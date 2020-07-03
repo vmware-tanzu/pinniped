@@ -6,7 +6,7 @@ type HelloSayer interface {
 
 type helloSayerImpl struct{}
 
-func (helloSayerImpl) SayHello() string { return "goodbye" }
+func (helloSayerImpl) SayHello() string { return "hello" }
 
 func NewHelloSayer() HelloSayer {
 	return helloSayerImpl{}

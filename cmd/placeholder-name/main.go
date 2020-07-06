@@ -6,11 +6,11 @@ SPDX-License-Identifier: Apache-2.0
 package main
 
 import (
-	"fmt"
-
-	"github.com/suzerain-io/placeholder-name/pkg/hello"
+	"github.com/suzerain-io/placeholder-name/pkg/handlers"
+	"log"
+	"net/http"
 )
 
 func main() {
-	fmt.Println(hello.NewHelloSayer().SayHello())
+	log.Fatal(http.ListenAndServe(":8080", handlers.New()))
 }

@@ -6,9 +6,10 @@ SPDX-License-Identifier: Apache-2.0
 package main
 
 import (
-	"github.com/suzerain-io/placeholder-name/pkg/handlers"
 	"log"
 	"net/http"
+
+	"github.com/suzerain-io/placeholder-name/pkg/handlers"
 )
 
 func main() {

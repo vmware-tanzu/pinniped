@@ -1,0 +1,69 @@
+# https://github.com/golangci/golangci-lint#config-file
+run:
+  deadline: 1m
+
+linters:
+  disable-all: true
+  enable:
+  # default linters
+  - deadcode
+  - errcheck
+  - gosimple
+  - govet
+  - ineffassign
+  - staticcheck
+  - structcheck
+  - typecheck
+  - unused
+  - varcheck
+
+  # additional linters for this project (we should disable these if they get annoying).
+  - asciicheck
+  - bodyclose
+  - depguard
+  - dogsled
+  - exhaustive
+  - exportloopref
+  - funlen
+  - gochecknoglobals
+  - gochecknoinits
+  - gocritic
+  - gocyclo
+  - godot
+  - goerr113
+  - goheader
+  - goimports
+  - golint
+  - goprintffuncname
+  - gosec
+  - misspell
+  - nakedret
+  - nestif
+  - noctx
+  - nolintlint
+  - prealloc
+  - rowserrcheck
+  - scopelint
+  - sqlclosecheck
+  - unconvert
+  - unparam
+  - whitespace
+
+issues:
+  exclude-rules:
+    # exclude tests from function length and global linting to encourage table-based tests.
+  - path: _test\.go
+    linters:
+    - funlen
+    - gochecknoglobals
+
+linters-settings:
+  funlen:
+    lines: 125
+    statements: 50
+  goheader:
+    template: |-
+      Copyright 2020 VMware, Inc.
+      SPDX-License-Identifier: Apache-2.0
+  goimports:
+    local-prefixes: github.com/suzerain-io

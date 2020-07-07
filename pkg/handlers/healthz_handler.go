@@ -19,7 +19,7 @@ type healthzHandler struct{}
 func (h healthzHandler) ServeHTTP(responseWriter http.ResponseWriter, _ *http.Request) {
 	response := healthzResponse{"OK"}
 	js, _ := json.Marshal(response)
-	responseWriter.Header().Set(HeaderNameContentType, JSONMimeType)
+	responseWriter.Header().Set(headerNameContentType, jsonMimeType)
 	_, _ = responseWriter.Write(js)
 }
 

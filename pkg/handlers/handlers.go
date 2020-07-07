@@ -7,8 +7,8 @@ package handlers
 
 import "net/http"
 
-const JSONMimeType = "application/json; charset=utf-8"
-const HeaderNameContentType = "Content-Type"
+const jsonMimeType = "application/json; charset=utf-8"
+const headerNameContentType = "Content-Type"
 
 func New() http.Handler {
 	mux := http.NewServeMux()

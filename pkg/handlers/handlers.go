@@ -7,7 +7,7 @@ package handlers
 
 import "net/http"
 
-const JsonMimeType = "application/json; charset=utf-8"
+const JSONMimeType = "application/json; charset=utf-8"
 const HeaderNameContentType = "Content-Type"
 
 func New() http.Handler {

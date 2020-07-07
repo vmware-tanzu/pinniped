@@ -13,5 +13,7 @@ import (
 )
 
 func main() {
-	log.Fatal(http.ListenAndServe(":8080", handlers.New()))
+	addr := ":8080"
+	log.Printf("Starting server on %v", addr)
+	log.Fatal(http.ListenAndServe(addr, handlers.New()))
 }

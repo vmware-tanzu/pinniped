@@ -1,0 +1,31 @@
+#@ load("@ytt:data", "data")
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: #@ data.values.namespace
+  labels:
+    name: #@ data.values.namespace
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: #@ data.values.app_name + "-deployment"
+  namespace: #@ data.values.namespace
+  labels:
+    app: #@ data.values.app_name
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: #@ data.values.app_name
+  template:
+    metadata:
+      labels:
+        app: #@ data.values.app_name
+    spec:
+      containers:
+        - name: placeholder-name
+          image:  #@ data.values.image_repo + "@" + data.values.image_digest

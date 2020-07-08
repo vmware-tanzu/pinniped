@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/suzerain-io/placeholder-name/cmd/placeholder-name/app/config"
 	"github.com/suzerain-io/placeholder-name/pkg/handlers"
 )
 
@@ -30,6 +31,12 @@ type App struct {
 func New(args []string, stdout, stderr io.Writer) *App {
 	a := &App{
 		runFunc: func(configPath string) {
+			config, err := config.FromPath(configPath)
+			if err != nil {
+				log.Fatalf("could not load config: %v", err)
+			}
+			_ = config // TODO(akeesler): use me!
+
 			addr := ":8080"
 			log.Printf("Starting server on %v", addr)
 			log.Fatal(http.ListenAndServe(addr, handlers.New()))

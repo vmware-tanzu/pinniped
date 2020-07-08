@@ -1,3 +1,8 @@
+/*
+Copyright 2020 VMware, Inc.
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package integration
 
 import (
@@ -7,16 +12,15 @@ import (
 	"testing"
 )
 
-// force users to opt-in to running the integration tests
+// force users to opt-in to running the integration tests.
 // this prevents them from running if someone does `go test ./...`
-// these tests could be destructive to the cluster under test
+// these tests could be destructive to the cluster under test.
 const magicIntegrationTestsEnvVar = "NAME_TEST_INTEGRATION"
 
-var shouldRunIntegrationTests bool
-
-func init() {
-	shouldRunIntegrationTests, _ = strconv.ParseBool(os.Getenv(magicIntegrationTestsEnvVar))
-}
+var shouldRunIntegrationTests = func() bool {
+	b, _ := strconv.ParseBool(os.Getenv(magicIntegrationTestsEnvVar))
+	return b
+}()
 
 func TestMain(m *testing.M) {
 	if !shouldRunIntegrationTests {

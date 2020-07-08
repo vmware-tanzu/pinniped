@@ -6,14 +6,13 @@ SPDX-License-Identifier: Apache-2.0
 package main
 
 import (
-	"log"
-	"net/http"
+	"os"
 
-	"github.com/suzerain-io/placeholder-name/pkg/handlers"
+	"github.com/suzerain-io/placeholder-name/cmd/placeholder-name/app"
 )
 
 func main() {
-	addr := ":8080"
-	log.Printf("Starting server on %v", addr)
-	log.Fatal(http.ListenAndServe(addr, handlers.New()))
+	if err := app.New(os.Args[1:], os.Stdout, os.Stderr).Run(); err != nil {
+		os.Exit(1)
+	}
 }

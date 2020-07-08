@@ -6,6 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 package integration
 
 import (
+	"os"
 	"os/exec"
 	"testing"
 
@@ -13,6 +14,9 @@ import (
 )
 
 func TestGetNodes(t *testing.T) {
-	err := exec.Command("kubectl", "get", "nodes").Run()
+	cmd := exec.Command("kubectl", "get", "nodes")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
 	require.NoError(t, err)
 }

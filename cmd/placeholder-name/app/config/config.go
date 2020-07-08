@@ -1,3 +1,8 @@
+/*
+Copyright 2020 VMware, Inc.
+SPDX-License-Identifier: Apache-2.0
+*/
+
 // Package config contains functionality to load/store api.Config's from/to
 // some source.
 package config
@@ -6,8 +11,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/suzerain-io/placeholder-name/cmd/placeholder-name/app/config/api"
 	"gopkg.in/yaml.v2"
+
+	"github.com/suzerain-io/placeholder-name/cmd/placeholder-name/app/config/api"
 )
 
 // FromPath loads an api.Config from a provided local file path.

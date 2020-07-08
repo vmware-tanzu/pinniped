@@ -1,3 +1,8 @@
+/*
+Copyright 2020 VMware, Inc.
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package config
 
 import (
@@ -6,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"github.com/suzerain-io/placeholder-name/cmd/placeholder-name/app/config/api"
 )
 
@@ -27,7 +33,7 @@ webhookCABundlePath: ../tuna/fish/marlin.yaml
 	config, err := FromPath(file.Name())
 	expect.NoError(err)
 	expect.Equal(config, &api.Config{
-		ApiVersion:          "v1alpha1",
+		APIVersion:          "v1alpha1",
 		WebhookURL:          "https://tuna.com/fish?marlin",
 		WebhookCABundlePath: "../tuna/fish/marlin.yaml",
 	})

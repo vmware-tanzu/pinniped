@@ -16,9 +16,10 @@ metadata:
   labels:
     app: #@ data.values.app_name
 data:
+  #@yaml/text-templated-strings
   placeholder-config.yaml: |
     apiVersion: v1alpha1
-    webhookURL: #@ data.values.webhook_url
+    webhookURL: (@= data.values.webhook_url @)
     webhookCABundlePath: /etc/config/ca.pem
   ca.pem: #@ data.values.webhook_ca_bundle
 ---

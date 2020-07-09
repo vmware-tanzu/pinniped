@@ -1,8 +1,14 @@
 #@data/values
 ---
+
 app_name: placeholder-name
-namespace:
+
+namespace: #! e.g. placeholder-name
+
+#! Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
 image_repo: #! e.g. gcr.io/your-project-name/repo-name
 image_digest: #! e.g. sha256:f3c4fdfd3ef865d4b97a1fd295d94acc3f0c654c46b6f27ffad5cf80216903c8
+image_tag: #! e.g. latest
+
 webhook_url: #! e.g., https://example.com
 webhook_ca_bundle: #! e.g., "-----BEGIN CERTIFICATE----- [...]"

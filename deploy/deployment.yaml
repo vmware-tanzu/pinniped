@@ -42,7 +42,11 @@ spec:
     spec:
       containers:
         - name: placeholder-name
+          #@ if data.values.image_digest:
           image:  #@ data.values.image_repo + "@" + data.values.image_digest
+          #@ else:
+          image: #@ data.values.image_repo + ":" + data.values.image_tag
+          #@ end
           imagePullPolicy: IfNotPresent
           command:
           - ./app

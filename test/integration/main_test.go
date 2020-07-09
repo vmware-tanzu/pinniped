@@ -15,7 +15,7 @@ import (
 // force users to opt-in to running the integration tests.
 // this prevents them from running if someone does `go test ./...`
 // these tests could be destructive to the cluster under test.
-const magicIntegrationTestsEnvVar = "NAME_TEST_INTEGRATION"
+const magicIntegrationTestsEnvVar = "PLACEHOLDER_NAME_TEST_INTEGRATION"
 
 var shouldRunIntegrationTests = func() bool {
 	b, _ := strconv.ParseBool(os.Getenv(magicIntegrationTestsEnvVar))

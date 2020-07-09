@@ -7,7 +7,20 @@ metadata:
   name: #@ data.values.namespace
   labels:
     name: #@ data.values.namespace
-
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: #@ data.values.app_name + "-config"
+  namespace: #@ data.values.namespace
+  labels:
+    app: #@ data.values.app_name
+data:
+  placeholder-config.yaml: |
+    apiVersion: v1alpha1
+    webhookURL: #@ data.values.webhook_url
+    webhookCABundlePath: /etc/config/ca.pem
+  ca.pem: #@ data.values.webhook_ca_bundle
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -30,3 +43,14 @@ spec:
         - name: placeholder-name
           image:  #@ data.values.image_repo + "@" + data.values.image_digest
           imagePullPolicy: IfNotPresent
+          command:
+          - ./app
+          - --config
+          - /etc/config/placeholder-config.yaml
+          volumeMounts:
+          - name: config-volume
+            mountPath: /etc/config
+      volumes:
+      - name: config-volume
+        configMap:
+          name: #@ data.values.app_name + "-config"

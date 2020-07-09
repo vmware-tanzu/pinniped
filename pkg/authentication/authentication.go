@@ -37,8 +37,12 @@ type Credential struct {
 
 // User contains details about a human being that has been authenticated.
 type User interface {
-	// Name returns a unique identifier for this User.
+	// GetName returns a unique identifier for this User.
 	GetName() string
+	// GetUID returns a unique value that identifies this user for eternity.
+	// I.e., if a user is removed from the system and another one is added with the
+	// same name, they should have different UID's.
+	GetUID() string
 	// Groups returns identifiers for the groups to which this User belongs.
 	GetGroups() []string
 	// Extra() returns a map of other details about this User.
@@ -56,6 +60,7 @@ type Status struct {
 // DefaultUser is a trivial implementation of a User.
 type DefaultUser struct {
 	Name   string
+	UID    string
 	Groups []string
 	Extra  map[string][]string
 }
@@ -63,5 +68,6 @@ type DefaultUser struct {
 var _ User = &DefaultUser{}
 
 func (du *DefaultUser) GetName() string               { return du.Name }
+func (du *DefaultUser) GetUID() string                { return du.UID }
 func (du *DefaultUser) GetGroups() []string           { return du.Groups }
 func (du *DefaultUser) GetExtra() map[string][]string { return du.Extra }

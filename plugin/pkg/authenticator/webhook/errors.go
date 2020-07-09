@@ -7,10 +7,19 @@ package webhook
 
 import "fmt"
 
-type unsupportedSchemeError struct {
-	scheme string
+// These errors are mostly here to please the linter.
+
+type tokenReviewError struct {
+	errorMsg string
 }
 
-func (e unsupportedSchemeError) Error() string {
-	return fmt.Sprintf("unsupported scheme: %s", e.scheme)
+func (e tokenReviewError) Error() string {
+	return fmt.Sprintf("token review error: %s", e.errorMsg)
+}
+
+type tokenReviewUnauthenticatedError struct {
+}
+
+func (e tokenReviewUnauthenticatedError) Error() string {
+	return "token review is unauthenticated"
 }

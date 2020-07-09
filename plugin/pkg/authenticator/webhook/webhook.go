@@ -3,78 +3,73 @@ Copyright 2020 VMware, Inc.
 SPDX-License-Identifier: Apache-2.0
 */
 
-// Package webhook provides a way to use an HTTP webhook to authenticate a user.
+// Package webhook uses the Kubernetes TokenReview API to authenticate a user.
 package webhook
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
-	"io/ioutil"
-	"net/http"
-	"net/url"
+
+	authenticationv1 "k8s.io/api/authentication/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/suzerain-io/placeholder-name/pkg/authentication"
 )
 
-// Config describes a Webhook.
-type Config struct {
-	// URL at which Webhook is running (must be 'https').
-	URL string
-
-	// CABundlePath is the local path at which the CA bundle is located that can be
-	// used to verify TLS connections to the webhook.
-	CABundlePath string
-}
-
-// Webhook is a webhook client that makes it easier to validate tokens against a
-// webhook.
-//
-// This webhook must be contactable over an HTTP URL.
+// Webhook is a webhook client that authenticates users via the Kubernetes
+// TokenReview API.
 type Webhook struct {
-	url    *url.URL
-	client http.Client
+	clientset kubernetes.Interface
 }
 
-// FromConfig tries to create a Webhook from the provided config.
-//
-// The only supported URL scheme is 'https'.
-func FromConfig(config *Config) (*Webhook, error) {
-	url, err := url.Parse(config.URL)
-	if err != nil {
-		return nil, fmt.Errorf("parse URL: %w", err)
-	}
-
-	if url.Scheme != "https" {
-		return nil, unsupportedSchemeError{scheme: url.Scheme}
-	}
-
-	caBundle, err := ioutil.ReadFile(config.CABundlePath)
-	if err != nil {
-		return nil, fmt.Errorf("read CA bundle path: %w", err)
-	}
-
-	rootCAs := x509.NewCertPool()
-	if !rootCAs.AppendCertsFromPEM(caBundle) {
-		return nil, fmt.Errorf("append CA bundle certs: %w", err)
-	}
-
+// New returns a new Webhook client that uses the provided clientset.
+func New(clientset kubernetes.Interface) *Webhook {
 	return &Webhook{
-		url: url,
-		client: http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					RootCAs: rootCAs,
-				},
-			},
-		},
-	}, nil
+		clientset: clientset,
+	}
 }
 
 func (w *Webhook) Authenticate(
 	ctx context.Context,
 	cred authentication.Credential,
 ) (*authentication.Status, bool, error) {
-	return nil, false, nil
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	tokenReviewsClient := w.clientset.AuthenticationV1().TokenReviews()
+	tokenReview, err := tokenReviewsClient.Create(
+		ctx,
+		&authenticationv1.TokenReview{},
+		metav1.CreateOptions{},
+	)
+	if err != nil {
+		return nil, false, fmt.Errorf("create token review: %w", err)
+	}
+
+	if tokenReview.Status.Error != "" {
+		return nil, false, tokenReviewError{tokenReview.Status.Error}
+	}
+
+	if !tokenReview.Status.Authenticated {
+		return nil, false, tokenReviewUnauthenticatedError{}
+	}
+
+	return &authentication.Status{
+		Audiences: tokenReview.Status.Audiences,
+		User: &authentication.DefaultUser{
+			Name:   tokenReview.Status.User.Username,
+			UID:    tokenReview.Status.User.UID,
+			Groups: tokenReview.Status.User.Groups,
+			Extra:  convertExtra(tokenReview.Status.User.Extra),
+		},
+	}, true, nil
+}
+
+func convertExtra(extraValue map[string]authenticationv1.ExtraValue) map[string][]string {
+	m := make(map[string][]string)
+	for k, v := range extraValue {
+		m[k] = []string(v)
+	}
+	return m
 }

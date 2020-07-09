@@ -7,6 +7,7 @@ package integration
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -18,15 +19,19 @@ import (
 	"github.com/suzerain-io/placeholder-name/test/library"
 )
 
-const appNamespace = "integration"
-
 func TestGetDeployment(t *testing.T) {
+	namespaceName := os.Getenv("PLACEHOLDER_NAME_NAMESPACE")
+	require.NotEmptyf(t, namespaceName, "must specify PLACEHOLDER_NAME_NAMESPACE env var for integration tests")
+
+	deploymentName := os.Getenv("PLACEHOLDER_NAME_DEPLOYMENT")
+	require.NotEmptyf(t, deploymentName, "must specify PLACEHOLDER_NAME_DEPLOYMENT env var for integration tests")
+
 	client := library.NewClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	appDeployment, err := client.AppsV1().Deployments(appNamespace).Get(ctx, appNamespace, metav1.GetOptions{})
+	appDeployment, err := client.AppsV1().Deployments(namespaceName).Get(ctx, deploymentName, metav1.GetOptions{})
 	require.NoError(t, err)
 
 	cond := library.GetDeploymentCondition(appDeployment.Status, appsv1.DeploymentAvailable)

@@ -15,11 +15,11 @@ import (
 )
 
 // AnonymousClientset returns a Kubernetes client that uses anonymous auth.
-func AnonymousClientset(url, caBundle string) (*kubernetes.Clientset, error) {
+func AnonymousClientset(url, caBundlePath string) (*kubernetes.Clientset, error) {
 	config := clientcmdapi.NewConfig()
 	config.Clusters["anonymous-cluster"] = &clientcmdapi.Cluster{
 		Server:               url,
-		CertificateAuthority: caBundle,
+		CertificateAuthority: caBundlePath,
 	}
 	config.Contexts["anonymous"] = &clientcmdapi.Context{
 		Cluster: "anonymous-cluster",

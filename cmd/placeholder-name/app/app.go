@@ -15,6 +15,8 @@ import (
 
 	"github.com/suzerain-io/placeholder-name/cmd/placeholder-name/app/config"
 	"github.com/suzerain-io/placeholder-name/pkg/handlers"
+	"github.com/suzerain-io/placeholder-name/pkg/util/kube"
+	"github.com/suzerain-io/placeholder-name/plugin/pkg/authenticator/webhook"
 )
 
 // App is an object that represents the placeholder-name application.
@@ -35,7 +37,14 @@ func New(args []string, stdout, stderr io.Writer) *App {
 			if err != nil {
 				log.Fatalf("could not load config: %v", err)
 			}
-			_ = config // TODO(akeesler): use me!
+
+			clientset, err := kube.AnonymousClientset(config.WebhookURL, config.WebhookCABundlePath)
+			if err != nil {
+				log.Fatalf("could not create client: %v", err)
+			}
+
+			webhook := webhook.New(clientset)
+			_ = webhook // TODO(akeesler): use me!
 
 			addr := ":8080"
 			log.Printf("Starting server on %v", addr)

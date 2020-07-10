@@ -32,15 +32,23 @@ func New(clientset kubernetes.Interface) *Webhook {
 
 func (w *Webhook) Authenticate(
 	ctx context.Context,
-	cred authentication.Credential,
+	cred *authentication.Credential,
 ) (*authentication.Status, bool, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	if cred.Type != authentication.TokenCredentialType {
+		return nil, false, nil
+	}
+
 	tokenReviewsClient := w.clientset.AuthenticationV1().TokenReviews()
 	tokenReview, err := tokenReviewsClient.Create(
 		ctx,
-		&authenticationv1.TokenReview{},
+		&authenticationv1.TokenReview{
+			Spec: authenticationv1.TokenReviewSpec{
+				Token: *cred.Token,
+			},
+		},
 		metav1.CreateOptions{},
 	)
 	if err != nil {

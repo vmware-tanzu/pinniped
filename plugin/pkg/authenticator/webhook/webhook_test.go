@@ -19,29 +19,45 @@ import (
 )
 
 func TestAuthenticate(t *testing.T) {
+	token := "some-token"
+
 	tests := []struct {
 		name string
 
-		response authenticationv1.TokenReviewStatus
+		cred authentication.Credential
 
+		response runtime.Object
+
+		wantRequest       runtime.Object
 		wantStatus        authentication.Status
 		wantAuthenticated bool
 		wantErr           bool
 	}{
 		{
 			name: "Happy",
-			response: authenticationv1.TokenReviewStatus{
-				Authenticated: true,
-				User: authenticationv1.UserInfo{
-					Username: "ada@lovelace.com",
-					UID:      "abc-123",
-					Groups:   []string{"tuna", "fish", "marlin"},
-					Extra: map[string]authenticationv1.ExtraValue{
-						"doughnut": authenticationv1.ExtraValue([]string{
-							"pizza",
-							"pasta",
-						}),
+			cred: authentication.Credential{
+				Type:  authentication.TokenCredentialType,
+				Token: &token,
+			},
+			response: &authenticationv1.TokenReview{
+				Status: authenticationv1.TokenReviewStatus{
+					Authenticated: true,
+					User: authenticationv1.UserInfo{
+						Username: "ada@lovelace.com",
+						UID:      "abc-123",
+						Groups:   []string{"tuna", "fish", "marlin"},
+						Extra: map[string]authenticationv1.ExtraValue{
+							"doughnut": authenticationv1.ExtraValue([]string{
+								"pizza",
+								"pasta",
+							}),
+						},
 					},
+				},
+			},
+			wantRequest: &authenticationv1.TokenReview{
+				Spec: authenticationv1.TokenReviewSpec{
+					Token: "some-token",
 				},
 			},
 			wantStatus: authentication.Status{
@@ -61,17 +77,46 @@ func TestAuthenticate(t *testing.T) {
 			wantErr:           false,
 		},
 		{
+			name: "InvalidCredentialType",
+			cred: authentication.Credential{
+				Type: "certificate",
+			},
+		},
+		{
 			name: "TokenReviewError",
-			response: authenticationv1.TokenReviewStatus{
-				Authenticated: true,
-				Error:         "some-error",
+			cred: authentication.Credential{
+				Type:  authentication.TokenCredentialType,
+				Token: &token,
+			},
+			response: &authenticationv1.TokenReview{
+				Status: authenticationv1.TokenReviewStatus{
+					Authenticated: true,
+					Error:         "some-error",
+				},
+			},
+			wantRequest: &authenticationv1.TokenReview{
+				Spec: authenticationv1.TokenReviewSpec{
+					Token: "some-token",
+				},
 			},
 			wantErr: true,
 		},
 		{
 			name: "TokenReviewNotAuthenticated",
-			response: authenticationv1.TokenReviewStatus{
-				Authenticated: false,
+			cred: authentication.Credential{
+				Type:  authentication.TokenCredentialType,
+				Token: &token,
+			},
+			response: &authenticationv1.TokenReview{
+				Status: authenticationv1.TokenReviewStatus{
+					Authenticated: true,
+					Error:         "some-error",
+				},
+			},
+			wantRequest: &authenticationv1.TokenReview{
+				Spec: authenticationv1.TokenReviewSpec{
+					Token: "some-token",
+				},
 			},
 			wantErr: true,
 		},
@@ -79,38 +124,35 @@ func TestAuthenticate(t *testing.T) {
 	for _, theTest := range tests {
 		test := theTest
 		t.Run(test.name, func(t *testing.T) {
+			expect := assert.New(t)
+
 			clientset := &fake.Clientset{}
 			clientset.Fake.AddReactor(
 				"create",
 				"tokenreviews",
 				func(action kubetesting.Action) (bool, runtime.Object, error) {
-					return true, &authenticationv1.TokenReview{
-						Status: test.response,
-					}, nil
+					createAction := action.(kubetesting.CreateActionImpl)
+					expect.Equal(test.wantRequest, createAction.Object)
+					return true, test.response, nil
 				},
 			)
 
 			w := New(clientset)
 
-			expect := assert.New(t)
-			token := "some-token" // TODO(akeesler): validate token passed to clientset!
 			status, authenticated, err := w.Authenticate(
 				context.Background(),
-				authentication.Credential{
-					Type:  authentication.TokenCredentialType,
-					Token: &token,
-				},
+				&test.cred,
 			)
 			switch {
 			case test.wantErr:
 				expect.Error(err)
+				expect.Equal(1, len(clientset.Actions()))
 			case !test.wantAuthenticated:
 				expect.False(authenticated)
 			default:
 				expect.Equal(&test.wantStatus, status)
+				expect.Equal(1, len(clientset.Actions()))
 			}
-
-			expect.Equal(1, len(clientset.Actions()))
 		})
 	}
 }

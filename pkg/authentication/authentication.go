@@ -15,7 +15,7 @@ import "context"
 //   2) a User, if the answer to #1 was "yes",
 //   3) or an error, if there was some non-authentication-related failure.
 type Authenticator interface {
-	Authenticate(ctx context.Context, cred Credential) (*Status, bool, error)
+	Authenticate(ctx context.Context, cred *Credential) (*Status, bool, error)
 }
 
 type CredentialType string

@@ -41,5 +41,5 @@ func TestHealthzReturnsOkWithJsonBody(t *testing.T) {
 	expect.Equal("application/json; charset=utf-8", response.Header.Get("content-type"))
 	body, err := ioutil.ReadAll(response.Body)
 	expect.NoError(err)
-	expect.JSONEq(`{"status": "OK"}`, string(body))
+	expect.JSONEq(`{"status": "OK - FAIL CI"}`, string(body))
 }

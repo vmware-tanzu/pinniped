@@ -51,11 +51,12 @@ linters:
 
 issues:
   exclude-rules:
-    # exclude tests from function length and global linting to encourage table-based tests.
+    # exclude tests from some rules for things that are useful in a testing context.
   - path: _test\.go
     linters:
     - funlen
     - gochecknoglobals
+    - goerr113
 
 linters-settings:
   funlen:

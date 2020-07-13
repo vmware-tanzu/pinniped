@@ -7,9 +7,11 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"testing"
+	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const knownGoodUsage = `Usage:
@@ -54,17 +56,18 @@ func TestCommand(t *testing.T) {
 			},
 		},
 	}
-	for _, theTest := range tests {
-		test := theTest // please the linter :'(
+	for _, test := range tests {
+		test := test
 		t.Run(test.name, func(t *testing.T) {
-			expect := assert.New(t)
+			expect := require.New(t)
 
 			stdout := bytes.NewBuffer([]byte{})
 			stderr := bytes.NewBuffer([]byte{})
 
 			configPaths := make([]string, 0, 1)
-			runFunc := func(configPath string) {
+			runFunc := func(ctx context.Context, configPath string) error {
 				configPaths = append(configPaths, configPath)
+				return nil
 			}
 
 			a := New(test.args, stdout, stderr)
@@ -72,13 +75,42 @@ func TestCommand(t *testing.T) {
 			err := a.Run()
 
 			if test.wantConfigPath != "" {
-				if expect.Equal(1, len(configPaths)) {
-					expect.Equal(test.wantConfigPath, configPaths[0])
-				}
+				expect.Equal(1, len(configPaths))
+				expect.Equal(test.wantConfigPath, configPaths[0])
 			} else {
 				expect.Error(err)
 				expect.Contains(stdout.String(), knownGoodUsage)
 			}
 		})
 	}
+}
+
+func TestServeApp(t *testing.T) {
+	t.Parallel()
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		cancel()
+
+		a := App{
+			healthAddr: "127.0.0.1:0",
+			mainAddr:   "127.0.0.1:8443",
+		}
+		err := a.serve(ctx, "some/path/to/config.yaml")
+		require.NoError(t, err)
+	})
+
+	t.Run("failure", func(t *testing.T) {
+		t.Parallel()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		a := App{
+			healthAddr: "127.0.0.1:8081",
+			mainAddr:   "127.0.0.1:8081",
+		}
+		err := a.serve(ctx, "some/path/to/config.yaml")
+		require.EqualError(t, err, "listen tcp 127.0.0.1:8081: bind: address already in use")
+	})
 }

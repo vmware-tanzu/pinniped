@@ -21,7 +21,10 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
+	"k8s.io/apiserver/pkg/authentication/authenticator"
+
 	"github.com/suzerain-io/placeholder-name/internal/certauthority"
+	"github.com/suzerain-io/placeholder-name/pkg/config"
 	"github.com/suzerain-io/placeholder-name/pkg/handlers"
 )
 
@@ -37,6 +40,9 @@ type App struct {
 
 	// listen address for main serve
 	mainAddr string
+
+	// webhook authenticates tokens
+	webhook authenticator.Token
 
 	// runFunc runs the actual program, after the parsing of flags has been done.
 	//
@@ -86,6 +92,17 @@ func (a *App) Run() error {
 }
 
 func (a *App) serve(ctx context.Context, configPath string) error {
+	cfg, err := config.FromPath(configPath)
+	if err != nil {
+		return fmt.Errorf("could not load config: %w", err)
+	}
+
+	webhook, err := config.NewWebhook(cfg.WebhookConfig)
+	if err != nil {
+		return fmt.Errorf("could create webhook client: %w", err)
+	}
+	a.webhook = webhook
+
 	ca, err := certauthority.New(pkix.Name{CommonName: "Placeholder CA"})
 	if err != nil {
 		return fmt.Errorf("could not initialize CA: %w", err)
@@ -116,7 +133,7 @@ func (a *App) serve(ctx context.Context, configPath string) error {
 			Addr:        a.healthAddr,
 			Handler:     handlers.New(),
 		}
-		return runGracefully(ctx, &server, eg)
+		return runGracefully(ctx, &server, eg, server.ListenAndServe)
 	})
 
 	// Start main service listener
@@ -129,9 +146,13 @@ func (a *App) serve(ctx context.Context, configPath string) error {
 				MinVersion:   tls.VersionTLS12,
 				Certificates: []tls.Certificate{*cert},
 			},
-			Handler: http.HandlerFunc(exampleHandler),
+			Handler: http.HandlerFunc(a.exampleHandler),
 		}
-		return runGracefully(ctx, &server, eg)
+		return runGracefully(ctx, &server, eg, func() error {
+			// Doc for ListenAndServeTLS says we can pass empty strings if we configured
+			// keypair for TLS in http.Server.TLSConfig.
+			return server.ListenAndServeTLS("", "")
+		})
 	})
 
 	if err := eg.Wait(); !errors.Is(err, http.ErrServerClosed) {
@@ -141,14 +162,22 @@ func (a *App) serve(ctx context.Context, configPath string) error {
 }
 
 // exampleHandler is a stub to be replaced with our real server logic.
-func exampleHandler(w http.ResponseWriter, r *http.Request) {
-	_, _ = w.Write([]byte("Hello world"))
+func (a *App) exampleHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	rsp, authenticated, err := a.webhook.AuthenticateToken(ctx, "")
+	log.Printf("token response: %+v", rsp)
+	log.Printf("token authenticated: %+v", authenticated)
+	log.Printf("token err: %+v", err)
+
+	_, _ = w.Write([]byte("hello world"))
 }
 
 // runGracefully runs an http.Server with graceful shutdown.
-func runGracefully(ctx context.Context, srv *http.Server, eg *errgroup.Group) error {
+func runGracefully(ctx context.Context, srv *http.Server, eg *errgroup.Group, f func() error) error {
 	// Start the listener in a child goroutine.
-	eg.Go(srv.ListenAndServe)
+	eg.Go(f)
 
 	// If/when the context is canceled or times out, initiate shutting down the serve.
 	<-ctx.Done()

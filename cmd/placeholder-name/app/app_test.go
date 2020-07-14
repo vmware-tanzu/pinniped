@@ -97,7 +97,7 @@ func TestServeApp(t *testing.T) {
 			healthAddr: "127.0.0.1:0",
 			mainAddr:   "127.0.0.1:8443",
 		}
-		err := a.serve(ctx, "some/path/to/config.yaml")
+		err := a.serve(ctx, "testdata/valid-config.yaml")
 		require.NoError(t, err)
 	})
 
@@ -110,7 +110,7 @@ func TestServeApp(t *testing.T) {
 			healthAddr: "127.0.0.1:8081",
 			mainAddr:   "127.0.0.1:8081",
 		}
-		err := a.serve(ctx, "some/path/to/config.yaml")
+		err := a.serve(ctx, "testdata/valid-config.yaml")
 		require.EqualError(t, err, "listen tcp 127.0.0.1:8081: bind: address already in use")
 	})
 }

@@ -11,5 +11,7 @@ require (
 	golang.org/x/tools v0.0.0-20200707134715-9e0a013e855f // indirect
 	k8s.io/api v0.18.5
 	k8s.io/apimachinery v0.18.5
+	k8s.io/apiserver v0.18.5
 	k8s.io/client-go v0.18.5
+	sigs.k8s.io/yaml v1.2.0
 )

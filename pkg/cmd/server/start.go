@@ -80,8 +80,8 @@ func (o *PlaceHolderServerOptions) Complete() error {
 }
 
 func (o *PlaceHolderServerOptions) Config() (*apiserver.Config, error) {
-	// TODO have a "real" external address
-	if err := o.RecommendedOptions.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
+	// TODO have a "real" external address. Get this from some kind of config input or preferably some environment variable.
+	if err := o.RecommendedOptions.SecureServing.MaybeDefaultWithSelfSignedCerts("placeholder-name.placeholder.svc", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %w", err)
 	}
 

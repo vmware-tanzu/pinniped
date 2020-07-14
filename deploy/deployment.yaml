@@ -22,6 +22,37 @@ data:
       url: (@= data.values.webhook_url @)
       caBundle: (@= data.values.webhook_ca_bundle @)
 ---
+#! TODO create a cluster role binding (or whatever) for our service account to use
+#! TODO create a service account and bind it to the role
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: #@ data.values.app_name
+  namespace: #@ data.values.namespace
+spec:
+  selector:
+    app: #@ data.values.app_name
+  ports:
+    - protocol: TCP
+      port: 443
+      targetPort: 443
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.placeholder.suzerain-io.github.io
+spec:
+  group: placeholder.suzerain-io.github.io
+  version: v1alpha1
+  groupPriorityMinimum: 2500 #! TODO huh? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
+  versionPriority: 10 #! TODO huh? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
+  insecureSkipTLSVerify: true #! TODO REMOVE and use caBundle instead
+  #! caBundle: <pem encoded ca cert that signs the server cert used by the webhook>
+  service:
+    namespace: #@ data.values.namespace
+    name: #@ data.values.app_name
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -48,13 +79,14 @@ spec:
           #@ end
           imagePullPolicy: IfNotPresent
           command:
-          - ./app
-          - --config
-          - /etc/config/placeholder-config.yaml
+            - ./app
           volumeMounts:
-          - name: config-volume
-            mountPath: /etc/config
+            - name: config-volume
+              mountPath: /etc/config
+          env:
+            - name: PLACEHOLDER_NAME_API_SERVER
+              value: "1"
       volumes:
-      - name: config-volume
-        configMap:
-          name: #@ data.values.app_name + "-config"
+        - name: config-volume
+          configMap:
+            name: #@ data.values.app_name + "-config"

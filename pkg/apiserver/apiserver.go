@@ -14,6 +14,7 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
+	placeholderapi "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
 	"github.com/suzerain-io/placeholder-name/pkg/registry/loginrequest"
 )
@@ -25,6 +26,7 @@ var (
 
 func init() {
 	utilruntime.Must(placeholderv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(placeholderapi.AddToScheme(scheme))
 
 	// we need to add the options to empty v1
 	// TODO fix the server code to avoid this

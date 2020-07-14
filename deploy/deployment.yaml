@@ -18,10 +18,9 @@ metadata:
 data:
   #@yaml/text-templated-strings
   placeholder-config.yaml: |
-    apiVersion: v1alpha1
-    webhookURL: (@= data.values.webhook_url @)
-    webhookCABundlePath: /etc/config/ca.pem
-  ca.pem: #@ data.values.webhook_ca_bundle
+    webhook:
+      url: (@= data.values.webhook_url @)
+      caBundle: (@= data.values.webhook_ca_bundle @)
 ---
 apiVersion: apps/v1
 kind: Deployment

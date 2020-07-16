@@ -17,7 +17,7 @@ metadata:
     app: #@ data.values.app_name
 data:
   #@yaml/text-templated-strings
-  placeholder-config.yaml: |
+  placeholder-name.yaml: |
     webhook:
       url: (@= data.values.webhook_url @)
       caBundle: (@= data.values.webhook_ca_bundle @)
@@ -83,9 +83,6 @@ spec:
           volumeMounts:
             - name: config-volume
               mountPath: /etc/config
-          env:
-            - name: PLACEHOLDER_NAME_API_SERVER
-              value: "1"
       volumes:
         - name: config-volume
           configMap:

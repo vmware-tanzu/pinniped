@@ -70,7 +70,7 @@ func TestCommand(t *testing.T) {
 				return nil
 			}
 
-			a := New(test.args, stdout, stderr)
+			a := New(test.args, stdout, stderr, nil)
 			a.runFunc = runFunc
 			err := a.Run()
 

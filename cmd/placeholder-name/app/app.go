@@ -95,7 +95,7 @@ authenticating to the Kubernetes API.`,
 		&configPath,
 		"config",
 		"c",
-		"/etc/config/placeholder-name.yaml",
+		"placeholder-name.yaml",
 		"path to configuration file",
 	)
 

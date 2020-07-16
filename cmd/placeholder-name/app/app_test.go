@@ -9,8 +9,8 @@ import (
 	"bytes"
 	"context"
 	"testing"
-	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,8 +18,9 @@ const knownGoodUsage = `Usage:
   placeholder-name [flags]
 
 Flags:
-  -c, --config string   path to configuration file (default "placeholder-name.yaml")
-  -h, --help            help for placeholder-name
+  -c, --config string                  path to configuration file (default "placeholder-name.yaml")
+  -h, --help                           help for placeholder-name
+      --log-flush-frequency duration   Maximum number of seconds between log flushes (default 5s)
 `
 
 func TestCommand(t *testing.T) {
@@ -70,7 +71,7 @@ func TestCommand(t *testing.T) {
 				return nil
 			}
 
-			a := New(test.args, stdout, stderr, nil)
+			a := New(nil, test.args, stdout, stderr)
 			a.runFunc = runFunc
 			err := a.Run()
 
@@ -79,38 +80,8 @@ func TestCommand(t *testing.T) {
 				expect.Equal(test.wantConfigPath, configPaths[0])
 			} else {
 				expect.Error(err)
-				expect.Contains(stdout.String(), knownGoodUsage)
+				expect.Contains(stdout.String(), knownGoodUsage, cmp.Diff(stdout.String(), knownGoodUsage))
 			}
 		})
 	}
-}
-
-func TestServeApp(t *testing.T) {
-	t.Parallel()
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-		cancel()
-
-		a := App{
-			healthAddr: "127.0.0.1:0",
-			mainAddr:   "127.0.0.1:8443",
-		}
-		err := a.serve(ctx, "testdata/valid-config.yaml")
-		require.NoError(t, err)
-	})
-
-	t.Run("failure", func(t *testing.T) {
-		t.Parallel()
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		a := App{
-			healthAddr: "127.0.0.1:8081",
-			mainAddr:   "127.0.0.1:8081",
-		}
-		err := a.serve(ctx, "testdata/valid-config.yaml")
-		require.EqualError(t, err, "listen tcp 127.0.0.1:8081: bind: address already in use")
-	})
 }

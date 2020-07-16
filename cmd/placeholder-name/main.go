@@ -6,9 +6,9 @@ SPDX-License-Identifier: Apache-2.0
 package main
 
 import (
-	genericapiserver "k8s.io/apiserver/pkg/server"
 	"os"
 
+	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 
@@ -19,9 +19,9 @@ func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
-	stopCh := genericapiserver.SetupSignalHandler()
+	ctx := genericapiserver.SetupSignalContext()
 
-	if err := app.New(os.Args[1:], os.Stdout, os.Stderr, stopCh).Run(); err != nil {
+	if err := app.New(ctx, os.Args[1:], os.Stdout, os.Stderr).Run(); err != nil {
 		klog.Fatal(err)
 	}
 }

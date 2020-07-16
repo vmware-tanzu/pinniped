@@ -9,9 +9,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
-	restclient "k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
 	placeholderapi "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
@@ -49,7 +49,7 @@ type Config struct {
 }
 
 type ExtraConfig struct {
-	PlaceHolderConfig string // TODO
+	Webhook authenticator.Token
 }
 
 type PlaceHolderServer struct {
@@ -93,11 +93,6 @@ func (c completedConfig) New() (*PlaceHolderServer, error) {
 		GenericAPIServer: genericServer,
 	}
 
-	inClusterConfig, err := restclient.InClusterConfig()
-	if err != nil {
-		return nil, fmt.Errorf("in cluster config error: %w", err)
-	}
-
 	// TODO this should be v1, not v1alpha1
 	gvr := placeholderv1alpha1.SchemeGroupVersion.WithResource("loginrequests")
 
@@ -111,7 +106,7 @@ func (c completedConfig) New() (*PlaceHolderServer, error) {
 		NegotiatedSerializer:   Codecs,
 	}
 
-	loginRequestStorage := loginrequest.NewREST(inClusterConfig)
+	loginRequestStorage := loginrequest.NewREST(c.ExtraConfig.Webhook)
 
 	v1Storage, ok := apiGroupInfo.VersionedResourcesStorageMap[gvr.Version]
 	if !ok {

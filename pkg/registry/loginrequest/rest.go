@@ -8,8 +8,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/registry/rest"
-	restclient "k8s.io/client-go/rest"
 
 	placeholderapi "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
 )
@@ -21,12 +21,15 @@ var (
 	_ rest.Storage                 = &REST{}
 )
 
-func NewREST(config *restclient.Config) *REST {
-	// TODO use config
-	return &REST{}
+func NewREST(webhook authenticator.Token) *REST {
+	return &REST{
+		webhook: webhook,
+	}
 }
 
-type REST struct{}
+type REST struct {
+	webhook authenticator.Token
+}
 
 func (r *REST) New() runtime.Object {
 	return &placeholderapi.LoginRequest{}
@@ -65,6 +68,21 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 		}
 	}
+
+	// the incoming context could have an audience attached to it technically
+	// sine we do not want to handle audiences right now, do not pass it through directly
+	// instead we just propagate cancellation of parent context
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		select {
+		case <-ctx.Done():
+			cancel()
+		case <-cancelCtx.Done():
+		}
+	}()
+
+	// resp, ok, err := r.webhook.AuthenticateToken(cancelCtx, token.Value)
 
 	// TODO put something reasonable here
 	// make a new object so that we do not return the original token in the response

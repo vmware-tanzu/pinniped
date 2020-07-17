@@ -1,4 +1,23 @@
 FROM golang:1.14-alpine as build-env
+
+# It is important that these ARG's are defined after the FROM statement
+ARG ACCESS_TOKEN_USR="nothing"
+ARG ACCESS_TOKEN_PWD="nothing"
+
+# git is required to fetch go dependencies
+RUN apk add --no-cache ca-certificates git
+
+# Create a netrc file using the credentials specified using --build-arg
+RUN printf "machine github.com\n\
+    login ${ACCESS_TOKEN_USR}\n\
+    password ${ACCESS_TOKEN_PWD}\n\
+    \n\
+    machine api.github.com\n\
+    login ${ACCESS_TOKEN_USR}\n\
+    password ${ACCESS_TOKEN_PWD}\n"\
+    >> /root/.netrc
+RUN chmod 600 /root/.netrc
+
 RUN mkdir /work
 RUN mkdir /work/out
 WORKDIR /work

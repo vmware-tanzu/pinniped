@@ -64,8 +64,8 @@ func Setup(ctx context.Context, options SetupOptions) error {
 		Port:      &svc.Spec.Ports[0].Port,
 	}
 	apiSvc.ObjectMeta.OwnerReferences = []metav1.OwnerReference{{
-		APIVersion: ns.APIVersion,
-		Kind:       ns.Kind,
+		APIVersion: "v1",        // TODO why did we need to hardcode this to avoid errors? was ns.APIVersion
+		Kind:       "Namespace", // TODO why did we need to hardcode this to avoid errors? was ns.Kind
 		UID:        ns.UID,
 		Name:       ns.Name,
 	}}

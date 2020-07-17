@@ -20,10 +20,20 @@ import (
 
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
-
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
+	"k8s.io/client-go/kubernetes"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	restclient "k8s.io/client-go/rest"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
+	aggregationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
+	"github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
+	"github.com/suzerain-io/placeholder-name/internal/autoregistration"
 	"github.com/suzerain-io/placeholder-name/internal/certauthority"
+	"github.com/suzerain-io/placeholder-name/internal/downward"
 	"github.com/suzerain-io/placeholder-name/pkg/config"
 	"github.com/suzerain-io/placeholder-name/pkg/handlers"
 )
@@ -35,6 +45,10 @@ const shutdownGracePeriod = 5 * time.Second
 type App struct {
 	cmd *cobra.Command
 
+	// CLI flags
+	configPath      string
+	downwardAPIPath string
+
 	// listen address for healthz serve
 	healthAddr string
 
@@ -43,29 +57,39 @@ type App struct {
 
 	// webhook authenticates tokens
 	webhook authenticator.Token
-
-	// runFunc runs the actual program, after the parsing of flags has been done.
-	//
-	// It is mostly a field for the sake of testing.
-	runFunc func(ctx context.Context, configPath string) error
 }
 
 // New constructs a new App with command line args, stdout and stderr.
 func New(args []string, stdout, stderr io.Writer) *App {
 	a := &App{
 		healthAddr: ":8080",
-		mainAddr:   ":8443",
+		mainAddr:   ":443",
 	}
-	a.runFunc = a.serve
 
-	var configPath string
 	cmd := &cobra.Command{
 		Use: `placeholder-name`,
 		Long: `placeholder-name provides a generic API for mapping an external
 credential from somewhere to an internal credential to be used for
 authenticating to the Kubernetes API.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.runFunc(context.Background(), configPath)
+			// Load the Kubernetes client configuration (kubeconfig),
+			kubeconfig, err := restclient.InClusterConfig()
+			if err != nil {
+				return fmt.Errorf("could not load in-cluster configuration: %w", err)
+			}
+
+			// Connect to the core Kubernetes API.
+			k8s, err := kubernetes.NewForConfig(kubeconfig)
+			if err != nil {
+				return fmt.Errorf("could not initialize Kubernetes client: %w", err)
+			}
+
+			// Connect to the Kubernetes aggregation API.
+			aggregation, err := aggregationv1client.NewForConfig(kubeconfig)
+			if err != nil {
+				return fmt.Errorf("could not initialize Kubernetes client: %w", err)
+			}
+			return a.serve(context.Background(), k8s.CoreV1(), aggregation)
 		},
 		Args: cobra.NoArgs,
 	}
@@ -75,11 +99,18 @@ authenticating to the Kubernetes API.`,
 	cmd.SetErr(stderr)
 
 	cmd.Flags().StringVarP(
-		&configPath,
+		&a.configPath,
 		"config",
 		"c",
 		"placeholder-name.yaml",
 		"path to configuration file",
+	)
+
+	cmd.Flags().StringVar(
+		&a.downwardAPIPath,
+		"downward-api-path",
+		"/etc/podinfo",
+		"path to Downward API volume mount",
 	)
 
 	a.cmd = cmd
@@ -91,8 +122,8 @@ func (a *App) Run() error {
 	return a.cmd.Execute()
 }
 
-func (a *App) serve(ctx context.Context, configPath string) error {
-	cfg, err := config.FromPath(configPath)
+func (a *App) serve(ctx context.Context, k8s corev1client.CoreV1Interface, aggregation aggregationv1client.Interface) error {
+	cfg, err := config.FromPath(a.configPath)
 	if err != nil {
 		return fmt.Errorf("could not load config: %w", err)
 	}
@@ -102,6 +133,11 @@ func (a *App) serve(ctx context.Context, configPath string) error {
 		return fmt.Errorf("could create webhook client: %w", err)
 	}
 	a.webhook = webhook
+
+	podinfo, err := downward.Load(a.downwardAPIPath)
+	if err != nil {
+		return fmt.Errorf("could not read pod metadata: %w", err)
+	}
 
 	ca, err := certauthority.New(pkix.Name{CommonName: "Placeholder CA"})
 	if err != nil {
@@ -124,6 +160,43 @@ func (a *App) serve(ctx context.Context, configPath string) error {
 
 	// Start an errgroup to manage the lifetimes of the various listener goroutines.
 	eg, ctx := errgroup.WithContext(ctx)
+
+	// Dynamically register our v1alpha1 API service.
+	service := corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "placeholder-name-api"},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Protocol:   corev1.ProtocolTCP,
+					Port:       443,
+					TargetPort: intstr.IntOrString{IntVal: 443}, //TODO: parse this out of mainAddr
+				},
+			},
+			Selector: podinfo.Labels,
+			Type:     corev1.ServiceTypeClusterIP,
+		},
+	}
+	apiService := apiregistrationv1.APIService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "v1alpha1." + placeholder.GroupName,
+		},
+		Spec: apiregistrationv1.APIServiceSpec{
+			Group:                placeholder.GroupName,
+			Version:              "v1alpha1",
+			CABundle:             caBundle,
+			GroupPriorityMinimum: 2500,
+			VersionPriority:      10,
+		},
+	}
+	if err := autoregistration.Setup(ctx, autoregistration.SetupOptions{
+		CoreV1:             k8s,
+		AggregationV1:      aggregation,
+		Namespace:          podinfo.Namespace,
+		ServiceTemplate:    service,
+		APIServiceTemplate: apiService,
+	}); err != nil {
+		return fmt.Errorf("could not register API service: %w", err)
+	}
 
 	// Start healthz listener
 	eg.Go(func() error {

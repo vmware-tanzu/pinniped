@@ -71,7 +71,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	// the incoming context could have an audience attached to it technically
 	// sine we do not want to handle audiences right now, do not pass it through directly
-	// instead we just propagate cancellation of parent context
+	// instead we just propagate cancellation of the parent context
 	cancelCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {

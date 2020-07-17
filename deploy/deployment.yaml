@@ -9,6 +9,12 @@ metadata:
     name: #@ data.values.namespace
 ---
 apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: #@ data.values.app_name + "-service-account"
+  namespace: #@ data.values.namespace
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: #@ data.values.app_name + "-config"
@@ -39,6 +45,7 @@ spec:
       labels:
         app: #@ data.values.app_name
     spec:
+      serviceAccountName: #@ data.values.app_name + "-service-account"
       containers:
         - name: placeholder-name
           #@ if data.values.image_digest:
@@ -48,25 +55,25 @@ spec:
           #@ end
           imagePullPolicy: IfNotPresent
           command:
-          - ./app
-          - --config=/etc/config/placeholder-config.yaml
-          - --downward-api-path=/etc/podinfo
+            - ./app
+          args:
+            - --config=/etc/config/placeholder-config.yaml
+            - --downward-api-path=/etc/podinfo
           volumeMounts:
-          - name: config-volume
-            mountPath: /etc/config
+            - name: config-volume
+              mountPath: /etc/config
+            - name: podinfo
+              mountPath: /etc/podinfo
       volumes:
-      - name: config-volume
-        configMap:
-          name: #@ data.values.app_name + "-config"
+        - name: config-volume
+          configMap:
+            name: #@ data.values.app_name + "-config"
         - name: podinfo
-          mountPath: /etc/podinfo
-  volumes:
-    - name: podinfo
-      downwardAPI:
-        items:
-          - path: "labels"
-            fieldRef:
-              fieldPath: metadata.labels
-          - path: "namespace"
-            fieldRef:
-              fieldPath: metadata.namespace
+          downwardAPI:
+            items:
+              - path: "labels"
+                fieldRef:
+                  fieldPath: metadata.labels
+              - path: "namespace"
+                fieldRef:
+                  fieldPath: metadata.namespace

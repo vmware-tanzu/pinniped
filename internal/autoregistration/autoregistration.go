@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/scheme"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/util/retry"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
@@ -40,6 +41,15 @@ func Setup(ctx context.Context, options SetupOptions) error {
 		return fmt.Errorf("could not get namespace: %w", err)
 	}
 
+	// Clayton ... 😒
+	// https://github.com/kubernetes/kubernetes/pull/26251/files#diff-71b26e1e133ec6d3c4da26366b6502acR360-R361
+	gvks, _, err := scheme.Scheme.ObjectKinds(ns)
+	if err != nil || len(gvks) == 0 {
+		return fmt.Errorf("could not get GVK: %w", err)
+	}
+	gvk := gvks[0]
+	apiVersion, kind := gvk.ToAPIVersionAndKind()
+
 	// Make a copy of the Service template.
 	svc := options.ServiceTemplate.DeepCopy()
 	svc.Namespace = ns.Name
@@ -64,8 +74,8 @@ func Setup(ctx context.Context, options SetupOptions) error {
 		Port:      &svc.Spec.Ports[0].Port,
 	}
 	apiSvc.ObjectMeta.OwnerReferences = []metav1.OwnerReference{{
-		APIVersion: "v1",        // TODO why did we need to hardcode this to avoid errors? was ns.APIVersion
-		Kind:       "Namespace", // TODO why did we need to hardcode this to avoid errors? was ns.Kind
+		APIVersion: apiVersion,
+		Kind:       kind,
 		UID:        ns.UID,
 		Name:       ns.Name,
 	}}

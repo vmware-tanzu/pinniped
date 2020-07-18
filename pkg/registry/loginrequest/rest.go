@@ -88,7 +88,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	// make a new object so that we do not return the original token in the response
 	out := &placeholderapi.LoginRequest{
 		Status: placeholderapi.LoginRequestStatus{
-			ExpirationTimestamp:   &metav1.Time{},
+			ExpirationTimestamp:   nil,
 			Token:                 "snorlax",
 			ClientCertificateData: "",
 			ClientKeyData:         "",

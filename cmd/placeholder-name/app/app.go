@@ -11,29 +11,28 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"time"
 
 	"github.com/spf13/cobra"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
+	"k8s.io/client-go/kubernetes"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	restclient "k8s.io/client-go/rest"
+	aggregationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
 	"github.com/suzerain-io/placeholder-name/pkg/apiserver"
 	"github.com/suzerain-io/placeholder-name/pkg/config"
 )
 
-// shutdownGracePeriod controls how long active connections are allowed to continue at shutdown.
-const shutdownGracePeriod = 5 * time.Second
-
 // App is an object that represents the placeholder-name application.
 type App struct {
 	cmd *cobra.Command
 
-	// runFunc runs the actual program, after the parsing of flags has been done.
-	//
-	// It is mostly a field for the sake of testing.
-	runFunc func(ctx context.Context, configPath string) error
+	// CLI flags
+	configPath      string
+	downwardAPIPath string
 
 	recommendedOptions *genericoptions.RecommendedOptions
 }
@@ -49,17 +48,33 @@ func New(ctx context.Context, args []string, stdout, stderr io.Writer) *App {
 			apiserver.Codecs.LegacyCodec(placeholderv1alpha1.SchemeGroupVersion),
 		),
 	}
-	a.runFunc = a.run
 	a.recommendedOptions.Etcd = nil // turn off etcd storage
 
-	var configPath string
 	cmd := &cobra.Command{
 		Use: `placeholder-name`,
 		Long: `placeholder-name provides a generic API for mapping an external
 credential from somewhere to an internal credential to be used for
 authenticating to the Kubernetes API.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return a.runFunc(ctx, configPath)
+			// Load the Kubernetes client configuration (kubeconfig),
+			kubeconfig, err := restclient.InClusterConfig()
+			if err != nil {
+				return fmt.Errorf("could not load in-cluster configuration: %w", err)
+			}
+
+			// Connect to the core Kubernetes API.
+			k8s, err := kubernetes.NewForConfig(kubeconfig)
+			if err != nil {
+				return fmt.Errorf("could not initialize Kubernetes client: %w", err)
+			}
+
+			// Connect to the Kubernetes aggregation API.
+			aggregation, err := aggregationv1client.NewForConfig(kubeconfig)
+			if err != nil {
+				return fmt.Errorf("could not initialize Kubernetes client: %w", err)
+			}
+
+			return a.run(ctx, a.configPath, k8s.CoreV1(), aggregation)
 		},
 		Args: cobra.NoArgs,
 	}
@@ -69,11 +84,18 @@ authenticating to the Kubernetes API.`,
 	cmd.SetErr(stderr)
 
 	cmd.Flags().StringVarP(
-		&configPath,
+		&a.configPath,
 		"config",
 		"c",
 		"placeholder-name.yaml",
 		"path to configuration file",
+	)
+
+	cmd.Flags().StringVar(
+		&a.downwardAPIPath,
+		"downward-api-path",
+		"/etc/podinfo",
+		"path to Downward API volume mount",
 	)
 
 	a.cmd = cmd
@@ -85,8 +107,10 @@ func (a *App) Run() error {
 	return a.cmd.Execute()
 }
 
-func (a *App) run(ctx context.Context, configPath string) error {
-	cfg, err := config.FromPath(configPath)
+func (a *App) run(ctx context.Context, configPath string,
+	k8s corev1client.CoreV1Interface, aggregation aggregationv1client.Interface) error {
+
+	cfg, err := config.FromPath(a.configPath)
 	if err != nil {
 		return fmt.Errorf("could not load config: %w", err)
 	}
@@ -96,6 +120,68 @@ func (a *App) run(ctx context.Context, configPath string) error {
 		return fmt.Errorf("could create webhook client: %w", err)
 	}
 
+	// TODO use this stuff again
+	//podinfo, err := downward.Load(a.downwardAPIPath)
+	//if err != nil {
+	//	return fmt.Errorf("could not read pod metadata: %w", err)
+	//}
+	//
+	//ca, err := certauthority.New(pkix.Name{CommonName: "Placeholder CA"})
+	//if err != nil {
+	//	return fmt.Errorf("could not initialize CA: %w", err)
+	//}
+	//caBundle, err := ca.Bundle()
+	//if err != nil {
+	//	return fmt.Errorf("could not read CA bundle: %w", err)
+	//}
+	//log.Printf("initialized CA bundle:\n%s", string(caBundle))
+	//
+	//cert, err := ca.Issue(
+	//	pkix.Name{CommonName: "Placeholder Server"},
+	//	[]string{"placeholder-serve"},
+	//	24*365*time.Hour,
+	//)
+	//if err != nil {
+	//	return fmt.Errorf("could not issue serving certificate: %w", err)
+	//}
+	//
+	//// Dynamically register our v1alpha1 API service.
+	//service := corev1.Service{
+	//	ObjectMeta: metav1.ObjectMeta{Name: "placeholder-name-api"},
+	//	Spec: corev1.ServiceSpec{
+	//		Ports: []corev1.ServicePort{
+	//			{
+	//				Protocol:   corev1.ProtocolTCP,
+	//				Port:       443,
+	//				TargetPort: intstr.IntOrString{IntVal: 443},
+	//			},
+	//		},
+	//		Selector: podinfo.Labels,
+	//		Type:     corev1.ServiceTypeClusterIP,
+	//	},
+	//}
+	//apiService := apiregistrationv1.APIService{
+	//	ObjectMeta: metav1.ObjectMeta{
+	//		Name: "v1alpha1." + placeholder.GroupName,
+	//	},
+	//	Spec: apiregistrationv1.APIServiceSpec{
+	//		Group:                 placeholder.GroupName,
+	//		Version:               "v1alpha1",
+	//		CABundle:              caBundle,
+	//		GroupPriorityMinimum:  2500,
+	//		VersionPriority:       10,
+	//	},
+	//}
+	//if err := autoregistration.Setup(ctx, autoregistration.SetupOptions{
+	//	CoreV1:             k8s,
+	//	AggregationV1:      aggregation,
+	//	Namespace:          podinfo.Namespace,
+	//	ServiceTemplate:    service,
+	//	APIServiceTemplate: apiService,
+	//}); err != nil {
+	//	return fmt.Errorf("could not register API service: %w", err)
+	//}
+
 	apiServerConfig, err := a.ConfigServer(webhookTokenAuthenticator)
 	if err != nil {
 		return err
@@ -103,14 +189,14 @@ func (a *App) run(ctx context.Context, configPath string) error {
 
 	server, err := apiServerConfig.Complete().New()
 	if err != nil {
-		return err
+		return fmt.Errorf("could not issue serving certificate: %w", err)
 	}
 
 	return server.GenericAPIServer.PrepareRun().Run(ctx.Done())
 }
 
 func (a *App) ConfigServer(webhookTokenAuthenticator *webhook.WebhookTokenAuthenticator) (*apiserver.Config, error) {
-	// TODO have a "real" external address. Get this from some kind of config input or preferably some environment variable.
+	// TODO Use certs created elsewhere instead of creating them here. Also dynamically determine namespace of service in the hostname.
 	if err := a.recommendedOptions.SecureServing.MaybeDefaultWithSelfSignedCerts("placeholder-name.placeholder.svc", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %w", err)
 	}
@@ -128,5 +214,3 @@ func (a *App) ConfigServer(webhookTokenAuthenticator *webhook.WebhookTokenAuthen
 	}
 	return apiServerConfig, nil
 }
-
-// drop

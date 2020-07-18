@@ -141,12 +141,23 @@ spec:
           command:
             - ./app
           args:
-            - --config
-            - /etc/config/placeholder-name.yaml
+            - --config=/etc/config/placeholder-name.yaml
+            - --downward-api-path=/etc/podinfo
           volumeMounts:
             - name: config-volume
               mountPath: /etc/config
+            - name: podinfo
+              mountPath: /etc/podinfo
       volumes:
         - name: config-volume
           configMap:
             name: #@ data.values.app_name + "-config"
+        - name: podinfo
+          downwardAPI:
+            items:
+              - path: "labels"
+                fieldRef:
+                  fieldPath: metadata.labels
+              - path: "namespace"
+                fieldRef:
+                  fieldPath: metadata.namespace

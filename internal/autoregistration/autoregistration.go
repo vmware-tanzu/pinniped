@@ -41,8 +41,16 @@ func Setup(ctx context.Context, options SetupOptions) error {
 		return fmt.Errorf("could not get namespace: %w", err)
 	}
 
-	// Clayton ... 😒
+	// runtime.WithoutVersionDecoder clears the GVK set on the namespace because Clayton ... 😒
 	// https://github.com/kubernetes/kubernetes/pull/26251/files#diff-71b26e1e133ec6d3c4da26366b6502acR360-R361
+	// I think this is legacy cruft from the internal rest clients combined with using the same codec
+	// in places where implicit conversion occurs from some external version to an internal or different external version
+	// i.e. the type meta we saw on the wire may not match the type meta of the struct in all cases
+	// however, in our case, we know that we directly called the rest API at a particular version and that no conversion occurred
+	// thus we know that the type meta we saw on the wire directly matches the struct that we are using
+	// said in a different way, we know that our GVR to GVK (and vice versa) mapping is 1:1
+	// this means we can recover the type meta by asking the Kube client-go scheme for it
+	// the below code will only error if some generated Kube client-go code is broken
 	gvks, _, err := scheme.Scheme.ObjectKinds(ns)
 	if err != nil || len(gvks) == 0 {
 		return fmt.Errorf("could not get GVK: %w", err)

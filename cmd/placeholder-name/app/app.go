@@ -22,6 +22,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/client-go/kubernetes"
@@ -30,7 +31,7 @@ import (
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	aggregationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	"github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
+	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
 	"github.com/suzerain-io/placeholder-name/internal/autoregistration"
 	"github.com/suzerain-io/placeholder-name/internal/certauthority"
 	"github.com/suzerain-io/placeholder-name/internal/downward"
@@ -73,19 +74,22 @@ credential from somewhere to an internal credential to be used for
 authenticating to the Kubernetes API.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Load the Kubernetes client configuration (kubeconfig),
-			kubeconfig, err := restclient.InClusterConfig()
+			kubeConfig, err := restclient.InClusterConfig()
 			if err != nil {
 				return fmt.Errorf("could not load in-cluster configuration: %w", err)
 			}
 
+			// explicitly use protobuf when talking to built-in kube APIs
+			protoKubeConfig := createProtoKubeConfig(kubeConfig)
+
 			// Connect to the core Kubernetes API.
-			k8s, err := kubernetes.NewForConfig(kubeconfig)
+			k8s, err := kubernetes.NewForConfig(protoKubeConfig)
 			if err != nil {
 				return fmt.Errorf("could not initialize Kubernetes client: %w", err)
 			}
 
 			// Connect to the Kubernetes aggregation API.
-			aggregation, err := aggregationv1client.NewForConfig(kubeconfig)
+			aggregation, err := aggregationv1client.NewForConfig(protoKubeConfig)
 			if err != nil {
 				return fmt.Errorf("could not initialize Kubernetes client: %w", err)
 			}
@@ -178,11 +182,11 @@ func (a *App) serve(ctx context.Context, k8s corev1client.CoreV1Interface, aggre
 	}
 	apiService := apiregistrationv1.APIService{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "v1alpha1." + placeholder.GroupName,
+			Name: placeholderv1alpha1.SchemeGroupVersion.Version + "." + placeholderv1alpha1.GroupName,
 		},
 		Spec: apiregistrationv1.APIServiceSpec{
-			Group:                placeholder.GroupName,
-			Version:              "v1alpha1",
+			Group:                placeholderv1alpha1.GroupName,
+			Version:              placeholderv1alpha1.SchemeGroupVersion.Version,
 			CABundle:             caBundle,
 			GroupPriorityMinimum: 2500,
 			VersionPriority:      10,
@@ -258,4 +262,14 @@ func runGracefully(ctx context.Context, srv *http.Server, eg *errgroup.Group, f 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownGracePeriod)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// createProtoKubeConfig returns a copy of the input config with the ContentConfig set to use protobuf.
+// do not use this config to communicate with any CRD based APIs.
+func createProtoKubeConfig(kubeConfig *restclient.Config) *restclient.Config {
+	protoKubeConfig := restclient.CopyConfig(kubeConfig)
+	const protoThenJSON = runtime.ContentTypeProtobuf + "," + runtime.ContentTypeJSON
+	protoKubeConfig.AcceptContentTypes = protoThenJSON
+	protoKubeConfig.ContentType = runtime.ContentTypeProtobuf
+	return protoKubeConfig
 }

@@ -31,7 +31,7 @@ import (
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	aggregationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	"github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
+	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
 	"github.com/suzerain-io/placeholder-name/internal/autoregistration"
 	"github.com/suzerain-io/placeholder-name/internal/certauthority"
 	"github.com/suzerain-io/placeholder-name/internal/downward"
@@ -182,11 +182,11 @@ func (a *App) serve(ctx context.Context, k8s corev1client.CoreV1Interface, aggre
 	}
 	apiService := apiregistrationv1.APIService{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "v1alpha1." + placeholder.GroupName,
+			Name: placeholderv1alpha1.SchemeGroupVersion.Version + "." + placeholderv1alpha1.GroupName,
 		},
 		Spec: apiregistrationv1.APIServiceSpec{
-			Group:                placeholder.GroupName,
-			Version:              "v1alpha1",
+			Group:                placeholderv1alpha1.GroupName,
+			Version:              placeholderv1alpha1.SchemeGroupVersion.Version,
 			CABundle:             caBundle,
 			GroupPriorityMinimum: 2500,
 			VersionPriority:      10,

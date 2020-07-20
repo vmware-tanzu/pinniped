@@ -12,6 +12,8 @@ import (
 	"io"
 	"net"
 
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/spf13/cobra"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
@@ -57,19 +59,22 @@ credential from somewhere to an internal credential to be used for
 authenticating to the Kubernetes API.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Load the Kubernetes client configuration (kubeconfig),
-			kubeconfig, err := restclient.InClusterConfig()
+			kubeConfig, err := restclient.InClusterConfig()
 			if err != nil {
 				return fmt.Errorf("could not load in-cluster configuration: %w", err)
 			}
 
+			// explicitly use protobuf when talking to built-in kube APIs
+			protoKubeConfig := createProtoKubeConfig(kubeConfig)
+
 			// Connect to the core Kubernetes API.
-			k8s, err := kubernetes.NewForConfig(kubeconfig)
+			k8s, err := kubernetes.NewForConfig(protoKubeConfig)
 			if err != nil {
 				return fmt.Errorf("could not initialize Kubernetes client: %w", err)
 			}
 
 			// Connect to the Kubernetes aggregation API.
-			aggregation, err := aggregationv1client.NewForConfig(kubeconfig)
+			aggregation, err := aggregationv1client.NewForConfig(protoKubeConfig)
 			if err != nil {
 				return fmt.Errorf("could not initialize Kubernetes client: %w", err)
 			}
@@ -153,7 +158,7 @@ func (a *App) run(ctx context.Context, configPath string,
 	//			{
 	//				Protocol:   corev1.ProtocolTCP,
 	//				Port:       443,
-	//				TargetPort: intstr.IntOrString{IntVal: 443},
+	//				TargetPort: intstr.IntOrString{IntVal: 443}, //TODO: parse this out of mainAddr
 	//			},
 	//		},
 	//		Selector: podinfo.Labels,
@@ -162,14 +167,14 @@ func (a *App) run(ctx context.Context, configPath string,
 	//}
 	//apiService := apiregistrationv1.APIService{
 	//	ObjectMeta: metav1.ObjectMeta{
-	//		Name: "v1alpha1." + placeholder.GroupName,
+	//		Name: placeholderv1alpha1.SchemeGroupVersion.Version + "." + placeholderv1alpha1.GroupName,
 	//	},
 	//	Spec: apiregistrationv1.APIServiceSpec{
-	//		Group:                 placeholder.GroupName,
-	//		Version:               "v1alpha1",
-	//		CABundle:              caBundle,
-	//		GroupPriorityMinimum:  2500,
-	//		VersionPriority:       10,
+	//		Group:                placeholderv1alpha1.GroupName,
+	//		Version:              placeholderv1alpha1.SchemeGroupVersion.Version,
+	//		CABundle:             caBundle,
+	//		GroupPriorityMinimum: 2500,
+	//		VersionPriority:      10,
 	//	},
 	//}
 	//if err := autoregistration.Setup(ctx, autoregistration.SetupOptions{
@@ -213,4 +218,14 @@ func (a *App) ConfigServer(webhookTokenAuthenticator *webhook.WebhookTokenAuthen
 		},
 	}
 	return apiServerConfig, nil
+}
+
+// createProtoKubeConfig returns a copy of the input config with the ContentConfig set to use protobuf.
+// do not use this config to communicate with any CRD based APIs.
+func createProtoKubeConfig(kubeConfig *restclient.Config) *restclient.Config {
+	protoKubeConfig := restclient.CopyConfig(kubeConfig)
+	const protoThenJSON = runtime.ContentTypeProtobuf + "," + runtime.ContentTypeJSON
+	protoKubeConfig.AcceptContentTypes = protoThenJSON
+	protoKubeConfig.ContentType = runtime.ContentTypeProtobuf
+	return protoKubeConfig
 }

@@ -11,6 +11,8 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
+	"k8s.io/client-go/pkg/version"
+	"k8s.io/client-go/rest"
 
 	"github.com/suzerain-io/placeholder-name/cmd/placeholder-name/app"
 )
@@ -18,6 +20,8 @@ import (
 func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
+
+	klog.Infof("Running %s at %#v", rest.DefaultKubernetesUserAgent(), version.Get())
 
 	ctx := genericapiserver.SetupSignalContext()
 

@@ -5,7 +5,7 @@ ARG ACCESS_TOKEN_USR="nothing"
 ARG ACCESS_TOKEN_PWD="nothing"
 
 # git is required to fetch go dependencies
-RUN apk add --no-cache ca-certificates git
+RUN apk add --no-cache ca-certificates git bash
 
 # Create a netrc file using the credentials specified using --build-arg
 RUN printf "machine github.com\n\
@@ -30,16 +30,17 @@ COPY cmd ./cmd
 COPY internal ./internal
 COPY pkg ./pkg
 COPY tools ./tools
+COPY hack ./hack
 # Build the executable binary
-RUN GOOS=linux GOARCH=amd64 go build -o out ./...
+RUN GOOS=linux GOARCH=amd64 go build -ldflags "$(hack/get-ldflags.sh)" -o out ./...
 
 FROM alpine:latest
 # Install CA certs and some tools for debugging
 RUN apk --update --no-cache add ca-certificates bash curl
 WORKDIR /root/
 # Copy the binary from the build-env stage
-COPY --from=build-env /work/out/placeholder-name app
+COPY --from=build-env /work/out/placeholder-name placeholder-name
 # Document the port
 EXPOSE 443
 # Set the command
-CMD ["./app"]
+CMD ["./placeholder-name"]

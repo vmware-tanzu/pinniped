@@ -14,6 +14,7 @@ require (
 	k8s.io/apimachinery v0.19.0-rc.0
 	k8s.io/apiserver v0.19.0-rc.0
 	k8s.io/client-go v0.19.0-rc.0
+	k8s.io/klog/v2 v2.2.0
 	k8s.io/kube-aggregator v0.19.0-rc.0
 	k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
 	sigs.k8s.io/yaml v1.2.0

@@ -8,9 +8,24 @@ package app
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
 	"io"
-	"net"
+	"io/ioutil"
+	"log"
+	"time"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
+
+	"github.com/suzerain-io/placeholder-name/internal/autoregistration"
+	"github.com/suzerain-io/placeholder-name/internal/certauthority"
+	"github.com/suzerain-io/placeholder-name/internal/downward"
 
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -50,7 +65,7 @@ func New(ctx context.Context, args []string, stdout, stderr io.Writer) *App {
 			apiserver.Codecs.LegacyCodec(placeholderv1alpha1.SchemeGroupVersion),
 		),
 	}
-	a.recommendedOptions.Etcd = nil // turn off etcd storage
+	a.recommendedOptions.Etcd = nil // turn off etcd storage because we don't need it yet
 
 	cmd := &cobra.Command{
 		Use: `placeholder-name`,
@@ -125,69 +140,70 @@ func (a *App) run(ctx context.Context, configPath string,
 		return fmt.Errorf("could create webhook client: %w", err)
 	}
 
-	// TODO use this stuff again
-	//podinfo, err := downward.Load(a.downwardAPIPath)
-	//if err != nil {
-	//	return fmt.Errorf("could not read pod metadata: %w", err)
-	//}
-	//
-	//ca, err := certauthority.New(pkix.Name{CommonName: "Placeholder CA"})
-	//if err != nil {
-	//	return fmt.Errorf("could not initialize CA: %w", err)
-	//}
-	//caBundle, err := ca.Bundle()
-	//if err != nil {
-	//	return fmt.Errorf("could not read CA bundle: %w", err)
-	//}
-	//log.Printf("initialized CA bundle:\n%s", string(caBundle))
-	//
-	//cert, err := ca.Issue(
-	//	pkix.Name{CommonName: "Placeholder Server"},
-	//	[]string{"placeholder-serve"},
-	//	24*365*time.Hour,
-	//)
-	//if err != nil {
-	//	return fmt.Errorf("could not issue serving certificate: %w", err)
-	//}
-	//
-	//// Dynamically register our v1alpha1 API service.
-	//service := corev1.Service{
-	//	ObjectMeta: metav1.ObjectMeta{Name: "placeholder-name-api"},
-	//	Spec: corev1.ServiceSpec{
-	//		Ports: []corev1.ServicePort{
-	//			{
-	//				Protocol:   corev1.ProtocolTCP,
-	//				Port:       443,
-	//				TargetPort: intstr.IntOrString{IntVal: 443}, //TODO: parse this out of mainAddr
-	//			},
-	//		},
-	//		Selector: podinfo.Labels,
-	//		Type:     corev1.ServiceTypeClusterIP,
-	//	},
-	//}
-	//apiService := apiregistrationv1.APIService{
-	//	ObjectMeta: metav1.ObjectMeta{
-	//		Name: placeholderv1alpha1.SchemeGroupVersion.Version + "." + placeholderv1alpha1.GroupName,
-	//	},
-	//	Spec: apiregistrationv1.APIServiceSpec{
-	//		Group:                placeholderv1alpha1.GroupName,
-	//		Version:              placeholderv1alpha1.SchemeGroupVersion.Version,
-	//		CABundle:             caBundle,
-	//		GroupPriorityMinimum: 2500,
-	//		VersionPriority:      10,
-	//	},
-	//}
-	//if err := autoregistration.Setup(ctx, autoregistration.SetupOptions{
-	//	CoreV1:             k8s,
-	//	AggregationV1:      aggregation,
-	//	Namespace:          podinfo.Namespace,
-	//	ServiceTemplate:    service,
-	//	APIServiceTemplate: apiService,
-	//}); err != nil {
-	//	return fmt.Errorf("could not register API service: %w", err)
-	//}
+	podinfo, err := downward.Load(a.downwardAPIPath)
+	if err != nil {
+		return fmt.Errorf("could not read pod metadata: %w", err)
+	}
 
-	apiServerConfig, err := a.ConfigServer(webhookTokenAuthenticator)
+	ca, err := certauthority.New(pkix.Name{CommonName: "Placeholder CA"})
+	if err != nil {
+		return fmt.Errorf("could not initialize CA: %w", err)
+	}
+	caBundle, err := ca.Bundle()
+	if err != nil {
+		return fmt.Errorf("could not read CA bundle: %w", err)
+	}
+	log.Printf("initialized CA bundle:\n%s", string(caBundle))
+
+	const serviceName = "placeholder-name-api"
+
+	cert, err := ca.Issue(
+		pkix.Name{CommonName: serviceName + "." + podinfo.Namespace + ".svc"},
+		[]string{},
+		24*365*time.Hour,
+	)
+	if err != nil {
+		return fmt.Errorf("could not issue serving certificate: %w", err)
+	}
+
+	// Dynamically register our v1alpha1 API service.
+	service := corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: serviceName},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Protocol:   corev1.ProtocolTCP,
+					Port:       443,
+					TargetPort: intstr.IntOrString{IntVal: 443},
+				},
+			},
+			Selector: podinfo.Labels,
+			Type:     corev1.ServiceTypeClusterIP,
+		},
+	}
+	apiService := apiregistrationv1.APIService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: placeholderv1alpha1.SchemeGroupVersion.Version + "." + placeholderv1alpha1.GroupName,
+		},
+		Spec: apiregistrationv1.APIServiceSpec{
+			Group:                placeholderv1alpha1.GroupName,
+			Version:              placeholderv1alpha1.SchemeGroupVersion.Version,
+			CABundle:             caBundle,
+			GroupPriorityMinimum: 2500, // TODO huh? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
+			VersionPriority:      10,   // TODO huh? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
+		},
+	}
+	if err := autoregistration.Setup(ctx, autoregistration.SetupOptions{
+		CoreV1:             k8s,
+		AggregationV1:      aggregation,
+		Namespace:          podinfo.Namespace,
+		ServiceTemplate:    service,
+		APIServiceTemplate: apiService,
+	}); err != nil {
+		return fmt.Errorf("could not register API service: %w", err)
+	}
+
+	apiServerConfig, err := a.ConfigServer(cert, webhookTokenAuthenticator)
 	if err != nil {
 		return err
 	}
@@ -200,11 +216,49 @@ func (a *App) run(ctx context.Context, configPath string,
 	return server.GenericAPIServer.PrepareRun().Run(ctx.Done())
 }
 
-func (a *App) ConfigServer(webhookTokenAuthenticator *webhook.WebhookTokenAuthenticator) (*apiserver.Config, error) {
-	// TODO Use certs created elsewhere instead of creating them here. Also dynamically determine namespace of service in the hostname.
-	if err := a.recommendedOptions.SecureServing.MaybeDefaultWithSelfSignedCerts("placeholder-name.placeholder.svc", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
-		return nil, fmt.Errorf("error creating self-signed certificates: %w", err)
+func (a *App) ConfigServer(cert *tls.Certificate, webhookTokenAuthenticator *webhook.WebhookTokenAuthenticator) (*apiserver.Config, error) {
+	privateKeyPemFile, err := ioutil.TempFile("", "private_key.*")
+	if err != nil {
+		return nil, fmt.Errorf("error opening tmp file for private key: %w", err)
 	}
+	privateKeyDer, err := x509.MarshalPKCS8PrivateKey(cert.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling private key: %w", err)
+	}
+	err = pem.Encode(privateKeyPemFile, &pem.Block{
+		Type:    "PRIVATE KEY",
+		Headers: nil,
+		Bytes:   privateKeyDer,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error writing private key to tmp file: %w", err)
+	}
+	err = privateKeyPemFile.Close()
+	if err != nil {
+		return nil, fmt.Errorf("error closing private key tmp file: %w", err)
+	}
+	a.recommendedOptions.SecureServing.ServerCert.CertKey.KeyFile = privateKeyPemFile.Name()
+
+	certificatePemFile, err := ioutil.TempFile("", "certificate.*")
+	if err != nil {
+		return nil, fmt.Errorf("error opening tmp file for certificate chain: %w", err)
+	}
+	certificateChain := cert.Certificate
+	for _, certFromChain := range certificateChain {
+		err := pem.Encode(certificatePemFile, &pem.Block{
+			Type:    "CERTIFICATE",
+			Headers: nil,
+			Bytes:   certFromChain,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error writing certificate chain to tmp file: %w", err)
+		}
+	}
+	err = certificatePemFile.Close()
+	if err != nil {
+		return nil, fmt.Errorf("error closing certificate chain tmp file: %w", err)
+	}
+	a.recommendedOptions.SecureServing.ServerCert.CertKey.CertFile = certificatePemFile.Name()
 
 	serverConfig := genericapiserver.NewRecommendedConfig(apiserver.Codecs)
 	if err := a.recommendedOptions.ApplyTo(serverConfig); err != nil {

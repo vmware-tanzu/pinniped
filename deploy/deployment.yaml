@@ -28,34 +28,9 @@ data:
       url: (@= data.values.webhook_url @)
       caBundle: (@= data.values.webhook_ca_bundle @)
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: #@ data.values.app_name
-  namespace: #@ data.values.namespace
-spec:
-  selector:
-    app: #@ data.values.app_name
-  ports:
-    - protocol: TCP
-      port: 443
-      targetPort: 443
----
-apiVersion: apiregistration.k8s.io/v1
-kind: APIService
-metadata:
-  name: v1alpha1.placeholder.suzerain-io.github.io
-spec:
-  group: placeholder.suzerain-io.github.io
-  version: v1alpha1
-  groupPriorityMinimum: 2500 #! TODO huh? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
-  versionPriority: 10 #! TODO huh? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
-  insecureSkipTLSVerify: true #! TODO REMOVE and use caBundle instead
-  #! caBundle: <pem encoded ca cert that signs the server cert used by the webhook>
-  service:
-    namespace: #@ data.values.namespace
-    name: #@ data.values.app_name
----
+#! TODO set up healthy, ready, etc. probes correctly for our deployment
+#! TODO set the priority-critical-urgent on our deployment to ask kube to never let it die
+#! TODO set resource minimums (e.g. 512MB RAM) on the deployment to make sure we get scheduled onto a reasonable node
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -64,7 +39,7 @@ metadata:
   labels:
     app: #@ data.values.app_name
 spec:
-  replicas: 1
+  replicas: 1 #! TODO more than one replica for high availability, and share the same serving certificate among them
   selector:
     matchLabels:
       app: #@ data.values.app_name

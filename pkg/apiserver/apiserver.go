@@ -8,10 +8,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	"k8s.io/client-go/pkg/version"
 	"k8s.io/klog/v2"
 
 	placeholderapi "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
@@ -28,11 +28,9 @@ func init() {
 	utilruntime.Must(placeholderv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(placeholderapi.AddToScheme(scheme))
 
-	// we need to add the options to empty v1
-	// TODO fix the server code to avoid this
+	// add the options to empty v1
 	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
 
-	// TODO: keep the generic API server from wanting this
 	unversioned := schema.GroupVersion{Group: "", Version: "v1"}
 	scheme.AddUnversionedTypes(unversioned,
 		&metav1.Status{},
@@ -73,11 +71,8 @@ func (c *Config) Complete() CompletedConfig {
 		&c.ExtraConfig,
 	}
 
-	// TODO fix version
-	completedCfg.GenericConfig.Version = &version.Info{
-		Major: "0",
-		Minor: "1",
-	}
+	versionInfo := version.Get()
+	completedCfg.GenericConfig.Version = &versionInfo
 
 	return CompletedConfig{completedConfig: &completedCfg}
 }
@@ -93,27 +88,25 @@ func (c completedConfig) New() (*PlaceHolderServer, error) {
 		GenericAPIServer: genericServer,
 	}
 
-	// TODO this should be v1, not v1alpha1
 	gvr := placeholderv1alpha1.SchemeGroupVersion.WithResource("loginrequests")
 
 	apiGroupInfo := genericapiserver.APIGroupInfo{
 		PrioritizedVersions:          []schema.GroupVersion{gvr.GroupVersion()},
 		VersionedResourcesStorageMap: map[string]map[string]rest.Storage{},
-		// TODO unhardcode this.  It was hardcoded before, but we need to re-evaluate
-		OptionsExternalVersion: &schema.GroupVersion{Version: "v1"},
-		Scheme:                 scheme,
-		ParameterCodec:         metav1.ParameterCodec,
-		NegotiatedSerializer:   Codecs,
+		OptionsExternalVersion:       &schema.GroupVersion{Version: "v1"},
+		Scheme:                       scheme,
+		ParameterCodec:               metav1.ParameterCodec,
+		NegotiatedSerializer:         Codecs,
 	}
 
 	loginRequestStorage := loginrequest.NewREST(c.ExtraConfig.Webhook)
 
-	v1Storage, ok := apiGroupInfo.VersionedResourcesStorageMap[gvr.Version]
+	v1alpha1Storage, ok := apiGroupInfo.VersionedResourcesStorageMap[gvr.Version]
 	if !ok {
-		v1Storage = map[string]rest.Storage{}
+		v1alpha1Storage = map[string]rest.Storage{}
 	}
-	v1Storage[gvr.Resource] = loginRequestStorage
-	apiGroupInfo.VersionedResourcesStorageMap[gvr.Version] = v1Storage
+	v1alpha1Storage[gvr.Resource] = loginRequestStorage
+	apiGroupInfo.VersionedResourcesStorageMap[gvr.Version] = v1alpha1Storage
 
 	if err := s.GenericAPIServer.InstallAPIGroup(&apiGroupInfo); err != nil {
 		return nil, fmt.Errorf("install API group error: %w", err)

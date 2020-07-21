@@ -193,8 +193,8 @@ func (a *App) run(ctx context.Context, configPath string,
 			Group:                placeholderv1alpha1.GroupName,
 			Version:              placeholderv1alpha1.SchemeGroupVersion.Version,
 			CABundle:             caBundle,
-			GroupPriorityMinimum: 2500, // TODO huh? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
-			VersionPriority:      10,   // TODO huh? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
+			GroupPriorityMinimum: 2500, // TODO what is the right value? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
+			VersionPriority:      10,   // TODO what is the right value? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
 		},
 	}
 	if err := autoregistration.Setup(ctx, autoregistration.SetupOptions{

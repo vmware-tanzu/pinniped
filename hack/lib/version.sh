@@ -71,7 +71,7 @@ kube::version::get_version_vars() {
       # compatible semantic version that looks something like this:
       #   v1.1.0-alpha.0.6+84c76d1142ea4d
       #
-      # TODO: We continue calling this "git version" because so many
+      # xTODO: We continue calling this "git version" because so many
       # downstream consumers are expecting it there.
       #
       # These regexes are painful enough in sed...

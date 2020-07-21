@@ -45,7 +45,9 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("not a LoginRequest: %#v", obj))
 	}
 
-	// TODO move into a validation function, check .spec.type, write unit tests, etc
+	// TODO refactor all validation checks into a validation function in another package (e.g. see subjectaccessreqview api in k8s)
+
+	// TODO also validate .spec.type
 	token := loginRequest.Spec.Token
 	if token == nil || len(token.Value) == 0 {
 		errs := field.ErrorList{field.Required(field.NewPath("spec", "token", "value"), "token must be supplied")}
@@ -53,7 +55,11 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	}
 
 	// let dynamic admission webhooks have a chance to validate (but not mutate) as well
-	// TODO are we okay with admission webhooks being able to see tokens?
+	// TODO Are we okay with admission webhooks being able to see tokens? Maybe strip token out before passing obj to createValidation.
+	//  Since we are an aggregated API, we should investigate to see if the kube API server is already invoking admission hooks for us.
+	//  Even if it is, its okay to call it again here. If the kube API server is already calling the webhooks and passing
+	//  the token, then there is probably no reason for us to avoid passing the token when we call the webhooks here, since
+	//  they already got the token.
 	if createValidation != nil {
 		if err := createValidation(ctx, obj.DeepCopyObject()); err != nil {
 			return nil, err

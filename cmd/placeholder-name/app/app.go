@@ -221,34 +221,10 @@ func (a *App) run(ctx context.Context, configPath string,
 }
 
 func (a *App) ConfigServer(cert *tls.Certificate, webhookTokenAuthenticator *webhook.WebhookTokenAuthenticator) (*apiserver.Config, error) {
-	privateKeyDER, err := x509.MarshalPKCS8PrivateKey(cert.PrivateKey)
+	provider, err := createStaticCertKeyProvider(cert)
 	if err != nil {
-		return nil, fmt.Errorf("error marshalling private key: %w", err)
+		return nil, fmt.Errorf("could not create static cert key provider: %w", err)
 	}
-	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:    "PRIVATE KEY",
-		Headers: nil,
-		Bytes:   privateKeyDER,
-	})
-
-	var certChainPEM []byte
-	for _, certFromChain := range cert.Certificate {
-		certPEMBytes := pem.EncodeToMemory(&pem.Block{
-			Type:    "CERTIFICATE",
-			Headers: nil,
-			Bytes:   certFromChain,
-		})
-		certChainPEM = append(certChainPEM, certPEMBytes...)
-	}
-
-	// TODO remove this debugging output
-	log.Print("certChainPEM is ....", string(certChainPEM))
-
-	provider, err := dynamiccertificates.NewStaticCertKeyContent("some-name???", certChainPEM, privateKeyPEM)
-	if err != nil {
-		return nil, fmt.Errorf("error making NewStaticCertKeyContent %w", err)
-	}
-
 	a.recommendedOptions.SecureServing.ServerCert.GeneratedCert = provider
 
 	serverConfig := genericapiserver.NewRecommendedConfig(apiserver.Codecs)
@@ -273,4 +249,28 @@ func createProtoKubeConfig(kubeConfig *restclient.Config) *restclient.Config {
 	protoKubeConfig.AcceptContentTypes = protoThenJSON
 	protoKubeConfig.ContentType = runtime.ContentTypeProtobuf
 	return protoKubeConfig
+}
+
+func createStaticCertKeyProvider(cert *tls.Certificate) (dynamiccertificates.CertKeyContentProvider, error) {
+	privateKeyDER, err := x509.MarshalPKCS8PrivateKey(cert.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling private key: %w", err)
+	}
+	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:    "PRIVATE KEY",
+		Headers: nil,
+		Bytes:   privateKeyDER,
+	})
+
+	var certChainPEM []byte
+	for _, certFromChain := range cert.Certificate {
+		certPEMBytes := pem.EncodeToMemory(&pem.Block{
+			Type:    "CERTIFICATE",
+			Headers: nil,
+			Bytes:   certFromChain,
+		})
+		certChainPEM = append(certChainPEM, certPEMBytes...)
+	}
+
+	return dynamiccertificates.NewStaticCertKeyContent("some-name???", certChainPEM, privateKeyPEM)
 }

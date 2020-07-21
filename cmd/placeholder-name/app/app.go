@@ -14,9 +14,10 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"time"
+
+	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -63,6 +64,7 @@ func New(ctx context.Context, args []string, stdout, stderr io.Writer) *App {
 		recommendedOptions: genericoptions.NewRecommendedOptions(
 			defaultEtcdPathPrefix,
 			apiserver.Codecs.LegacyCodec(placeholderv1alpha1.SchemeGroupVersion),
+			// TODO we should check to see if all the other default settings are acceptable for us
 		),
 	}
 	a.recommendedOptions.Etcd = nil // turn off etcd storage because we don't need it yet
@@ -145,6 +147,8 @@ func (a *App) run(ctx context.Context, configPath string,
 		return fmt.Errorf("could not read pod metadata: %w", err)
 	}
 
+	// TODO use the postStart hook to generate certs?
+
 	ca, err := certauthority.New(pkix.Name{CommonName: "Placeholder CA"})
 	if err != nil {
 		return fmt.Errorf("could not initialize CA: %w", err)
@@ -217,48 +221,35 @@ func (a *App) run(ctx context.Context, configPath string,
 }
 
 func (a *App) ConfigServer(cert *tls.Certificate, webhookTokenAuthenticator *webhook.WebhookTokenAuthenticator) (*apiserver.Config, error) {
-	privateKeyPemFile, err := ioutil.TempFile("", "private_key.*")
-	if err != nil {
-		return nil, fmt.Errorf("error opening tmp file for private key: %w", err)
-	}
-	privateKeyDer, err := x509.MarshalPKCS8PrivateKey(cert.PrivateKey)
+	privateKeyDER, err := x509.MarshalPKCS8PrivateKey(cert.PrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("error marshalling private key: %w", err)
 	}
-	err = pem.Encode(privateKeyPemFile, &pem.Block{
+	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
 		Type:    "PRIVATE KEY",
 		Headers: nil,
-		Bytes:   privateKeyDer,
+		Bytes:   privateKeyDER,
 	})
-	if err != nil {
-		return nil, fmt.Errorf("error writing private key to tmp file: %w", err)
-	}
-	err = privateKeyPemFile.Close()
-	if err != nil {
-		return nil, fmt.Errorf("error closing private key tmp file: %w", err)
-	}
-	a.recommendedOptions.SecureServing.ServerCert.CertKey.KeyFile = privateKeyPemFile.Name()
 
-	certificatePemFile, err := ioutil.TempFile("", "certificate.*")
-	if err != nil {
-		return nil, fmt.Errorf("error opening tmp file for certificate chain: %w", err)
-	}
-	certificateChain := cert.Certificate
-	for _, certFromChain := range certificateChain {
-		err := pem.Encode(certificatePemFile, &pem.Block{
+	var certChainPEM []byte
+	for _, certFromChain := range cert.Certificate {
+		certPEMBytes := pem.EncodeToMemory(&pem.Block{
 			Type:    "CERTIFICATE",
 			Headers: nil,
 			Bytes:   certFromChain,
 		})
-		if err != nil {
-			return nil, fmt.Errorf("error writing certificate chain to tmp file: %w", err)
-		}
+		certChainPEM = append(certChainPEM, certPEMBytes...)
 	}
-	err = certificatePemFile.Close()
+
+	// TODO remove this debugging output
+	log.Print("certChainPEM is ....", string(certChainPEM))
+
+	provider, err := dynamiccertificates.NewStaticCertKeyContent("some-name???", certChainPEM, privateKeyPEM)
 	if err != nil {
-		return nil, fmt.Errorf("error closing certificate chain tmp file: %w", err)
+		return nil, fmt.Errorf("error making NewStaticCertKeyContent %w", err)
 	}
-	a.recommendedOptions.SecureServing.ServerCert.CertKey.CertFile = certificatePemFile.Name()
+
+	a.recommendedOptions.SecureServing.ServerCert.GeneratedCert = provider
 
 	serverConfig := genericapiserver.NewRecommendedConfig(apiserver.Codecs)
 	if err := a.recommendedOptions.ApplyTo(serverConfig); err != nil {

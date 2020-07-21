@@ -51,7 +51,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	token := loginRequest.Spec.Token
 	if token == nil || len(token.Value) == 0 {
 		errs := field.ErrorList{field.Required(field.NewPath("spec", "token", "value"), "token must be supplied")}
-		return nil, apierrors.NewInvalid(placeholderapi.Kind(loginRequest.Kind), "", errs)
+		return nil, apierrors.NewInvalid(placeholderapi.Kind(loginRequest.Kind), loginRequest.Name, errs)
 	}
 
 	// let dynamic admission webhooks have a chance to validate (but not mutate) as well
@@ -70,8 +70,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	if options != nil {
 		if len(options.DryRun) != 0 {
 			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, nil)}
-			return nil, apierrors.NewInvalid(placeholderapi.Kind(loginRequest.Kind), "", errs)
-
+			return nil, apierrors.NewInvalid(placeholderapi.Kind(loginRequest.Kind), loginRequest.Name, errs)
 		}
 	}
 
@@ -88,9 +87,10 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		}
 	}()
 
-	// resp, ok, err := r.webhook.AuthenticateToken(cancelCtx, token.Value)
+	// TODO do the actual business logic of this endpoint here
 
-	// TODO put something reasonable here
+	_, _, _ = r.webhook.AuthenticateToken(cancelCtx, token.Value)
+
 	// make a new object so that we do not return the original token in the response
 	out := &placeholderapi.LoginRequest{
 		Status: placeholderapi.LoginRequestStatus{

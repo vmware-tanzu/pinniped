@@ -145,8 +145,9 @@ func TestGetAPIResourceList(t *testing.T) {
 		GroupVersion: "placeholder.suzerain-io.github.io/v1alpha1",
 		APIResources: []metav1.APIResource{
 			metav1.APIResource{
-				Name: "loginrequests",
-				Kind: "LoginRequest",
+				Name:         "loginrequests",
+				Kind:         "LoginRequest",
+				SingularName: "", // TODO(akeesler): what should this be?
 				Verbs: metav1.Verbs([]string{
 					"create",
 				}),

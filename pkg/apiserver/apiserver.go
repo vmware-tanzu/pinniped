@@ -25,10 +25,14 @@ import (
 )
 
 var (
+	//nolint: gochecknoglobals
 	scheme = runtime.NewScheme()
+	//nolint: gochecknoglobals
+	//nolint: golint
 	Codecs = serializer.NewCodecFactory(scheme)
 )
 
+//nolint: gochecknoinits
 func init() {
 	utilruntime.Must(placeholderv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(placeholderapi.AddToScheme(scheme))

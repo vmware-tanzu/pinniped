@@ -25,6 +25,8 @@ linters:
   - exhaustive
   - exportloopref
   - funlen
+  - gochecknoglobals
+  - gochecknoinits
   - gocritic
   - gocyclo
   - godot

@@ -55,7 +55,8 @@ type App struct {
 	recommendedOptions *genericoptions.RecommendedOptions
 }
 
-// This is ignored for now because we turn off etcd storage below, but this is the right prefix in case we turn it back on
+// This is ignored for now because we turn off etcd storage below, but this is
+// the right prefix in case we turn it back on.
 const defaultEtcdPathPrefix = "/registry/" + placeholderv1alpha1.GroupName
 
 // New constructs a new App with command line args, stdout and stderr.
@@ -96,7 +97,7 @@ authenticating to the Kubernetes API.`,
 				return fmt.Errorf("could not initialize Kubernetes client: %w", err)
 			}
 
-			return a.run(ctx, a.configPath, k8s.CoreV1(), aggregation)
+			return a.run(ctx, k8s.CoreV1(), aggregation)
 		},
 		Args: cobra.NoArgs,
 	}
@@ -129,9 +130,11 @@ func (a *App) Run() error {
 	return a.cmd.Execute()
 }
 
-func (a *App) run(ctx context.Context, configPath string,
-	k8s corev1client.CoreV1Interface, aggregation aggregationv1client.Interface) error {
-
+func (a *App) run(
+	ctx context.Context,
+	k8s corev1client.CoreV1Interface,
+	aggregation aggregationv1client.Interface,
+) error {
 	cfg, err := config.FromPath(a.configPath)
 	if err != nil {
 		return fmt.Errorf("could not load config: %w", err)
@@ -262,7 +265,7 @@ func createStaticCertKeyProvider(cert *tls.Certificate) (dynamiccertificates.Cer
 		Bytes:   privateKeyDER,
 	})
 
-	var certChainPEM []byte
+	certChainPEM := make([]byte, 0)
 	for _, certFromChain := range cert.Certificate {
 		certPEMBytes := pem.EncodeToMemory(&pem.Block{
 			Type:    "CERTIFICATE",

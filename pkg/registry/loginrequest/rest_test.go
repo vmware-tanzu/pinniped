@@ -1,3 +1,8 @@
+/*
+Copyright 2020 VMware, Inc.
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package loginrequest
 
 import (
@@ -18,6 +23,8 @@ import (
 	placeholderapi "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
 )
 
+type contextKey struct{}
+
 type FakeToken struct {
 	calledWithToken                       string
 	calledWithContext                     context.Context
@@ -25,6 +32,7 @@ type FakeToken struct {
 	reachedTimeout                        bool
 	cancelled                             bool
 	webhookStartedRunningNotificationChan chan bool
+	returnErr                             error
 }
 
 func (f *FakeToken) AuthenticateToken(ctx context.Context, token string) (*authenticator.Response, bool, error) {
@@ -40,10 +48,10 @@ func (f *FakeToken) AuthenticateToken(ctx context.Context, token string) (*authe
 	case <-ctx.Done():
 		f.cancelled = true
 	}
-	return &authenticator.Response{}, true, nil
+	return &authenticator.Response{}, true, f.returnErr
 }
 
-func callCreate(storage *REST, ctx context.Context, loginRequest *placeholderapi.LoginRequest) (runtime.Object, error) {
+func callCreate(ctx context.Context, storage *REST, loginRequest *placeholderapi.LoginRequest) (runtime.Object, error) {
 	return storage.Create(
 		ctx,
 		loginRequest,
@@ -74,7 +82,7 @@ func TestCreateSucceedsWhenGivenAToken(t *testing.T) {
 	webhook := FakeToken{}
 	storage := NewREST(&webhook)
 	requestToken := "a token"
-	response, err := callCreate(storage, context.Background(), loginRequest(placeholderapi.LoginRequestSpec{
+	response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
 		Type:  placeholderapi.TokenLoginCredentialType,
 		Token: &placeholderapi.LoginRequestTokenCredential{Value: requestToken},
 	}))
@@ -94,9 +102,9 @@ func TestCreateSucceedsWhenGivenAToken(t *testing.T) {
 func TestCreateDoesNotPassAdditionalContextInfoToTheWebhook(t *testing.T) {
 	webhook := FakeToken{}
 	storage := NewREST(&webhook)
-	ctx := context.WithValue(context.Background(), "context-key", "context-value")
+	ctx := context.WithValue(context.Background(), contextKey{}, "context-value")
 
-	_, err := callCreate(storage, ctx, validLoginRequest())
+	_, err := callCreate(ctx, storage, validLoginRequest())
 
 	require.NoError(t, err)
 	require.Nil(t, webhook.calledWithContext.Value("context-key"))
@@ -109,11 +117,11 @@ func TestCreateCancelsTheWebhookInvocationWhenTheCallToCreateIsCancelledItself(t
 		webhookStartedRunningNotificationChan: webhookStartedRunningNotificationChan,
 	}
 	storage := NewREST(&webhook)
-	ctx, cancelFunc := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 
 	c := make(chan bool)
 	go func() {
-		_, err := callCreate(storage, ctx, validLoginRequest())
+		_, err := callCreate(ctx, storage, validLoginRequest())
 		c <- true
 		require.NoError(t, err)
 	}()
@@ -121,7 +129,7 @@ func TestCreateCancelsTheWebhookInvocationWhenTheCallToCreateIsCancelledItself(t
 	require.False(t, webhook.cancelled)
 	require.False(t, webhook.reachedTimeout)
 	<-webhookStartedRunningNotificationChan // wait long enough to make sure that the webhook has started
-	cancelFunc()                            // cancel the context that was passed to storage.Create() above
+	cancel()                                // cancel the context that was passed to storage.Create() above
 	<-c                                     // wait for the above call to storage.Create() to be finished
 	require.True(t, webhook.cancelled)
 	require.False(t, webhook.reachedTimeout)
@@ -135,11 +143,12 @@ func TestCreateAllowsTheWebhookInvocationToFinishWhenTheCallToCreateIsNotCancell
 		webhookStartedRunningNotificationChan: webhookStartedRunningNotificationChan,
 	}
 	storage := NewREST(&webhook)
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	c := make(chan bool)
 	go func() {
-		_, err := callCreate(storage, ctx, validLoginRequest())
+		_, err := callCreate(ctx, storage, validLoginRequest())
 		c <- true
 		require.NoError(t, err)
 	}()
@@ -151,6 +160,18 @@ func TestCreateAllowsTheWebhookInvocationToFinishWhenTheCallToCreateIsNotCancell
 	require.False(t, webhook.cancelled)
 	require.True(t, webhook.reachedTimeout)
 	require.Equal(t, context.Canceled, webhook.calledWithContext.Err()) // the inner context is cancelled (in this case by the "defer")
+}
+
+func TestCreateFailsWhenWebhookFails(t *testing.T) {
+	webhook := FakeToken{
+		returnErr: errors.New("some webhook error"),
+	}
+	storage := NewREST(&webhook)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, err := callCreate(ctx, storage, validLoginRequest())
+	require.EqualError(t, err, "authenticate token failed: some webhook error")
 }
 
 func TestCreateFailsWhenGivenTheWrongInputType(t *testing.T) {
@@ -170,7 +191,7 @@ func TestCreateFailsWhenGivenTheWrongInputType(t *testing.T) {
 
 func TestCreateFailsWhenTokenIsNilInRequest(t *testing.T) {
 	storage := NewREST(&FakeToken{})
-	response, err := callCreate(storage, context.Background(), loginRequest(placeholderapi.LoginRequestSpec{
+	response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
 		Type:  placeholderapi.TokenLoginCredentialType,
 		Token: nil,
 	}))
@@ -186,7 +207,7 @@ func TestCreateFailsWhenTokenIsNilInRequest(t *testing.T) {
 
 func TestCreateFailsWhenTokenValueIsEmptyInRequest(t *testing.T) {
 	storage := NewREST(&FakeToken{})
-	response, err := callCreate(storage, context.Background(), loginRequest(placeholderapi.LoginRequestSpec{
+	response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
 		Type:  placeholderapi.TokenLoginCredentialType,
 		Token: &placeholderapi.LoginRequestTokenCredential{Value: ""},
 	}))

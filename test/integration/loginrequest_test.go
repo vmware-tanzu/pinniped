@@ -79,7 +79,7 @@ func TestGetDiscovery(t *testing.T) {
 }
 
 func TestGetApiResourceList(t *testing.T) {
-	var expectedApiResourceList = `{
+	var expectedAPIResourceList = `{
 	  "kind": "APIResourceList",
 	  "apiVersion": "v1",
 	  "groupVersion": "placeholder.suzerain-io.github.io/v1alpha1",
@@ -103,5 +103,5 @@ func TestGetApiResourceList(t *testing.T) {
 
 	result, err := client.PlaceholderV1alpha1().RESTClient().Get().Do(ctx).Raw()
 	require.NoError(t, err)
-	require.JSONEq(t, expectedApiResourceList, string(result))
+	require.JSONEq(t, expectedAPIResourceList, string(result))
 }

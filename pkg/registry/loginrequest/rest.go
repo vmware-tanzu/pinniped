@@ -1,3 +1,9 @@
+/*
+Copyright 2020 VMware, Inc.
+SPDX-License-Identifier: Apache-2.0
+*/
+
+// Package loginrequest provides REST functionality for the LoginRequest resource.
 package loginrequest
 
 import (
@@ -89,7 +95,10 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	// TODO do the actual business logic of this endpoint here
 
-	_, _, _ = r.webhook.AuthenticateToken(cancelCtx, token.Value)
+	_, _, err := r.webhook.AuthenticateToken(cancelCtx, token.Value)
+	if err != nil {
+		return nil, fmt.Errorf("authenticate token failed: %w", err)
+	}
 
 	// make a new object so that we do not return the original token in the response
 	out := &placeholderapi.LoginRequest{

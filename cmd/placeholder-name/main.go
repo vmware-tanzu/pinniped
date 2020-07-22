@@ -9,10 +9,10 @@ import (
 	"os"
 
 	genericapiserver "k8s.io/apiserver/pkg/server"
-	"k8s.io/component-base/logs"
-	"k8s.io/klog/v2"
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/client-go/rest"
+	"k8s.io/component-base/logs"
+	"k8s.io/klog/v2"
 
 	"github.com/suzerain-io/placeholder-name/cmd/placeholder-name/app"
 )

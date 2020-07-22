@@ -7,6 +7,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 
@@ -74,7 +75,7 @@ func TestCommand(t *testing.T) {
 			stdout := bytes.NewBuffer([]byte{})
 			stderr := bytes.NewBuffer([]byte{})
 
-			a := New(nil, test.args, stdout, stderr)
+			a := New(context.Background(), test.args, stdout, stderr)
 			a.cmd.RunE = func(cmd *cobra.Command, args []string) error {
 				return nil
 			}

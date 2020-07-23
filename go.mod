@@ -8,7 +8,7 @@ require (
 	github.com/google/go-cmp v0.4.0
 	github.com/spf13/cobra v1.0.0
 	github.com/stretchr/testify v1.6.1
-	github.com/suzerain-io/placeholder-name-api v0.0.0-20200714184318-8ad91581433a
+	github.com/suzerain-io/placeholder-name-api v0.0.0-20200723201114-466aa86ace18
 	github.com/suzerain-io/placeholder-name-client-go v0.0.0-20200714203950-a414963b4f95
 	golang.org/x/tools v0.0.0-20200707134715-9e0a013e855f // indirect
 	k8s.io/api v0.19.0-rc.0

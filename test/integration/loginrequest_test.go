@@ -40,20 +40,39 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 	require.NotEmptyf(t, tmcClusterToken, "must specify PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN env var for integration tests")
 
 	response, err := makeRequest(t, v1alpha1.LoginRequestSpec{
+		Type:  v1alpha1.TokenLoginCredentialType,
 		Token: &v1alpha1.LoginRequestTokenCredential{Value: tmcClusterToken},
+	})
+
+	require.NoError(t, err)
+	require.Empty(t, response.Status.Message)
+
+	require.Empty(t, response.Spec)
+	require.NotNil(t, response.Status.Credential)
+	require.NotEmpty(t, response.Status.Credential.Token)
+	require.Empty(t, response.Status.Credential.ClientCertificateData)
+	require.Empty(t, response.Status.Credential.ClientKeyData)
+	require.Nil(t, response.Status.Credential.ExpirationTimestamp)
+}
+
+func TestFailedLoginRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
+	response, err := makeRequest(t, v1alpha1.LoginRequestSpec{
+		Type:  v1alpha1.TokenLoginCredentialType,
+		Token: &v1alpha1.LoginRequestTokenCredential{Value: "not a good token"},
 	})
 
 	require.NoError(t, err)
 
 	require.Empty(t, response.Spec)
-	require.NotEmpty(t, response.Status.Token)
-	require.Empty(t, response.Status.ClientCertificateData)
-	require.Empty(t, response.Status.ClientKeyData)
-	require.Nil(t, response.Status.ExpirationTimestamp)
+	require.Nil(t, response.Status.Credential)
+	require.Equal(t, "authentication failed", response.Status.Message)
 }
 
 func TestLoginRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
-	_, err := makeRequest(t, v1alpha1.LoginRequestSpec{})
+	_, err := makeRequest(t, v1alpha1.LoginRequestSpec{
+		Type:  v1alpha1.TokenLoginCredentialType,
+		Token: nil,
+	})
 
 	require.Error(t, err)
 	statusError, isStatus := err.(*errors.StatusError)

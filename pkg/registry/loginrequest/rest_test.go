@@ -32,6 +32,7 @@ type FakeToken struct {
 	cancelled                             bool
 	webhookStartedRunningNotificationChan chan bool
 	returnErr                             error
+	returnUnauthenticated                 bool
 }
 
 func (f *FakeToken) AuthenticateToken(ctx context.Context, token string) (*authenticator.Response, bool, error) {
@@ -47,7 +48,7 @@ func (f *FakeToken) AuthenticateToken(ctx context.Context, token string) (*authe
 	case <-ctx.Done():
 		f.cancelled = true
 	}
-	return &authenticator.Response{}, true, f.returnErr
+	return &authenticator.Response{}, !f.returnUnauthenticated, f.returnErr
 }
 
 func callCreate(ctx context.Context, storage *REST, loginRequest *placeholderapi.LoginRequest) (runtime.Object, error) {
@@ -61,9 +62,13 @@ func callCreate(ctx context.Context, storage *REST, loginRequest *placeholderapi
 }
 
 func validLoginRequest() *placeholderapi.LoginRequest {
+	return validLoginRequestWithToken("a token")
+}
+
+func validLoginRequestWithToken(token string) *placeholderapi.LoginRequest {
 	return loginRequest(placeholderapi.LoginRequestSpec{
 		Type:  placeholderapi.TokenLoginCredentialType,
-		Token: &placeholderapi.LoginRequestTokenCredential{Value: "a token"},
+		Token: &placeholderapi.LoginRequestTokenCredential{Value: token},
 	})
 }
 
@@ -86,25 +91,64 @@ func requireAPIError(t *testing.T, response runtime.Object, err error, expectedE
 	require.Contains(t, status.Status().Message, expectedErrorMessage)
 }
 
-func TestCreateSucceedsWhenGivenAToken(t *testing.T) {
-	webhook := FakeToken{}
+func TestCreateSucceedsWhenGivenATokenAndTheWebhookAuthenticatesTheToken(t *testing.T) {
+	webhook := FakeToken{
+		returnUnauthenticated: false,
+	}
 	storage := NewREST(&webhook)
 	requestToken := "a token"
-	response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
-		Type:  placeholderapi.TokenLoginCredentialType,
-		Token: &placeholderapi.LoginRequestTokenCredential{Value: requestToken},
-	}))
+
+	response, err := callCreate(context.Background(), storage, validLoginRequestWithToken(requestToken))
 
 	require.NoError(t, err)
 	require.Equal(t, response, &placeholderapi.LoginRequest{
 		Status: placeholderapi.LoginRequestStatus{
-			ExpirationTimestamp:   nil,
-			Token:                 "snorlax",
-			ClientCertificateData: "",
-			ClientKeyData:         "",
+			Credential: &placeholderapi.LoginRequestCredential{
+				ExpirationTimestamp:   nil,
+				Token:                 "snorlax",
+				ClientCertificateData: "",
+				ClientKeyData:         "",
+			},
+			Message: "",
 		},
 	})
 	require.Equal(t, requestToken, webhook.calledWithToken)
+}
+
+func TestCreateSucceedsWithAnUnauthenticatedStatusWhenGivenATokenAndTheWebhookDoesNotAuthenticateTheToken(t *testing.T) {
+	webhook := FakeToken{
+		returnUnauthenticated: true,
+	}
+	storage := NewREST(&webhook)
+	requestToken := "a token"
+
+	response, err := callCreate(context.Background(), storage, validLoginRequestWithToken(requestToken))
+
+	require.NoError(t, err)
+	require.Equal(t, response, &placeholderapi.LoginRequest{
+		Status: placeholderapi.LoginRequestStatus{
+			Credential: nil,
+			Message:    "authentication failed",
+		},
+	})
+	require.Equal(t, requestToken, webhook.calledWithToken)
+}
+
+func TestCreateSucceedsWithAnUnauthenticatedStatusWhenWebhookFails(t *testing.T) {
+	webhook := FakeToken{
+		returnErr: errors.New("some webhook error"),
+	}
+	storage := NewREST(&webhook)
+
+	response, err := callCreate(context.Background(), storage, validLoginRequest())
+
+	require.NoError(t, err)
+	require.Equal(t, response, &placeholderapi.LoginRequest{
+		Status: placeholderapi.LoginRequestStatus{
+			Credential: nil,
+			Message:    "authentication failed",
+		},
+	})
 }
 
 func TestCreateDoesNotPassAdditionalContextInfoToTheWebhook(t *testing.T) {
@@ -116,6 +160,74 @@ func TestCreateDoesNotPassAdditionalContextInfoToTheWebhook(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Nil(t, webhook.calledWithContext.Value("context-key"))
+}
+
+func TestCreateFailsWhenGivenTheWrongInputType(t *testing.T) {
+	notALoginRequest := runtime.Unknown{}
+	response, err := NewREST(&FakeToken{}).Create(
+		genericapirequest.NewContext(),
+		&notALoginRequest,
+		rest.ValidateAllObjectFunc,
+		&metav1.CreateOptions{})
+
+	requireAPIError(t, response, err, apierrors.IsBadRequest, "not a LoginRequest")
+}
+
+func TestCreateFailsWhenTokenIsNilInRequest(t *testing.T) {
+	storage := NewREST(&FakeToken{})
+	response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
+		Type:  placeholderapi.TokenLoginCredentialType,
+		Token: nil,
+	}))
+
+	requireAPIError(t, response, err, apierrors.IsInvalid,
+		`.placeholder.suzerain-io.github.io "request name" is invalid: spec.token.value: Required value: token must be supplied`)
+}
+
+func TestCreateFailsWhenTypeInRequestIsMissing(t *testing.T) {
+	storage := NewREST(&FakeToken{})
+	response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
+		Type:  "",
+		Token: &placeholderapi.LoginRequestTokenCredential{Value: "a token"},
+	}))
+
+	requireAPIError(t, response, err, apierrors.IsInvalid,
+		`.placeholder.suzerain-io.github.io "request name" is invalid: spec.type: Required value: type must be supplied`)
+}
+
+func TestCreateFailsWhenTypeInRequestIsNotLegal(t *testing.T) {
+	storage := NewREST(&FakeToken{})
+	response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
+		Type:  "this in an invalid type",
+		Token: &placeholderapi.LoginRequestTokenCredential{Value: "a token"},
+	}))
+
+	requireAPIError(t, response, err, apierrors.IsInvalid,
+		`.placeholder.suzerain-io.github.io "request name" is invalid: spec.type: Invalid value: "this in an invalid type": unrecognized type`)
+}
+
+func TestCreateFailsWhenTokenValueIsEmptyInRequest(t *testing.T) {
+	storage := NewREST(&FakeToken{})
+	response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
+		Type:  placeholderapi.TokenLoginCredentialType,
+		Token: &placeholderapi.LoginRequestTokenCredential{Value: ""},
+	}))
+
+	requireAPIError(t, response, err, apierrors.IsInvalid,
+		`.placeholder.suzerain-io.github.io "request name" is invalid: spec.token.value: Required value: token must be supplied`)
+}
+
+func TestCreateFailsWhenRequestOptionsDryRunIsNotEmpty(t *testing.T) {
+	response, err := NewREST(&FakeToken{}).Create(
+		genericapirequest.NewContext(),
+		validLoginRequest(),
+		rest.ValidateAllObjectFunc,
+		&metav1.CreateOptions{
+			DryRun: []string{"some dry run flag"},
+		})
+
+	requireAPIError(t, response, err, apierrors.IsInvalid,
+		`.placeholder.suzerain-io.github.io "request name" is invalid: dryRun: Unsupported value: []string{"some dry run flag"}`)
 }
 
 func TestCreateCancelsTheWebhookInvocationWhenTheCallToCreateIsCancelledItself(t *testing.T) {
@@ -168,62 +280,4 @@ func TestCreateAllowsTheWebhookInvocationToFinishWhenTheCallToCreateIsNotCancell
 	require.False(t, webhook.cancelled)
 	require.True(t, webhook.reachedTimeout)
 	require.Equal(t, context.Canceled, webhook.calledWithContext.Err()) // the inner context is cancelled (in this case by the "defer")
-}
-
-func TestCreateFailsWhenWebhookFails(t *testing.T) {
-	webhook := FakeToken{
-		returnErr: errors.New("some webhook error"),
-	}
-	storage := NewREST(&webhook)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	_, err := callCreate(ctx, storage, validLoginRequest())
-	require.EqualError(t, err, "authenticate token failed: some webhook error")
-}
-
-func TestCreateFailsWhenGivenTheWrongInputType(t *testing.T) {
-	notALoginRequest := runtime.Unknown{}
-	response, err := NewREST(&FakeToken{}).Create(
-		genericapirequest.NewContext(),
-		&notALoginRequest,
-		rest.ValidateAllObjectFunc,
-		&metav1.CreateOptions{})
-
-	requireAPIError(t, response, err, apierrors.IsBadRequest, "not a LoginRequest")
-}
-
-func TestCreateFailsWhenTokenIsNilInRequest(t *testing.T) {
-	storage := NewREST(&FakeToken{})
-	response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
-		Type:  placeholderapi.TokenLoginCredentialType,
-		Token: nil,
-	}))
-
-	requireAPIError(t, response, err, apierrors.IsInvalid,
-		`.placeholder.suzerain-io.github.io "request name" is invalid: spec.token.value: Required value: token must be supplied`)
-}
-
-func TestCreateFailsWhenTokenValueIsEmptyInRequest(t *testing.T) {
-	storage := NewREST(&FakeToken{})
-	response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
-		Type:  placeholderapi.TokenLoginCredentialType,
-		Token: &placeholderapi.LoginRequestTokenCredential{Value: ""},
-	}))
-
-	requireAPIError(t, response, err, apierrors.IsInvalid,
-		`.placeholder.suzerain-io.github.io "request name" is invalid: spec.token.value: Required value: token must be supplied`)
-}
-
-func TestCreateFailsWhenRequestOptionsDryRunIsNotEmpty(t *testing.T) {
-	response, err := NewREST(&FakeToken{}).Create(
-		genericapirequest.NewContext(),
-		validLoginRequest(),
-		rest.ValidateAllObjectFunc,
-		&metav1.CreateOptions{
-			DryRun: []string{"some dry run flag"},
-		})
-
-	requireAPIError(t, response, err, apierrors.IsInvalid,
-		`.placeholder.suzerain-io.github.io "request name" is invalid: dryRun: Unsupported value: []string{"some dry run flag"}`)
 }

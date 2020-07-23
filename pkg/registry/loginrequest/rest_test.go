@@ -11,9 +11,8 @@ import (
 	"testing"
 	"time"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
@@ -76,6 +75,15 @@ func loginRequest(spec placeholderapi.LoginRequestSpec) *placeholderapi.LoginReq
 		},
 		Spec: spec,
 	}
+}
+
+func requireAPIError(t *testing.T, response runtime.Object, err error, expectedErrorTypeChecker func(err error) bool, expectedErrorMessage string) {
+	t.Helper()
+	require.Nil(t, response)
+	require.True(t, expectedErrorTypeChecker(err))
+	var status apierrors.APIStatus
+	errors.As(err, &status)
+	require.Contains(t, status.Status().Message, expectedErrorMessage)
 }
 
 func TestCreateSucceedsWhenGivenAToken(t *testing.T) {
@@ -182,11 +190,7 @@ func TestCreateFailsWhenGivenTheWrongInputType(t *testing.T) {
 		rest.ValidateAllObjectFunc,
 		&metav1.CreateOptions{})
 
-	require.Nil(t, response)
-	require.True(t, apierrors.IsBadRequest(err))
-	var status apierrors.APIStatus
-	errors.As(err, &status)
-	require.Contains(t, status.Status().Message, "not a LoginRequest")
+	requireAPIError(t, response, err, apierrors.IsBadRequest, "not a LoginRequest")
 }
 
 func TestCreateFailsWhenTokenIsNilInRequest(t *testing.T) {
@@ -196,13 +200,8 @@ func TestCreateFailsWhenTokenIsNilInRequest(t *testing.T) {
 		Token: nil,
 	}))
 
-	require.Nil(t, response)
-	require.True(t, apierrors.IsInvalid(err))
-	var status apierrors.APIStatus
-	errors.As(err, &status)
-	require.Equal(t,
-		`.placeholder.suzerain-io.github.io "request name" is invalid: spec.token.value: Required value: token must be supplied`,
-		status.Status().Message)
+	requireAPIError(t, response, err, apierrors.IsInvalid,
+		`.placeholder.suzerain-io.github.io "request name" is invalid: spec.token.value: Required value: token must be supplied`)
 }
 
 func TestCreateFailsWhenTokenValueIsEmptyInRequest(t *testing.T) {
@@ -212,13 +211,8 @@ func TestCreateFailsWhenTokenValueIsEmptyInRequest(t *testing.T) {
 		Token: &placeholderapi.LoginRequestTokenCredential{Value: ""},
 	}))
 
-	require.Nil(t, response)
-	require.True(t, apierrors.IsInvalid(err))
-	var status apierrors.APIStatus
-	errors.As(err, &status)
-	require.Equal(t,
-		`.placeholder.suzerain-io.github.io "request name" is invalid: spec.token.value: Required value: token must be supplied`,
-		status.Status().Message)
+	requireAPIError(t, response, err, apierrors.IsInvalid,
+		`.placeholder.suzerain-io.github.io "request name" is invalid: spec.token.value: Required value: token must be supplied`)
 }
 
 func TestCreateFailsWhenRequestOptionsDryRunIsNotEmpty(t *testing.T) {
@@ -230,11 +224,6 @@ func TestCreateFailsWhenRequestOptionsDryRunIsNotEmpty(t *testing.T) {
 			DryRun: []string{"some dry run flag"},
 		})
 
-	require.Nil(t, response)
-	require.True(t, apierrors.IsInvalid(err))
-	var status apierrors.APIStatus
-	errors.As(err, &status)
-	require.Equal(t,
-		`.placeholder.suzerain-io.github.io "request name" is invalid: dryRun: Unsupported value: []string{"some dry run flag"}`,
-		status.Status().Message)
+	requireAPIError(t, response, err, apierrors.IsInvalid,
+		`.placeholder.suzerain-io.github.io "request name" is invalid: dryRun: Unsupported value: []string{"some dry run flag"}`)
 }

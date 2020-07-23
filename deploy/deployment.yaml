@@ -23,11 +23,14 @@ metadata:
     app: #@ data.values.app_name
 data:
   #@yaml/text-templated-strings
-  placeholder-config.yaml: |
+  placeholder-name.yaml: |
     webhook:
       url: (@= data.values.webhook_url @)
       caBundle: (@= data.values.webhook_ca_bundle @)
 ---
+#! TODO set up healthy, ready, etc. probes correctly for our deployment
+#! TODO set the priority-critical-urgent on our deployment to ask kube to never let it die
+#! TODO set resource minimums (e.g. 512MB RAM) on the deployment to make sure we get scheduled onto a reasonable node
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -36,7 +39,7 @@ metadata:
   labels:
     app: #@ data.values.app_name
 spec:
-  replicas: 1
+  replicas: 1 #! TODO more than one replica for high availability, and share the same serving certificate among them (maybe using client-go leader election)
   selector:
     matchLabels:
       app: #@ data.values.app_name
@@ -57,7 +60,7 @@ spec:
           command:
             - ./placeholder-name
           args:
-            - --config=/etc/config/placeholder-config.yaml
+            - --config=/etc/config/placeholder-name.yaml
             - --downward-api-path=/etc/podinfo
           volumeMounts:
             - name: config-volume

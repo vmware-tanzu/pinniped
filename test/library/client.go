@@ -12,6 +12,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	placeholdernameclientset "github.com/suzerain-io/placeholder-name-client-go/pkg/generated/clientset/versioned"
 )
 
 func NewClientConfig(t *testing.T) *rest.Config {
@@ -29,4 +31,10 @@ func NewClientset(t *testing.T) kubernetes.Interface {
 	t.Helper()
 
 	return kubernetes.NewForConfigOrDie(NewClientConfig(t))
+}
+
+func NewPlaceholderNameClientset(t *testing.T) placeholdernameclientset.Interface {
+	t.Helper()
+
+	return placeholdernameclientset.NewForConfigOrDie(NewClientConfig(t))
 }

@@ -65,7 +65,7 @@ func callCreate(ctx context.Context, storage *REST, loginRequest *placeholderapi
 }
 
 func validLoginRequest() *placeholderapi.LoginRequest {
-	return validLoginRequestWithToken("a token")
+	return validLoginRequestWithToken("some token")
 }
 
 func validLoginRequestWithToken(token string) *placeholderapi.LoginRequest {
@@ -85,6 +85,15 @@ func loginRequest(spec placeholderapi.LoginRequestSpec) *placeholderapi.LoginReq
 	}
 }
 
+func webhookSuccessResponse() *authenticator.Response {
+	return &authenticator.Response{User: &user.DefaultInfo{
+		Name:   "some-user",
+		UID:    "",
+		Groups: []string{},
+		Extra:  nil,
+	}}
+}
+
 func requireAPIError(t *testing.T, response runtime.Object, err error, expectedErrorTypeChecker func(err error) bool, expectedErrorMessage string) {
 	t.Helper()
 	require.Nil(t, response)
@@ -94,8 +103,14 @@ func requireAPIError(t *testing.T, response runtime.Object, err error, expectedE
 	require.Contains(t, status.Status().Message, expectedErrorMessage)
 }
 
-func emptyWebhookSuccessResponse() *authenticator.Response {
-	return &authenticator.Response{User: &user.DefaultInfo{}}
+func requireSuccessfulResponseWithAuthenticationFailureMessage(t *testing.T, err error, response runtime.Object) {
+	require.NoError(t, err)
+	require.Equal(t, response, &placeholderapi.LoginRequest{
+		Status: placeholderapi.LoginRequestStatus{
+			Credential: nil,
+			Message:    "authentication failed",
+		},
+	})
 }
 
 func TestCreateSucceedsWhenGivenATokenAndTheWebhookAuthenticatesTheToken(t *testing.T) {
@@ -141,13 +156,7 @@ func TestCreateSucceedsWithAnUnauthenticatedStatusWhenGivenATokenAndTheWebhookDo
 
 	response, err := callCreate(context.Background(), storage, validLoginRequestWithToken(requestToken))
 
-	require.NoError(t, err)
-	require.Equal(t, response, &placeholderapi.LoginRequest{
-		Status: placeholderapi.LoginRequestStatus{
-			Credential: nil,
-			Message:    "authentication failed",
-		},
-	})
+	requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 	require.Equal(t, requestToken, webhook.calledWithToken)
 }
 
@@ -159,18 +168,38 @@ func TestCreateSucceedsWithAnUnauthenticatedStatusWhenWebhookFails(t *testing.T)
 
 	response, err := callCreate(context.Background(), storage, validLoginRequest())
 
-	require.NoError(t, err)
-	require.Equal(t, response, &placeholderapi.LoginRequest{
-		Status: placeholderapi.LoginRequestStatus{
-			Credential: nil,
-			Message:    "authentication failed",
+	requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
+}
+
+func TestCreateSucceedsWithAnUnauthenticatedStatusWhenWebhookDoesNotReturnAnyUserInfo(t *testing.T) {
+	webhook := FakeToken{
+		returnResponse: &authenticator.Response{},
+	}
+	storage := NewREST(&webhook)
+
+	response, err := callCreate(context.Background(), storage, validLoginRequest())
+
+	requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
+}
+
+func TestCreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsAnEmptyUsername(t *testing.T) {
+	webhook := FakeToken{
+		returnResponse: &authenticator.Response{
+			User: &user.DefaultInfo{
+				Name: "",
+			},
 		},
-	})
+	}
+	storage := NewREST(&webhook)
+
+	response, err := callCreate(context.Background(), storage, validLoginRequest())
+
+	requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 }
 
 func TestCreateDoesNotPassAdditionalContextInfoToTheWebhook(t *testing.T) {
 	webhook := FakeToken{
-		returnResponse: emptyWebhookSuccessResponse(),
+		returnResponse: webhookSuccessResponse(),
 	}
 	storage := NewREST(&webhook)
 	ctx := context.WithValue(context.Background(), contextKey{}, "context-value")
@@ -244,11 +273,52 @@ func TestCreateFailsWhenValidationFails(t *testing.T) {
 		func(ctx context.Context, obj runtime.Object) error {
 			return fmt.Errorf("some validation error")
 		},
-		&metav1.CreateOptions{
-			DryRun: []string{},
-		})
+		&metav1.CreateOptions{})
 	require.Nil(t, response)
 	require.EqualError(t, err, "some validation error")
+}
+
+func TestCreateDoesNotAllowValidationFunctionToMutateRequest(t *testing.T) {
+	webhook := FakeToken{
+		returnResponse: webhookSuccessResponse(),
+	}
+	storage := NewREST(&webhook)
+	requestToken := "a token"
+	response, err := storage.Create(
+		context.Background(),
+		validLoginRequestWithToken(requestToken),
+		func(ctx context.Context, obj runtime.Object) error {
+			loginRequest, _ := obj.(*placeholderapi.LoginRequest)
+			loginRequest.Spec.Token.Value = "foobaz"
+			return nil
+		},
+		&metav1.CreateOptions{})
+	require.NoError(t, err)
+	require.NotEmpty(t, response)
+	require.Equal(t, requestToken, webhook.calledWithToken) // i.e. not called with foobaz
+}
+
+func TestCreateDoesNotAllowValidationFunctionToSeeTheActualRequestToken(t *testing.T) {
+	webhook := FakeToken{
+		returnResponse: webhookSuccessResponse(),
+	}
+	storage := NewREST(&webhook)
+	validationFunctionWasCalled := false
+	var validationFunctionSawTokenValue string
+	response, err := storage.Create(
+		context.Background(),
+		validLoginRequest(),
+		func(ctx context.Context, obj runtime.Object) error {
+			loginRequest, _ := obj.(*placeholderapi.LoginRequest)
+			validationFunctionWasCalled = true
+			validationFunctionSawTokenValue = loginRequest.Spec.Token.Value
+			return nil
+		},
+		&metav1.CreateOptions{})
+	require.NoError(t, err)
+	require.NotEmpty(t, response)
+	require.True(t, validationFunctionWasCalled)
+	require.Empty(t, validationFunctionSawTokenValue)
 }
 
 func TestCreateFailsWhenRequestOptionsDryRunIsNotEmpty(t *testing.T) {
@@ -269,7 +339,7 @@ func TestCreateCancelsTheWebhookInvocationWhenTheCallToCreateIsCancelledItself(t
 	webhook := FakeToken{
 		timeout:                               time.Second * 2,
 		webhookStartedRunningNotificationChan: webhookStartedRunningNotificationChan,
-		returnResponse:                        emptyWebhookSuccessResponse(),
+		returnResponse:                        webhookSuccessResponse(),
 	}
 	storage := NewREST(&webhook)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -296,7 +366,7 @@ func TestCreateAllowsTheWebhookInvocationToFinishWhenTheCallToCreateIsNotCancell
 	webhook := FakeToken{
 		timeout:                               0,
 		webhookStartedRunningNotificationChan: webhookStartedRunningNotificationChan,
-		returnResponse:                        emptyWebhookSuccessResponse(),
+		returnResponse:                        webhookSuccessResponse(),
 	}
 	storage := NewREST(&webhook)
 	ctx, cancel := context.WithCancel(context.Background())

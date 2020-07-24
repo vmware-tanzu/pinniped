@@ -7,7 +7,6 @@ package integration
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"os"
 	"testing"

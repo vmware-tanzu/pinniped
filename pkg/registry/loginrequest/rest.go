@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/registry/rest"
+	"k8s.io/klog/v2"
 
 	placeholderapi "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
 )
@@ -53,7 +54,16 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	// TODO refactor all validation checks into a validation function in another package (e.g. see subjectaccessreqview api in k8s)
 
-	// TODO also validate .spec.type
+	if len(loginRequest.Spec.Type) == 0 {
+		errs := field.ErrorList{field.Required(field.NewPath("spec", "type"), "type must be supplied")}
+		return nil, apierrors.NewInvalid(placeholderapi.Kind(loginRequest.Kind), loginRequest.Name, errs)
+	}
+
+	if loginRequest.Spec.Type != placeholderapi.TokenLoginCredentialType {
+		errs := field.ErrorList{field.Invalid(field.NewPath("spec", "type"), loginRequest.Spec.Type, "unrecognized type")}
+		return nil, apierrors.NewInvalid(placeholderapi.Kind(loginRequest.Kind), loginRequest.Name, errs)
+	}
+
 	token := loginRequest.Spec.Token
 	if token == nil || len(token.Value) == 0 {
 		errs := field.ErrorList{field.Required(field.NewPath("spec", "token", "value"), "token must be supplied")}
@@ -93,22 +103,44 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		}
 	}()
 
-	// TODO do the actual business logic of this endpoint here
-
-	_, _, err := r.webhook.AuthenticateToken(cancelCtx, token.Value)
+	authResponse, authenticated, err := r.webhook.AuthenticateToken(cancelCtx, token.Value)
 	if err != nil {
-		return nil, fmt.Errorf("authenticate token failed: %w", err)
+		klog.Warningf("webhook authentication failure: %v", err)
+		return failureResponse(), nil
 	}
 
-	// make a new object so that we do not return the original token in the response
-	out := &placeholderapi.LoginRequest{
-		Status: placeholderapi.LoginRequestStatus{
-			ExpirationTimestamp:   nil,
-			Token:                 "snorlax",
-			ClientCertificateData: "",
-			ClientKeyData:         "",
-		},
+	var out *placeholderapi.LoginRequest
+	if authenticated {
+		out = successfulResponse(authResponse)
+	} else {
+		out = failureResponse()
 	}
 
 	return out, nil
+}
+
+func successfulResponse(authResponse *authenticator.Response) *placeholderapi.LoginRequest {
+	return &placeholderapi.LoginRequest{
+		Status: placeholderapi.LoginRequestStatus{
+			Credential: &placeholderapi.LoginRequestCredential{
+				ExpirationTimestamp:   nil,
+				Token:                 "snorlax",
+				ClientCertificateData: "",
+				ClientKeyData:         "",
+			},
+			User: &placeholderapi.User{
+				Name:   authResponse.User.GetName(),
+				Groups: authResponse.User.GetGroups(),
+			},
+		},
+	}
+}
+
+func failureResponse() *placeholderapi.LoginRequest {
+	return &placeholderapi.LoginRequest{
+		Status: placeholderapi.LoginRequestStatus{
+			Credential: nil,
+			Message:    "authentication failed",
+		},
+	}
 }

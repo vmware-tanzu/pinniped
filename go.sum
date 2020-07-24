@@ -521,6 +521,8 @@ github.com/subosito/gotenv v1.2.0 h1:Slr1R9HxAlEKefgq5jn9U+DnETlIUa6HfgEzj0g5d7s
 github.com/subosito/gotenv v1.2.0/go.mod h1:N0PQaV/YGNqwC0u51sEeR/aUtSLEXKX9iv69rRypqCw=
 github.com/suzerain-io/placeholder-name-api v0.0.0-20200714184318-8ad91581433a h1:ycG6TufZM7ZDrgBklkXEMauvSyh44JQDvSUdJawAjGA=
 github.com/suzerain-io/placeholder-name-api v0.0.0-20200714184318-8ad91581433a/go.mod h1:bNHheAnmAISdW/ZYTnhCmg8QQKwA5WD64ZvPdsTrWjw=
+github.com/suzerain-io/placeholder-name-api v0.0.0-20200724000517-dc602fd8d75e h1:PavRTcjOk0SUtIRUY4OaFXB3CVYFLTIlxLptUawLB1o=
+github.com/suzerain-io/placeholder-name-api v0.0.0-20200724000517-dc602fd8d75e/go.mod h1:bNHheAnmAISdW/ZYTnhCmg8QQKwA5WD64ZvPdsTrWjw=
 github.com/suzerain-io/placeholder-name-client-go v0.0.0-20200714203950-a414963b4f95 h1:O1aoszdMJEekLXD7pNWP23vq0g8eXLp40AQgY8Hj+Sw=
 github.com/suzerain-io/placeholder-name-client-go v0.0.0-20200714203950-a414963b4f95/go.mod h1:NwirXEgd1VaA+6R0W7PYL/ae6wfPT3vA+tu7POAArjU=
 github.com/tdakkota/asciicheck v0.0.0-20200416190851-d7f85be797a2 h1:Xr9gkxfOP0KQWXKNqmwe8vEeSUiUj4Rlee9CMVX2ZUQ=

@@ -14,6 +14,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"time"
 
@@ -49,8 +50,10 @@ type App struct {
 	cmd *cobra.Command
 
 	// CLI flags
-	configPath      string
-	downwardAPIPath string
+	configPath                 string
+	downwardAPIPath            string
+	clusterSigningCertFilePath string
+	clusterSigningKeyFilePath  string
 
 	recommendedOptions *genericoptions.RecommendedOptions
 }
@@ -76,6 +79,18 @@ func New(ctx context.Context, args []string, stdout, stderr io.Writer) *App {
 credential from somewhere to an internal credential to be used for
 authenticating to the Kubernetes API.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			clusterSigningCertificatePEM, err := ioutil.ReadFile(a.clusterSigningCertFilePath)
+			if err != nil {
+				return fmt.Errorf("could not read cluster signing certificate: %w", err)
+			}
+			clusterSigningPrivateKeyPEM, err := ioutil.ReadFile(a.clusterSigningKeyFilePath)
+			if err != nil {
+				return fmt.Errorf("could not read cluster signing private key: %w", err)
+			}
+			// TODO: use these value for something useful
+			_ = clusterSigningCertificatePEM
+			_ = clusterSigningPrivateKeyPEM
+
 			// Load the Kubernetes client configuration (kubeconfig),
 			kubeConfig, err := restclient.InClusterConfig()
 			if err != nil {
@@ -119,6 +134,20 @@ authenticating to the Kubernetes API.`,
 		"downward-api-path",
 		"/etc/podinfo",
 		"path to Downward API volume mount",
+	)
+
+	cmd.Flags().StringVar(
+		&a.clusterSigningCertFilePath,
+		"cluster-signing-cert-file",
+		"",
+		"path to cluster signing certificate",
+	)
+
+	cmd.Flags().StringVar(
+		&a.clusterSigningKeyFilePath,
+		"cluster-signing-key-file",
+		"",
+		"path to cluster signing private key",
 	)
 
 	a.cmd = cmd

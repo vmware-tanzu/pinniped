@@ -47,6 +47,8 @@ spec:
     metadata:
       labels:
         app: #@ data.values.app_name
+    annotations:
+      scheduler.alpha.kubernetes.io/critical-pod: ""
     spec:
       serviceAccountName: #@ data.values.app_name + "-service-account"
       containers:
@@ -62,11 +64,15 @@ spec:
           args:
             - --config=/etc/config/placeholder-name.yaml
             - --downward-api-path=/etc/podinfo
+            - --cluster-signing-cert-file=/etc/kubernetes/pki/ca.crt
+            - --cluster-signing-key-file=/etc/kubernetes/pki/ca.key
           volumeMounts:
             - name: config-volume
               mountPath: /etc/config
             - name: podinfo
               mountPath: /etc/podinfo
+            - name: k8s-certs
+              mountPath: /etc/kubernetes/pki
       volumes:
         - name: config-volume
           configMap:
@@ -80,3 +86,15 @@ spec:
               - path: "namespace"
                 fieldRef:
                   fieldPath: metadata.namespace
+        - name: k8s-certs
+          hostPath:
+            path: /etc/kubernetes/pki
+            type: DirectoryOrCreate
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master

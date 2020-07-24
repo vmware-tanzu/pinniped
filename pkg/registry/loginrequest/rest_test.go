@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
+	"k8s.io/apiserver/pkg/authentication/user"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 
@@ -31,8 +32,9 @@ type FakeToken struct {
 	reachedTimeout                        bool
 	cancelled                             bool
 	webhookStartedRunningNotificationChan chan bool
-	returnErr                             error
+	returnResponse                        *authenticator.Response
 	returnUnauthenticated                 bool
+	returnErr                             error
 }
 
 func (f *FakeToken) AuthenticateToken(ctx context.Context, token string) (*authenticator.Response, bool, error) {
@@ -48,7 +50,7 @@ func (f *FakeToken) AuthenticateToken(ctx context.Context, token string) (*authe
 	case <-ctx.Done():
 		f.cancelled = true
 	}
-	return &authenticator.Response{}, !f.returnUnauthenticated, f.returnErr
+	return f.returnResponse, !f.returnUnauthenticated, f.returnErr
 }
 
 func callCreate(ctx context.Context, storage *REST, loginRequest *placeholderapi.LoginRequest) (runtime.Object, error) {
@@ -91,8 +93,18 @@ func requireAPIError(t *testing.T, response runtime.Object, err error, expectedE
 	require.Contains(t, status.Status().Message, expectedErrorMessage)
 }
 
+func emptyWebhookSuccessResponse() *authenticator.Response {
+	return &authenticator.Response{User: &user.DefaultInfo{}}
+}
+
 func TestCreateSucceedsWhenGivenATokenAndTheWebhookAuthenticatesTheToken(t *testing.T) {
 	webhook := FakeToken{
+		returnResponse: &authenticator.Response{
+			User: &user.DefaultInfo{
+				Name:   "test-user",
+				Groups: []string{"test-group-1", "test-group-2"},
+			},
+		},
 		returnUnauthenticated: false,
 	}
 	storage := NewREST(&webhook)
@@ -103,6 +115,10 @@ func TestCreateSucceedsWhenGivenATokenAndTheWebhookAuthenticatesTheToken(t *test
 	require.NoError(t, err)
 	require.Equal(t, response, &placeholderapi.LoginRequest{
 		Status: placeholderapi.LoginRequestStatus{
+			User: &placeholderapi.User{
+				Name:   "test-user",
+				Groups: []string{"test-group-1", "test-group-2"},
+			},
 			Credential: &placeholderapi.LoginRequestCredential{
 				ExpirationTimestamp:   nil,
 				Token:                 "snorlax",
@@ -152,7 +168,9 @@ func TestCreateSucceedsWithAnUnauthenticatedStatusWhenWebhookFails(t *testing.T)
 }
 
 func TestCreateDoesNotPassAdditionalContextInfoToTheWebhook(t *testing.T) {
-	webhook := FakeToken{}
+	webhook := FakeToken{
+		returnResponse: emptyWebhookSuccessResponse(),
+	}
 	storage := NewREST(&webhook)
 	ctx := context.WithValue(context.Background(), contextKey{}, "context-value")
 
@@ -235,6 +253,7 @@ func TestCreateCancelsTheWebhookInvocationWhenTheCallToCreateIsCancelledItself(t
 	webhook := FakeToken{
 		timeout:                               time.Second * 2,
 		webhookStartedRunningNotificationChan: webhookStartedRunningNotificationChan,
+		returnResponse:                        emptyWebhookSuccessResponse(),
 	}
 	storage := NewREST(&webhook)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -261,6 +280,7 @@ func TestCreateAllowsTheWebhookInvocationToFinishWhenTheCallToCreateIsNotCancell
 	webhook := FakeToken{
 		timeout:                               0,
 		webhookStartedRunningNotificationChan: webhookStartedRunningNotificationChan,
+		returnResponse:                        emptyWebhookSuccessResponse(),
 	}
 	storage := NewREST(&webhook)
 	ctx, cancel := context.WithCancel(context.Background())

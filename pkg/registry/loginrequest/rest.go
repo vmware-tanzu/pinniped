@@ -103,7 +103,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		}
 	}()
 
-	_, authenticated, err := r.webhook.AuthenticateToken(cancelCtx, token.Value)
+	authResponse, authenticated, err := r.webhook.AuthenticateToken(cancelCtx, token.Value)
 	if err != nil {
 		klog.Warningf("webhook authentication failure: %v", err)
 		return failureResponse(), nil
@@ -111,7 +111,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	var out *placeholderapi.LoginRequest
 	if authenticated {
-		out = successfulResponse()
+		out = successfulResponse(authResponse)
 	} else {
 		out = failureResponse()
 	}
@@ -119,7 +119,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	return out, nil
 }
 
-func successfulResponse() *placeholderapi.LoginRequest {
+func successfulResponse(authResponse *authenticator.Response) *placeholderapi.LoginRequest {
 	return &placeholderapi.LoginRequest{
 		Status: placeholderapi.LoginRequestStatus{
 			Credential: &placeholderapi.LoginRequestCredential{
@@ -127,6 +127,10 @@ func successfulResponse() *placeholderapi.LoginRequest {
 				Token:                 "snorlax",
 				ClientCertificateData: "",
 				ClientKeyData:         "",
+			},
+			User: &placeholderapi.User{
+				Name:   authResponse.User.GetName(),
+				Groups: authResponse.User.GetGroups(),
 			},
 		},
 	}

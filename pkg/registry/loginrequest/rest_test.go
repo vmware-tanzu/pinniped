@@ -8,6 +8,7 @@ package loginrequest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -233,6 +234,21 @@ func TestCreateFailsWhenTokenValueIsEmptyInRequest(t *testing.T) {
 
 	requireAPIError(t, response, err, apierrors.IsInvalid,
 		`.placeholder.suzerain-io.github.io "request name" is invalid: spec.token.value: Required value: token must be supplied`)
+}
+
+func TestCreateFailsWhenValidationFails(t *testing.T) {
+	storage := NewREST(&FakeToken{})
+	response, err := storage.Create(
+		context.Background(),
+		validLoginRequest(),
+		func(ctx context.Context, obj runtime.Object) error {
+			return fmt.Errorf("some validation error")
+		},
+		&metav1.CreateOptions{
+			DryRun: []string{},
+		})
+	require.Nil(t, response)
+	require.EqualError(t, err, "some validation error")
 }
 
 func TestCreateFailsWhenRequestOptionsDryRunIsNotEmpty(t *testing.T) {

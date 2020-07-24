@@ -71,13 +71,15 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	}
 
 	// let dynamic admission webhooks have a chance to validate (but not mutate) as well
-	// TODO Are we okay with admission webhooks being able to see tokens? Maybe strip token out before passing obj to createValidation.
-	//  Since we are an aggregated API, we should investigate to see if the kube API server is already invoking admission hooks for us.
-	//  Even if it is, its okay to call it again here. If the kube API server is already calling the webhooks and passing
-	//  the token, then there is probably no reason for us to avoid passing the token when we call the webhooks here, since
-	//  they already got the token.
+	//  TODO Since we are an aggregated API, we should investigate to see if the kube API server is already invoking admission hooks for us.
+	//   Even if it is, its okay to call it again here. However, if the kube API server is already calling the webhooks and passing
+	//   the token, then there is probably no reason for us to avoid passing the token when we call the webhooks here, since
+	//   they already got the token.
 	if createValidation != nil {
-		if err := createValidation(ctx, obj.DeepCopyObject()); err != nil {
+		requestForValidation := obj.DeepCopyObject()
+		loginRequestCopy, _ := requestForValidation.(*placeholderapi.LoginRequest)
+		loginRequestCopy.Spec.Token.Value = ""
+		if err := createValidation(ctx, requestForValidation); err != nil {
 			return nil, err
 		}
 	}
@@ -110,7 +112,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	}
 
 	var out *placeholderapi.LoginRequest
-	if authenticated {
+	if authenticated && authResponse.User != nil && authResponse.User.GetName() != "" {
 		out = successfulResponse(authResponse)
 	} else {
 		out = failureResponse()

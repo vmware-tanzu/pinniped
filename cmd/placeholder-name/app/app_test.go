@@ -25,10 +25,12 @@ Usage:
   placeholder-name [flags]
 
 Flags:
-  -c, --config string                  path to configuration file (default "placeholder-name.yaml")
-      --downward-api-path string       path to Downward API volume mount (default "/etc/podinfo")
-  -h, --help                           help for placeholder-name
-      --log-flush-frequency duration   Maximum number of seconds between log flushes (default 5s)
+      --cluster-signing-cert-file string   path to cluster signing certificate
+      --cluster-signing-key-file string    path to cluster signing private key
+  -c, --config string                      path to configuration file (default "placeholder-name.yaml")
+      --downward-api-path string           path to Downward API volume mount (default "/etc/podinfo")
+  -h, --help                               help for placeholder-name
+      --log-flush-frequency duration       Maximum number of seconds between log flushes (default 5s)
 `
 
 func TestCommand(t *testing.T) {

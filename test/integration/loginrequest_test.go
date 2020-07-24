@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -45,6 +46,8 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 	})
 
 	require.NoError(t, err)
+
+	// Note: If this assertion fails then your TMC token might have expired. Get a fresh one and try again.
 	require.Empty(t, response.Status.Message)
 
 	require.Empty(t, response.Spec)
@@ -53,11 +56,52 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 	require.NotEmpty(t, response.Status.Credential.ClientCertificateData)
 	require.NotEmpty(t, response.Status.Credential.ClientKeyData)
 	require.Nil(t, response.Status.Credential.ExpirationTimestamp)
-
 	require.NotNil(t, response.Status.User)
 	require.NotEmpty(t, response.Status.User.Name)
 	require.Contains(t, response.Status.User.Groups, "tmc:member")
 
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	const readonlyBindingName = "integration-test-user-readonly-role-binding"
+
+	adminClient := library.NewClientset(t)
+	_, err = adminClient.RbacV1().ClusterRoleBindings().Get(ctx, readonlyBindingName, metav1.GetOptions{})
+	if err != nil {
+		// "404 not found" errors are acceptable, but others would be unexpected
+		statusError, isStatus := err.(*errors.StatusError)
+		require.True(t, isStatus)
+		require.Equal(t, http.StatusNotFound, int(statusError.Status().Code))
+
+		// Create a ClusterRoleBinding for this user only if one is not already found (so you can run tests more than once)
+		bindUserToReadonly := rbacv1.ClusterRoleBinding{
+			TypeMeta: metav1.TypeMeta{},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: readonlyBindingName,
+			},
+			Subjects: []rbacv1.Subject{{
+				Kind:     rbacv1.UserKind,
+				APIGroup: rbacv1.GroupName,
+				Name:     response.Status.User.Name,
+			}},
+			RoleRef: rbacv1.RoleRef{
+				Kind:     "ClusterRole",
+				APIGroup: rbacv1.GroupName,
+				Name:     "view",
+			},
+		}
+		_, err = adminClient.RbacV1().ClusterRoleBindings().Create(ctx, &bindUserToReadonly, metav1.CreateOptions{})
+		require.NoError(t, err)
+	}
+
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		err = adminClient.RbacV1().ClusterRoleBindings().Delete(ctx, readonlyBindingName, metav1.DeleteOptions{})
+		require.NoError(t, err, "Test failed to clean up after itself")
+	}()
+
+	// Create a client using the certificate from the LoginRequest
 	clientWithCert := library.NewClientsetWithConfig(
 		t,
 		library.NewClientConfigWithCertAndKey(
@@ -66,17 +110,11 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 			response.Status.Credential.ClientKeyData,
 		),
 	)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
-	_, err = clientWithCert.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-
-	// Response status should be 403 Forbidden because we assume this actor does
-	// not have any permissions on this cluster.
-	require.Error(t, err)
-	statusError, isStatus := err.(*errors.StatusError)
-	require.True(t, isStatus)
-	require.Equal(t, http.StatusForbidden, statusError.Status().Code)
+	// Use the client which is authenticated as the TMC user to list namespaces
+	listNamespaceResponse, err := clientWithCert.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	require.NoError(t, err)
+	require.NotEmpty(t, listNamespaceResponse.Items)
 }
 
 func TestFailedLoginRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
@@ -126,7 +164,7 @@ func TestGetAPIResourceList(t *testing.T) {
 	expectedGroup := &metav1.APIGroup{
 		Name: "placeholder.suzerain-io.github.io",
 		Versions: []metav1.GroupVersionForDiscovery{
-			metav1.GroupVersionForDiscovery{
+			{
 				GroupVersion: "placeholder.suzerain-io.github.io/v1alpha1",
 				Version:      "v1alpha1",
 			},
@@ -149,7 +187,7 @@ func TestGetAPIResourceList(t *testing.T) {
 		},
 		GroupVersion: "placeholder.suzerain-io.github.io/v1alpha1",
 		APIResources: []metav1.APIResource{
-			metav1.APIResource{
+			{
 				Name:         "loginrequests",
 				Kind:         "LoginRequest",
 				SingularName: "", // TODO(akeesler): what should this be?
@@ -167,7 +205,7 @@ func TestGetAPIVersion(t *testing.T) {
 
 	version, err := client.Discovery().ServerVersion()
 	require.NoError(t, err)
-	require.NotNil(t, version) // TODO(akeesler: what can we assert here?
+	require.NotNil(t, version) // TODO(akeesler): what can we assert here?
 }
 
 func findGroup(name string, groups []*metav1.APIGroup) *metav1.APIGroup {

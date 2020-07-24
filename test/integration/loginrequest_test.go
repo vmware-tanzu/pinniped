@@ -7,8 +7,6 @@ package integration
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -114,50 +112,8 @@ func TestLoginRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
 	require.Nil(t, response.Status.Credential)
 }
 
-func TestGetDiscovery(t *testing.T) {
-	client := library.NewPlaceholderNameClientset(t)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	result, err := client.Discovery().RESTClient().Get().Do(ctx).Raw()
-	require.NoError(t, err)
-
-	var parsedResult map[string]interface{}
-	err = json.Unmarshal(result, &parsedResult)
-	require.NoError(t, err)
-	require.Contains(t, parsedResult["paths"], "/apis/placeholder.suzerain-io.github.io")
-	require.Contains(t, parsedResult["paths"], "/apis/placeholder.suzerain-io.github.io/v1alpha1")
-}
-
 func TestGetAPIResourceList(t *testing.T) {
-	var expectedAPIResourceList = `{
-	  "kind": "APIResourceList",
-	  "apiVersion": "v1",
-	  "groupVersion": "placeholder.suzerain-io.github.io/v1alpha1",
-	  "resources": [
-		{
-		  "name": "loginrequests",
-		  "singularName": "",
-		  "namespaced": false,
-		  "kind": "LoginRequest",
-		  "verbs": [
-			"create"
-		  ]
-		}
-	  ]
-	}`
-
 	client := library.NewPlaceholderNameClientset(t)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	result, err := client.PlaceholderV1alpha1().RESTClient().Get().Do(ctx).Raw()
-	require.NoError(t, err)
-	require.JSONEq(t, expectedAPIResourceList, string(result))
-
-	// proposed:
 
 	groups, resources, err := client.Discovery().ServerGroupsAndResources()
 	require.NoError(t, err)

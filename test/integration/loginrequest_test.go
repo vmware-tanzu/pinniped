@@ -53,6 +53,10 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 	require.Empty(t, response.Status.Credential.ClientCertificateData)
 	require.Empty(t, response.Status.Credential.ClientKeyData)
 	require.Nil(t, response.Status.Credential.ExpirationTimestamp)
+
+	require.NotNil(t, response.Status.User)
+	require.NotEmpty(t, response.Status.User.Name)
+	require.Contains(t, response.Status.User.Groups, "tmc:member")
 }
 
 func TestFailedLoginRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
@@ -65,6 +69,7 @@ func TestFailedLoginRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTh
 
 	require.Empty(t, response.Spec)
 	require.Nil(t, response.Status.Credential)
+	require.Nil(t, response.Status.User)
 	require.Equal(t, "authentication failed", response.Status.Message)
 }
 

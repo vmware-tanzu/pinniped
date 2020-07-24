@@ -8,6 +8,7 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -49,14 +50,34 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 
 	require.Empty(t, response.Spec)
 	require.NotNil(t, response.Status.Credential)
-	require.NotEmpty(t, response.Status.Credential.Token)
-	require.Empty(t, response.Status.Credential.ClientCertificateData)
-	require.Empty(t, response.Status.Credential.ClientKeyData)
+	require.Empty(t, response.Status.Credential.Token)
+	require.NotEmpty(t, response.Status.Credential.ClientCertificateData)
+	require.NotEmpty(t, response.Status.Credential.ClientKeyData)
 	require.Nil(t, response.Status.Credential.ExpirationTimestamp)
 
 	require.NotNil(t, response.Status.User)
 	require.NotEmpty(t, response.Status.User.Name)
 	require.Contains(t, response.Status.User.Groups, "tmc:member")
+
+	clientWithCert := library.NewClientsetWithConfig(
+		t,
+		library.NewClientConfigWithCertAndKey(
+			t,
+			response.Status.Credential.ClientCertificateData,
+			response.Status.Credential.ClientKeyData,
+		),
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err = clientWithCert.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+
+	// Response status should be 403 Forbidden because we assume this actor does
+	// not have any permissions on this cluster.
+	require.Error(t, err)
+	statusError, isStatus := err.(*errors.StatusError)
+	require.True(t, isStatus)
+	require.Equal(t, http.StatusForbidden, statusError.Status().Code)
 }
 
 func TestFailedLoginRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
@@ -74,7 +95,7 @@ func TestFailedLoginRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTh
 }
 
 func TestLoginRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
-	_, err := makeRequest(t, v1alpha1.LoginRequestSpec{
+	response, err := makeRequest(t, v1alpha1.LoginRequestSpec{
 		Type:  v1alpha1.TokenLoginCredentialType,
 		Token: nil,
 	})
@@ -88,6 +109,9 @@ func TestLoginRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
 	require.Equal(t, metav1.CauseType("FieldValueRequired"), cause.Type)
 	require.Equal(t, "Required value: token must be supplied", cause.Message)
 	require.Equal(t, "spec.token.value", cause.Field)
+
+	require.Empty(t, response.Spec)
+	require.Nil(t, response.Status.Credential)
 }
 
 func TestGetDiscovery(t *testing.T) {

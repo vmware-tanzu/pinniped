@@ -6,7 +6,6 @@ SPDX-License-Identifier: Apache-2.0
 package library
 
 import (
-	"encoding/base64"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -29,8 +28,8 @@ func NewClientConfigWithCertAndKey(t *testing.T, cert, key string) *rest.Config 
 
 	return newClientConfigWithOverrides(t, &clientcmd.ConfigOverrides{
 		AuthInfo: clientcmdapi.AuthInfo{
-			ClientCertificateData: []byte(base64.StdEncoding.EncodeToString([]byte(cert))),
-			ClientKeyData:         []byte(base64.StdEncoding.EncodeToString([]byte(key))),
+			ClientCertificateData: []byte(cert),
+			ClientKeyData:         []byte(key),
 		},
 	})
 }
@@ -54,7 +53,9 @@ func NewClientset(t *testing.T) kubernetes.Interface {
 func NewClientsetWithConfig(t *testing.T, config *rest.Config) kubernetes.Interface {
 	t.Helper()
 
-	return kubernetes.NewForConfigOrDie(config)
+	result, err := kubernetes.NewForConfig(config)
+	require.NoError(t, err, "unexpected failure from kubernetes.NewForConfig()")
+	return result
 }
 
 func NewPlaceholderNameClientset(t *testing.T) placeholdernameclientset.Interface {

@@ -90,7 +90,9 @@ spec:
           hostPath:
             path: /etc/kubernetes/pki
             type: DirectoryOrCreate
-      priorityClassName: system-cluster-critical
+      #! "system-cluster-critical" cannot be used outside the kube-system namespace until Kubernetes >= 1.17,
+      #! so we skip setting this for now (see https://github.com/kubernetes/kubernetes/issues/60596).
+      #! priorityClassName: system-cluster-critical
       nodeSelector:
         node-role.kubernetes.io/master: ""
       tolerations:

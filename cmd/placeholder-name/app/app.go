@@ -14,32 +14,27 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"log"
 	"time"
 
-	"k8s.io/apiserver/pkg/server/dynamiccertificates"
-
+	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
-
-	"github.com/suzerain-io/placeholder-name/internal/autoregistration"
-	"github.com/suzerain-io/placeholder-name/internal/certauthority"
-	"github.com/suzerain-io/placeholder-name/internal/downward"
-
 	"k8s.io/apimachinery/pkg/runtime"
-
-	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
 	"k8s.io/client-go/kubernetes"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	restclient "k8s.io/client-go/rest"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	aggregationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
+	"github.com/suzerain-io/placeholder-name/internal/autoregistration"
+	"github.com/suzerain-io/placeholder-name/internal/certauthority"
+	"github.com/suzerain-io/placeholder-name/internal/downward"
 	"github.com/suzerain-io/placeholder-name/pkg/apiserver"
 	"github.com/suzerain-io/placeholder-name/pkg/config"
 )
@@ -49,8 +44,10 @@ type App struct {
 	cmd *cobra.Command
 
 	// CLI flags
-	configPath      string
-	downwardAPIPath string
+	configPath                 string
+	downwardAPIPath            string
+	clusterSigningCertFilePath string
+	clusterSigningKeyFilePath  string
 
 	recommendedOptions *genericoptions.RecommendedOptions
 }
@@ -121,6 +118,20 @@ authenticating to the Kubernetes API.`,
 		"path to Downward API volume mount",
 	)
 
+	cmd.Flags().StringVar(
+		&a.clusterSigningCertFilePath,
+		"cluster-signing-cert-file",
+		"",
+		"path to cluster signing certificate",
+	)
+
+	cmd.Flags().StringVar(
+		&a.clusterSigningKeyFilePath,
+		"cluster-signing-key-file",
+		"",
+		"path to cluster signing private key",
+	)
+
 	a.cmd = cmd
 
 	return a
@@ -140,9 +151,15 @@ func (a *App) run(
 		return fmt.Errorf("could not load config: %w", err)
 	}
 
+	// Load the Kubernetes cluster signing CA.
+	clientCA, err := certauthority.Load(a.clusterSigningCertFilePath, a.clusterSigningKeyFilePath)
+	if err != nil {
+		return fmt.Errorf("could not load cluster signing CA: %w", err)
+	}
+
 	webhookTokenAuthenticator, err := config.NewWebhook(cfg.WebhookConfig)
 	if err != nil {
-		return fmt.Errorf("could create webhook client: %w", err)
+		return fmt.Errorf("could not create webhook client: %w", err)
 	}
 
 	podinfo, err := downward.Load(a.downwardAPIPath)
@@ -152,19 +169,14 @@ func (a *App) run(
 
 	// TODO use the postStart hook to generate certs?
 
-	ca, err := certauthority.New(pkix.Name{CommonName: "Placeholder CA"})
+	apiCA, err := certauthority.New(pkix.Name{CommonName: "Placeholder CA"})
 	if err != nil {
 		return fmt.Errorf("could not initialize CA: %w", err)
 	}
-	caBundle, err := ca.Bundle()
-	if err != nil {
-		return fmt.Errorf("could not read CA bundle: %w", err)
-	}
-	log.Printf("initialized CA bundle:\n%s", string(caBundle))
 
 	const serviceName = "placeholder-name-api"
 
-	cert, err := ca.Issue(
+	cert, err := apiCA.Issue(
 		pkix.Name{CommonName: serviceName + "." + podinfo.Namespace + ".svc"},
 		[]string{},
 		24*365*time.Hour,
@@ -195,7 +207,7 @@ func (a *App) run(
 		Spec: apiregistrationv1.APIServiceSpec{
 			Group:                placeholderv1alpha1.GroupName,
 			Version:              placeholderv1alpha1.SchemeGroupVersion.Version,
-			CABundle:             caBundle,
+			CABundle:             apiCA.Bundle(),
 			GroupPriorityMinimum: 2500, // TODO what is the right value? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
 			VersionPriority:      10,   // TODO what is the right value? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
 		},
@@ -210,7 +222,7 @@ func (a *App) run(
 		return fmt.Errorf("could not register API service: %w", err)
 	}
 
-	apiServerConfig, err := a.ConfigServer(cert, webhookTokenAuthenticator)
+	apiServerConfig, err := a.ConfigServer(cert, webhookTokenAuthenticator, clientCA)
 	if err != nil {
 		return err
 	}
@@ -223,7 +235,7 @@ func (a *App) run(
 	return server.GenericAPIServer.PrepareRun().Run(ctx.Done())
 }
 
-func (a *App) ConfigServer(cert *tls.Certificate, webhookTokenAuthenticator *webhook.WebhookTokenAuthenticator) (*apiserver.Config, error) {
+func (a *App) ConfigServer(cert *tls.Certificate, webhookTokenAuthenticator *webhook.WebhookTokenAuthenticator, ca *certauthority.CA) (*apiserver.Config, error) {
 	provider, err := createStaticCertKeyProvider(cert)
 	if err != nil {
 		return nil, fmt.Errorf("could not create static cert key provider: %w", err)
@@ -239,6 +251,7 @@ func (a *App) ConfigServer(cert *tls.Certificate, webhookTokenAuthenticator *web
 		GenericConfig: serverConfig,
 		ExtraConfig: apiserver.ExtraConfig{
 			Webhook: webhookTokenAuthenticator,
+			Issuer:  ca,
 		},
 	}
 	return apiServerConfig, nil

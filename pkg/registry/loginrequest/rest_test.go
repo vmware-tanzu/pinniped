@@ -144,7 +144,7 @@ func TestCreateSucceedsWhenGivenATokenAndTheWebhookAuthenticatesTheToken(t *test
 			CommonName:         "test-user",
 			OrganizationalUnit: []string{"test-group-1", "test-group-2"}},
 		[]string{},
-		5*time.Minute,
+		1*time.Hour,
 	).Return([]byte("test-cert"), []byte("test-key"), nil)
 
 	storage := NewREST(&webhook, issuer)

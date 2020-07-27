@@ -23,6 +23,9 @@ import (
 	placeholderapi "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
 )
 
+// clientCertificateTTL is the TTL for short-lived client certificates returned by this API.
+const clientCertificateTTL = 1 * time.Hour
+
 var (
 	_ rest.Creater                 = &REST{}
 	_ rest.NamespaceScopedStrategy = &REST{}
@@ -128,7 +131,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 			OrganizationalUnit: authResponse.User.GetGroups(),
 		},
 		[]string{},
-		5*time.Minute,
+		clientCertificateTTL,
 	)
 	if err != nil {
 		klog.Warningf("failed to issue short lived client certificate: %v", err)

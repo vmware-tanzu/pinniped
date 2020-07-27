@@ -72,7 +72,7 @@ func TestLoad(t *testing.T) {
 			name:     "multiple certs",
 			certPath: "./testdata/multiple.crt",
 			keyPath:  "./testdata/test.key",
-			wantErr:  "expected CA to be a single certificate, found 2 certificates",
+			wantErr:  "invalid CA certificate: expected a single certificate, found 2 certificates",
 		},
 		{
 			name:     "success",

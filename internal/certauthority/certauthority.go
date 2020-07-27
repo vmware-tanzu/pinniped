@@ -58,6 +58,9 @@ func secureEnv() env {
 	}
 }
 
+// ErrInvalidCACertificate is returned when the contents of the loaded CA certificate do not meet our assumptions.
+var ErrInvalidCACertificate = fmt.Errorf("invalid CA certificate")
+
 // Load a certificate authority from an existing certificate and private key (in PEM format).
 func Load(certPath string, keyPath string) (*CA, error) {
 	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
@@ -65,7 +68,7 @@ func Load(certPath string, keyPath string) (*CA, error) {
 		return nil, fmt.Errorf("could not load CA: %w", err)
 	}
 	if certCount := len(cert.Certificate); certCount != 1 {
-		return nil, fmt.Errorf("expected CA to be a single certificate, found %d certificates", certCount)
+		return nil, fmt.Errorf("%w: expected a single certificate, found %d certificates", ErrInvalidCACertificate, certCount)
 	}
 	return &CA{
 		caCertBytes: cert.Certificate[0],

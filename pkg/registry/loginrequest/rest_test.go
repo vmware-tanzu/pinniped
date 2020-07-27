@@ -7,11 +7,13 @@ package loginrequest
 
 import (
 	"context"
+	"crypto/x509/pkix"
 	"errors"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,6 +24,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 
 	placeholderapi "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
+	"github.com/suzerain-io/placeholder-name/internal/mocks/mockcertissuer"
 )
 
 type contextKey struct{}
@@ -113,7 +116,18 @@ func requireSuccessfulResponseWithAuthenticationFailureMessage(t *testing.T, err
 	})
 }
 
+func successfulIssuer(ctrl *gomock.Controller) CertIssuer {
+	issuer := mockcertissuer.NewMockCertIssuer(ctrl)
+	issuer.EXPECT().
+		IssuePEM(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return([]byte("test-cert"), []byte("test-key"), nil)
+	return issuer
+}
+
 func TestCreateSucceedsWhenGivenATokenAndTheWebhookAuthenticatesTheToken(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	webhook := FakeToken{
 		returnResponse: &authenticator.Response{
 			User: &user.DefaultInfo{
@@ -123,7 +137,17 @@ func TestCreateSucceedsWhenGivenATokenAndTheWebhookAuthenticatesTheToken(t *test
 		},
 		returnUnauthenticated: false,
 	}
-	storage := NewREST(&webhook)
+
+	issuer := mockcertissuer.NewMockCertIssuer(ctrl)
+	issuer.EXPECT().IssuePEM(
+		pkix.Name{
+			CommonName:         "test-user",
+			OrganizationalUnit: []string{"test-group-1", "test-group-2"}},
+		[]string{},
+		5*time.Minute,
+	).Return([]byte("test-cert"), []byte("test-key"), nil)
+
+	storage := NewREST(&webhook, issuer)
 	requestToken := "a token"
 
 	response, err := callCreate(context.Background(), storage, validLoginRequestWithToken(requestToken))
@@ -137,9 +161,8 @@ func TestCreateSucceedsWhenGivenATokenAndTheWebhookAuthenticatesTheToken(t *test
 			},
 			Credential: &placeholderapi.LoginRequestCredential{
 				ExpirationTimestamp:   nil,
-				Token:                 "snorlax",
-				ClientCertificateData: "",
-				ClientKeyData:         "",
+				ClientCertificateData: "test-cert",
+				ClientKeyData:         "test-key",
 			},
 			Message: "",
 		},
@@ -147,11 +170,38 @@ func TestCreateSucceedsWhenGivenATokenAndTheWebhookAuthenticatesTheToken(t *test
 	require.Equal(t, requestToken, webhook.calledWithToken)
 }
 
+func TestCreateFailsWithValidTokenWhenCertIssuerFails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	webhook := FakeToken{
+		returnResponse: &authenticator.Response{
+			User: &user.DefaultInfo{
+				Name:   "test-user",
+				Groups: []string{"test-group-1", "test-group-2"},
+			},
+		},
+		returnUnauthenticated: false,
+	}
+
+	issuer := mockcertissuer.NewMockCertIssuer(ctrl)
+	issuer.EXPECT().
+		IssuePEM(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil, nil, fmt.Errorf("some certificate authority error"))
+
+	storage := NewREST(&webhook, issuer)
+	requestToken := "a token"
+
+	response, err := callCreate(context.Background(), storage, validLoginRequestWithToken(requestToken))
+	requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
+	require.Equal(t, requestToken, webhook.calledWithToken)
+}
+
 func TestCreateSucceedsWithAnUnauthenticatedStatusWhenGivenATokenAndTheWebhookDoesNotAuthenticateTheToken(t *testing.T) {
 	webhook := FakeToken{
 		returnUnauthenticated: true,
 	}
-	storage := NewREST(&webhook)
+	storage := NewREST(&webhook, nil)
 	requestToken := "a token"
 
 	response, err := callCreate(context.Background(), storage, validLoginRequestWithToken(requestToken))
@@ -164,7 +214,7 @@ func TestCreateSucceedsWithAnUnauthenticatedStatusWhenWebhookFails(t *testing.T)
 	webhook := FakeToken{
 		returnErr: errors.New("some webhook error"),
 	}
-	storage := NewREST(&webhook)
+	storage := NewREST(&webhook, nil)
 
 	response, err := callCreate(context.Background(), storage, validLoginRequest())
 
@@ -175,7 +225,7 @@ func TestCreateSucceedsWithAnUnauthenticatedStatusWhenWebhookDoesNotReturnAnyUse
 	webhook := FakeToken{
 		returnResponse: &authenticator.Response{},
 	}
-	storage := NewREST(&webhook)
+	storage := NewREST(&webhook, nil)
 
 	response, err := callCreate(context.Background(), storage, validLoginRequest())
 
@@ -190,7 +240,7 @@ func TestCreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsAnEmptyUsern
 			},
 		},
 	}
-	storage := NewREST(&webhook)
+	storage := NewREST(&webhook, nil)
 
 	response, err := callCreate(context.Background(), storage, validLoginRequest())
 
@@ -198,10 +248,13 @@ func TestCreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsAnEmptyUsern
 }
 
 func TestCreateDoesNotPassAdditionalContextInfoToTheWebhook(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	webhook := FakeToken{
 		returnResponse: webhookSuccessResponse(),
 	}
-	storage := NewREST(&webhook)
+	storage := NewREST(&webhook, successfulIssuer(ctrl))
 	ctx := context.WithValue(context.Background(), contextKey{}, "context-value")
 
 	_, err := callCreate(ctx, storage, validLoginRequest())
@@ -212,7 +265,7 @@ func TestCreateDoesNotPassAdditionalContextInfoToTheWebhook(t *testing.T) {
 
 func TestCreateFailsWhenGivenTheWrongInputType(t *testing.T) {
 	notALoginRequest := runtime.Unknown{}
-	response, err := NewREST(&FakeToken{}).Create(
+	response, err := NewREST(&FakeToken{}, nil).Create(
 		genericapirequest.NewContext(),
 		&notALoginRequest,
 		rest.ValidateAllObjectFunc,
@@ -222,7 +275,7 @@ func TestCreateFailsWhenGivenTheWrongInputType(t *testing.T) {
 }
 
 func TestCreateFailsWhenTokenIsNilInRequest(t *testing.T) {
-	storage := NewREST(&FakeToken{})
+	storage := NewREST(&FakeToken{}, nil)
 	response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
 		Type:  placeholderapi.TokenLoginCredentialType,
 		Token: nil,
@@ -233,7 +286,7 @@ func TestCreateFailsWhenTokenIsNilInRequest(t *testing.T) {
 }
 
 func TestCreateFailsWhenTypeInRequestIsMissing(t *testing.T) {
-	storage := NewREST(&FakeToken{})
+	storage := NewREST(&FakeToken{}, nil)
 	response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
 		Type:  "",
 		Token: &placeholderapi.LoginRequestTokenCredential{Value: "a token"},
@@ -244,7 +297,7 @@ func TestCreateFailsWhenTypeInRequestIsMissing(t *testing.T) {
 }
 
 func TestCreateFailsWhenTypeInRequestIsNotLegal(t *testing.T) {
-	storage := NewREST(&FakeToken{})
+	storage := NewREST(&FakeToken{}, nil)
 	response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
 		Type:  "this in an invalid type",
 		Token: &placeholderapi.LoginRequestTokenCredential{Value: "a token"},
@@ -255,7 +308,7 @@ func TestCreateFailsWhenTypeInRequestIsNotLegal(t *testing.T) {
 }
 
 func TestCreateFailsWhenTokenValueIsEmptyInRequest(t *testing.T) {
-	storage := NewREST(&FakeToken{})
+	storage := NewREST(&FakeToken{}, nil)
 	response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
 		Type:  placeholderapi.TokenLoginCredentialType,
 		Token: &placeholderapi.LoginRequestTokenCredential{Value: ""},
@@ -266,7 +319,7 @@ func TestCreateFailsWhenTokenValueIsEmptyInRequest(t *testing.T) {
 }
 
 func TestCreateFailsWhenValidationFails(t *testing.T) {
-	storage := NewREST(&FakeToken{})
+	storage := NewREST(&FakeToken{}, nil)
 	response, err := storage.Create(
 		context.Background(),
 		validLoginRequest(),
@@ -279,10 +332,13 @@ func TestCreateFailsWhenValidationFails(t *testing.T) {
 }
 
 func TestCreateDoesNotAllowValidationFunctionToMutateRequest(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	webhook := FakeToken{
 		returnResponse: webhookSuccessResponse(),
 	}
-	storage := NewREST(&webhook)
+	storage := NewREST(&webhook, successfulIssuer(ctrl))
 	requestToken := "a token"
 	response, err := storage.Create(
 		context.Background(),
@@ -299,10 +355,14 @@ func TestCreateDoesNotAllowValidationFunctionToMutateRequest(t *testing.T) {
 }
 
 func TestCreateDoesNotAllowValidationFunctionToSeeTheActualRequestToken(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	webhook := FakeToken{
 		returnResponse: webhookSuccessResponse(),
 	}
-	storage := NewREST(&webhook)
+
+	storage := NewREST(&webhook, successfulIssuer(ctrl))
 	validationFunctionWasCalled := false
 	var validationFunctionSawTokenValue string
 	response, err := storage.Create(
@@ -322,7 +382,7 @@ func TestCreateDoesNotAllowValidationFunctionToSeeTheActualRequestToken(t *testi
 }
 
 func TestCreateFailsWhenRequestOptionsDryRunIsNotEmpty(t *testing.T) {
-	response, err := NewREST(&FakeToken{}).Create(
+	response, err := NewREST(&FakeToken{}, nil).Create(
 		genericapirequest.NewContext(),
 		validLoginRequest(),
 		rest.ValidateAllObjectFunc,
@@ -335,13 +395,16 @@ func TestCreateFailsWhenRequestOptionsDryRunIsNotEmpty(t *testing.T) {
 }
 
 func TestCreateCancelsTheWebhookInvocationWhenTheCallToCreateIsCancelledItself(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	webhookStartedRunningNotificationChan := make(chan bool)
 	webhook := FakeToken{
 		timeout:                               time.Second * 2,
 		webhookStartedRunningNotificationChan: webhookStartedRunningNotificationChan,
 		returnResponse:                        webhookSuccessResponse(),
 	}
-	storage := NewREST(&webhook)
+	storage := NewREST(&webhook, successfulIssuer(ctrl))
 	ctx, cancel := context.WithCancel(context.Background())
 
 	c := make(chan bool)
@@ -362,13 +425,16 @@ func TestCreateCancelsTheWebhookInvocationWhenTheCallToCreateIsCancelledItself(t
 }
 
 func TestCreateAllowsTheWebhookInvocationToFinishWhenTheCallToCreateIsNotCancelledItself(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	webhookStartedRunningNotificationChan := make(chan bool)
 	webhook := FakeToken{
 		timeout:                               0,
 		webhookStartedRunningNotificationChan: webhookStartedRunningNotificationChan,
 		returnResponse:                        webhookSuccessResponse(),
 	}
-	storage := NewREST(&webhook)
+	storage := NewREST(&webhook, successfulIssuer(ctrl))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

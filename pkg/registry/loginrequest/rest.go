@@ -118,32 +118,36 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		klog.Warningf("webhook authentication failure: %v", err)
 		return failureResponse(), nil
 	}
-
-	var out *placeholderapi.LoginRequest
-	if authenticated && authResponse.User != nil && authResponse.User.GetName() != "" {
-		out = successfulResponse(authResponse)
-	} else {
-		out = failureResponse()
+	if !authenticated || authResponse.User == nil || authResponse.User.GetName() == "" {
+		return failureResponse(), nil
 	}
 
-	return out, nil
-}
+	certPEM, keyPEM, err := r.issuer.IssuePEM(
+		pkix.Name{
+			CommonName:         authResponse.User.GetName(),
+			OrganizationalUnit: authResponse.User.GetGroups(),
+		},
+		[]string{},
+		5*time.Minute,
+	)
+	if err != nil {
+		klog.Warningf("failed to issue short lived client certificate: %v", err)
+		return failureResponse(), nil
+	}
 
-func successfulResponse(authResponse *authenticator.Response) *placeholderapi.LoginRequest {
 	return &placeholderapi.LoginRequest{
 		Status: placeholderapi.LoginRequestStatus{
 			Credential: &placeholderapi.LoginRequestCredential{
 				ExpirationTimestamp:   nil,
-				Token:                 "snorlax",
-				ClientCertificateData: "",
-				ClientKeyData:         "",
+				ClientCertificateData: string(certPEM),
+				ClientKeyData:         string(keyPEM),
 			},
 			User: &placeholderapi.User{
 				Name:   authResponse.User.GetName(),
 				Groups: authResponse.User.GetGroups(),
 			},
 		},
-	}
+	}, nil
 }
 
 func failureResponse() *placeholderapi.LoginRequest {

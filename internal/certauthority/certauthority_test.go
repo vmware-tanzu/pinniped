@@ -6,8 +6,8 @@ SPDX-License-Identifier: Apache-2.0
 package certauthority
 
 import (
-	"bytes"
 	"crypto"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
@@ -19,65 +19,149 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNew(t *testing.T) {
-	now := time.Date(2020, 7, 10, 12, 41, 12, 1234, time.UTC)
-
+func TestLoad(t *testing.T) {
 	tests := []struct {
-		name    string
-		opts    []Option
-		wantErr string
+		name     string
+		certPath string
+		keyPath  string
+		wantErr  string
 	}{
 		{
-			name: "error option",
-			opts: []Option{func(ca *CA) error {
-				return fmt.Errorf("some error")
-			}},
-			wantErr: "some error",
+			name:     "missing cert",
+			certPath: "./testdata/cert-does-not-exist",
+			keyPath:  "./testdata/test.key",
+			wantErr:  "could not load CA: open ./testdata/cert-does-not-exist: no such file or directory",
 		},
 		{
-			name: "failed to generate CA serial",
-			opts: []Option{func(ca *CA) error {
-				ca.serialRNG = strings.NewReader("")
-				ca.keygenRNG = strings.NewReader("")
-				ca.signingRNG = strings.NewReader("")
-				return nil
-			}},
-			wantErr: "could not generate CA serial: EOF",
+			name:     "empty cert",
+			certPath: "./testdata/empty",
+			keyPath:  "./testdata/test.key",
+			wantErr:  "could not load CA: tls: failed to find any PEM data in certificate input",
 		},
 		{
-			name: "failed to generate CA key",
-			opts: []Option{func(ca *CA) error {
-				ca.serialRNG = strings.NewReader(strings.Repeat("x", 64))
-				ca.keygenRNG = strings.NewReader("")
-				return nil
-			}},
-			wantErr: "could not generate CA private key: EOF",
+			name:     "invalid cert",
+			certPath: "./testdata/invalid",
+			keyPath:  "./testdata/test.key",
+			wantErr:  "could not load CA: tls: failed to find any PEM data in certificate input",
 		},
 		{
-			name: "failed to self-sign",
-			opts: []Option{func(ca *CA) error {
-				ca.serialRNG = strings.NewReader(strings.Repeat("x", 64))
-				ca.keygenRNG = strings.NewReader(strings.Repeat("y", 64))
-				ca.signingRNG = strings.NewReader("")
-				return nil
-			}},
-			wantErr: "could not issue CA certificate: EOF",
+			name:     "missing key",
+			certPath: "./testdata/test.crt",
+			keyPath:  "./testdata/key-does-not-exist",
+			wantErr:  "could not load CA: open ./testdata/key-does-not-exist: no such file or directory",
 		},
 		{
-			name: "success",
-			opts: []Option{func(ca *CA) error {
-				ca.serialRNG = strings.NewReader(strings.Repeat("x", 64))
-				ca.keygenRNG = strings.NewReader(strings.Repeat("y", 64))
-				ca.signingRNG = strings.NewReader(strings.Repeat("z", 64))
-				ca.clock = func() time.Time { return now }
-				return nil
-			}},
+			name:     "empty key",
+			certPath: "./testdata/test.crt",
+			keyPath:  "./testdata/empty",
+			wantErr:  "could not load CA: tls: failed to find any PEM data in key input",
+		},
+		{
+			name:     "invalid key",
+			certPath: "./testdata/test.crt",
+			keyPath:  "./testdata/invalid",
+			wantErr:  "could not load CA: tls: failed to find any PEM data in key input",
+		},
+		{
+			name:     "mismatched cert and key",
+			certPath: "./testdata/test.crt",
+			keyPath:  "./testdata/test2.key",
+			wantErr:  "could not load CA: tls: private key does not match public key",
+		},
+		{
+			name:     "multiple certs",
+			certPath: "./testdata/multiple.crt",
+			keyPath:  "./testdata/test.key",
+			wantErr:  "expected CA to be a single certificate, found 2 certificates",
+		},
+		{
+			name:     "success",
+			certPath: "./testdata/test.crt",
+			keyPath:  "./testdata/test.key",
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := New(pkix.Name{CommonName: "Test CA"}, tt.opts...)
+			ca, err := Load(tt.certPath, tt.keyPath)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.NotEmpty(t, ca.caCertBytes)
+			require.NotNil(t, ca.signer)
+		})
+	}
+}
+
+func TestNew(t *testing.T) {
+	got, err := New(pkix.Name{CommonName: "Test CA"})
+	require.NoError(t, err)
+	require.NotNil(t, got)
+
+	// Make sure the CA certificate looks roughly like what we expect.
+	caCert, err := x509.ParseCertificate(got.caCertBytes)
+	require.NoError(t, err)
+	require.Equal(t, "Test CA", caCert.Subject.CommonName)
+}
+
+func TestNewInternal(t *testing.T) {
+	now := time.Date(2020, 7, 10, 12, 41, 12, 1234, time.UTC)
+
+	tests := []struct {
+		name           string
+		env            env
+		wantErr        string
+		wantCommonName string
+		wantNotBefore  time.Time
+		wantNotAfter   time.Time
+	}{
+		{
+			name: "failed to generate CA serial",
+			env: env{
+				serialRNG:  strings.NewReader(""),
+				keygenRNG:  strings.NewReader(""),
+				signingRNG: strings.NewReader(""),
+			},
+			wantErr: "could not generate CA serial: EOF",
+		},
+		{
+			name: "failed to generate CA key",
+			env: env{
+				serialRNG:  strings.NewReader(strings.Repeat("x", 64)),
+				keygenRNG:  strings.NewReader(""),
+				signingRNG: strings.NewReader(""),
+			},
+			wantErr: "could not generate CA private key: EOF",
+		},
+		{
+			name: "failed to self-sign",
+			env: env{
+				serialRNG:  strings.NewReader(strings.Repeat("x", 64)),
+				keygenRNG:  strings.NewReader(strings.Repeat("y", 64)),
+				signingRNG: strings.NewReader(""),
+				clock:      func() time.Time { return now },
+			},
+			wantErr: "could not issue CA certificate: EOF",
+		},
+		{
+			name: "success",
+			env: env{
+				serialRNG:  strings.NewReader(strings.Repeat("x", 64)),
+				keygenRNG:  strings.NewReader(strings.Repeat("y", 64)),
+				signingRNG: strings.NewReader(strings.Repeat("z", 64)),
+				clock:      func() time.Time { return now },
+			},
+			wantCommonName: "Test CA",
+			wantNotAfter:   now.Add(100 * 365 * 24 * time.Hour),
+			wantNotBefore:  now.Add(-1 * time.Minute),
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := newInternal(pkix.Name{CommonName: "Test CA"}, tt.env)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				require.Nil(t, got)
@@ -89,46 +173,17 @@ func TestNew(t *testing.T) {
 			// Make sure the CA certificate looks roughly like what we expect.
 			caCert, err := x509.ParseCertificate(got.caCertBytes)
 			require.NoError(t, err)
-			require.Equal(t, "Test CA", caCert.Subject.CommonName)
-			require.Equal(t, now.Add(100*365*24*time.Hour).Unix(), caCert.NotAfter.Unix())
-			require.Equal(t, now.Add(-1*time.Minute).Unix(), caCert.NotBefore.Unix())
+			require.Equal(t, tt.wantCommonName, caCert.Subject.CommonName)
+			require.Equal(t, tt.wantNotAfter.Unix(), caCert.NotAfter.Unix())
+			require.Equal(t, tt.wantNotBefore.Unix(), caCert.NotBefore.Unix())
 		})
 	}
-}
-
-type errWriter struct {
-	err error
-}
-
-func (e *errWriter) Write(p []byte) (n int, err error) { return 0, e.err }
-
-func TestWriteBundle(t *testing.T) {
-	t.Run("error", func(t *testing.T) {
-		ca := CA{}
-		out := errWriter{fmt.Errorf("some error")}
-		require.EqualError(t, ca.WriteBundle(&out), "could not encode CA certificate to PEM: some error")
-	})
-
-	t.Run("empty", func(t *testing.T) {
-		ca := CA{}
-		var out bytes.Buffer
-		require.NoError(t, ca.WriteBundle(&out))
-		require.Equal(t, "-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n", out.String())
-	})
-
-	t.Run("success", func(t *testing.T) {
-		ca := CA{caCertBytes: []byte{1, 2, 3, 4, 5, 6, 7, 8}}
-		var out bytes.Buffer
-		require.NoError(t, ca.WriteBundle(&out))
-		require.Equal(t, "-----BEGIN CERTIFICATE-----\nAQIDBAUGBwg=\n-----END CERTIFICATE-----\n", out.String())
-	})
 }
 
 func TestBundle(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		ca := CA{caCertBytes: []byte{1, 2, 3, 4, 5, 6, 7, 8}}
-		got, err := ca.Bundle()
-		require.NoError(t, err)
+		got := ca.Bundle()
 		require.Equal(t, "-----BEGIN CERTIFICATE-----\nAQIDBAUGBwg=\n-----END CERTIFICATE-----\n", string(got))
 	})
 }
@@ -147,7 +202,7 @@ func (e *errSigner) Sign(_ io.Reader, _ []byte, _ crypto.SignerOpts) ([]byte, er
 func TestIssue(t *testing.T) {
 	now := time.Date(2020, 7, 10, 12, 41, 12, 1234, time.UTC)
 
-	realCA, err := New(pkix.Name{CommonName: "Test CA"})
+	realCA, err := Load("./testdata/test.crt", "./testdata/test.key")
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -158,33 +213,41 @@ func TestIssue(t *testing.T) {
 		{
 			name: "failed to generate serial",
 			ca: CA{
-				serialRNG: strings.NewReader(""),
+				env: env{
+					serialRNG: strings.NewReader(""),
+				},
 			},
 			wantErr: "could not generate serial number for certificate: EOF",
 		},
 		{
 			name: "failed to generate keypair",
 			ca: CA{
-				serialRNG: strings.NewReader(strings.Repeat("x", 64)),
-				keygenRNG: strings.NewReader(""),
+				env: env{
+					serialRNG: strings.NewReader(strings.Repeat("x", 64)),
+					keygenRNG: strings.NewReader(""),
+				},
 			},
 			wantErr: "could not generate private key: EOF",
 		},
 		{
 			name: "invalid CA certificate",
 			ca: CA{
-				serialRNG: strings.NewReader(strings.Repeat("x", 64)),
-				keygenRNG: strings.NewReader(strings.Repeat("x", 64)),
-				clock:     func() time.Time { return now },
+				env: env{
+					serialRNG: strings.NewReader(strings.Repeat("x", 64)),
+					keygenRNG: strings.NewReader(strings.Repeat("x", 64)),
+					clock:     func() time.Time { return now },
+				},
 			},
 			wantErr: "could not parse CA certificate: asn1: syntax error: sequence truncated",
 		},
 		{
 			name: "signing error",
 			ca: CA{
-				serialRNG:   strings.NewReader(strings.Repeat("x", 64)),
-				keygenRNG:   strings.NewReader(strings.Repeat("x", 64)),
-				clock:       func() time.Time { return now },
+				env: env{
+					serialRNG: strings.NewReader(strings.Repeat("x", 64)),
+					keygenRNG: strings.NewReader(strings.Repeat("x", 64)),
+					clock:     func() time.Time { return now },
+				},
 				caCertBytes: realCA.caCertBytes,
 				signer: &errSigner{
 					pubkey: realCA.signer.Public(),
@@ -196,9 +259,28 @@ func TestIssue(t *testing.T) {
 		{
 			name: "success",
 			ca: CA{
-				serialRNG:   strings.NewReader(strings.Repeat("x", 64)),
-				keygenRNG:   strings.NewReader(strings.Repeat("x", 64)),
-				clock:       func() time.Time { return now },
+				env: env{
+					serialRNG: strings.NewReader(strings.Repeat("x", 64)),
+					keygenRNG: strings.NewReader(strings.Repeat("x", 64)),
+					clock:     func() time.Time { return now },
+					parseCert: func(_ []byte) (*x509.Certificate, error) {
+						return nil, fmt.Errorf("some parse certificate error")
+					},
+				},
+				caCertBytes: realCA.caCertBytes,
+				signer:      realCA.signer,
+			},
+			wantErr: "could not parse certificate: some parse certificate error",
+		},
+		{
+			name: "success",
+			ca: CA{
+				env: env{
+					serialRNG: strings.NewReader(strings.Repeat("x", 64)),
+					keygenRNG: strings.NewReader(strings.Repeat("x", 64)),
+					clock:     func() time.Time { return now },
+					parseCert: x509.ParseCertificate,
+				},
 				caCertBytes: realCA.caCertBytes,
 				signer:      realCA.signer,
 			},
@@ -217,4 +299,42 @@ func TestIssue(t *testing.T) {
 			require.NotNil(t, got)
 		})
 	}
+}
+
+func TestIssuePEM(t *testing.T) {
+	realCA, err := Load("./testdata/test.crt", "./testdata/test.key")
+	require.NoError(t, err)
+
+	certPEM, keyPEM, err := realCA.IssuePEM(pkix.Name{CommonName: "Test Server"}, []string{"example.com"}, 10*time.Minute)
+	require.NoError(t, err)
+	require.NotEmpty(t, certPEM)
+	require.NotEmpty(t, keyPEM)
+}
+
+func TestToPEM(t *testing.T) {
+	realCert, err := tls.LoadX509KeyPair("./testdata/test.crt", "./testdata/test.key")
+	require.NoError(t, err)
+
+	t.Run("error from input", func(t *testing.T) {
+		certPEM, keyPEM, err := toPEM(nil, fmt.Errorf("some error"))
+		require.EqualError(t, err, "some error")
+		require.Nil(t, certPEM)
+		require.Nil(t, keyPEM)
+	})
+
+	t.Run("invalid private key", func(t *testing.T) {
+		cert := realCert
+		cert.PrivateKey = nil
+		certPEM, keyPEM, err := toPEM(&cert, nil)
+		require.EqualError(t, err, "failed to marshal private key into PKCS8: x509: unknown key type while marshaling PKCS#8: <nil>")
+		require.Nil(t, certPEM)
+		require.Nil(t, keyPEM)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		certPEM, keyPEM, err := toPEM(&realCert, nil)
+		require.NoError(t, err)
+		require.NotEmpty(t, certPEM)
+		require.NotEmpty(t, keyPEM)
+	})
 }

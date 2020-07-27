@@ -60,7 +60,7 @@ spec:
           #@ end
           imagePullPolicy: IfNotPresent
           command:
-            - ./placeholder-name
+            - ./placeholder-name-server
           args:
             - --config=/etc/config/placeholder-name.yaml
             - --downward-api-path=/etc/podinfo

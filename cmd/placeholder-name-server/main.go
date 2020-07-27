@@ -14,7 +14,7 @@ import (
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 
-	"github.com/suzerain-io/placeholder-name/cmd/placeholder-name/app"
+	"github.com/suzerain-io/placeholder-name/internal/server"
 )
 
 func main() {
@@ -25,7 +25,7 @@ func main() {
 
 	ctx := genericapiserver.SetupSignalContext()
 
-	if err := app.New(ctx, os.Args[1:], os.Stdout, os.Stderr).Run(); err != nil {
+	if err := server.New(ctx, os.Args[1:], os.Stdout, os.Stderr).Run(); err != nil {
 		klog.Fatal(err)
 	}
 }

@@ -3,7 +3,7 @@ Copyright 2020 VMware, Inc.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package app
+package server
 
 import (
 	"bytes"
@@ -17,19 +17,19 @@ import (
 )
 
 const knownGoodUsage = `
-placeholder-name provides a generic API for mapping an external
+placeholder-name-server provides a generic API for mapping an external
 credential from somewhere to an internal credential to be used for
 authenticating to the Kubernetes API.
 
 Usage:
-  placeholder-name [flags]
+  placeholder-name-server [flags]
 
 Flags:
       --cluster-signing-cert-file string   path to cluster signing certificate
       --cluster-signing-key-file string    path to cluster signing private key
   -c, --config string                      path to configuration file (default "placeholder-name.yaml")
       --downward-api-path string           path to Downward API volume mount (default "/etc/podinfo")
-  -h, --help                               help for placeholder-name
+  -h, --help                               help for placeholder-name-server
       --log-flush-frequency duration       Maximum number of seconds between log flushes (default 5s)
 `
 
@@ -52,7 +52,7 @@ func TestCommand(t *testing.T) {
 		{
 			name:    "OneArgFails",
 			args:    []string{"tuna"},
-			wantErr: `unknown command "tuna" for "placeholder-name"`,
+			wantErr: `unknown command "tuna" for "placeholder-name-server"`,
 		},
 		{
 			name: "ShortConfigFlagSucceeds",
@@ -68,7 +68,7 @@ func TestCommand(t *testing.T) {
 				"--config", "some/path/to/config.yaml",
 				"tuna",
 			},
-			wantErr: `unknown command "tuna" for "placeholder-name"`,
+			wantErr: `unknown command "tuna" for "placeholder-name-server"`,
 		},
 	}
 	for _, test := range tests {

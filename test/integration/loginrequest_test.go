@@ -7,6 +7,7 @@ package integration
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"testing"
 	"time"

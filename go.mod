@@ -4,6 +4,7 @@ go 1.14
 
 require (
 	github.com/davecgh/go-spew v1.1.1
+	github.com/golang/mock v1.4.3
 	github.com/golangci/golangci-lint v1.28.1
 	github.com/google/go-cmp v0.4.0
 	github.com/spf13/cobra v1.0.0

@@ -57,6 +57,7 @@ type Config struct {
 
 type ExtraConfig struct {
 	Webhook authenticator.Token
+	Issuer  loginrequest.CertIssuer
 }
 
 type PlaceHolderServer struct {
@@ -108,7 +109,7 @@ func (c completedConfig) New() (*PlaceHolderServer, error) {
 		NegotiatedSerializer:         Codecs,
 	}
 
-	loginRequestStorage := loginrequest.NewREST(c.ExtraConfig.Webhook)
+	loginRequestStorage := loginrequest.NewREST(c.ExtraConfig.Webhook, c.ExtraConfig.Issuer)
 
 	v1alpha1Storage, ok := apiGroupInfo.VersionedResourcesStorageMap[gvr.Version]
 	if !ok {

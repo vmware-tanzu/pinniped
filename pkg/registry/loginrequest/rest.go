@@ -8,7 +8,9 @@ package loginrequest
 
 import (
 	"context"
+	"crypto/x509/pkix"
 	"fmt"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,14 +30,20 @@ var (
 	_ rest.Storage                 = &REST{}
 )
 
-func NewREST(webhook authenticator.Token) *REST {
+type CertIssuer interface {
+	IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) ([]byte, []byte, error)
+}
+
+func NewREST(webhook authenticator.Token, issuer CertIssuer) *REST {
 	return &REST{
 		webhook: webhook,
+		issuer:  issuer,
 	}
 }
 
 type REST struct {
 	webhook authenticator.Token
+	issuer  CertIssuer
 }
 
 func (r *REST) New() runtime.Object {

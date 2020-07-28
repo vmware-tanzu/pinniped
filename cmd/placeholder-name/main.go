@@ -28,7 +28,7 @@ func main() {
 type envGetter func(string) (string, bool)
 type tokenExchanger func(token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error)
 
-const EnvVarNotSetError = constable.Error("failed to login: environment variable not set")
+const ErrMissingEnvVar = constable.Error("failed to login: environment variable not set")
 
 func run(envGetter envGetter, tokenExchanger tokenExchanger, outputWriter io.Writer) error {
 	token, varExists := envGetter("PLACEHOLDER_NAME_TOKEN")
@@ -60,5 +60,5 @@ func run(envGetter envGetter, tokenExchanger tokenExchanger, outputWriter io.Wri
 }
 
 func envVarNotSetError(varName string) error {
-	return fmt.Errorf("%w: %s", EnvVarNotSetError, varName)
+	return fmt.Errorf("%w: %s", ErrMissingEnvVar, varName)
 }

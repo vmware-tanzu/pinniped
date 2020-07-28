@@ -10,13 +10,15 @@ import (
 	"fmt"
 	"testing"
 
-	"k8s.io/client-go/pkg/apis/clientauthentication"
-
-	"github.com/stretchr/testify/require"
-
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
+	"github.com/stretchr/testify/require"
+	"k8s.io/client-go/pkg/apis/clientauthentication"
 )
+
+type errWriter struct{ returnErr error }
+
+func (e *errWriter) Write([]byte) (int, error) { return 0, e.returnErr }
 
 func TestRun(t *testing.T) {
 	spec.Run(t, "Run", func(t *testing.T, when spec.G, it spec.S) {
@@ -80,6 +82,21 @@ func TestRun(t *testing.T) {
 			it("returns an error", func() {
 				err := run(envGetter, tokenExchanger, buffer)
 				require.Error(t, err, "failed to login: some error")
+			})
+		}, spec.Parallel())
+
+		when("the JSON encoder fails", func() {
+			it.Before(func() {
+				tokenExchanger = func(token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error) {
+					return &clientauthentication.ExecCredential{
+						Status: &clientauthentication.ExecCredentialStatus{Token: "some token"},
+					}, nil
+				}
+			})
+
+			it("returns an error", func() {
+				err := run(envGetter, tokenExchanger, &errWriter{returnErr: fmt.Errorf("some IO error")})
+				require.EqualError(t, err, "failed to marshal response to stdout: some IO error")
 			})
 		}, spec.Parallel())
 

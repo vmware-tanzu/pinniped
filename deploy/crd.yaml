@@ -1,0 +1,44 @@
+#@ load("@ytt:data", "data")
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: logindiscoveryconfigs.suzerain-io.github.io
+spec:
+  group: suzerain-io.github.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [server, certificateAuthorityData]
+              properties:
+                server:
+                  type: string
+                  minLength: 1
+                certificateAuthorityData:
+                  type: string
+                  minLength: 1
+                identityProviders:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      idpType:
+                        type: string
+                        pattern: '^token$' #! validation via regexp pattern match
+  scope: Namespaced
+  names:
+    plural: logindiscoveryconfigs
+    singular: logindiscoveryconfig
+    kind: LoginDiscoveryConfig
+    shortNames:
+      - ldc

@@ -53,7 +53,7 @@ func run(envGetter envGetter, tokenExchanger tokenExchanger, outputWriter io.Wri
 
 	err = json.NewEncoder(outputWriter).Encode(execCredential)
 	if err != nil {
-		return fmt.Errorf("failed to marshall response to stdout: %w", err)
+		return fmt.Errorf("failed to marshal response to stdout: %w", err)
 	}
 
 	return nil

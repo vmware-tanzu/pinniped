@@ -32,10 +32,10 @@ import (
 	aggregationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
+	"github.com/suzerain-io/placeholder-name/internal/apiserver"
 	"github.com/suzerain-io/placeholder-name/internal/autoregistration"
 	"github.com/suzerain-io/placeholder-name/internal/certauthority"
 	"github.com/suzerain-io/placeholder-name/internal/downward"
-	"github.com/suzerain-io/placeholder-name/pkg/apiserver"
 	"github.com/suzerain-io/placeholder-name/pkg/config"
 )
 

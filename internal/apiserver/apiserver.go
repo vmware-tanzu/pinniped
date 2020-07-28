@@ -21,7 +21,7 @@ import (
 
 	placeholderapi "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
-	"github.com/suzerain-io/placeholder-name/pkg/registry/loginrequest"
+	"github.com/suzerain-io/placeholder-name/internal/registry/loginrequest"
 )
 
 var (

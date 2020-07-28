@@ -16,11 +16,9 @@ import (
 	"github.com/sclevine/spec/report"
 	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/pkg/apis/clientauthentication"
+
+	"github.com/suzerain-io/placeholder-name/test/library"
 )
-
-type errWriter struct{ returnErr error }
-
-func (e *errWriter) Write([]byte) (int, error) { return 0, e.returnErr }
 
 func TestRun(t *testing.T) {
 	spec.Run(t, "Run", func(t *testing.T, when spec.G, it spec.S) {
@@ -97,7 +95,7 @@ func TestRun(t *testing.T) {
 			})
 
 			it("returns an error", func() {
-				err := run(envGetter, tokenExchanger, &errWriter{returnErr: fmt.Errorf("some IO error")}, 30*time.Second)
+				err := run(envGetter, tokenExchanger, &library.ErrorWriter{ReturnError: fmt.Errorf("some IO error")}, 30*time.Second)
 				require.EqualError(t, err, "failed to marshal response to stdout: some IO error")
 			})
 		}, spec.Parallel())

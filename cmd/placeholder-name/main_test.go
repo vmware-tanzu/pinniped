@@ -50,7 +50,7 @@ func TestRun(t *testing.T) {
 					"PLACEHOLDER_NAME_CA_BUNDLE":        "b",
 				}
 				err := run(envGetter, tokenExchanger, buffer)
-				require.Error(t, err, "failed to login: environment variable not set: PLACEHOLDER_NAME_TOKEN")
+				require.EqualError(t, err, "failed to login: environment variable not set: PLACEHOLDER_NAME_TOKEN")
 			})
 
 			it("returns an error when PLACEHOLDER_NAME_CA_BUNDLE is missing", func() {
@@ -59,7 +59,7 @@ func TestRun(t *testing.T) {
 					"PLACEHOLDER_NAME_TOKEN":            "b",
 				}
 				err := run(envGetter, tokenExchanger, buffer)
-				require.Error(t, err, "failed to login: environment variable not set: PLACEHOLDER_NAME_CA_BUNDLE")
+				require.EqualError(t, err, "failed to login: environment variable not set: PLACEHOLDER_NAME_CA_BUNDLE")
 			})
 
 			it("returns an error when PLACEHOLDER_NAME_K8S_API_ENDPOINT is missing", func() {
@@ -68,7 +68,7 @@ func TestRun(t *testing.T) {
 					"PLACEHOLDER_NAME_CA_BUNDLE": "b",
 				}
 				err := run(envGetter, tokenExchanger, buffer)
-				require.Error(t, err, "failed to login: environment variable not set: PLACEHOLDER_NAME_K8S_API_ENDPOINT")
+				require.EqualError(t, err, "failed to login: environment variable not set: PLACEHOLDER_NAME_K8S_API_ENDPOINT")
 			})
 		}, spec.Parallel())
 
@@ -81,7 +81,7 @@ func TestRun(t *testing.T) {
 
 			it("returns an error", func() {
 				err := run(envGetter, tokenExchanger, buffer)
-				require.Error(t, err, "failed to login: some error")
+				require.EqualError(t, err, "failed to login: some error")
 			})
 		}, spec.Parallel())
 

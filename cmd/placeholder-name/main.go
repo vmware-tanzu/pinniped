@@ -6,10 +6,12 @@ SPDX-License-Identifier: Apache-2.0
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"k8s.io/client-go/pkg/apis/clientauthentication"
 
@@ -18,7 +20,7 @@ import (
 )
 
 func main() {
-	err := run(os.LookupEnv, client.ExchangeToken, os.Stdout)
+	err := run(os.LookupEnv, client.ExchangeToken, os.Stdout, 30*time.Second)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%s", err.Error())
 		os.Exit(1)
@@ -26,11 +28,14 @@ func main() {
 }
 
 type envGetter func(string) (string, bool)
-type tokenExchanger func(token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error)
+type tokenExchanger func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error)
 
 const ErrMissingEnvVar = constable.Error("failed to login: environment variable not set")
 
-func run(envGetter envGetter, tokenExchanger tokenExchanger, outputWriter io.Writer) error {
+func run(envGetter envGetter, tokenExchanger tokenExchanger, outputWriter io.Writer, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	token, varExists := envGetter("PLACEHOLDER_NAME_TOKEN")
 	if !varExists {
 		return envVarNotSetError("PLACEHOLDER_NAME_TOKEN")
@@ -46,7 +51,7 @@ func run(envGetter envGetter, tokenExchanger tokenExchanger, outputWriter io.Wri
 		return envVarNotSetError("PLACEHOLDER_NAME_K8S_API_ENDPOINT")
 	}
 
-	execCredential, err := tokenExchanger(token, caBundle, apiEndpoint)
+	execCredential, err := tokenExchanger(ctx, token, caBundle, apiEndpoint)
 	if err != nil {
 		return fmt.Errorf("failed to login: %w", err)
 	}

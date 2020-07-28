@@ -7,8 +7,10 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
@@ -49,7 +51,7 @@ func TestRun(t *testing.T) {
 					"PLACEHOLDER_NAME_K8S_API_ENDPOINT": "a",
 					"PLACEHOLDER_NAME_CA_BUNDLE":        "b",
 				}
-				err := run(envGetter, tokenExchanger, buffer)
+				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
 				require.EqualError(t, err, "failed to login: environment variable not set: PLACEHOLDER_NAME_TOKEN")
 			})
 
@@ -58,7 +60,7 @@ func TestRun(t *testing.T) {
 					"PLACEHOLDER_NAME_K8S_API_ENDPOINT": "a",
 					"PLACEHOLDER_NAME_TOKEN":            "b",
 				}
-				err := run(envGetter, tokenExchanger, buffer)
+				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
 				require.EqualError(t, err, "failed to login: environment variable not set: PLACEHOLDER_NAME_CA_BUNDLE")
 			})
 
@@ -67,27 +69,27 @@ func TestRun(t *testing.T) {
 					"PLACEHOLDER_NAME_TOKEN":     "a",
 					"PLACEHOLDER_NAME_CA_BUNDLE": "b",
 				}
-				err := run(envGetter, tokenExchanger, buffer)
+				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
 				require.EqualError(t, err, "failed to login: environment variable not set: PLACEHOLDER_NAME_K8S_API_ENDPOINT")
 			})
 		}, spec.Parallel())
 
 		when("the token exchange fails", func() {
 			it.Before(func() {
-				tokenExchanger = func(token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error) {
+				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error) {
 					return nil, fmt.Errorf("some error")
 				}
 			})
 
 			it("returns an error", func() {
-				err := run(envGetter, tokenExchanger, buffer)
+				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
 				require.EqualError(t, err, "failed to login: some error")
 			})
 		}, spec.Parallel())
 
 		when("the JSON encoder fails", func() {
 			it.Before(func() {
-				tokenExchanger = func(token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error) {
+				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error) {
 					return &clientauthentication.ExecCredential{
 						Status: &clientauthentication.ExecCredentialStatus{Token: "some token"},
 					}, nil
@@ -95,8 +97,28 @@ func TestRun(t *testing.T) {
 			})
 
 			it("returns an error", func() {
-				err := run(envGetter, tokenExchanger, &errWriter{returnErr: fmt.Errorf("some IO error")})
+				err := run(envGetter, tokenExchanger, &errWriter{returnErr: fmt.Errorf("some IO error")}, 30*time.Second)
 				require.EqualError(t, err, "failed to marshal response to stdout: some IO error")
+			})
+		}, spec.Parallel())
+
+		when("the token exchange times out", func() {
+			it.Before(func() {
+				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error) {
+					select {
+					case <-time.After(100 * time.Millisecond):
+						return &clientauthentication.ExecCredential{
+							Status: &clientauthentication.ExecCredentialStatus{Token: "some token"},
+						}, nil
+					case <-ctx.Done():
+						return nil, ctx.Err()
+					}
+				}
+			})
+
+			it("returns an error", func() {
+				err := run(envGetter, tokenExchanger, buffer, 1*time.Millisecond)
+				require.EqualError(t, err, "failed to login: context deadline exceeded")
 			})
 		}, spec.Parallel())
 
@@ -104,7 +126,7 @@ func TestRun(t *testing.T) {
 			var actualToken, actualCaBundle, actualAPIEndpoint string
 
 			it.Before(func() {
-				tokenExchanger = func(token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error) {
+				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error) {
 					actualToken, actualCaBundle, actualAPIEndpoint = token, caBundle, apiEndpoint
 					return &clientauthentication.ExecCredential{
 						Status: &clientauthentication.ExecCredentialStatus{Token: "some token"},
@@ -113,7 +135,7 @@ func TestRun(t *testing.T) {
 			})
 
 			it("writes the execCredential to the given writer", func() {
-				err := run(envGetter, tokenExchanger, buffer)
+				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
 				require.NoError(t, err)
 				require.Equal(t, fakeEnv["PLACEHOLDER_NAME_TOKEN"], actualToken)
 				require.Equal(t, fakeEnv["PLACEHOLDER_NAME_CA_BUNDLE"], actualCaBundle)

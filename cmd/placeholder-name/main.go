@@ -13,7 +13,7 @@ import (
 	"os"
 	"time"
 
-	"k8s.io/client-go/pkg/apis/clientauthentication"
+	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
 	"github.com/suzerain-io/placeholder-name/internal/constable"
 	"github.com/suzerain-io/placeholder-name/pkg/client"
@@ -28,7 +28,7 @@ func main() {
 }
 
 type envGetter func(string) (string, bool)
-type tokenExchanger func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error)
+type tokenExchanger func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error)
 
 const ErrMissingEnvVar = constable.Error("failed to login: environment variable not set")
 

@@ -16,7 +16,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/apis/clientauthentication"
+	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
 )
@@ -112,12 +112,12 @@ func TestExchangeToken(t *testing.T) {
 
 		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
 		require.NoError(t, err)
-		require.Equal(t, &clientauthentication.ExecCredential{
+		require.Equal(t, &clientauthenticationv1beta1.ExecCredential{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "ExecCredential",
 				APIVersion: "client.authentication.k8s.io/v1beta1",
 			},
-			Status: &clientauthentication.ExecCredentialStatus{
+			Status: &clientauthenticationv1beta1.ExecCredentialStatus{
 				ClientCertificateData: "test-certificate",
 				ClientKeyData:         "test-key",
 			},

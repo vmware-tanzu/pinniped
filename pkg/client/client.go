@@ -10,7 +10,7 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/apis/clientauthentication"
+	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
@@ -22,7 +22,7 @@ import (
 // ErrLoginFailed is returned by ExchangeToken when the server rejects the login request.
 const ErrLoginFailed = constable.Error("login failed")
 
-func ExchangeToken(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error) {
+func ExchangeToken(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
 	clientset, err := getClient(apiEndpoint, caBundle)
 	if err != nil {
 		return nil, fmt.Errorf("could not get API client: %w", err)
@@ -43,12 +43,12 @@ func ExchangeToken(ctx context.Context, token, caBundle, apiEndpoint string) (*c
 		return nil, fmt.Errorf("%w: %s", ErrLoginFailed, resp.Status.Message)
 	}
 
-	return &clientauthentication.ExecCredential{
+	return &clientauthenticationv1beta1.ExecCredential{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ExecCredential",
 			APIVersion: "client.authentication.k8s.io/v1beta1",
 		},
-		Status: &clientauthentication.ExecCredentialStatus{
+		Status: &clientauthenticationv1beta1.ExecCredentialStatus{
 			ExpirationTimestamp:   resp.Status.Credential.ExpirationTimestamp,
 			ClientCertificateData: resp.Status.Credential.ClientCertificateData,
 			ClientKeyData:         resp.Status.Credential.ClientKeyData,

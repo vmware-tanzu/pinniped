@@ -3,8 +3,8 @@ Copyright 2020 VMware, Inc.
 SPDX-License-Identifier: Apache-2.0
 */
 
-// Package app is the command line entry point for placeholder-name.
-package app
+// Package server is the command line entry point for placeholder-name-server.
+package server
 
 import (
 	"context"
@@ -39,7 +39,7 @@ import (
 	"github.com/suzerain-io/placeholder-name/pkg/config"
 )
 
-// App is an object that represents the placeholder-name application.
+// App is an object that represents the placeholder-name-server application.
 type App struct {
 	cmd *cobra.Command
 
@@ -68,8 +68,8 @@ func New(ctx context.Context, args []string, stdout, stderr io.Writer) *App {
 	a.recommendedOptions.Etcd = nil // turn off etcd storage because we don't need it yet
 
 	cmd := &cobra.Command{
-		Use: `placeholder-name`,
-		Long: `placeholder-name provides a generic API for mapping an external
+		Use: `placeholder-name-server`,
+		Long: `placeholder-name-server provides a generic API for mapping an external
 credential from somewhere to an internal credential to be used for
 authenticating to the Kubernetes API.`,
 		RunE: func(cmd *cobra.Command, args []string) error {

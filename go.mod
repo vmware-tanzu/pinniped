@@ -7,6 +7,7 @@ require (
 	github.com/golang/mock v1.4.3
 	github.com/golangci/golangci-lint v1.28.1
 	github.com/google/go-cmp v0.4.0
+	github.com/sclevine/spec v1.4.0
 	github.com/spf13/cobra v1.0.0
 	github.com/stretchr/testify v1.6.1
 	github.com/suzerain-io/placeholder-name-api v0.0.0-20200724000517-dc602fd8d75e

@@ -12,10 +12,12 @@ import (
 	"testing"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
 	"github.com/stretchr/testify/require"
-	"k8s.io/client-go/pkg/apis/clientauthentication"
+	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
 	"github.com/suzerain-io/placeholder-name/test/library"
 )
@@ -74,7 +76,7 @@ func TestRun(t *testing.T) {
 
 		when("the token exchange fails", func() {
 			it.Before(func() {
-				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error) {
+				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
 					return nil, fmt.Errorf("some error")
 				}
 			})
@@ -87,9 +89,9 @@ func TestRun(t *testing.T) {
 
 		when("the JSON encoder fails", func() {
 			it.Before(func() {
-				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error) {
-					return &clientauthentication.ExecCredential{
-						Status: &clientauthentication.ExecCredentialStatus{Token: "some token"},
+				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
+					return &clientauthenticationv1beta1.ExecCredential{
+						Status: &clientauthenticationv1beta1.ExecCredentialStatus{Token: "some token"},
 					}, nil
 				}
 			})
@@ -102,11 +104,11 @@ func TestRun(t *testing.T) {
 
 		when("the token exchange times out", func() {
 			it.Before(func() {
-				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error) {
+				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
 					select {
 					case <-time.After(100 * time.Millisecond):
-						return &clientauthentication.ExecCredential{
-							Status: &clientauthentication.ExecCredentialStatus{Token: "some token"},
+						return &clientauthenticationv1beta1.ExecCredential{
+							Status: &clientauthenticationv1beta1.ExecCredentialStatus{Token: "some token"},
 						}, nil
 					case <-ctx.Done():
 						return nil, ctx.Err()
@@ -124,10 +126,14 @@ func TestRun(t *testing.T) {
 			var actualToken, actualCaBundle, actualAPIEndpoint string
 
 			it.Before(func() {
-				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthentication.ExecCredential, error) {
+				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
 					actualToken, actualCaBundle, actualAPIEndpoint = token, caBundle, apiEndpoint
-					return &clientauthentication.ExecCredential{
-						Status: &clientauthentication.ExecCredentialStatus{Token: "some token"},
+					return &clientauthenticationv1beta1.ExecCredential{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "ExecCredential",
+							APIVersion: "client.authentication.k8s.io/v1beta1",
+						},
+						Status: &clientauthenticationv1beta1.ExecCredentialStatus{Token: "some token"},
 					}, nil
 				}
 			})
@@ -138,10 +144,16 @@ func TestRun(t *testing.T) {
 				require.Equal(t, fakeEnv["PLACEHOLDER_NAME_TOKEN"], actualToken)
 				require.Equal(t, fakeEnv["PLACEHOLDER_NAME_CA_BUNDLE"], actualCaBundle)
 				require.Equal(t, fakeEnv["PLACEHOLDER_NAME_K8S_API_ENDPOINT"], actualAPIEndpoint)
-				expected := `{
-					"Spec": {"Interactive": false, "Response": null},
-					"Status": {"ClientCertificateData": "", "ClientKeyData": "", "ExpirationTimestamp": null, "Token": "some token"}
-				}`
+				expected := `
+				{
+				  "kind": "ExecCredential",
+				  "apiVersion": "client.authentication.k8s.io/v1beta1",
+				  "spec": {},
+				  "status": {
+					"token": "some token"
+				  }
+				}
+				`
 				require.JSONEq(t, expected, buffer.String())
 			})
 		}, spec.Parallel())

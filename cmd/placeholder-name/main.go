@@ -22,7 +22,7 @@ import (
 func main() {
 	err := run(os.LookupEnv, client.ExchangeToken, os.Stdout, 30*time.Second)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "%s", err.Error())
+		_, _ = fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 		os.Exit(1)
 	}
 }

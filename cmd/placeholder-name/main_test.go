@@ -15,9 +15,8 @@ import (
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
+	"github.com/suzerain-io/placeholder-name/pkg/client"
 	"github.com/suzerain-io/placeholder-name/test/library"
 )
 
@@ -68,7 +67,7 @@ func TestRun(t *testing.T) {
 
 		when("the token exchange fails", func() {
 			it.Before(func() {
-				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
+				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*client.Credential, error) {
 					return nil, fmt.Errorf("some error")
 				}
 			})
@@ -81,10 +80,8 @@ func TestRun(t *testing.T) {
 
 		when("the JSON encoder fails", func() {
 			it.Before(func() {
-				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
-					return &clientauthenticationv1beta1.ExecCredential{
-						Status: &clientauthenticationv1beta1.ExecCredentialStatus{Token: "some token"},
-					}, nil
+				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*client.Credential, error) {
+					return &client.Credential{Token: "some token"}, nil
 				}
 			})
 
@@ -96,12 +93,10 @@ func TestRun(t *testing.T) {
 
 		when("the token exchange times out", func() {
 			it.Before(func() {
-				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
+				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*client.Credential, error) {
 					select {
 					case <-time.After(100 * time.Millisecond):
-						return &clientauthenticationv1beta1.ExecCredential{
-							Status: &clientauthenticationv1beta1.ExecCredentialStatus{Token: "some token"},
-						}, nil
+						return &client.Credential{Token: "some token"}, nil
 					case <-ctx.Done():
 						return nil, ctx.Err()
 					}
@@ -118,14 +113,14 @@ func TestRun(t *testing.T) {
 			var actualToken, actualCaBundle, actualAPIEndpoint string
 
 			it.Before(func() {
-				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
+				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*client.Credential, error) {
 					actualToken, actualCaBundle, actualAPIEndpoint = token, caBundle, apiEndpoint
-					return &clientauthenticationv1beta1.ExecCredential{
-						TypeMeta: metav1.TypeMeta{
-							Kind:       "ExecCredential",
-							APIVersion: "client.authentication.k8s.io/v1beta1",
-						},
-						Status: &clientauthenticationv1beta1.ExecCredentialStatus{Token: "some token"},
+					now := time.Date(2020, 7, 29, 1, 2, 3, 0, time.UTC)
+					return &client.Credential{
+						ExpirationTimestamp:   &now,
+						ClientCertificateData: "some certificate",
+						ClientKeyData:         "some key",
+						Token:                 "some token",
 					}, nil
 				}
 			})
@@ -141,6 +136,9 @@ func TestRun(t *testing.T) {
 				  "apiVersion": "client.authentication.k8s.io/v1beta1",
 				  "spec": {},
 				  "status": {
+					"expirationTimestamp":"2020-07-29T01:02:03Z",
+					"clientCertificateData": "some certificate",
+					"clientKeyData":"some key",
 					"token": "some token"
 				  }
 				}`

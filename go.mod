@@ -12,6 +12,7 @@ require (
 	github.com/stretchr/testify v1.6.1
 	github.com/suzerain-io/placeholder-name-api v0.0.0-20200724000517-dc602fd8d75e
 	github.com/suzerain-io/placeholder-name-client-go v0.0.0-20200714203950-a414963b4f95
+	github.com/suzerain-io/placeholder-name/pkg/client v0.0.0-00010101000000-000000000000
 	golang.org/x/tools v0.0.0-20200707134715-9e0a013e855f // indirect
 	k8s.io/api v0.19.0-rc.0
 	k8s.io/apimachinery v0.19.0-rc.0
@@ -23,3 +24,5 @@ require (
 	k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
 	sigs.k8s.io/yaml v1.2.0
 )
+
+replace github.com/suzerain-io/placeholder-name/pkg/client => ./pkg/client

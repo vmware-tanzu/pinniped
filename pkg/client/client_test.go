@@ -7,7 +7,6 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"encoding/pem"
 	"io/ioutil"
 	"net/http"
@@ -15,10 +14,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
-
-	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
 )
 
 func startTestServer(t *testing.T, handler http.HandlerFunc) (string, string) {
@@ -39,9 +34,36 @@ func TestExchangeToken(t *testing.T) {
 
 	t.Run("invalid configuration", func(t *testing.T) {
 		t.Parallel()
-		got, err := ExchangeToken(ctx, "", "", "")
-		require.EqualError(t, err, "could not get API client: invalid configuration: no configuration has been provided, try setting KUBERNETES_MASTER environment variable")
-		require.Nil(t, got)
+		for _, tt := range []struct {
+			name        string
+			caBundle    string
+			apiEndpoint string
+			wantErr     string
+		}{
+			{
+				name:        "bad URL",
+				apiEndpoint: "%@Q$!",
+				wantErr:     `invalid API endpoint: parse "%@Q$!": invalid URL escape "%@Q"`,
+			},
+			{
+				name:        "plain HTTP URL",
+				apiEndpoint: "http://example.com",
+				wantErr:     `invalid API endpoint: protocol must be "https", not "http"`,
+			},
+			{
+				name:        "no CA certs",
+				apiEndpoint: "https://example.com",
+				caBundle:    "",
+				wantErr:     `invalid CA bundle: no certificates found`,
+			},
+		} {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				got, err := ExchangeToken(ctx, "", tt.caBundle, tt.apiEndpoint)
+				require.EqualError(t, err, tt.wantErr)
+				require.Nil(t, got)
+			})
+		}
 	})
 
 	t.Run("server error", func(t *testing.T) {
@@ -53,7 +75,20 @@ func TestExchangeToken(t *testing.T) {
 		})
 
 		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
-		require.EqualError(t, err, `could not login: an error on the server ("some server error") has prevented the request from succeeding (post loginrequests.placeholder.suzerain-io.github.io)`)
+		require.EqualError(t, err, `could not login: server returned status 500`)
+		require.Nil(t, got)
+	})
+
+	t.Run("server invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		// Start a test server that returns only 500 errors.
+		caBundle, endpoint := startTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte("not valid json"))
+		})
+
+		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
+		require.EqualError(t, err, `invalid login response: invalid character 'o' in literal null (expecting 'u')`)
 		require.Nil(t, got)
 	})
 
@@ -62,10 +97,19 @@ func TestExchangeToken(t *testing.T) {
 		// Start a test server that returns success but with an error message
 		caBundle, endpoint := startTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("content-type", "application/json")
-			_ = json.NewEncoder(w).Encode(&placeholderv1alpha1.LoginRequest{
-				TypeMeta: metav1.TypeMeta{APIVersion: "placeholder.suzerain-io.github.io/v1alpha1", Kind: "LoginRequest"},
-				Status:   placeholderv1alpha1.LoginRequestStatus{Message: "some login failure"},
-			})
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`
+				{
+				  "kind": "LoginRequest",
+				  "apiVersion": "placeholder.suzerain-io.github.io/v1alpha1",
+				  "metadata": {
+					"creationTimestamp": null
+				  },
+				  "spec": {},
+				  "status": {
+					"message": "some login failure"
+				  }
+				}`))
 		})
 
 		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
@@ -93,7 +137,9 @@ func TestExchangeToken(t *testing.T) {
 				  },
 				  "spec": {
 					"type": "token",
-					"token": {}
+					"token": {
+                      "value": "test-token"
+                    }
 				  },
 				  "status": {}
 				}`,
@@ -101,28 +147,29 @@ func TestExchangeToken(t *testing.T) {
 			)
 
 			w.Header().Set("content-type", "application/json")
-			_ = json.NewEncoder(w).Encode(&placeholderv1alpha1.LoginRequest{
-				TypeMeta: metav1.TypeMeta{APIVersion: "placeholder.suzerain-io.github.io/v1alpha1", Kind: "LoginRequest"},
-				Status: placeholderv1alpha1.LoginRequestStatus{
-					Credential: &placeholderv1alpha1.LoginRequestCredential{
-						ClientCertificateData: "test-certificate",
-						ClientKeyData:         "test-key",
-					},
-				},
-			})
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`
+				{
+				  "kind": "LoginRequest",
+				  "apiVersion": "placeholder.suzerain-io.github.io/v1alpha1",
+				  "metadata": {
+					"creationTimestamp": null
+				  },
+				  "spec": {},
+				  "status": {
+					"credential": {
+					  "clientCertificateData": "test-certificate",
+					  "clientKeyData": "test-key"
+					}
+				  }
+				}`))
 		})
 
-		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
+		got, err := ExchangeToken(ctx, "test-token", caBundle, endpoint)
 		require.NoError(t, err)
-		require.Equal(t, &clientauthenticationv1beta1.ExecCredential{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ExecCredential",
-				APIVersion: "client.authentication.k8s.io/v1beta1",
-			},
-			Status: &clientauthenticationv1beta1.ExecCredentialStatus{
-				ClientCertificateData: "test-certificate",
-				ClientKeyData:         "test-key",
-			},
+		require.Equal(t, &Credential{
+			ClientCertificateData: "test-certificate",
+			ClientKeyData:         "test-key",
 		}, got)
 	})
 }

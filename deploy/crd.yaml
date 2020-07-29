@@ -10,11 +10,6 @@
 #! spec:
 #!   server: https://foo
 #!   certificateAuthorityData: bar
-#!   identityProviders:
-#!     - name: baz
-#!       type: token
-#!     - name: bat
-#!       type: token
 
 ---
 apiVersion: apiextensions.k8s.io/v1
@@ -36,7 +31,7 @@ spec:
           properties:
             spec:
               type: object
-              required: [server, certificateAuthorityData, identityProviders]
+              required: [server, certificateAuthorityData]
               properties:
                 server:
                   type: string
@@ -45,19 +40,6 @@ spec:
                 certificateAuthorityData:
                   type: string
                   minLength: 1
-                identityProviders:
-                  type: array
-                  items:
-                    type: object
-                    required: [name, type]
-                    properties:
-                      name:
-                        type: string
-                        minLength: 1
-                        pattern: '^[a-zA-Z0-9]+(?:(-|_)?[a-zA-Z0-9]+)+$'
-                      type: #! The name of this property is "type" (not declaring the type of a property).
-                        type: string
-                        pattern: '^token$'
   scope: Namespaced
   names:
     plural: logindiscoveryconfigs

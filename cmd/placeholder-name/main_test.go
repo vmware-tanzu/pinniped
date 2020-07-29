@@ -12,18 +12,18 @@ import (
 	"testing"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
 	"github.com/suzerain-io/placeholder-name/test/library"
 )
 
 func TestRun(t *testing.T) {
-	spec.Run(t, "Run", func(t *testing.T, when spec.G, it spec.S) {
+	spec.Run(t, "main.run", func(t *testing.T, when spec.G, it spec.S) {
+		var r *require.Assertions
 		var buffer *bytes.Buffer
 		var tokenExchanger tokenExchanger
 		var fakeEnv map[string]string
@@ -37,6 +37,7 @@ func TestRun(t *testing.T) {
 		}
 
 		it.Before(func() {
+			r = require.New(t)
 			buffer = new(bytes.Buffer)
 			fakeEnv = map[string]string{
 				"PLACEHOLDER_NAME_TOKEN":            "token from env",
@@ -47,30 +48,21 @@ func TestRun(t *testing.T) {
 
 		when("env vars are missing", func() {
 			it("returns an error when PLACEHOLDER_NAME_TOKEN is missing", func() {
-				fakeEnv = map[string]string{
-					"PLACEHOLDER_NAME_K8S_API_ENDPOINT": "a",
-					"PLACEHOLDER_NAME_CA_BUNDLE":        "b",
-				}
+				delete(fakeEnv, "PLACEHOLDER_NAME_TOKEN")
 				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
-				require.EqualError(t, err, "failed to login: environment variable not set: PLACEHOLDER_NAME_TOKEN")
+				r.EqualError(err, "failed to login: environment variable not set: PLACEHOLDER_NAME_TOKEN")
 			})
 
 			it("returns an error when PLACEHOLDER_NAME_CA_BUNDLE is missing", func() {
-				fakeEnv = map[string]string{
-					"PLACEHOLDER_NAME_K8S_API_ENDPOINT": "a",
-					"PLACEHOLDER_NAME_TOKEN":            "b",
-				}
+				delete(fakeEnv, "PLACEHOLDER_NAME_CA_BUNDLE")
 				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
-				require.EqualError(t, err, "failed to login: environment variable not set: PLACEHOLDER_NAME_CA_BUNDLE")
+				r.EqualError(err, "failed to login: environment variable not set: PLACEHOLDER_NAME_CA_BUNDLE")
 			})
 
 			it("returns an error when PLACEHOLDER_NAME_K8S_API_ENDPOINT is missing", func() {
-				fakeEnv = map[string]string{
-					"PLACEHOLDER_NAME_TOKEN":     "a",
-					"PLACEHOLDER_NAME_CA_BUNDLE": "b",
-				}
+				delete(fakeEnv, "PLACEHOLDER_NAME_K8S_API_ENDPOINT")
 				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
-				require.EqualError(t, err, "failed to login: environment variable not set: PLACEHOLDER_NAME_K8S_API_ENDPOINT")
+				r.EqualError(err, "failed to login: environment variable not set: PLACEHOLDER_NAME_K8S_API_ENDPOINT")
 			})
 		}, spec.Parallel())
 
@@ -83,7 +75,7 @@ func TestRun(t *testing.T) {
 
 			it("returns an error", func() {
 				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
-				require.EqualError(t, err, "failed to login: some error")
+				r.EqualError(err, "failed to login: some error")
 			})
 		}, spec.Parallel())
 
@@ -98,7 +90,7 @@ func TestRun(t *testing.T) {
 
 			it("returns an error", func() {
 				err := run(envGetter, tokenExchanger, &library.ErrorWriter{ReturnError: fmt.Errorf("some IO error")}, 30*time.Second)
-				require.EqualError(t, err, "failed to marshal response to stdout: some IO error")
+				r.EqualError(err, "failed to marshal response to stdout: some IO error")
 			})
 		}, spec.Parallel())
 
@@ -118,7 +110,7 @@ func TestRun(t *testing.T) {
 
 			it("returns an error", func() {
 				err := run(envGetter, tokenExchanger, buffer, 1*time.Millisecond)
-				require.EqualError(t, err, "failed to login: context deadline exceeded")
+				r.EqualError(err, "failed to login: context deadline exceeded")
 			})
 		}, spec.Parallel())
 
@@ -140,21 +132,19 @@ func TestRun(t *testing.T) {
 
 			it("writes the execCredential to the given writer", func() {
 				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
-				require.NoError(t, err)
-				require.Equal(t, fakeEnv["PLACEHOLDER_NAME_TOKEN"], actualToken)
-				require.Equal(t, fakeEnv["PLACEHOLDER_NAME_CA_BUNDLE"], actualCaBundle)
-				require.Equal(t, fakeEnv["PLACEHOLDER_NAME_K8S_API_ENDPOINT"], actualAPIEndpoint)
-				expected := `
-				{
+				r.NoError(err)
+				r.Equal(fakeEnv["PLACEHOLDER_NAME_TOKEN"], actualToken)
+				r.Equal(fakeEnv["PLACEHOLDER_NAME_CA_BUNDLE"], actualCaBundle)
+				r.Equal(fakeEnv["PLACEHOLDER_NAME_K8S_API_ENDPOINT"], actualAPIEndpoint)
+				expected := `{
 				  "kind": "ExecCredential",
 				  "apiVersion": "client.authentication.k8s.io/v1beta1",
 				  "spec": {},
 				  "status": {
 					"token": "some token"
 				  }
-				}
-				`
-				require.JSONEq(t, expected, buffer.String())
+				}`
+				r.JSONEq(expected, buffer.String())
 			})
 		}, spec.Parallel())
 	}, spec.Report(report.Terminal{}))

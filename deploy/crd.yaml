@@ -1,5 +1,21 @@
 #@ load("@ytt:data", "data")
 
+#! Example of valid LoginDiscoveryConfig object:
+#! ---
+#! apiVersion: suzerain-io.github.io/v1alpha1
+#! kind: LoginDiscoveryConfig
+#! metadata:
+#!   name: login-discovery
+#!   namespace: integration
+#! spec:
+#!   server: https://foo
+#!   certificateAuthorityData: bar
+#!   identityProviders:
+#!     - name: baz
+#!       type: token
+#!     - name: bat
+#!       type: token
+
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -8,20 +24,24 @@ metadata:
 spec:
   group: suzerain-io.github.io
   versions:
+    #! Any changes to these schemas should also be reflected in the types.go file(s)
+    #! in https://github.com/suzerain-io/placeholder-name-api/tree/main/pkg/apis/placeholder
     - name: v1alpha1
       served: true
       storage: true
       schema:
         openAPIV3Schema:
           type: object
+          required: [spec]
           properties:
             spec:
               type: object
-              required: [server, certificateAuthorityData]
+              required: [server, certificateAuthorityData, identityProviders]
               properties:
                 server:
                   type: string
                   minLength: 1
+                  pattern: '^https://'
                 certificateAuthorityData:
                   type: string
                   minLength: 1
@@ -29,12 +49,15 @@ spec:
                   type: array
                   items:
                     type: object
+                    required: [name, type]
                     properties:
                       name:
                         type: string
-                      idpType:
+                        minLength: 1
+                        pattern: '^[a-zA-Z0-9]+(?:(-|_)?[a-zA-Z0-9]+)+$'
+                      type: #! The name of this property is "type" (not declaring the type of a property).
                         type: string
-                        pattern: '^token$' #! validation via regexp pattern match
+                        pattern: '^token$'
   scope: Namespaced
   names:
     plural: logindiscoveryconfigs

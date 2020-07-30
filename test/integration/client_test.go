@@ -69,7 +69,7 @@ func TestClient(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a client using the certificate and key returned by the token exchange.
-	validClient := library.NewClientsetWithConfig(t, library.NewClientConfigWithCertAndKey(t, resp.Status.ClientCertificateData, resp.Status.ClientKeyData))
+	validClient := library.NewClientsetWithConfig(t, library.NewClientConfigWithCertAndKey(t, resp.ClientCertificateData, resp.ClientKeyData))
 
 	// Make a version request, which should succeed even without any authorization.
 	_, err = validClient.Discovery().ServerVersion()

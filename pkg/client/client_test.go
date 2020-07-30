@@ -151,6 +151,33 @@ func TestExchangeToken(t *testing.T) {
 		require.Nil(t, got)
 	})
 
+	t.Run("invalid timestamp failure", func(t *testing.T) {
+		t.Parallel()
+		// Start a test server that returns success but with an error message
+		caBundle, endpoint := startTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("content-type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`
+				{
+				  "kind": "LoginRequest",
+				  "apiVersion": "placeholder.suzerain-io.github.io/v1alpha1",
+				  "metadata": {
+					"creationTimestamp": null
+				  },
+				  "spec": {},
+				  "status": {
+					"credential": {
+					  "expirationTimestamp": "invalid"
+					}
+				  }
+				}`))
+		})
+
+		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
+		require.EqualError(t, err, `invalid login response: parsing time "invalid" as "2006-01-02T15:04:05Z07:00": cannot parse "invalid" as "2006"`)
+		require.Nil(t, got)
+	})
+
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
@@ -172,8 +199,8 @@ func TestExchangeToken(t *testing.T) {
 				  "spec": {
 					"type": "token",
 					"token": {
-                      "value": "test-token"
-                    }
+					  "value": "test-token"
+					}
 				  },
 				  "status": {}
 				}`,
@@ -192,6 +219,8 @@ func TestExchangeToken(t *testing.T) {
 				  "spec": {},
 				  "status": {
 					"credential": {
+					  "expirationTimestamp": "2020-07-30T15:52:01Z",
+					  "token": "test-token",
 					  "clientCertificateData": "test-certificate",
 					  "clientKeyData": "test-key"
 					}
@@ -201,7 +230,10 @@ func TestExchangeToken(t *testing.T) {
 
 		got, err := ExchangeToken(ctx, "test-token", caBundle, endpoint)
 		require.NoError(t, err)
+		expires := time.Date(2020, 07, 30, 15, 52, 1, 0, time.UTC)
 		require.Equal(t, &Credential{
+			ExpirationTimestamp:   &expires,
+			Token:                 "test-token",
 			ClientCertificateData: "test-certificate",
 			ClientKeyData:         "test-key",
 		}, got)

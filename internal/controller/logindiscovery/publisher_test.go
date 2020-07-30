@@ -25,12 +25,6 @@ import (
 	placeholderfake "github.com/suzerain-io/placeholder-name-client-go/pkg/generated/clientset/versioned/fake"
 )
 
-// TODO: add test for ConfigMap does NOT exist
-// TODO: add test for when LoginDiscoveryConfig already exists
-//  There should be 4 tests of the above cross product
-
-// TODO test when the expected key in the configmap does not exist
-
 func TestRun(t *testing.T) {
 	spec.Run(t, "publisher", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
@@ -79,19 +73,18 @@ func TestRun(t *testing.T) {
 			}
 		})
 
-		when("when there is a cluster-info ConfigMap in the kube-public namespace", func() {
+		when("there is a cluster-info ConfigMap in the kube-public namespace", func() {
 			const caData = "c29tZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YQo=" // "some-certificate-authority-data" base64 encoded
 			const kubeServerURL = "https://some-server"
+			var clusterInfoConfigMap *corev1.ConfigMap
 
-			it.Before(func() {
-				clusterInfo := &corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "cluster-info",
-						Namespace: "kube-public",
-					},
-					// Note that go fmt puts tabs in our file, which we must remove from our configmap yaml below.
-					Data: map[string]string{
-						"kubeconfig": strings.ReplaceAll(`
+			when("the ConfigMap has the expected `kubeconfig` top-level data key", func() {
+				it.Before(func() {
+					clusterInfoConfigMap = &corev1.ConfigMap{
+						ObjectMeta: metav1.ObjectMeta{Name: "cluster-info", Namespace: "kube-public"},
+						// Note that go fmt puts tabs in our file, which we must remove from our configmap yaml below.
+						Data: map[string]string{
+							"kubeconfig": strings.ReplaceAll(`
 							kind: Config
 							apiVersion: v1
 							clusters:
@@ -99,31 +92,94 @@ func TestRun(t *testing.T) {
 							  cluster:
 							    certificate-authority-data: "`+caData+`"
 							    server: "`+kubeServerURL+`"`, "\t", "  "),
-						"uninteresting-key": "uninteresting-value",
+							"uninteresting-key": "uninteresting-value",
+						},
+					}
+					err := kubeClient.Tracker().Add(clusterInfoConfigMap)
+					r.NoError(err)
+				})
+
+				when("the LoginDiscoveryConfig does not already exist", func() {
+					it("creates a LoginDiscoveryConfig", func() {
+						defer timeoutContextCancel()
+
+						err := controller.TestSync(t, subject, *controllerContext)
+						r.NoError(err)
+
+						expectedLoginDiscoveryConfigGVR, expectedLoginDiscoveryConfig := expectedLoginDiscoveryConfig(installedInNamespace, kubeServerURL, caData)
+						expectedActions := []coretesting.Action{
+							coretesting.NewCreateAction(expectedLoginDiscoveryConfigGVR, installedInNamespace, expectedLoginDiscoveryConfig),
+						}
+
+						// Expect a LoginDiscoveryConfig to be created with the fields from the cluster-info ConfigMap
+						actualCreatedObject := placeholderClient.Actions()[0].(coretesting.CreateActionImpl).Object
+						r.Equal(expectedLoginDiscoveryConfig, actualCreatedObject)
+						r.Equal(expectedActions, placeholderClient.Actions())
+					})
+				})
+
+				when("the LoginDiscoveryConfig already exists", func() {
+					when("the LoginDiscoveryConfig is already up to date according to the data in the ConfigMap", func() {
+						it.Before(func() {
+							// TODO add a fake LoginDiscoveryConfig to the placeholderClient whose data matches the ConfigMap's data
+						})
+
+						it.Pend("does not update the LoginDiscoveryConfig to avoid unnecessary etcd writes", func() {
+							err := controller.TestSync(t, subject, *controllerContext)
+							r.NoError(err)
+							r.Empty(placeholderClient.Actions())
+						})
+					})
+
+					when("the LoginDiscoveryConfig is stale compared to the data in the ConfigMap", func() {
+						it.Before(func() {
+							// TODO add a fake LoginDiscoveryConfig to the placeholderClient whose data does not match the ConfigMap's data
+						})
+
+						it.Pend("updates the existing LoginDiscoveryConfig", func() {
+							// TODO
+						})
+					})
+				})
+			})
+
+			when("the ConfigMap is missing the expected `kubeconfig` top-level data key", func() {
+				it.Before(func() {
+					clusterInfoConfigMap = &corev1.ConfigMap{
+						ObjectMeta: metav1.ObjectMeta{Name: "cluster-info", Namespace: "kube-public"},
+						Data: map[string]string{
+							"these are not the droids you're looking for": "uninteresting-value",
+						},
+					}
+					err := kubeClient.Tracker().Add(clusterInfoConfigMap)
+					r.NoError(err)
+				})
+
+				it("keeps waiting for it to exist", func() {
+					err := controller.TestSync(t, subject, *controllerContext)
+					r.NoError(err)
+					r.Empty(placeholderClient.Actions())
+				})
+			})
+		})
+
+		when("there is not a cluster-info ConfigMap in the kube-public namespace", func() {
+			it.Before(func() {
+				unrelatedConfigMap := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "oops this is not the cluster-info ConfigMap",
+						Namespace: "kube-public",
 					},
 				}
-				err := kubeClient.Tracker().Add(clusterInfo)
+				err := kubeClient.Tracker().Add(unrelatedConfigMap)
 				r.NoError(err)
 			})
 
-			when("when the LoginDiscoveryConfig does not already exist", func() {
-				it("creates a LoginDiscoveryConfig", func() {
-					defer timeoutContextCancel()
-
-					err := controller.TestSync(t, subject, *controllerContext) // Call the controller's sync method once
-					r.NoError(err)
-
-					expectedLoginDiscoveryConfigGVR, expectedLoginDiscoveryConfig := expectedLoginDiscoveryConfig(installedInNamespace, kubeServerURL, caData)
-					expectedActions := []coretesting.Action{
-						coretesting.NewCreateAction(expectedLoginDiscoveryConfigGVR, installedInNamespace, expectedLoginDiscoveryConfig),
-					}
-
-					// Expect a LoginDiscoveryConfig to be created with the fields from the cluster-info ConfigMap
-					actualCreatedObject := placeholderClient.Actions()[0].(coretesting.CreateActionImpl).Object
-					r.Equal(expectedLoginDiscoveryConfig, actualCreatedObject)
-					r.Equal(expectedActions, placeholderClient.Actions())
-				})
-			}, spec.Parallel())
-		}, spec.Parallel())
-	}, spec.Report(report.Terminal{}))
+			it("keeps waiting for one", func() {
+				err := controller.TestSync(t, subject, *controllerContext)
+				r.NoError(err)
+				r.Empty(placeholderClient.Actions())
+			})
+		})
+	}, spec.Parallel(), spec.Report(report.Terminal{}))
 }

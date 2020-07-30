@@ -45,8 +45,14 @@ func NewPublisherController(namespace string, kubeClient kubernetes.Interface, p
 }
 
 func (c *publisherController) Sync(ctx controller.Context) error {
-	configMap, _ := c.kubeClient.CoreV1().ConfigMaps(clusterInfoNamespace).Get(ctx.Context, clusterInfoName, metav1.GetOptions{})
-	kubeConfig := configMap.Data[clusterInfoConfigMapKey] // TODO also handle when the key is not found
+	configMap, err := c.kubeClient.CoreV1().ConfigMaps(clusterInfoNamespace).Get(ctx.Context, clusterInfoName, metav1.GetOptions{})
+	if err != nil {
+		return nil // TODO should this return an error? and should it log?
+	}
+	kubeConfig, kubeConfigPresent := configMap.Data[clusterInfoConfigMapKey]
+	if !kubeConfigPresent {
+		return nil // TODO should this return an error? and should it log?
+	}
 
 	config, _ := clientcmd.Load([]byte(kubeConfig))
 

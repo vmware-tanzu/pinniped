@@ -64,7 +64,7 @@ func TestRun(t *testing.T) {
 				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
 				r.EqualError(err, "failed to login: environment variable not set: PLACEHOLDER_NAME_K8S_API_ENDPOINT")
 			})
-		}, spec.Parallel())
+		})
 
 		when("the token exchange fails", func() {
 			it.Before(func() {
@@ -77,7 +77,7 @@ func TestRun(t *testing.T) {
 				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
 				r.EqualError(err, "failed to login: some error")
 			})
-		}, spec.Parallel())
+		})
 
 		when("the JSON encoder fails", func() {
 			it.Before(func() {
@@ -92,7 +92,7 @@ func TestRun(t *testing.T) {
 				err := run(envGetter, tokenExchanger, &library.ErrorWriter{ReturnError: fmt.Errorf("some IO error")}, 30*time.Second)
 				r.EqualError(err, "failed to marshal response to stdout: some IO error")
 			})
-		}, spec.Parallel())
+		})
 
 		when("the token exchange times out", func() {
 			it.Before(func() {
@@ -112,7 +112,7 @@ func TestRun(t *testing.T) {
 				err := run(envGetter, tokenExchanger, buffer, 1*time.Millisecond)
 				r.EqualError(err, "failed to login: context deadline exceeded")
 			})
-		}, spec.Parallel())
+		})
 
 		when("the token exchange succeeds", func() {
 			var actualToken, actualCaBundle, actualAPIEndpoint string
@@ -146,6 +146,6 @@ func TestRun(t *testing.T) {
 				}`
 				r.JSONEq(expected, buffer.String())
 			})
-		}, spec.Parallel())
-	}, spec.Report(report.Terminal{}))
+		})
+	}, spec.Parallel(), spec.Report(report.Terminal{}))
 }

@@ -132,6 +132,8 @@ func ExchangeToken(ctx context.Context, token, caBundle, apiEndpoint string) (*C
 		Kind       string `json:"kind"`
 		Status     struct {
 			Credential *struct {
+				ExpirationTimestamp   string `json:"expirationTimestamp"`
+				Token                 string `json:"token"`
 				ClientCertificateData string `json:"clientCertificateData"`
 				ClientKeyData         string `json:"clientKeyData"`
 			}
@@ -146,8 +148,18 @@ func ExchangeToken(ctx context.Context, token, caBundle, apiEndpoint string) (*C
 		return nil, fmt.Errorf("%w: %s", ErrLoginFailed, respBody.Status.Message)
 	}
 
-	return &Credential{
+	result := Credential{
+		Token:                 respBody.Status.Credential.Token,
 		ClientCertificateData: respBody.Status.Credential.ClientCertificateData,
 		ClientKeyData:         respBody.Status.Credential.ClientKeyData,
-	}, nil
+	}
+	if str := respBody.Status.Credential.ExpirationTimestamp; str != "" {
+		expiration, err := time.Parse(time.RFC3339, str)
+		if err != nil {
+			return nil, fmt.Errorf("invalid login response: %w", err)
+		}
+		result.ExpirationTimestamp = &expiration
+	}
+
+	return &result, nil
 }

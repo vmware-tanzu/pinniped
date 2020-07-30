@@ -7,6 +7,7 @@ package logindiscovery
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
@@ -106,38 +108,144 @@ func TestRun(t *testing.T) {
 						err := controller.TestSync(t, subject, *controllerContext)
 						r.NoError(err)
 
-						expectedLoginDiscoveryConfigGVR, expectedLoginDiscoveryConfig := expectedLoginDiscoveryConfig(installedInNamespace, kubeServerURL, caData)
+						expectedLoginDiscoveryConfigGVR, expectedLoginDiscoveryConfig := expectedLoginDiscoveryConfig(
+							installedInNamespace,
+							kubeServerURL,
+							caData,
+						)
 						expectedActions := []coretesting.Action{
-							coretesting.NewCreateAction(expectedLoginDiscoveryConfigGVR, installedInNamespace, expectedLoginDiscoveryConfig),
+							coretesting.NewGetAction(
+								expectedLoginDiscoveryConfigGVR,
+								installedInNamespace,
+								expectedLoginDiscoveryConfig.Name,
+							),
+							coretesting.NewCreateAction(
+								expectedLoginDiscoveryConfigGVR,
+								installedInNamespace,
+								expectedLoginDiscoveryConfig,
+							),
 						}
-
-						// Expect a LoginDiscoveryConfig to be created with the fields from the cluster-info ConfigMap
-						actualCreatedObject := placeholderClient.Actions()[0].(coretesting.CreateActionImpl).Object
-						r.Equal(expectedLoginDiscoveryConfig, actualCreatedObject)
 						r.Equal(expectedActions, placeholderClient.Actions())
+					})
+
+					when("creating the LoginDiscoveryConfig fails", func() {
+						it.Before(func() {
+							placeholderClient.PrependReactor(
+								"create",
+								"logindiscoveryconfigs",
+								func(_ coretesting.Action) (bool, runtime.Object, error) {
+									return true, nil, errors.New("create failed")
+								},
+							)
+						})
+
+						it("returns the create error", func() {
+							err := controller.TestSync(t, subject, *controllerContext)
+							r.EqualError(err, "could not create logindiscoveryconfig: create failed")
+						})
 					})
 				})
 
 				when("the LoginDiscoveryConfig already exists", func() {
 					when("the LoginDiscoveryConfig is already up to date according to the data in the ConfigMap", func() {
 						it.Before(func() {
-							// TODO add a fake LoginDiscoveryConfig to the placeholderClient whose data matches the ConfigMap's data
+							_, expectedLoginDiscoveryConfig := expectedLoginDiscoveryConfig(
+								installedInNamespace,
+								kubeServerURL,
+								caData,
+							)
+							err := placeholderClient.Tracker().Add(expectedLoginDiscoveryConfig)
+							r.NoError(err)
 						})
 
-						it.Pend("does not update the LoginDiscoveryConfig to avoid unnecessary etcd writes", func() {
+						it("does not update the LoginDiscoveryConfig to avoid unnecessary etcd writes/api calls", func() {
 							err := controller.TestSync(t, subject, *controllerContext)
 							r.NoError(err)
-							r.Empty(placeholderClient.Actions())
+
+							expectedLoginDiscoveryConfigGVR, expectedLoginDiscoveryConfig := expectedLoginDiscoveryConfig(
+								installedInNamespace,
+								kubeServerURL,
+								caData,
+							)
+							expectedActions := []coretesting.Action{
+								coretesting.NewGetAction(
+									expectedLoginDiscoveryConfigGVR,
+									installedInNamespace,
+									expectedLoginDiscoveryConfig.Name,
+								),
+							}
+							r.Equal(expectedActions, placeholderClient.Actions())
+						})
+
+						when("getting the LoginDiscoveryConfig fails", func() {
+							it.Before(func() {
+								placeholderClient.PrependReactor(
+									"get",
+									"logindiscoveryconfigs",
+									func(_ coretesting.Action) (bool, runtime.Object, error) {
+										return true, nil, errors.New("get failed")
+									},
+								)
+							})
+
+							it("returns the get error", func() {
+								err := controller.TestSync(t, subject, *controllerContext)
+								r.EqualError(err, "could not get logindiscoveryconfig: get failed")
+							})
 						})
 					})
 
 					when("the LoginDiscoveryConfig is stale compared to the data in the ConfigMap", func() {
 						it.Before(func() {
-							// TODO add a fake LoginDiscoveryConfig to the placeholderClient whose data does not match the ConfigMap's data
+							_, expectedLoginDiscoveryConfig := expectedLoginDiscoveryConfig(
+								installedInNamespace,
+								kubeServerURL,
+								caData,
+							)
+							expectedLoginDiscoveryConfig.Spec.Server = "https://some-other-server"
+							err := placeholderClient.Tracker().Add(expectedLoginDiscoveryConfig)
+							r.NoError(err)
 						})
 
-						it.Pend("updates the existing LoginDiscoveryConfig", func() {
-							// TODO
+						it("updates the existing LoginDiscoveryConfig", func() {
+							err := controller.TestSync(t, subject, *controllerContext)
+							r.NoError(err)
+
+							expectedLoginDiscoveryConfigGVR, expectedLoginDiscoveryConfig := expectedLoginDiscoveryConfig(
+								installedInNamespace,
+								kubeServerURL,
+								caData,
+							)
+							expectedActions := []coretesting.Action{
+								coretesting.NewGetAction(
+									expectedLoginDiscoveryConfigGVR,
+									installedInNamespace,
+									expectedLoginDiscoveryConfig.Name,
+								),
+								coretesting.NewUpdateAction(
+									expectedLoginDiscoveryConfigGVR,
+									installedInNamespace,
+									expectedLoginDiscoveryConfig,
+								),
+							}
+							r.Equal(expectedActions, placeholderClient.Actions())
+						})
+
+						when("updating the LoginDiscoveryConfig fails", func() {
+							it.Before(func() {
+								placeholderClient.PrependReactor(
+									"update",
+									"logindiscoveryconfigs",
+									func(_ coretesting.Action) (bool, runtime.Object, error) {
+										return true, nil, errors.New("update failed")
+									},
+								)
+							})
+
+							it("returns the update error", func() {
+								err := controller.TestSync(t, subject, *controllerContext)
+								r.EqualError(err, "could not update logindiscoveryconfig: update failed")
+							})
 						})
 					})
 				})
@@ -179,6 +287,23 @@ func TestRun(t *testing.T) {
 				err := controller.TestSync(t, subject, *controllerContext)
 				r.NoError(err)
 				r.Empty(placeholderClient.Actions())
+			})
+		})
+
+		when("getting the cluster-info ConfigMap in the kube-public namespace fails", func() {
+			it.Before(func() {
+				kubeClient.PrependReactor(
+					"get",
+					"configmaps",
+					func(_ coretesting.Action) (bool, runtime.Object, error) {
+						return true, nil, errors.New("get failed")
+					},
+				)
+			})
+
+			it("returns an error", func() {
+				err := controller.TestSync(t, subject, *controllerContext)
+				r.EqualError(err, "failed to get cluster-info configmap: get failed")
 			})
 		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))

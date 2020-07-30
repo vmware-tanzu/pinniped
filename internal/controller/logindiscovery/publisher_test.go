@@ -19,12 +19,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 
 	"github.com/suzerain-io/controller-go"
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
 	placeholderfake "github.com/suzerain-io/placeholder-name-client-go/pkg/generated/clientset/versioned/fake"
+	placeholderinformers "github.com/suzerain-io/placeholder-name-client-go/pkg/generated/informers/externalversions"
 )
 
 func TestRun(t *testing.T) {
@@ -34,11 +36,14 @@ func TestRun(t *testing.T) {
 		var r *require.Assertions
 
 		var subject controller.Controller
-		var kubeClient *kubernetesfake.Clientset
-		var placeholderClient *placeholderfake.Clientset
+		var kubeInformerClient *kubernetesfake.Clientset
+		var placeholderInformerClient *placeholderfake.Clientset
+		var kubeInformers kubeinformers.SharedInformerFactory
+		var placeholderInformers placeholderinformers.SharedInformerFactory
+		var placeholderAPIClient *placeholderfake.Clientset
 		var timeoutContext context.Context
 		var timeoutContextCancel context.CancelFunc
-		var controllerContext *controller.Context
+		var syncContext *controller.Context
 
 		var expectedLoginDiscoveryConfig = func(expectedNamespace, expectedServerURL, expectedCAData string) (schema.GroupVersionResource, *placeholderv1alpha1.LoginDiscoveryConfig) {
 			expectedLoginDiscoveryConfigGVR := schema.GroupVersionResource{
@@ -59,13 +64,34 @@ func TestRun(t *testing.T) {
 			return expectedLoginDiscoveryConfigGVR, expectedLoginDiscoveryConfig
 		}
 
+		// Defer starting the informers until the last possible moment so that the
+		// nested Before's can keep adding things to the informer caches.
+		var startInformersAndController = func() {
+			// Must start informers before calling TestRunSynchronously()
+			kubeInformers.Start(timeoutContext.Done())
+			placeholderInformers.Start(timeoutContext.Done())
+			controller.TestRunSynchronously(t, subject)
+		}
+
 		it.Before(func() {
 			r = require.New(t)
-			kubeClient = kubernetesfake.NewSimpleClientset()
-			placeholderClient = placeholderfake.NewSimpleClientset()
+
 			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
-			subject = NewPublisherController(installedInNamespace, kubeClient, placeholderClient)
-			controllerContext = &controller.Context{
+
+			kubeInformerClient = kubernetesfake.NewSimpleClientset()
+			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
+			placeholderAPIClient = placeholderfake.NewSimpleClientset()
+			placeholderInformerClient = placeholderfake.NewSimpleClientset()
+			placeholderInformers = placeholderinformers.NewSharedInformerFactory(placeholderInformerClient, 0)
+
+			subject = NewPublisherController(
+				installedInNamespace,
+				placeholderAPIClient,
+				kubeInformers.Core().V1().ConfigMaps(),
+				placeholderInformers.Placeholder().V1alpha1().LoginDiscoveryConfigs(),
+			)
+
+			syncContext = &controller.Context{
 				Context: timeoutContext,
 				Name:    subject.Name(),
 				Key: controller.Key{
@@ -75,14 +101,17 @@ func TestRun(t *testing.T) {
 			}
 		})
 
+		it.After(func() {
+			timeoutContextCancel()
+		})
+
 		when("there is a cluster-info ConfigMap in the kube-public namespace", func() {
 			const caData = "c29tZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YQo=" // "some-certificate-authority-data" base64 encoded
 			const kubeServerURL = "https://some-server"
-			var clusterInfoConfigMap *corev1.ConfigMap
 
 			when("the ConfigMap has the expected `kubeconfig` top-level data key", func() {
 				it.Before(func() {
-					clusterInfoConfigMap = &corev1.ConfigMap{
+					clusterInfoConfigMap := &corev1.ConfigMap{
 						ObjectMeta: metav1.ObjectMeta{Name: "cluster-info", Namespace: "kube-public"},
 						// Note that go fmt puts tabs in our file, which we must remove from our configmap yaml below.
 						Data: map[string]string{
@@ -97,15 +126,14 @@ func TestRun(t *testing.T) {
 							"uninteresting-key": "uninteresting-value",
 						},
 					}
-					err := kubeClient.Tracker().Add(clusterInfoConfigMap)
+					err := kubeInformerClient.Tracker().Add(clusterInfoConfigMap)
 					r.NoError(err)
 				})
 
 				when("the LoginDiscoveryConfig does not already exist", func() {
-					it("creates a LoginDiscoveryConfig", func() {
-						defer timeoutContextCancel()
-
-						err := controller.TestSync(t, subject, *controllerContext)
+					it.Focus("creates a LoginDiscoveryConfig", func() {
+						startInformersAndController()
+						err := controller.TestSync(t, subject, *syncContext)
 						r.NoError(err)
 
 						expectedLoginDiscoveryConfigGVR, expectedLoginDiscoveryConfig := expectedLoginDiscoveryConfig(
@@ -113,24 +141,22 @@ func TestRun(t *testing.T) {
 							kubeServerURL,
 							caData,
 						)
-						expectedActions := []coretesting.Action{
-							coretesting.NewGetAction(
-								expectedLoginDiscoveryConfigGVR,
-								installedInNamespace,
-								expectedLoginDiscoveryConfig.Name,
-							),
-							coretesting.NewCreateAction(
-								expectedLoginDiscoveryConfigGVR,
-								installedInNamespace,
-								expectedLoginDiscoveryConfig,
-							),
-						}
-						r.Equal(expectedActions, placeholderClient.Actions())
+
+						r.Equal(
+							[]coretesting.Action{
+								coretesting.NewCreateAction(
+									expectedLoginDiscoveryConfigGVR,
+									installedInNamespace,
+									expectedLoginDiscoveryConfig,
+								),
+							},
+							placeholderAPIClient.Actions(),
+						)
 					})
 
 					when("creating the LoginDiscoveryConfig fails", func() {
 						it.Before(func() {
-							placeholderClient.PrependReactor(
+							placeholderAPIClient.PrependReactor(
 								"create",
 								"logindiscoveryconfigs",
 								func(_ coretesting.Action) (bool, runtime.Object, error) {
@@ -140,7 +166,8 @@ func TestRun(t *testing.T) {
 						})
 
 						it("returns the create error", func() {
-							err := controller.TestSync(t, subject, *controllerContext)
+							startInformersAndController()
+							err := controller.TestSync(t, subject, *syncContext)
 							r.EqualError(err, "could not create logindiscoveryconfig: create failed")
 						})
 					})
@@ -154,44 +181,16 @@ func TestRun(t *testing.T) {
 								kubeServerURL,
 								caData,
 							)
-							err := placeholderClient.Tracker().Add(expectedLoginDiscoveryConfig)
+							err := placeholderInformerClient.Tracker().Add(expectedLoginDiscoveryConfig)
 							r.NoError(err)
 						})
 
 						it("does not update the LoginDiscoveryConfig to avoid unnecessary etcd writes/api calls", func() {
-							err := controller.TestSync(t, subject, *controllerContext)
+							startInformersAndController()
+							err := controller.TestSync(t, subject, *syncContext)
 							r.NoError(err)
 
-							expectedLoginDiscoveryConfigGVR, expectedLoginDiscoveryConfig := expectedLoginDiscoveryConfig(
-								installedInNamespace,
-								kubeServerURL,
-								caData,
-							)
-							expectedActions := []coretesting.Action{
-								coretesting.NewGetAction(
-									expectedLoginDiscoveryConfigGVR,
-									installedInNamespace,
-									expectedLoginDiscoveryConfig.Name,
-								),
-							}
-							r.Equal(expectedActions, placeholderClient.Actions())
-						})
-
-						when("getting the LoginDiscoveryConfig fails", func() {
-							it.Before(func() {
-								placeholderClient.PrependReactor(
-									"get",
-									"logindiscoveryconfigs",
-									func(_ coretesting.Action) (bool, runtime.Object, error) {
-										return true, nil, errors.New("get failed")
-									},
-								)
-							})
-
-							it("returns the get error", func() {
-								err := controller.TestSync(t, subject, *controllerContext)
-								r.EqualError(err, "could not get logindiscoveryconfig: get failed")
-							})
+							r.Empty(placeholderAPIClient.Actions())
 						})
 					})
 
@@ -203,12 +202,13 @@ func TestRun(t *testing.T) {
 								caData,
 							)
 							expectedLoginDiscoveryConfig.Spec.Server = "https://some-other-server"
-							err := placeholderClient.Tracker().Add(expectedLoginDiscoveryConfig)
-							r.NoError(err)
+							r.NoError(placeholderInformerClient.Tracker().Add(expectedLoginDiscoveryConfig))
+							r.NoError(placeholderAPIClient.Tracker().Add(expectedLoginDiscoveryConfig))
 						})
 
 						it("updates the existing LoginDiscoveryConfig", func() {
-							err := controller.TestSync(t, subject, *controllerContext)
+							startInformersAndController()
+							err := controller.TestSync(t, subject, *syncContext)
 							r.NoError(err)
 
 							expectedLoginDiscoveryConfigGVR, expectedLoginDiscoveryConfig := expectedLoginDiscoveryConfig(
@@ -217,23 +217,18 @@ func TestRun(t *testing.T) {
 								caData,
 							)
 							expectedActions := []coretesting.Action{
-								coretesting.NewGetAction(
-									expectedLoginDiscoveryConfigGVR,
-									installedInNamespace,
-									expectedLoginDiscoveryConfig.Name,
-								),
 								coretesting.NewUpdateAction(
 									expectedLoginDiscoveryConfigGVR,
 									installedInNamespace,
 									expectedLoginDiscoveryConfig,
 								),
 							}
-							r.Equal(expectedActions, placeholderClient.Actions())
+							r.Equal(expectedActions, placeholderAPIClient.Actions())
 						})
 
 						when("updating the LoginDiscoveryConfig fails", func() {
 							it.Before(func() {
-								placeholderClient.PrependReactor(
+								placeholderAPIClient.PrependReactor(
 									"update",
 									"logindiscoveryconfigs",
 									func(_ coretesting.Action) (bool, runtime.Object, error) {
@@ -243,7 +238,8 @@ func TestRun(t *testing.T) {
 							})
 
 							it("returns the update error", func() {
-								err := controller.TestSync(t, subject, *controllerContext)
+								startInformersAndController()
+								err := controller.TestSync(t, subject, *syncContext)
 								r.EqualError(err, "could not update logindiscoveryconfig: update failed")
 							})
 						})
@@ -253,20 +249,21 @@ func TestRun(t *testing.T) {
 
 			when("the ConfigMap is missing the expected `kubeconfig` top-level data key", func() {
 				it.Before(func() {
-					clusterInfoConfigMap = &corev1.ConfigMap{
+					clusterInfoConfigMap := &corev1.ConfigMap{
 						ObjectMeta: metav1.ObjectMeta{Name: "cluster-info", Namespace: "kube-public"},
 						Data: map[string]string{
 							"these are not the droids you're looking for": "uninteresting-value",
 						},
 					}
-					err := kubeClient.Tracker().Add(clusterInfoConfigMap)
+					err := kubeInformerClient.Tracker().Add(clusterInfoConfigMap)
 					r.NoError(err)
 				})
 
 				it("keeps waiting for it to exist", func() {
-					err := controller.TestSync(t, subject, *controllerContext)
+					startInformersAndController()
+					err := controller.TestSync(t, subject, *syncContext)
 					r.NoError(err)
-					r.Empty(placeholderClient.Actions())
+					r.Empty(placeholderAPIClient.Actions())
 				})
 			})
 		})
@@ -279,20 +276,21 @@ func TestRun(t *testing.T) {
 						Namespace: "kube-public",
 					},
 				}
-				err := kubeClient.Tracker().Add(unrelatedConfigMap)
+				err := kubeInformerClient.Tracker().Add(unrelatedConfigMap)
 				r.NoError(err)
 			})
 
 			it("keeps waiting for one", func() {
-				err := controller.TestSync(t, subject, *controllerContext)
+				startInformersAndController()
+				err := controller.TestSync(t, subject, *syncContext)
 				r.NoError(err)
-				r.Empty(placeholderClient.Actions())
+				r.Empty(placeholderAPIClient.Actions())
 			})
 		})
 
 		when("getting the cluster-info ConfigMap in the kube-public namespace fails", func() {
 			it.Before(func() {
-				kubeClient.PrependReactor(
+				kubeInformerClient.PrependReactor(
 					"get",
 					"configmaps",
 					func(_ coretesting.Action) (bool, runtime.Object, error) {
@@ -302,7 +300,8 @@ func TestRun(t *testing.T) {
 			})
 
 			it("returns an error", func() {
-				err := controller.TestSync(t, subject, *controllerContext)
+				startInformersAndController()
+				err := controller.TestSync(t, subject, *syncContext)
 				r.EqualError(err, "failed to get cluster-info configmap: get failed")
 			})
 		})

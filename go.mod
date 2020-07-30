@@ -10,7 +10,7 @@ require (
 	github.com/sclevine/spec v1.4.0
 	github.com/spf13/cobra v1.0.0
 	github.com/stretchr/testify v1.6.1
-	github.com/suzerain-io/controller-go v0.0.0-20200728175738-b49edda60499
+	github.com/suzerain-io/controller-go v0.0.0-20200730212956-7f99b569ca9f
 	github.com/suzerain-io/placeholder-name-api v0.0.0-20200730131400-4a1da8d7e70b
 	github.com/suzerain-io/placeholder-name-client-go v0.0.0-20200729202601-9b4b6d38494c
 	k8s.io/api v0.19.0-rc.0

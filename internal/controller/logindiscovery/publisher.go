@@ -12,13 +12,14 @@ import (
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
 	"github.com/suzerain-io/controller-go"
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
 	placeholderclientset "github.com/suzerain-io/placeholder-name-client-go/pkg/generated/clientset/versioned"
+	placeholderv1alpha1informers "github.com/suzerain-io/placeholder-name-client-go/pkg/generated/informers/externalversions/placeholder/v1alpha1"
 )
 
 const (
@@ -30,29 +31,46 @@ const (
 )
 
 type publisherController struct {
-	namespace         string
-	kubeClient        kubernetes.Interface
-	placeholderClient placeholderclientset.Interface
+	namespace                    string
+	placeholderClient            placeholderclientset.Interface
+	configMapInformer            corev1informers.ConfigMapInformer
+	loginDiscoveryConfigInformer placeholderv1alpha1informers.LoginDiscoveryConfigInformer
 }
 
-func NewPublisherController(namespace string, kubeClient kubernetes.Interface, placeholderClient placeholderclientset.Interface) controller.Controller {
+func NewPublisherController(
+	namespace string,
+	placeholderClient placeholderclientset.Interface,
+	configMapInformer corev1informers.ConfigMapInformer,
+	loginDiscoveryConfigInformer placeholderv1alpha1informers.LoginDiscoveryConfigInformer,
+) controller.Controller {
 	return controller.New(
 		controller.Config{
 			Name: "publisher-controller",
 			Syncer: &publisherController{
-				namespace:         namespace,
-				kubeClient:        kubeClient,
-				placeholderClient: placeholderClient,
+				namespace:                    namespace,
+				placeholderClient:            placeholderClient,
+				configMapInformer:            configMapInformer,
+				loginDiscoveryConfigInformer: loginDiscoveryConfigInformer,
 			},
 		},
+		controller.WithInformer(
+			configMapInformer,
+			controller.FilterFuncs{}, // TODO fix this and write tests
+			controller.InformerOption{},
+		),
+		controller.WithInformer(
+			loginDiscoveryConfigInformer,
+			controller.FilterFuncs{}, // TODO fix this and write tests
+			controller.InformerOption{},
+		),
 	)
 }
 
 func (c *publisherController) Sync(ctx controller.Context) error {
-	configMap, err := c.kubeClient.
-		CoreV1().
+	configMap, err := c.configMapInformer.
+		Lister().
 		ConfigMaps(clusterInfoNamespace).
-		Get(ctx.Context, clusterInfoName, metav1.GetOptions{})
+		Get(clusterInfoName)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return fmt.Errorf("failed to get %s configmap: %w", clusterInfoName, err)
@@ -103,20 +121,18 @@ func (c *publisherController) createOrUpdateLoginDiscoveryConfig(
 	ctx context.Context,
 	discoveryConfig *placeholderv1alpha1.LoginDiscoveryConfig,
 ) error {
-	loginDiscoveryConfigs := c.placeholderClient.
-		PlaceholderV1alpha1().
-		LoginDiscoveryConfigs(c.namespace)
-
-	existingDiscoveryConfig, err := loginDiscoveryConfigs.Get(
-		ctx,
-		discoveryConfig.Name,
-		metav1.GetOptions{},
-	)
+	existingDiscoveryConfig, err := c.loginDiscoveryConfigInformer.
+		Lister().
+		LoginDiscoveryConfigs(c.namespace).
+		Get(discoveryConfig.Name)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return fmt.Errorf("could not get logindiscoveryconfig: %w", err)
 	}
 
+	loginDiscoveryConfigs := c.placeholderClient.
+		PlaceholderV1alpha1().
+		LoginDiscoveryConfigs(c.namespace)
 	if notFound {
 		if _, err := loginDiscoveryConfigs.Create(
 			ctx,

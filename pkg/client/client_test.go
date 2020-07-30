@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -66,6 +67,16 @@ func TestExchangeToken(t *testing.T) {
 		}
 	})
 
+	t.Run("request creation failure", func(t *testing.T) {
+		t.Parallel()
+		// Start a test server that doesn't do anything.
+		caBundle, endpoint := startTestServer(t, func(w http.ResponseWriter, r *http.Request) {})
+
+		got, err := ExchangeToken(nil, "", caBundle, endpoint)
+		require.EqualError(t, err, `could not build request: net/http: nil Context`)
+		require.Nil(t, got)
+	})
+
 	t.Run("server error", func(t *testing.T) {
 		t.Parallel()
 		// Start a test server that returns only 500 errors.
@@ -76,6 +87,29 @@ func TestExchangeToken(t *testing.T) {
 
 		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
 		require.EqualError(t, err, `could not login: server returned status 500`)
+		require.Nil(t, got)
+	})
+
+	t.Run("request failure", func(t *testing.T) {
+		t.Parallel()
+
+		clientTimeout := 500 * time.Millisecond
+
+		// Start a test server that is slow to respond.
+		caBundle, endpoint := startTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusCreated)
+			time.Sleep(2 * clientTimeout)
+			_, _ = w.Write([]byte("slow response"))
+		})
+
+		// Make a request using short timeout.
+		ctx, cancel := context.WithTimeout(ctx, clientTimeout)
+		defer cancel()
+
+		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "context deadline exceeded")
+		require.Contains(t, err.Error(), "could not login:")
 		require.Nil(t, got)
 	})
 

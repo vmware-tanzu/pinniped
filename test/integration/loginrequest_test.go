@@ -181,32 +181,41 @@ func TestGetAPIResourceList(t *testing.T) {
 	actualResources := findResources(resourceGroupVersion, resources)
 	require.NotNil(t, actualResources)
 
-	expectedResources := &metav1.APIResourceList{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "APIResourceList",
-			APIVersion: "v1",
-		},
-		GroupVersion: "placeholder.suzerain-io.github.io/v1alpha1",
-		APIResources: []metav1.APIResource{
-			{
-				Name:         "loginrequests",
-				Kind:         "LoginRequest",
-				SingularName: "", // TODO(akeesler): what should this be?
-				Verbs: metav1.Verbs([]string{
-					"create",
-				}),
-			},
-		},
+	expectedLoginRequestAPIResource := metav1.APIResource{
+		Name:         "loginrequests",
+		Kind:         "LoginRequest",
+		SingularName: "", // TODO(akeesler): what should this be?
+		Verbs: metav1.Verbs([]string{
+			"create",
+		}),
+		Namespaced: false,
 	}
-	require.Equal(t, expectedResources, actualResources)
-}
 
-func TestGetAPIVersion(t *testing.T) {
-	client := library.NewPlaceholderNameClientset(t)
+	expectedLDCAPIResource := metav1.APIResource{
+		Name:         "logindiscoveryconfigs",
+		SingularName: "logindiscoveryconfig",
+		Namespaced:   true,
+		Kind:         "LoginDiscoveryConfig",
+		Verbs: metav1.Verbs([]string{
+			"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch",
+		}),
+		ShortNames:         []string{"ldc"},
+		StorageVersionHash: "unknown: to be filled in automatically below",
+	}
 
-	version, err := client.Discovery().ServerVersion()
-	require.NoError(t, err)
-	require.NotNil(t, version) // TODO(akeesler): what can we assert here?
+	expectedResourcesMap := map[string]metav1.APIResource{
+		expectedLoginRequestAPIResource.Name: expectedLoginRequestAPIResource,
+		expectedLDCAPIResource.Name:          expectedLDCAPIResource,
+	}
+
+	require.Len(t, actualResources.APIResources, 2)
+	for _, actualAPIResource := range actualResources.APIResources {
+		if actualAPIResource.Name == expectedLDCAPIResource.Name {
+			// hard to predict the storage version hash (e.g. "t/+v41y+3e4=") so just don't worry about comparing them
+			expectedLDCAPIResource.StorageVersionHash = actualAPIResource.StorageVersionHash
+		}
+		require.Equal(t, expectedResourcesMap[actualAPIResource.Name], actualAPIResource)
+	}
 }
 
 func findGroup(name string, groups []*metav1.APIGroup) *metav1.APIGroup {

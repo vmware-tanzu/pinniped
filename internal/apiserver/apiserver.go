@@ -126,7 +126,7 @@ func (c completedConfig) New() (*PlaceHolderServer, error) {
 
 	s.GenericAPIServer.AddPostStartHookOrDie("start-controllers",
 		func(postStartContext genericapiserver.PostStartHookContext) error {
-			klog.InfoS("post start hook")
+			klog.InfoS("start-controllers post start hook starting")
 
 			ctx, cancel := context.WithCancel(context.Background())
 			go func() {

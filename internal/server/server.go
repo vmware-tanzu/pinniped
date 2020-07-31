@@ -43,10 +43,9 @@ import (
 	"github.com/suzerain-io/placeholder-name/pkg/config"
 )
 
-// TODO(akeesler): what should these controller settings be?
 const (
-	defaultWorkers = 3
-	defaultResync  = 20 * time.Minute
+	singletonWorker       = 1
+	defaultResyncInterval = 3 * time.Minute
 )
 
 // App is an object that represents the placeholder-name-server application.
@@ -93,13 +92,13 @@ authenticating to the Kubernetes API.`,
 			protoKubeConfig := createProtoKubeConfig(kubeConfig)
 
 			// Connect to the core Kubernetes API.
-			k8s, err := kubernetes.NewForConfig(protoKubeConfig)
+			k8sClient, err := kubernetes.NewForConfig(protoKubeConfig)
 			if err != nil {
 				return fmt.Errorf("could not initialize Kubernetes client: %w", err)
 			}
 
 			// Connect to the Kubernetes aggregation API.
-			aggregation, err := aggregationv1client.NewForConfig(protoKubeConfig)
+			aggregationClient, err := aggregationv1client.NewForConfig(protoKubeConfig)
 			if err != nil {
 				return fmt.Errorf("could not initialize Kubernetes client: %w", err)
 			}
@@ -107,12 +106,12 @@ authenticating to the Kubernetes API.`,
 			// Connect to the placeholder API.
 			// I think we can't use protobuf encoding here because we are using CRDs
 			// (for which protobuf encoding is not supported).
-			placeholder, err := placeholderclientset.NewForConfig(kubeConfig)
+			placeholderClient, err := placeholderclientset.NewForConfig(kubeConfig)
 			if err != nil {
 				return fmt.Errorf("could not initialize placeholder client: %w", err)
 			}
 
-			return a.run(ctx, k8s, aggregation, placeholder)
+			return a.run(ctx, k8sClient, aggregationClient, placeholderClient)
 		},
 		Args: cobra.NoArgs,
 	}
@@ -161,9 +160,9 @@ func (a *App) Run() error {
 
 func (a *App) run(
 	ctx context.Context,
-	k8s kubernetes.Interface,
-	aggregation aggregationv1client.Interface,
-	placeholder placeholderclientset.Interface,
+	k8sClient kubernetes.Interface,
+	aggregationClient aggregationv1client.Interface,
+	placeholderClient placeholderclientset.Interface,
 ) error {
 	cfg, err := config.FromPath(a.configPath)
 	if err != nil {
@@ -185,6 +184,7 @@ func (a *App) run(
 	if err != nil {
 		return fmt.Errorf("could not read pod metadata: %w", err)
 	}
+	serverInstallationNamespace := podinfo.Namespace
 
 	// TODO use the postStart hook to generate certs?
 
@@ -196,7 +196,7 @@ func (a *App) run(
 	const serviceName = "placeholder-name-api"
 
 	cert, err := apiCA.Issue(
-		pkix.Name{CommonName: serviceName + "." + podinfo.Namespace + ".svc"},
+		pkix.Name{CommonName: serviceName + "." + serverInstallationNamespace + ".svc"},
 		[]string{},
 		24*365*time.Hour,
 	)
@@ -232,16 +232,16 @@ func (a *App) run(
 		},
 	}
 	if err := autoregistration.Setup(ctx, autoregistration.SetupOptions{
-		CoreV1:             k8s.CoreV1(),
-		AggregationV1:      aggregation,
-		Namespace:          podinfo.Namespace,
+		CoreV1:             k8sClient.CoreV1(),
+		AggregationV1:      aggregationClient,
+		Namespace:          serverInstallationNamespace,
 		ServiceTemplate:    service,
 		APIServiceTemplate: apiService,
 	}); err != nil {
 		return fmt.Errorf("could not register API service: %w", err)
 	}
 
-	cmrf := wireControllerManagerRunFunc(podinfo, k8s, placeholder)
+	cmrf := wireControllerManagerRunFunc(serverInstallationNamespace, k8sClient, placeholderClient)
 	apiServerConfig, err := a.configServer(
 		cert,
 		webhookTokenAuthenticator,
@@ -323,35 +323,33 @@ func createStaticCertKeyProvider(cert *tls.Certificate) (dynamiccertificates.Cer
 }
 
 func wireControllerManagerRunFunc(
-	podinfo *downward.PodInfo,
+	serverInstallationNamespace string,
 	k8s kubernetes.Interface,
 	placeholder placeholderclientset.Interface,
 ) func(ctx context.Context) {
 	k8sInformers := k8sinformers.NewSharedInformerFactoryWithOptions(
 		k8s,
-		defaultResync,
+		defaultResyncInterval,
 		k8sinformers.WithNamespace(
 			logindiscovery.ClusterInfoNamespace,
 		),
 	)
 	placeholderInformers := placeholderinformers.NewSharedInformerFactoryWithOptions(
 		placeholder,
-		defaultResync,
-		placeholderinformers.WithNamespace(
-			"integration", // TODO(akeesler): unhardcode this.
-		),
+		defaultResyncInterval,
+		placeholderinformers.WithNamespace(serverInstallationNamespace),
 	)
 	cm := controller.
 		NewManager().
 		WithController(
 			logindiscovery.NewPublisherController(
-				podinfo.Namespace,
+				serverInstallationNamespace,
 				placeholder,
 				k8sInformers.Core().V1().ConfigMaps(),
 				placeholderInformers.Placeholder().V1alpha1().LoginDiscoveryConfigs(),
 				controller.WithInformer,
 			),
-			defaultWorkers,
+			singletonWorker,
 		)
 	return func(ctx context.Context) {
 		k8sInformers.Start(ctx.Done())

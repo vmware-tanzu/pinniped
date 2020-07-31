@@ -30,6 +30,25 @@ const (
 	configName = "placeholder-name-config"
 )
 
+func nameAndNamespaceExactMatchFilterFactory(name, namespace string) controller.FilterFuncs {
+	objMatchesFunc := func(obj metav1.Object) bool {
+		return obj.GetName() == name && obj.GetNamespace() == namespace
+	}
+	return controller.FilterFuncs{
+		AddFunc: objMatchesFunc,
+		UpdateFunc: func(oldObj, newObj metav1.Object) bool {
+			return objMatchesFunc(oldObj) || objMatchesFunc(newObj)
+		},
+		DeleteFunc: objMatchesFunc,
+	}
+}
+
+// Same signature as controller.WithInformer().
+type withInformerOptionFunc func(
+	getter controller.InformerGetter,
+	filter controller.Filter,
+	opt controller.InformerOption) controller.Option
+
 type publisherController struct {
 	namespace                    string
 	placeholderClient            placeholderclientset.Interface
@@ -42,6 +61,7 @@ func NewPublisherController(
 	placeholderClient placeholderclientset.Interface,
 	configMapInformer corev1informers.ConfigMapInformer,
 	loginDiscoveryConfigInformer placeholderv1alpha1informers.LoginDiscoveryConfigInformer,
+	withInformer withInformerOptionFunc,
 ) controller.Controller {
 	return controller.New(
 		controller.Config{
@@ -53,14 +73,14 @@ func NewPublisherController(
 				loginDiscoveryConfigInformer: loginDiscoveryConfigInformer,
 			},
 		},
-		controller.WithInformer(
+		withInformer(
 			configMapInformer,
-			controller.FilterFuncs{}, // TODO fix this and write tests
+			nameAndNamespaceExactMatchFilterFactory(clusterInfoName, clusterInfoNamespace),
 			controller.InformerOption{},
 		),
-		controller.WithInformer(
+		withInformer(
 			loginDiscoveryConfigInformer,
-			controller.FilterFuncs{}, // TODO fix this and write tests
+			nameAndNamespaceExactMatchFilterFactory(configName, namespace),
 			controller.InformerOption{},
 		),
 	)

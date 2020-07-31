@@ -158,7 +158,7 @@ func TestCreateSucceedsWhenGivenATokenAndTheWebhookAuthenticatesTheToken(t *test
 	expires := response.(*placeholderapi.LoginRequest).Status.Credential.ExpirationTimestamp
 	require.NotNil(t, expires)
 	require.InDelta(t, time.Now().Add(1*time.Hour).Unix(), expires.Unix(), 5)
-	response.(*placeholderapi.LoginRequest).Status.Credential.ExpirationTimestamp = nil
+	response.(*placeholderapi.LoginRequest).Status.Credential.ExpirationTimestamp = metav1.Time{}
 
 	require.Equal(t, response, &placeholderapi.LoginRequest{
 		Status: placeholderapi.LoginRequestStatus{
@@ -167,7 +167,7 @@ func TestCreateSucceedsWhenGivenATokenAndTheWebhookAuthenticatesTheToken(t *test
 				Groups: []string{"test-group-1", "test-group-2"},
 			},
 			Credential: &placeholderapi.LoginRequestCredential{
-				ExpirationTimestamp:   nil,
+				ExpirationTimestamp:   metav1.Time{},
 				ClientCertificateData: "test-cert",
 				ClientKeyData:         "test-key",
 			},

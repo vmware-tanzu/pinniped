@@ -138,11 +138,10 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		return failureResponse(), nil
 	}
 
-	expires := metav1.NewTime(time.Now().UTC().Add(clientCertificateTTL))
 	return &placeholderapi.LoginRequest{
 		Status: placeholderapi.LoginRequestStatus{
 			Credential: &placeholderapi.LoginRequestCredential{
-				ExpirationTimestamp:   &expires,
+				ExpirationTimestamp:   metav1.NewTime(time.Now().UTC().Add(clientCertificateTTL)),
 				ClientCertificateData: string(certPEM),
 				ClientKeyData:         string(keyPEM),
 			},

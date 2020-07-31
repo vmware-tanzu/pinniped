@@ -11,8 +11,8 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/stretchr/testify v1.6.1
 	github.com/suzerain-io/controller-go v0.0.0-20200730212956-7f99b569ca9f
-	github.com/suzerain-io/placeholder-name-api v0.0.0-20200730131400-4a1da8d7e70b
-	github.com/suzerain-io/placeholder-name-client-go v0.0.0-20200729202601-9b4b6d38494c
+	github.com/suzerain-io/placeholder-name-api v0.0.0-20200731022217-d7e4c306f7fd
+	github.com/suzerain-io/placeholder-name-client-go v0.0.0-20200731022627-a9c34c8413ac
 	github.com/suzerain-io/placeholder-name/pkg/client v0.0.0-00010101000000-000000000000
 	k8s.io/api v0.19.0-rc.0
 	k8s.io/apimachinery v0.19.0-rc.0

@@ -25,18 +25,28 @@ import (
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
+	k8sinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	restclient "k8s.io/client-go/rest"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	aggregationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
+	"github.com/suzerain-io/controller-go"
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
+	placeholderclientset "github.com/suzerain-io/placeholder-name-client-go/pkg/generated/clientset/versioned"
+	placeholderinformers "github.com/suzerain-io/placeholder-name-client-go/pkg/generated/informers/externalversions"
 	"github.com/suzerain-io/placeholder-name/internal/apiserver"
 	"github.com/suzerain-io/placeholder-name/internal/autoregistration"
 	"github.com/suzerain-io/placeholder-name/internal/certauthority"
+	"github.com/suzerain-io/placeholder-name/internal/controller/logindiscovery"
 	"github.com/suzerain-io/placeholder-name/internal/downward"
 	"github.com/suzerain-io/placeholder-name/pkg/config"
+)
+
+// TODO(akeesler): what should these controller settings be?
+const (
+	defaultWorkers = 3
+	defaultResync  = 20 * time.Minute
 )
 
 // App is an object that represents the placeholder-name-server application.
@@ -94,7 +104,15 @@ authenticating to the Kubernetes API.`,
 				return fmt.Errorf("could not initialize Kubernetes client: %w", err)
 			}
 
-			return a.run(ctx, k8s.CoreV1(), aggregation)
+			// Connect to the placeholder API.
+			// I think we can't use protobuf encoding here because we are using CRDs
+			// (for which protobuf encoding is not supported).
+			placeholder, err := placeholderclientset.NewForConfig(kubeConfig)
+			if err != nil {
+				return fmt.Errorf("could not initialize placeholder client: %w", err)
+			}
+
+			return a.run(ctx, k8s, aggregation, placeholder)
 		},
 		Args: cobra.NoArgs,
 	}
@@ -143,8 +161,9 @@ func (a *App) Run() error {
 
 func (a *App) run(
 	ctx context.Context,
-	k8s corev1client.CoreV1Interface,
+	k8s kubernetes.Interface,
 	aggregation aggregationv1client.Interface,
+	placeholder placeholderclientset.Interface,
 ) error {
 	cfg, err := config.FromPath(a.configPath)
 	if err != nil {
@@ -213,7 +232,7 @@ func (a *App) run(
 		},
 	}
 	if err := autoregistration.Setup(ctx, autoregistration.SetupOptions{
-		CoreV1:             k8s,
+		CoreV1:             k8s.CoreV1(),
 		AggregationV1:      aggregation,
 		Namespace:          podinfo.Namespace,
 		ServiceTemplate:    service,
@@ -222,7 +241,13 @@ func (a *App) run(
 		return fmt.Errorf("could not register API service: %w", err)
 	}
 
-	apiServerConfig, err := a.ConfigServer(cert, webhookTokenAuthenticator, clientCA)
+	cmrf := wireControllerManagerRunFunc(podinfo, k8s, placeholder)
+	apiServerConfig, err := a.configServer(
+		cert,
+		webhookTokenAuthenticator,
+		clientCA,
+		cmrf,
+	)
 	if err != nil {
 		return err
 	}
@@ -235,7 +260,12 @@ func (a *App) run(
 	return server.GenericAPIServer.PrepareRun().Run(ctx.Done())
 }
 
-func (a *App) ConfigServer(cert *tls.Certificate, webhookTokenAuthenticator *webhook.WebhookTokenAuthenticator, ca *certauthority.CA) (*apiserver.Config, error) {
+func (a *App) configServer(
+	cert *tls.Certificate,
+	webhookTokenAuthenticator *webhook.WebhookTokenAuthenticator,
+	ca *certauthority.CA,
+	startControllersPostStartHook func(context.Context),
+) (*apiserver.Config, error) {
 	provider, err := createStaticCertKeyProvider(cert)
 	if err != nil {
 		return nil, fmt.Errorf("could not create static cert key provider: %w", err)
@@ -250,8 +280,9 @@ func (a *App) ConfigServer(cert *tls.Certificate, webhookTokenAuthenticator *web
 	apiServerConfig := &apiserver.Config{
 		GenericConfig: serverConfig,
 		ExtraConfig: apiserver.ExtraConfig{
-			Webhook: webhookTokenAuthenticator,
-			Issuer:  ca,
+			Webhook:                       webhookTokenAuthenticator,
+			Issuer:                        ca,
+			StartControllersPostStartHook: startControllersPostStartHook,
 		},
 	}
 	return apiServerConfig, nil
@@ -289,4 +320,42 @@ func createStaticCertKeyProvider(cert *tls.Certificate) (dynamiccertificates.Cer
 	}
 
 	return dynamiccertificates.NewStaticCertKeyContent("some-name???", certChainPEM, privateKeyPEM)
+}
+
+func wireControllerManagerRunFunc(
+	podinfo *downward.PodInfo,
+	k8s kubernetes.Interface,
+	placeholder placeholderclientset.Interface,
+) func(ctx context.Context) {
+	k8sInformers := k8sinformers.NewSharedInformerFactoryWithOptions(
+		k8s,
+		defaultResync,
+		k8sinformers.WithNamespace(
+			logindiscovery.ClusterInfoNamespace,
+		),
+	)
+	placeholderInformers := placeholderinformers.NewSharedInformerFactoryWithOptions(
+		placeholder,
+		defaultResync,
+		placeholderinformers.WithNamespace(
+			"integration", // TODO(akeesler): unhardcode this.
+		),
+	)
+	cm := controller.
+		NewManager().
+		WithController(
+			logindiscovery.NewPublisherController(
+				podinfo.Namespace,
+				placeholder,
+				k8sInformers.Core().V1().ConfigMaps(),
+				placeholderInformers.Placeholder().V1alpha1().LoginDiscoveryConfigs(),
+				controller.WithInformer,
+			),
+			defaultWorkers,
+		)
+	return func(ctx context.Context) {
+		k8sInformers.Start(ctx.Done())
+		placeholderInformers.Start(ctx.Done())
+		go cm.Start(ctx)
+	}
 }

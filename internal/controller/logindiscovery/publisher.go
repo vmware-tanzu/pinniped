@@ -23,8 +23,9 @@ import (
 )
 
 const (
+	ClusterInfoNamespace = "kube-public"
+
 	clusterInfoName         = "cluster-info"
-	clusterInfoNamespace    = "kube-public"
 	clusterInfoConfigMapKey = "kubeconfig"
 
 	configName = "placeholder-name-config"
@@ -75,7 +76,7 @@ func NewPublisherController(
 		},
 		withInformer(
 			configMapInformer,
-			nameAndNamespaceExactMatchFilterFactory(clusterInfoName, clusterInfoNamespace),
+			nameAndNamespaceExactMatchFilterFactory(clusterInfoName, ClusterInfoNamespace),
 			controller.InformerOption{},
 		),
 		withInformer(
@@ -89,7 +90,7 @@ func NewPublisherController(
 func (c *publisherController) Sync(ctx controller.Context) error {
 	configMap, err := c.configMapInformer.
 		Lister().
-		ConfigMaps(clusterInfoNamespace).
+		ConfigMaps(ClusterInfoNamespace).
 		Get(clusterInfoName)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
@@ -99,7 +100,7 @@ func (c *publisherController) Sync(ctx controller.Context) error {
 		klog.InfoS(
 			"could not find config map",
 			"configmap",
-			klog.KRef(clusterInfoNamespace, clusterInfoName),
+			klog.KRef(ClusterInfoNamespace, clusterInfoName),
 		)
 		return nil
 	}

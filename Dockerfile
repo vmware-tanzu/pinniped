@@ -24,6 +24,8 @@ WORKDIR /work
 # Get dependencies first so they can be cached as a layer
 COPY go.mod .
 COPY go.sum .
+COPY pkg/client/go.mod ./pkg/client/go.mod
+COPY pkg/client/go.sum ./pkg/client/go.sum
 RUN go mod download
 # Copy only the production source code to avoid cache misses when editing other files
 COPY cmd ./cmd

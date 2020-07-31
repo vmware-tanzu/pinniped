@@ -67,9 +67,11 @@ func TestClient(t *testing.T) {
 	clientConfig := library.NewClientConfig(t)
 	resp, err := client.ExchangeToken(ctx, tmcClusterToken, string(clientConfig.CAData), clientConfig.Host)
 	require.NoError(t, err)
+	require.NotNil(t, resp.ExpirationTimestamp)
+	require.InDelta(t, time.Until(*resp.ExpirationTimestamp), 1*time.Hour, float64(5*time.Second))
 
 	// Create a client using the certificate and key returned by the token exchange.
-	validClient := library.NewClientsetWithConfig(t, library.NewClientConfigWithCertAndKey(t, resp.Status.ClientCertificateData, resp.Status.ClientKeyData))
+	validClient := library.NewClientsetWithConfig(t, library.NewClientConfigWithCertAndKey(t, resp.ClientCertificateData, resp.ClientKeyData))
 
 	// Make a version request, which should succeed even without any authorization.
 	_, err = validClient.Discovery().ServerVersion()

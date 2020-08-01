@@ -38,7 +38,7 @@ rules:
   - apiGroups: [""]
     resources: [services]
     verbs: [create, get, list, patch, update, watch]
-  - apiGroups: [placeholder.suzerain-io.github.io]
+  - apiGroups: [crds.placeholder.suzerain-io.github.io]
     resources: [logindiscoveryconfigs]
     verbs: [create, get, list, update, watch]
 ---

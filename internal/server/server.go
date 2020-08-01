@@ -346,7 +346,7 @@ func wireControllerManagerRunFunc(
 				serverInstallationNamespace,
 				placeholder,
 				k8sInformers.Core().V1().ConfigMaps(),
-				placeholderInformers.Placeholder().V1alpha1().LoginDiscoveryConfigs(),
+				placeholderInformers.Crds().V1alpha1().LoginDiscoveryConfigs(),
 				controller.WithInformer,
 			),
 			singletonWorker,

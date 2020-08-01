@@ -16,7 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 
-	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
+	crdsplaceholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/crdsplaceholder/v1alpha1"
 	"github.com/suzerain-io/placeholder-name/test/library"
 )
 
@@ -32,7 +32,7 @@ func TestSuccessfulLoginDiscoveryConfig(t *testing.T) {
 	config := library.NewClientConfig(t)
 	expectedLDCSpec := expectedLDCSpec(config)
 	configList, err := client.
-		PlaceholderV1alpha1().
+		CrdsV1alpha1().
 		LoginDiscoveryConfigs(namespaceName).
 		List(ctx, metav1.ListOptions{})
 	require.NoError(t, err)
@@ -50,7 +50,7 @@ func TestReconcilingLoginDiscoveryConfig(t *testing.T) {
 	defer cancel()
 
 	err := client.
-		PlaceholderV1alpha1().
+		CrdsV1alpha1().
 		LoginDiscoveryConfigs(namespaceName).
 		Delete(ctx, "placeholder-name-config", metav1.DeleteOptions{})
 	require.NoError(t, err)
@@ -58,9 +58,10 @@ func TestReconcilingLoginDiscoveryConfig(t *testing.T) {
 	config := library.NewClientConfig(t)
 	expectedLDCSpec := expectedLDCSpec(config)
 
-	var actualLDC *placeholderv1alpha1.LoginDiscoveryConfig
+	var actualLDC *crdsplaceholderv1alpha1.LoginDiscoveryConfig
 	for i := 0; i < 10; i++ {
-		actualLDC, err = client.PlaceholderV1alpha1().
+		actualLDC, err = client.
+			CrdsV1alpha1().
 			LoginDiscoveryConfigs(namespaceName).
 			Get(ctx, "placeholder-name-config", metav1.GetOptions{})
 		if err == nil {
@@ -72,8 +73,8 @@ func TestReconcilingLoginDiscoveryConfig(t *testing.T) {
 	require.Equal(t, expectedLDCSpec, &actualLDC.Spec)
 }
 
-func expectedLDCSpec(config *rest.Config) *placeholderv1alpha1.LoginDiscoveryConfigSpec {
-	return &placeholderv1alpha1.LoginDiscoveryConfigSpec{
+func expectedLDCSpec(config *rest.Config) *crdsplaceholderv1alpha1.LoginDiscoveryConfigSpec {
+	return &crdsplaceholderv1alpha1.LoginDiscoveryConfigSpec{
 		Server:                   "https://kind-control-plane:6443", //config.Host, // TODO FIX THIS
 		CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.TLSClientConfig.CAData),
 	}

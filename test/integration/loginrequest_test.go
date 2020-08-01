@@ -177,9 +177,10 @@ func TestGetAPIResourceList(t *testing.T) {
 	}
 	require.Equal(t, expectedGroup, actualGroup)
 
-	resourceGroupVersion := "placeholder.suzerain-io.github.io/v1alpha1"
-	actualResources := findResources(resourceGroupVersion, resources)
-	require.NotNil(t, actualResources)
+	actualPlaceHolderResources := findResources("placeholder.suzerain-io.github.io/v1alpha1", resources)
+	require.NotNil(t, actualPlaceHolderResources)
+	actualCrdsPlaceHolderResources := findResources("crds.placeholder.suzerain-io.github.io/v1alpha1", resources)
+	require.NotNil(t, actualPlaceHolderResources)
 
 	expectedLoginRequestAPIResource := metav1.APIResource{
 		Name:         "loginrequests",
@@ -203,19 +204,15 @@ func TestGetAPIResourceList(t *testing.T) {
 		StorageVersionHash: "unknown: to be filled in automatically below",
 	}
 
-	expectedResourcesMap := map[string]metav1.APIResource{
-		expectedLoginRequestAPIResource.Name: expectedLoginRequestAPIResource,
-		expectedLDCAPIResource.Name:          expectedLDCAPIResource,
-	}
+	require.Len(t, actualPlaceHolderResources.APIResources, 1)
+	require.Equal(t, expectedLoginRequestAPIResource, actualPlaceHolderResources.APIResources[0])
 
-	require.Len(t, actualResources.APIResources, 2)
-	for _, actualAPIResource := range actualResources.APIResources {
-		if actualAPIResource.Name == expectedLDCAPIResource.Name {
-			// hard to predict the storage version hash (e.g. "t/+v41y+3e4=") so just don't worry about comparing them
-			expectedLDCAPIResource.StorageVersionHash = actualAPIResource.StorageVersionHash
-		}
-		require.Equal(t, expectedResourcesMap[actualAPIResource.Name], actualAPIResource)
-	}
+	require.Len(t, actualCrdsPlaceHolderResources.APIResources, 1)
+	actualAPIResource := actualCrdsPlaceHolderResources.APIResources[0]
+	// workaround because its hard to predict the storage version hash (e.g. "t/+v41y+3e4=")
+	// so just don't worry about comparing that field
+	expectedLDCAPIResource.StorageVersionHash = actualAPIResource.StorageVersionHash
+	require.Equal(t, expectedLDCAPIResource, actualAPIResource)
 }
 
 func findGroup(name string, groups []*metav1.APIGroup) *metav1.APIGroup {

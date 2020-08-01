@@ -24,7 +24,7 @@ import (
 	coretesting "k8s.io/client-go/testing"
 
 	"github.com/suzerain-io/controller-go"
-	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
+	crdsplaceholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/crdsplaceholder/v1alpha1"
 	placeholderfake "github.com/suzerain-io/placeholder-name-client-go/pkg/generated/clientset/versioned/fake"
 	placeholderinformers "github.com/suzerain-io/placeholder-name-client-go/pkg/generated/informers/externalversions"
 )
@@ -60,7 +60,7 @@ func TestInformerFilters(t *testing.T) {
 			r = require.New(t)
 			observableWithInformerOption = NewObservableWithInformerOption()
 			configMapInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().ConfigMaps()
-			loginDiscoveryConfigInformer := placeholderinformers.NewSharedInformerFactory(nil, 0).Placeholder().V1alpha1().LoginDiscoveryConfigs()
+			loginDiscoveryConfigInformer := placeholderinformers.NewSharedInformerFactory(nil, 0).Crds().V1alpha1().LoginDiscoveryConfigs()
 			_ = NewPublisherController(
 				installedInNamespace,
 				nil,
@@ -122,20 +122,20 @@ func TestInformerFilters(t *testing.T) {
 
 		when("watching LoginDiscoveryConfig objects", func() {
 			var subject controller.Filter
-			var target, wrongNamespace, wrongName, unrelated *placeholderv1alpha1.LoginDiscoveryConfig
+			var target, wrongNamespace, wrongName, unrelated *crdsplaceholderv1alpha1.LoginDiscoveryConfig
 
 			it.Before(func() {
 				subject = loginDiscoveryConfigInformerFilter
-				target = &placeholderv1alpha1.LoginDiscoveryConfig{
+				target = &crdsplaceholderv1alpha1.LoginDiscoveryConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "placeholder-name-config", Namespace: installedInNamespace},
 				}
-				wrongNamespace = &placeholderv1alpha1.LoginDiscoveryConfig{
+				wrongNamespace = &crdsplaceholderv1alpha1.LoginDiscoveryConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "placeholder-name-config", Namespace: "wrong-namespace"},
 				}
-				wrongName = &placeholderv1alpha1.LoginDiscoveryConfig{
+				wrongName = &crdsplaceholderv1alpha1.LoginDiscoveryConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: installedInNamespace},
 				}
-				unrelated = &placeholderv1alpha1.LoginDiscoveryConfig{
+				unrelated = &crdsplaceholderv1alpha1.LoginDiscoveryConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: "wrong-namespace"},
 				}
 			})
@@ -194,18 +194,18 @@ func TestSync(t *testing.T) {
 		var timeoutContextCancel context.CancelFunc
 		var syncContext *controller.Context
 
-		var expectedLoginDiscoveryConfig = func(expectedNamespace, expectedServerURL, expectedCAData string) (schema.GroupVersionResource, *placeholderv1alpha1.LoginDiscoveryConfig) {
+		var expectedLoginDiscoveryConfig = func(expectedNamespace, expectedServerURL, expectedCAData string) (schema.GroupVersionResource, *crdsplaceholderv1alpha1.LoginDiscoveryConfig) {
 			expectedLoginDiscoveryConfigGVR := schema.GroupVersionResource{
-				Group:    placeholderv1alpha1.GroupName,
+				Group:    crdsplaceholderv1alpha1.GroupName,
 				Version:  "v1alpha1",
 				Resource: "logindiscoveryconfigs",
 			}
-			expectedLoginDiscoveryConfig := &placeholderv1alpha1.LoginDiscoveryConfig{
+			expectedLoginDiscoveryConfig := &crdsplaceholderv1alpha1.LoginDiscoveryConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "placeholder-name-config",
 					Namespace: expectedNamespace,
 				},
-				Spec: placeholderv1alpha1.LoginDiscoveryConfigSpec{
+				Spec: crdsplaceholderv1alpha1.LoginDiscoveryConfigSpec{
 					Server:                   expectedServerURL,
 					CertificateAuthorityData: expectedCAData,
 				},
@@ -237,7 +237,7 @@ func TestSync(t *testing.T) {
 				installedInNamespace,
 				placeholderAPIClient,
 				kubeInformers.Core().V1().ConfigMaps(),
-				placeholderInformers.Placeholder().V1alpha1().LoginDiscoveryConfigs(),
+				placeholderInformers.Crds().V1alpha1().LoginDiscoveryConfigs(),
 				controller.WithInformer,
 			)
 

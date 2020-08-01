@@ -10,9 +10,9 @@ require (
 	github.com/sclevine/spec v1.4.0
 	github.com/spf13/cobra v1.0.0
 	github.com/stretchr/testify v1.6.1
-	github.com/suzerain-io/placeholder-name-api v0.0.0-20200731022217-d7e4c306f7fd
-	github.com/suzerain-io/placeholder-name-client-go v0.0.0-20200731022627-a9c34c8413ac
+	github.com/suzerain-io/placeholder-name/pkg/api v0.0.0-00010101000000-000000000000
 	github.com/suzerain-io/placeholder-name/pkg/client v0.0.0-00010101000000-000000000000
+	github.com/suzerain-io/placeholder-name/pkg/client-go v0.0.0-00010101000000-000000000000
 	k8s.io/api v0.19.0-rc.0
 	k8s.io/apimachinery v0.19.0-rc.0
 	k8s.io/apiserver v0.19.0-rc.0
@@ -24,4 +24,8 @@ require (
 	sigs.k8s.io/yaml v1.2.0
 )
 
+replace github.com/suzerain-io/placeholder-name/pkg/api => ./pkg/api
+
 replace github.com/suzerain-io/placeholder-name/pkg/client => ./pkg/client
+
+replace github.com/suzerain-io/placeholder-name/pkg/client-go => ./pkg/client-go

@@ -19,9 +19,9 @@ import (
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/klog/v2"
 
-	placeholderapi "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
-	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
 	"github.com/suzerain-io/placeholder-name/internal/registry/loginrequest"
+	placeholderapi "github.com/suzerain-io/placeholder-name/pkg/api/placeholder"
+	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/pkg/api/placeholder/v1alpha1"
 )
 
 var (

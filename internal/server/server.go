@@ -31,11 +31,11 @@ import (
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	aggregationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
 	"github.com/suzerain-io/placeholder-name/internal/apiserver"
 	"github.com/suzerain-io/placeholder-name/internal/autoregistration"
 	"github.com/suzerain-io/placeholder-name/internal/certauthority"
 	"github.com/suzerain-io/placeholder-name/internal/downward"
+	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/pkg/api/placeholder/v1alpha1"
 	"github.com/suzerain-io/placeholder-name/pkg/config"
 )
 

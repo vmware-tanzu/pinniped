@@ -23,8 +23,8 @@ import (
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 
-	placeholderapi "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
 	"github.com/suzerain-io/placeholder-name/internal/mocks/mockcertissuer"
+	placeholderapi "github.com/suzerain-io/placeholder-name/pkg/api/placeholder"
 )
 
 type contextKey struct{}

@@ -1,6 +1,7 @@
 # https://github.com/golangci/golangci-lint#config-file
 run:
   deadline: 1m
+  skip-dirs-use-default: true
 
 linters:
   disable-all: true
@@ -52,6 +53,10 @@ linters:
 issues:
   exclude-rules:
     # exclude tests from some rules for things that are useful in a testing context.
+  - path: placeholder/
+    linters:
+    - gochecknoglobals
+    - gochecknoinits
   - path: _test\.go
     linters:
     - funlen
@@ -63,6 +68,8 @@ linters-settings:
     lines: 125
     statements: 50
   goheader:
-    template-path: hack/header.txt
+    template: |-
+      Copyright 2020 VMware, Inc.
+      SPDX-License-Identifier: Apache-2.0
   goimports:
     local-prefixes: github.com/suzerain-io

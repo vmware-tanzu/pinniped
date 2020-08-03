@@ -30,7 +30,7 @@ function with_modules() {
   cmd="$(${cmd_function})"
 
   pushd "${root_dir}"
-  for mod_file in $(find . -maxdepth 3 -name go.mod); do
+  for mod_file in $(find . -not -path "*vendor/*" -name go.mod); do
     mod_dir="$(dirname "${mod_file}")"
     (
       echo "=> " && \

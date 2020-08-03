@@ -8,7 +8,6 @@ package integration
 import (
 	"context"
 	"encoding/base64"
-	"os"
 	"testing"
 	"time"
 
@@ -21,8 +20,8 @@ import (
 )
 
 func TestSuccessfulLoginDiscoveryConfig(t *testing.T) {
-	namespaceName := os.Getenv("PLACEHOLDER_NAME_NAMESPACE")
-	require.NotEmptyf(t, namespaceName, "must specify PLACEHOLDER_NAME_NAMESPACE env var for integration tests")
+	namespaceName := library.Getenv(t, "PLACEHOLDER_NAME_NAMESPACE")
+	discoveryURL := library.Getenv(t, "PLACEHOLDER_NAME_DISCOVERY_URL")
 
 	client := library.NewPlaceholderNameClientset(t)
 
@@ -30,7 +29,7 @@ func TestSuccessfulLoginDiscoveryConfig(t *testing.T) {
 	defer cancel()
 
 	config := library.NewClientConfig(t)
-	expectedLDCSpec := expectedLDCSpec(config)
+	expectedLDCSpec := expectedLDCSpec(config, discoveryURL)
 	configList, err := client.
 		CrdsV1alpha1().
 		LoginDiscoveryConfigs(namespaceName).
@@ -41,8 +40,8 @@ func TestSuccessfulLoginDiscoveryConfig(t *testing.T) {
 }
 
 func TestReconcilingLoginDiscoveryConfig(t *testing.T) {
-	namespaceName := os.Getenv("PLACEHOLDER_NAME_NAMESPACE")
-	require.NotEmptyf(t, namespaceName, "must specify PLACEHOLDER_NAME_NAMESPACE env var for integration tests")
+	namespaceName := library.Getenv(t, "PLACEHOLDER_NAME_NAMESPACE")
+	discoveryURL := library.Getenv(t, "PLACEHOLDER_NAME_DISCOVERY_URL")
 
 	client := library.NewPlaceholderNameClientset(t)
 
@@ -56,7 +55,7 @@ func TestReconcilingLoginDiscoveryConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	config := library.NewClientConfig(t)
-	expectedLDCSpec := expectedLDCSpec(config)
+	expectedLDCSpec := expectedLDCSpec(config, discoveryURL)
 
 	var actualLDC *crdsplaceholderv1alpha1.LoginDiscoveryConfig
 	for i := 0; i < 10; i++ {
@@ -73,9 +72,9 @@ func TestReconcilingLoginDiscoveryConfig(t *testing.T) {
 	require.Equal(t, expectedLDCSpec, &actualLDC.Spec)
 }
 
-func expectedLDCSpec(config *rest.Config) *crdsplaceholderv1alpha1.LoginDiscoveryConfigSpec {
+func expectedLDCSpec(config *rest.Config, discoveryURL string) *crdsplaceholderv1alpha1.LoginDiscoveryConfigSpec {
 	return &crdsplaceholderv1alpha1.LoginDiscoveryConfigSpec{
-		Server:                   "https://kind-control-plane:6443", //config.Host, // TODO FIX THIS
+		Server:                   discoveryURL,
 		CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.TLSClientConfig.CAData),
 	}
 }

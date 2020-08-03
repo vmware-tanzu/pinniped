@@ -7,7 +7,6 @@ package integration
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -20,11 +19,8 @@ import (
 )
 
 func TestGetDeployment(t *testing.T) {
-	namespaceName := os.Getenv("PLACEHOLDER_NAME_NAMESPACE")
-	require.NotEmptyf(t, namespaceName, "must specify PLACEHOLDER_NAME_NAMESPACE env var for integration tests")
-
-	deploymentName := os.Getenv("PLACEHOLDER_NAME_DEPLOYMENT")
-	require.NotEmptyf(t, deploymentName, "must specify PLACEHOLDER_NAME_DEPLOYMENT env var for integration tests")
+	namespaceName := library.Getenv(t, "PLACEHOLDER_NAME_NAMESPACE")
+	deploymentName := library.Getenv(t, "PLACEHOLDER_NAME_DEPLOYMENT")
 
 	client := library.NewClientset(t)
 

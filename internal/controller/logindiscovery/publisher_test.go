@@ -64,6 +64,7 @@ func TestInformerFilters(t *testing.T) {
 			_ = NewPublisherController(
 				installedInNamespace,
 				nil,
+				nil,
 				configMapInformer,
 				loginDiscoveryConfigInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
@@ -185,6 +186,7 @@ func TestSync(t *testing.T) {
 		var r *require.Assertions
 
 		var subject controller.Controller
+		var serverOverride *string
 		var kubeInformerClient *kubernetesfake.Clientset
 		var placeholderInformerClient *placeholderfake.Clientset
 		var kubeInformers kubeinformers.SharedInformerFactory
@@ -216,6 +218,26 @@ func TestSync(t *testing.T) {
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
 		var startInformersAndController = func() {
+			// Set this at the last second to allow for injection of server override.
+			subject = NewPublisherController(
+				installedInNamespace,
+				serverOverride,
+				placeholderAPIClient,
+				kubeInformers.Core().V1().ConfigMaps(),
+				placeholderInformers.Crds().V1alpha1().LoginDiscoveryConfigs(),
+				controller.WithInformer,
+			)
+
+			// Set this at the last second to support calling subject.Name().
+			syncContext = &controller.Context{
+				Context: timeoutContext,
+				Name:    subject.Name(),
+				Key: controller.Key{
+					Namespace: "kube-public",
+					Name:      "cluster-info",
+				},
+			}
+
 			// Must start informers before calling TestRunSynchronously()
 			kubeInformers.Start(timeoutContext.Done())
 			placeholderInformers.Start(timeoutContext.Done())
@@ -232,23 +254,6 @@ func TestSync(t *testing.T) {
 			placeholderAPIClient = placeholderfake.NewSimpleClientset()
 			placeholderInformerClient = placeholderfake.NewSimpleClientset()
 			placeholderInformers = placeholderinformers.NewSharedInformerFactory(placeholderInformerClient, 0)
-
-			subject = NewPublisherController(
-				installedInNamespace,
-				placeholderAPIClient,
-				kubeInformers.Core().V1().ConfigMaps(),
-				placeholderInformers.Crds().V1alpha1().LoginDiscoveryConfigs(),
-				controller.WithInformer,
-			)
-
-			syncContext = &controller.Context{
-				Context: timeoutContext,
-				Name:    subject.Name(),
-				Key: controller.Key{
-					Namespace: "kube-public",
-					Name:      "cluster-info",
-				},
-			}
 		})
 
 		it.After(func() {
@@ -319,6 +324,35 @@ func TestSync(t *testing.T) {
 							startInformersAndController()
 							err := controller.TestSync(t, subject, *syncContext)
 							r.EqualError(err, "could not create logindiscoveryconfig: create failed")
+						})
+					})
+
+					when("a server override is passed to the controller", func() {
+						it("uses the server override field", func() {
+							serverOverride = new(string)
+							*serverOverride = "https://some-server-override"
+
+							startInformersAndController()
+							err := controller.TestSync(t, subject, *syncContext)
+							r.NoError(err)
+
+							expectedLoginDiscoveryConfigGVR, expectedLoginDiscoveryConfig := expectedLoginDiscoveryConfig(
+								installedInNamespace,
+								kubeServerURL,
+								caData,
+							)
+							expectedLoginDiscoveryConfig.Spec.Server = "https://some-server-override"
+
+							r.Equal(
+								[]coretesting.Action{
+									coretesting.NewCreateAction(
+										expectedLoginDiscoveryConfigGVR,
+										installedInNamespace,
+										expectedLoginDiscoveryConfig,
+									),
+								},
+								placeholderAPIClient.Actions(),
+							)
 						})
 					})
 				})

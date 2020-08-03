@@ -52,6 +52,7 @@ type withInformerOptionFunc func(
 
 type publisherController struct {
 	namespace                    string
+	serverOverride               *string
 	placeholderClient            placeholderclientset.Interface
 	configMapInformer            corev1informers.ConfigMapInformer
 	loginDiscoveryConfigInformer crdsplaceholderv1alpha1informers.LoginDiscoveryConfigInformer
@@ -59,6 +60,7 @@ type publisherController struct {
 
 func NewPublisherController(
 	namespace string,
+	serverOverride *string,
 	placeholderClient placeholderclientset.Interface,
 	configMapInformer corev1informers.ConfigMapInformer,
 	loginDiscoveryConfigInformer crdsplaceholderv1alpha1informers.LoginDiscoveryConfigInformer,
@@ -69,6 +71,7 @@ func NewPublisherController(
 			Name: "publisher-controller",
 			Syncer: &publisherController{
 				namespace:                    namespace,
+				serverOverride:               serverOverride,
 				placeholderClient:            placeholderClient,
 				configMapInformer:            configMapInformer,
 				loginDiscoveryConfigInformer: loginDiscoveryConfigInformer,
@@ -118,6 +121,10 @@ func (c *publisherController) Sync(ctx controller.Context) error {
 		certificateAuthorityData = base64.StdEncoding.EncodeToString(v.CertificateAuthorityData)
 		server = v.Server
 		break
+	}
+
+	if c.serverOverride != nil {
+		server = *c.serverOverride
 	}
 
 	discoveryConfig := crdsplaceholderv1alpha1.LoginDiscoveryConfig{

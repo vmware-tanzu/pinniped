@@ -241,7 +241,12 @@ func (a *App) run(
 		return fmt.Errorf("could not register API service: %w", err)
 	}
 
-	cmrf := wireControllerManagerRunFunc(serverInstallationNamespace, k8sClient, placeholderClient)
+	cmrf := wireControllerManagerRunFunc(
+		serverInstallationNamespace,
+		cfg.DiscoveryConfig.URL,
+		k8sClient,
+		placeholderClient,
+	)
 	apiServerConfig, err := a.configServer(
 		cert,
 		webhookTokenAuthenticator,
@@ -324,6 +329,7 @@ func createStaticCertKeyProvider(cert *tls.Certificate) (dynamiccertificates.Cer
 
 func wireControllerManagerRunFunc(
 	serverInstallationNamespace string,
+	discoveryURLOverride *string,
 	k8s kubernetes.Interface,
 	placeholder placeholderclientset.Interface,
 ) func(ctx context.Context) {
@@ -344,6 +350,7 @@ func wireControllerManagerRunFunc(
 		WithController(
 			logindiscovery.NewPublisherController(
 				serverInstallationNamespace,
+				discoveryURLOverride,
 				placeholder,
 				k8sInformers.Core().V1().ConfigMaps(),
 				placeholderInformers.Crds().V1alpha1().LoginDiscoveryConfigs(),

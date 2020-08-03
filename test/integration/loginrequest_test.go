@@ -8,7 +8,6 @@ package integration
 import (
 	"context"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -37,8 +36,7 @@ func makeRequest(t *testing.T, spec v1alpha1.LoginRequestSpec) (*v1alpha1.LoginR
 }
 
 func TestSuccessfulLoginRequest(t *testing.T) {
-	tmcClusterToken := os.Getenv("PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN")
-	require.NotEmptyf(t, tmcClusterToken, "must specify PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN env var for integration tests")
+	tmcClusterToken := library.Getenv(t, "PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN")
 
 	response, err := makeRequest(t, v1alpha1.LoginRequestSpec{
 		Type:  v1alpha1.TokenLoginCredentialType,

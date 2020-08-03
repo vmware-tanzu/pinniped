@@ -25,7 +25,7 @@ data:
   #@yaml/text-templated-strings
   placeholder-name.yaml: |
     discovery:
-      url: (@= data.values.discovery_url @)
+      url: (@= data.values.discovery_url or "null" @)
     webhook:
       url: (@= data.values.webhook_url @)
       caBundle: (@= data.values.webhook_ca_bundle @)

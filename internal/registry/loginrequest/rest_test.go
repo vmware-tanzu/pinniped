@@ -141,8 +141,8 @@ func TestCreateSucceedsWhenGivenATokenAndTheWebhookAuthenticatesTheToken(t *test
 	issuer := mockcertissuer.NewMockCertIssuer(ctrl)
 	issuer.EXPECT().IssuePEM(
 		pkix.Name{
-			CommonName:         "test-user",
-			OrganizationalUnit: []string{"test-group-1", "test-group-2"}},
+			CommonName:   "test-user",
+			Organization: []string{"test-group-1", "test-group-2"}},
 		[]string{},
 		1*time.Hour,
 	).Return([]byte("test-cert"), []byte("test-key"), nil)

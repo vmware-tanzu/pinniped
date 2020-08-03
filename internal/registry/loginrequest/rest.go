@@ -127,8 +127,8 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	certPEM, keyPEM, err := r.issuer.IssuePEM(
 		pkix.Name{
-			CommonName:         authResponse.User.GetName(),
-			OrganizationalUnit: authResponse.User.GetGroups(),
+			CommonName:   authResponse.User.GetName(),
+			Organization: authResponse.User.GetGroups(),
 		},
 		[]string{},
 		clientCertificateTTL,

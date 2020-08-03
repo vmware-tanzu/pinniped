@@ -12,3 +12,5 @@ image_tag: #! e.g. latest
 
 webhook_url: #! e.g., https://example.com
 webhook_ca_bundle: #! e.g., LS0tLS1CRUdJTiBDRVJUSUZJQ0F...
+
+discovery_url: #! e.g., https://example.com

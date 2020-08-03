@@ -45,13 +45,17 @@ func TestGetAPIResourceList(t *testing.T) {
 	require.NotNil(t, actualPlaceHolderResources)
 
 	expectedLoginRequestAPIResource := metav1.APIResource{
-		Name:         "loginrequests",
-		Kind:         "LoginRequest",
-		SingularName: "", // TODO(akeesler): what should this be?
+		Name: "loginrequests",
+		Kind: "LoginRequest",
 		Verbs: metav1.Verbs([]string{
 			"create",
 		}),
 		Namespaced: false,
+
+		// This is currently an empty string in the response; maybe it should not be
+		// empty? Seems like no harm in keeping it like this for now, but feel free
+		// to update in the future if there is a compelling reason to do so.
+		SingularName: "",
 	}
 
 	expectedLDCAPIResource := metav1.APIResource{

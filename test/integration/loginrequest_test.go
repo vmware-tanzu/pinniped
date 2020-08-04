@@ -8,7 +8,6 @@ package integration
 import (
 	"context"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -58,8 +57,7 @@ func addTestClusterRoleBinding(ctx context.Context, t *testing.T, adminClient ku
 }
 
 func TestSuccessfulLoginRequest(t *testing.T) {
-	tmcClusterToken := os.Getenv("PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN")
-	require.NotEmptyf(t, tmcClusterToken, "must specify PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN env var for integration tests")
+	tmcClusterToken := library.Getenv(t, "PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN")
 
 	response, err := makeRequest(t, v1alpha1.LoginRequestSpec{
 		Type:  v1alpha1.TokenLoginCredentialType,
@@ -179,79 +177,4 @@ func TestLoginRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
 
 	require.Empty(t, response.Spec)
 	require.Nil(t, response.Status.Credential)
-}
-
-func TestGetAPIResourceList(t *testing.T) {
-	client := library.NewPlaceholderNameClientset(t)
-
-	groups, resources, err := client.Discovery().ServerGroupsAndResources()
-	require.NoError(t, err)
-
-	groupName := "placeholder.suzerain-io.github.io"
-	actualGroup := findGroup(groupName, groups)
-	require.NotNil(t, actualGroup)
-
-	expectedGroup := &metav1.APIGroup{
-		Name: "placeholder.suzerain-io.github.io",
-		Versions: []metav1.GroupVersionForDiscovery{
-			{
-				GroupVersion: "placeholder.suzerain-io.github.io/v1alpha1",
-				Version:      "v1alpha1",
-			},
-		},
-		PreferredVersion: metav1.GroupVersionForDiscovery{
-			GroupVersion: "placeholder.suzerain-io.github.io/v1alpha1",
-			Version:      "v1alpha1",
-		},
-	}
-	require.Equal(t, expectedGroup, actualGroup)
-
-	resourceGroupVersion := "placeholder.suzerain-io.github.io/v1alpha1"
-	actualResources := findResources(resourceGroupVersion, resources)
-	require.NotNil(t, actualResources)
-
-	expectedResources := &metav1.APIResourceList{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "APIResourceList",
-			APIVersion: "v1",
-		},
-		GroupVersion: "placeholder.suzerain-io.github.io/v1alpha1",
-		APIResources: []metav1.APIResource{
-			{
-				Name:         "loginrequests",
-				Kind:         "LoginRequest",
-				SingularName: "", // TODO(akeesler): what should this be?
-				Verbs: metav1.Verbs([]string{
-					"create",
-				}),
-			},
-		},
-	}
-	require.Equal(t, expectedResources, actualResources)
-}
-
-func TestGetAPIVersion(t *testing.T) {
-	client := library.NewPlaceholderNameClientset(t)
-
-	version, err := client.Discovery().ServerVersion()
-	require.NoError(t, err)
-	require.NotNil(t, version) // TODO(akeesler): what can we assert here?
-}
-
-func findGroup(name string, groups []*metav1.APIGroup) *metav1.APIGroup {
-	for _, group := range groups {
-		if group.Name == name {
-			return group
-		}
-	}
-	return nil
-}
-
-func findResources(groupVersion string, resources []*metav1.APIResourceList) *metav1.APIResourceList {
-	for _, resource := range resources {
-		if resource.GroupVersion == groupVersion {
-			return resource
-		}
-	}
-	return nil
 }

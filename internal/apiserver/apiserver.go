@@ -6,6 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 package apiserver
 
 import (
+	"context"
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -56,8 +57,9 @@ type Config struct {
 }
 
 type ExtraConfig struct {
-	Webhook authenticator.Token
-	Issuer  loginrequest.CertIssuer
+	Webhook                       authenticator.Token
+	Issuer                        loginrequest.CertIssuer
+	StartControllersPostStartHook func(ctx context.Context)
 }
 
 type PlaceHolderServer struct {
@@ -122,9 +124,17 @@ func (c completedConfig) New() (*PlaceHolderServer, error) {
 		return nil, fmt.Errorf("install API group error: %w", err)
 	}
 
-	s.GenericAPIServer.AddPostStartHookOrDie("place-holder-post-start-hook",
-		func(context genericapiserver.PostStartHookContext) error {
-			klog.InfoS("post start hook", "foo", "bar")
+	s.GenericAPIServer.AddPostStartHookOrDie("start-controllers",
+		func(postStartContext genericapiserver.PostStartHookContext) error {
+			klog.InfoS("start-controllers post start hook starting")
+
+			ctx, cancel := context.WithCancel(context.Background())
+			go func() {
+				<-postStartContext.StopCh
+				cancel()
+			}()
+			c.ExtraConfig.StartControllersPostStartHook(ctx)
+
 			return nil
 		},
 	)

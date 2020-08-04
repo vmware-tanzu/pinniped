@@ -1,0 +1,49 @@
+#@ load("@ytt:data", "data")
+
+#! Example of valid LoginDiscoveryConfig object:
+#! ---
+#! apiVersion: suzerain-io.github.io/v1alpha1
+#! kind: LoginDiscoveryConfig
+#! metadata:
+#!   name: login-discovery
+#!   namespace: integration
+#! spec:
+#!   server: https://foo
+#!   certificateAuthorityData: bar
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: logindiscoveryconfigs.crds.placeholder.suzerain-io.github.io
+spec:
+  group: crds.placeholder.suzerain-io.github.io
+  versions:
+    #! Any changes to these schemas should also be reflected in the types.go file(s)
+    #! in https://github.com/suzerain-io/placeholder-name-api/tree/main/pkg/apis/placeholder
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [server, certificateAuthorityData]
+              properties:
+                server:
+                  type: string
+                  minLength: 1
+                  pattern: '^https://'
+                certificateAuthorityData:
+                  type: string
+                  minLength: 1
+  scope: Namespaced
+  names:
+    plural: logindiscoveryconfigs
+    singular: logindiscoveryconfig
+    kind: LoginDiscoveryConfig
+    shortNames:
+      - ldc

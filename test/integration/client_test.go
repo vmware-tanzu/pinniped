@@ -7,7 +7,6 @@ package integration
 
 import (
 	"context"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -52,8 +51,7 @@ O2D8LtWhMbrYy755Fgq4H9s3vCgfvHY1AQ==
 )
 
 func TestClient(t *testing.T) {
-	tmcClusterToken := os.Getenv("PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN")
-	require.NotEmptyf(t, tmcClusterToken, "must specify PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN env var for integration tests")
+	tmcClusterToken := library.Getenv(t, "PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -17,10 +17,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
@@ -28,7 +25,6 @@ import (
 	k8sinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
-	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	aggregationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	"github.com/suzerain-io/controller-go"
@@ -188,14 +184,14 @@ func (a *App) run(
 
 	// TODO use the postStart hook to generate certs?
 
-	apiCA, err := certauthority.New(pkix.Name{CommonName: "Placeholder CA"})
+	aggregatedAPIServerCA, err := certauthority.New(pkix.Name{CommonName: "Placeholder CA"})
 	if err != nil {
 		return fmt.Errorf("could not initialize CA: %w", err)
 	}
 
 	const serviceName = "placeholder-name-api"
 
-	cert, err := apiCA.Issue(
+	cert, err := aggregatedAPIServerCA.Issue(
 		pkix.Name{CommonName: serviceName + "." + serverInstallationNamespace + ".svc"},
 		[]string{},
 		24*365*time.Hour,
@@ -204,40 +200,7 @@ func (a *App) run(
 		return fmt.Errorf("could not issue serving certificate: %w", err)
 	}
 
-	// Dynamically register our v1alpha1 API service.
-	service := corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: serviceName},
-		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{
-					Protocol:   corev1.ProtocolTCP,
-					Port:       443,
-					TargetPort: intstr.IntOrString{IntVal: 443},
-				},
-			},
-			Selector: podinfo.Labels,
-			Type:     corev1.ServiceTypeClusterIP,
-		},
-	}
-	apiService := apiregistrationv1.APIService{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: placeholderv1alpha1.SchemeGroupVersion.Version + "." + placeholderv1alpha1.GroupName,
-		},
-		Spec: apiregistrationv1.APIServiceSpec{
-			Group:                placeholderv1alpha1.GroupName,
-			Version:              placeholderv1alpha1.SchemeGroupVersion.Version,
-			CABundle:             apiCA.Bundle(),
-			GroupPriorityMinimum: 2500, // TODO what is the right value? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
-			VersionPriority:      10,   // TODO what is the right value? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
-		},
-	}
-	if err := autoregistration.Setup(ctx, autoregistration.SetupOptions{
-		CoreV1:             k8sClient.CoreV1(),
-		AggregationV1:      aggregationClient,
-		Namespace:          serverInstallationNamespace,
-		ServiceTemplate:    service,
-		APIServiceTemplate: apiService,
-	}); err != nil {
+	if err := autoregistration.UpdateAPIService(ctx, aggregationClient, aggregatedAPIServerCA.Bundle()); err != nil {
 		return fmt.Errorf("could not register API service: %w", err)
 	}
 

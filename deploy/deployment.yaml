@@ -49,8 +49,8 @@ spec:
     metadata:
       labels:
         app: #@ data.values.app_name
-    annotations:
-      scheduler.alpha.kubernetes.io/critical-pod: ""
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ""
     spec:
       serviceAccountName: #@ data.values.app_name + "-service-account"
       containers:

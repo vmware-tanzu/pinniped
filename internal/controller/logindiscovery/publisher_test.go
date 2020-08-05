@@ -25,8 +25,8 @@ import (
 
 	"github.com/suzerain-io/controller-go"
 	crdsplaceholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/crdsplaceholder/v1alpha1"
-	placeholderfake "github.com/suzerain-io/placeholder-name-client-go/pkg/generated/clientset/versioned/fake"
-	placeholderinformers "github.com/suzerain-io/placeholder-name-client-go/pkg/generated/informers/externalversions"
+	placeholderfake "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned/fake"
+	placeholderinformers "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/informers/externalversions"
 )
 
 type ObservableWithInformerOption struct {

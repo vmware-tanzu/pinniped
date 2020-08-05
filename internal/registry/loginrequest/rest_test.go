@@ -25,9 +25,9 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 
-	placeholderapi "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
 	"github.com/suzerain-io/placeholder-name/internal/mocks/mockcertissuer"
 	"github.com/suzerain-io/placeholder-name/internal/testutil"
+	placeholderapi "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder"
 )
 
 type contextKey struct{}

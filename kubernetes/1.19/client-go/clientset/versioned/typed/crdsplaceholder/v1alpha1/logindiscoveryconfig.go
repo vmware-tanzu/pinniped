@@ -11,7 +11,7 @@ import (
 	"context"
 	"time"
 
-	v1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/crdsplaceholder/v1alpha1"
+	v1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/crdsplaceholder/v1alpha1"
 	scheme "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"

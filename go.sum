@@ -532,8 +532,6 @@ github.com/subosito/gotenv v1.2.0 h1:Slr1R9HxAlEKefgq5jn9U+DnETlIUa6HfgEzj0g5d7s
 github.com/subosito/gotenv v1.2.0/go.mod h1:N0PQaV/YGNqwC0u51sEeR/aUtSLEXKX9iv69rRypqCw=
 github.com/suzerain-io/controller-go v0.0.0-20200730212956-7f99b569ca9f h1:gZ6rAdl+VE9DT0yE52xY/kJZ/hOJYxwtsgGoPr5vItI=
 github.com/suzerain-io/controller-go v0.0.0-20200730212956-7f99b569ca9f/go.mod h1:+v9upryFWBJac6KXKlheGHr7e3kqpk1ldH1iIMFopMs=
-github.com/suzerain-io/placeholder-name-api v0.0.0-20200731224558-ff85679d3364 h1:5NaQExCSh8+6YP3QNhWsWyMrEd+7zsnrznRlisydlZo=
-github.com/suzerain-io/placeholder-name-api v0.0.0-20200731224558-ff85679d3364/go.mod h1:OuYBJDpMMnvMUoBn+XeMWtHghuYk0cq9bNkNa3T8j/g=
 github.com/tdakkota/asciicheck v0.0.0-20200416190851-d7f85be797a2 h1:Xr9gkxfOP0KQWXKNqmwe8vEeSUiUj4Rlee9CMVX2ZUQ=
 github.com/tdakkota/asciicheck v0.0.0-20200416190851-d7f85be797a2/go.mod h1:yHp0ai0Z9gUljN3o0xMhYJnH/IcvkdTBOX2fmJ93JEM=
 github.com/tetafro/godot v0.4.2 h1:Dib7un+rYJFUi8vN0Bk6EHheKy6fv6ZzFURHw75g6m8=

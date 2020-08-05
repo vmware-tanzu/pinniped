@@ -24,7 +24,7 @@ import (
 	coretesting "k8s.io/client-go/testing"
 
 	"github.com/suzerain-io/controller-go"
-	crdsplaceholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/crdsplaceholder/v1alpha1"
+	crdsplaceholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/crdsplaceholder/v1alpha1"
 	placeholderfake "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned/fake"
 	placeholderinformers "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/informers/externalversions"
 )

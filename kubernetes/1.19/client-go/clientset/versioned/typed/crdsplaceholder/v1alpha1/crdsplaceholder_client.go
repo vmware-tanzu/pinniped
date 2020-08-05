@@ -8,7 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/crdsplaceholder/v1alpha1"
+	v1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/crdsplaceholder/v1alpha1"
 	"github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )

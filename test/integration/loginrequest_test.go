@@ -17,7 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
+	"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
 	"github.com/suzerain-io/placeholder-name/test/library"
 )
 

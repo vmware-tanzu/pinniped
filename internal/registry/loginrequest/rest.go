@@ -21,7 +21,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/utils/trace"
 
-	placeholderapi "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder"
+	placeholderapi "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder"
 )
 
 // clientCertificateTTL is the TTL for short-lived client certificates returned by this API.

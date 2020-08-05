@@ -11,7 +11,7 @@ import (
 	"context"
 	time "time"
 
-	crdsplaceholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/crdsplaceholder/v1alpha1"
+	crdsplaceholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/crdsplaceholder/v1alpha1"
 	versioned "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned"
 	internalinterfaces "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/informers/externalversions/internalinterfaces"
 	v1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/listers/crdsplaceholder/v1alpha1"

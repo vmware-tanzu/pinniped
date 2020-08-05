@@ -28,14 +28,14 @@ import (
 	aggregationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	"github.com/suzerain-io/controller-go"
-	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
-	placeholderclientset "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned"
-	placeholderinformers "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/informers/externalversions"
 	"github.com/suzerain-io/placeholder-name/internal/apiserver"
 	"github.com/suzerain-io/placeholder-name/internal/autoregistration"
 	"github.com/suzerain-io/placeholder-name/internal/certauthority"
 	"github.com/suzerain-io/placeholder-name/internal/controller/logindiscovery"
 	"github.com/suzerain-io/placeholder-name/internal/downward"
+	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
+	placeholderclientset "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned"
+	placeholderinformers "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/informers/externalversions"
 	"github.com/suzerain-io/placeholder-name/pkg/config"
 )
 

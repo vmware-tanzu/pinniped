@@ -14,7 +14,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	aggregatationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/placeholder/v1alpha1"
+	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
 )
 
 // UpdateAPIService updates the APIService's CA bundle.

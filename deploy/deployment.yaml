@@ -102,3 +102,36 @@ spec:
         operator: Exists
       - effect: NoSchedule
         key: node-role.kubernetes.io/master
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: placeholder-name-api #! the golang code assumes this specific name as part of the common name during cert generation
+  namespace: #@ data.values.namespace
+  labels:
+    app: #@ data.values.app_name
+spec:
+  type: ClusterIP
+  selector:
+    app: #@ data.values.app_name
+  ports:
+    - protocol: TCP
+      port: 443
+      targetPort: 443
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.placeholder.suzerain-io.github.io
+  labels:
+    app: #@ data.values.app_name
+spec:
+  version: v1alpha1
+  group: placeholder.suzerain-io.github.io
+  groupPriorityMinimum: 2500 #! TODO what is the right value? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
+  versionPriority: 10 #! TODO what is the right value? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
+  #! caBundle: Do not include this key here. Starts out null, will be updated/owned by the golang code.
+  service:
+    name: placeholder-name-api
+    namespace: #@ data.values.namespace
+    port: 443

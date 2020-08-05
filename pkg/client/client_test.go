@@ -72,6 +72,7 @@ func TestExchangeToken(t *testing.T) {
 		// Start a test server that doesn't do anything.
 		caBundle, endpoint := startTestServer(t, func(w http.ResponseWriter, r *http.Request) {})
 
+		//nolint:staticcheck // ignore "do not pass a nil Context" linter error since that's what we're testing here.
 		got, err := ExchangeToken(nil, "", caBundle, endpoint)
 		require.EqualError(t, err, `could not build request: net/http: nil Context`)
 		require.Nil(t, got)
@@ -86,7 +87,7 @@ func TestExchangeToken(t *testing.T) {
 		})
 
 		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
-		require.EqualError(t, err, `could not login: server returned status 500`)
+		require.EqualError(t, err, `login failed: server returned status 500`)
 		require.Nil(t, got)
 	})
 

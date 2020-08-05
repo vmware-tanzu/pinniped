@@ -124,7 +124,7 @@ func ExchangeToken(ctx context.Context, token, caBundle, apiEndpoint string) (*C
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("could not login: server returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("%w: server returned status %d", ErrLoginFailed, resp.StatusCode)
 	}
 
 	var respBody struct {

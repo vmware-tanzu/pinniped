@@ -17,14 +17,17 @@ import (
 	"github.com/suzerain-io/placeholder-name/test/library"
 )
 
-var (
-	// Test certificate and private key that should get an authentication error. Generated with
-	// https://github.com/cloudflare/cfssl, like this:
-	// $ brew install cfssl
-	// $ cfssl print-defaults csr | cfssl genkey -initca - | cfssljson -bare ca
-	// $ cfssl print-defaults csr | cfssl gencert -ca ca.pem -ca-key ca-key.pem -hostname=testuser - | cfssljson -bare client
-	// $ cat client.pem client-key.pem
+/*
+Test certificate and private key that should get an authentication error. Generated with cfssl [1], like this:
 
+	$ brew install cfssl
+	$ cfssl print-defaults csr | cfssl genkey -initca - | cfssljson -bare ca
+	$ cfssl print-defaults csr | cfssl gencert -ca ca.pem -ca-key ca-key.pem -hostname=testuser - | cfssljson -bare client
+	$ cat client.pem client-key.pem
+
+[1]: https://github.com/cloudflare/cfssl
+*/
+var (
 	testCert = strings.TrimSpace(`
 -----BEGIN CERTIFICATE-----
 MIICBDCCAaugAwIBAgIUeidKWlZQuoKfBGydObI1hMwzt9cwCgYIKoZIzj0EAwIw
@@ -40,7 +43,6 @@ c2VyMAoGCCqGSM49BAMCA0cAMEQCIEwPZhPpYhYHndfTEsWOxnxzJkmhAcYIMCeJ
 d9kyq/fPAiBNCJw1MCLT8LjNlyUZCfwI2zuI3e0w6vuau89oj2zvVA==
 -----END CERTIFICATE-----
 	`)
-
 	testKey = strings.TrimSpace(`
 -----BEGIN EC PRIVATE KEY-----
 MHcCAQEEIAqkBGGKTH5GzLx8XZLAHEFW2E8jT+jpy0p6w6MMR7DkoAoGCCqGSM49

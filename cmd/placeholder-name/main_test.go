@@ -9,9 +9,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"testing"
 	"time"
+
+	"github.com/suzerain-io/placeholder-name/internal/testutil"
 
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
@@ -19,15 +20,6 @@ import (
 
 	"github.com/suzerain-io/placeholder-name/pkg/client"
 )
-
-// errorWriter implements io.Writer by returning a fixed error.
-type errorWriter struct {
-	returnError error
-}
-
-var _ io.Writer = &errorWriter{}
-
-func (e *errorWriter) Write([]byte) (int, error) { return 0, e.returnError }
 
 func TestRun(t *testing.T) {
 	spec.Run(t, "main.run", func(t *testing.T, when spec.G, it spec.S) {
@@ -95,7 +87,7 @@ func TestRun(t *testing.T) {
 			})
 
 			it("returns an error", func() {
-				err := run(envGetter, tokenExchanger, &errorWriter{returnError: fmt.Errorf("some IO error")}, 30*time.Second)
+				err := run(envGetter, tokenExchanger, &testutil.ErrorWriter{ReturnError: fmt.Errorf("some IO error")}, 30*time.Second)
 				r.EqualError(err, "failed to marshal response to stdout: some IO error")
 			})
 		})

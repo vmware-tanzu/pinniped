@@ -3,7 +3,6 @@ module github.com/suzerain-io/placeholder-name
 go 1.14
 
 require (
-	github.com/davecgh/go-spew v1.1.1
 	github.com/golang/mock v1.4.3
 	github.com/golangci/golangci-lint v1.29.0
 	github.com/google/go-cmp v0.5.0
@@ -21,7 +20,6 @@ require (
 	k8s.io/component-base v0.19.0-rc.0
 	k8s.io/klog/v2 v2.2.0
 	k8s.io/kube-aggregator v0.19.0-rc.0
-	k8s.io/utils v0.0.0-20200619165400-6e3d28b6ed19
 	sigs.k8s.io/yaml v1.2.0
 )
 

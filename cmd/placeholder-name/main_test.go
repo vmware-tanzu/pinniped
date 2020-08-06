@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
@@ -17,8 +18,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/suzerain-io/placeholder-name/pkg/client"
-	"github.com/suzerain-io/placeholder-name/test/library"
 )
+
+// errorWriter implements io.Writer by returning a fixed error.
+type errorWriter struct {
+	returnError error
+}
+
+var _ io.Writer = &errorWriter{}
+
+func (e *errorWriter) Write([]byte) (int, error) { return 0, e.returnError }
 
 func TestRun(t *testing.T) {
 	spec.Run(t, "main.run", func(t *testing.T, when spec.G, it spec.S) {
@@ -86,7 +95,7 @@ func TestRun(t *testing.T) {
 			})
 
 			it("returns an error", func() {
-				err := run(envGetter, tokenExchanger, &library.ErrorWriter{ReturnError: fmt.Errorf("some IO error")}, 30*time.Second)
+				err := run(envGetter, tokenExchanger, &errorWriter{returnError: fmt.Errorf("some IO error")}, 30*time.Second)
 				r.EqualError(err, "failed to marshal response to stdout: some IO error")
 			})
 		})

@@ -33,8 +33,8 @@ COPY internal ./internal
 COPY pkg ./pkg
 COPY tools ./tools
 COPY hack ./hack
-# Build the executable binary
-RUN GOOS=linux GOARCH=amd64 go build -ldflags "$(hack/get-ldflags.sh)" -o out ./cmd/placeholder-name-server/...
+# Build the executable binary (CGO_ENABLED=0 means static linking)
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(hack/get-ldflags.sh)" -o out ./cmd/placeholder-name-server/...
 
 FROM alpine:latest
 # Install CA certs and some tools for debugging

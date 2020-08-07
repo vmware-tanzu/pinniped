@@ -5,4 +5,4 @@
 set -euo pipefail
 ROOT="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 
-"$ROOT/hack/module.sh" test
+"$ROOT/hack/module.sh" unittest

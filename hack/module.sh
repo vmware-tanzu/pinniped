@@ -25,6 +25,15 @@ function test_cmd() {
   echo "${cmd} -race ./..."
 }
 
+function unittest_cmd() {
+  if [ -x "$(command -v gotest)" ]; then
+    cmd='gotest'
+  else
+    cmd='go test'
+  fi
+  echo "${cmd} -short -race ./..."
+}
+
 function with_modules() {
   local cmd_function="${1}"
   cmd="$(${cmd_function})"
@@ -52,6 +61,7 @@ function main() {
     'tidy') with_modules 'tidy_cmd' ;;
     'lint') with_modules 'lint_cmd' ;;
     'test') with_modules 'test_cmd' ;;
+    'unittest') with_modules 'unittest_cmd' ;;
     *) usage ;;
   esac
 }

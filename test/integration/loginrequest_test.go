@@ -57,6 +57,7 @@ func addTestClusterRoleBinding(ctx context.Context, t *testing.T, adminClient ku
 }
 
 func TestSuccessfulLoginRequest(t *testing.T) {
+	library.SkipUnlessIntegration(t)
 	tmcClusterToken := library.Getenv(t, "PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN")
 
 	response, err := makeRequest(t, v1alpha1.LoginRequestSpec{
@@ -146,6 +147,7 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 }
 
 func TestFailedLoginRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
+	library.SkipUnlessIntegration(t)
 	response, err := makeRequest(t, v1alpha1.LoginRequestSpec{
 		Type:  v1alpha1.TokenLoginCredentialType,
 		Token: &v1alpha1.LoginRequestTokenCredential{Value: "not a good token"},
@@ -160,6 +162,7 @@ func TestFailedLoginRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTh
 }
 
 func TestLoginRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
+	library.SkipUnlessIntegration(t)
 	response, err := makeRequest(t, v1alpha1.LoginRequestSpec{
 		Type:  v1alpha1.TokenLoginCredentialType,
 		Token: nil,

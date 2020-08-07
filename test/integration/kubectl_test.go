@@ -11,9 +11,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/suzerain-io/placeholder-name/test/library"
 )
 
 func TestGetNodes(t *testing.T) {
+	library.SkipUnlessIntegration(t)
 	cmd := exec.Command("kubectl", "get", "nodes")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

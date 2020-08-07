@@ -20,6 +20,7 @@ import (
 )
 
 func TestSuccessfulLoginDiscoveryConfig(t *testing.T) {
+	library.SkipUnlessIntegration(t)
 	namespaceName := library.Getenv(t, "PLACEHOLDER_NAME_NAMESPACE")
 
 	client := library.NewPlaceholderNameClientset(t)
@@ -39,6 +40,7 @@ func TestSuccessfulLoginDiscoveryConfig(t *testing.T) {
 }
 
 func TestReconcilingLoginDiscoveryConfig(t *testing.T) {
+	library.SkipUnlessIntegration(t)
 	namespaceName := library.Getenv(t, "PLACEHOLDER_NAME_NAMESPACE")
 
 	client := library.NewPlaceholderNameClientset(t)

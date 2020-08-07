@@ -19,6 +19,7 @@ import (
 )
 
 func TestGetDeployment(t *testing.T) {
+	library.SkipUnlessIntegration(t)
 	namespaceName := library.Getenv(t, "PLACEHOLDER_NAME_NAMESPACE")
 	deploymentName := library.Getenv(t, "PLACEHOLDER_NAME_DEPLOYMENT")
 

@@ -4,7 +4,7 @@ set -euo pipefail
 root_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
 function tidy_cmd() {
-  echo 'go mod tidy'
+  echo 'go mod tidy -v'
 }
 
 function lint_cmd() {

@@ -1,5 +1,9 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
 
-go mod tidy
-go run github.com/golangci/golangci-lint/cmd/golangci-lint run ./... --fix --timeout=10m
+# Copyright 2020 VMware, Inc.
+# SPDX-License-Identifier: Apache-2.0
+set -euo pipefail
+ROOT="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
+
+"$ROOT/hack/module.sh" tidy
+"$ROOT/hack/update-codegen.sh"

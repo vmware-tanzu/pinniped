@@ -1,5 +1,8 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
 
-go test -race ./...
-( cd pkg/client && go test -race ./... )
+# Copyright 2020 VMware, Inc.
+# SPDX-License-Identifier: Apache-2.0
+set -euo pipefail
+ROOT="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
+
+"$ROOT/hack/module.sh" test

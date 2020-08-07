@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# Copyright 2020 VMware, Inc.
+# SPDX-License-Identifier: Apache-2.0
 set -euo pipefail
+ROOT="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 
-go run github.com/golangci/golangci-lint/cmd/golangci-lint run ./... --modules-download-mode=readonly --timeout=10m
+"$ROOT/hack/module.sh" lint
+"$ROOT/hack/verify-codegen.sh"

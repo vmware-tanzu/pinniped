@@ -15,6 +15,8 @@ import (
 )
 
 func TestGetAPIResourceList(t *testing.T) {
+	library.SkipUnlessIntegration(t)
+
 	client := library.NewPlaceholderNameClientset(t)
 
 	groups, resources, err := client.Discovery().ServerGroupsAndResources()

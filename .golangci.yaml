@@ -63,6 +63,8 @@ linters-settings:
     lines: 125
     statements: 50
   goheader:
-    template-path: hack/header.txt
+    template: |-
+        Copyright 2020 VMware, Inc.
+        SPDX-License-Identifier: Apache-2.0
   goimports:
     local-prefixes: github.com/suzerain-io

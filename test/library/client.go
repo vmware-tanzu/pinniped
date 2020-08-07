@@ -14,7 +14,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
-	placeholdernameclientset "github.com/suzerain-io/placeholder-name-client-go/pkg/generated/clientset/versioned"
+	placeholdernameclientset "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned"
 )
 
 func NewClientConfig(t *testing.T) *rest.Config {

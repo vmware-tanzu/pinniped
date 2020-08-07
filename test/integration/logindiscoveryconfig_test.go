@@ -15,11 +15,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 
-	crdsplaceholderv1alpha1 "github.com/suzerain-io/placeholder-name-api/pkg/apis/crdsplaceholder/v1alpha1"
+	crdsplaceholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/crdsplaceholder/v1alpha1"
 	"github.com/suzerain-io/placeholder-name/test/library"
 )
 
 func TestSuccessfulLoginDiscoveryConfig(t *testing.T) {
+	library.SkipUnlessIntegration(t)
 	namespaceName := library.Getenv(t, "PLACEHOLDER_NAME_NAMESPACE")
 
 	client := library.NewPlaceholderNameClientset(t)
@@ -39,6 +40,7 @@ func TestSuccessfulLoginDiscoveryConfig(t *testing.T) {
 }
 
 func TestReconcilingLoginDiscoveryConfig(t *testing.T) {
+	library.SkipUnlessIntegration(t)
 	namespaceName := library.Getenv(t, "PLACEHOLDER_NAME_NAMESPACE")
 
 	client := library.NewPlaceholderNameClientset(t)

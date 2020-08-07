@@ -22,12 +22,14 @@ RUN mkdir /work
 RUN mkdir /work/out
 WORKDIR /work
 # Get dependencies first so they can be cached as a layer
-COPY go.mod .
-COPY go.sum .
-COPY pkg/client/go.mod ./pkg/client/go.mod
-COPY pkg/client/go.sum ./pkg/client/go.sum
+COPY go.mod go.sum ./
+COPY pkg/client/go.mod pkg/client/go.sum ./pkg/client/
+COPY kubernetes/1.19/api/go.mod kubernetes/1.19/api/go.sum ./kubernetes/1.19/api/
+COPY kubernetes/1.19/client-go/go.mod kubernetes/1.19/client-go/go.sum ./kubernetes/1.19/client-go/
+
 RUN go mod download
 # Copy only the production source code to avoid cache misses when editing other files
+COPY kubernetes ./kubernetes
 COPY cmd ./cmd
 COPY internal ./internal
 COPY pkg ./pkg

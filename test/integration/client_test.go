@@ -53,6 +53,7 @@ O2D8LtWhMbrYy755Fgq4H9s3vCgfvHY1AQ==
 )
 
 func TestClient(t *testing.T) {
+	library.SkipUnlessIntegration(t)
 	tmcClusterToken := library.Getenv(t, "PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

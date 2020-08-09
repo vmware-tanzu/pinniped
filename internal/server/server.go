@@ -8,24 +8,19 @@ package server
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/spf13/cobra"
 	genericapiserver "k8s.io/apiserver/pkg/server"
-	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
 
 	"github.com/suzerain-io/placeholder-name/internal/apiserver"
 	"github.com/suzerain-io/placeholder-name/internal/certauthority"
-	"github.com/suzerain-io/placeholder-name/internal/controller"
+	"github.com/suzerain-io/placeholder-name/internal/controllermanager"
 	"github.com/suzerain-io/placeholder-name/internal/downward"
+	"github.com/suzerain-io/placeholder-name/internal/provider"
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
 	"github.com/suzerain-io/placeholder-name/pkg/config"
 )
@@ -135,31 +130,19 @@ func (app *App) runServer(ctx context.Context) error {
 	}
 	serverInstallationNamespace := podInfo.Namespace
 
-	// Create a CA.
-	aggregatedAPIServerCA, err := certauthority.New(pkix.Name{CommonName: "Placeholder CA"})
-	if err != nil {
-		return fmt.Errorf("could not initialize CA: %w", err)
-	}
-
-	// This string must match the name of the Service declared in the deployment yaml.
-	const serviceName = "placeholder-name-api"
-	// Using the CA from above, create a TLS server cert for the aggregated API server to use.
-	aggregatedAPIServerTLSCert, err := aggregatedAPIServerCA.Issue(
-		pkix.Name{CommonName: serviceName + "." + serverInstallationNamespace + ".svc"},
-		[]string{},
-		24*365*time.Hour,
-	)
-	if err != nil {
-		return fmt.Errorf("could not issue serving certificate: %w", err)
-	}
+	// This cert provider will provide certs to the API server and will
+	// be mutated by a controller to keep the certs up to date with what
+	// is stored in a k8s Secret. Therefore it also effectively acting as
+	// an in-memory cache of what is stored in the k8s Secret, helping to
+	// keep incoming requests fast.
+	dynamicCertProvider := &provider.DynamicTLSServingCertProvider{}
 
 	// Prepare to start the controllers, but defer actually starting them until the
 	// post start hook of the aggregated API server.
-	startControllersFunc, err := controller.PrepareControllers(
-		ctx,
-		aggregatedAPIServerCA.Bundle(),
+	startControllersFunc, err := controllermanager.PrepareControllers(
 		serverInstallationNamespace,
 		cfg.DiscoveryConfig.URL,
+		dynamicCertProvider,
 	)
 	if err != nil {
 		return fmt.Errorf("could not prepare controllers: %w", err)
@@ -167,7 +150,7 @@ func (app *App) runServer(ctx context.Context) error {
 
 	// Get the aggregated API server config.
 	aggregatedAPIServerConfig, err := getAggregatedAPIServerConfig(
-		aggregatedAPIServerTLSCert,
+		dynamicCertProvider,
 		webhookTokenAuthenticator,
 		k8sClusterCA,
 		startControllersFunc,
@@ -188,25 +171,29 @@ func (app *App) runServer(ctx context.Context) error {
 
 // Create a configuration for the aggregated API server.
 func getAggregatedAPIServerConfig(
-	cert *tls.Certificate,
+	dynamicCertProvider *provider.DynamicTLSServingCertProvider,
 	webhookTokenAuthenticator *webhook.WebhookTokenAuthenticator,
 	ca *certauthority.CA,
 	startControllersPostStartHook func(context.Context),
 ) (*apiserver.Config, error) {
-	provider, err := createStaticCertKeyProvider(cert)
-	if err != nil {
-		return nil, fmt.Errorf("could not create static cert key provider: %w", err)
-	}
-
 	recommendedOptions := genericoptions.NewRecommendedOptions(
 		defaultEtcdPathPrefix,
 		apiserver.Codecs.LegacyCodec(placeholderv1alpha1.SchemeGroupVersion),
 		// TODO we should check to see if all the other default settings are acceptable for us
 	)
 	recommendedOptions.Etcd = nil // turn off etcd storage because we don't need it yet
-	recommendedOptions.SecureServing.ServerCert.GeneratedCert = provider
+	recommendedOptions.SecureServing.ServerCert.GeneratedCert = dynamicCertProvider
 
 	serverConfig := genericapiserver.NewRecommendedConfig(apiserver.Codecs)
+	// Note that among other things, this ApplyTo() function copies
+	// `recommendedOptions.SecureServing.ServerCert.GeneratedCert` into
+	// `serverConfig.SecureServing.Cert` thus making `dynamicCertProvider`
+	// the cert provider for the running server. The provider will be called
+	// by the API machinery periodically. When the provider returns nil certs,
+	// the API server will return "the server is currently unable to
+	// handle the request" error responses for all incoming requests.
+	// If the provider later starts returning certs, then the API server
+	// will use them to handle the incoming requests successfully.
 	if err := recommendedOptions.ApplyTo(serverConfig); err != nil {
 		return nil, err
 	}
@@ -220,28 +207,4 @@ func getAggregatedAPIServerConfig(
 		},
 	}
 	return apiServerConfig, nil
-}
-
-func createStaticCertKeyProvider(cert *tls.Certificate) (dynamiccertificates.CertKeyContentProvider, error) {
-	privateKeyDER, err := x509.MarshalPKCS8PrivateKey(cert.PrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("error marshalling private key: %w", err)
-	}
-	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:    "PRIVATE KEY",
-		Headers: nil,
-		Bytes:   privateKeyDER,
-	})
-
-	certChainPEM := make([]byte, 0)
-	for _, certFromChain := range cert.Certificate {
-		certPEMBytes := pem.EncodeToMemory(&pem.Block{
-			Type:    "CERTIFICATE",
-			Headers: nil,
-			Bytes:   certFromChain,
-		})
-		certChainPEM = append(certChainPEM, certPEMBytes...)
-	}
-
-	return dynamiccertificates.NewStaticCertKeyContent("some-name???", certChainPEM, privateKeyPEM)
 }

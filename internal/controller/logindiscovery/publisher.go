@@ -17,6 +17,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/suzerain-io/controller-go"
+	placeholdernamecontroller "github.com/suzerain-io/placeholder-name/internal/controller"
 	crdsplaceholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/crdsplaceholder/v1alpha1"
 	placeholderclientset "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned"
 	crdsplaceholderv1alpha1informers "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/informers/externalversions/crdsplaceholder/v1alpha1"
@@ -30,25 +31,6 @@ const (
 
 	configName = "placeholder-name-config"
 )
-
-func nameAndNamespaceExactMatchFilterFactory(name, namespace string) controller.FilterFuncs {
-	objMatchesFunc := func(obj metav1.Object) bool {
-		return obj.GetName() == name && obj.GetNamespace() == namespace
-	}
-	return controller.FilterFuncs{
-		AddFunc: objMatchesFunc,
-		UpdateFunc: func(oldObj, newObj metav1.Object) bool {
-			return objMatchesFunc(oldObj) || objMatchesFunc(newObj)
-		},
-		DeleteFunc: objMatchesFunc,
-	}
-}
-
-// Same signature as controller.WithInformer().
-type withInformerOptionFunc func(
-	getter controller.InformerGetter,
-	filter controller.Filter,
-	opt controller.InformerOption) controller.Option
 
 type publisherController struct {
 	namespace                    string
@@ -64,7 +46,7 @@ func NewPublisherController(
 	placeholderClient placeholderclientset.Interface,
 	configMapInformer corev1informers.ConfigMapInformer,
 	loginDiscoveryConfigInformer crdsplaceholderv1alpha1informers.LoginDiscoveryConfigInformer,
-	withInformer withInformerOptionFunc,
+	withInformer placeholdernamecontroller.WithInformerOptionFunc,
 ) controller.Controller {
 	return controller.New(
 		controller.Config{
@@ -79,12 +61,12 @@ func NewPublisherController(
 		},
 		withInformer(
 			configMapInformer,
-			nameAndNamespaceExactMatchFilterFactory(clusterInfoName, ClusterInfoNamespace),
+			placeholdernamecontroller.NameAndNamespaceExactMatchFilterFactory(clusterInfoName, ClusterInfoNamespace),
 			controller.InformerOption{},
 		),
 		withInformer(
 			loginDiscoveryConfigInformer,
-			nameAndNamespaceExactMatchFilterFactory(configName, namespace),
+			placeholdernamecontroller.NameAndNamespaceExactMatchFilterFactory(configName, namespace),
 			controller.InformerOption{},
 		),
 	)

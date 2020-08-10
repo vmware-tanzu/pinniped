@@ -52,7 +52,7 @@ function with_modules() {
 
 function usage() {
   echo "Error: <task> must be specified"
-  echo "       do.sh <task> [tidy, lint, test]"
+  echo "       do.sh <task> [tidy, lint, test, unittest]"
   exit 1
 }
 

@@ -1,4 +1,4 @@
-FROM golang:1.14.6-alpine as build-env
+FROM golang:1.14.7-alpine as build-env
 
 # It is important that these ARG's are defined after the FROM statement
 ARG ACCESS_TOKEN_USR="nothing"

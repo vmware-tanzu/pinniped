@@ -6,6 +6,4 @@ set -euo pipefail
 ROOT="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 
 "$ROOT/hack/module.sh" lint
-
-# TODO: re-enable once we figure out how to run docker in CI
-#"$ROOT/hack/verify-codegen.sh"
+"$ROOT/hack/verify-codegen.sh"

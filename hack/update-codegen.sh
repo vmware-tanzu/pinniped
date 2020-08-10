@@ -11,7 +11,22 @@ CODEGEN_IMAGE=${CODEGEN_IMAGE:-gcr.io/tanzu-user-authentication/k8s-code-generat
 function codegen() {
     PKG="$1"
     shift 1
-    docker run --rm -v "$ROOT:/go/src/$BASE_PKG" -w "/go/src/$BASE_PKG/$PKG" "${CODEGEN_IMAGE}" "$@" 2>&1 | sed "s|^|$1 ($PKG) > |"
+    if [[ ${IN_DOCKER:-0} -eq 1 ]]; then
+        # Already in a container ($CODEGEN_IMAGE).
+        mkdir -p "$(dirname /go/src/$BASE_PKG/$PKG)"
+        ln -sf "$ROOT" "/go/src/$BASE_PKG/$PKG"
+        cd "/go/src/$BASE_PKG/$PKG"
+        /codegen/entrypoint.sh "$@" 2>&1 | sed "s|^|$1 ($PKG) > |"
+    else
+        # Local workstation.
+        docker run \
+          --rm \
+          --volume "$ROOT:/go/src/$BASE_PKG" \
+          --workdir "/go/src/$BASE_PKG/$PKG" \
+          "${CODEGEN_IMAGE}" \
+          /codegen/entrypoint.sh "$@" 2>&1 \
+          | sed "s|^|$1 ($PKG) > |"
+    fi
 }
 
 codegen kubernetes/1.19/api generate-groups deepcopy,defaulter \

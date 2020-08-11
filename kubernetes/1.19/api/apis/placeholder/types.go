@@ -46,8 +46,6 @@ type User struct {
 
 	// Identity Provider groups for authenticated user.
 	Groups []string
-
-	FavoriteColor string
 }
 
 type LoginRequestStatus struct {

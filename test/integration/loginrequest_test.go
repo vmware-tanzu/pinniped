@@ -76,7 +76,7 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 	require.NotEmpty(t, response.Status.Credential.ClientCertificateData)
 	require.NotEmpty(t, response.Status.Credential.ClientKeyData)
 	require.NotNil(t, response.Status.Credential.ExpirationTimestamp)
-	require.InDelta(t, time.Until(response.Status.Credential.ExpirationTimestamp.Time), 1*time.Hour, float64(5*time.Second))
+	require.InDelta(t, time.Until(response.Status.Credential.ExpirationTimestamp.Time), 1*time.Hour, float64(3*time.Minute))
 	require.NotNil(t, response.Status.User)
 	require.NotEmpty(t, response.Status.User.Name)
 	require.Contains(t, response.Status.User.Groups, "tmc:member")

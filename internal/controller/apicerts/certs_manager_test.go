@@ -7,6 +7,7 @@ package apicerts
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -239,8 +240,9 @@ func TestManagerControllerSync(t *testing.T) {
 					r.WithinDuration(time.Now(), parsedCert.NotBefore, time.Minute*2)
 					r.WithinDuration(time.Now().Add(24*365*time.Hour), parsedCert.NotAfter, time.Minute*2)
 
-					// TODO How can we validate that the actualPrivateKey is correct and works with the other cert values?
-					//  Maybe start a test http server using these certs and then make a request to it using the actualCACert?
+					// Check that the private key and cert chain match
+					_, err = tls.X509KeyPair([]byte(actualCertChain), []byte(actualPrivateKey))
+					r.NoError(err)
 
 					// Make sure we updated the APIService caBundle and left it otherwise unchanged
 					r.Len(aggregatorAPIClient.Actions(), 2)

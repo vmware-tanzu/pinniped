@@ -101,7 +101,7 @@ func (c *certsManagerController) Sync(ctx controller.Context) error {
 	}
 
 	// Write the CA's public key bundle and the serving certs to a secret.
-	tlsPrivateKeyPEM, tlsCertChainPEM, err := certauthority.ToPEM(aggregatedAPIServerTLSCert)
+	tlsCertChainPEM, tlsPrivateKeyPEM, err := certauthority.ToPEM(aggregatedAPIServerTLSCert)
 	if err != nil {
 		return fmt.Errorf("could not PEM encode serving certificate: %w", err)
 	}

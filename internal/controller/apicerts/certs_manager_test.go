@@ -31,6 +31,8 @@ import (
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
 )
 
+// TODO test that it uses controller.WithInitialEvent correctly
+
 func TestManagerControllerInformerFilters(t *testing.T) {
 	spec.Run(t, "informer filters", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
@@ -211,7 +213,7 @@ func TestManagerControllerSync(t *testing.T) {
 					roots := x509.NewCertPool()
 					ok := roots.AppendCertsFromPEM([]byte(actualCACert))
 					r.True(ok)
-					block, _ := pem.Decode([]byte(actualPrivateKey))
+					block, _ := pem.Decode([]byte(actualCertChain))
 					r.NotNil(block)
 					parsedCert, err := x509.ParseCertificate(block.Bytes)
 					r.NoError(err)
@@ -226,7 +228,8 @@ func TestManagerControllerSync(t *testing.T) {
 					r.WithinDuration(time.Now(), parsedCert.NotBefore, time.Minute*2)
 					r.WithinDuration(time.Now().Add(24*365*time.Hour), parsedCert.NotAfter, time.Minute*2)
 
-					// TODO How can we validate the tlsCertificateChain?
+					// TODO How can we validate that the actualPrivateKey is correct and works with the other cert values?
+					//  Maybe start a test http server using these certs and then make a request to it using the actualCACert?
 
 					// Make sure we updated the APIService caBundle and left it otherwise unchanged
 					r.Len(aggregatorAPIClient.Actions(), 2)

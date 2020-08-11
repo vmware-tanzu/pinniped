@@ -195,6 +195,16 @@ func toPEM(cert *tls.Certificate, err error) ([]byte, []byte, error) {
 		return nil, nil, err
 	}
 
+	certPEM, keyPEM, err := ToPEM(cert)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return certPEM, keyPEM, nil
+}
+
+// Encode a tls.Certificate into a private key PEM and a cert chain PEM.
+func ToPEM(cert *tls.Certificate) ([]byte, []byte, error) {
 	// Encode the certificate(s) to PEM.
 	certPEMBlocks := make([][]byte, 0, len(cert.Certificate))
 	for _, c := range cert.Certificate {

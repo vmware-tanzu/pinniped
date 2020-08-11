@@ -3,7 +3,7 @@ Copyright 2020 VMware, Inc.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package autoregistration
+package apicerts
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kubetesting "k8s.io/client-go/testing"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
-	aggregationv1fake "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
+	aggregatorv1fake "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 )
 
 func TestUpdateAPIService(t *testing.T) {
@@ -25,14 +25,14 @@ func TestUpdateAPIService(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		mocks       func(*aggregationv1fake.Clientset)
+		mocks       func(*aggregatorv1fake.Clientset)
 		caInput     []byte
 		wantObjects []apiregistrationv1.APIService
 		wantErr     string
 	}{
 		{
 			name: "happy path update when the pre-existing APIService did not already have a CA bundle",
-			mocks: func(c *aggregationv1fake.Clientset) {
+			mocks: func(c *aggregatorv1fake.Clientset) {
 				_ = c.Tracker().Add(&apiregistrationv1.APIService{
 					ObjectMeta: metav1.ObjectMeta{Name: apiServiceName},
 					Spec: apiregistrationv1.APIServiceSpec{
@@ -52,7 +52,7 @@ func TestUpdateAPIService(t *testing.T) {
 		},
 		{
 			name: "happy path update when the pre-existing APIService already had a CA bundle",
-			mocks: func(c *aggregationv1fake.Clientset) {
+			mocks: func(c *aggregatorv1fake.Clientset) {
 				_ = c.Tracker().Add(&apiregistrationv1.APIService{
 					ObjectMeta: metav1.ObjectMeta{Name: apiServiceName},
 					Spec: apiregistrationv1.APIServiceSpec{
@@ -72,7 +72,7 @@ func TestUpdateAPIService(t *testing.T) {
 		},
 		{
 			name: "error on update",
-			mocks: func(c *aggregationv1fake.Clientset) {
+			mocks: func(c *aggregatorv1fake.Clientset) {
 				_ = c.Tracker().Add(&apiregistrationv1.APIService{
 					ObjectMeta: metav1.ObjectMeta{Name: apiServiceName},
 					Spec:       apiregistrationv1.APIServiceSpec{},
@@ -85,7 +85,7 @@ func TestUpdateAPIService(t *testing.T) {
 		},
 		{
 			name: "error on get",
-			mocks: func(c *aggregationv1fake.Clientset) {
+			mocks: func(c *aggregatorv1fake.Clientset) {
 				_ = c.Tracker().Add(&apiregistrationv1.APIService{
 					ObjectMeta: metav1.ObjectMeta{Name: apiServiceName},
 					Spec:       apiregistrationv1.APIServiceSpec{},
@@ -99,7 +99,7 @@ func TestUpdateAPIService(t *testing.T) {
 		},
 		{
 			name: "conflict error on update, followed by successful retry",
-			mocks: func(c *aggregationv1fake.Clientset) {
+			mocks: func(c *aggregatorv1fake.Clientset) {
 				_ = c.Tracker().Add(&apiregistrationv1.APIService{
 					ObjectMeta: metav1.ObjectMeta{Name: apiServiceName},
 					Spec: apiregistrationv1.APIServiceSpec{
@@ -148,7 +148,7 @@ func TestUpdateAPIService(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			client := aggregationv1fake.NewSimpleClientset()
+			client := aggregatorv1fake.NewSimpleClientset()
 			if tt.mocks != nil {
 				tt.mocks(client)
 			}

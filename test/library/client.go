@@ -13,6 +13,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	placeholdernameclientset "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned"
 )
@@ -62,4 +63,10 @@ func NewPlaceholderNameClientset(t *testing.T) placeholdernameclientset.Interfac
 	t.Helper()
 
 	return placeholdernameclientset.NewForConfigOrDie(NewClientConfig(t))
+}
+
+func NewAggregatedClientset(t *testing.T) aggregatorclient.Interface {
+	t.Helper()
+
+	return aggregatorclient.NewForConfigOrDie(NewClientConfig(t))
 }

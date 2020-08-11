@@ -3,8 +3,7 @@ Copyright 2020 VMware, Inc.
 SPDX-License-Identifier: Apache-2.0
 */
 
-// Package autoregistration updates the pre-registered APIService.
-package autoregistration
+package apicerts
 
 import (
 	"context"
@@ -12,14 +11,14 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
-	aggregatationv1client "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
+	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
 )
 
 // UpdateAPIService updates the APIService's CA bundle.
-func UpdateAPIService(ctx context.Context, aggregationV1 aggregatationv1client.Interface, aggregatedAPIServerCA []byte) error {
-	apiServices := aggregationV1.ApiregistrationV1().APIServices()
+func UpdateAPIService(ctx context.Context, aggregatorClient aggregatorclient.Interface, aggregatedAPIServerCA []byte) error {
+	apiServices := aggregatorClient.ApiregistrationV1().APIServices()
 	apiServiceName := placeholderv1alpha1.SchemeGroupVersion.Version + "." + placeholderv1alpha1.GroupName
 
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {

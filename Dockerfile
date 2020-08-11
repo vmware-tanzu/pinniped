@@ -1,7 +1,7 @@
 # Copyright 2020 VMware, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.14-alpine as build-env
+FROM golang:1.14.7-alpine as build-env
 
 # It is important that these ARG's are defined after the FROM statement
 ARG ACCESS_TOKEN_USR="nothing"

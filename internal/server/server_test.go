@@ -78,7 +78,7 @@ func TestCommand(t *testing.T) {
 			stderr := bytes.NewBuffer([]byte{})
 
 			a := New(context.Background(), test.args, stdout, stderr)
-			a.serverCommand.RunE = func(cmd *cobra.Command, args []string) error {
+			a.cmd.RunE = func(cmd *cobra.Command, args []string) error {
 				return nil
 			}
 			err := a.Run()

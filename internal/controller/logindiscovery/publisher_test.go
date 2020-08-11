@@ -24,41 +24,24 @@ import (
 	coretesting "k8s.io/client-go/testing"
 
 	"github.com/suzerain-io/controller-go"
+	"github.com/suzerain-io/placeholder-name/internal/testutil"
 	crdsplaceholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/crdsplaceholder/v1alpha1"
 	placeholderfake "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned/fake"
 	placeholderinformers "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/informers/externalversions"
 )
-
-type ObservableWithInformerOption struct {
-	InformerToFilterMap map[controller.InformerGetter]controller.Filter
-}
-
-func NewObservableWithInformerOption() *ObservableWithInformerOption {
-	return &ObservableWithInformerOption{
-		InformerToFilterMap: make(map[controller.InformerGetter]controller.Filter),
-	}
-}
-
-func (owi *ObservableWithInformerOption) WithInformer(
-	getter controller.InformerGetter,
-	filter controller.Filter,
-	opt controller.InformerOption) controller.Option {
-	owi.InformerToFilterMap[getter] = filter
-	return controller.WithInformer(getter, filter, opt)
-}
 
 func TestInformerFilters(t *testing.T) {
 	spec.Run(t, "informer filters", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
 
 		var r *require.Assertions
-		var observableWithInformerOption *ObservableWithInformerOption
+		var observableWithInformerOption *testutil.ObservableWithInformerOption
 		var configMapInformerFilter controller.Filter
 		var loginDiscoveryConfigInformerFilter controller.Filter
 
 		it.Before(func() {
 			r = require.New(t)
-			observableWithInformerOption = NewObservableWithInformerOption()
+			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			configMapInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().ConfigMaps()
 			loginDiscoveryConfigInformer := placeholderinformers.NewSharedInformerFactory(nil, 0).Crds().V1alpha1().LoginDiscoveryConfigs()
 			_ = NewPublisherController(
@@ -69,8 +52,8 @@ func TestInformerFilters(t *testing.T) {
 				loginDiscoveryConfigInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
 			)
-			configMapInformerFilter = observableWithInformerOption.InformerToFilterMap[configMapInformer]
-			loginDiscoveryConfigInformerFilter = observableWithInformerOption.InformerToFilterMap[loginDiscoveryConfigInformer]
+			configMapInformerFilter = observableWithInformerOption.GetFilterForInformer(configMapInformer)
+			loginDiscoveryConfigInformerFilter = observableWithInformerOption.GetFilterForInformer(loginDiscoveryConfigInformer)
 		})
 
 		when("watching ConfigMap objects", func() {

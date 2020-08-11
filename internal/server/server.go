@@ -27,7 +27,7 @@ import (
 
 // App is an object that represents the placeholder-name-server application.
 type App struct {
-	serverCommand *cobra.Command
+	cmd *cobra.Command
 
 	// CLI flags
 	configPath                 string
@@ -48,27 +48,27 @@ func New(ctx context.Context, args []string, stdout, stderr io.Writer) *App {
 }
 
 // Run the server.
-func (app *App) Run() error {
-	return app.serverCommand.Execute()
+func (a *App) Run() error {
+	return a.cmd.Execute()
 }
 
 // Create the server command and save it into the App.
-func (app *App) addServerCommand(ctx context.Context, args []string, stdout, stderr io.Writer) {
+func (a *App) addServerCommand(ctx context.Context, args []string, stdout, stderr io.Writer) {
 	cmd := &cobra.Command{
 		Use: `placeholder-name-server`,
 		Long: "placeholder-name-server provides a generic API for mapping an external\n" +
 			"credential from somewhere to an internal credential to be used for\n" +
 			"authenticating to the Kubernetes API.",
-		RunE: func(cmd *cobra.Command, args []string) error { return app.runServer(ctx) },
+		RunE: func(cmd *cobra.Command, args []string) error { return a.runServer(ctx) },
 		Args: cobra.NoArgs,
 	}
 
 	cmd.SetArgs(args)
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
-	addCommandlineFlagsToCommand(cmd, app)
+	addCommandlineFlagsToCommand(cmd, a)
 
-	app.serverCommand = cmd
+	a.cmd = cmd
 }
 
 // Define the app's commandline flags.
@@ -104,15 +104,15 @@ func addCommandlineFlagsToCommand(cmd *cobra.Command, app *App) {
 }
 
 // Boot the aggregated API server, which will in turn boot the controllers.
-func (app *App) runServer(ctx context.Context) error {
+func (a *App) runServer(ctx context.Context) error {
 	// Read the server config file.
-	cfg, err := config.FromPath(app.configPath)
+	cfg, err := config.FromPath(a.configPath)
 	if err != nil {
 		return fmt.Errorf("could not load config: %w", err)
 	}
 
 	// Load the Kubernetes cluster signing CA.
-	k8sClusterCA, err := certauthority.Load(app.clusterSigningCertFilePath, app.clusterSigningKeyFilePath)
+	k8sClusterCA, err := certauthority.Load(a.clusterSigningCertFilePath, a.clusterSigningKeyFilePath)
 	if err != nil {
 		return fmt.Errorf("could not load cluster signing CA: %w", err)
 	}
@@ -124,7 +124,7 @@ func (app *App) runServer(ctx context.Context) error {
 	}
 
 	// Discover in which namespace we are installed.
-	podInfo, err := downward.Load(app.downwardAPIPath)
+	podInfo, err := downward.Load(a.downwardAPIPath)
 	if err != nil {
 		return fmt.Errorf("could not read pod metadata: %w", err)
 	}
@@ -135,7 +135,7 @@ func (app *App) runServer(ctx context.Context) error {
 	// is stored in a k8s Secret. Therefore it also effectively acting as
 	// an in-memory cache of what is stored in the k8s Secret, helping to
 	// keep incoming requests fast.
-	dynamicCertProvider := &provider.DynamicTLSServingCertProvider{}
+	dynamicCertProvider := provider.NewDynamicTLSServingCertProvider()
 
 	// Prepare to start the controllers, but defer actually starting them until the
 	// post start hook of the aggregated API server.
@@ -171,7 +171,7 @@ func (app *App) runServer(ctx context.Context) error {
 
 // Create a configuration for the aggregated API server.
 func getAggregatedAPIServerConfig(
-	dynamicCertProvider *provider.DynamicTLSServingCertProvider,
+	dynamicCertProvider provider.DynamicTLSServingCertProvider,
 	webhookTokenAuthenticator *webhook.WebhookTokenAuthenticator,
 	ca *certauthority.CA,
 	startControllersPostStartHook func(context.Context),

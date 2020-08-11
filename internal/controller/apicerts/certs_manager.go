@@ -6,10 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 package apicerts
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/pem"
 	"fmt"
 	"time"
 
@@ -25,7 +22,6 @@ import (
 	"github.com/suzerain-io/placeholder-name/internal/autoregistration"
 	"github.com/suzerain-io/placeholder-name/internal/certauthority"
 	placeholdernamecontroller "github.com/suzerain-io/placeholder-name/internal/controller"
-	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
 )
 
 const (
@@ -38,28 +34,25 @@ const (
 
 type certsManagerController struct {
 	namespace        string
-	apiServiceName   string
 	k8sClient        kubernetes.Interface
-	aggregatorClient *aggregatorclient.Clientset
+	aggregatorClient aggregatorclient.Interface
 	secretInformer   corev1informers.SecretInformer
 }
 
 func NewCertsManagerController(
 	namespace string,
 	k8sClient kubernetes.Interface,
-	aggregationClient *aggregatorclient.Clientset,
+	aggregatorClient aggregatorclient.Interface,
 	secretInformer corev1informers.SecretInformer,
 	withInformer placeholdernamecontroller.WithInformerOptionFunc,
 ) controller.Controller {
-	apiServiceName := placeholderv1alpha1.SchemeGroupVersion.Version + "." + placeholderv1alpha1.GroupName
 	return controller.New(
 		controller.Config{
 			Name: "certs-manager-controller",
 			Syncer: &certsManagerController{
-				apiServiceName:   apiServiceName,
 				namespace:        namespace,
 				k8sClient:        k8sClient,
-				aggregatorClient: aggregationClient,
+				aggregatorClient: aggregatorClient,
 				secretInformer:   secretInformer,
 			},
 		},
@@ -108,7 +101,7 @@ func (c *certsManagerController) Sync(ctx controller.Context) error {
 	}
 
 	// Write the CA's public key bundle and the serving certs to a secret.
-	tlsPrivateKeyPEM, tlsCertChainPEM, err := pemEncode(aggregatedAPIServerTLSCert)
+	tlsPrivateKeyPEM, tlsCertChainPEM, err := certauthority.ToPEM(aggregatedAPIServerTLSCert)
 	if err != nil {
 		return fmt.Errorf("could not PEM encode serving certificate: %w", err)
 	}
@@ -136,29 +129,4 @@ func (c *certsManagerController) Sync(ctx controller.Context) error {
 
 	klog.Info("certsManagerController Sync successfully created secret and updated API service")
 	return nil
-}
-
-// Encode a tls.Certificate into a private key PEM and a cert chain PEM.
-func pemEncode(cert *tls.Certificate) ([]byte, []byte, error) {
-	privateKeyDER, err := x509.MarshalPKCS8PrivateKey(cert.PrivateKey)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error marshalling private key: %w", err)
-	}
-	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:    "PRIVATE KEY",
-		Headers: nil,
-		Bytes:   privateKeyDER,
-	})
-
-	certChainPEM := make([]byte, 0)
-	for _, certFromChain := range cert.Certificate {
-		certPEMBytes := pem.EncodeToMemory(&pem.Block{
-			Type:    "CERTIFICATE",
-			Headers: nil,
-			Bytes:   certFromChain,
-		})
-		certChainPEM = append(certChainPEM, certPEMBytes...)
-	}
-
-	return privateKeyPEM, certChainPEM, nil
 }

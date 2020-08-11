@@ -19,13 +19,13 @@ import (
 
 type certsObserverController struct {
 	namespace           string
-	dynamicCertProvider *provider.DynamicTLSServingCertProvider
+	dynamicCertProvider provider.DynamicTLSServingCertProvider
 	secretInformer      corev1informers.SecretInformer
 }
 
 func NewCertsObserverController(
 	namespace string,
-	dynamicCertProvider *provider.DynamicTLSServingCertProvider,
+	dynamicCertProvider provider.DynamicTLSServingCertProvider,
 	secretInformer corev1informers.SecretInformer,
 	withInformer placeholdernamecontroller.WithInformerOptionFunc,
 ) controller.Controller {
@@ -56,14 +56,12 @@ func (c *certsObserverController) Sync(_ controller.Context) error {
 	if notFound {
 		klog.Info("certsObserverController Sync() found that the secret does not exist yet or was deleted")
 		// The secret does not exist yet or was deleted.
-		c.dynamicCertProvider.CertPEM = nil
-		c.dynamicCertProvider.KeyPEM = nil
+		c.dynamicCertProvider.Set(nil, nil)
 		return nil
 	}
 
 	// Mutate the in-memory cert provider to update with the latest cert values.
-	c.dynamicCertProvider.CertPEM = certSecret.Data[tlsCertificateChainSecretKey]
-	c.dynamicCertProvider.KeyPEM = certSecret.Data[tlsPrivateKeySecretKey]
+	c.dynamicCertProvider.Set(certSecret.Data[tlsCertificateChainSecretKey], certSecret.Data[tlsPrivateKeySecretKey])
 	klog.Info("certsObserverController Sync updated certs in the dynamic cert provider")
 	return nil
 }

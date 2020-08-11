@@ -33,7 +33,7 @@ const (
 func PrepareControllers(
 	serverInstallationNamespace string,
 	discoveryURLOverride *string,
-	dynamicCertProvider *provider.DynamicTLSServingCertProvider,
+	dynamicCertProvider provider.DynamicTLSServingCertProvider,
 ) (func(ctx context.Context), error) {
 	// Create k8s clients.
 	k8sClient, aggregatorClient, placeholderClient, err := createClients()

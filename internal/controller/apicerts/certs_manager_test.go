@@ -31,26 +31,27 @@ import (
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
 )
 
-// TODO test that it uses controller.WithInitialEvent correctly
-
-func TestManagerControllerInformerFilters(t *testing.T) {
-	spec.Run(t, "informer filters", func(t *testing.T, when spec.G, it spec.S) {
+func TestManagerControllerOptions(t *testing.T) {
+	spec.Run(t, "options", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
 
 		var r *require.Assertions
 		var observableWithInformerOption *testutil.ObservableWithInformerOption
+		var observableWithInitialEventOption *testutil.ObservableWithInitialEventOption
 		var secretsInformerFilter controller.Filter
 
 		it.Before(func() {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
+			observableWithInitialEventOption = testutil.NewObservableWithInitialEventOption()
 			secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
 			_ = NewCertsManagerController(
 				installedInNamespace,
 				nil,
 				nil,
 				secretsInformer,
-				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
+				observableWithInformerOption.WithInformer,         // make it possible to observe the behavior of the Filters
+				observableWithInitialEventOption.WithInitialEvent, // make it possible to observe the behavior of the initial event
 			)
 			secretsInformerFilter = observableWithInformerOption.GetFilterForInformer(secretsInformer)
 		})
@@ -102,6 +103,15 @@ func TestManagerControllerInformerFilters(t *testing.T) {
 				})
 			})
 		})
+
+		when("starting up", func() {
+			it("asks for an initial event because the Secret may not exist yet and it needs to run anyway", func() {
+				r.Equal(controller.Key{
+					Namespace: installedInNamespace,
+					Name:      "api-serving-cert",
+				}, observableWithInitialEventOption.GetInitialEventKey())
+			})
+		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))
 }
 
@@ -130,6 +140,7 @@ func TestManagerControllerSync(t *testing.T) {
 				aggregatorAPIClient,
 				kubeInformers.Core().V1().Secrets(),
 				controller.WithInformer,
+				controller.WithInitialEvent,
 			)
 
 			// Set this at the last second to support calling subject.Name().

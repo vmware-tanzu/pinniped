@@ -29,3 +29,6 @@ type WithInformerOptionFunc func(
 	getter controller.InformerGetter,
 	filter controller.Filter,
 	opt controller.InformerOption) controller.Option
+
+// Same signature as controller.WithInitialEvent().
+type WithInitialEventOptionFunc func(key controller.Key) controller.Option

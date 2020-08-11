@@ -66,6 +66,7 @@ func PrepareControllers(
 				aggregatorClient,
 				installationNamespaceK8sInformers.Core().V1().Secrets(),
 				controller.WithInformer,
+				controller.WithInitialEvent,
 			),
 			singletonWorker,
 		).

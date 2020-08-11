@@ -19,7 +19,6 @@ import (
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	"github.com/suzerain-io/controller-go"
-	"github.com/suzerain-io/placeholder-name/internal/autoregistration"
 	"github.com/suzerain-io/placeholder-name/internal/certauthority"
 	placeholdernamecontroller "github.com/suzerain-io/placeholder-name/internal/controller"
 )
@@ -45,6 +44,7 @@ func NewCertsManagerController(
 	aggregatorClient aggregatorclient.Interface,
 	secretInformer corev1informers.SecretInformer,
 	withInformer placeholdernamecontroller.WithInformerOptionFunc,
+	withInitialEvent placeholdernamecontroller.WithInitialEventOptionFunc,
 ) controller.Controller {
 	return controller.New(
 		controller.Config{
@@ -62,7 +62,7 @@ func NewCertsManagerController(
 			controller.InformerOption{},
 		),
 		// Be sure to run once even if the Secret that the informer is watching doesn't exist.
-		controller.WithInitialEvent(controller.Key{
+		withInitialEvent(controller.Key{
 			Namespace: namespace,
 			Name:      certsSecretName,
 		}),
@@ -123,7 +123,7 @@ func (c *certsManagerController) Sync(ctx controller.Context) error {
 	}
 
 	// Update the APIService to give it the new CA bundle.
-	if err := autoregistration.UpdateAPIService(ctx.Context, c.aggregatorClient, aggregatedAPIServerCA.Bundle()); err != nil {
+	if err := UpdateAPIService(ctx.Context, c.aggregatorClient, aggregatedAPIServerCA.Bundle()); err != nil {
 		return fmt.Errorf("could not update the API service: %w", err)
 	}
 

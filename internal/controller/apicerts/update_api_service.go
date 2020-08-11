@@ -3,8 +3,7 @@ Copyright 2020 VMware, Inc.
 SPDX-License-Identifier: Apache-2.0
 */
 
-// Package autoregistration updates the pre-registered APIService.
-package autoregistration
+package apicerts
 
 import (
 	"context"

@@ -14,7 +14,7 @@ function codegen() {
     if [[ ${IN_DOCKER:-0} -eq 1 ]]; then
         # Already in a container ($CODEGEN_IMAGE).
         mkdir -p "$(dirname /go/src/$BASE_PKG/$PKG)"
-        test -e "/go/src/$BASE_PKG/$PKG" || ln -s "$ROOT" "/go/src/$BASE_PKG/$PKG"
+        test -e "/go/src/$BASE_PKG/$PKG" || ln -s "$ROOT/$PKG" "/go/src/$BASE_PKG/$PKG"
         cd "/go/src/$BASE_PKG/$PKG"
         /codegen/entrypoint.sh "$@" 2>&1 \
           | sed "s|^|$1 ($PKG) > |"

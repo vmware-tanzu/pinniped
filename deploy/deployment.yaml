@@ -59,8 +59,6 @@ spec:
           image: #@ data.values.image_repo + ":" + data.values.image_tag
           #@ end
           imagePullPolicy: IfNotPresent
-          command:
-            - ./placeholder-name-server
           args:
             - --config=/etc/config/placeholder-name.yaml
             - --downward-api-path=/etc/podinfo

@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
+set -euo pipefail
+ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
-set -o errexit
-set -o nounset
-set -o pipefail
-
-KUBE_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
-source "${KUBE_ROOT}/hack/lib/version.sh"
+KUBE_ROOT="${ROOT}" # required by `hack/lib/version.sh`
+source "${ROOT}/hack/lib/version.sh"
 
 kube::version::ldflags

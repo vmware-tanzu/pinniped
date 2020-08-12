@@ -15,8 +15,7 @@
 # limitations under the License.
 
 set -euo pipefail
-
-ROOT=$(dirname "${BASH_SOURCE[0]}")/..
+ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
 DIFFROOT="${ROOT}/kubernetes"
 TMP_DIFFROOT="${ROOT}/_tmp/kubernetes"

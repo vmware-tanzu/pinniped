@@ -3,8 +3,8 @@
 # Copyright 2020 VMware, Inc.
 # SPDX-License-Identifier: Apache-2.0
 set -euo pipefail
+ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
-ROOT="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 BASE_PKG="github.com/suzerain-io/placeholder-name"
 CODEGEN_IMAGE=${CODEGEN_IMAGE:-gcr.io/tanzu-user-authentication/k8s-code-generator-1.19:latest}
 

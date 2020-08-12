@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-root_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
 function tidy_cmd() {
   echo 'go mod tidy -v'
@@ -48,7 +47,7 @@ function with_modules() {
   local cmd_function="${1}"
   cmd="$(${cmd_function})"
 
-  pushd "${root_dir}"
+  pushd "${ROOT}"
   for mod_file in $(find . -maxdepth 4 -name go.mod | sort); do
     mod_dir="$(dirname "${mod_file}")"
     (

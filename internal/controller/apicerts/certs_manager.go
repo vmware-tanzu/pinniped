@@ -91,9 +91,10 @@ func (c *certsManagerController) Sync(ctx controller.Context) error {
 	const serviceName = "placeholder-name-api"
 
 	// Using the CA from above, create a TLS server cert for the aggregated API server to use.
+	serviceEndpoint := serviceName + "." + c.namespace + ".svc"
 	aggregatedAPIServerTLSCert, err := aggregatedAPIServerCA.Issue(
-		pkix.Name{CommonName: serviceName + "." + c.namespace + ".svc"},
-		[]string{},
+		pkix.Name{CommonName: serviceEndpoint},
+		[]string{serviceEndpoint},
 		24*365*time.Hour,
 	)
 	if err != nil {

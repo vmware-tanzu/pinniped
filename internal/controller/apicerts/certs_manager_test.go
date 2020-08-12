@@ -229,12 +229,14 @@ func TestManagerControllerSync(t *testing.T) {
 					r.NotNil(block)
 					parsedCert, err := x509.ParseCertificate(block.Bytes)
 					r.NoError(err)
+					serviceEndpoint := "placeholder-name-api." + installedInNamespace + ".svc"
 					opts := x509.VerifyOptions{
-						DNSName: "placeholder-name-api." + installedInNamespace + ".svc",
+						DNSName: serviceEndpoint,
 						Roots:   roots,
 					}
 					_, err = parsedCert.Verify(opts)
 					r.NoError(err)
+					r.Contains(parsedCert.DNSNames, serviceEndpoint, "expected an explicit DNS SAN, not just Common Name")
 
 					// Check the created cert's validity bounds
 					r.WithinDuration(time.Now(), parsedCert.NotBefore, time.Minute*2)

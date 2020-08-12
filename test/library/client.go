@@ -6,6 +6,8 @@ SPDX-License-Identifier: Apache-2.0
 package library
 
 import (
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,15 +26,34 @@ func NewClientConfig(t *testing.T) *rest.Config {
 	return newClientConfigWithOverrides(t, &clientcmd.ConfigOverrides{})
 }
 
-func NewClientConfigWithCertAndKey(t *testing.T, cert, key string) *rest.Config {
+func NewClientset(t *testing.T) kubernetes.Interface {
 	t.Helper()
 
-	return newClientConfigWithOverrides(t, &clientcmd.ConfigOverrides{
-		AuthInfo: clientcmdapi.AuthInfo{
-			ClientCertificateData: []byte(cert),
-			ClientKeyData:         []byte(key),
-		},
-	})
+	return newClientsetWithConfig(t, NewClientConfig(t))
+}
+
+func NewClientsetWithCertAndKey(t *testing.T, clientCertificateData, clientKeyData string) kubernetes.Interface {
+	t.Helper()
+
+	return newClientsetWithConfig(t, newAnonymousClientRestConfigWithCertAndKeyAdded(t, clientCertificateData, clientKeyData))
+}
+
+func NewPlaceholderNameClientset(t *testing.T) placeholdernameclientset.Interface {
+	t.Helper()
+
+	return placeholdernameclientset.NewForConfigOrDie(NewClientConfig(t))
+}
+
+func NewAnonymousPlaceholderNameClientset(t *testing.T) placeholdernameclientset.Interface {
+	t.Helper()
+
+	return placeholdernameclientset.NewForConfigOrDie(newAnonymousClientRestConfig(t))
+}
+
+func NewAggregatedClientset(t *testing.T) aggregatorclient.Interface {
+	t.Helper()
+
+	return aggregatorclient.NewForConfigOrDie(NewClientConfig(t))
 }
 
 func newClientConfigWithOverrides(t *testing.T, overrides *clientcmd.ConfigOverrides) *rest.Config {
@@ -45,13 +66,7 @@ func newClientConfigWithOverrides(t *testing.T, overrides *clientcmd.ConfigOverr
 	return config
 }
 
-func NewClientset(t *testing.T) kubernetes.Interface {
-	t.Helper()
-
-	return NewClientsetWithConfig(t, NewClientConfig(t))
-}
-
-func NewClientsetWithConfig(t *testing.T, config *rest.Config) kubernetes.Interface {
+func newClientsetWithConfig(t *testing.T, config *rest.Config) kubernetes.Interface {
 	t.Helper()
 
 	result, err := kubernetes.NewForConfig(config)
@@ -59,14 +74,47 @@ func NewClientsetWithConfig(t *testing.T, config *rest.Config) kubernetes.Interf
 	return result
 }
 
-func NewPlaceholderNameClientset(t *testing.T) placeholdernameclientset.Interface {
+// Returns a rest.Config without any user authentication info.
+// Ensures that we are not accidentally picking up any authentication info from the kube config file.
+// E.g. If your kube config were pointing at an Azure cluster, it would have both certs and a token,
+// and we don't want our tests to accidentally pick up that token.
+func newAnonymousClientRestConfig(t *testing.T) *rest.Config {
 	t.Helper()
 
-	return placeholdernameclientset.NewForConfigOrDie(NewClientConfig(t))
+	realConfig := NewClientConfig(t)
+
+	out, err := ioutil.TempFile("", "placeholder-name-anonymous-kubeconfig-test-*")
+	require.NoError(t, err)
+	defer os.Remove(out.Name())
+
+	anonConfig := clientcmdapi.NewConfig()
+	anonConfig.Clusters["anonymous-cluster"] = &clientcmdapi.Cluster{
+		Server:                   realConfig.Host,
+		CertificateAuthorityData: realConfig.CAData,
+	}
+	anonConfig.Contexts["anonymous"] = &clientcmdapi.Context{
+		Cluster: "anonymous-cluster",
+	}
+	anonConfig.CurrentContext = "anonymous"
+
+	data, err := clientcmd.Write(*anonConfig)
+	require.NoError(t, err)
+
+	_, err = out.Write(data)
+	require.NoError(t, err)
+
+	restConfig, err := clientcmd.BuildConfigFromFlags("", out.Name())
+	require.NoError(t, err)
+
+	return restConfig
 }
 
-func NewAggregatedClientset(t *testing.T) aggregatorclient.Interface {
+// Starting with an anonymous client config, add a cert and key to use for authentication in the API server.
+func newAnonymousClientRestConfigWithCertAndKeyAdded(t *testing.T, clientCertificateData, clientKeyData string) *rest.Config {
 	t.Helper()
 
-	return aggregatorclient.NewForConfigOrDie(NewClientConfig(t))
+	config := newAnonymousClientRestConfig(t)
+	config.CertData = []byte(clientCertificateData)
+	config.KeyData = []byte(clientKeyData)
+	return config
 }

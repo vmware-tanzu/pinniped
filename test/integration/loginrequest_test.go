@@ -24,7 +24,7 @@ import (
 func makeRequest(t *testing.T, spec v1alpha1.LoginRequestSpec) (*v1alpha1.LoginRequest, error) {
 	t.Helper()
 
-	client := library.NewPlaceholderNameClientset(t)
+	client := library.NewAnonymousPlaceholderNameClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -88,13 +88,10 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 	adminClient := library.NewClientset(t)
 
 	// Create a client using the certificate from the LoginRequest.
-	clientWithCert := library.NewClientsetWithConfig(
+	clientWithCertFromLoginRequest := library.NewClientsetWithCertAndKey(
 		t,
-		library.NewClientConfigWithCertAndKey(
-			t,
-			response.Status.Credential.ClientCertificateData,
-			response.Status.Credential.ClientKeyData,
-		),
+		response.Status.Credential.ClientCertificateData,
+		response.Status.Credential.ClientKeyData,
 	)
 
 	t.Run("access as user", func(t *testing.T) {
@@ -116,7 +113,7 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 		})
 
 		// Use the client which is authenticated as the TMC user to list namespaces
-		listNamespaceResponse, err := clientWithCert.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+		listNamespaceResponse, err := clientWithCertFromLoginRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 		require.NoError(t, err)
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	})
@@ -140,7 +137,7 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 		})
 
 		// Use the client which is authenticated as the TMC group to list namespaces
-		listNamespaceResponse, err := clientWithCert.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+		listNamespaceResponse, err := clientWithCertFromLoginRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 		require.NoError(t, err)
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	})

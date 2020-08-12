@@ -60,7 +60,7 @@ func TestClient(t *testing.T) {
 	defer cancel()
 
 	// Use an invalid certificate/key to validate that the ServerVersion API fails like we assume.
-	invalidClient := library.NewClientsetWithConfig(t, library.NewClientConfigWithCertAndKey(t, testCert, testKey))
+	invalidClient := library.NewClientsetWithCertAndKey(t, testCert, testKey)
 	_, err := invalidClient.Discovery().ServerVersion()
 	require.EqualError(t, err, "the server has asked for the client to provide credentials")
 
@@ -72,7 +72,7 @@ func TestClient(t *testing.T) {
 	require.InDelta(t, time.Until(*resp.ExpirationTimestamp), 1*time.Hour, float64(3*time.Minute))
 
 	// Create a client using the certificate and key returned by the token exchange.
-	validClient := library.NewClientsetWithConfig(t, library.NewClientConfigWithCertAndKey(t, resp.ClientCertificateData, resp.ClientKeyData))
+	validClient := library.NewClientsetWithCertAndKey(t, resp.ClientCertificateData, resp.ClientKeyData)
 
 	// Make a version request, which should succeed even without any authorization.
 	_, err = validClient.Discovery().ServerVersion()

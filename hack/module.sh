@@ -49,7 +49,7 @@ function with_modules() {
   cmd="$(${cmd_function})"
 
   pushd "${root_dir}"
-  for mod_file in $(find . -maxdepth 4 -name go.mod); do
+  for mod_file in $(find . -maxdepth 4 -name go.mod | sort); do
     mod_dir="$(dirname "${mod_file}")"
     (
       echo "=> " && \

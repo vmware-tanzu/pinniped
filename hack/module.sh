@@ -34,6 +34,16 @@ function unittest_cmd() {
   echo "${cmd} -short -race ./..."
 }
 
+# The race detector is slow, so sometimes you don't want to use it
+function unittest_no_race_cmd() {
+  if [ -x "$(command -v gotest)" ]; then
+    cmd='gotest'
+  else
+    cmd='go test'
+  fi
+  echo "${cmd} -short ./..."
+}
+
 function with_modules() {
   local cmd_function="${1}"
   cmd="$(${cmd_function})"
@@ -52,7 +62,7 @@ function with_modules() {
 
 function usage() {
   echo "Error: <task> must be specified"
-  echo "       do.sh <task> [tidy, lint, test, unittest]"
+  echo "       do.sh <task> [tidy, lint, test, unittest, unittest_no_race]"
   exit 1
 }
 
@@ -62,6 +72,7 @@ function main() {
     'lint') with_modules 'lint_cmd' ;;
     'test') with_modules 'test_cmd' ;;
     'unittest') with_modules 'unittest_cmd' ;;
+    'unittest_no_race') with_modules 'unittest_no_race_cmd' ;;
     *) usage ;;
   esac
 }

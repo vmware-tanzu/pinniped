@@ -30,18 +30,16 @@ data:
       url: (@= data.values.webhook_url @)
       caBundle: (@= data.values.webhook_ca_bundle @)
 ---
-#! TODO set up healthy, ready, etc. probes correctly for our deployment
-#! TODO set the priority-critical-urgent on our deployment to ask kube to never let it die
-#! TODO set resource minimums (e.g. 512MB RAM) on the deployment to make sure we get scheduled onto a reasonable node
+#! TODO set up healthy, ready, etc. probes correctly?
+#! TODO set resource minimums (e.g. 512MB RAM) to make sure we get scheduled onto a reasonable node?
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
-  name: #@ data.values.app_name + "-deployment"
+  name: #@ data.values.app_name
   namespace: #@ data.values.namespace
   labels:
     app: #@ data.values.app_name
 spec:
-  replicas: 1 #! TODO more than one replica for high availability, and share the same serving certificate among them (maybe using client-go leader election)
   selector:
     matchLabels:
       app: #@ data.values.app_name
@@ -92,16 +90,16 @@ spec:
           hostPath:
             path: /etc/kubernetes/pki
             type: DirectoryOrCreate
-      #! "system-cluster-critical" cannot be used outside the kube-system namespace until Kubernetes >= 1.17,
-      #! so we skip setting this for now (see https://github.com/kubernetes/kubernetes/issues/60596).
-      #! priorityClassName: system-cluster-critical
-      nodeSelector:
+      nodeSelector: #! Create Pods on all nodes which match this node selector, and not on any other nodes.
         node-role.kubernetes.io/master: ""
       tolerations:
-      - key: CriticalAddonsOnly
-        operator: Exists
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/master
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - key: node-role.kubernetes.io/master #! Allow running on master nodes.
+          effect: NoSchedule
+      #! "system-cluster-critical" cannot be used outside the kube-system namespace until Kubernetes >= 1.17,
+      #! so we skip setting this for now (see https://github.com/kubernetes/kubernetes/issues/60596).
+      #!priorityClassName: system-cluster-critical
 ---
 apiVersion: v1
 kind: Service

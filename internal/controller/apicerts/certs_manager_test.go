@@ -317,10 +317,11 @@ func TestManagerControllerSync(t *testing.T) {
 					)
 				})
 
-				it("returns the create error", func() {
+				it("returns the create error and does not update the APIService", func() {
 					startInformersAndController()
 					err := controller.TestSync(t, subject, *syncContext)
 					r.EqualError(err, "could not create secret: create failed")
+					r.Empty(aggregatorAPIClient.Actions())
 				})
 			})
 		})

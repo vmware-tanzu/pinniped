@@ -38,8 +38,8 @@ metadata:
   namespace: #@ data.values.namespace
   labels:
     app: #@ data.values.app_name
+type: kubernetes.io/dockerconfigjson
 data:
-  #! e.g. the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username="USERNAME" --docker-password="PASSWORD" --dry-run=client -o json | jq -r '.data[".dockerconfigjson"]'
   .dockerconfigjson: #@ data.values.image_pull_dockerconfigjson
 #@ end
 ---

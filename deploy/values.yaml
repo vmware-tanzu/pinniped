@@ -6,7 +6,7 @@ app_name: placeholder-name
 namespace: #! e.g. placeholder-name
 
 #! Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
-image_repo: #! e.g. gcr.io/your-project-name/repo-name
+image_repo: #! e.g. registry.example.com/your-project-name/repo-name
 image_digest: #! e.g. sha256:f3c4fdfd3ef865d4b97a1fd295d94acc3f0c654c46b6f27ffad5cf80216903c8
 image_tag: #! e.g. latest
 
@@ -14,3 +14,5 @@ webhook_url: #! e.g., https://example.com
 webhook_ca_bundle: #! e.g., LS0tLS1CRUdJTiBDRVJUSUZJQ0F...
 
 discovery_url: #! e.g., https://example.com
+
+image_pull_dockerconfigjson: #! e.g. {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}

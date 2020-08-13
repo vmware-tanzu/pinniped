@@ -30,6 +30,19 @@ data:
       url: (@= data.values.webhook_url @)
       caBundle: (@= data.values.webhook_ca_bundle @)
 ---
+#@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
+apiVersion: v1
+kind: Secret
+metadata:
+  name: image-pull-secret
+  namespace: #@ data.values.namespace
+  labels:
+    app: #@ data.values.app_name
+data:
+  #! e.g. the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username="USERNAME" --docker-password="PASSWORD" --dry-run=client -o json | jq -r '.data[".dockerconfigjson"]'
+  .dockerconfigjson: #@ data.values.image_pull_dockerconfigjson
+#@ end
+---
 #! TODO set up healthy, ready, etc. probes correctly?
 #! TODO set resource minimums (e.g. 512MB RAM) to make sure we get scheduled onto a reasonable node?
 apiVersion: apps/v1
@@ -51,6 +64,10 @@ spec:
         scheduler.alpha.kubernetes.io/critical-pod: ""
     spec:
       serviceAccountName: #@ data.values.app_name + "-service-account"
+      #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
+      imagePullSecrets:
+        - name: image-pull-secret
+      #@ end
       containers:
         - name: placeholder-name
           #@ if data.values.image_digest:

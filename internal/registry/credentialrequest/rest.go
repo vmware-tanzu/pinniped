@@ -3,8 +3,8 @@ Copyright 2020 VMware, Inc.
 SPDX-License-Identifier: Apache-2.0
 */
 
-// Package loginrequest provides REST functionality for the LoginRequest resource.
-package loginrequest
+// Package credentialrequest provides REST functionality for the CredentialRequest resource.
+package credentialrequest
 
 import (
 	"context"
@@ -51,7 +51,7 @@ type REST struct {
 }
 
 func (r *REST) New() runtime.Object {
-	return &placeholderapi.LoginRequest{}
+	return &placeholderapi.CredentialRequest{}
 }
 
 func (r *REST) NamespaceScoped() bool {
@@ -59,10 +59,10 @@ func (r *REST) NamespaceScoped() bool {
 }
 
 func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
-	t := trace.FromContext(ctx).Nest("create LoginRequest")
+	t := trace.FromContext(ctx).Nest("create CredentialRequest")
 	defer t.Log()
 
-	loginRequest, err := validateRequest(ctx, obj, createValidation, options, t)
+	credentialRequest, err := validateRequest(ctx, obj, createValidation, options, t)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		}
 	}()
 
-	authResponse, authenticated, err := r.webhook.AuthenticateToken(cancelCtx, loginRequest.Spec.Token.Value)
+	authResponse, authenticated, err := r.webhook.AuthenticateToken(cancelCtx, credentialRequest.Spec.Token.Value)
 	if err != nil {
 		traceFailureWithError(t, "webhook authentication", err)
 		return failureResponse(), nil
@@ -107,9 +107,9 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	traceSuccess(t, authResponse.User, authenticated, true)
 
-	return &placeholderapi.LoginRequest{
-		Status: placeholderapi.LoginRequestStatus{
-			Credential: &placeholderapi.LoginRequestCredential{
+	return &placeholderapi.CredentialRequest{
+		Status: placeholderapi.CredentialRequestStatus{
+			Credential: &placeholderapi.CredentialRequestCredential{
 				ExpirationTimestamp:   metav1.NewTime(time.Now().UTC().Add(clientCertificateTTL)),
 				ClientCertificateData: string(certPEM),
 				ClientKeyData:         string(keyPEM),
@@ -118,30 +118,30 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	}, nil
 }
 
-func validateRequest(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions, t *trace.Trace) (*placeholderapi.LoginRequest, error) {
-	loginRequest, ok := obj.(*placeholderapi.LoginRequest)
+func validateRequest(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions, t *trace.Trace) (*placeholderapi.CredentialRequest, error) {
+	credentialRequest, ok := obj.(*placeholderapi.CredentialRequest)
 	if !ok {
-		traceValidationFailure(t, "not a LoginRequest")
-		return nil, apierrors.NewBadRequest(fmt.Sprintf("not a LoginRequest: %#v", obj))
+		traceValidationFailure(t, "not a CredentialRequest")
+		return nil, apierrors.NewBadRequest(fmt.Sprintf("not a CredentialRequest: %#v", obj))
 	}
 
-	if len(loginRequest.Spec.Type) == 0 {
+	if len(credentialRequest.Spec.Type) == 0 {
 		traceValidationFailure(t, "type must be supplied")
 		errs := field.ErrorList{field.Required(field.NewPath("spec", "type"), "type must be supplied")}
-		return nil, apierrors.NewInvalid(placeholderapi.Kind(loginRequest.Kind), loginRequest.Name, errs)
+		return nil, apierrors.NewInvalid(placeholderapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
 	}
 
-	if loginRequest.Spec.Type != placeholderapi.TokenLoginCredentialType {
+	if credentialRequest.Spec.Type != placeholderapi.TokenCredentialType {
 		traceValidationFailure(t, "unrecognized type")
-		errs := field.ErrorList{field.Invalid(field.NewPath("spec", "type"), loginRequest.Spec.Type, "unrecognized type")}
-		return nil, apierrors.NewInvalid(placeholderapi.Kind(loginRequest.Kind), loginRequest.Name, errs)
+		errs := field.ErrorList{field.Invalid(field.NewPath("spec", "type"), credentialRequest.Spec.Type, "unrecognized type")}
+		return nil, apierrors.NewInvalid(placeholderapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
 	}
 
-	token := loginRequest.Spec.Token
+	token := credentialRequest.Spec.Token
 	if token == nil || len(token.Value) == 0 {
 		traceValidationFailure(t, "token must be supplied")
 		errs := field.ErrorList{field.Required(field.NewPath("spec", "token", "value"), "token must be supplied")}
-		return nil, apierrors.NewInvalid(placeholderapi.Kind(loginRequest.Kind), loginRequest.Name, errs)
+		return nil, apierrors.NewInvalid(placeholderapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
 	}
 
 	// just a sanity check, not sure how to honor a dry run on a virtual API
@@ -149,7 +149,7 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 		if len(options.DryRun) != 0 {
 			traceValidationFailure(t, "dryRun not supported")
 			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, nil)}
-			return nil, apierrors.NewInvalid(placeholderapi.Kind(loginRequest.Kind), loginRequest.Name, errs)
+			return nil, apierrors.NewInvalid(placeholderapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
 		}
 	}
 
@@ -160,15 +160,15 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 	//   they already got the token.
 	if createValidation != nil {
 		requestForValidation := obj.DeepCopyObject()
-		loginRequestCopy, _ := requestForValidation.(*placeholderapi.LoginRequest)
-		loginRequestCopy.Spec.Token.Value = ""
+		credentialRequestCopy, _ := requestForValidation.(*placeholderapi.CredentialRequest)
+		credentialRequestCopy.Spec.Token.Value = ""
 		if err := createValidation(ctx, requestForValidation); err != nil {
 			traceFailureWithError(t, "validation webhook", err)
 			return nil, err
 		}
 	}
 
-	return loginRequest, nil
+	return credentialRequest, nil
 }
 
 func traceSuccess(t *trace.Trace, user user.Info, webhookAuthenticated bool, placeholderNameAuthenticated bool) {
@@ -197,10 +197,10 @@ func traceFailureWithError(t *trace.Trace, failureType string, err error) {
 	)
 }
 
-func failureResponse() *placeholderapi.LoginRequest {
+func failureResponse() *placeholderapi.CredentialRequest {
 	m := "authentication failed"
-	return &placeholderapi.LoginRequest{
-		Status: placeholderapi.LoginRequestStatus{
+	return &placeholderapi.CredentialRequest{
+		Status: placeholderapi.CredentialRequestStatus{
 			Credential: nil,
 			Message:    &m,
 		},

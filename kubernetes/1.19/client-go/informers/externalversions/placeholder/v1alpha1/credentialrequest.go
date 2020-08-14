@@ -21,58 +21,58 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 )
 
-// LoginRequestInformer provides access to a shared informer and lister for
-// LoginRequests.
-type LoginRequestInformer interface {
+// CredentialRequestInformer provides access to a shared informer and lister for
+// CredentialRequests.
+type CredentialRequestInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.LoginRequestLister
+	Lister() v1alpha1.CredentialRequestLister
 }
 
-type loginRequestInformer struct {
+type credentialRequestInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 }
 
-// NewLoginRequestInformer constructs a new informer for LoginRequest type.
+// NewCredentialRequestInformer constructs a new informer for CredentialRequest type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewLoginRequestInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredLoginRequestInformer(client, resyncPeriod, indexers, nil)
+func NewCredentialRequestInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredCredentialRequestInformer(client, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredLoginRequestInformer constructs a new informer for LoginRequest type.
+// NewFilteredCredentialRequestInformer constructs a new informer for CredentialRequest type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredLoginRequestInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredCredentialRequestInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.PlaceholderV1alpha1().LoginRequests().List(context.TODO(), options)
+				return client.PlaceholderV1alpha1().CredentialRequests().List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.PlaceholderV1alpha1().LoginRequests().Watch(context.TODO(), options)
+				return client.PlaceholderV1alpha1().CredentialRequests().Watch(context.TODO(), options)
 			},
 		},
-		&placeholderv1alpha1.LoginRequest{},
+		&placeholderv1alpha1.CredentialRequest{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *loginRequestInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredLoginRequestInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *credentialRequestInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredCredentialRequestInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *loginRequestInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&placeholderv1alpha1.LoginRequest{}, f.defaultInformer)
+func (f *credentialRequestInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&placeholderv1alpha1.CredentialRequest{}, f.defaultInformer)
 }
 
-func (f *loginRequestInformer) Lister() v1alpha1.LoginRequestLister {
-	return v1alpha1.NewLoginRequestLister(f.Informer().GetIndexer())
+func (f *credentialRequestInformer) Lister() v1alpha1.CredentialRequestLister {
+	return v1alpha1.NewCredentialRequestLister(f.Informer().GetIndexer())
 }

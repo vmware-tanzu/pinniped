@@ -87,7 +87,7 @@ func TestExchangeToken(t *testing.T) {
 		})
 
 		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
-		require.EqualError(t, err, `login failed: server returned status 500`)
+		require.EqualError(t, err, `credential request failed: server returned status 500`)
 		require.Nil(t, got)
 	})
 
@@ -110,7 +110,7 @@ func TestExchangeToken(t *testing.T) {
 		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "context deadline exceeded")
-		require.Contains(t, err.Error(), "could not login:")
+		require.Contains(t, err.Error(), "could not get credential:")
 		require.Nil(t, got)
 	})
 
@@ -123,11 +123,11 @@ func TestExchangeToken(t *testing.T) {
 		})
 
 		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
-		require.EqualError(t, err, `invalid login response: invalid character 'o' in literal null (expecting 'u')`)
+		require.EqualError(t, err, `invalid credential response: invalid character 'o' in literal null (expecting 'u')`)
 		require.Nil(t, got)
 	})
 
-	t.Run("login failure", func(t *testing.T) {
+	t.Run("credential request failure", func(t *testing.T) {
 		t.Parallel()
 		// Start a test server that returns success but with an error message
 		caBundle, endpoint := startTestServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -135,20 +135,20 @@ func TestExchangeToken(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`
 				{
-				  "kind": "LoginRequest",
+				  "kind": "CredentialRequest",
 				  "apiVersion": "placeholder.suzerain-io.github.io/v1alpha1",
 				  "metadata": {
 					"creationTimestamp": null
 				  },
 				  "spec": {},
 				  "status": {
-					"message": "some login failure"
+					"message": "some credential request failure"
 				  }
 				}`))
 		})
 
 		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
-		require.EqualError(t, err, `login failed: some login failure`)
+		require.EqualError(t, err, `credential request failed: some credential request failure`)
 		require.Nil(t, got)
 	})
 
@@ -160,7 +160,7 @@ func TestExchangeToken(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`
 				{
-				  "kind": "LoginRequest",
+				  "kind": "CredentialRequest",
 				  "apiVersion": "placeholder.suzerain-io.github.io/v1alpha1",
 				  "metadata": {
 					"creationTimestamp": null
@@ -175,7 +175,7 @@ func TestExchangeToken(t *testing.T) {
 		})
 
 		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
-		require.EqualError(t, err, `invalid login response: parsing time "invalid" as "2006-01-02T15:04:05Z07:00": cannot parse "invalid" as "2006"`)
+		require.EqualError(t, err, `invalid credential response: parsing time "invalid" as "2006-01-02T15:04:05Z07:00": cannot parse "invalid" as "2006"`)
 		require.Nil(t, got)
 	})
 
@@ -185,14 +185,14 @@ func TestExchangeToken(t *testing.T) {
 		// Start a test server that returns successfully and asserts various properties of the request.
 		caBundle, endpoint := startTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 			require.Equal(t, http.MethodPost, r.Method)
-			require.Equal(t, "/apis/placeholder.suzerain-io.github.io/v1alpha1/loginrequests", r.URL.Path)
+			require.Equal(t, "/apis/placeholder.suzerain-io.github.io/v1alpha1/credentialrequests", r.URL.Path)
 			require.Equal(t, "application/json", r.Header.Get("content-type"))
 
 			body, err := ioutil.ReadAll(r.Body)
 			require.NoError(t, err)
 			require.JSONEq(t,
 				`{
-				  "kind": "LoginRequest",
+				  "kind": "CredentialRequest",
 				  "apiVersion": "placeholder.suzerain-io.github.io/v1alpha1",
 				  "metadata": {
 					"creationTimestamp": null
@@ -212,7 +212,7 @@ func TestExchangeToken(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`
 				{
-				  "kind": "LoginRequest",
+				  "kind": "CredentialRequest",
 				  "apiVersion": "placeholder.suzerain-io.github.io/v1alpha1",
 				  "metadata": {
 					"creationTimestamp": null

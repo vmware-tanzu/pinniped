@@ -79,12 +79,12 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 	// because the kube API server uses these certs when proxying requests to the aggregated API server,
 	// so this is effectively checking that the aggregated API server is using these new certs.
 	var aggregatedAPIWorking = func() bool {
-		_, err = placeholderClient.PlaceholderV1alpha1().LoginRequests().Create(ctx, &v1alpha1.LoginRequest{
+		_, err = placeholderClient.PlaceholderV1alpha1().CredentialRequests().Create(ctx, &v1alpha1.CredentialRequest{
 			TypeMeta:   metav1.TypeMeta{},
 			ObjectMeta: metav1.ObjectMeta{},
-			Spec: v1alpha1.LoginRequestSpec{
-				Type:  v1alpha1.TokenLoginCredentialType,
-				Token: &v1alpha1.LoginRequestTokenCredential{Value: "not a good token"},
+			Spec: v1alpha1.CredentialRequestSpec{
+				Type:  v1alpha1.TokenCredentialType,
+				Token: &v1alpha1.CredentialRequestTokenCredential{Value: "not a good token"},
 			},
 		}, metav1.CreateOptions{})
 		// Should have got a success response with an error message inside it complaining about the token value.

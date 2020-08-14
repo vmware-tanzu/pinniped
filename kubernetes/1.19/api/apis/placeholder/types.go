@@ -7,26 +7,26 @@ package placeholder
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-type LoginCredentialType string
+type CredentialType string
 
 const (
-	TokenLoginCredentialType = LoginCredentialType("token")
+	TokenCredentialType = CredentialType("token")
 )
 
-type LoginRequestTokenCredential struct {
-	// Value of the bearer token supplied with the login request.
+type CredentialRequestTokenCredential struct {
+	// Value of the bearer token supplied with the credential request.
 	Value string
 }
 
-type LoginRequestSpec struct {
+type CredentialRequestSpec struct {
 	// Type of credential.
-	Type LoginCredentialType
+	Type CredentialType
 
-	// Token credential (when Type == TokenLoginCredentialType).
-	Token *LoginRequestTokenCredential
+	// Token credential (when Type == TokenCredentialType).
+	Token *CredentialRequestTokenCredential
 }
 
-type LoginRequestCredential struct {
+type CredentialRequestCredential struct {
 	// ExpirationTimestamp indicates a time when the provided credentials expire.
 	ExpirationTimestamp metav1.Time
 
@@ -40,12 +40,12 @@ type LoginRequestCredential struct {
 	ClientKeyData string
 }
 
-type LoginRequestStatus struct {
-	// A Credential will be returned for a successful login request.
+type CredentialRequestStatus struct {
+	// A Credential will be returned for a successful credential request.
 	// +optional
-	Credential *LoginRequestCredential
+	Credential *CredentialRequestCredential
 
-	// An error message will be returned for an unsuccessful login request.
+	// An error message will be returned for an unsuccessful credential request.
 	// +optional
 	Message *string
 }
@@ -54,22 +54,22 @@ type LoginRequestStatus struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-type LoginRequest struct {
+type CredentialRequest struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
 
-	Spec   LoginRequestSpec
-	Status LoginRequestStatus
+	Spec   CredentialRequestSpec
+	Status CredentialRequestStatus
 }
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// LoginRequestList is a list of LoginRequest objects.
-type LoginRequestList struct {
+// CredentialRequestList is a list of CredentialRequest objects.
+type CredentialRequestList struct {
 	metav1.TypeMeta
 	metav1.ListMeta
 
-	// Items is a list of LoginRequests
-	Items []LoginRequest
+	// Items is a list of CredentialRequests
+	Items []CredentialRequest
 }

@@ -19,67 +19,67 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/crdsplaceholder/v1alpha1.LoginDiscoveryConfig":     schema_api_apis_crdsplaceholder_v1alpha1_LoginDiscoveryConfig(ref),
-		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/crdsplaceholder/v1alpha1.LoginDiscoveryConfigList": schema_api_apis_crdsplaceholder_v1alpha1_LoginDiscoveryConfigList(ref),
-		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/crdsplaceholder/v1alpha1.LoginDiscoveryConfigSpec": schema_api_apis_crdsplaceholder_v1alpha1_LoginDiscoveryConfigSpec(ref),
-		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequest":                 schema_api_apis_placeholder_v1alpha1_LoginRequest(ref),
-		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestCredential":       schema_api_apis_placeholder_v1alpha1_LoginRequestCredential(ref),
-		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestList":             schema_api_apis_placeholder_v1alpha1_LoginRequestList(ref),
-		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestSpec":             schema_api_apis_placeholder_v1alpha1_LoginRequestSpec(ref),
-		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestStatus":           schema_api_apis_placeholder_v1alpha1_LoginRequestStatus(ref),
-		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestTokenCredential":  schema_api_apis_placeholder_v1alpha1_LoginRequestTokenCredential(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                                                                      schema_pkg_apis_meta_v1_APIGroup(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroupList":                                                                  schema_pkg_apis_meta_v1_APIGroupList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":                                                                   schema_pkg_apis_meta_v1_APIResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResourceList":                                                               schema_pkg_apis_meta_v1_APIResourceList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIVersions":                                                                   schema_pkg_apis_meta_v1_APIVersions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Condition":                                                                     schema_pkg_apis_meta_v1_Condition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.CreateOptions":                                                                 schema_pkg_apis_meta_v1_CreateOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.DeleteOptions":                                                                 schema_pkg_apis_meta_v1_DeleteOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Duration":                                                                      schema_pkg_apis_meta_v1_Duration(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ExportOptions":                                                                 schema_pkg_apis_meta_v1_ExportOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.FieldsV1":                                                                      schema_pkg_apis_meta_v1_FieldsV1(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GetOptions":                                                                    schema_pkg_apis_meta_v1_GetOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupKind":                                                                     schema_pkg_apis_meta_v1_GroupKind(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupResource":                                                                 schema_pkg_apis_meta_v1_GroupResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersion":                                                                  schema_pkg_apis_meta_v1_GroupVersion(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionForDiscovery":                                                      schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionKind":                                                              schema_pkg_apis_meta_v1_GroupVersionKind(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionResource":                                                          schema_pkg_apis_meta_v1_GroupVersionResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.InternalEvent":                                                                 schema_pkg_apis_meta_v1_InternalEvent(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector":                                                                 schema_pkg_apis_meta_v1_LabelSelector(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelectorRequirement":                                                      schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.List":                                                                          schema_pkg_apis_meta_v1_List(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta":                                                                      schema_pkg_apis_meta_v1_ListMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ListOptions":                                                                   schema_pkg_apis_meta_v1_ListOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry":                                                            schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.MicroTime":                                                                     schema_pkg_apis_meta_v1_MicroTime(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta":                                                                    schema_pkg_apis_meta_v1_ObjectMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.OwnerReference":                                                                schema_pkg_apis_meta_v1_OwnerReference(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadata":                                                         schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadataList":                                                     schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Patch":                                                                         schema_pkg_apis_meta_v1_Patch(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PatchOptions":                                                                  schema_pkg_apis_meta_v1_PatchOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Preconditions":                                                                 schema_pkg_apis_meta_v1_Preconditions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.RootPaths":                                                                     schema_pkg_apis_meta_v1_RootPaths(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ServerAddressByClientCIDR":                                                     schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Status":                                                                        schema_pkg_apis_meta_v1_Status(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusCause":                                                                   schema_pkg_apis_meta_v1_StatusCause(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusDetails":                                                                 schema_pkg_apis_meta_v1_StatusDetails(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Table":                                                                         schema_pkg_apis_meta_v1_Table(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableColumnDefinition":                                                         schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableOptions":                                                                  schema_pkg_apis_meta_v1_TableOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRow":                                                                      schema_pkg_apis_meta_v1_TableRow(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRowCondition":                                                             schema_pkg_apis_meta_v1_TableRowCondition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Time":                                                                          schema_pkg_apis_meta_v1_Time(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Timestamp":                                                                     schema_pkg_apis_meta_v1_Timestamp(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TypeMeta":                                                                      schema_pkg_apis_meta_v1_TypeMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.UpdateOptions":                                                                 schema_pkg_apis_meta_v1_UpdateOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.WatchEvent":                                                                    schema_pkg_apis_meta_v1_WatchEvent(ref),
-		"k8s.io/apimachinery/pkg/runtime.RawExtension":                                                                       schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
-		"k8s.io/apimachinery/pkg/runtime.TypeMeta":                                                                           schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
-		"k8s.io/apimachinery/pkg/runtime.Unknown":                                                                            schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
-		"k8s.io/apimachinery/pkg/version.Info":                                                                               schema_k8sio_apimachinery_pkg_version_Info(ref),
+		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/crdsplaceholder/v1alpha1.LoginDiscoveryConfig":         schema_api_apis_crdsplaceholder_v1alpha1_LoginDiscoveryConfig(ref),
+		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/crdsplaceholder/v1alpha1.LoginDiscoveryConfigList":     schema_api_apis_crdsplaceholder_v1alpha1_LoginDiscoveryConfigList(ref),
+		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/crdsplaceholder/v1alpha1.LoginDiscoveryConfigSpec":     schema_api_apis_crdsplaceholder_v1alpha1_LoginDiscoveryConfigSpec(ref),
+		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequest":                schema_api_apis_placeholder_v1alpha1_CredentialRequest(ref),
+		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequestCredential":      schema_api_apis_placeholder_v1alpha1_CredentialRequestCredential(ref),
+		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequestList":            schema_api_apis_placeholder_v1alpha1_CredentialRequestList(ref),
+		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequestSpec":            schema_api_apis_placeholder_v1alpha1_CredentialRequestSpec(ref),
+		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequestStatus":          schema_api_apis_placeholder_v1alpha1_CredentialRequestStatus(ref),
+		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequestTokenCredential": schema_api_apis_placeholder_v1alpha1_CredentialRequestTokenCredential(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                                                                          schema_pkg_apis_meta_v1_APIGroup(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroupList":                                                                      schema_pkg_apis_meta_v1_APIGroupList(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":                                                                       schema_pkg_apis_meta_v1_APIResource(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResourceList":                                                                   schema_pkg_apis_meta_v1_APIResourceList(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIVersions":                                                                       schema_pkg_apis_meta_v1_APIVersions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Condition":                                                                         schema_pkg_apis_meta_v1_Condition(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.CreateOptions":                                                                     schema_pkg_apis_meta_v1_CreateOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.DeleteOptions":                                                                     schema_pkg_apis_meta_v1_DeleteOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Duration":                                                                          schema_pkg_apis_meta_v1_Duration(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ExportOptions":                                                                     schema_pkg_apis_meta_v1_ExportOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.FieldsV1":                                                                          schema_pkg_apis_meta_v1_FieldsV1(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GetOptions":                                                                        schema_pkg_apis_meta_v1_GetOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupKind":                                                                         schema_pkg_apis_meta_v1_GroupKind(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupResource":                                                                     schema_pkg_apis_meta_v1_GroupResource(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersion":                                                                      schema_pkg_apis_meta_v1_GroupVersion(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionForDiscovery":                                                          schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionKind":                                                                  schema_pkg_apis_meta_v1_GroupVersionKind(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionResource":                                                              schema_pkg_apis_meta_v1_GroupVersionResource(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.InternalEvent":                                                                     schema_pkg_apis_meta_v1_InternalEvent(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector":                                                                     schema_pkg_apis_meta_v1_LabelSelector(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelectorRequirement":                                                          schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.List":                                                                              schema_pkg_apis_meta_v1_List(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta":                                                                          schema_pkg_apis_meta_v1_ListMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ListOptions":                                                                       schema_pkg_apis_meta_v1_ListOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry":                                                                schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.MicroTime":                                                                         schema_pkg_apis_meta_v1_MicroTime(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta":                                                                        schema_pkg_apis_meta_v1_ObjectMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.OwnerReference":                                                                    schema_pkg_apis_meta_v1_OwnerReference(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadata":                                                             schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadataList":                                                         schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Patch":                                                                             schema_pkg_apis_meta_v1_Patch(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.PatchOptions":                                                                      schema_pkg_apis_meta_v1_PatchOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Preconditions":                                                                     schema_pkg_apis_meta_v1_Preconditions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.RootPaths":                                                                         schema_pkg_apis_meta_v1_RootPaths(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ServerAddressByClientCIDR":                                                         schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Status":                                                                            schema_pkg_apis_meta_v1_Status(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusCause":                                                                       schema_pkg_apis_meta_v1_StatusCause(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusDetails":                                                                     schema_pkg_apis_meta_v1_StatusDetails(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Table":                                                                             schema_pkg_apis_meta_v1_Table(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableColumnDefinition":                                                             schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableOptions":                                                                      schema_pkg_apis_meta_v1_TableOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRow":                                                                          schema_pkg_apis_meta_v1_TableRow(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRowCondition":                                                                 schema_pkg_apis_meta_v1_TableRowCondition(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Time":                                                                              schema_pkg_apis_meta_v1_Time(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Timestamp":                                                                         schema_pkg_apis_meta_v1_Timestamp(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TypeMeta":                                                                          schema_pkg_apis_meta_v1_TypeMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.UpdateOptions":                                                                     schema_pkg_apis_meta_v1_UpdateOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.WatchEvent":                                                                        schema_pkg_apis_meta_v1_WatchEvent(ref),
+		"k8s.io/apimachinery/pkg/runtime.RawExtension":                                                                           schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
+		"k8s.io/apimachinery/pkg/runtime.TypeMeta":                                                                               schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
+		"k8s.io/apimachinery/pkg/runtime.Unknown":                                                                                schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
+		"k8s.io/apimachinery/pkg/version.Info":                                                                                   schema_k8sio_apimachinery_pkg_version_Info(ref),
 	}
 }
 
@@ -194,7 +194,7 @@ func schema_api_apis_crdsplaceholder_v1alpha1_LoginDiscoveryConfigSpec(ref commo
 	}
 }
 
-func schema_api_apis_placeholder_v1alpha1_LoginRequest(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_api_apis_placeholder_v1alpha1_CredentialRequest(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -221,23 +221,23 @@ func schema_api_apis_placeholder_v1alpha1_LoginRequest(ref common.ReferenceCallb
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestSpec"),
+							Ref: ref("github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequestSpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestStatus"),
+							Ref: ref("github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequestStatus"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestSpec", "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequestSpec", "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequestStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
-func schema_api_apis_placeholder_v1alpha1_LoginRequestCredential(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_api_apis_placeholder_v1alpha1_CredentialRequestCredential(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -278,11 +278,11 @@ func schema_api_apis_placeholder_v1alpha1_LoginRequestCredential(ref common.Refe
 	}
 }
 
-func schema_api_apis_placeholder_v1alpha1_LoginRequestList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_api_apis_placeholder_v1alpha1_CredentialRequestList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "LoginRequestList is a list of LoginRequest objects.",
+				Description: "CredentialRequestList is a list of CredentialRequest objects.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
@@ -310,7 +310,7 @@ func schema_api_apis_placeholder_v1alpha1_LoginRequestList(ref common.ReferenceC
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequest"),
+										Ref: ref("github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequest"),
 									},
 								},
 							},
@@ -321,11 +321,11 @@ func schema_api_apis_placeholder_v1alpha1_LoginRequestList(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequest", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequest", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
 	}
 }
 
-func schema_api_apis_placeholder_v1alpha1_LoginRequestSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_api_apis_placeholder_v1alpha1_CredentialRequestSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -340,19 +340,19 @@ func schema_api_apis_placeholder_v1alpha1_LoginRequestSpec(ref common.ReferenceC
 					},
 					"token": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Token credential (when Type == TokenLoginCredentialType).",
-							Ref:         ref("github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestTokenCredential"),
+							Description: "Token credential (when Type == TokenCredentialType).",
+							Ref:         ref("github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequestTokenCredential"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestTokenCredential"},
+			"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequestTokenCredential"},
 	}
 }
 
-func schema_api_apis_placeholder_v1alpha1_LoginRequestStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_api_apis_placeholder_v1alpha1_CredentialRequestStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -360,13 +360,13 @@ func schema_api_apis_placeholder_v1alpha1_LoginRequestStatus(ref common.Referenc
 				Properties: map[string]spec.Schema{
 					"credential": {
 						SchemaProps: spec.SchemaProps{
-							Description: "A Credential will be returned for a successful login request.",
-							Ref:         ref("github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestCredential"),
+							Description: "A Credential will be returned for a successful credential request.",
+							Ref:         ref("github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequestCredential"),
 						},
 					},
 					"message": {
 						SchemaProps: spec.SchemaProps{
-							Description: "An error message will be returned for an unsuccessful login request.",
+							Description: "An error message will be returned for an unsuccessful credential request.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -375,11 +375,11 @@ func schema_api_apis_placeholder_v1alpha1_LoginRequestStatus(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestCredential"},
+			"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.CredentialRequestCredential"},
 	}
 }
 
-func schema_api_apis_placeholder_v1alpha1_LoginRequestTokenCredential(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_api_apis_placeholder_v1alpha1_CredentialRequestTokenCredential(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -387,7 +387,7 @@ func schema_api_apis_placeholder_v1alpha1_LoginRequestTokenCredential(ref common
 				Properties: map[string]spec.Schema{
 					"value": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Value of the bearer token supplied with the login request.",
+							Description: "Value of the bearer token supplied with the credential request.",
 							Type:        []string{"string"},
 							Format:      "",
 						},

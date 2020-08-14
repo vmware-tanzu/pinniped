@@ -7,26 +7,26 @@ package v1alpha1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-type LoginCredentialType string
+type CredentialType string
 
 const (
-	TokenLoginCredentialType = LoginCredentialType("token")
+	TokenCredentialType = CredentialType("token")
 )
 
-type LoginRequestTokenCredential struct {
-	// Value of the bearer token supplied with the login request.
+type CredentialRequestTokenCredential struct {
+	// Value of the bearer token supplied with the credential request.
 	Value string `json:"value,omitempty" protobuf:"bytes,1,opt,name=value"`
 }
 
-type LoginRequestSpec struct {
+type CredentialRequestSpec struct {
 	// Type of credential.
-	Type LoginCredentialType `json:"type,omitempty" protobuf:"bytes,1,opt,name=type"`
+	Type CredentialType `json:"type,omitempty" protobuf:"bytes,1,opt,name=type"`
 
-	// Token credential (when Type == TokenLoginCredentialType).
-	Token *LoginRequestTokenCredential `json:"token,omitempty" protobuf:"bytes,2,opt,name=token"`
+	// Token credential (when Type == TokenCredentialType).
+	Token *CredentialRequestTokenCredential `json:"token,omitempty" protobuf:"bytes,2,opt,name=token"`
 }
 
-type LoginRequestCredential struct {
+type CredentialRequestCredential struct {
 	// ExpirationTimestamp indicates a time when the provided credentials expire.
 	ExpirationTimestamp metav1.Time `json:"expirationTimestamp,omitempty"`
 
@@ -40,12 +40,12 @@ type LoginRequestCredential struct {
 	ClientKeyData string `json:"clientKeyData,omitempty"`
 }
 
-type LoginRequestStatus struct {
-	// A Credential will be returned for a successful login request.
+type CredentialRequestStatus struct {
+	// A Credential will be returned for a successful credential request.
 	// +optional
-	Credential *LoginRequestCredential `json:"credential,omitempty"`
+	Credential *CredentialRequestCredential `json:"credential,omitempty"`
 
-	// An error message will be returned for an unsuccessful login request.
+	// An error message will be returned for an unsuccessful credential request.
 	// +optional
 	Message *string `json:"message,omitempty"`
 }
@@ -54,21 +54,21 @@ type LoginRequestStatus struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-type LoginRequest struct {
+type CredentialRequest struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec   LoginRequestSpec   `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
-	Status LoginRequestStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
+	Spec   CredentialRequestSpec   `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Status CredentialRequestStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// LoginRequestList is a list of LoginRequest objects.
-type LoginRequestList struct {
+// CredentialRequestList is a list of CredentialRequest objects.
+type CredentialRequestList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
-	Items []LoginRequest `json:"items" protobuf:"bytes,2,rep,name=items"`
+	Items []CredentialRequest `json:"items" protobuf:"bytes,2,rep,name=items"`
 }

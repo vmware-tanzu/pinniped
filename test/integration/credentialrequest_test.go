@@ -23,7 +23,7 @@ import (
 	"github.com/suzerain-io/placeholder-name/test/library"
 )
 
-func makeRequest(t *testing.T, spec v1alpha1.LoginRequestSpec) (*v1alpha1.LoginRequest, error) {
+func makeRequest(t *testing.T, spec v1alpha1.CredentialRequestSpec) (*v1alpha1.CredentialRequest, error) {
 	t.Helper()
 
 	client := library.NewAnonymousPlaceholderNameClientset(t)
@@ -31,7 +31,7 @@ func makeRequest(t *testing.T, spec v1alpha1.LoginRequestSpec) (*v1alpha1.LoginR
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	return client.PlaceholderV1alpha1().LoginRequests().Create(ctx, &v1alpha1.LoginRequest{
+	return client.PlaceholderV1alpha1().CredentialRequests().Create(ctx, &v1alpha1.CredentialRequest{
 		TypeMeta:   metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{},
 		Spec:       spec,
@@ -58,13 +58,13 @@ func addTestClusterRoleBinding(ctx context.Context, t *testing.T, adminClient ku
 	})
 }
 
-func TestSuccessfulLoginRequest(t *testing.T) {
+func TestSuccessfulCredentialRequest(t *testing.T) {
 	library.SkipUnlessIntegration(t)
 	tmcClusterToken := library.Getenv(t, "PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN")
 
-	response, err := makeRequest(t, v1alpha1.LoginRequestSpec{
-		Type:  v1alpha1.TokenLoginCredentialType,
-		Token: &v1alpha1.LoginRequestTokenCredential{Value: tmcClusterToken},
+	response, err := makeRequest(t, v1alpha1.CredentialRequestSpec{
+		Type:  v1alpha1.TokenCredentialType,
+		Token: &v1alpha1.CredentialRequestTokenCredential{Value: tmcClusterToken},
 	})
 
 	require.NoError(t, err)
@@ -86,8 +86,8 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 	// Create a client using the admin kubeconfig.
 	adminClient := library.NewClientset(t)
 
-	// Create a client using the certificate from the LoginRequest.
-	clientWithCertFromLoginRequest := library.NewClientsetWithCertAndKey(
+	// Create a client using the certificate from the CredentialRequest.
+	clientWithCertFromCredentialRequest := library.NewClientsetWithCertAndKey(
 		t,
 		response.Status.Credential.ClientCertificateData,
 		response.Status.Credential.ClientKeyData,
@@ -112,7 +112,7 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 		})
 
 		// Use the client which is authenticated as the TMC user to list namespaces
-		listNamespaceResponse, err := clientWithCertFromLoginRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+		listNamespaceResponse, err := clientWithCertFromCredentialRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 		require.NoError(t, err)
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	})
@@ -136,17 +136,17 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 		})
 
 		// Use the client which is authenticated as the TMC group to list namespaces
-		listNamespaceResponse, err := clientWithCertFromLoginRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+		listNamespaceResponse, err := clientWithCertFromCredentialRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 		require.NoError(t, err)
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	})
 }
 
-func TestFailedLoginRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
+func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
 	library.SkipUnlessIntegration(t)
-	response, err := makeRequest(t, v1alpha1.LoginRequestSpec{
-		Type:  v1alpha1.TokenLoginCredentialType,
-		Token: &v1alpha1.LoginRequestTokenCredential{Value: "not a good token"},
+	response, err := makeRequest(t, v1alpha1.CredentialRequestSpec{
+		Type:  v1alpha1.TokenCredentialType,
+		Token: &v1alpha1.CredentialRequestTokenCredential{Value: "not a good token"},
 	})
 
 	require.NoError(t, err)
@@ -156,10 +156,10 @@ func TestFailedLoginRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTh
 	require.Equal(t, stringPtr("authentication failed"), response.Status.Message)
 }
 
-func TestLoginRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
+func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
 	library.SkipUnlessIntegration(t)
-	response, err := makeRequest(t, v1alpha1.LoginRequestSpec{
-		Type:  v1alpha1.TokenLoginCredentialType,
+	response, err := makeRequest(t, v1alpha1.CredentialRequestSpec{
+		Type:  v1alpha1.TokenCredentialType,
 		Token: nil,
 	})
 

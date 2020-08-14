@@ -3,7 +3,7 @@ Copyright 2020 VMware, Inc.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package loginrequest
+package credentialrequest
 
 import (
 	"context"
@@ -102,19 +102,19 @@ func TestCreate(t *testing.T) {
 			storage := NewREST(&webhook, issuer)
 			requestToken := "a token"
 
-			response, err := callCreate(context.Background(), storage, validLoginRequestWithToken(requestToken))
+			response, err := callCreate(context.Background(), storage, validCredentialRequestWithToken(requestToken))
 
 			r.NoError(err)
-			r.IsType(&placeholderapi.LoginRequest{}, response)
+			r.IsType(&placeholderapi.CredentialRequest{}, response)
 
-			expires := response.(*placeholderapi.LoginRequest).Status.Credential.ExpirationTimestamp
+			expires := response.(*placeholderapi.CredentialRequest).Status.Credential.ExpirationTimestamp
 			r.NotNil(expires)
 			r.InDelta(time.Now().Add(1*time.Hour).Unix(), expires.Unix(), 5)
-			response.(*placeholderapi.LoginRequest).Status.Credential.ExpirationTimestamp = metav1.Time{}
+			response.(*placeholderapi.CredentialRequest).Status.Credential.ExpirationTimestamp = metav1.Time{}
 
-			r.Equal(response, &placeholderapi.LoginRequest{
-				Status: placeholderapi.LoginRequestStatus{
-					Credential: &placeholderapi.LoginRequestCredential{
+			r.Equal(response, &placeholderapi.CredentialRequest{
+				Status: placeholderapi.CredentialRequestStatus{
+					Credential: &placeholderapi.CredentialRequestCredential{
 						ExpirationTimestamp:   metav1.Time{},
 						ClientCertificateData: "test-cert",
 						ClientKeyData:         "test-key",
@@ -144,7 +144,7 @@ func TestCreate(t *testing.T) {
 			storage := NewREST(&webhook, issuer)
 			requestToken := "a token"
 
-			response, err := callCreate(context.Background(), storage, validLoginRequestWithToken(requestToken))
+			response, err := callCreate(context.Background(), storage, validCredentialRequestWithToken(requestToken))
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 			r.Equal(requestToken, webhook.calledWithToken)
 			requireOneLogStatement(r, logger, `"failure" failureType:cert issuer,msg:some certificate authority error`)
@@ -160,7 +160,7 @@ func TestCreate(t *testing.T) {
 			storage := NewREST(&webhook, nil)
 			requestToken := "a token"
 
-			response, err := callCreate(context.Background(), storage, validLoginRequestWithToken(requestToken))
+			response, err := callCreate(context.Background(), storage, validCredentialRequestWithToken(requestToken))
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 			r.Equal(requestToken, webhook.calledWithToken)
@@ -175,7 +175,7 @@ func TestCreate(t *testing.T) {
 			storage := NewREST(&webhook, nil)
 			requestToken := "a token"
 
-			response, err := callCreate(context.Background(), storage, validLoginRequestWithToken(requestToken))
+			response, err := callCreate(context.Background(), storage, validCredentialRequestWithToken(requestToken))
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 			r.Equal(requestToken, webhook.calledWithToken)
@@ -188,7 +188,7 @@ func TestCreate(t *testing.T) {
 			}
 			storage := NewREST(&webhook, nil)
 
-			response, err := callCreate(context.Background(), storage, validLoginRequest())
+			response, err := callCreate(context.Background(), storage, validCredentialRequest())
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 			requireOneLogStatement(r, logger, `"failure" failureType:webhook authentication,msg:some webhook error`)
@@ -201,7 +201,7 @@ func TestCreate(t *testing.T) {
 			}
 			storage := NewREST(&webhook, nil)
 
-			response, err := callCreate(context.Background(), storage, validLoginRequest())
+			response, err := callCreate(context.Background(), storage, validCredentialRequest())
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 			requireOneLogStatement(r, logger, `"success" userID:<none>,idpAuthenticated:true,placeholderNameAuthenticated:false`)
@@ -217,7 +217,7 @@ func TestCreate(t *testing.T) {
 			}
 			storage := NewREST(&webhook, nil)
 
-			response, err := callCreate(context.Background(), storage, validLoginRequest())
+			response, err := callCreate(context.Background(), storage, validCredentialRequest())
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 			requireOneLogStatement(r, logger, `"success" userID:,idpAuthenticated:true,placeholderNameAuthenticated:false`)
@@ -230,28 +230,28 @@ func TestCreate(t *testing.T) {
 			storage := NewREST(&webhook, successfulIssuer(ctrl))
 			ctx := context.WithValue(context.Background(), contextKey{}, "context-value")
 
-			_, err := callCreate(ctx, storage, validLoginRequest())
+			_, err := callCreate(ctx, storage, validCredentialRequest())
 
 			r.NoError(err)
 			r.Nil(webhook.calledWithContext.Value("context-key"))
 		})
 
 		it("CreateFailsWhenGivenTheWrongInputType", func() {
-			notALoginRequest := runtime.Unknown{}
+			notACredentialRequest := runtime.Unknown{}
 			response, err := NewREST(&FakeToken{}, nil).Create(
 				genericapirequest.NewContext(),
-				&notALoginRequest,
+				&notACredentialRequest,
 				rest.ValidateAllObjectFunc,
 				&metav1.CreateOptions{})
 
-			requireAPIError(t, response, err, apierrors.IsBadRequest, "not a LoginRequest")
-			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:not a LoginRequest`)
+			requireAPIError(t, response, err, apierrors.IsBadRequest, "not a CredentialRequest")
+			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:not a CredentialRequest`)
 		})
 
 		it("CreateFailsWhenTokenIsNilInRequest", func() {
 			storage := NewREST(&FakeToken{}, nil)
-			response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
-				Type:  placeholderapi.TokenLoginCredentialType,
+			response, err := callCreate(context.Background(), storage, credentialRequest(placeholderapi.CredentialRequestSpec{
+				Type:  placeholderapi.TokenCredentialType,
 				Token: nil,
 			}))
 
@@ -262,9 +262,9 @@ func TestCreate(t *testing.T) {
 
 		it("CreateFailsWhenTypeInRequestIsMissing", func() {
 			storage := NewREST(&FakeToken{}, nil)
-			response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
+			response, err := callCreate(context.Background(), storage, credentialRequest(placeholderapi.CredentialRequestSpec{
 				Type:  "",
-				Token: &placeholderapi.LoginRequestTokenCredential{Value: "a token"},
+				Token: &placeholderapi.CredentialRequestTokenCredential{Value: "a token"},
 			}))
 
 			requireAPIError(t, response, err, apierrors.IsInvalid,
@@ -274,9 +274,9 @@ func TestCreate(t *testing.T) {
 
 		it("CreateFailsWhenTypeInRequestIsNotLegal", func() {
 			storage := NewREST(&FakeToken{}, nil)
-			response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
+			response, err := callCreate(context.Background(), storage, credentialRequest(placeholderapi.CredentialRequestSpec{
 				Type:  "this in an invalid type",
-				Token: &placeholderapi.LoginRequestTokenCredential{Value: "a token"},
+				Token: &placeholderapi.CredentialRequestTokenCredential{Value: "a token"},
 			}))
 
 			requireAPIError(t, response, err, apierrors.IsInvalid,
@@ -286,9 +286,9 @@ func TestCreate(t *testing.T) {
 
 		it("CreateFailsWhenTokenValueIsEmptyInRequest", func() {
 			storage := NewREST(&FakeToken{}, nil)
-			response, err := callCreate(context.Background(), storage, loginRequest(placeholderapi.LoginRequestSpec{
-				Type:  placeholderapi.TokenLoginCredentialType,
-				Token: &placeholderapi.LoginRequestTokenCredential{Value: ""},
+			response, err := callCreate(context.Background(), storage, credentialRequest(placeholderapi.CredentialRequestSpec{
+				Type:  placeholderapi.TokenCredentialType,
+				Token: &placeholderapi.CredentialRequestTokenCredential{Value: ""},
 			}))
 
 			requireAPIError(t, response, err, apierrors.IsInvalid,
@@ -300,7 +300,7 @@ func TestCreate(t *testing.T) {
 			storage := NewREST(&FakeToken{}, nil)
 			response, err := storage.Create(
 				context.Background(),
-				validLoginRequest(),
+				validCredentialRequest(),
 				func(ctx context.Context, obj runtime.Object) error {
 					return fmt.Errorf("some validation error")
 				},
@@ -318,10 +318,10 @@ func TestCreate(t *testing.T) {
 			requestToken := "a token"
 			response, err := storage.Create(
 				context.Background(),
-				validLoginRequestWithToken(requestToken),
+				validCredentialRequestWithToken(requestToken),
 				func(ctx context.Context, obj runtime.Object) error {
-					loginRequest, _ := obj.(*placeholderapi.LoginRequest)
-					loginRequest.Spec.Token.Value = "foobaz"
+					credentialRequest, _ := obj.(*placeholderapi.CredentialRequest)
+					credentialRequest.Spec.Token.Value = "foobaz"
 					return nil
 				},
 				&metav1.CreateOptions{})
@@ -340,11 +340,11 @@ func TestCreate(t *testing.T) {
 			var validationFunctionSawTokenValue string
 			response, err := storage.Create(
 				context.Background(),
-				validLoginRequest(),
+				validCredentialRequest(),
 				func(ctx context.Context, obj runtime.Object) error {
-					loginRequest, _ := obj.(*placeholderapi.LoginRequest)
+					credentialRequest, _ := obj.(*placeholderapi.CredentialRequest)
 					validationFunctionWasCalled = true
-					validationFunctionSawTokenValue = loginRequest.Spec.Token.Value
+					validationFunctionSawTokenValue = credentialRequest.Spec.Token.Value
 					return nil
 				},
 				&metav1.CreateOptions{})
@@ -357,7 +357,7 @@ func TestCreate(t *testing.T) {
 		it("CreateFailsWhenRequestOptionsDryRunIsNotEmpty", func() {
 			response, err := NewREST(&FakeToken{}, nil).Create(
 				genericapirequest.NewContext(),
-				validLoginRequest(),
+				validCredentialRequest(),
 				rest.ValidateAllObjectFunc,
 				&metav1.CreateOptions{
 					DryRun: []string{"some dry run flag"},
@@ -380,7 +380,7 @@ func TestCreate(t *testing.T) {
 
 			c := make(chan bool)
 			go func() {
-				_, err := callCreate(ctx, storage, validLoginRequest())
+				_, err := callCreate(ctx, storage, validCredentialRequest())
 				c <- true
 				r.NoError(err)
 			}()
@@ -408,7 +408,7 @@ func TestCreate(t *testing.T) {
 
 			c := make(chan bool)
 			go func() {
-				_, err := callCreate(ctx, storage, validLoginRequest())
+				_, err := callCreate(ctx, storage, validCredentialRequest())
 				c <- true
 				r.NoError(err)
 			}()
@@ -430,29 +430,29 @@ func requireOneLogStatement(r *require.Assertions, logger *testutil.TranscriptLo
 	r.Contains(logger.Transcript[0].Message, messageContains)
 }
 
-func callCreate(ctx context.Context, storage *REST, loginRequest *placeholderapi.LoginRequest) (runtime.Object, error) {
+func callCreate(ctx context.Context, storage *REST, credentialRequest *placeholderapi.CredentialRequest) (runtime.Object, error) {
 	return storage.Create(
 		ctx,
-		loginRequest,
+		credentialRequest,
 		rest.ValidateAllObjectFunc,
 		&metav1.CreateOptions{
 			DryRun: []string{},
 		})
 }
 
-func validLoginRequest() *placeholderapi.LoginRequest {
-	return validLoginRequestWithToken("some token")
+func validCredentialRequest() *placeholderapi.CredentialRequest {
+	return validCredentialRequestWithToken("some token")
 }
 
-func validLoginRequestWithToken(token string) *placeholderapi.LoginRequest {
-	return loginRequest(placeholderapi.LoginRequestSpec{
-		Type:  placeholderapi.TokenLoginCredentialType,
-		Token: &placeholderapi.LoginRequestTokenCredential{Value: token},
+func validCredentialRequestWithToken(token string) *placeholderapi.CredentialRequest {
+	return credentialRequest(placeholderapi.CredentialRequestSpec{
+		Type:  placeholderapi.TokenCredentialType,
+		Token: &placeholderapi.CredentialRequestTokenCredential{Value: token},
 	})
 }
 
-func loginRequest(spec placeholderapi.LoginRequestSpec) *placeholderapi.LoginRequest {
-	return &placeholderapi.LoginRequest{
+func credentialRequest(spec placeholderapi.CredentialRequestSpec) *placeholderapi.CredentialRequest {
+	return &placeholderapi.CredentialRequest{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "request name",
@@ -482,8 +482,8 @@ func requireAPIError(t *testing.T, response runtime.Object, err error, expectedE
 func requireSuccessfulResponseWithAuthenticationFailureMessage(t *testing.T, err error, response runtime.Object) {
 	t.Helper()
 	require.NoError(t, err)
-	require.Equal(t, response, &placeholderapi.LoginRequest{
-		Status: placeholderapi.LoginRequestStatus{
+	require.Equal(t, response, &placeholderapi.CredentialRequest{
+		Status: placeholderapi.CredentialRequestStatus{
 			Credential: nil,
 			Message:    stringPtr("authentication failed"),
 		},

@@ -31,7 +31,7 @@ func main() {
 type envGetter func(string) (string, bool)
 type tokenExchanger func(ctx context.Context, token, caBundle, apiEndpoint string) (*client.Credential, error)
 
-const ErrMissingEnvVar = constable.Error("failed to login: environment variable not set")
+const ErrMissingEnvVar = constable.Error("failed to get credential: environment variable not set")
 
 func run(envGetter envGetter, tokenExchanger tokenExchanger, outputWriter io.Writer, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -54,7 +54,7 @@ func run(envGetter envGetter, tokenExchanger tokenExchanger, outputWriter io.Wri
 
 	cred, err := tokenExchanger(ctx, token, caBundle, apiEndpoint)
 	if err != nil {
-		return fmt.Errorf("failed to login: %w", err)
+		return fmt.Errorf("failed to get credential: %w", err)
 	}
 
 	var expiration *metav1.Time

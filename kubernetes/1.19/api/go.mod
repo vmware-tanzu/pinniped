@@ -6,6 +6,7 @@ require (
 	github.com/emicklei/go-restful v2.9.5+incompatible // indirect
 	github.com/go-openapi/jsonreference v0.19.3 // indirect
 	github.com/go-openapi/spec v0.19.3
+	github.com/golangci/golangci-lint v1.30.0 // indirect
 	github.com/google/go-cmp v0.5.0 // indirect
 	github.com/json-iterator/go v1.1.10 // indirect
 	github.com/kr/text v0.2.0 // indirect

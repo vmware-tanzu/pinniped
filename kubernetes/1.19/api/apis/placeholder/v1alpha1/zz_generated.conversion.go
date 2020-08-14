@@ -202,7 +202,7 @@ func Convert_placeholder_LoginRequestSpec_To_v1alpha1_LoginRequestSpec(in *place
 func autoConvert_v1alpha1_LoginRequestStatus_To_placeholder_LoginRequestStatus(in *LoginRequestStatus, out *placeholder.LoginRequestStatus, s conversion.Scope) error {
 	out.Credential = (*placeholder.LoginRequestCredential)(unsafe.Pointer(in.Credential))
 	out.User = (*placeholder.User)(unsafe.Pointer(in.User))
-	out.Message = in.Message
+	out.Message = (*string)(unsafe.Pointer(in.Message))
 	return nil
 }
 
@@ -214,7 +214,7 @@ func Convert_v1alpha1_LoginRequestStatus_To_placeholder_LoginRequestStatus(in *L
 func autoConvert_placeholder_LoginRequestStatus_To_v1alpha1_LoginRequestStatus(in *placeholder.LoginRequestStatus, out *LoginRequestStatus, s conversion.Scope) error {
 	out.Credential = (*LoginRequestCredential)(unsafe.Pointer(in.Credential))
 	out.User = (*User)(unsafe.Pointer(in.User))
-	out.Message = in.Message
+	out.Message = (*string)(unsafe.Pointer(in.Message))
 	return nil
 }
 

@@ -125,6 +125,11 @@ func (in *LoginRequestStatus) DeepCopyInto(out *LoginRequestStatus) {
 		*out = new(User)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Message != nil {
+		in, out := &in.Message, &out.Message
+		*out = new(string)
+		**out = **in
+	}
 	return
 }
 

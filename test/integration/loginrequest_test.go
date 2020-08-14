@@ -155,7 +155,7 @@ func TestFailedLoginRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTh
 	require.Empty(t, response.Spec)
 	require.Nil(t, response.Status.Credential)
 	require.Nil(t, response.Status.User)
-	require.Equal(t, "authentication failed", response.Status.Message)
+	require.Equal(t, stringPtr("authentication failed"), response.Status.Message)
 }
 
 func TestLoginRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
@@ -177,4 +177,8 @@ func TestLoginRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
 
 	require.Empty(t, response.Spec)
 	require.Nil(t, response.Status.Credential)
+}
+
+func stringPtr(s string) *string {
+	return &s
 }

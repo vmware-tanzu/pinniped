@@ -59,7 +59,7 @@ type LoginRequestStatus struct {
 
 	// An error message will be returned for an unsuccessful login request.
 	// +optional
-	Message string
+	Message *string
 }
 
 // +genclient

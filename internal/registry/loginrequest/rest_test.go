@@ -123,7 +123,6 @@ func TestCreate(t *testing.T) {
 						ClientCertificateData: "test-cert",
 						ClientKeyData:         "test-key",
 					},
-					Message: "",
 				},
 			})
 			r.Equal(requestToken, webhook.calledWithToken)
@@ -490,7 +489,7 @@ func requireSuccessfulResponseWithAuthenticationFailureMessage(t *testing.T, err
 	require.Equal(t, response, &placeholderapi.LoginRequest{
 		Status: placeholderapi.LoginRequestStatus{
 			Credential: nil,
-			Message:    "authentication failed",
+			Message:    stringPtr("authentication failed"),
 		},
 	})
 }
@@ -501,4 +500,8 @@ func successfulIssuer(ctrl *gomock.Controller) CertIssuer {
 		IssuePEM(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return([]byte("test-cert"), []byte("test-key"), nil)
 	return issuer
+}
+
+func stringPtr(s string) *string {
+	return &s
 }

@@ -202,10 +202,11 @@ func traceFailureWithError(t *trace.Trace, failureType string, err error) {
 }
 
 func failureResponse() *placeholderapi.LoginRequest {
+	m := "authentication failed"
 	return &placeholderapi.LoginRequest{
 		Status: placeholderapi.LoginRequestStatus{
 			Credential: nil,
-			Message:    "authentication failed",
+			Message:    &m,
 		},
 	}
 }

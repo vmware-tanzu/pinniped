@@ -37,7 +37,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(hack/get-ldflags.
 
 
 # Use a runtime image based on Debian slim
-FROM debian:10.5-slim@sha256:b2cade793f3558c90d018ed386cd61bf5e4ec06bf8ed6761bed3dd7e2c425ecc
+FROM debian:10.5-slim@sha256:e0a33348ac8cace6b4294885e6e0bb57ecdfe4b6e415f1a7f4c5da5fe3116e02
 
 # Copy the binary from the build-env stage
 COPY --from=build-env /work/out/placeholder-name-server /usr/local/bin/placeholder-name-server

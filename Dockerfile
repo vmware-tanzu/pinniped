@@ -1,7 +1,7 @@
 # Copyright 2020 VMware, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.15.0@sha256:f92b2f06e4dbda381b142d63b009cf5117bb3c487617d4695808fce05a808ebe as build-env
+FROM golang:1.15.0@sha256:5219b39d2d6bf723fb0221633a0ff831b0f89a94beb5a8003c7ff18003f48ead as build-env
 
 # It is important that these ARG's are defined after the FROM statement
 ARG ACCESS_TOKEN_USR="nothing"

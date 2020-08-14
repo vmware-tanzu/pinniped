@@ -1,7 +1,7 @@
 # Copyright 2020 VMware, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.15.0 as build-env
+FROM golang:1.15.0@sha256:f92b2f06e4dbda381b142d63b009cf5117bb3c487617d4695808fce05a808ebe as build-env
 
 # It is important that these ARG's are defined after the FROM statement
 ARG ACCESS_TOKEN_USR="nothing"
@@ -37,7 +37,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(hack/get-ldflags.
 
 
 # Use a runtime image based on Debian slim
-FROM debian:10.5-slim
+FROM debian:10.5-slim@sha256:b2cade793f3558c90d018ed386cd61bf5e4ec06bf8ed6761bed3dd7e2c425ecc
 
 # Copy the binary from the build-env stage
 COPY --from=build-env /work/out/placeholder-name-server /usr/local/bin/placeholder-name-server

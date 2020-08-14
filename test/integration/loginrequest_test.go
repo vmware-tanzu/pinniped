@@ -7,6 +7,8 @@ package integration
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"net/http"
 	"testing"
 	"time"
@@ -77,9 +79,6 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 	require.NotEmpty(t, response.Status.Credential.ClientKeyData)
 	require.NotNil(t, response.Status.Credential.ExpirationTimestamp)
 	require.InDelta(t, time.Until(response.Status.Credential.ExpirationTimestamp.Time), 1*time.Hour, float64(3*time.Minute))
-	require.NotNil(t, response.Status.User)
-	require.NotEmpty(t, response.Status.User.Name)
-	require.Contains(t, response.Status.User.Groups, "tmc:member")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -103,7 +102,7 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 			Subjects: []rbacv1.Subject{{
 				Kind:     rbacv1.UserKind,
 				APIGroup: rbacv1.GroupName,
-				Name:     response.Status.User.Name,
+				Name:     getCommonName(t, response.Status.Credential.ClientCertificateData),
 			}},
 			RoleRef: rbacv1.RoleRef{
 				Kind:     "ClusterRole",
@@ -154,7 +153,6 @@ func TestFailedLoginRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTh
 
 	require.Empty(t, response.Spec)
 	require.Nil(t, response.Status.Credential)
-	require.Nil(t, response.Status.User)
 	require.Equal(t, stringPtr("authentication failed"), response.Status.Message)
 }
 
@@ -181,4 +179,14 @@ func TestLoginRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
 
 func stringPtr(s string) *string {
 	return &s
+}
+
+func getCommonName(t *testing.T, certPEM string) string {
+	t.Helper()
+
+	pemBlock, _ := pem.Decode([]byte(certPEM))
+	cert, err := x509.ParseCertificate(pemBlock.Bytes)
+	require.NoError(t, err)
+
+	return cert.Subject.CommonName
 }

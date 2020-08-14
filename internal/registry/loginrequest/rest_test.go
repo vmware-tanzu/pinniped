@@ -114,10 +114,6 @@ func TestCreate(t *testing.T) {
 
 			r.Equal(response, &placeholderapi.LoginRequest{
 				Status: placeholderapi.LoginRequestStatus{
-					User: &placeholderapi.User{
-						Name:   "test-user",
-						Groups: []string{"test-group-1", "test-group-2"},
-					},
 					Credential: &placeholderapi.LoginRequestCredential{
 						ExpirationTimestamp:   metav1.Time{},
 						ClientCertificateData: "test-cert",

@@ -40,22 +40,10 @@ type LoginRequestCredential struct {
 	ClientKeyData string `json:"clientKeyData,omitempty"`
 }
 
-type User struct {
-	// Identity Provider name for authenticated user.
-	Name string `json:"name,omitempty"`
-
-	// Identity Provider groups for authenticated user.
-	Groups []string `json:"groups"`
-}
-
 type LoginRequestStatus struct {
 	// A Credential will be returned for a successful login request.
 	// +optional
 	Credential *LoginRequestCredential `json:"credential,omitempty"`
-
-	// A User will be populated from the Identity Provider.
-	// +optional
-	User *User `json:"user,omitempty"`
 
 	// An error message will be returned for an unsuccessful login request.
 	// +optional

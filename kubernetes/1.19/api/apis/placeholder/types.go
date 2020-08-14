@@ -40,22 +40,10 @@ type LoginRequestCredential struct {
 	ClientKeyData string
 }
 
-type User struct {
-	// Identity Provider name for authenticated user.
-	Name string
-
-	// Identity Provider groups for authenticated user.
-	Groups []string
-}
-
 type LoginRequestStatus struct {
 	// A Credential will be returned for a successful login request.
 	// +optional
 	Credential *LoginRequestCredential
-
-	// A User will be populated from the Identity Provider.
-	// +optional
-	User *User
 
 	// An error message will be returned for an unsuccessful login request.
 	// +optional

@@ -28,7 +28,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestSpec":             schema_api_apis_placeholder_v1alpha1_LoginRequestSpec(ref),
 		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestStatus":           schema_api_apis_placeholder_v1alpha1_LoginRequestStatus(ref),
 		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestTokenCredential":  schema_api_apis_placeholder_v1alpha1_LoginRequestTokenCredential(ref),
-		"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.User":                         schema_api_apis_placeholder_v1alpha1_User(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                                                                      schema_pkg_apis_meta_v1_APIGroup(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroupList":                                                                  schema_pkg_apis_meta_v1_APIGroupList(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":                                                                   schema_pkg_apis_meta_v1_APIResource(ref),
@@ -365,12 +364,6 @@ func schema_api_apis_placeholder_v1alpha1_LoginRequestStatus(ref common.Referenc
 							Ref:         ref("github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestCredential"),
 						},
 					},
-					"user": {
-						SchemaProps: spec.SchemaProps{
-							Description: "A User will be populated from the Identity Provider.",
-							Ref:         ref("github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.User"),
-						},
-					},
 					"message": {
 						SchemaProps: spec.SchemaProps{
 							Description: "An error message will be returned for an unsuccessful login request.",
@@ -382,7 +375,7 @@ func schema_api_apis_placeholder_v1alpha1_LoginRequestStatus(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestCredential", "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.User"},
+			"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1.LoginRequestCredential"},
 	}
 }
 
@@ -400,40 +393,6 @@ func schema_api_apis_placeholder_v1alpha1_LoginRequestTokenCredential(ref common
 						},
 					},
 				},
-			},
-		},
-	}
-}
-
-func schema_api_apis_placeholder_v1alpha1_User(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"name": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Identity Provider name for authenticated user.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"groups": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Identity Provider groups for authenticated user.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Type:   []string{"string"},
-										Format: "",
-									},
-								},
-							},
-						},
-					},
-				},
-				Required: []string{"groups"},
 			},
 		},
 	}

@@ -114,10 +114,6 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 				ClientCertificateData: string(certPEM),
 				ClientKeyData:         string(keyPEM),
 			},
-			User: &placeholderapi.User{
-				Name:   username,
-				Groups: groups,
-			},
 		},
 	}, nil
 }

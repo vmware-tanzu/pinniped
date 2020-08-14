@@ -1,0 +1,16 @@
+repos:
+- repo: git://github.com/pre-commit/pre-commit-hooks
+  rev: v3.2.0
+  hooks:
+  # TODO: find a version of this to validate ytt templates?
+  # - id: check-yaml
+  #   args: ['--allow-multiple-documents']
+  - id: check-json
+  - id: end-of-file-fixer
+  - id: trailing-whitespace
+  - id: check-merge-conflict
+  - id: check-added-large-files
+  - id: check-byte-order-marker
+  - id: detect-private-key
+    exclude: testdata
+  - id: mixed-line-ending

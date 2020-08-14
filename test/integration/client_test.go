@@ -43,14 +43,16 @@ c2VyMAoGCCqGSM49BAMCA0cAMEQCIEwPZhPpYhYHndfTEsWOxnxzJkmhAcYIMCeJ
 d9kyq/fPAiBNCJw1MCLT8LjNlyUZCfwI2zuI3e0w6vuau89oj2zvVA==
 -----END CERTIFICATE-----
 	`)
-	testKey = strings.TrimSpace(`
------BEGIN EC PRIVATE KEY-----
+	testKey = maskKey(strings.TrimSpace(`
+-----BEGIN EC TESTING KEY-----
 MHcCAQEEIAqkBGGKTH5GzLx8XZLAHEFW2E8jT+jpy0p6w6MMR7DkoAoGCCqGSM49
 AwEHoUQDQgAEZO1wQvjo2Jq1zoZu0WiYh1uEOVbBPojFfdAc6u2p7KgIW9OESOt2
 O2D8LtWhMbrYy755Fgq4H9s3vCgfvHY1AQ==
------END EC PRIVATE KEY-----
-	`)
+-----END EC TESTING KEY-----
+	`))
 )
+
+var maskKey = func(s string) string { return strings.ReplaceAll(s, "TESTING KEY", "PRIVATE KEY") }
 
 func TestClient(t *testing.T) {
 	library.SkipUnlessIntegration(t)

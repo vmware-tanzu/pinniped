@@ -51,6 +51,7 @@ function with_modules() {
   for mod_file in $(find . -maxdepth 4 -name go.mod | sort); do
     mod_dir="$(dirname "${mod_file}")"
     (
+      export MOD_DIR="$(pwd)"
       echo "=> " && \
       echo "   cd ${mod_dir} && ${cmd}" && \
       cd "${mod_dir}" && ${cmd}

@@ -68,8 +68,33 @@ function codegen::generate_for_module() {
 }
 
 function codegen::generate() {
+  local mod_basename_for_version
+  mod_basename_for_version="${K8S_PKG_VERSION}/$(basename "${MOD_DIR}")"
+
   codegen::ensure_module_in_gopath
-  codegen::generate_for_module "${K8S_PKG_VERSION}/$(basename "${MOD_DIR}")"
+  codegen::generate_for_module "${mod_basename_for_version}"
+}
+
+function codegen::verify() {
+  local have_stash=''
+  if [[ "$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')" -ne "0" ]]; then
+    git stash --all >/dev/null 2>&1 && have_stash=1
+  fi
+
+  codegen::generate
+
+  if [[ "$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')" -eq "0" ]]; then
+    echo "Generated code in ${MOD_DIR} up to date."
+  else
+    echo "Generated code in ${MOD_DIR} is out of date."
+    echo "Please run hack/module.sh codegen"
+    git diff "${ROOT}"
+    git checkout "${ROOT}"
+  fi
+
+  if [[ -n "${have_stash}" ]]; then
+    git stash pop >/dev/null 2>&1
+  fi
 }
 
 function codegen::usage() {

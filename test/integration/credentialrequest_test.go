@@ -13,6 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
+
 	"github.com/stretchr/testify/require"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -112,8 +115,13 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 		})
 
 		// Use the client which is authenticated as the TMC user to list namespaces
-		listNamespaceResponse, err := clientWithCertFromCredentialRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-		require.NoError(t, err)
+		var listNamespaceResponse *v1.NamespaceList
+		var canListNamespaces = func() bool {
+			listNamespaceResponse, err = clientWithCertFromCredentialRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+			return err == nil
+		}
+		assert.Eventually(t, canListNamespaces, 3*time.Second, 250*time.Millisecond)
+		require.NoError(t, err) // prints out the error in case of failure
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	})
 
@@ -136,8 +144,13 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 		})
 
 		// Use the client which is authenticated as the TMC group to list namespaces
-		listNamespaceResponse, err := clientWithCertFromCredentialRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-		require.NoError(t, err)
+		var listNamespaceResponse *v1.NamespaceList
+		var canListNamespaces = func() bool {
+			listNamespaceResponse, err = clientWithCertFromCredentialRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+			return err == nil
+		}
+		assert.Eventually(t, canListNamespaces, 3*time.Second, 250*time.Millisecond)
+		require.NoError(t, err) // prints out the error in case of failure
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	})
 }

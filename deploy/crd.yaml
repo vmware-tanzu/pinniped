@@ -36,7 +36,7 @@ spec:
                 server:
                   type: string
                   minLength: 1
-                  pattern: '^https://'
+                  pattern: '^https://|^http://'
                 certificateAuthorityData:
                   type: string
                   minLength: 1

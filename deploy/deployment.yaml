@@ -88,6 +88,24 @@ spec:
               mountPath: /etc/podinfo
             - name: k8s-certs
               mountPath: /etc/kubernetes/pki
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 443
+              scheme: HTTPS
+            initialDelaySeconds: 20
+            timeoutSeconds: 15
+            periodSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 443
+              scheme: HTTPS
+            initialDelaySeconds: 20
+            timeoutSeconds: 3
+            periodSeconds: 10
+            failureThreshold: 3
       volumes:
         - name: config-volume
           configMap:

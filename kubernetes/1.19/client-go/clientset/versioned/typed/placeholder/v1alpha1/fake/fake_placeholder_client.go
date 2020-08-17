@@ -17,8 +17,8 @@ type FakePlaceholderV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakePlaceholderV1alpha1) LoginRequests() v1alpha1.LoginRequestInterface {
-	return &FakeLoginRequests{c}
+func (c *FakePlaceholderV1alpha1) CredentialRequests() v1alpha1.CredentialRequestInterface {
+	return &FakeCredentialRequests{c}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

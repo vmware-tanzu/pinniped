@@ -50,19 +50,19 @@ func TestRun(t *testing.T) {
 			it("returns an error when PLACEHOLDER_NAME_TOKEN is missing", func() {
 				delete(fakeEnv, "PLACEHOLDER_NAME_TOKEN")
 				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
-				r.EqualError(err, "failed to login: environment variable not set: PLACEHOLDER_NAME_TOKEN")
+				r.EqualError(err, "failed to get credential: environment variable not set: PLACEHOLDER_NAME_TOKEN")
 			})
 
 			it("returns an error when PLACEHOLDER_NAME_CA_BUNDLE is missing", func() {
 				delete(fakeEnv, "PLACEHOLDER_NAME_CA_BUNDLE")
 				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
-				r.EqualError(err, "failed to login: environment variable not set: PLACEHOLDER_NAME_CA_BUNDLE")
+				r.EqualError(err, "failed to get credential: environment variable not set: PLACEHOLDER_NAME_CA_BUNDLE")
 			})
 
 			it("returns an error when PLACEHOLDER_NAME_K8S_API_ENDPOINT is missing", func() {
 				delete(fakeEnv, "PLACEHOLDER_NAME_K8S_API_ENDPOINT")
 				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
-				r.EqualError(err, "failed to login: environment variable not set: PLACEHOLDER_NAME_K8S_API_ENDPOINT")
+				r.EqualError(err, "failed to get credential: environment variable not set: PLACEHOLDER_NAME_K8S_API_ENDPOINT")
 			})
 		})
 
@@ -75,7 +75,7 @@ func TestRun(t *testing.T) {
 
 			it("returns an error", func() {
 				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
-				r.EqualError(err, "failed to login: some error")
+				r.EqualError(err, "failed to get credential: some error")
 			})
 		})
 
@@ -106,7 +106,7 @@ func TestRun(t *testing.T) {
 
 			it("returns an error", func() {
 				err := run(envGetter, tokenExchanger, buffer, 1*time.Millisecond)
-				r.EqualError(err, "failed to login: context deadline exceeded")
+				r.EqualError(err, "failed to get credential: context deadline exceeded")
 			})
 		})
 

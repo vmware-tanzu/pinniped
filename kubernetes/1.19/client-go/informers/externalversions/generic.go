@@ -47,8 +47,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crds().V1alpha1().LoginDiscoveryConfigs().Informer()}, nil
 
 		// Group=placeholder.suzerain-io.github.io, Version=v1alpha1
-	case placeholderv1alpha1.SchemeGroupVersion.WithResource("loginrequests"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Placeholder().V1alpha1().LoginRequests().Informer()}, nil
+	case placeholderv1alpha1.SchemeGroupVersion.WithResource("credentialrequests"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Placeholder().V1alpha1().CredentialRequests().Informer()}, nil
 
 	}
 

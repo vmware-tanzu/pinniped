@@ -20,7 +20,7 @@ import (
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/klog/v2"
 
-	"github.com/suzerain-io/placeholder-name/internal/registry/loginrequest"
+	"github.com/suzerain-io/placeholder-name/internal/registry/credentialrequest"
 	placeholderapi "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder"
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
 )
@@ -58,7 +58,7 @@ type Config struct {
 
 type ExtraConfig struct {
 	Webhook                       authenticator.Token
-	Issuer                        loginrequest.CertIssuer
+	Issuer                        credentialrequest.CertIssuer
 	StartControllersPostStartHook func(ctx context.Context)
 }
 
@@ -100,7 +100,7 @@ func (c completedConfig) New() (*PlaceHolderServer, error) {
 		GenericAPIServer: genericServer,
 	}
 
-	gvr := placeholderv1alpha1.SchemeGroupVersion.WithResource("loginrequests")
+	gvr := placeholderv1alpha1.SchemeGroupVersion.WithResource("credentialrequests")
 
 	apiGroupInfo := genericapiserver.APIGroupInfo{
 		PrioritizedVersions:          []schema.GroupVersion{gvr.GroupVersion()},
@@ -111,13 +111,13 @@ func (c completedConfig) New() (*PlaceHolderServer, error) {
 		NegotiatedSerializer:         Codecs,
 	}
 
-	loginRequestStorage := loginrequest.NewREST(c.ExtraConfig.Webhook, c.ExtraConfig.Issuer)
+	credentialRequestStorage := credentialrequest.NewREST(c.ExtraConfig.Webhook, c.ExtraConfig.Issuer)
 
 	v1alpha1Storage, ok := apiGroupInfo.VersionedResourcesStorageMap[gvr.Version]
 	if !ok {
 		v1alpha1Storage = map[string]rest.Storage{}
 	}
-	v1alpha1Storage[gvr.Resource] = loginRequestStorage
+	v1alpha1Storage[gvr.Resource] = credentialRequestStorage
 	apiGroupInfo.VersionedResourcesStorageMap[gvr.Version] = v1alpha1Storage
 
 	if err := s.GenericAPIServer.InstallAPIGroup(&apiGroupInfo); err != nil {

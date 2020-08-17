@@ -7,6 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
 
-// LoginRequestListerExpansion allows custom methods to be added to
-// LoginRequestLister.
-type LoginRequestListerExpansion interface{}
+// CredentialRequestListerExpansion allows custom methods to be added to
+// CredentialRequestLister.
+type CredentialRequestListerExpansion interface{}

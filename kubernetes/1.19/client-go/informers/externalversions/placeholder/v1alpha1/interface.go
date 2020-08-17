@@ -13,8 +13,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// LoginRequests returns a LoginRequestInformer.
-	LoginRequests() LoginRequestInformer
+	// CredentialRequests returns a CredentialRequestInformer.
+	CredentialRequests() CredentialRequestInformer
 }
 
 type version struct {
@@ -28,7 +28,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// LoginRequests returns a LoginRequestInformer.
-func (v *version) LoginRequests() LoginRequestInformer {
-	return &loginRequestInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+// CredentialRequests returns a CredentialRequestInformer.
+func (v *version) CredentialRequests() CredentialRequestInformer {
+	return &credentialRequestInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

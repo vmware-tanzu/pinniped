@@ -46,9 +46,9 @@ func TestGetAPIResourceList(t *testing.T) {
 	actualCrdsPlaceHolderResources := findResources("crds.placeholder.suzerain-io.github.io/v1alpha1", resources)
 	require.NotNil(t, actualPlaceHolderResources)
 
-	expectedLoginRequestAPIResource := metav1.APIResource{
-		Name: "loginrequests",
-		Kind: "LoginRequest",
+	expectedCredentialRequestAPIResource := metav1.APIResource{
+		Name: "credentialrequests",
+		Kind: "CredentialRequest",
 		Verbs: metav1.Verbs([]string{
 			"create",
 		}),
@@ -73,7 +73,7 @@ func TestGetAPIResourceList(t *testing.T) {
 	}
 
 	require.Len(t, actualPlaceHolderResources.APIResources, 1)
-	require.Equal(t, expectedLoginRequestAPIResource, actualPlaceHolderResources.APIResources[0])
+	require.Equal(t, expectedCredentialRequestAPIResource, actualPlaceHolderResources.APIResources[0])
 
 	require.Len(t, actualCrdsPlaceHolderResources.APIResources, 1)
 	actualAPIResource := actualCrdsPlaceHolderResources.APIResources[0]

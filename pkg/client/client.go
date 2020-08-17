@@ -19,8 +19,8 @@ import (
 )
 
 var (
-	// ErrLoginFailed is returned by ExchangeToken when the server rejects the login request.
-	ErrLoginFailed = fmt.Errorf("login failed")
+	// ErrCredentialRequestFailed is returned by ExchangeToken when the server rejects the credential request.
+	ErrCredentialRequestFailed = fmt.Errorf("credential request failed")
 
 	// ErrInvalidAPIEndpoint is returned by ExchangeToken when the provided API endpoint is invalid.
 	ErrInvalidAPIEndpoint = fmt.Errorf("invalid API endpoint")
@@ -30,20 +30,20 @@ var (
 )
 
 const (
-	// loginRequestsAPIPath is the API path for the v1alpha1 LoginRequest API.
-	loginRequestsAPIPath = "/apis/placeholder.suzerain-io.github.io/v1alpha1/loginrequests"
+	// credentialRequestsAPIPath is the API path for the v1alpha1 CredentialRequest API.
+	credentialRequestsAPIPath = "/apis/placeholder.suzerain-io.github.io/v1alpha1/credentialrequests"
 
 	// userAgent is the user agent header value sent with requests.
 	userAgent = "placeholder-name"
 )
 
-func loginRequest(ctx context.Context, apiEndpoint *url.URL, token string) (*http.Request, error) {
-	type LoginRequestTokenCredential struct {
+func credentialRequest(ctx context.Context, apiEndpoint *url.URL, token string) (*http.Request, error) {
+	type CredentialRequestTokenCredential struct {
 		Value string `json:"value"`
 	}
-	type LoginRequestSpec struct {
-		Type  string                       `json:"type"`
-		Token *LoginRequestTokenCredential `json:"token"`
+	type CredentialRequestSpec struct {
+		Type  string                            `json:"type"`
+		Token *CredentialRequestTokenCredential `json:"token"`
 	}
 	body := struct {
 		APIVersion string `json:"apiVersion"`
@@ -51,12 +51,12 @@ func loginRequest(ctx context.Context, apiEndpoint *url.URL, token string) (*htt
 		Metadata   struct {
 			CreationTimestamp *string `json:"creationTimestamp"`
 		} `json:"metadata"`
-		Spec   LoginRequestSpec `json:"spec"`
-		Status struct{}         `json:"status"`
+		Spec   CredentialRequestSpec `json:"spec"`
+		Status struct{}              `json:"status"`
 	}{
 		APIVersion: "placeholder.suzerain-io.github.io/v1alpha1",
-		Kind:       "LoginRequest",
-		Spec:       LoginRequestSpec{Type: "token", Token: &LoginRequestTokenCredential{Value: token}},
+		Kind:       "CredentialRequest",
+		Spec:       CredentialRequestSpec{Type: "token", Token: &CredentialRequestTokenCredential{Value: token}},
 	}
 	bodyJSON, err := json.Marshal(&body)
 	if err != nil {
@@ -98,9 +98,9 @@ func ExchangeToken(ctx context.Context, token, caBundle, apiEndpoint string) (*C
 		return nil, fmt.Errorf(`%w: protocol must be "https", not %q`, ErrInvalidAPIEndpoint, endpointURL.Scheme)
 	}
 
-	// Form the LoginRequest API URL by appending the API path to the main API endpoint.
+	// Form the CredentialRequest API URL by appending the API path to the main API endpoint.
 	placeholderEndpointURL := *endpointURL
-	placeholderEndpointURL.Path = filepath.Join(placeholderEndpointURL.Path, loginRequestsAPIPath)
+	placeholderEndpointURL.Path = filepath.Join(placeholderEndpointURL.Path, credentialRequestsAPIPath)
 
 	// Initialize a TLS client configuration from the provided CA bundle.
 	tlsConfig := tls.Config{
@@ -111,8 +111,8 @@ func ExchangeToken(ctx context.Context, token, caBundle, apiEndpoint string) (*C
 		return nil, fmt.Errorf("%w: no certificates found", ErrInvalidCABundle)
 	}
 
-	// Create a request object for the "POST /apis/placeholder.suzerain-io.github.io/v1alpha1/loginrequests" request.
-	req, err := loginRequest(ctx, &placeholderEndpointURL, token)
+	// Create a request object for the "POST /apis/placeholder.suzerain-io.github.io/v1alpha1/credentialrequests" request.
+	req, err := credentialRequest(ctx, &placeholderEndpointURL, token)
 	if err != nil {
 		return nil, fmt.Errorf("could not build request: %w", err)
 	}
@@ -120,11 +120,11 @@ func ExchangeToken(ctx context.Context, token, caBundle, apiEndpoint string) (*C
 	client := http.Client{Transport: &http.Transport{TLSClientConfig: &tlsConfig}}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("could not login: %w", err)
+		return nil, fmt.Errorf("could not get credential: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("%w: server returned status %d", ErrLoginFailed, resp.StatusCode)
+		return nil, fmt.Errorf("%w: server returned status %d", ErrCredentialRequestFailed, resp.StatusCode)
 	}
 
 	var respBody struct {
@@ -141,11 +141,11 @@ func ExchangeToken(ctx context.Context, token, caBundle, apiEndpoint string) (*C
 		} `json:"status"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
-		return nil, fmt.Errorf("invalid login response: %w", err)
+		return nil, fmt.Errorf("invalid credential response: %w", err)
 	}
 
 	if respBody.Status.Credential == nil || respBody.Status.Message != "" {
-		return nil, fmt.Errorf("%w: %s", ErrLoginFailed, respBody.Status.Message)
+		return nil, fmt.Errorf("%w: %s", ErrCredentialRequestFailed, respBody.Status.Message)
 	}
 
 	result := Credential{
@@ -156,7 +156,7 @@ func ExchangeToken(ctx context.Context, token, caBundle, apiEndpoint string) (*C
 	if str := respBody.Status.Credential.ExpirationTimestamp; str != "" {
 		expiration, err := time.Parse(time.RFC3339, str)
 		if err != nil {
-			return nil, fmt.Errorf("invalid login response: %w", err)
+			return nil, fmt.Errorf("invalid credential response: %w", err)
 		}
 		result.ExpirationTimestamp = &expiration
 	}

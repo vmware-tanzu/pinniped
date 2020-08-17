@@ -62,21 +62,21 @@ roleRef:
   name: #@ data.values.app_name + "-aggregated-api-server-role"
   apiGroup: rbac.authorization.k8s.io
 
-#! Allow both authenticated and unauthenticated LoginRequests (i.e. allow all requests)
+#! Allow both authenticated and unauthenticated CredentialRequests (i.e. allow all requests)
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: #@ data.values.app_name + "-loginrequests-cluster-role"
+  name: #@ data.values.app_name + "-credentialrequests-cluster-role"
 rules:
   - apiGroups: [placeholder.suzerain-io.github.io]
-    resources: [loginrequests]
+    resources: [credentialrequests]
     verbs: [create]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: #@ data.values.app_name + "-loginrequests-cluster-role-binding"
+  name: #@ data.values.app_name + "-credentialrequests-cluster-role-binding"
 subjects:
   - kind: Group
     name: system:authenticated
@@ -86,7 +86,7 @@ subjects:
     apiGroup: rbac.authorization.k8s.io
 roleRef:
   kind: ClusterRole
-  name: #@ data.values.app_name + "-loginrequests-cluster-role"
+  name: #@ data.values.app_name + "-credentialrequests-cluster-role"
   apiGroup: rbac.authorization.k8s.io
 
 #! Give permissions for subjectaccessreviews, tokenreview that is needed by aggregated api servers

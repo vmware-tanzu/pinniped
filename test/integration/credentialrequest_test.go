@@ -7,6 +7,8 @@ package integration
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"net/http"
 	"testing"
 	"time"
@@ -21,7 +23,7 @@ import (
 	"github.com/suzerain-io/placeholder-name/test/library"
 )
 
-func makeRequest(t *testing.T, spec v1alpha1.LoginRequestSpec) (*v1alpha1.LoginRequest, error) {
+func makeRequest(t *testing.T, spec v1alpha1.CredentialRequestSpec) (*v1alpha1.CredentialRequest, error) {
 	t.Helper()
 
 	client := library.NewAnonymousPlaceholderNameClientset(t)
@@ -29,7 +31,7 @@ func makeRequest(t *testing.T, spec v1alpha1.LoginRequestSpec) (*v1alpha1.LoginR
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	return client.PlaceholderV1alpha1().LoginRequests().Create(ctx, &v1alpha1.LoginRequest{
+	return client.PlaceholderV1alpha1().CredentialRequests().Create(ctx, &v1alpha1.CredentialRequest{
 		TypeMeta:   metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{},
 		Spec:       spec,
@@ -56,13 +58,13 @@ func addTestClusterRoleBinding(ctx context.Context, t *testing.T, adminClient ku
 	})
 }
 
-func TestSuccessfulLoginRequest(t *testing.T) {
+func TestSuccessfulCredentialRequest(t *testing.T) {
 	library.SkipUnlessIntegration(t)
 	tmcClusterToken := library.Getenv(t, "PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN")
 
-	response, err := makeRequest(t, v1alpha1.LoginRequestSpec{
-		Type:  v1alpha1.TokenLoginCredentialType,
-		Token: &v1alpha1.LoginRequestTokenCredential{Value: tmcClusterToken},
+	response, err := makeRequest(t, v1alpha1.CredentialRequestSpec{
+		Type:  v1alpha1.TokenCredentialType,
+		Token: &v1alpha1.CredentialRequestTokenCredential{Value: tmcClusterToken},
 	})
 
 	require.NoError(t, err)
@@ -77,9 +79,6 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 	require.NotEmpty(t, response.Status.Credential.ClientKeyData)
 	require.NotNil(t, response.Status.Credential.ExpirationTimestamp)
 	require.InDelta(t, time.Until(response.Status.Credential.ExpirationTimestamp.Time), 1*time.Hour, float64(3*time.Minute))
-	require.NotNil(t, response.Status.User)
-	require.NotEmpty(t, response.Status.User.Name)
-	require.Contains(t, response.Status.User.Groups, "tmc:member")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -87,8 +86,8 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 	// Create a client using the admin kubeconfig.
 	adminClient := library.NewClientset(t)
 
-	// Create a client using the certificate from the LoginRequest.
-	clientWithCertFromLoginRequest := library.NewClientsetWithCertAndKey(
+	// Create a client using the certificate from the CredentialRequest.
+	clientWithCertFromCredentialRequest := library.NewClientsetWithCertAndKey(
 		t,
 		response.Status.Credential.ClientCertificateData,
 		response.Status.Credential.ClientKeyData,
@@ -103,7 +102,7 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 			Subjects: []rbacv1.Subject{{
 				Kind:     rbacv1.UserKind,
 				APIGroup: rbacv1.GroupName,
-				Name:     response.Status.User.Name,
+				Name:     getCommonName(t, response.Status.Credential.ClientCertificateData),
 			}},
 			RoleRef: rbacv1.RoleRef{
 				Kind:     "ClusterRole",
@@ -113,7 +112,7 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 		})
 
 		// Use the client which is authenticated as the TMC user to list namespaces
-		listNamespaceResponse, err := clientWithCertFromLoginRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+		listNamespaceResponse, err := clientWithCertFromCredentialRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 		require.NoError(t, err)
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	})
@@ -137,31 +136,30 @@ func TestSuccessfulLoginRequest(t *testing.T) {
 		})
 
 		// Use the client which is authenticated as the TMC group to list namespaces
-		listNamespaceResponse, err := clientWithCertFromLoginRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+		listNamespaceResponse, err := clientWithCertFromCredentialRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 		require.NoError(t, err)
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	})
 }
 
-func TestFailedLoginRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
+func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
 	library.SkipUnlessIntegration(t)
-	response, err := makeRequest(t, v1alpha1.LoginRequestSpec{
-		Type:  v1alpha1.TokenLoginCredentialType,
-		Token: &v1alpha1.LoginRequestTokenCredential{Value: "not a good token"},
+	response, err := makeRequest(t, v1alpha1.CredentialRequestSpec{
+		Type:  v1alpha1.TokenCredentialType,
+		Token: &v1alpha1.CredentialRequestTokenCredential{Value: "not a good token"},
 	})
 
 	require.NoError(t, err)
 
 	require.Empty(t, response.Spec)
 	require.Nil(t, response.Status.Credential)
-	require.Nil(t, response.Status.User)
-	require.Equal(t, "authentication failed", response.Status.Message)
+	require.Equal(t, stringPtr("authentication failed"), response.Status.Message)
 }
 
-func TestLoginRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
+func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
 	library.SkipUnlessIntegration(t)
-	response, err := makeRequest(t, v1alpha1.LoginRequestSpec{
-		Type:  v1alpha1.TokenLoginCredentialType,
+	response, err := makeRequest(t, v1alpha1.CredentialRequestSpec{
+		Type:  v1alpha1.TokenCredentialType,
 		Token: nil,
 	})
 
@@ -177,4 +175,18 @@ func TestLoginRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
 
 	require.Empty(t, response.Spec)
 	require.Nil(t, response.Status.Credential)
+}
+
+func stringPtr(s string) *string {
+	return &s
+}
+
+func getCommonName(t *testing.T, certPEM string) string {
+	t.Helper()
+
+	pemBlock, _ := pem.Decode([]byte(certPEM))
+	cert, err := x509.ParseCertificate(pemBlock.Bytes)
+	require.NoError(t, err)
+
+	return cert.Subject.CommonName
 }

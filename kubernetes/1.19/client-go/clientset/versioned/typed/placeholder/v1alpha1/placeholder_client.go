@@ -15,7 +15,7 @@ import (
 
 type PlaceholderV1alpha1Interface interface {
 	RESTClient() rest.Interface
-	LoginRequestsGetter
+	CredentialRequestsGetter
 }
 
 // PlaceholderV1alpha1Client is used to interact with features provided by the placeholder.suzerain-io.github.io group.
@@ -23,8 +23,8 @@ type PlaceholderV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *PlaceholderV1alpha1Client) LoginRequests() LoginRequestInterface {
-	return newLoginRequests(c)
+func (c *PlaceholderV1alpha1Client) CredentialRequests() CredentialRequestInterface {
+	return newCredentialRequests(c)
 }
 
 // NewForConfig creates a new PlaceholderV1alpha1Client for the given config.

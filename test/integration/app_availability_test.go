@@ -11,23 +11,39 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/suzerain-io/placeholder-name/test/library"
 )
 
-func TestAppAvailability(t *testing.T) {
+func TestGetDeployment(t *testing.T) {
 	library.SkipUnlessIntegration(t)
 	namespaceName := library.Getenv(t, "PLACEHOLDER_NAME_NAMESPACE")
-	daemonSetName := library.Getenv(t, "PLACEHOLDER_NAME_APP_NAME")
+	deploymentName := library.Getenv(t, "PLACEHOLDER_NAME_APP_NAME")
 
 	client := library.NewClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	daemonSet, err := client.AppsV1().DaemonSets(namespaceName).Get(ctx, daemonSetName, metav1.GetOptions{})
+	appDeployment, err := client.AppsV1().Deployments(namespaceName).Get(ctx, deploymentName, metav1.GetOptions{})
 	require.NoError(t, err)
 
-	require.GreaterOrEqual(t, daemonSet.Status.NumberAvailable, int32(1))
+	cond := getDeploymentCondition(appDeployment.Status, appsv1.DeploymentAvailable)
+	require.NotNil(t, cond)
+	require.Equalf(t, corev1.ConditionTrue, cond.Status, "app should be available: %s", library.Sdump(appDeployment))
+}
+
+// getDeploymentCondition returns the condition with the provided type.
+// Copied from k8s.io/kubectl/pkg/util/deployment/deployment.go to prevent us from vendoring the world.
+func getDeploymentCondition(status appsv1.DeploymentStatus, condType appsv1.DeploymentConditionType) *appsv1.DeploymentCondition {
+	for i := range status.Conditions {
+		c := status.Conditions[i]
+		if c.Type == condType {
+			return &c
+		}
+	}
+	return nil
 }

@@ -46,13 +46,14 @@ data:
 #! TODO set up healthy, ready, etc. probes correctly?
 #! TODO set resource minimums (e.g. 512MB RAM) to make sure we get scheduled onto a reasonable node?
 apiVersion: apps/v1
-kind: DaemonSet
+kind: Deployment
 metadata:
   name: #@ data.values.app_name
   namespace: #@ data.values.namespace
   labels:
     app: #@ data.values.app_name
 spec:
+  replicas: 2
   selector:
     matchLabels:
       app: #@ data.values.app_name
@@ -79,15 +80,11 @@ spec:
           args:
             - --config=/etc/config/placeholder-name.yaml
             - --downward-api-path=/etc/podinfo
-            - --cluster-signing-cert-file=/etc/kubernetes/pki/ca.crt
-            - --cluster-signing-key-file=/etc/kubernetes/pki/ca.key
           volumeMounts:
             - name: config-volume
               mountPath: /etc/config
             - name: podinfo
               mountPath: /etc/podinfo
-            - name: k8s-certs
-              mountPath: /etc/kubernetes/pki
       volumes:
         - name: config-volume
           configMap:
@@ -101,16 +98,10 @@ spec:
               - path: "namespace"
                 fieldRef:
                   fieldPath: metadata.namespace
-        - name: k8s-certs
-          hostPath:
-            path: /etc/kubernetes/pki
-            type: DirectoryOrCreate
-      nodeSelector: #! Create Pods on all nodes which match this node selector, and not on any other nodes.
-        node-role.kubernetes.io/master: ""
       tolerations:
         - key: CriticalAddonsOnly
           operator: Exists
-        - key: node-role.kubernetes.io/master #! Allow running on master nodes.
+        - key: node-role.kubernetes.io/master #! Allow running on master nodes too
           effect: NoSchedule
       #! "system-cluster-critical" cannot be used outside the kube-system namespace until Kubernetes >= 1.17,
       #! so we skip setting this for now (see https://github.com/kubernetes/kubernetes/issues/60596).

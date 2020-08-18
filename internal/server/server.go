@@ -34,10 +34,8 @@ type App struct {
 	cmd *cobra.Command
 
 	// CLI flags
-	configPath                 string
-	downwardAPIPath            string
-	clusterSigningCertFilePath string
-	clusterSigningKeyFilePath  string
+	configPath      string
+	downwardAPIPath string
 }
 
 // This is ignored for now because we turn off etcd storage below, but this is
@@ -90,20 +88,6 @@ func addCommandlineFlagsToCommand(cmd *cobra.Command, app *App) {
 		"downward-api-path",
 		"/etc/podinfo",
 		"path to Downward API volume mount",
-	)
-
-	cmd.Flags().StringVar(
-		&app.clusterSigningCertFilePath,
-		"cluster-signing-cert-file",
-		"",
-		"path to cluster signing certificate",
-	)
-
-	cmd.Flags().StringVar(
-		&app.clusterSigningKeyFilePath,
-		"cluster-signing-key-file",
-		"",
-		"path to cluster signing private key",
 	)
 }
 
@@ -188,7 +172,7 @@ func getClusterCASigner() (*kubecertauthority.CA, kubecertauthority.ShutdownFunc
 	}
 
 	// Load the Kubernetes cluster signing CA.
-	k8sClusterCA, shutdownCA, err := kubecertauthority.New(k8sClient)
+	k8sClusterCA, shutdownCA, err := kubecertauthority.New(kubeConfig, k8sClient)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not load cluster signing CA: %w", err)
 	}

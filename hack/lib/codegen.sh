@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 GOPATH="${GOPATH:-$(mktemp -d)}"
 
-K8S_PKG_VERSION="${K8S_PKG_VERSION:-"1.19"}" # TODO: set this in k8s-code-generator-{} image
+K8S_PKG_VERSION="${K8S_PKG_VERSION:-"1.19"}"
 CODEGEN_IMAGE=${CODEGEN_IMAGE:-"gcr.io/tanzu-user-authentication/k8s-code-generator-${K8S_PKG_VERSION}:latest"}
 
 BASE_PKG="github.com/suzerain-io/placeholder-name"

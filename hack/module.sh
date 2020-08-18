@@ -34,11 +34,11 @@ function unittest_cmd() {
 }
 
 function codegen_cmd() {
-  echo "${ROOT}/hack/codegen.sh codegen::generate"
+  echo "${ROOT}/hack/lib/codegen.sh codegen::generate"
 }
 
 function codegen_verify_cmd() {
-  echo "${ROOT}/hack/codegen.sh codegen::verify"
+  echo "${ROOT}/hack/lib/codegen.sh codegen::verify"
 }
 
 # The race detector is slow, so sometimes you don't want to use it

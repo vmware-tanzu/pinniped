@@ -3,7 +3,7 @@
 # Copyright 2020 VMware, Inc.
 # SPDX-License-Identifier: Apache-2.0
 set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 GOPATH="${GOPATH:-$(mktemp -d)}"
 
@@ -133,7 +133,7 @@ function codegen::main() {
       --volume "${ROOT}:${DOCKER_ROOT_DIR}" \
       --workdir "${DOCKER_MOD_DIR}" \
       "${CODEGEN_IMAGE}" \
-      "${DOCKER_ROOT_DIR}/hack/$(basename "${BASH_SOURCE[0]}")" \
+      "${DOCKER_ROOT_DIR}/hack/lib/$(basename "${BASH_SOURCE[0]}")" \
       "${codegen_command}"
   fi
 }

@@ -6,4 +6,4 @@ set -euo pipefail
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
 "$ROOT/hack/module.sh" tidy
-"$ROOT/hack/update-codegen.sh"
+"$ROOT/hack/module.sh" codegen

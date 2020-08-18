@@ -6,4 +6,4 @@ set -euo pipefail
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
 "$ROOT/hack/module.sh" lint
-"$ROOT/hack/verify-codegen.sh"
+"$ROOT/hack/module.sh" codegen_verify

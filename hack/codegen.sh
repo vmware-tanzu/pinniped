@@ -13,8 +13,12 @@ CODEGEN_IMAGE=${CODEGEN_IMAGE:-"gcr.io/tanzu-user-authentication/k8s-code-genera
 BASE_PKG="github.com/suzerain-io/placeholder-name"
 
 function codegen::ensure_module_in_gopath() {
-  local pkg_name="${MOD_DIR/#${ROOT}\//}"
-  local pkg_gosrc_path="${GOPATH}/src/${BASE_PKG}/${pkg_name}"
+  # This should be something like "kubernetes/1.19/api".
+  local pkg_name="$(realpath "--relative-to=$ROOT" "$MOD_DIR")"
+
+  # Use --canonicalize-missing to since pkg_name could end up as "." - this would
+  # lead to a pkg_gosrc_path like "foo/bar/bat/." which ln(1) (below) does not like.
+  local pkg_gosrc_path="$(realpath --canonicalize-missing "${GOPATH}/src/${BASE_PKG}/${pkg_name}")"
 
   if [[ ! -e "${pkg_gosrc_path}" ]]; then
     mkdir -p "$(dirname "${pkg_gosrc_path}")"
@@ -78,11 +82,17 @@ function codegen::generate() {
 function codegen::verify() {
   local have_stash=''
   if [[ "$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')" -ne "0" ]]; then
+    # git stash requires the user.email and user.name to be set. We set these at
+    # a global scope so they don't overwrite the .git/config in the mounted repo
+    # from the host.
+    git config --global user.email "codegen_verify@whatever.com"
+    git config --global user.name "Codegen Verify"
     git stash --all >/dev/null 2>&1 && have_stash=1
   fi
 
   codegen::generate
 
+  failure=0
   if [[ "$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')" -eq "0" ]]; then
     echo "Generated code in ${MOD_DIR} up to date."
   else
@@ -90,16 +100,21 @@ function codegen::verify() {
     echo "Please run hack/module.sh codegen"
     git diff "${ROOT}"
     git checkout "${ROOT}"
+    failure=1
   fi
 
   if [[ -n "${have_stash}" ]]; then
     git stash pop >/dev/null 2>&1
   fi
+
+  if [[ "$failure" -eq 1 ]]; then
+    exit 1
+  fi
 }
 
 function codegen::usage() {
   echo "Error: <codegen command> must be specified"
-  echo "       ${BASH_SOURCE[0]} <codegen command> [codegen::generate]"
+  echo "       ${BASH_SOURCE[0]} <codegen command> [codegen::generate, codegen::verify]"
   exit 1
 }
 
@@ -110,7 +125,7 @@ function codegen::main() {
     "${codegen_command}"
   else
     DOCKER_ROOT_DIR="/tmp/${RANDOM}/${BASE_PKG}"
-    DOCKER_MOD_DIR="${DOCKER_ROOT_DIR}/${MOD_DIR/#${ROOT}\//}"
+    DOCKER_MOD_DIR="${DOCKER_ROOT_DIR}/$(realpath "--relative-to=$ROOT" "$MOD_DIR")"
 
     docker run --rm \
       --env CONTAINED=1 \

@@ -33,6 +33,14 @@ function unittest_cmd() {
   echo "${cmd} -short -race ./..."
 }
 
+function codegen_cmd() {
+  echo "${ROOT}/hack/codegen.sh codegen::generate"
+}
+
+function codegen_verify_cmd() {
+  echo "${ROOT}/hack/codegen.sh codegen::verify"
+}
+
 # The race detector is slow, so sometimes you don't want to use it
 function unittest_no_race_cmd() {
   if [ -x "$(command -v gotest)" ]; then
@@ -62,7 +70,7 @@ function with_modules() {
 
 function usage() {
   echo "Error: <task> must be specified"
-  echo "       do.sh <task> [tidy, lint, test, unittest, unittest_no_race]"
+  echo "       do.sh <task> [tidy, lint, test, unittest, unittest_no_race, codegen, codegen_verify]"
   exit 1
 }
 
@@ -73,6 +81,8 @@ function main() {
     'test') with_modules 'test_cmd' ;;
     'unittest') with_modules 'unittest_cmd' ;;
     'unittest_no_race') with_modules 'unittest_no_race_cmd' ;;
+    'codegen') with_modules 'codegen_cmd' ;;
+    'codegen_verify') with_modules 'codegen_verify_cmd' ;;
     *) usage ;;
   esac
 }

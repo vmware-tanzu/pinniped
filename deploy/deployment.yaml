@@ -93,7 +93,7 @@ spec:
               path: /healthz
               port: 443
               scheme: HTTPS
-            initialDelaySeconds: 20
+            initialDelaySeconds: 2
             timeoutSeconds: 15
             periodSeconds: 10
             failureThreshold: 5
@@ -102,7 +102,7 @@ spec:
               path: /healthz
               port: 443
               scheme: HTTPS
-            initialDelaySeconds: 20
+            initialDelaySeconds: 2
             timeoutSeconds: 3
             periodSeconds: 10
             failureThreshold: 3

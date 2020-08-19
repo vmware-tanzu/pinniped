@@ -25,10 +25,11 @@ Usage:
   placeholder-name-server [flags]
 
 Flags:
-  -c, --config string                  path to configuration file (default "placeholder-name.yaml")
-      --downward-api-path string       path to Downward API volume mount (default "/etc/podinfo")
-  -h, --help                           help for placeholder-name-server
-      --log-flush-frequency duration   Maximum number of seconds between log flushes (default 5s)
+  -c, --config string                                path to configuration file (default "placeholder-name.yaml")
+      --downward-api-path string                     path to Downward API volume mount (default "/etc/podinfo")
+  -h, --help                                         help for placeholder-name-server
+      --log-flush-frequency duration                 Maximum number of seconds between log flushes (default 5s)
+      --serving-cert-rotation-threshold percentage   real number between 0 and 1 indicating percentage of lifetime before rotation of serving cert (default 70.00%)
 `
 
 func TestCommand(t *testing.T) {
@@ -67,6 +68,30 @@ func TestCommand(t *testing.T) {
 				"tuna",
 			},
 			wantErr: `unknown command "tuna" for "placeholder-name-server"`,
+		},
+		{
+			name: "PercentageIsNotRealNumber",
+			args: []string{
+				"--config", "some/path/to/config.yaml",
+				"--serving-cert-rotation-threshold", "tuna",
+			},
+			wantErr: `invalid argument "tuna" for "--serving-cert-rotation-threshold" flag: must pass real number between 0 and 1`,
+		},
+		{
+			name: "PercentageIsTooSmall",
+			args: []string{
+				"--config", "some/path/to/config.yaml",
+				"--serving-cert-rotation-threshold", "-1",
+			},
+			wantErr: `invalid argument "-1" for "--serving-cert-rotation-threshold" flag: must pass real number between 0 and 1`,
+		},
+		{
+			name: "PercentageIsTooLarge",
+			args: []string{
+				"--config", "some/path/to/config.yaml",
+				"--serving-cert-rotation-threshold", "75",
+			},
+			wantErr: `invalid argument "75" for "--serving-cert-rotation-threshold" flag: must pass real number between 0 and 1`,
 		},
 	}
 	for _, test := range tests {

@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/spf13/cobra"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -170,15 +171,20 @@ func getClusterCASigner() (*kubecertauthority.CA, kubecertauthority.ShutdownFunc
 		return nil, nil, fmt.Errorf("could not initialize Kubernetes client: %w", err)
 	}
 
+	// Make a clock tick that triggers a periodic refresh.
+	ticker := time.NewTicker(5 * time.Minute)
+
 	// Make a CA which uses the Kubernetes cluster API server's signing certs.
 	k8sClusterCA, shutdownCA, err := kubecertauthority.New(
 		kubeClient,
 		kubecertauthority.NewPodCommandExecutor(kubeConfig, kubeClient),
+		ticker.C,
 	)
 	if err != nil {
+		ticker.Stop()
 		return nil, nil, fmt.Errorf("could not load cluster signing CA: %w", err)
 	}
-	return k8sClusterCA, shutdownCA, nil
+	return k8sClusterCA, func() { shutdownCA(); ticker.Stop() }, nil
 }
 
 // Create a configuration for the aggregated API server.

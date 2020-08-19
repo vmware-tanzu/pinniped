@@ -425,9 +425,10 @@ func TestCreate(t *testing.T) {
 }
 
 func requireOneLogStatement(r *require.Assertions, logger *testutil.TranscriptLogger, messageContains string) {
-	r.Len(logger.Transcript, 1)
-	r.Equal("info", logger.Transcript[0].Level)
-	r.Contains(logger.Transcript[0].Message, messageContains)
+	transcript := logger.Transcript()
+	r.Len(transcript, 1)
+	r.Equal("info", transcript[0].Level)
+	r.Contains(transcript[0].Message, messageContains)
 }
 
 func callCreate(ctx context.Context, storage *REST, credentialRequest *placeholderapi.CredentialRequest) (runtime.Object, error) {

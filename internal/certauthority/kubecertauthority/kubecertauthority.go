@@ -4,7 +4,7 @@ SPDX-License-Identifier: Apache-2.0
 */
 
 // Package kubecertauthority implements a signer backed by the kubernetes controller-manager signing
-// keys (accessed via the kubernetes exec API).
+// keys (accessed via the kubernetes Exec API).
 package kubecertauthority
 
 import (
@@ -12,10 +12,10 @@ import (
 	"context"
 	"crypto/x509/pkix"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
+	"github.com/spf13/pflag"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/deprecated/scheme"
@@ -25,7 +25,11 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/suzerain-io/placeholder-name/internal/certauthority"
+	"github.com/suzerain-io/placeholder-name/internal/constable"
 )
+
+// ErrNoKubeControllerManagerPod is returned when no kube-controller-manager pod is found on the cluster.
+const ErrNoKubeControllerManagerPod = constable.Error("did not find kube-controller-manager pod")
 
 const k8sAPIServerCACertPEMDefaultPath = "/etc/kubernetes/ca/ca.pem"
 const k8sAPIServerCAKeyPEMDefaultPath = "/etc/kubernetes/ca/ca.key"
@@ -35,7 +39,7 @@ type signer interface {
 }
 
 type PodCommandExecutor interface {
-	exec(podNamespace string, podName string, commandAndArgs ...string) (stdoutResult string, err error)
+	Exec(podNamespace string, podName string, commandAndArgs ...string) (stdoutResult string, err error)
 }
 
 type kubeClientPodCommandExecutor struct {
@@ -47,7 +51,7 @@ func NewPodCommandExecutor(kubeConfig *restclient.Config, kubeClient kubernetes.
 	return &kubeClientPodCommandExecutor{kubeConfig: kubeConfig, kubeClient: kubeClient}
 }
 
-func (s *kubeClientPodCommandExecutor) exec(podNamespace string, podName string, commandAndArgs ...string) (string, error) {
+func (s *kubeClientPodCommandExecutor) Exec(podNamespace string, podName string, commandAndArgs ...string) (string, error) {
 	request := s.kubeClient.
 		CoreV1().
 		RESTClient().
@@ -64,16 +68,16 @@ func (s *kubeClientPodCommandExecutor) exec(podNamespace string, podName string,
 			Command: commandAndArgs,
 		}, scheme.ParameterCodec)
 
-	stdoutBuf := bytes.Buffer{}
-
 	executor, err := remotecommand.NewSPDYExecutor(s.kubeConfig, "POST", request.URL())
 	if err != nil {
 		return "", err
 	}
 
-	err = executor.Stream(remotecommand.StreamOptions{Stdout: &stdoutBuf})
-	result := string(stdoutBuf.Bytes())
-	return result, nil
+	var stdoutBuf bytes.Buffer
+	if err := executor.Stream(remotecommand.StreamOptions{Stdout: &stdoutBuf}); err != nil {
+		return "", err
+	}
+	return stdoutBuf.String(), nil
 }
 
 type CA struct {
@@ -92,7 +96,7 @@ type ShutdownFunc func()
 // and is ready to issue certs, or an error. When successful, it also starts a goroutine
 // to periodically reload the kube API server's private key in case it changed, and returns
 // a function that can be used to shut down that goroutine.
-func New(kubeClient kubernetes.Interface, podCommandExecutor PodCommandExecutor) (*CA, ShutdownFunc, error) {
+func New(kubeClient kubernetes.Interface, podCommandExecutor PodCommandExecutor, tick <-chan time.Time) (*CA, ShutdownFunc, error) {
 	signer, err := createSignerWithAPIServerSecret(kubeClient, podCommandExecutor)
 	if err != nil {
 		// The initial load failed, so give up
@@ -105,7 +109,7 @@ func New(kubeClient kubernetes.Interface, podCommandExecutor PodCommandExecutor)
 		shutdown:           make(chan struct{}),
 		done:               make(chan struct{}),
 	}
-	go result.refreshLoop()
+	go result.refreshLoop(tick)
 	return result, result.shutdownRefresh, nil
 }
 
@@ -115,16 +119,16 @@ func createSignerWithAPIServerSecret(kubeClient kubernetes.Interface, podCommand
 
 	pod, err := findControllerManagerPod(ctx, kubeClient)
 	if err != nil {
-		return nil, fmt.Errorf("could not find controller-manager pod: %v", err)
+		return nil, err
 	}
 	certPath, keyPath := getKeypairFilePaths(pod)
 
-	certPEM, err := podCommandExecutor.exec(pod.Namespace, pod.Name, "cat", certPath)
+	certPEM, err := podCommandExecutor.Exec(pod.Namespace, pod.Name, "cat", certPath)
 	if err != nil {
 		return nil, err
 	}
 
-	keyPEM, err := podCommandExecutor.exec(pod.Namespace, pod.Name, "cat", keyPath)
+	keyPEM, err := podCommandExecutor.Exec(pod.Namespace, pod.Name, "cat", keyPath)
 	if err != nil {
 		return nil, err
 	}
@@ -132,15 +136,13 @@ func createSignerWithAPIServerSecret(kubeClient kubernetes.Interface, podCommand
 	return certauthority.Load(certPEM, keyPEM)
 }
 
-func (c *CA) refreshLoop() {
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
+func (c *CA) refreshLoop(tick <-chan time.Time) {
 	for {
 		select {
 		case <-c.shutdown:
 			close(c.done)
 			return
-		case <-ticker.C:
+		case <-tick:
 			c.updateSigner()
 		}
 	}
@@ -178,12 +180,12 @@ func findControllerManagerPod(ctx context.Context, kubeClient kubernetes.Interfa
 		FieldSelector: "status.phase=Running",
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not check for kube-controller-manager pod: %w", err)
 	}
 	for _, pod := range pods.Items {
 		return &pod, nil
 	}
-	return nil, fmt.Errorf("did not find matching pod")
+	return nil, ErrNoKubeControllerManagerPod
 }
 
 func getKeypairFilePaths(pod *v1.Pod) (string, string) {
@@ -193,12 +195,14 @@ func getKeypairFilePaths(pod *v1.Pod) (string, string) {
 }
 
 func getContainerArgByName(pod *v1.Pod, name string, defaultValue string) string {
-	prefix := "--" + name + "="
 	for _, container := range pod.Spec.Containers {
-		for _, arg := range append(container.Command, container.Args...) {
-			if strings.HasPrefix(arg, prefix) {
-				return strings.TrimPrefix(arg, prefix)
-			}
+		flagset := pflag.NewFlagSet("", pflag.ContinueOnError)
+		flagset.ParseErrorsWhitelist = pflag.ParseErrorsWhitelist{UnknownFlags: true}
+		var val string
+		flagset.StringVar(&val, name, "", "")
+		_ = flagset.Parse(append(container.Command, container.Args...))
+		if val != "" {
+			return val
 		}
 	}
 	return defaultValue

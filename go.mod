@@ -9,6 +9,7 @@ require (
 	github.com/google/go-cmp v0.5.0
 	github.com/sclevine/spec v1.4.0
 	github.com/spf13/cobra v1.0.0
+	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.6.1
 	github.com/suzerain-io/controller-go v0.0.0-20200730212956-7f99b569ca9f
 	github.com/suzerain-io/placeholder-name/kubernetes/1.19/api v0.0.0-00010101000000-000000000000

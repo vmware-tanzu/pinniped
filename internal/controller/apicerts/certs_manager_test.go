@@ -7,9 +7,6 @@ package apicerts
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"testing"
 	"time"
@@ -222,29 +219,10 @@ func TestManagerControllerSync(t *testing.T) {
 					r.NotEmpty(actualCertChain)
 
 					// Validate the created cert using the CA, and also validate the cert's hostname
-					roots := x509.NewCertPool()
-					ok := roots.AppendCertsFromPEM([]byte(actualCACert))
-					r.True(ok)
-					block, _ := pem.Decode([]byte(actualCertChain))
-					r.NotNil(block)
-					parsedCert, err := x509.ParseCertificate(block.Bytes)
-					r.NoError(err)
-					serviceEndpoint := "placeholder-name-api." + installedInNamespace + ".svc"
-					opts := x509.VerifyOptions{
-						DNSName: serviceEndpoint,
-						Roots:   roots,
-					}
-					_, err = parsedCert.Verify(opts)
-					r.NoError(err)
-					r.Contains(parsedCert.DNSNames, serviceEndpoint, "expected an explicit DNS SAN, not just Common Name")
-
-					// Check the created cert's validity bounds
-					r.WithinDuration(time.Now(), parsedCert.NotBefore, time.Minute*2)
-					r.WithinDuration(time.Now().Add(24*365*time.Hour), parsedCert.NotAfter, time.Minute*2)
-
-					// Check that the private key and cert chain match
-					_, err = tls.X509KeyPair([]byte(actualCertChain), []byte(actualPrivateKey))
-					r.NoError(err)
+					validCert := testutil.ValidateCertificate(t, actualCACert, actualCertChain)
+					validCert.RequireDNSName("placeholder-name-api." + installedInNamespace + ".svc")
+					validCert.RequireLifetime(time.Now(), time.Now().Add(24*365*time.Hour), 2*time.Minute)
+					validCert.RequireMatchesPrivateKey(actualPrivateKey)
 
 					// Make sure we updated the APIService caBundle and left it otherwise unchanged
 					r.Len(aggregatorAPIClient.Actions(), 2)

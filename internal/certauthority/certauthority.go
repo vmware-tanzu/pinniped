@@ -62,8 +62,8 @@ func secureEnv() env {
 var ErrInvalidCACertificate = fmt.Errorf("invalid CA certificate")
 
 // Load a certificate authority from an existing certificate and private key (in PEM format).
-func Load(certPath string, keyPath string) (*CA, error) {
-	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+func Load(certPEM string, keyPEM string) (*CA, error) {
+	cert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
 	if err != nil {
 		return nil, fmt.Errorf("could not load CA: %w", err)
 	}

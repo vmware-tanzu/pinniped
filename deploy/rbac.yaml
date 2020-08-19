@@ -62,6 +62,35 @@ roleRef:
   name: #@ data.values.app_name + "-aggregated-api-server-role"
   apiGroup: rbac.authorization.k8s.io
 
+#! Give permission to list pods and pod exec in the kube-system namespace so we can find the API server's private key
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: #@ data.values.app_name + "-kube-system-pod-exec-role"
+  namespace: kube-system
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: #@ data.values.app_name + "-kube-system-pod-exec-role-binding"
+  namespace: kube-system
+subjects:
+  - kind: ServiceAccount
+    name: #@ data.values.app_name + "-service-account"
+    namespace: #@ data.values.namespace
+roleRef:
+  kind: Role
+  name: #@ data.values.app_name + "-kube-system-pod-exec-role"
+  apiGroup: rbac.authorization.k8s.io
+
 #! Allow both authenticated and unauthenticated CredentialRequests (i.e. allow all requests)
 ---
 apiVersion: rbac.authorization.k8s.io/v1

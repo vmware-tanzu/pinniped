@@ -10,17 +10,21 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/spf13/cobra"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
+	"k8s.io/client-go/kubernetes"
+	restclient "k8s.io/client-go/rest"
 
 	"github.com/suzerain-io/placeholder-name/internal/apiserver"
-	"github.com/suzerain-io/placeholder-name/internal/certauthority"
+	"github.com/suzerain-io/placeholder-name/internal/certauthority/kubecertauthority"
 	"github.com/suzerain-io/placeholder-name/internal/controllermanager"
 	"github.com/suzerain-io/placeholder-name/internal/downward"
 	"github.com/suzerain-io/placeholder-name/internal/provider"
+	"github.com/suzerain-io/placeholder-name/internal/registry/credentialrequest"
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
 	"github.com/suzerain-io/placeholder-name/pkg/config"
 )
@@ -30,10 +34,8 @@ type App struct {
 	cmd *cobra.Command
 
 	// CLI flags
-	configPath                 string
-	downwardAPIPath            string
-	clusterSigningCertFilePath string
-	clusterSigningKeyFilePath  string
+	configPath      string
+	downwardAPIPath string
 }
 
 // This is ignored for now because we turn off etcd storage below, but this is
@@ -87,20 +89,6 @@ func addCommandlineFlagsToCommand(cmd *cobra.Command, app *App) {
 		"/etc/podinfo",
 		"path to Downward API volume mount",
 	)
-
-	cmd.Flags().StringVar(
-		&app.clusterSigningCertFilePath,
-		"cluster-signing-cert-file",
-		"",
-		"path to cluster signing certificate",
-	)
-
-	cmd.Flags().StringVar(
-		&app.clusterSigningKeyFilePath,
-		"cluster-signing-key-file",
-		"",
-		"path to cluster signing private key",
-	)
 }
 
 // Boot the aggregated API server, which will in turn boot the controllers.
@@ -112,10 +100,11 @@ func (a *App) runServer(ctx context.Context) error {
 	}
 
 	// Load the Kubernetes cluster signing CA.
-	k8sClusterCA, err := certauthority.Load(a.clusterSigningCertFilePath, a.clusterSigningKeyFilePath)
+	k8sClusterCA, shutdownCA, err := getClusterCASigner()
 	if err != nil {
-		return fmt.Errorf("could not load cluster signing CA: %w", err)
+		return err
 	}
+	defer shutdownCA()
 
 	// Create a WebhookTokenAuthenticator.
 	webhookTokenAuthenticator, err := config.NewWebhook(cfg.WebhookConfig)
@@ -169,11 +158,40 @@ func (a *App) runServer(ctx context.Context) error {
 	return server.GenericAPIServer.PrepareRun().Run(ctx.Done())
 }
 
+func getClusterCASigner() (*kubecertauthority.CA, kubecertauthority.ShutdownFunc, error) {
+	// Load the Kubernetes client configuration.
+	kubeConfig, err := restclient.InClusterConfig()
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not load in-cluster configuration: %w", err)
+	}
+
+	// Connect to the core Kubernetes API.
+	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not initialize Kubernetes client: %w", err)
+	}
+
+	// Make a clock tick that triggers a periodic refresh.
+	ticker := time.NewTicker(5 * time.Minute)
+
+	// Make a CA which uses the Kubernetes cluster API server's signing certs.
+	k8sClusterCA, shutdownCA, err := kubecertauthority.New(
+		kubeClient,
+		kubecertauthority.NewPodCommandExecutor(kubeConfig, kubeClient),
+		ticker.C,
+	)
+	if err != nil {
+		ticker.Stop()
+		return nil, nil, fmt.Errorf("could not load cluster signing CA: %w", err)
+	}
+	return k8sClusterCA, func() { shutdownCA(); ticker.Stop() }, nil
+}
+
 // Create a configuration for the aggregated API server.
 func getAggregatedAPIServerConfig(
 	dynamicCertProvider provider.DynamicTLSServingCertProvider,
 	webhookTokenAuthenticator *webhook.WebhookTokenAuthenticator,
-	ca *certauthority.CA,
+	ca credentialrequest.CertIssuer,
 	startControllersPostStartHook func(context.Context),
 ) (*apiserver.Config, error) {
 	recommendedOptions := genericoptions.NewRecommendedOptions(

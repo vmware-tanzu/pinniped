@@ -12,12 +12,26 @@ import (
 	"crypto/x509/pkix"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+func loadFromFiles(t *testing.T, certPath string, keyPath string) (*CA, error) {
+	t.Helper()
+
+	certPEM, err := ioutil.ReadFile(certPath)
+	require.NoError(t, err)
+
+	keyPEM, err := ioutil.ReadFile(keyPath)
+	require.NoError(t, err)
+
+	ca, err := Load(string(certPEM), string(keyPEM))
+	return ca, err
+}
 
 func TestLoad(t *testing.T) {
 	tests := []struct {
@@ -26,30 +40,6 @@ func TestLoad(t *testing.T) {
 		keyPath  string
 		wantErr  string
 	}{
-		{
-			name:     "missing cert",
-			certPath: "./testdata/cert-does-not-exist",
-			keyPath:  "./testdata/test.key",
-			wantErr:  "could not load CA: open ./testdata/cert-does-not-exist: no such file or directory",
-		},
-		{
-			name:     "empty cert",
-			certPath: "./testdata/empty",
-			keyPath:  "./testdata/test.key",
-			wantErr:  "could not load CA: tls: failed to find any PEM data in certificate input",
-		},
-		{
-			name:     "invalid cert",
-			certPath: "./testdata/invalid",
-			keyPath:  "./testdata/test.key",
-			wantErr:  "could not load CA: tls: failed to find any PEM data in certificate input",
-		},
-		{
-			name:     "missing key",
-			certPath: "./testdata/test.crt",
-			keyPath:  "./testdata/key-does-not-exist",
-			wantErr:  "could not load CA: open ./testdata/key-does-not-exist: no such file or directory",
-		},
 		{
 			name:     "empty key",
 			certPath: "./testdata/test.crt",
@@ -83,7 +73,7 @@ func TestLoad(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			ca, err := Load(tt.certPath, tt.keyPath)
+			ca, err := loadFromFiles(t, tt.certPath, tt.keyPath)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				return
@@ -202,7 +192,7 @@ func (e *errSigner) Sign(_ io.Reader, _ []byte, _ crypto.SignerOpts) ([]byte, er
 func TestIssue(t *testing.T) {
 	now := time.Date(2020, 7, 10, 12, 41, 12, 1234, time.UTC)
 
-	realCA, err := Load("./testdata/test.crt", "./testdata/test.key")
+	realCA, err := loadFromFiles(t, "./testdata/test.crt", "./testdata/test.key")
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -302,7 +292,7 @@ func TestIssue(t *testing.T) {
 }
 
 func TestIssuePEM(t *testing.T) {
-	realCA, err := Load("./testdata/test.crt", "./testdata/test.key")
+	realCA, err := loadFromFiles(t, "./testdata/test.crt", "./testdata/test.key")
 	require.NoError(t, err)
 
 	certPEM, keyPEM, err := realCA.IssuePEM(pkix.Name{CommonName: "Test Server"}, []string{"example.com"}, 10*time.Minute)

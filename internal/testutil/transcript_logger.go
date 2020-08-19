@@ -7,6 +7,7 @@ package testutil
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -14,7 +15,8 @@ import (
 
 type TranscriptLogger struct {
 	t          *testing.T
-	Transcript []TranscriptLogMessage
+	lock       sync.Mutex
+	transcript []TranscriptLogMessage
 }
 
 var _ logr.Logger = &TranscriptLogger{}
@@ -28,15 +30,27 @@ func NewTranscriptLogger(t *testing.T) *TranscriptLogger {
 	return &TranscriptLogger{t: t}
 }
 
+func (log *TranscriptLogger) Transcript() []TranscriptLogMessage {
+	log.lock.Lock()
+	defer log.lock.Unlock()
+	result := make([]TranscriptLogMessage, 0, len(log.transcript))
+	result = append(result, log.transcript...)
+	return result
+}
+
 func (log *TranscriptLogger) Info(msg string, keysAndValues ...interface{}) {
-	log.Transcript = append(log.Transcript, TranscriptLogMessage{
+	log.lock.Lock()
+	defer log.lock.Unlock()
+	log.transcript = append(log.transcript, TranscriptLogMessage{
 		Level:   "info",
 		Message: fmt.Sprintf(msg, keysAndValues...),
 	})
 }
 
 func (log *TranscriptLogger) Error(err error, msg string, keysAndValues ...interface{}) {
-	log.Transcript = append(log.Transcript, TranscriptLogMessage{
+	log.lock.Lock()
+	defer log.lock.Unlock()
+	log.transcript = append(log.transcript, TranscriptLogMessage{
 		Level:   "error",
 		Message: fmt.Sprintf("%s: %v -- %v", msg, err, keysAndValues),
 	})

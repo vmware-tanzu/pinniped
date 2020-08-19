@@ -10,6 +10,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -18,6 +22,8 @@ import (
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
+	"k8s.io/client-go/transport"
+	"k8s.io/klog/v2"
 
 	"github.com/suzerain-io/pinniped/internal/apiserver"
 	"github.com/suzerain-io/pinniped/internal/certauthority/kubecertauthority"
@@ -155,6 +161,70 @@ func (a *App) runServer(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("could not create aggregated API server: %w", err)
 	}
+
+	const proxyPrefix = "/proxy.placeholder.suzerain-io.github.io/"
+
+	kubeconfig, err := restclient.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("could not get in-cluster config: %w", err)
+	}
+
+	kubeTransportConfig, err := kubeconfig.TransportConfig()
+	if err != nil {
+		return fmt.Errorf("could not get in-cluster transport config: %w", err)
+	}
+
+	kubeRoundTripper, err := transport.New(kubeTransportConfig)
+	if err != nil {
+		return fmt.Errorf("could not get in-cluster transport: %w", err)
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "https", Host: "kubernetes.default"})
+	proxy.Transport = kubeRoundTripper
+
+	originalHandlerChain := server.GenericAPIServer.Handler.FullHandlerChain
+	server.GenericAPIServer.Handler.FullHandlerChain = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, proxyPrefix) {
+			originalHandlerChain.ServeHTTP(w, r)
+			return
+		}
+
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		klog.Error("got authorization header %q", token)
+		authResponse, authenticated, err := webhookTokenAuthenticator.AuthenticateToken(r.Context(), token)
+		if err != nil || !authenticated {
+			klog.Error("unauthenticated request: err=%v, authenticated=%v", err, authenticated)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		klog.Error("authenticated successfully: %v", authResponse.User)
+
+		r.URL.Path = strings.TrimPrefix(r.URL.Path, proxyPrefix)
+
+		// TODO: reject requests that are trying to use impersonation (or make it work somehow?)
+
+		newHeaders := http.Header{}
+		newHeaders.Set("Impersonate-User", authResponse.User.GetName())
+		for _, group := range authResponse.User.GetGroups() {
+			newHeaders.Add("Impersonate-Group", group)
+		}
+		for _, header := range []string{
+			"Accept",
+			"Accept-Encoding",
+			"User-Agent",
+		} {
+			if incoming := r.Header.Get(header); incoming != "" {
+				newHeaders.Add(header, incoming)
+			}
+		}
+		r.Header = newHeaders
+
+		klog.Error("request to proxy: %v", r)
+
+		// TODO: if we get a 403 because we're not allowed to impersonate, we might want to change it into a 500 downstream
+		proxy.ServeHTTP(w, r)
+	})
 
 	// Run the server. Its post-start hook will start the controllers.
 	return server.GenericAPIServer.PrepareRun().Run(ctx.Done())

@@ -97,7 +97,7 @@ func createClients() (
 	placeholderClient *placeholderclientset.Clientset,
 	err error,
 ) {
-	// Load the Kubernetes client configuration (kubeconfig),
+	// Load the Kubernetes client configuration.
 	kubeConfig, err := restclient.InClusterConfig()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("could not load in-cluster configuration: %w", err)

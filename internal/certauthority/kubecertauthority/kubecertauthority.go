@@ -12,7 +12,6 @@ import (
 	"context"
 	"crypto/x509/pkix"
 	"fmt"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -28,13 +27,58 @@ import (
 	"github.com/suzerain-io/placeholder-name/internal/certauthority"
 )
 
+const k8sAPIServerCACertPEMDefaultPath = "/etc/kubernetes/ca/ca.pem"
+const k8sAPIServerCAKeyPEMDefaultPath = "/etc/kubernetes/ca/ca.key"
+
 type signer interface {
 	IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) ([]byte, []byte, error)
 }
 
-type CA struct {
+type PodCommandExecutor interface {
+	exec(podNamespace string, podName string, commandAndArgs ...string) (stdoutResult string, err error)
+}
+
+type kubeClientPodCommandExecutor struct {
 	kubeConfig *restclient.Config
 	kubeClient kubernetes.Interface
+}
+
+func NewPodCommandExecutor(kubeConfig *restclient.Config, kubeClient kubernetes.Interface) PodCommandExecutor {
+	return &kubeClientPodCommandExecutor{kubeConfig: kubeConfig, kubeClient: kubeClient}
+}
+
+func (s *kubeClientPodCommandExecutor) exec(podNamespace string, podName string, commandAndArgs ...string) (string, error) {
+	request := s.kubeClient.
+		CoreV1().
+		RESTClient().
+		Post().
+		Namespace(podNamespace).
+		Resource("pods").
+		Name(podName).
+		SubResource("exec").
+		VersionedParams(&v1.PodExecOptions{
+			Stdin:   false,
+			Stdout:  true,
+			Stderr:  false,
+			TTY:     false,
+			Command: commandAndArgs,
+		}, scheme.ParameterCodec)
+
+	stdoutBuf := bytes.Buffer{}
+
+	executor, err := remotecommand.NewSPDYExecutor(s.kubeConfig, "POST", request.URL())
+	if err != nil {
+		return "", err
+	}
+
+	err = executor.Stream(remotecommand.StreamOptions{Stdout: &stdoutBuf})
+	result := string(stdoutBuf.Bytes())
+	return result, nil
+}
+
+type CA struct {
+	kubeClient         kubernetes.Interface
+	podCommandExecutor PodCommandExecutor
 
 	shutdown, done chan struct{}
 
@@ -48,22 +92,24 @@ type ShutdownFunc func()
 // and is ready to issue certs, or an error. When successful, it also starts a goroutine
 // to periodically reload the kube API server's private key in case it changed, and returns
 // a function that can be used to shut down that goroutine.
-func New(kubeConfig *restclient.Config, kubeClient kubernetes.Interface) (*CA, ShutdownFunc, error) {
-	signer, err := createSignerWithAPIServerSecret(kubeConfig, kubeClient)
+func New(kubeClient kubernetes.Interface, podCommandExecutor PodCommandExecutor) (*CA, ShutdownFunc, error) {
+	signer, err := createSignerWithAPIServerSecret(kubeClient, podCommandExecutor)
 	if err != nil {
 		// The initial load failed, so give up
 		return nil, nil, err
 	}
 	result := &CA{
-		kubeConfig:   kubeConfig,
-		kubeClient:   kubeClient,
-		activeSigner: signer,
+		kubeClient:         kubeClient,
+		podCommandExecutor: podCommandExecutor,
+		activeSigner:       signer,
+		shutdown:           make(chan struct{}),
+		done:               make(chan struct{}),
 	}
 	go result.refreshLoop()
 	return result, result.shutdownRefresh, nil
 }
 
-func createSignerWithAPIServerSecret(kubeConfig *restclient.Config, kubeClient kubernetes.Interface) (signer, error) {
+func createSignerWithAPIServerSecret(kubeClient kubernetes.Interface, podCommandExecutor PodCommandExecutor) (signer, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -73,12 +119,12 @@ func createSignerWithAPIServerSecret(kubeConfig *restclient.Config, kubeClient k
 	}
 	certPath, keyPath := getKeypairFilePaths(pod)
 
-	certPEM, err := execCmdInPod(kubeConfig, kubeClient, pod, "cat", certPath)
+	certPEM, err := podCommandExecutor.exec(pod.Namespace, pod.Name, "cat", certPath)
 	if err != nil {
 		return nil, err
 	}
 
-	keyPEM, err := execCmdInPod(kubeConfig, kubeClient, pod, "cat", keyPath)
+	keyPEM, err := podCommandExecutor.exec(pod.Namespace, pod.Name, "cat", keyPath)
 	if err != nil {
 		return nil, err
 	}
@@ -101,9 +147,9 @@ func (c *CA) refreshLoop() {
 }
 
 func (c *CA) updateSigner() {
-	newSigner, err := createSignerWithAPIServerSecret(c.kubeConfig, c.kubeClient)
+	newSigner, err := createSignerWithAPIServerSecret(c.kubeClient, c.podCommandExecutor)
 	if err != nil {
-		klog.Errorf("could not create signer with API server secret: %w", err)
+		klog.Errorf("could not create signer with API server secret: %s", err)
 		return
 	}
 	c.lock.Lock()
@@ -141,8 +187,6 @@ func findControllerManagerPod(ctx context.Context, kubeClient kubernetes.Interfa
 }
 
 func getKeypairFilePaths(pod *v1.Pod) (string, string) {
-	const k8sAPIServerCACertPEMDefaultPath = "/etc/kubernetes/ca/ca.pem"
-	const k8sAPIServerCAKeyPEMDefaultPath = "/etc/kubernetes/ca/ca.key"
 	certPath := getContainerArgByName(pod, "cluster-signing-cert-file", k8sAPIServerCACertPEMDefaultPath)
 	keyPath := getContainerArgByName(pod, "cluster-signing-key-file", k8sAPIServerCAKeyPEMDefaultPath)
 	return certPath, keyPath
@@ -158,42 +202,4 @@ func getContainerArgByName(pod *v1.Pod, name string, defaultValue string) string
 		}
 	}
 	return defaultValue
-}
-
-func execCmdInPod(
-	kubeConfig *restclient.Config,
-	kubeClient kubernetes.Interface,
-	pod *v1.Pod,
-	command ...string,
-) (stdout string, err error) {
-	request := kubeClient.
-		CoreV1().
-		RESTClient().
-		Post().
-		Namespace(pod.Namespace).
-		Resource("pods").
-		Name(pod.Name).
-		SubResource("exec").
-		VersionedParams(&v1.PodExecOptions{
-			Stdin:   false,
-			Stdout:  true,
-			Stderr:  false,
-			TTY:     false,
-			Command: command,
-		}, scheme.ParameterCodec)
-
-	return streamPostRequest(kubeConfig, request.URL())
-}
-
-func streamPostRequest(kubeConfig *restclient.Config, url *url.URL) (string, error) {
-	stdoutBuf := bytes.Buffer{}
-
-	executor, err := remotecommand.NewSPDYExecutor(kubeConfig, "POST", url)
-	if err != nil {
-		return "", err
-	}
-
-	err = executor.Stream(remotecommand.StreamOptions{Stdout: &stdoutBuf})
-	result := string(stdoutBuf.Bytes())
-	return result, nil
 }

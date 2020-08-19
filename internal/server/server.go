@@ -18,13 +18,12 @@ import (
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 
-	"github.com/suzerain-io/placeholder-name/internal/certauthority/kubecertauthority"
-	"github.com/suzerain-io/placeholder-name/internal/registry/credentialrequest"
-
 	"github.com/suzerain-io/placeholder-name/internal/apiserver"
+	"github.com/suzerain-io/placeholder-name/internal/certauthority/kubecertauthority"
 	"github.com/suzerain-io/placeholder-name/internal/controllermanager"
 	"github.com/suzerain-io/placeholder-name/internal/downward"
 	"github.com/suzerain-io/placeholder-name/internal/provider"
+	"github.com/suzerain-io/placeholder-name/internal/registry/credentialrequest"
 	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
 	"github.com/suzerain-io/placeholder-name/pkg/config"
 )
@@ -159,20 +158,23 @@ func (a *App) runServer(ctx context.Context) error {
 }
 
 func getClusterCASigner() (*kubecertauthority.CA, kubecertauthority.ShutdownFunc, error) {
-	// Load the Kubernetes client configuration (kubeconfig),
+	// Load the Kubernetes client configuration.
 	kubeConfig, err := restclient.InClusterConfig()
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not load in-cluster configuration: %w", err)
 	}
 
 	// Connect to the core Kubernetes API.
-	k8sClient, err := kubernetes.NewForConfig(kubeConfig)
+	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not initialize Kubernetes client: %w", err)
 	}
 
-	// Load the Kubernetes cluster signing CA.
-	k8sClusterCA, shutdownCA, err := kubecertauthority.New(kubeConfig, k8sClient)
+	// Make a CA which uses the Kubernetes cluster API server's signing certs.
+	k8sClusterCA, shutdownCA, err := kubecertauthority.New(
+		kubeClient,
+		kubecertauthority.NewPodCommandExecutor(kubeConfig, kubeClient),
+	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not load cluster signing CA: %w", err)
 	}

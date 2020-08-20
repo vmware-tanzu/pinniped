@@ -17,3 +17,9 @@ discovery_url: #! e.g., https://example.com
 
 #! e.g. the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username="USERNAME" --docker-password="PASSWORD" --dry-run=client -o json | jq -r '.data[".dockerconfigjson"]'
 image_pull_dockerconfigjson: #! e.g. {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}
+
+#! Specify the duration and renewal interval for the API serving certificate.
+#! The defaults are set to expire the cert about every 30 days, and to rotate it
+#! about every 25 days.
+api_serving_certificate_duration_seconds: 2592000
+api_serving_certificate_renew_before_seconds: 2160000

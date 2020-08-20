@@ -29,6 +29,10 @@ data:
     webhook:
       url: (@= data.values.webhook_url @)
       caBundle: (@= data.values.webhook_ca_bundle @)
+    api:
+      servingCertificate:
+        durationSeconds: (@= str(data.values.api_serving_certificate_duration_seconds) @)
+        renewBeforeSeconds: (@= str(data.values.api_serving_certificate_renew_before_seconds) @)
 ---
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
 apiVersion: v1

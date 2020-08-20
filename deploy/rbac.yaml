@@ -43,7 +43,7 @@ rules:
     verbs: [create, get, list, patch, update, watch]
   - apiGroups: [""]
     resources: [secrets]
-    verbs: [create, get, list, patch, update, watch]
+    verbs: [create, get, list, patch, update, watch, delete]
   - apiGroups: [crds.placeholder.suzerain-io.github.io]
     resources: [logindiscoveryconfigs]
     verbs: [create, get, list, update, watch]

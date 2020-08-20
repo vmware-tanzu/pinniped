@@ -6,9 +6,13 @@ SPDX-License-Identifier: Apache-2.0
 package testutil
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
+	"math/big"
 	"testing"
 	"time"
 
@@ -70,4 +74,41 @@ func (v *ValidCert) RequireMatchesPrivateKey(keyPEM string) {
 	v.t.Helper()
 	_, err := tls.X509KeyPair([]byte(v.certPEM), []byte(keyPEM))
 	require.NoError(v.t, err)
+}
+
+// CreateCertificate creates a certificate with the provided time bounds, and
+// returns the PEM representation of the certificate.
+//
+// There is nothing very special about the certificate that it creates, just
+// that it is a valid certificate that can be used for testing.
+func CreateCertificate(notBefore, notAfter time.Time) ([]byte, error) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, err
+	}
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(0),
+		Subject: pkix.Name{
+			CommonName: "some-common-name",
+		},
+		NotBefore: notBefore,
+		NotAfter:  notAfter,
+	}
+	cert, err := x509.CreateCertificate(
+		rand.Reader,
+		&template,
+		&template,
+		&privateKey.PublicKey,
+		privateKey,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	certPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: cert,
+	})
+	return certPEM, nil
 }

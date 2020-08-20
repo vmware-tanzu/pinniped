@@ -10,9 +10,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
@@ -21,6 +23,7 @@ import (
 
 	"github.com/suzerain-io/placeholder-name/internal/apiserver"
 	"github.com/suzerain-io/placeholder-name/internal/certauthority/kubecertauthority"
+	"github.com/suzerain-io/placeholder-name/internal/constable"
 	"github.com/suzerain-io/placeholder-name/internal/controllermanager"
 	"github.com/suzerain-io/placeholder-name/internal/downward"
 	"github.com/suzerain-io/placeholder-name/internal/provider"
@@ -29,13 +32,39 @@ import (
 	"github.com/suzerain-io/placeholder-name/pkg/config"
 )
 
+type percentageValue struct {
+	percentage float32
+}
+
+var _ pflag.Value = &percentageValue{}
+
+func (p *percentageValue) String() string {
+	return fmt.Sprintf("%.2f%%", p.percentage*100)
+}
+
+func (p *percentageValue) Set(s string) error {
+	f, err := strconv.ParseFloat(s, 32)
+	if err != nil || f < 0 || f > 1 {
+		return constable.Error("must pass real number between 0 and 1")
+	}
+
+	p.percentage = float32(f)
+
+	return nil
+}
+
+func (p *percentageValue) Type() string {
+	return "percentage"
+}
+
 // App is an object that represents the placeholder-name-server application.
 type App struct {
 	cmd *cobra.Command
 
 	// CLI flags
-	configPath      string
-	downwardAPIPath string
+	configPath                   string
+	downwardAPIPath              string
+	servingCertRotationThreshold percentageValue
 }
 
 // This is ignored for now because we turn off etcd storage below, but this is
@@ -89,6 +118,13 @@ func addCommandlineFlagsToCommand(cmd *cobra.Command, app *App) {
 		"/etc/podinfo",
 		"path to Downward API volume mount",
 	)
+
+	app.servingCertRotationThreshold.percentage = .70 // default
+	cmd.Flags().Var(
+		&app.servingCertRotationThreshold,
+		"serving-cert-rotation-threshold",
+		"real number between 0 and 1 indicating percentage of lifetime before rotation of serving cert",
+	)
 }
 
 // Boot the aggregated API server, which will in turn boot the controllers.
@@ -132,6 +168,7 @@ func (a *App) runServer(ctx context.Context) error {
 		serverInstallationNamespace,
 		cfg.DiscoveryConfig.URL,
 		dynamicCertProvider,
+		a.servingCertRotationThreshold.percentage,
 	)
 	if err != nil {
 		return fmt.Errorf("could not prepare controllers: %w", err)

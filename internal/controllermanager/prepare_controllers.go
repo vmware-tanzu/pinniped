@@ -34,6 +34,7 @@ func PrepareControllers(
 	serverInstallationNamespace string,
 	discoveryURLOverride *string,
 	dynamicCertProvider provider.DynamicTLSServingCertProvider,
+	servingCertRotationThreshold float32,
 ) (func(ctx context.Context), error) {
 	// Create k8s clients.
 	k8sClient, aggregatorClient, placeholderClient, err := createClients()
@@ -76,6 +77,16 @@ func PrepareControllers(
 				dynamicCertProvider,
 				installationNamespaceK8sInformers.Core().V1().Secrets(),
 				controller.WithInformer,
+			),
+			singletonWorker,
+		).
+		WithController(
+			apicerts.NewCertsExpirerController(
+				serverInstallationNamespace,
+				k8sClient,
+				installationNamespaceK8sInformers.Core().V1().Secrets(),
+				controller.WithInformer,
+				servingCertRotationThreshold,
 			),
 			singletonWorker,
 		)

@@ -89,7 +89,7 @@ func (c *certsExpirerController) Sync(ctx controller.Context) error {
 	caLifetime := notAfter.Sub(notBefore)
 	caAge := time.Since(notBefore)
 	thresholdDelta := (float32(caAge) / float32(caLifetime)) - c.ageThreshold
-	klog.Infof("certsExpirerController Sync() found a CA age threshold delta of %.2f", thresholdDelta)
+	klog.Infof("certsExpirerController Sync() found a CA age threshold delta of %.9g", thresholdDelta)
 	if thresholdDelta > 0 {
 		err := c.k8sClient.
 			CoreV1().

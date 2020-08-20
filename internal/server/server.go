@@ -3,7 +3,7 @@ Copyright 2020 VMware, Inc.
 SPDX-License-Identifier: Apache-2.0
 */
 
-// Package server is the command line entry point for placeholder-name-server.
+// Package server is the command line entry point for pinniped-server.
 package server
 
 import (
@@ -21,15 +21,15 @@ import (
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 
-	"github.com/suzerain-io/placeholder-name/internal/apiserver"
-	"github.com/suzerain-io/placeholder-name/internal/certauthority/kubecertauthority"
-	"github.com/suzerain-io/placeholder-name/internal/constable"
-	"github.com/suzerain-io/placeholder-name/internal/controllermanager"
-	"github.com/suzerain-io/placeholder-name/internal/downward"
-	"github.com/suzerain-io/placeholder-name/internal/provider"
-	"github.com/suzerain-io/placeholder-name/internal/registry/credentialrequest"
-	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
-	"github.com/suzerain-io/placeholder-name/pkg/config"
+	"github.com/suzerain-io/pinniped/internal/apiserver"
+	"github.com/suzerain-io/pinniped/internal/certauthority/kubecertauthority"
+	"github.com/suzerain-io/pinniped/internal/constable"
+	"github.com/suzerain-io/pinniped/internal/controllermanager"
+	"github.com/suzerain-io/pinniped/internal/downward"
+	"github.com/suzerain-io/pinniped/internal/provider"
+	"github.com/suzerain-io/pinniped/internal/registry/credentialrequest"
+	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1"
+	"github.com/suzerain-io/pinniped/pkg/config"
 )
 
 type percentageValue struct {
@@ -57,7 +57,7 @@ func (p *percentageValue) Type() string {
 	return "percentage"
 }
 
-// App is an object that represents the placeholder-name-server application.
+// App is an object that represents the pinniped-server application.
 type App struct {
 	cmd *cobra.Command
 
@@ -69,7 +69,7 @@ type App struct {
 
 // This is ignored for now because we turn off etcd storage below, but this is
 // the right prefix in case we turn it back on.
-const defaultEtcdPathPrefix = "/registry/" + placeholderv1alpha1.GroupName
+const defaultEtcdPathPrefix = "/registry/" + pinnipedv1alpha1.GroupName
 
 // New constructs a new App with command line args, stdout and stderr.
 func New(ctx context.Context, args []string, stdout, stderr io.Writer) *App {
@@ -86,8 +86,8 @@ func (a *App) Run() error {
 // Create the server command and save it into the App.
 func (a *App) addServerCommand(ctx context.Context, args []string, stdout, stderr io.Writer) {
 	cmd := &cobra.Command{
-		Use: `placeholder-name-server`,
-		Long: "placeholder-name-server provides a generic API for mapping an external\n" +
+		Use: `pinniped-server`,
+		Long: "pinniped-server provides a generic API for mapping an external\n" +
 			"credential from somewhere to an internal credential to be used for\n" +
 			"authenticating to the Kubernetes API.",
 		RunE: func(cmd *cobra.Command, args []string) error { return a.runServer(ctx) },
@@ -108,7 +108,7 @@ func addCommandlineFlagsToCommand(cmd *cobra.Command, app *App) {
 		&app.configPath,
 		"config",
 		"c",
-		"placeholder-name.yaml",
+		"pinniped.yaml",
 		"path to configuration file",
 	)
 
@@ -166,7 +166,7 @@ func (a *App) runServer(ctx context.Context) error {
 	// post start hook of the aggregated API server.
 	startControllersFunc, err := controllermanager.PrepareControllers(
 		serverInstallationNamespace,
-		cfg.DiscoveryConfig.URL,
+		cfg.DiscoveryInfo.URL,
 		dynamicCertProvider,
 		a.servingCertRotationThreshold.percentage,
 	)
@@ -233,7 +233,7 @@ func getAggregatedAPIServerConfig(
 ) (*apiserver.Config, error) {
 	recommendedOptions := genericoptions.NewRecommendedOptions(
 		defaultEtcdPathPrefix,
-		apiserver.Codecs.LegacyCodec(placeholderv1alpha1.SchemeGroupVersion),
+		apiserver.Codecs.LegacyCodec(pinnipedv1alpha1.SchemeGroupVersion),
 		// TODO we should check to see if all the other default settings are acceptable for us
 	)
 	recommendedOptions.Etcd = nil // turn off etcd storage because we don't need it yet

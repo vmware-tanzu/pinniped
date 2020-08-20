@@ -17,11 +17,11 @@ import (
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	"github.com/suzerain-io/controller-go"
-	"github.com/suzerain-io/placeholder-name/internal/controller/apicerts"
-	"github.com/suzerain-io/placeholder-name/internal/controller/logindiscovery"
-	"github.com/suzerain-io/placeholder-name/internal/provider"
-	placeholderclientset "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned"
-	placeholderinformers "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/informers/externalversions"
+	"github.com/suzerain-io/pinniped/internal/controller/apicerts"
+	"github.com/suzerain-io/pinniped/internal/controller/discovery"
+	"github.com/suzerain-io/pinniped/internal/provider"
+	pinnipedclientset "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned"
+	pinnipedinformers "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/informers/externalversions"
 )
 
 const (
@@ -37,25 +37,25 @@ func PrepareControllers(
 	servingCertRotationThreshold float32,
 ) (func(ctx context.Context), error) {
 	// Create k8s clients.
-	k8sClient, aggregatorClient, placeholderClient, err := createClients()
+	k8sClient, aggregatorClient, pinnipedClient, err := createClients()
 	if err != nil {
 		return nil, fmt.Errorf("could not create clients for the controllers: %w", err)
 	}
 
 	// Create informers. Don't forget to make sure they get started in the function returned below.
-	kubePublicNamespaceK8sInformers, installationNamespaceK8sInformers, installationNamespacePlaceholderInformers :=
-		createInformers(serverInstallationNamespace, k8sClient, placeholderClient)
+	kubePublicNamespaceK8sInformers, installationNamespaceK8sInformers, installationNamespacePinnipedInformers :=
+		createInformers(serverInstallationNamespace, k8sClient, pinnipedClient)
 
 	// Create controller manager.
 	controllerManager := controller.
 		NewManager().
 		WithController(
-			logindiscovery.NewPublisherController(
+			discovery.NewPublisherController(
 				serverInstallationNamespace,
 				discoveryURLOverride,
-				placeholderClient,
+				pinnipedClient,
 				kubePublicNamespaceK8sInformers.Core().V1().ConfigMaps(),
-				installationNamespacePlaceholderInformers.Crds().V1alpha1().LoginDiscoveryConfigs(),
+				installationNamespacePinnipedInformers.Crd().V1alpha1().PinnipedDiscoveryInfos(),
 				controller.WithInformer,
 			),
 			singletonWorker,
@@ -95,7 +95,7 @@ func PrepareControllers(
 	return func(ctx context.Context) {
 		kubePublicNamespaceK8sInformers.Start(ctx.Done())
 		installationNamespaceK8sInformers.Start(ctx.Done())
-		installationNamespacePlaceholderInformers.Start(ctx.Done())
+		installationNamespacePinnipedInformers.Start(ctx.Done())
 
 		go controllerManager.Start(ctx)
 	}, nil
@@ -105,7 +105,7 @@ func PrepareControllers(
 func createClients() (
 	k8sClient *kubernetes.Clientset,
 	aggregatorClient *aggregatorclient.Clientset,
-	placeholderClient *placeholderclientset.Clientset,
+	pinnipedClient *pinnipedclientset.Clientset,
 	err error,
 ) {
 	// Load the Kubernetes client configuration.
@@ -129,12 +129,12 @@ func createClients() (
 		return nil, nil, nil, fmt.Errorf("could not initialize Kubernetes client: %w", err)
 	}
 
-	// Connect to the placeholder API.
+	// Connect to the pinniped API.
 	// I think we can't use protobuf encoding here because we are using CRDs
 	// (for which protobuf encoding is not supported).
-	placeholderClient, err = placeholderclientset.NewForConfig(kubeConfig)
+	pinnipedClient, err = pinnipedclientset.NewForConfig(kubeConfig)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("could not initialize placeholder client: %w", err)
+		return nil, nil, nil, fmt.Errorf("could not initialize pinniped client: %w", err)
 	}
 
 	//nolint: nakedret
@@ -145,26 +145,26 @@ func createClients() (
 func createInformers(
 	serverInstallationNamespace string,
 	k8sClient *kubernetes.Clientset,
-	placeholderClient *placeholderclientset.Clientset,
+	pinnipedClient *pinnipedclientset.Clientset,
 ) (
 	kubePublicNamespaceK8sInformers k8sinformers.SharedInformerFactory,
 	installationNamespaceK8sInformers k8sinformers.SharedInformerFactory,
-	installationNamespacePlaceholderInformers placeholderinformers.SharedInformerFactory,
+	installationNamespacePinnipedInformers pinnipedinformers.SharedInformerFactory,
 ) {
 	kubePublicNamespaceK8sInformers = k8sinformers.NewSharedInformerFactoryWithOptions(
 		k8sClient,
 		defaultResyncInterval,
-		k8sinformers.WithNamespace(logindiscovery.ClusterInfoNamespace),
+		k8sinformers.WithNamespace(discovery.ClusterInfoNamespace),
 	)
 	installationNamespaceK8sInformers = k8sinformers.NewSharedInformerFactoryWithOptions(
 		k8sClient,
 		defaultResyncInterval,
 		k8sinformers.WithNamespace(serverInstallationNamespace),
 	)
-	installationNamespacePlaceholderInformers = placeholderinformers.NewSharedInformerFactoryWithOptions(
-		placeholderClient,
+	installationNamespacePinnipedInformers = pinnipedinformers.NewSharedInformerFactoryWithOptions(
+		pinnipedClient,
 		defaultResyncInterval,
-		placeholderinformers.WithNamespace(serverInstallationNamespace),
+		pinnipedinformers.WithNamespace(serverInstallationNamespace),
 	)
 	return
 }

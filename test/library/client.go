@@ -17,7 +17,7 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	placeholdernameclientset "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned"
+	pinnipedclientset "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned"
 )
 
 func NewClientConfig(t *testing.T) *rest.Config {
@@ -38,16 +38,16 @@ func NewClientsetWithCertAndKey(t *testing.T, clientCertificateData, clientKeyDa
 	return newClientsetWithConfig(t, newAnonymousClientRestConfigWithCertAndKeyAdded(t, clientCertificateData, clientKeyData))
 }
 
-func NewPlaceholderNameClientset(t *testing.T) placeholdernameclientset.Interface {
+func NewPinnipedClientset(t *testing.T) pinnipedclientset.Interface {
 	t.Helper()
 
-	return placeholdernameclientset.NewForConfigOrDie(NewClientConfig(t))
+	return pinnipedclientset.NewForConfigOrDie(NewClientConfig(t))
 }
 
-func NewAnonymousPlaceholderNameClientset(t *testing.T) placeholdernameclientset.Interface {
+func NewAnonymousPinnipedClientset(t *testing.T) pinnipedclientset.Interface {
 	t.Helper()
 
-	return placeholdernameclientset.NewForConfigOrDie(newAnonymousClientRestConfig(t))
+	return pinnipedclientset.NewForConfigOrDie(newAnonymousClientRestConfig(t))
 }
 
 func NewAggregatedClientset(t *testing.T) aggregatorclient.Interface {
@@ -83,7 +83,7 @@ func newAnonymousClientRestConfig(t *testing.T) *rest.Config {
 
 	realConfig := NewClientConfig(t)
 
-	out, err := ioutil.TempFile("", "placeholder-name-anonymous-kubeconfig-test-*")
+	out, err := ioutil.TempFile("", "pinniped-anonymous-kubeconfig-test-*")
 	require.NoError(t, err)
 	defer os.Remove(out.Name())
 

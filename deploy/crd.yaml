@@ -1,9 +1,9 @@
 #@ load("@ytt:data", "data")
 
-#! Example of valid LoginDiscoveryConfig object:
+#! Example of valid PinnipedDiscoveryInfo object:
 #! ---
-#! apiVersion: suzerain-io.github.io/v1alpha1
-#! kind: LoginDiscoveryConfig
+#! apiVersion: crd.pinniped.dev/v1alpha1
+#! kind: PinnipedDiscoveryInfo
 #! metadata:
 #!   name: login-discovery
 #!   namespace: integration
@@ -15,12 +15,12 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: logindiscoveryconfigs.crds.placeholder.suzerain-io.github.io
+  name: pinnipeddiscoveryinfos.crd.pinniped.dev
 spec:
-  group: crds.placeholder.suzerain-io.github.io
+  group: crd.pinniped.dev
   versions:
     #! Any changes to these schemas should also be reflected in the types.go file(s)
-    #! in https://github.com/suzerain-io/placeholder-name-api/tree/main/pkg/apis/placeholder
+    #! in https://github.com/suzerain-io/pinniped-api/tree/main/pkg/apis/pinniped
     - name: v1alpha1
       served: true
       storage: true
@@ -42,8 +42,8 @@ spec:
                   minLength: 1
   scope: Namespaced
   names:
-    plural: logindiscoveryconfigs
-    singular: logindiscoveryconfig
-    kind: LoginDiscoveryConfig
+    plural: pinnipeddiscoveryinfos
+    singular: pinnipeddiscoveryinfo
+    kind: PinnipedDiscoveryInfo
     shortNames:
       - ldc

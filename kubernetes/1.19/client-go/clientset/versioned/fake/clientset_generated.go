@@ -8,16 +8,17 @@ SPDX-License-Identifier: Apache-2.0
 package fake
 
 import (
-	clientset "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned"
-	crdsv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned/typed/crdsplaceholder/v1alpha1"
-	fakecrdsv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned/typed/crdsplaceholder/v1alpha1/fake"
-	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned/typed/placeholder/v1alpha1"
-	fakeplaceholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned/typed/placeholder/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/testing"
+
+	clientset "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned"
+	crdv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/typed/crdpinniped/v1alpha1"
+	fakecrdv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/typed/crdpinniped/v1alpha1/fake"
+	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/typed/pinniped/v1alpha1"
+	fakepinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/typed/pinniped/v1alpha1/fake"
 )
 
 // NewSimpleClientset returns a clientset that will respond with the provided objects.
@@ -67,12 +68,12 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 
 var _ clientset.Interface = &Clientset{}
 
-// CrdsV1alpha1 retrieves the CrdsV1alpha1Client
-func (c *Clientset) CrdsV1alpha1() crdsv1alpha1.CrdsV1alpha1Interface {
-	return &fakecrdsv1alpha1.FakeCrdsV1alpha1{Fake: &c.Fake}
+// CrdV1alpha1 retrieves the CrdV1alpha1Client
+func (c *Clientset) CrdV1alpha1() crdv1alpha1.CrdV1alpha1Interface {
+	return &fakecrdv1alpha1.FakeCrdV1alpha1{Fake: &c.Fake}
 }
 
-// PlaceholderV1alpha1 retrieves the PlaceholderV1alpha1Client
-func (c *Clientset) PlaceholderV1alpha1() placeholderv1alpha1.PlaceholderV1alpha1Interface {
-	return &fakeplaceholderv1alpha1.FakePlaceholderV1alpha1{Fake: &c.Fake}
+// PinnipedV1alpha1 retrieves the PinnipedV1alpha1Client
+func (c *Clientset) PinnipedV1alpha1() pinnipedv1alpha1.PinnipedV1alpha1Interface {
+	return &fakepinnipedv1alpha1.FakePinnipedV1alpha1{Fake: &c.Fake}
 }

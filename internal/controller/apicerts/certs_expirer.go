@@ -19,8 +19,8 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/suzerain-io/controller-go"
-	"github.com/suzerain-io/placeholder-name/internal/constable"
-	placeholdernamecontroller "github.com/suzerain-io/placeholder-name/internal/controller"
+	"github.com/suzerain-io/pinniped/internal/constable"
+	pinnipedcontroller "github.com/suzerain-io/pinniped/internal/controller"
 )
 
 type certsExpirerController struct {
@@ -44,7 +44,7 @@ func NewCertsExpirerController(
 	namespace string,
 	k8sClient kubernetes.Interface,
 	secretInformer corev1informers.SecretInformer,
-	withInformer placeholdernamecontroller.WithInformerOptionFunc,
+	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	ageThreshold float32,
 ) controller.Controller {
 	return controller.New(
@@ -59,7 +59,7 @@ func NewCertsExpirerController(
 		},
 		withInformer(
 			secretInformer,
-			placeholdernamecontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretName, namespace),
+			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretName, namespace),
 			controller.InformerOption{},
 		),
 	)

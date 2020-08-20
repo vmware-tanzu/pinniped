@@ -1,4 +1,4 @@
-module github.com/suzerain-io/placeholder-name/pkg/client
+module github.com/suzerain-io/pinniped/pkg/client
 
 go 1.14
 

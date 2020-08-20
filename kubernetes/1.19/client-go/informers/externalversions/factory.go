@@ -12,14 +12,15 @@ import (
 	sync "sync"
 	time "time"
 
-	versioned "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/clientset/versioned"
-	crdsplaceholder "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/informers/externalversions/crdsplaceholder"
-	internalinterfaces "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/informers/externalversions/internalinterfaces"
-	placeholder "github.com/suzerain-io/placeholder-name/kubernetes/1.19/client-go/informers/externalversions/placeholder"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
+
+	versioned "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned"
+	crdpinniped "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/informers/externalversions/crdpinniped"
+	internalinterfaces "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/informers/externalversions/internalinterfaces"
+	pinniped "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/informers/externalversions/pinniped"
 )
 
 // SharedInformerOption defines the functional option type for SharedInformerFactory.
@@ -162,14 +163,14 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
-	Crds() crdsplaceholder.Interface
-	Placeholder() placeholder.Interface
+	Crd() crdpinniped.Interface
+	Pinniped() pinniped.Interface
 }
 
-func (f *sharedInformerFactory) Crds() crdsplaceholder.Interface {
-	return crdsplaceholder.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) Crd() crdpinniped.Interface {
+	return crdpinniped.New(f, f.namespace, f.tweakListOptions)
 }
 
-func (f *sharedInformerFactory) Placeholder() placeholder.Interface {
-	return placeholder.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) Pinniped() pinniped.Interface {
+	return pinniped.New(f, f.namespace, f.tweakListOptions)
 }

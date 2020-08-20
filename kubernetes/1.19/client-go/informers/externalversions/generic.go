@@ -10,10 +10,11 @@ package externalversions
 import (
 	"fmt"
 
-	v1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/crdsplaceholder/v1alpha1"
-	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
+
+	v1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1"
+	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1"
 )
 
 // GenericInformer is type of SharedIndexInformer which will locate and delegate to other
@@ -42,13 +43,13 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=crds.placeholder.suzerain-io.github.io, Version=v1alpha1
-	case v1alpha1.SchemeGroupVersion.WithResource("logindiscoveryconfigs"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Crds().V1alpha1().LoginDiscoveryConfigs().Informer()}, nil
+	// Group=crd.pinniped.dev, Version=v1alpha1
+	case v1alpha1.SchemeGroupVersion.WithResource("pinnipeddiscoveryinfos"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha1().PinnipedDiscoveryInfos().Informer()}, nil
 
-		// Group=placeholder.suzerain-io.github.io, Version=v1alpha1
-	case placeholderv1alpha1.SchemeGroupVersion.WithResource("credentialrequests"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Placeholder().V1alpha1().CredentialRequests().Informer()}, nil
+		// Group=pinniped.dev, Version=v1alpha1
+	case pinnipedv1alpha1.SchemeGroupVersion.WithResource("credentialrequests"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Pinniped().V1alpha1().CredentialRequests().Informer()}, nil
 
 	}
 

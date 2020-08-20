@@ -13,8 +13,8 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/suzerain-io/controller-go"
-	placeholdernamecontroller "github.com/suzerain-io/placeholder-name/internal/controller"
-	"github.com/suzerain-io/placeholder-name/internal/provider"
+	pinnipedcontroller "github.com/suzerain-io/pinniped/internal/controller"
+	"github.com/suzerain-io/pinniped/internal/provider"
 )
 
 type certsObserverController struct {
@@ -27,7 +27,7 @@ func NewCertsObserverController(
 	namespace string,
 	dynamicCertProvider provider.DynamicTLSServingCertProvider,
 	secretInformer corev1informers.SecretInformer,
-	withInformer placeholdernamecontroller.WithInformerOptionFunc,
+	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controller.Controller {
 	return controller.New(
 		controller.Config{
@@ -40,7 +40,7 @@ func NewCertsObserverController(
 		},
 		withInformer(
 			secretInformer,
-			placeholdernamecontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretName, namespace),
+			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretName, namespace),
 			controller.InformerOption{},
 		),
 	)

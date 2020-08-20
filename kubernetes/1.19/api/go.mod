@@ -1,4 +1,4 @@
-module github.com/suzerain-io/placeholder-name/kubernetes/1.19/api
+module github.com/suzerain-io/pinniped/kubernetes/1.19/api
 
 go 1.14
 

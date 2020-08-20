@@ -21,7 +21,7 @@ import (
 )
 
 func TestUpdateAPIService(t *testing.T) {
-	const apiServiceName = "v1alpha1.placeholder.suzerain-io.github.io"
+	const apiServiceName = "v1alpha1.pinniped.dev"
 
 	tests := []struct {
 		name        string

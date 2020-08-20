@@ -13,8 +13,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/suzerain-io/placeholder-name/pkg/client"
-	"github.com/suzerain-io/placeholder-name/test/library"
+	"github.com/suzerain-io/pinniped/pkg/client"
+	"github.com/suzerain-io/pinniped/test/library"
 )
 
 /*
@@ -56,7 +56,7 @@ var maskKey = func(s string) string { return strings.ReplaceAll(s, "TESTING KEY"
 
 func TestClient(t *testing.T) {
 	library.SkipUnlessIntegration(t)
-	tmcClusterToken := library.Getenv(t, "PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN")
+	tmcClusterToken := library.Getenv(t, "PINNIPED_TMC_CLUSTER_TOKEN")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

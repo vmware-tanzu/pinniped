@@ -25,9 +25,9 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 
-	"github.com/suzerain-io/placeholder-name/internal/mocks/mockcertissuer"
-	"github.com/suzerain-io/placeholder-name/internal/testutil"
-	placeholderapi "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder"
+	"github.com/suzerain-io/pinniped/internal/mocks/mockcertissuer"
+	"github.com/suzerain-io/pinniped/internal/testutil"
+	pinnipedapi "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped"
 )
 
 type contextKey struct{}
@@ -105,16 +105,16 @@ func TestCreate(t *testing.T) {
 			response, err := callCreate(context.Background(), storage, validCredentialRequestWithToken(requestToken))
 
 			r.NoError(err)
-			r.IsType(&placeholderapi.CredentialRequest{}, response)
+			r.IsType(&pinnipedapi.CredentialRequest{}, response)
 
-			expires := response.(*placeholderapi.CredentialRequest).Status.Credential.ExpirationTimestamp
+			expires := response.(*pinnipedapi.CredentialRequest).Status.Credential.ExpirationTimestamp
 			r.NotNil(expires)
 			r.InDelta(time.Now().Add(1*time.Hour).Unix(), expires.Unix(), 5)
-			response.(*placeholderapi.CredentialRequest).Status.Credential.ExpirationTimestamp = metav1.Time{}
+			response.(*pinnipedapi.CredentialRequest).Status.Credential.ExpirationTimestamp = metav1.Time{}
 
-			r.Equal(response, &placeholderapi.CredentialRequest{
-				Status: placeholderapi.CredentialRequestStatus{
-					Credential: &placeholderapi.CredentialRequestCredential{
+			r.Equal(response, &pinnipedapi.CredentialRequest{
+				Status: pinnipedapi.CredentialRequestStatus{
+					Credential: &pinnipedapi.CredentialRequestCredential{
 						ExpirationTimestamp:   metav1.Time{},
 						ClientCertificateData: "test-cert",
 						ClientKeyData:         "test-key",
@@ -164,7 +164,7 @@ func TestCreate(t *testing.T) {
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 			r.Equal(requestToken, webhook.calledWithToken)
-			requireOneLogStatement(r, logger, `"success" userID:test-user-uid,idpAuthenticated:false,placeholderNameAuthenticated:false`)
+			requireOneLogStatement(r, logger, `"success" userID:test-user-uid,idpAuthenticated:false,pinnipedAuthenticated:false`)
 		})
 
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenGivenATokenAndTheWebhookReturnsUnauthenticatedWithNilUser", func() {
@@ -179,7 +179,7 @@ func TestCreate(t *testing.T) {
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 			r.Equal(requestToken, webhook.calledWithToken)
-			requireOneLogStatement(r, logger, `"success" userID:<none>,idpAuthenticated:false,placeholderNameAuthenticated:false`)
+			requireOneLogStatement(r, logger, `"success" userID:<none>,idpAuthenticated:false,pinnipedAuthenticated:false`)
 		})
 
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookFails", func() {
@@ -204,7 +204,7 @@ func TestCreate(t *testing.T) {
 			response, err := callCreate(context.Background(), storage, validCredentialRequest())
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			requireOneLogStatement(r, logger, `"success" userID:<none>,idpAuthenticated:true,placeholderNameAuthenticated:false`)
+			requireOneLogStatement(r, logger, `"success" userID:<none>,idpAuthenticated:true,pinnipedAuthenticated:false`)
 		})
 
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsAnEmptyUsername", func() {
@@ -220,7 +220,7 @@ func TestCreate(t *testing.T) {
 			response, err := callCreate(context.Background(), storage, validCredentialRequest())
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			requireOneLogStatement(r, logger, `"success" userID:,idpAuthenticated:true,placeholderNameAuthenticated:false`)
+			requireOneLogStatement(r, logger, `"success" userID:,idpAuthenticated:true,pinnipedAuthenticated:false`)
 		})
 
 		it("CreateDoesNotPassAdditionalContextInfoToTheWebhook", func() {
@@ -250,49 +250,49 @@ func TestCreate(t *testing.T) {
 
 		it("CreateFailsWhenTokenIsNilInRequest", func() {
 			storage := NewREST(&FakeToken{}, nil)
-			response, err := callCreate(context.Background(), storage, credentialRequest(placeholderapi.CredentialRequestSpec{
-				Type:  placeholderapi.TokenCredentialType,
+			response, err := callCreate(context.Background(), storage, credentialRequest(pinnipedapi.CredentialRequestSpec{
+				Type:  pinnipedapi.TokenCredentialType,
 				Token: nil,
 			}))
 
 			requireAPIError(t, response, err, apierrors.IsInvalid,
-				`.placeholder.suzerain-io.github.io "request name" is invalid: spec.token.value: Required value: token must be supplied`)
+				`.pinniped.dev "request name" is invalid: spec.token.value: Required value: token must be supplied`)
 			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:token must be supplied`)
 		})
 
 		it("CreateFailsWhenTypeInRequestIsMissing", func() {
 			storage := NewREST(&FakeToken{}, nil)
-			response, err := callCreate(context.Background(), storage, credentialRequest(placeholderapi.CredentialRequestSpec{
+			response, err := callCreate(context.Background(), storage, credentialRequest(pinnipedapi.CredentialRequestSpec{
 				Type:  "",
-				Token: &placeholderapi.CredentialRequestTokenCredential{Value: "a token"},
+				Token: &pinnipedapi.CredentialRequestTokenCredential{Value: "a token"},
 			}))
 
 			requireAPIError(t, response, err, apierrors.IsInvalid,
-				`.placeholder.suzerain-io.github.io "request name" is invalid: spec.type: Required value: type must be supplied`)
+				`.pinniped.dev "request name" is invalid: spec.type: Required value: type must be supplied`)
 			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:type must be supplied`)
 		})
 
 		it("CreateFailsWhenTypeInRequestIsNotLegal", func() {
 			storage := NewREST(&FakeToken{}, nil)
-			response, err := callCreate(context.Background(), storage, credentialRequest(placeholderapi.CredentialRequestSpec{
+			response, err := callCreate(context.Background(), storage, credentialRequest(pinnipedapi.CredentialRequestSpec{
 				Type:  "this in an invalid type",
-				Token: &placeholderapi.CredentialRequestTokenCredential{Value: "a token"},
+				Token: &pinnipedapi.CredentialRequestTokenCredential{Value: "a token"},
 			}))
 
 			requireAPIError(t, response, err, apierrors.IsInvalid,
-				`.placeholder.suzerain-io.github.io "request name" is invalid: spec.type: Invalid value: "this in an invalid type": unrecognized type`)
+				`.pinniped.dev "request name" is invalid: spec.type: Invalid value: "this in an invalid type": unrecognized type`)
 			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:unrecognized type`)
 		})
 
 		it("CreateFailsWhenTokenValueIsEmptyInRequest", func() {
 			storage := NewREST(&FakeToken{}, nil)
-			response, err := callCreate(context.Background(), storage, credentialRequest(placeholderapi.CredentialRequestSpec{
-				Type:  placeholderapi.TokenCredentialType,
-				Token: &placeholderapi.CredentialRequestTokenCredential{Value: ""},
+			response, err := callCreate(context.Background(), storage, credentialRequest(pinnipedapi.CredentialRequestSpec{
+				Type:  pinnipedapi.TokenCredentialType,
+				Token: &pinnipedapi.CredentialRequestTokenCredential{Value: ""},
 			}))
 
 			requireAPIError(t, response, err, apierrors.IsInvalid,
-				`.placeholder.suzerain-io.github.io "request name" is invalid: spec.token.value: Required value: token must be supplied`)
+				`.pinniped.dev "request name" is invalid: spec.token.value: Required value: token must be supplied`)
 			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:token must be supplied`)
 		})
 
@@ -320,7 +320,7 @@ func TestCreate(t *testing.T) {
 				context.Background(),
 				validCredentialRequestWithToken(requestToken),
 				func(ctx context.Context, obj runtime.Object) error {
-					credentialRequest, _ := obj.(*placeholderapi.CredentialRequest)
+					credentialRequest, _ := obj.(*pinnipedapi.CredentialRequest)
 					credentialRequest.Spec.Token.Value = "foobaz"
 					return nil
 				},
@@ -342,7 +342,7 @@ func TestCreate(t *testing.T) {
 				context.Background(),
 				validCredentialRequest(),
 				func(ctx context.Context, obj runtime.Object) error {
-					credentialRequest, _ := obj.(*placeholderapi.CredentialRequest)
+					credentialRequest, _ := obj.(*pinnipedapi.CredentialRequest)
 					validationFunctionWasCalled = true
 					validationFunctionSawTokenValue = credentialRequest.Spec.Token.Value
 					return nil
@@ -364,7 +364,7 @@ func TestCreate(t *testing.T) {
 				})
 
 			requireAPIError(t, response, err, apierrors.IsInvalid,
-				`.placeholder.suzerain-io.github.io "request name" is invalid: dryRun: Unsupported value: []string{"some dry run flag"}`)
+				`.pinniped.dev "request name" is invalid: dryRun: Unsupported value: []string{"some dry run flag"}`)
 			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:dryRun not supported`)
 		})
 
@@ -431,7 +431,7 @@ func requireOneLogStatement(r *require.Assertions, logger *testutil.TranscriptLo
 	r.Contains(transcript[0].Message, messageContains)
 }
 
-func callCreate(ctx context.Context, storage *REST, credentialRequest *placeholderapi.CredentialRequest) (runtime.Object, error) {
+func callCreate(ctx context.Context, storage *REST, credentialRequest *pinnipedapi.CredentialRequest) (runtime.Object, error) {
 	return storage.Create(
 		ctx,
 		credentialRequest,
@@ -441,19 +441,19 @@ func callCreate(ctx context.Context, storage *REST, credentialRequest *placehold
 		})
 }
 
-func validCredentialRequest() *placeholderapi.CredentialRequest {
+func validCredentialRequest() *pinnipedapi.CredentialRequest {
 	return validCredentialRequestWithToken("some token")
 }
 
-func validCredentialRequestWithToken(token string) *placeholderapi.CredentialRequest {
-	return credentialRequest(placeholderapi.CredentialRequestSpec{
-		Type:  placeholderapi.TokenCredentialType,
-		Token: &placeholderapi.CredentialRequestTokenCredential{Value: token},
+func validCredentialRequestWithToken(token string) *pinnipedapi.CredentialRequest {
+	return credentialRequest(pinnipedapi.CredentialRequestSpec{
+		Type:  pinnipedapi.TokenCredentialType,
+		Token: &pinnipedapi.CredentialRequestTokenCredential{Value: token},
 	})
 }
 
-func credentialRequest(spec placeholderapi.CredentialRequestSpec) *placeholderapi.CredentialRequest {
-	return &placeholderapi.CredentialRequest{
+func credentialRequest(spec pinnipedapi.CredentialRequestSpec) *pinnipedapi.CredentialRequest {
+	return &pinnipedapi.CredentialRequest{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "request name",
@@ -483,8 +483,8 @@ func requireAPIError(t *testing.T, response runtime.Object, err error, expectedE
 func requireSuccessfulResponseWithAuthenticationFailureMessage(t *testing.T, err error, response runtime.Object) {
 	t.Helper()
 	require.NoError(t, err)
-	require.Equal(t, response, &placeholderapi.CredentialRequest{
-		Status: placeholderapi.CredentialRequestStatus{
+	require.Equal(t, response, &pinnipedapi.CredentialRequest{
+		Status: pinnipedapi.CredentialRequestStatus{
 			Credential: nil,
 			Message:    stringPtr("authentication failed"),
 		},

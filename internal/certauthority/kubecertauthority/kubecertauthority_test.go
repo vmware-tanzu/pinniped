@@ -23,7 +23,7 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/klog/v2"
 
-	"github.com/suzerain-io/placeholder-name/internal/testutil"
+	"github.com/suzerain-io/pinniped/internal/testutil"
 )
 
 type fakePodExecutor struct {

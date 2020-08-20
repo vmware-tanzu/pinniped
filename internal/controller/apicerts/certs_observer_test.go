@@ -19,8 +19,8 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/suzerain-io/controller-go"
-	"github.com/suzerain-io/placeholder-name/internal/provider"
-	"github.com/suzerain-io/placeholder-name/internal/testutil"
+	"github.com/suzerain-io/pinniped/internal/provider"
+	"github.com/suzerain-io/pinniped/internal/testutil"
 )
 
 func TestObserverControllerInformerFilters(t *testing.T) {

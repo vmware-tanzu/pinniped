@@ -8,4 +8,4 @@ https://hub.docker.com/r/k14s/image/tags
 
 1. Fill in the values in [values.yml](values.yaml)
 2. In a terminal, cd to this `deploy` directory
-3. Run: `ytt --file . | kapp deploy --yes --app placeholder-name --diff-changes --file -`
+3. Run: `ytt --file . | kapp deploy --yes --app pinniped --diff-changes --file -`

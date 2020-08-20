@@ -136,7 +136,7 @@ func TestExchangeToken(t *testing.T) {
 			_, _ = w.Write([]byte(`
 				{
 				  "kind": "CredentialRequest",
-				  "apiVersion": "placeholder.suzerain-io.github.io/v1alpha1",
+				  "apiVersion": "pinniped.dev/v1alpha1",
 				  "metadata": {
 					"creationTimestamp": null
 				  },
@@ -161,7 +161,7 @@ func TestExchangeToken(t *testing.T) {
 			_, _ = w.Write([]byte(`
 				{
 				  "kind": "CredentialRequest",
-				  "apiVersion": "placeholder.suzerain-io.github.io/v1alpha1",
+				  "apiVersion": "pinniped.dev/v1alpha1",
 				  "metadata": {
 					"creationTimestamp": null
 				  },
@@ -185,7 +185,7 @@ func TestExchangeToken(t *testing.T) {
 		// Start a test server that returns successfully and asserts various properties of the request.
 		caBundle, endpoint := startTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 			require.Equal(t, http.MethodPost, r.Method)
-			require.Equal(t, "/apis/placeholder.suzerain-io.github.io/v1alpha1/credentialrequests", r.URL.Path)
+			require.Equal(t, "/apis/pinniped.dev/v1alpha1/credentialrequests", r.URL.Path)
 			require.Equal(t, "application/json", r.Header.Get("content-type"))
 
 			body, err := ioutil.ReadAll(r.Body)
@@ -193,7 +193,7 @@ func TestExchangeToken(t *testing.T) {
 			require.JSONEq(t,
 				`{
 				  "kind": "CredentialRequest",
-				  "apiVersion": "placeholder.suzerain-io.github.io/v1alpha1",
+				  "apiVersion": "pinniped.dev/v1alpha1",
 				  "metadata": {
 					"creationTimestamp": null
 				  },
@@ -213,7 +213,7 @@ func TestExchangeToken(t *testing.T) {
 			_, _ = w.Write([]byte(`
 				{
 				  "kind": "CredentialRequest",
-				  "apiVersion": "placeholder.suzerain-io.github.io/v1alpha1",
+				  "apiVersion": "pinniped.dev/v1alpha1",
 				  "metadata": {
 					"creationTimestamp": null
 				  },

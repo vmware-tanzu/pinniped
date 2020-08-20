@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/suzerain-io/placeholder-name/pkg/config/api"
+	"github.com/suzerain-io/pinniped/pkg/config/api"
 )
 
 func TestFromPath(t *testing.T) {
@@ -23,7 +23,7 @@ func TestFromPath(t *testing.T) {
 			name: "Happy",
 			path: "testdata/happy.yaml",
 			wantConfig: &api.Config{
-				DiscoveryConfig: api.DiscoveryConfigSpec{
+				DiscoveryInfo: api.DiscoveryInfoSpec{
 					URL: stringPtr("https://some.discovery/url"),
 				},
 				WebhookConfig: api.WebhookConfigSpec{
@@ -36,7 +36,7 @@ func TestFromPath(t *testing.T) {
 			name: "NoDiscovery",
 			path: "testdata/no-discovery.yaml",
 			wantConfig: &api.Config{
-				DiscoveryConfig: api.DiscoveryConfigSpec{
+				DiscoveryInfo: api.DiscoveryInfoSpec{
 					URL: nil,
 				},
 				WebhookConfig: api.WebhookConfigSpec{

@@ -44,8 +44,8 @@ rules:
   - apiGroups: [""]
     resources: [secrets]
     verbs: [create, get, list, patch, update, watch, delete]
-  - apiGroups: [crds.placeholder.suzerain-io.github.io]
-    resources: [logindiscoveryconfigs]
+  - apiGroups: [crd.pinniped.dev]
+    resources: [pinnipeddiscoveryinfos]
     verbs: [create, get, list, update, watch]
 ---
 kind: RoleBinding
@@ -98,7 +98,7 @@ kind: ClusterRole
 metadata:
   name: #@ data.values.app_name + "-credentialrequests-cluster-role"
 rules:
-  - apiGroups: [placeholder.suzerain-io.github.io]
+  - apiGroups: [pinniped.dev]
     resources: [credentialrequests]
     verbs: [create]
 ---

@@ -24,7 +24,7 @@ import (
 	kubetesting "k8s.io/client-go/testing"
 
 	"github.com/suzerain-io/controller-go"
-	"github.com/suzerain-io/placeholder-name/internal/testutil"
+	"github.com/suzerain-io/pinniped/internal/testutil"
 )
 
 func TestExpirerControllerFilters(t *testing.T) {

@@ -22,19 +22,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
-	"github.com/suzerain-io/placeholder-name/test/library"
+	"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1"
+	"github.com/suzerain-io/pinniped/test/library"
 )
 
 func makeRequest(t *testing.T, spec v1alpha1.CredentialRequestSpec) (*v1alpha1.CredentialRequest, error) {
 	t.Helper()
 
-	client := library.NewAnonymousPlaceholderNameClientset(t)
+	client := library.NewAnonymousPinnipedClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	return client.PlaceholderV1alpha1().CredentialRequests().Create(ctx, &v1alpha1.CredentialRequest{
+	return client.PinnipedV1alpha1().CredentialRequests().Create(ctx, &v1alpha1.CredentialRequest{
 		TypeMeta:   metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{},
 		Spec:       spec,
@@ -63,7 +63,7 @@ func addTestClusterRoleBinding(ctx context.Context, t *testing.T, adminClient ku
 
 func TestSuccessfulCredentialRequest(t *testing.T) {
 	library.SkipUnlessIntegration(t)
-	tmcClusterToken := library.Getenv(t, "PLACEHOLDER_NAME_TMC_CLUSTER_TOKEN")
+	tmcClusterToken := library.Getenv(t, "PINNIPED_TMC_CLUSTER_TOKEN")
 
 	response, err := makeRequest(t, v1alpha1.CredentialRequestSpec{
 		Type:  v1alpha1.TokenCredentialType,

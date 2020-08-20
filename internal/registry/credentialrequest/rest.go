@@ -21,7 +21,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/utils/trace"
 
-	placeholderapi "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder"
+	pinnipedapi "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped"
 )
 
 // clientCertificateTTL is the TTL for short-lived client certificates returned by this API.
@@ -51,7 +51,7 @@ type REST struct {
 }
 
 func (r *REST) New() runtime.Object {
-	return &placeholderapi.CredentialRequest{}
+	return &pinnipedapi.CredentialRequest{}
 }
 
 func (r *REST) NamespaceScoped() bool {
@@ -107,9 +107,9 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	traceSuccess(t, authResponse.User, authenticated, true)
 
-	return &placeholderapi.CredentialRequest{
-		Status: placeholderapi.CredentialRequestStatus{
-			Credential: &placeholderapi.CredentialRequestCredential{
+	return &pinnipedapi.CredentialRequest{
+		Status: pinnipedapi.CredentialRequestStatus{
+			Credential: &pinnipedapi.CredentialRequestCredential{
 				ExpirationTimestamp:   metav1.NewTime(time.Now().UTC().Add(clientCertificateTTL)),
 				ClientCertificateData: string(certPEM),
 				ClientKeyData:         string(keyPEM),
@@ -118,8 +118,8 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	}, nil
 }
 
-func validateRequest(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions, t *trace.Trace) (*placeholderapi.CredentialRequest, error) {
-	credentialRequest, ok := obj.(*placeholderapi.CredentialRequest)
+func validateRequest(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions, t *trace.Trace) (*pinnipedapi.CredentialRequest, error) {
+	credentialRequest, ok := obj.(*pinnipedapi.CredentialRequest)
 	if !ok {
 		traceValidationFailure(t, "not a CredentialRequest")
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("not a CredentialRequest: %#v", obj))
@@ -128,20 +128,20 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 	if len(credentialRequest.Spec.Type) == 0 {
 		traceValidationFailure(t, "type must be supplied")
 		errs := field.ErrorList{field.Required(field.NewPath("spec", "type"), "type must be supplied")}
-		return nil, apierrors.NewInvalid(placeholderapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
+		return nil, apierrors.NewInvalid(pinnipedapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
 	}
 
-	if credentialRequest.Spec.Type != placeholderapi.TokenCredentialType {
+	if credentialRequest.Spec.Type != pinnipedapi.TokenCredentialType {
 		traceValidationFailure(t, "unrecognized type")
 		errs := field.ErrorList{field.Invalid(field.NewPath("spec", "type"), credentialRequest.Spec.Type, "unrecognized type")}
-		return nil, apierrors.NewInvalid(placeholderapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
+		return nil, apierrors.NewInvalid(pinnipedapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
 	}
 
 	token := credentialRequest.Spec.Token
 	if token == nil || len(token.Value) == 0 {
 		traceValidationFailure(t, "token must be supplied")
 		errs := field.ErrorList{field.Required(field.NewPath("spec", "token", "value"), "token must be supplied")}
-		return nil, apierrors.NewInvalid(placeholderapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
+		return nil, apierrors.NewInvalid(pinnipedapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
 	}
 
 	// just a sanity check, not sure how to honor a dry run on a virtual API
@@ -149,7 +149,7 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 		if len(options.DryRun) != 0 {
 			traceValidationFailure(t, "dryRun not supported")
 			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, nil)}
-			return nil, apierrors.NewInvalid(placeholderapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
+			return nil, apierrors.NewInvalid(pinnipedapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
 		}
 	}
 
@@ -160,7 +160,7 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 	//   they already got the token.
 	if createValidation != nil {
 		requestForValidation := obj.DeepCopyObject()
-		credentialRequestCopy, _ := requestForValidation.(*placeholderapi.CredentialRequest)
+		credentialRequestCopy, _ := requestForValidation.(*pinnipedapi.CredentialRequest)
 		credentialRequestCopy.Spec.Token.Value = ""
 		if err := createValidation(ctx, requestForValidation); err != nil {
 			traceFailureWithError(t, "validation webhook", err)
@@ -171,7 +171,7 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 	return credentialRequest, nil
 }
 
-func traceSuccess(t *trace.Trace, user user.Info, webhookAuthenticated bool, placeholderNameAuthenticated bool) {
+func traceSuccess(t *trace.Trace, user user.Info, webhookAuthenticated bool, pinnipedAuthenticated bool) {
 	userID := "<none>"
 	if user != nil {
 		userID = user.GetUID()
@@ -179,7 +179,7 @@ func traceSuccess(t *trace.Trace, user user.Info, webhookAuthenticated bool, pla
 	t.Step("success",
 		trace.Field{Key: "userID", Value: userID},
 		trace.Field{Key: "idpAuthenticated", Value: webhookAuthenticated},
-		trace.Field{Key: "placeholderNameAuthenticated", Value: placeholderNameAuthenticated},
+		trace.Field{Key: "pinnipedAuthenticated", Value: pinnipedAuthenticated},
 	)
 }
 
@@ -197,10 +197,10 @@ func traceFailureWithError(t *trace.Trace, failureType string, err error) {
 	)
 }
 
-func failureResponse() *placeholderapi.CredentialRequest {
+func failureResponse() *pinnipedapi.CredentialRequest {
 	m := "authentication failed"
-	return &placeholderapi.CredentialRequest{
-		Status: placeholderapi.CredentialRequestStatus{
+	return &pinnipedapi.CredentialRequest{
+		Status: pinnipedapi.CredentialRequestStatus{
 			Credential: nil,
 			Message:    &m,
 		},

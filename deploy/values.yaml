@@ -1,9 +1,9 @@
 #@data/values
 ---
 
-app_name: placeholder-name
+app_name: pinniped
 
-namespace: #! e.g. placeholder-name
+namespace: #! e.g. pinniped
 
 #! Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
 image_repo: #! e.g. registry.example.com/your-project-name/repo-name

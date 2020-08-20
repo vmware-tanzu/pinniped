@@ -33,17 +33,17 @@ COPY tools ./tools
 COPY hack ./hack
 
 # Build the executable binary (CGO_ENABLED=0 means static linking)
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(hack/get-ldflags.sh)" -o out ./cmd/placeholder-name-server/...
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(hack/get-ldflags.sh)" -o out ./cmd/pinniped-server/...
 
 
 # Use a runtime image based on Debian slim
 FROM debian:10.5-slim
 
 # Copy the binary from the build-env stage
-COPY --from=build-env /work/out/placeholder-name-server /usr/local/bin/placeholder-name-server
+COPY --from=build-env /work/out/pinniped-server /usr/local/bin/pinniped-server
 
 # Document the port
 EXPOSE 443
 
 # Set the entrypoint
-ENTRYPOINT ["/usr/local/bin/placeholder-name-server"]
+ENTRYPOINT ["/usr/local/bin/pinniped-server"]

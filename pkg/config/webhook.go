@@ -18,13 +18,13 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
-	"github.com/suzerain-io/placeholder-name/pkg/config/api"
+	"github.com/suzerain-io/pinniped/pkg/config/api"
 )
 
 // NewWebhook creates a webhook from the provided API server url and caBundle
 // used to validate TLS connections.
 func NewWebhook(spec api.WebhookConfigSpec) (*webhook.WebhookTokenAuthenticator, error) {
-	kubeconfig, err := ioutil.TempFile("", "placeholder-name-webhook-kubeconfig-*")
+	kubeconfig, err := ioutil.TempFile("", "pinniped-webhook-kubeconfig-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp file: %w", err)
 	}

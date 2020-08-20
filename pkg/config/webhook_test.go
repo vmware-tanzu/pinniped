@@ -17,7 +17,7 @@ import (
 func TestAnonymousKubeconfig(t *testing.T) {
 	expect := require.New(t)
 
-	f, err := ioutil.TempFile("", "placeholder-name-anonymous-kubeconfig-test-*")
+	f, err := ioutil.TempFile("", "pinniped-anonymous-kubeconfig-test-*")
 	expect.NoError(err)
 	defer os.Remove(f.Name())
 

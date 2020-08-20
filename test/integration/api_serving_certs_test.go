@@ -15,9 +15,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/suzerain-io/placeholder-name/internal/testutil"
-	"github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
-	"github.com/suzerain-io/placeholder-name/test/library"
+	"github.com/suzerain-io/pinniped/internal/testutil"
+	"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1"
+	"github.com/suzerain-io/pinniped/test/library"
 )
 
 func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
@@ -74,15 +74,15 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			namespaceName := library.Getenv(t, "PLACEHOLDER_NAME_NAMESPACE")
+			namespaceName := library.Getenv(t, "PINNIPED_NAMESPACE")
 
 			kubeClient := library.NewClientset(t)
 			aggregatedClient := library.NewAggregatedClientset(t)
-			placeholderClient := library.NewPlaceholderNameClientset(t)
+			pinnipedClient := library.NewPinnipedClientset(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
 
-			const apiServiceName = "v1alpha1.placeholder.suzerain-io.github.io"
+			const apiServiceName = "v1alpha1.pinniped.dev"
 
 			// Get the initial auto-generated version of the Secret.
 			secret, err := kubeClient.CoreV1().Secrets(namespaceName).Get(ctx, "api-serving-cert", metav1.GetOptions{})
@@ -132,7 +132,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			// because the kube API server uses these certs when proxying requests to the aggregated API server,
 			// so this is effectively checking that the aggregated API server is using these new certs.
 			aggregatedAPIWorking := func() bool {
-				_, err = placeholderClient.PlaceholderV1alpha1().CredentialRequests().Create(ctx, &v1alpha1.CredentialRequest{
+				_, err = pinnipedClient.PinnipedV1alpha1().CredentialRequests().Create(ctx, &v1alpha1.CredentialRequest{
 					TypeMeta:   metav1.TypeMeta{},
 					ObjectMeta: metav1.ObjectMeta{},
 					Spec: v1alpha1.CredentialRequestSpec{

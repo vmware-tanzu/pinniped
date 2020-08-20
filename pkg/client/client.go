@@ -31,10 +31,10 @@ var (
 
 const (
 	// credentialRequestsAPIPath is the API path for the v1alpha1 CredentialRequest API.
-	credentialRequestsAPIPath = "/apis/placeholder.suzerain-io.github.io/v1alpha1/credentialrequests"
+	credentialRequestsAPIPath = "/apis/pinniped.dev/v1alpha1/credentialrequests"
 
 	// userAgent is the user agent header value sent with requests.
-	userAgent = "placeholder-name"
+	userAgent = "pinniped"
 )
 
 func credentialRequest(ctx context.Context, apiEndpoint *url.URL, token string) (*http.Request, error) {
@@ -54,7 +54,7 @@ func credentialRequest(ctx context.Context, apiEndpoint *url.URL, token string) 
 		Spec   CredentialRequestSpec `json:"spec"`
 		Status struct{}              `json:"status"`
 	}{
-		APIVersion: "placeholder.suzerain-io.github.io/v1alpha1",
+		APIVersion: "pinniped.dev/v1alpha1",
 		Kind:       "CredentialRequest",
 		Spec:       CredentialRequestSpec{Type: "token", Token: &CredentialRequestTokenCredential{Value: token}},
 	}
@@ -99,8 +99,8 @@ func ExchangeToken(ctx context.Context, token, caBundle, apiEndpoint string) (*C
 	}
 
 	// Form the CredentialRequest API URL by appending the API path to the main API endpoint.
-	placeholderEndpointURL := *endpointURL
-	placeholderEndpointURL.Path = filepath.Join(placeholderEndpointURL.Path, credentialRequestsAPIPath)
+	pinnipedEndpointURL := *endpointURL
+	pinnipedEndpointURL.Path = filepath.Join(pinnipedEndpointURL.Path, credentialRequestsAPIPath)
 
 	// Initialize a TLS client configuration from the provided CA bundle.
 	tlsConfig := tls.Config{
@@ -111,8 +111,8 @@ func ExchangeToken(ctx context.Context, token, caBundle, apiEndpoint string) (*C
 		return nil, fmt.Errorf("%w: no certificates found", ErrInvalidCABundle)
 	}
 
-	// Create a request object for the "POST /apis/placeholder.suzerain-io.github.io/v1alpha1/credentialrequests" request.
-	req, err := credentialRequest(ctx, &placeholderEndpointURL, token)
+	// Create a request object for the "POST /apis/pinniped.dev/v1alpha1/credentialrequests" request.
+	req, err := credentialRequest(ctx, &pinnipedEndpointURL, token)
 	if err != nil {
 		return nil, fmt.Errorf("could not build request: %w", err)
 	}

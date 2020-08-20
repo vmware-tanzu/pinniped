@@ -12,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/suzerain-io/placeholder-name/test/library"
+	"github.com/suzerain-io/pinniped/test/library"
 )
 
 func TestGetNodes(t *testing.T) {

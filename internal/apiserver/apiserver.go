@@ -20,9 +20,9 @@ import (
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/klog/v2"
 
-	"github.com/suzerain-io/placeholder-name/internal/registry/credentialrequest"
-	placeholderapi "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder"
-	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
+	"github.com/suzerain-io/pinniped/internal/registry/credentialrequest"
+	pinnipedapi "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped"
+	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1"
 )
 
 var (
@@ -35,8 +35,8 @@ var (
 
 //nolint: gochecknoinits
 func init() {
-	utilruntime.Must(placeholderv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(placeholderapi.AddToScheme(scheme))
+	utilruntime.Must(pinnipedv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(pinnipedapi.AddToScheme(scheme))
 
 	// add the options to empty v1
 	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
@@ -62,7 +62,7 @@ type ExtraConfig struct {
 	StartControllersPostStartHook func(ctx context.Context)
 }
 
-type PlaceHolderServer struct {
+type PinnipedServer struct {
 	GenericAPIServer *genericapiserver.GenericAPIServer
 }
 
@@ -90,17 +90,17 @@ func (c *Config) Complete() CompletedConfig {
 }
 
 // New returns a new instance of AdmissionServer from the given config.
-func (c completedConfig) New() (*PlaceHolderServer, error) {
-	genericServer, err := c.GenericConfig.New("place-holder-server", genericapiserver.NewEmptyDelegate()) // completion is done in Complete, no need for a second time
+func (c completedConfig) New() (*PinnipedServer, error) {
+	genericServer, err := c.GenericConfig.New("pinniped-server", genericapiserver.NewEmptyDelegate()) // completion is done in Complete, no need for a second time
 	if err != nil {
 		return nil, fmt.Errorf("completion error: %w", err)
 	}
 
-	s := &PlaceHolderServer{
+	s := &PinnipedServer{
 		GenericAPIServer: genericServer,
 	}
 
-	gvr := placeholderv1alpha1.SchemeGroupVersion.WithResource("credentialrequests")
+	gvr := pinnipedv1alpha1.SchemeGroupVersion.WithResource("credentialrequests")
 
 	apiGroupInfo := genericapiserver.APIGroupInfo{
 		PrioritizedVersions:          []schema.GroupVersion{gvr.GroupVersion()},

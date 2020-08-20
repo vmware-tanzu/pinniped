@@ -25,8 +25,8 @@ import (
 	aggregatorfake "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 
 	"github.com/suzerain-io/controller-go"
-	"github.com/suzerain-io/placeholder-name/internal/testutil"
-	placeholderv1alpha1 "github.com/suzerain-io/placeholder-name/kubernetes/1.19/api/apis/placeholder/v1alpha1"
+	"github.com/suzerain-io/pinniped/internal/testutil"
+	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1"
 )
 
 func TestManagerControllerOptions(t *testing.T) {
@@ -187,7 +187,7 @@ func TestManagerControllerSync(t *testing.T) {
 				it.Before(func() {
 					apiService := &apiregistrationv1.APIService{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: placeholderv1alpha1.SchemeGroupVersion.Version + "." + placeholderv1alpha1.GroupName,
+							Name: pinnipedv1alpha1.SchemeGroupVersion.Version + "." + pinnipedv1alpha1.GroupName,
 						},
 						Spec: apiregistrationv1.APIServiceSpec{
 							CABundle:        nil,
@@ -220,14 +220,14 @@ func TestManagerControllerSync(t *testing.T) {
 
 					// Validate the created cert using the CA, and also validate the cert's hostname
 					validCert := testutil.ValidateCertificate(t, actualCACert, actualCertChain)
-					validCert.RequireDNSName("placeholder-name-api." + installedInNamespace + ".svc")
+					validCert.RequireDNSName("pinniped-api." + installedInNamespace + ".svc")
 					validCert.RequireLifetime(time.Now(), time.Now().Add(24*365*time.Hour), 2*time.Minute)
 					validCert.RequireMatchesPrivateKey(actualPrivateKey)
 
 					// Make sure we updated the APIService caBundle and left it otherwise unchanged
 					r.Len(aggregatorAPIClient.Actions(), 2)
 					r.Equal("get", aggregatorAPIClient.Actions()[0].GetVerb())
-					expectedAPIServiceName := placeholderv1alpha1.SchemeGroupVersion.Version + "." + placeholderv1alpha1.GroupName
+					expectedAPIServiceName := pinnipedv1alpha1.SchemeGroupVersion.Version + "." + pinnipedv1alpha1.GroupName
 					expectedUpdateAction := coretesting.NewUpdateAction(
 						schema.GroupVersionResource{
 							Group:    apiregistrationv1.GroupName,

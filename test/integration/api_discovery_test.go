@@ -11,40 +11,40 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/suzerain-io/placeholder-name/test/library"
+	"github.com/suzerain-io/pinniped/test/library"
 )
 
 func TestGetAPIResourceList(t *testing.T) {
 	library.SkipUnlessIntegration(t)
 
-	client := library.NewPlaceholderNameClientset(t)
+	client := library.NewPinnipedClientset(t)
 
 	groups, resources, err := client.Discovery().ServerGroupsAndResources()
 	require.NoError(t, err)
 
-	groupName := "placeholder.suzerain-io.github.io"
+	groupName := "pinniped.dev"
 	actualGroup := findGroup(groupName, groups)
 	require.NotNil(t, actualGroup)
 
 	expectedGroup := &metav1.APIGroup{
-		Name: "placeholder.suzerain-io.github.io",
+		Name: "pinniped.dev",
 		Versions: []metav1.GroupVersionForDiscovery{
 			{
-				GroupVersion: "placeholder.suzerain-io.github.io/v1alpha1",
+				GroupVersion: "pinniped.dev/v1alpha1",
 				Version:      "v1alpha1",
 			},
 		},
 		PreferredVersion: metav1.GroupVersionForDiscovery{
-			GroupVersion: "placeholder.suzerain-io.github.io/v1alpha1",
+			GroupVersion: "pinniped.dev/v1alpha1",
 			Version:      "v1alpha1",
 		},
 	}
 	require.Equal(t, expectedGroup, actualGroup)
 
-	actualPlaceHolderResources := findResources("placeholder.suzerain-io.github.io/v1alpha1", resources)
-	require.NotNil(t, actualPlaceHolderResources)
-	actualCrdsPlaceHolderResources := findResources("crds.placeholder.suzerain-io.github.io/v1alpha1", resources)
-	require.NotNil(t, actualPlaceHolderResources)
+	actualPinnipedResources := findResources("pinniped.dev/v1alpha1", resources)
+	require.NotNil(t, actualPinnipedResources)
+	actualCrdPinnipedResources := findResources("crd.pinniped.dev/v1alpha1", resources)
+	require.NotNil(t, actualPinnipedResources)
 
 	expectedCredentialRequestAPIResource := metav1.APIResource{
 		Name: "credentialrequests",
@@ -61,10 +61,10 @@ func TestGetAPIResourceList(t *testing.T) {
 	}
 
 	expectedLDCAPIResource := metav1.APIResource{
-		Name:         "logindiscoveryconfigs",
-		SingularName: "logindiscoveryconfig",
+		Name:         "pinnipeddiscoveryinfos",
+		SingularName: "pinnipeddiscoveryinfo",
 		Namespaced:   true,
-		Kind:         "LoginDiscoveryConfig",
+		Kind:         "PinnipedDiscoveryInfo",
 		Verbs: metav1.Verbs([]string{
 			"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch",
 		}),
@@ -72,11 +72,11 @@ func TestGetAPIResourceList(t *testing.T) {
 		StorageVersionHash: "unknown: to be filled in automatically below",
 	}
 
-	require.Len(t, actualPlaceHolderResources.APIResources, 1)
-	require.Equal(t, expectedCredentialRequestAPIResource, actualPlaceHolderResources.APIResources[0])
+	require.Len(t, actualPinnipedResources.APIResources, 1)
+	require.Equal(t, expectedCredentialRequestAPIResource, actualPinnipedResources.APIResources[0])
 
-	require.Len(t, actualCrdsPlaceHolderResources.APIResources, 1)
-	actualAPIResource := actualCrdsPlaceHolderResources.APIResources[0]
+	require.Len(t, actualCrdPinnipedResources.APIResources, 1)
+	actualAPIResource := actualCrdPinnipedResources.APIResources[0]
 	// workaround because its hard to predict the storage version hash (e.g. "t/+v41y+3e4=")
 	// so just don't worry about comparing that field
 	expectedLDCAPIResource.StorageVersionHash = actualAPIResource.StorageVersionHash

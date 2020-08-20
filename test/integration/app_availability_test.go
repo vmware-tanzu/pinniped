@@ -15,13 +15,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/suzerain-io/placeholder-name/test/library"
+	"github.com/suzerain-io/pinniped/test/library"
 )
 
 func TestGetDeployment(t *testing.T) {
 	library.SkipUnlessIntegration(t)
-	namespaceName := library.Getenv(t, "PLACEHOLDER_NAME_NAMESPACE")
-	deploymentName := library.Getenv(t, "PLACEHOLDER_NAME_APP_NAME")
+	namespaceName := library.Getenv(t, "PINNIPED_NAMESPACE")
+	deploymentName := library.Getenv(t, "PINNIPED_APP_NAME")
 
 	client := library.NewClientset(t)
 

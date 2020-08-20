@@ -17,17 +17,17 @@ import (
 )
 
 const knownGoodUsage = `
-placeholder-name-server provides a generic API for mapping an external
+pinniped-server provides a generic API for mapping an external
 credential from somewhere to an internal credential to be used for
 authenticating to the Kubernetes API.
 
 Usage:
-  placeholder-name-server [flags]
+  pinniped-server [flags]
 
 Flags:
-  -c, --config string                                path to configuration file (default "placeholder-name.yaml")
+  -c, --config string                                path to configuration file (default "pinniped.yaml")
       --downward-api-path string                     path to Downward API volume mount (default "/etc/podinfo")
-  -h, --help                                         help for placeholder-name-server
+  -h, --help                                         help for pinniped-server
       --log-flush-frequency duration                 Maximum number of seconds between log flushes (default 5s)
       --serving-cert-rotation-threshold percentage   real number between 0 and 1 indicating percentage of lifetime before rotation of serving cert (default 70.00%)
 `
@@ -51,7 +51,7 @@ func TestCommand(t *testing.T) {
 		{
 			name:    "OneArgFails",
 			args:    []string{"tuna"},
-			wantErr: `unknown command "tuna" for "placeholder-name-server"`,
+			wantErr: `unknown command "tuna" for "pinniped-server"`,
 		},
 		{
 			name: "ShortConfigFlagSucceeds",
@@ -67,7 +67,7 @@ func TestCommand(t *testing.T) {
 				"--config", "some/path/to/config.yaml",
 				"tuna",
 			},
-			wantErr: `unknown command "tuna" for "placeholder-name-server"`,
+			wantErr: `unknown command "tuna" for "pinniped-server"`,
 		},
 		{
 			name: "PercentageIsNotRealNumber",

@@ -10,7 +10,7 @@ GOPATH="${GOPATH:-$(mktemp -d)}"
 K8S_PKG_VERSION="${K8S_PKG_VERSION:-"1.19"}"
 CODEGEN_IMAGE=${CODEGEN_IMAGE:-"gcr.io/tanzu-user-authentication/k8s-code-generator-${K8S_PKG_VERSION}:latest"}
 
-BASE_PKG="github.com/suzerain-io/placeholder-name"
+BASE_PKG="github.com/suzerain-io/pinniped"
 
 function codegen::ensure_module_in_gopath() {
   # This should be something like "kubernetes/1.19/api".
@@ -53,20 +53,20 @@ function codegen::generate_for_module() {
       deepcopy,defaulter \
       "${BASE_PKG}/kubernetes/1.19/api/generated" \
       "${BASE_PKG}/kubernetes/1.19/api/apis" \
-      "placeholder:v1alpha1 crdsplaceholder:v1alpha1"
+      "pinniped:v1alpha1 crdpinniped:v1alpha1"
     codegen::invoke_code_generator generate-internal-groups "${mod_basename_for_version}" \
       deepcopy,defaulter,conversion,openapi \
       "${BASE_PKG}/kubernetes/1.19/api/generated" \
       "${BASE_PKG}/kubernetes/1.19/api/apis" \
       "${BASE_PKG}/kubernetes/1.19/api/apis" \
-      "placeholder:v1alpha1 crdsplaceholder:v1alpha1"
+      "pinniped:v1alpha1 crdpinniped:v1alpha1"
     ;;
   1.19/client-go)
     codegen::invoke_code_generator generate-groups "${mod_basename_for_version}" \
       client,lister,informer \
       "${BASE_PKG}/kubernetes/1.19/client-go" \
       "${BASE_PKG}/kubernetes/1.19/api/apis" \
-      "placeholder:v1alpha1 crdsplaceholder:v1alpha1"
+      "pinniped:v1alpha1 crdpinniped:v1alpha1"
     ;;
   esac
 }

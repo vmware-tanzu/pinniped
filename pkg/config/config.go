@@ -13,7 +13,7 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/suzerain-io/placeholder-name/pkg/config/api"
+	"github.com/suzerain-io/pinniped/pkg/config/api"
 )
 
 // FromPath loads an api.Config from a provided local file path.

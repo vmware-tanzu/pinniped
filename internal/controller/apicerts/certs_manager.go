@@ -19,8 +19,8 @@ import (
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	"github.com/suzerain-io/controller-go"
-	"github.com/suzerain-io/placeholder-name/internal/certauthority"
-	placeholdernamecontroller "github.com/suzerain-io/placeholder-name/internal/controller"
+	"github.com/suzerain-io/pinniped/internal/certauthority"
+	pinnipedcontroller "github.com/suzerain-io/pinniped/internal/controller"
 )
 
 const (
@@ -43,8 +43,8 @@ func NewCertsManagerController(
 	k8sClient kubernetes.Interface,
 	aggregatorClient aggregatorclient.Interface,
 	secretInformer corev1informers.SecretInformer,
-	withInformer placeholdernamecontroller.WithInformerOptionFunc,
-	withInitialEvent placeholdernamecontroller.WithInitialEventOptionFunc,
+	withInformer pinnipedcontroller.WithInformerOptionFunc,
+	withInitialEvent pinnipedcontroller.WithInitialEventOptionFunc,
 ) controller.Controller {
 	return controller.New(
 		controller.Config{
@@ -58,7 +58,7 @@ func NewCertsManagerController(
 		},
 		withInformer(
 			secretInformer,
-			placeholdernamecontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretName, namespace),
+			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretName, namespace),
 			controller.InformerOption{},
 		),
 		// Be sure to run once even if the Secret that the informer is watching doesn't exist.
@@ -82,13 +82,13 @@ func (c *certsManagerController) Sync(ctx controller.Context) error {
 	}
 
 	// Create a CA.
-	aggregatedAPIServerCA, err := certauthority.New(pkix.Name{CommonName: "Placeholder CA"})
+	aggregatedAPIServerCA, err := certauthority.New(pkix.Name{CommonName: "Pinniped CA"})
 	if err != nil {
 		return fmt.Errorf("could not initialize CA: %w", err)
 	}
 
 	// This string must match the name of the Service declared in the deployment yaml.
-	const serviceName = "placeholder-name-api"
+	const serviceName = "pinniped-api"
 
 	// Using the CA from above, create a TLS server cert for the aggregated API server to use.
 	serviceEndpoint := serviceName + "." + c.namespace + ".svc"

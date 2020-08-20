@@ -24,8 +24,8 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/klog/v2"
 
-	"github.com/suzerain-io/placeholder-name/internal/certauthority"
-	"github.com/suzerain-io/placeholder-name/internal/constable"
+	"github.com/suzerain-io/pinniped/internal/certauthority"
+	"github.com/suzerain-io/pinniped/internal/constable"
 )
 
 // ErrNoKubeControllerManagerPod is returned when no kube-controller-manager pod is found on the cluster.

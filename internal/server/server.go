@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"crypto/x509/pkix"
 	"fmt"
 	"io"
 	"net/http"
@@ -97,6 +98,12 @@ func addCommandlineFlagsToCommand(cmd *cobra.Command, app *App) {
 	)
 }
 
+type brokenIssuer struct{}
+
+func (*brokenIssuer) IssuePEM(_ pkix.Name, _ []string, _ time.Duration) ([]byte, []byte, error) {
+	return nil, nil, fmt.Errorf("cannot issue a certificate on this cluster")
+}
+
 // Boot the aggregated API server, which will in turn boot the controllers.
 func (a *App) runServer(ctx context.Context) error {
 	// Read the server config file.
@@ -106,9 +113,11 @@ func (a *App) runServer(ctx context.Context) error {
 	}
 
 	// Load the Kubernetes cluster signing CA.
+	var k8sClusterCA credentialrequest.CertIssuer
 	k8sClusterCA, shutdownCA, err := getClusterCASigner()
 	if err != nil {
-		return err
+		klog.ErrorS(err, "could not get real k8s signer, using fake value")
+		k8sClusterCA, shutdownCA = &brokenIssuer{}, func() {}
 	}
 	defer shutdownCA()
 

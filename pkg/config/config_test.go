@@ -18,6 +18,7 @@ func TestFromPath(t *testing.T) {
 		name       string
 		path       string
 		wantConfig *api.Config
+		wantError  string
 	}{
 		{
 			name: "Happy",
@@ -30,11 +31,17 @@ func TestFromPath(t *testing.T) {
 					URL:      "https://tuna.com/fish?marlin",
 					CABundle: []byte("-----BEGIN CERTIFICATE-----..."),
 				},
+				APIConfig: api.APIConfigSpec{
+					ServingCertificateConfig: api.ServingCertificateConfigSpec{
+						DurationSeconds:    int64Ptr(3600),
+						RenewBeforeSeconds: int64Ptr(2400),
+					},
+				},
 			},
 		},
 		{
-			name: "NoDiscovery",
-			path: "testdata/no-discovery.yaml",
+			name: "Default",
+			path: "testdata/default.yaml",
 			wantConfig: &api.Config{
 				DiscoveryInfo: api.DiscoveryInfoSpec{
 					URL: nil,
@@ -43,21 +50,34 @@ func TestFromPath(t *testing.T) {
 					URL:      "https://tuna.com/fish?marlin",
 					CABundle: []byte("-----BEGIN CERTIFICATE-----..."),
 				},
+				APIConfig: api.APIConfigSpec{
+					ServingCertificateConfig: api.ServingCertificateConfigSpec{
+						DurationSeconds:    int64Ptr(60 * 60 * 24 * 365),    // about a year
+						RenewBeforeSeconds: int64Ptr(60 * 60 * 24 * 30 * 9), // about 9 months
+					},
+				},
 			},
+		},
+		{
+			name:      "InvalidDurationRenewBefore",
+			path:      "testdata/invalid-duration-renew-before.yaml",
+			wantError: "validate api: durationSeconds cannot be smaller than renewBeforeSeconds",
 		},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			config, err := FromPath(test.path)
-			require.NoError(t, err)
-			require.Equal(t, test.wantConfig, config)
+			if test.wantError != "" {
+				require.EqualError(t, err, test.wantError)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, test.wantConfig, config)
+			}
 		})
 	}
 }
 
 func stringPtr(s string) *string {
-	sPtr := new(string)
-	*sPtr = s
-	return sPtr
+	return &s
 }

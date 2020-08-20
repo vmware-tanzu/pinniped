@@ -1,10 +1,8 @@
 ---
-discovery:
-  url: https://some.discovery/url
 webhook:
   url: https://tuna.com/fish?marlin
   caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tLi4u
 api:
   servingCertificate:
-    durationSeconds: 3600
-    renewBeforeSeconds: 2400
+    durationSeconds: 2400
+    renewBeforeSeconds: 3600

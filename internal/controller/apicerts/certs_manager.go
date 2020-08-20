@@ -36,6 +36,10 @@ type certsManagerController struct {
 	k8sClient        kubernetes.Interface
 	aggregatorClient aggregatorclient.Interface
 	secretInformer   corev1informers.SecretInformer
+
+	// certDuration is the lifetime of the serving certificate that this
+	// controller will use when issuing the serving certificate.
+	certDuration time.Duration
 }
 
 func NewCertsManagerController(
@@ -45,6 +49,7 @@ func NewCertsManagerController(
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	withInitialEvent pinnipedcontroller.WithInitialEventOptionFunc,
+	certDuration time.Duration,
 ) controller.Controller {
 	return controller.New(
 		controller.Config{
@@ -54,6 +59,7 @@ func NewCertsManagerController(
 				k8sClient:        k8sClient,
 				aggregatorClient: aggregatorClient,
 				secretInformer:   secretInformer,
+				certDuration:     certDuration,
 			},
 		},
 		withInformer(
@@ -95,7 +101,7 @@ func (c *certsManagerController) Sync(ctx controller.Context) error {
 	aggregatedAPIServerTLSCert, err := aggregatedAPIServerCA.Issue(
 		pkix.Name{CommonName: serviceEndpoint},
 		[]string{serviceEndpoint},
-		24*365*time.Hour,
+		c.certDuration,
 	)
 	if err != nil {
 		return fmt.Errorf("could not issue serving certificate: %w", err)

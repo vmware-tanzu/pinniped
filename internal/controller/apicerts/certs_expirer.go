@@ -28,24 +28,20 @@ type certsExpirerController struct {
 	k8sClient      kubernetes.Interface
 	secretInformer corev1informers.SecretInformer
 
-	// ageThreshold is a percentage (i.e., a real number between 0 and 1,
-	// inclusive) indicating the point in a certificate's lifetime where this
-	// controller will start to try to rotate it.
-	//
-	// Said another way, once ageThreshold % of a certificate's lifetime has
-	// passed, this controller will try to delete it to force a new certificate
-	// to be created.
-	ageThreshold float32
+	// renewBefore is the amount of time after the cert's issuance where
+	// this controller will start to try to rotate it.
+	renewBefore time.Duration
 }
 
 // NewCertsExpirerController returns a controller.Controller that will delete a
-// CA once it gets within some threshold of its expiration time.
+// certificate secret once it gets within some threshold of its expiration time. The
+// deletion forces rotation of the secret with the help of other controllers.
 func NewCertsExpirerController(
 	namespace string,
 	k8sClient kubernetes.Interface,
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
-	ageThreshold float32,
+	renewBefore time.Duration,
 ) controller.Controller {
 	return controller.New(
 		controller.Config{
@@ -54,7 +50,7 @@ func NewCertsExpirerController(
 				namespace:      namespace,
 				k8sClient:      k8sClient,
 				secretInformer: secretInformer,
-				ageThreshold:   ageThreshold,
+				renewBefore:    renewBefore,
 			},
 		},
 		withInformer(
@@ -77,20 +73,19 @@ func (c *certsExpirerController) Sync(ctx controller.Context) error {
 		return nil
 	}
 
-	notBefore, notAfter, err := getCABounds(secret)
+	notBefore, notAfter, err := getCertBounds(secret)
 	if err != nil {
-		// If we can't get the CA, then really all we can do is log something, since
-		// if we returned an error then the controller lib would just call us again
-		// and again, which would probably yield the same results.
+		// If we can't read the cert, then really all we can do is log something,
+		// since if we returned an error then the controller lib would just call us
+		// again and again, which would probably yield the same results.
 		klog.Warningf("certsExpirerController Sync() found that the secret is malformed: %s", err.Error())
 		return nil
 	}
 
-	caLifetime := notAfter.Sub(notBefore)
-	caAge := time.Since(notBefore)
-	thresholdDelta := (float32(caAge) / float32(caLifetime)) - c.ageThreshold
-	klog.Infof("certsExpirerController Sync() found a CA age threshold delta of %.9g", thresholdDelta)
-	if thresholdDelta > 0 {
+	certAge := time.Since(notBefore)
+	renewDelta := certAge - c.renewBefore
+	klog.Infof("certsExpirerController Sync() found a renew delta of %s", renewDelta)
+	if renewDelta >= 0 || time.Now().After(notAfter) {
 		err := c.k8sClient.
 			CoreV1().
 			Secrets(c.namespace).
@@ -105,24 +100,25 @@ func (c *certsExpirerController) Sync(ctx controller.Context) error {
 	return nil
 }
 
-// getCABounds returns the NotBefore and NotAfter fields of the CA certificate
-// in the provided secret, or an error. Not that it expects the provided secret
-// to contain the well-known data keys from this package (see certs_manager.go).
-func getCABounds(secret *corev1.Secret) (time.Time, time.Time, error) {
-	caPEM := secret.Data[caCertificateSecretKey]
-	if caPEM == nil {
-		return time.Time{}, time.Time{}, constable.Error("failed to find CA")
+// getCertBounds returns the NotBefore and NotAfter fields of the TLS
+// certificate in the provided secret, or an error. Not that it expects the
+// provided secret to contain the well-known data keys from this package (see
+// certs_manager.go).
+func getCertBounds(secret *corev1.Secret) (time.Time, time.Time, error) {
+	certPEM := secret.Data[tlsCertificateChainSecretKey]
+	if certPEM == nil {
+		return time.Time{}, time.Time{}, constable.Error("failed to find certificate")
 	}
 
-	caBlock, _ := pem.Decode(caPEM)
-	if caBlock == nil {
-		return time.Time{}, time.Time{}, constable.Error("failed to decode CA PEM")
+	certBlock, _ := pem.Decode(certPEM)
+	if certBlock == nil {
+		return time.Time{}, time.Time{}, constable.Error("failed to decode certificate PEM")
 	}
 
-	caCrt, err := x509.ParseCertificate(caBlock.Bytes)
+	cert, err := x509.ParseCertificate(certBlock.Bytes)
 	if err != nil {
-		return time.Time{}, time.Time{}, fmt.Errorf("failed to parse CA: %w", err)
+		return time.Time{}, time.Time{}, fmt.Errorf("failed to parse certificate: %w", err)
 	}
 
-	return caCrt.NotBefore, caCrt.NotAfter, nil
+	return cert.NotBefore, cert.NotAfter, nil
 }

@@ -50,6 +50,7 @@ func TestManagerControllerOptions(t *testing.T) {
 				secretsInformer,
 				observableWithInformerOption.WithInformer,         // make it possible to observe the behavior of the Filters
 				observableWithInitialEventOption.WithInitialEvent, // make it possible to observe the behavior of the initial event
+				0, // certDuration, not needed for this test
 			)
 			secretsInformerFilter = observableWithInformerOption.GetFilterForInformer(secretsInformer)
 		})
@@ -116,6 +117,7 @@ func TestManagerControllerOptions(t *testing.T) {
 func TestManagerControllerSync(t *testing.T) {
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
+		const certDuration = 12345678 * time.Second
 
 		var r *require.Assertions
 
@@ -139,6 +141,7 @@ func TestManagerControllerSync(t *testing.T) {
 				kubeInformers.Core().V1().Secrets(),
 				controller.WithInformer,
 				controller.WithInitialEvent,
+				certDuration,
 			)
 
 			// Set this at the last second to support calling subject.Name().
@@ -221,7 +224,7 @@ func TestManagerControllerSync(t *testing.T) {
 					// Validate the created cert using the CA, and also validate the cert's hostname
 					validCert := testutil.ValidateCertificate(t, actualCACert, actualCertChain)
 					validCert.RequireDNSName("pinniped-api." + installedInNamespace + ".svc")
-					validCert.RequireLifetime(time.Now(), time.Now().Add(24*365*time.Hour), 2*time.Minute)
+					validCert.RequireLifetime(time.Now(), time.Now().Add(certDuration), 2*time.Minute)
 					validCert.RequireMatchesPrivateKey(actualPrivateKey)
 
 					// Make sure we updated the APIService caBundle and left it otherwise unchanged

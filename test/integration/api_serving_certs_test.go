@@ -58,7 +58,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 					return err
 				}
 
-				secret.Data["caCertificate"], err = createExpiredCertificate()
+				secret.Data["tlsCertificateChain"], err = createExpiredCertificate()
 				if err != nil {
 					return err
 				}

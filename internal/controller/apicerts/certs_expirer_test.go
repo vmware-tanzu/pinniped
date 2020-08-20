@@ -96,7 +96,7 @@ func TestExpirerControllerFilters(t *testing.T) {
 				nil, // k8sClient, not needed
 				secretsInformer,
 				withInformer.WithInformer,
-				0, // ageThreshold, not needed
+				0, // renewBefore, not needed
 			)
 
 			unrelated := corev1.Secret{}
@@ -114,7 +114,7 @@ func TestExpirerControllerSync(t *testing.T) {
 
 	tests := []struct {
 		name                string
-		ageThreshold        float32
+		renewBefore         time.Duration
 		fillSecretData      func(*testing.T, map[string][]byte)
 		configKubeAPIClient func(*kubernetesfake.Clientset)
 		wantDelete          bool
@@ -130,47 +130,62 @@ func TestExpirerControllerSync(t *testing.T) {
 			wantDelete:     false,
 		},
 		{
-			name:         "lifetime below threshold",
-			ageThreshold: 0.7,
+			name:        "lifetime below threshold",
+			renewBefore: 7 * time.Hour,
 			fillSecretData: func(t *testing.T, m map[string][]byte) {
-				caPEM, err := testutil.CreateCertificate(
+				certPEM, err := testutil.CreateCertificate(
 					time.Now().Add(-5*time.Hour),
 					time.Now().Add(5*time.Hour),
 				)
 				require.NoError(t, err)
 
-				// See cert_manager.go for this constant.
-				m["caCertificate"] = caPEM
+				// See certs_manager.go for this constant.
+				m["tlsCertificateChain"] = certPEM
 			},
 			wantDelete: false,
 		},
 		{
-			name:         "lifetime above threshold",
-			ageThreshold: 0.3,
+			name:        "lifetime above threshold",
+			renewBefore: 3 * time.Hour,
 			fillSecretData: func(t *testing.T, m map[string][]byte) {
-				caPEM, err := testutil.CreateCertificate(
+				certPEM, err := testutil.CreateCertificate(
 					time.Now().Add(-5*time.Hour),
 					time.Now().Add(5*time.Hour),
 				)
 				require.NoError(t, err)
 
-				// See cert_manager.go for this constant.
-				m["caCertificate"] = caPEM
+				// See certs_manager.go for this constant.
+				m["tlsCertificateChain"] = certPEM
 			},
 			wantDelete: true,
 		},
 		{
-			name:         "delete failure",
-			ageThreshold: 0.3,
+			name:        "cert expired",
+			renewBefore: 3 * time.Hour,
 			fillSecretData: func(t *testing.T, m map[string][]byte) {
-				caPEM, err := testutil.CreateCertificate(
+				certPEM, err := testutil.CreateCertificate(
+					time.Now().Add(-2*time.Hour),
+					time.Now().Add(-1*time.Hour),
+				)
+				require.NoError(t, err)
+
+				// See certs_manager.go for this constant.
+				m["tlsCertificateChain"] = certPEM
+			},
+			wantDelete: true,
+		},
+		{
+			name:        "delete failure",
+			renewBefore: 3 * time.Hour,
+			fillSecretData: func(t *testing.T, m map[string][]byte) {
+				certPEM, err := testutil.CreateCertificate(
 					time.Now().Add(-5*time.Hour),
 					time.Now().Add(5*time.Hour),
 				)
 				require.NoError(t, err)
 
-				// See cert_manager.go for this constant.
-				m["caCertificate"] = caPEM
+				// See certs_manager.go for this constant.
+				m["tlsCertificateChain"] = certPEM
 			},
 			configKubeAPIClient: func(c *kubernetesfake.Clientset) {
 				c.PrependReactor("delete", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
@@ -185,8 +200,8 @@ func TestExpirerControllerSync(t *testing.T) {
 				privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 				require.NoError(t, err)
 
-				// See cert_manager.go for this constant.
-				m["caCertificate"] = x509.MarshalPKCS1PrivateKey(privateKey)
+				// See certs_manager.go for this constant.
+				m["tlsCertificateChain"] = x509.MarshalPKCS1PrivateKey(privateKey)
 			},
 			wantDelete: false,
 		},
@@ -205,7 +220,7 @@ func TestExpirerControllerSync(t *testing.T) {
 			}
 
 			kubeInformerClient := kubernetesfake.NewSimpleClientset()
-			name := "api-serving-cert" // See cert_manager.go.
+			name := "api-serving-cert" // See certs_manager.go.
 			namespace := "some-namespace"
 			if test.fillSecretData != nil {
 				secret := &corev1.Secret{
@@ -231,7 +246,7 @@ func TestExpirerControllerSync(t *testing.T) {
 				kubeAPIClient,
 				kubeInformers.Core().V1().Secrets(),
 				controller.WithInformer,
-				test.ageThreshold,
+				test.renewBefore,
 			)
 
 			// Must start informers before calling TestRunSynchronously().

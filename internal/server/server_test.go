@@ -25,11 +25,10 @@ Usage:
   pinniped-server [flags]
 
 Flags:
-  -c, --config string                                path to configuration file (default "pinniped.yaml")
-      --downward-api-path string                     path to Downward API volume mount (default "/etc/podinfo")
-  -h, --help                                         help for pinniped-server
-      --log-flush-frequency duration                 Maximum number of seconds between log flushes (default 5s)
-      --serving-cert-rotation-threshold percentage   real number between 0 and 1 indicating percentage of lifetime before rotation of serving cert (default 70.00%)
+  -c, --config string                  path to configuration file (default "pinniped.yaml")
+      --downward-api-path string       path to Downward API volume mount (default "/etc/podinfo")
+  -h, --help                           help for pinniped-server
+      --log-flush-frequency duration   Maximum number of seconds between log flushes (default 5s)
 `
 
 func TestCommand(t *testing.T) {
@@ -68,30 +67,6 @@ func TestCommand(t *testing.T) {
 				"tuna",
 			},
 			wantErr: `unknown command "tuna" for "pinniped-server"`,
-		},
-		{
-			name: "PercentageIsNotRealNumber",
-			args: []string{
-				"--config", "some/path/to/config.yaml",
-				"--serving-cert-rotation-threshold", "tuna",
-			},
-			wantErr: `invalid argument "tuna" for "--serving-cert-rotation-threshold" flag: must pass real number between 0 and 1`,
-		},
-		{
-			name: "PercentageIsTooSmall",
-			args: []string{
-				"--config", "some/path/to/config.yaml",
-				"--serving-cert-rotation-threshold", "-1",
-			},
-			wantErr: `invalid argument "-1" for "--serving-cert-rotation-threshold" flag: must pass real number between 0 and 1`,
-		},
-		{
-			name: "PercentageIsTooLarge",
-			args: []string{
-				"--config", "some/path/to/config.yaml",
-				"--serving-cert-rotation-threshold", "75",
-			},
-			wantErr: `invalid argument "75" for "--serving-cert-rotation-threshold" flag: must pass real number between 0 and 1`,
 		},
 	}
 	for _, test := range tests {

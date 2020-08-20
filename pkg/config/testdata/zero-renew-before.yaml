@@ -1,0 +1,8 @@
+---
+webhook:
+  url: https://tuna.com/fish?marlin
+  caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tLi4u
+api:
+  servingCertificate:
+    durationSeconds: 2400
+    renewBeforeSeconds: -10

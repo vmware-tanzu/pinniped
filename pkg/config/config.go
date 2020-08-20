@@ -64,6 +64,10 @@ func validateAPI(apiConfig *api.APIConfigSpec) error {
 		return constable.Error("durationSeconds cannot be smaller than renewBeforeSeconds")
 	}
 
+	if *apiConfig.ServingCertificateConfig.RenewBeforeSeconds <= 0 {
+		return constable.Error("renewBefore must be positive")
+	}
+
 	return nil
 }
 

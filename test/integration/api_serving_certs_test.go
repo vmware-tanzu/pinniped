@@ -154,7 +154,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 
 func createExpiredCertificate() ([]byte, error) {
 	return testutil.CreateCertificate(
-		time.Now().Add(-24*time.Hour),
-		time.Now().Add(-time.Hour),
+		time.Now().Add(-24*time.Hour), // notBefore
+		time.Now().Add(-time.Hour),    // notAfter
 	)
 }

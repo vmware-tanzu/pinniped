@@ -63,6 +63,16 @@ func TestFromPath(t *testing.T) {
 			path:      "testdata/invalid-duration-renew-before.yaml",
 			wantError: "validate api: durationSeconds cannot be smaller than renewBeforeSeconds",
 		},
+		{
+			name:      "NegativeRenewBefore",
+			path:      "testdata/negative-renew-before.yaml",
+			wantError: "validate api: renewBefore must be positive",
+		},
+		{
+			name:      "ZeroRenewBefore",
+			path:      "testdata/zero-renew-before.yaml",
+			wantError: "validate api: renewBefore must be positive",
+		},
 	}
 	for _, test := range tests {
 		test := test

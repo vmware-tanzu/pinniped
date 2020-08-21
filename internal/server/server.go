@@ -182,6 +182,7 @@ func (a *App) runServer(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("could not get in-cluster transport config: %w", err)
 	}
+	kubeTransportConfig.TLS.NextProtos = []string{"http/1.1"}
 
 	kubeRoundTripper, err := transport.New(kubeTransportConfig)
 	if err != nil {
@@ -222,6 +223,8 @@ func (a *App) runServer(ctx context.Context) error {
 			"Accept",
 			"Accept-Encoding",
 			"User-Agent",
+			"Connection",
+			"Upgrade",
 		} {
 			if incoming := r.Header.Get(header); incoming != "" {
 				newHeaders.Add(header, incoming)

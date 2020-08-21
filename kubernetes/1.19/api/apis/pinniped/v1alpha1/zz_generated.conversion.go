@@ -12,10 +12,9 @@ package v1alpha1
 import (
 	unsafe "unsafe"
 
+	pinniped "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
-
-	pinniped "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped"
 )
 
 func init() {

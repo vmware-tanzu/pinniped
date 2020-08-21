@@ -11,15 +11,14 @@ import (
 	"context"
 	time "time"
 
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	runtime "k8s.io/apimachinery/pkg/runtime"
-	watch "k8s.io/apimachinery/pkg/watch"
-	cache "k8s.io/client-go/tools/cache"
-
 	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1"
 	versioned "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned"
 	internalinterfaces "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/informers/externalversions/internalinterfaces"
 	v1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/listers/pinniped/v1alpha1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
+	watch "k8s.io/apimachinery/pkg/watch"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // CredentialRequestInformer provides access to a shared informer and lister for

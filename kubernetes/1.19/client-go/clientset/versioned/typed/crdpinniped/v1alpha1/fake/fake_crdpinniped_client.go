@@ -8,10 +8,9 @@ SPDX-License-Identifier: Apache-2.0
 package fake
 
 import (
+	v1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/typed/crdpinniped/v1alpha1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
-
-	v1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/typed/crdpinniped/v1alpha1"
 )
 
 type FakeCrdV1alpha1 struct {

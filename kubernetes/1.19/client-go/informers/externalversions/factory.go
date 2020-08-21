@@ -12,15 +12,14 @@ import (
 	sync "sync"
 	time "time"
 
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	runtime "k8s.io/apimachinery/pkg/runtime"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
-	cache "k8s.io/client-go/tools/cache"
-
 	versioned "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned"
 	crdpinniped "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/informers/externalversions/crdpinniped"
 	internalinterfaces "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/informers/externalversions/internalinterfaces"
 	pinniped "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/informers/externalversions/pinniped"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // SharedInformerOption defines the functional option type for SharedInformerFactory.

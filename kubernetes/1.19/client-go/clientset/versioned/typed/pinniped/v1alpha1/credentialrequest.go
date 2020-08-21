@@ -11,13 +11,12 @@ import (
 	"context"
 	"time"
 
+	v1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1"
+	scheme "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"
-
-	v1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1"
-	scheme "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/scheme"
 )
 
 // CredentialRequestsGetter has a method to return a CredentialRequestInterface.

@@ -8,17 +8,16 @@ SPDX-License-Identifier: Apache-2.0
 package fake
 
 import (
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/discovery"
-	fakediscovery "k8s.io/client-go/discovery/fake"
-	"k8s.io/client-go/testing"
-
 	clientset "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned"
 	crdv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/typed/crdpinniped/v1alpha1"
 	fakecrdv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/typed/crdpinniped/v1alpha1/fake"
 	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/typed/pinniped/v1alpha1"
 	fakepinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/typed/pinniped/v1alpha1/fake"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/discovery"
+	fakediscovery "k8s.io/client-go/discovery/fake"
+	"k8s.io/client-go/testing"
 )
 
 // NewSimpleClientset returns a clientset that will respond with the provided objects.

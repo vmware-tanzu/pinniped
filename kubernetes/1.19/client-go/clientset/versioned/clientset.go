@@ -10,12 +10,11 @@ package versioned
 import (
 	"fmt"
 
+	crdv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/typed/crdpinniped/v1alpha1"
+	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/typed/pinniped/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
-
-	crdv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/typed/crdpinniped/v1alpha1"
-	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/typed/pinniped/v1alpha1"
 )
 
 type Interface interface {

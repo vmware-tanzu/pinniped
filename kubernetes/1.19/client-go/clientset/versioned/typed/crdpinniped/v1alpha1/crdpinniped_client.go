@@ -8,10 +8,9 @@ SPDX-License-Identifier: Apache-2.0
 package v1alpha1
 
 import (
-	rest "k8s.io/client-go/rest"
-
 	v1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1"
 	"github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/scheme"
+	rest "k8s.io/client-go/rest"
 )
 
 type CrdV1alpha1Interface interface {

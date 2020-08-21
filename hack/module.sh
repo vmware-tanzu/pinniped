@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
+
 set -euo pipefail
-ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 function tidy_cmd() {
   echo 'go mod tidy -v'
@@ -21,7 +23,7 @@ function test_cmd() {
   else
     cmd='go test'
   fi
-  echo "${cmd} -race ./..."
+  echo "${cmd} -count 1 -race ./..."
 }
 
 function unittest_cmd() {
@@ -30,7 +32,7 @@ function unittest_cmd() {
   else
     cmd='go test'
   fi
-  echo "${cmd} -short -race ./..."
+  echo "${cmd} -count 1 -short -race ./..."
 }
 
 function codegen_cmd() {
@@ -41,21 +43,11 @@ function codegen_verify_cmd() {
   echo "${ROOT}/hack/lib/codegen.sh codegen::verify"
 }
 
-# The race detector is slow, so sometimes you don't want to use it
-function unittest_no_race_cmd() {
-  if [ -x "$(command -v gotest)" ]; then
-    cmd='gotest'
-  else
-    cmd='go test'
-  fi
-  echo "${cmd} -short ./..."
-}
-
 function with_modules() {
   local cmd_function="${1}"
   cmd="$(${cmd_function})"
 
-  pushd "${ROOT}"
+  pushd "${ROOT}" >/dev/null
   for mod_file in $(find . -maxdepth 4 -name go.mod | sort); do
     mod_dir="$(dirname "${mod_file}")"
     (
@@ -64,26 +56,42 @@ function with_modules() {
       cd "${mod_dir}" && ${cmd}
     )
   done
-  popd
+  popd >/dev/null
 }
 
 function usage() {
   echo "Error: <task> must be specified"
-  echo "       do.sh <task> [tidy, lint, test, unittest, unittest_no_race, codegen, codegen_verify]"
+  echo "       module.sh <task> [tidy, lint, test, unittest, codegen, codegen_verify]"
   exit 1
 }
 
 function main() {
   case "${1:-invalid}" in
-    'tidy') with_modules 'tidy_cmd' ;;
-    'lint') with_modules 'lint_cmd' ;;
-    'test') with_modules 'test_cmd' ;;
-    'unittest') with_modules 'unittest_cmd' ;;
-    'unittest_no_race') with_modules 'unittest_no_race_cmd' ;;
-    'codegen') with_modules 'codegen_cmd' ;;
-    'codegen_verify') with_modules 'codegen_verify_cmd' ;;
-    *) usage ;;
+  'tidy')
+    with_modules 'tidy_cmd'
+    ;;
+  'lint' | 'linter' | 'linters')
+    with_modules 'lint_cmd'
+    ;;
+  'test' | 'tests')
+    with_modules 'test_cmd'
+    ;;
+  'unittest' | 'unittests' | 'units' | 'unit')
+    with_modules 'unittest_cmd'
+    ;;
+  'codegen' | 'codegens')
+    with_modules 'codegen_cmd'
+    ;;
+  'codegen_verify' | 'verify_codegen')
+    with_modules 'codegen_verify_cmd'
+    ;;
+  *)
+    usage
+    ;;
   esac
+
+  echo "=> "
+  echo "   \"module.sh $1\" Finished successfully."
 }
 
 main "$@"

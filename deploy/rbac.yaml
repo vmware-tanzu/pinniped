@@ -45,7 +45,7 @@ rules:
     resources: [secrets]
     verbs: [create, get, list, patch, update, watch, delete]
   - apiGroups: [crd.pinniped.dev]
-    resources: [pinnipeddiscoveryinfos]
+    resources: [credentialissuerconfigs]
     verbs: [create, get, list, update, watch]
 ---
 kind: RoleBinding

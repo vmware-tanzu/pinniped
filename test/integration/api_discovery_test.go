@@ -61,14 +61,14 @@ func TestGetAPIResourceList(t *testing.T) {
 	}
 
 	expectedLDCAPIResource := metav1.APIResource{
-		Name:         "pinnipeddiscoveryinfos",
-		SingularName: "pinnipeddiscoveryinfo",
+		Name:         "credentialissuerconfigs",
+		SingularName: "credentialissuerconfig",
 		Namespaced:   true,
-		Kind:         "PinnipedDiscoveryInfo",
+		Kind:         "CredentialIssuerConfig",
 		Verbs: metav1.Verbs([]string{
 			"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch",
 		}),
-		ShortNames:         []string{"ldc"},
+		ShortNames:         []string{"cic"},
 		StorageVersionHash: "unknown: to be filled in automatically below",
 	}
 

@@ -21,59 +21,59 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 )
 
-// PinnipedDiscoveryInfoInformer provides access to a shared informer and lister for
-// PinnipedDiscoveryInfos.
-type PinnipedDiscoveryInfoInformer interface {
+// CredentialIssuerConfigInformer provides access to a shared informer and lister for
+// CredentialIssuerConfigs.
+type CredentialIssuerConfigInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.PinnipedDiscoveryInfoLister
+	Lister() v1alpha1.CredentialIssuerConfigLister
 }
 
-type pinnipedDiscoveryInfoInformer struct {
+type credentialIssuerConfigInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 	namespace        string
 }
 
-// NewPinnipedDiscoveryInfoInformer constructs a new informer for PinnipedDiscoveryInfo type.
+// NewCredentialIssuerConfigInformer constructs a new informer for CredentialIssuerConfig type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewPinnipedDiscoveryInfoInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredPinnipedDiscoveryInfoInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewCredentialIssuerConfigInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredCredentialIssuerConfigInformer(client, namespace, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredPinnipedDiscoveryInfoInformer constructs a new informer for PinnipedDiscoveryInfo type.
+// NewFilteredCredentialIssuerConfigInformer constructs a new informer for CredentialIssuerConfig type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredPinnipedDiscoveryInfoInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredCredentialIssuerConfigInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha1().PinnipedDiscoveryInfos(namespace).List(context.TODO(), options)
+				return client.CrdV1alpha1().CredentialIssuerConfigs(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha1().PinnipedDiscoveryInfos(namespace).Watch(context.TODO(), options)
+				return client.CrdV1alpha1().CredentialIssuerConfigs(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&crdpinnipedv1alpha1.PinnipedDiscoveryInfo{},
+		&crdpinnipedv1alpha1.CredentialIssuerConfig{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *pinnipedDiscoveryInfoInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredPinnipedDiscoveryInfoInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *credentialIssuerConfigInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredCredentialIssuerConfigInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *pinnipedDiscoveryInfoInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&crdpinnipedv1alpha1.PinnipedDiscoveryInfo{}, f.defaultInformer)
+func (f *credentialIssuerConfigInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&crdpinnipedv1alpha1.CredentialIssuerConfig{}, f.defaultInformer)
 }
 
-func (f *pinnipedDiscoveryInfoInformer) Lister() v1alpha1.PinnipedDiscoveryInfoLister {
-	return v1alpha1.NewPinnipedDiscoveryInfoLister(f.Informer().GetIndexer())
+func (f *credentialIssuerConfigInformer) Lister() v1alpha1.CredentialIssuerConfigLister {
+	return v1alpha1.NewCredentialIssuerConfigLister(f.Informer().GetIndexer())
 }

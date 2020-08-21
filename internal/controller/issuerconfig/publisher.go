@@ -3,7 +3,7 @@ Copyright 2020 VMware, Inc.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package discovery
+package issuerconfig
 
 import (
 	"context"
@@ -33,11 +33,11 @@ const (
 )
 
 type publisherController struct {
-	namespace                     string
-	serverOverride                *string
-	pinnipedClient                pinnipedclientset.Interface
-	configMapInformer             corev1informers.ConfigMapInformer
-	pinnipedDiscoveryInfoInformer crdpinnipedv1alpha1informers.PinnipedDiscoveryInfoInformer
+	namespace                      string
+	serverOverride                 *string
+	pinnipedClient                 pinnipedclientset.Interface
+	configMapInformer              corev1informers.ConfigMapInformer
+	credentialIssuerConfigInformer crdpinnipedv1alpha1informers.CredentialIssuerConfigInformer
 }
 
 func NewPublisherController(
@@ -45,18 +45,18 @@ func NewPublisherController(
 	serverOverride *string,
 	pinnipedClient pinnipedclientset.Interface,
 	configMapInformer corev1informers.ConfigMapInformer,
-	pinnipedDiscoveryInfoInformer crdpinnipedv1alpha1informers.PinnipedDiscoveryInfoInformer,
+	credentialIssuerConfigInformer crdpinnipedv1alpha1informers.CredentialIssuerConfigInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controller.Controller {
 	return controller.New(
 		controller.Config{
 			Name: "publisher-controller",
 			Syncer: &publisherController{
-				namespace:                     namespace,
-				serverOverride:                serverOverride,
-				pinnipedClient:                pinnipedClient,
-				configMapInformer:             configMapInformer,
-				pinnipedDiscoveryInfoInformer: pinnipedDiscoveryInfoInformer,
+				namespace:                      namespace,
+				serverOverride:                 serverOverride,
+				pinnipedClient:                 pinnipedClient,
+				configMapInformer:              configMapInformer,
+				credentialIssuerConfigInformer: credentialIssuerConfigInformer,
 			},
 		},
 		withInformer(
@@ -65,7 +65,7 @@ func NewPublisherController(
 			controller.InformerOption{},
 		),
 		withInformer(
-			pinnipedDiscoveryInfoInformer,
+			credentialIssuerConfigInformer,
 			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(configName, namespace),
 			controller.InformerOption{},
 		),
@@ -109,66 +109,66 @@ func (c *publisherController) Sync(ctx controller.Context) error {
 		server = *c.serverOverride
 	}
 
-	discoveryInfo := crdpinnipedv1alpha1.PinnipedDiscoveryInfo{
+	credentialIssuerConfig := crdpinnipedv1alpha1.CredentialIssuerConfig{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      configName,
 			Namespace: c.namespace,
 		},
-		Spec: crdpinnipedv1alpha1.PinnipedDiscoveryInfoSpec{
+		Spec: crdpinnipedv1alpha1.CredentialIssuerConfigSpec{
 			Server:                   server,
 			CertificateAuthorityData: certificateAuthorityData,
 		},
 	}
-	if err := c.createOrUpdatePinnipedDiscoveryInfo(ctx.Context, &discoveryInfo); err != nil {
+	if err := c.createOrUpdateCredentialIssuerConfig(ctx.Context, &credentialIssuerConfig); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (c *publisherController) createOrUpdatePinnipedDiscoveryInfo(
+func (c *publisherController) createOrUpdateCredentialIssuerConfig(
 	ctx context.Context,
-	discoveryInfo *crdpinnipedv1alpha1.PinnipedDiscoveryInfo,
+	credentialIssuerConfig *crdpinnipedv1alpha1.CredentialIssuerConfig,
 ) error {
-	existingDiscoveryInfo, err := c.pinnipedDiscoveryInfoInformer.
+	existingCredentialIssuerConfig, err := c.credentialIssuerConfigInformer.
 		Lister().
-		PinnipedDiscoveryInfos(c.namespace).
-		Get(discoveryInfo.Name)
+		CredentialIssuerConfigs(c.namespace).
+		Get(credentialIssuerConfig.Name)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
-		return fmt.Errorf("could not get pinnipeddiscoveryinfo: %w", err)
+		return fmt.Errorf("could not get credentialissuerconfig: %w", err)
 	}
 
-	pinnipedDiscoveryInfos := c.pinnipedClient.
+	credentialIssuerConfigs := c.pinnipedClient.
 		CrdV1alpha1().
-		PinnipedDiscoveryInfos(c.namespace)
+		CredentialIssuerConfigs(c.namespace)
 	if notFound {
-		if _, err := pinnipedDiscoveryInfos.Create(
+		if _, err := credentialIssuerConfigs.Create(
 			ctx,
-			discoveryInfo,
+			credentialIssuerConfig,
 			metav1.CreateOptions{},
 		); err != nil {
-			return fmt.Errorf("could not create pinnipeddiscoveryinfo: %w", err)
+			return fmt.Errorf("could not create credentialissuerconfig: %w", err)
 		}
-	} else if !equal(existingDiscoveryInfo, discoveryInfo) {
+	} else if !equal(existingCredentialIssuerConfig, credentialIssuerConfig) {
 		// Update just the fields we care about.
-		existingDiscoveryInfo.Spec.Server = discoveryInfo.Spec.Server
-		existingDiscoveryInfo.Spec.CertificateAuthorityData = discoveryInfo.Spec.CertificateAuthorityData
+		existingCredentialIssuerConfig.Spec.Server = credentialIssuerConfig.Spec.Server
+		existingCredentialIssuerConfig.Spec.CertificateAuthorityData = credentialIssuerConfig.Spec.CertificateAuthorityData
 
-		if _, err := pinnipedDiscoveryInfos.Update(
+		if _, err := credentialIssuerConfigs.Update(
 			ctx,
-			existingDiscoveryInfo,
+			existingCredentialIssuerConfig,
 			metav1.UpdateOptions{},
 		); err != nil {
-			return fmt.Errorf("could not update pinnipeddiscoveryinfo: %w", err)
+			return fmt.Errorf("could not update credentialissuerconfig: %w", err)
 		}
 	}
 
 	return nil
 }
 
-func equal(a, b *crdpinnipedv1alpha1.PinnipedDiscoveryInfo) bool {
+func equal(a, b *crdpinnipedv1alpha1.CredentialIssuerConfig) bool {
 	return a.Spec.Server == b.Spec.Server &&
 		a.Spec.CertificateAuthorityData == b.Spec.CertificateAuthorityData
 }

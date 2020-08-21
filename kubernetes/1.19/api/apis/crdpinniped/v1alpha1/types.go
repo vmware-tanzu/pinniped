@@ -7,7 +7,7 @@ package v1alpha1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-type PinnipedDiscoveryInfoSpec struct {
+type CredentialIssuerConfigSpec struct {
 	// The K8s API server URL. Required.
 	Server string `json:"server,omitempty"`
 
@@ -18,18 +18,18 @@ type PinnipedDiscoveryInfoSpec struct {
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-type PinnipedDiscoveryInfo struct {
+type CredentialIssuerConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec PinnipedDiscoveryInfoSpec `json:"spec"`
+	Spec CredentialIssuerConfigSpec `json:"spec"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-type PinnipedDiscoveryInfoList struct {
+type CredentialIssuerConfigList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 
-	Items []PinnipedDiscoveryInfo `json:"items"`
+	Items []CredentialIssuerConfig `json:"items"`
 }

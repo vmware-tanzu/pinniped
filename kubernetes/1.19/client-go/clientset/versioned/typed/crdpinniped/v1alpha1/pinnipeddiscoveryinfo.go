@@ -19,45 +19,45 @@ import (
 	rest "k8s.io/client-go/rest"
 )
 
-// PinnipedDiscoveryInfosGetter has a method to return a PinnipedDiscoveryInfoInterface.
+// CredentialIssuerConfigsGetter has a method to return a CredentialIssuerConfigInterface.
 // A group's client should implement this interface.
-type PinnipedDiscoveryInfosGetter interface {
-	PinnipedDiscoveryInfos(namespace string) PinnipedDiscoveryInfoInterface
+type CredentialIssuerConfigsGetter interface {
+	CredentialIssuerConfigs(namespace string) CredentialIssuerConfigInterface
 }
 
-// PinnipedDiscoveryInfoInterface has methods to work with PinnipedDiscoveryInfo resources.
-type PinnipedDiscoveryInfoInterface interface {
-	Create(ctx context.Context, pinnipedDiscoveryInfo *v1alpha1.PinnipedDiscoveryInfo, opts v1.CreateOptions) (*v1alpha1.PinnipedDiscoveryInfo, error)
-	Update(ctx context.Context, pinnipedDiscoveryInfo *v1alpha1.PinnipedDiscoveryInfo, opts v1.UpdateOptions) (*v1alpha1.PinnipedDiscoveryInfo, error)
+// CredentialIssuerConfigInterface has methods to work with CredentialIssuerConfig resources.
+type CredentialIssuerConfigInterface interface {
+	Create(ctx context.Context, credentialIssuerConfig *v1alpha1.CredentialIssuerConfig, opts v1.CreateOptions) (*v1alpha1.CredentialIssuerConfig, error)
+	Update(ctx context.Context, credentialIssuerConfig *v1alpha1.CredentialIssuerConfig, opts v1.UpdateOptions) (*v1alpha1.CredentialIssuerConfig, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.PinnipedDiscoveryInfo, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.PinnipedDiscoveryInfoList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.CredentialIssuerConfig, error)
+	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.CredentialIssuerConfigList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.PinnipedDiscoveryInfo, err error)
-	PinnipedDiscoveryInfoExpansion
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.CredentialIssuerConfig, err error)
+	CredentialIssuerConfigExpansion
 }
 
-// pinnipedDiscoveryInfos implements PinnipedDiscoveryInfoInterface
-type pinnipedDiscoveryInfos struct {
+// credentialIssuerConfigs implements CredentialIssuerConfigInterface
+type credentialIssuerConfigs struct {
 	client rest.Interface
 	ns     string
 }
 
-// newPinnipedDiscoveryInfos returns a PinnipedDiscoveryInfos
-func newPinnipedDiscoveryInfos(c *CrdV1alpha1Client, namespace string) *pinnipedDiscoveryInfos {
-	return &pinnipedDiscoveryInfos{
+// newCredentialIssuerConfigs returns a CredentialIssuerConfigs
+func newCredentialIssuerConfigs(c *CrdV1alpha1Client, namespace string) *credentialIssuerConfigs {
+	return &credentialIssuerConfigs{
 		client: c.RESTClient(),
 		ns:     namespace,
 	}
 }
 
-// Get takes name of the pinnipedDiscoveryInfo, and returns the corresponding pinnipedDiscoveryInfo object, and an error if there is any.
-func (c *pinnipedDiscoveryInfos) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.PinnipedDiscoveryInfo, err error) {
-	result = &v1alpha1.PinnipedDiscoveryInfo{}
+// Get takes name of the credentialIssuerConfig, and returns the corresponding credentialIssuerConfig object, and an error if there is any.
+func (c *credentialIssuerConfigs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.CredentialIssuerConfig, err error) {
+	result = &v1alpha1.CredentialIssuerConfig{}
 	err = c.client.Get().
 		Namespace(c.ns).
-		Resource("pinnipeddiscoveryinfos").
+		Resource("credentialissuerconfigs").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
 		Do(ctx).
@@ -65,16 +65,16 @@ func (c *pinnipedDiscoveryInfos) Get(ctx context.Context, name string, options v
 	return
 }
 
-// List takes label and field selectors, and returns the list of PinnipedDiscoveryInfos that match those selectors.
-func (c *pinnipedDiscoveryInfos) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.PinnipedDiscoveryInfoList, err error) {
+// List takes label and field selectors, and returns the list of CredentialIssuerConfigs that match those selectors.
+func (c *credentialIssuerConfigs) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.CredentialIssuerConfigList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
 	}
-	result = &v1alpha1.PinnipedDiscoveryInfoList{}
+	result = &v1alpha1.CredentialIssuerConfigList{}
 	err = c.client.Get().
 		Namespace(c.ns).
-		Resource("pinnipeddiscoveryinfos").
+		Resource("credentialissuerconfigs").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
 		Do(ctx).
@@ -82,8 +82,8 @@ func (c *pinnipedDiscoveryInfos) List(ctx context.Context, opts v1.ListOptions) 
 	return
 }
 
-// Watch returns a watch.Interface that watches the requested pinnipedDiscoveryInfos.
-func (c *pinnipedDiscoveryInfos) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
+// Watch returns a watch.Interface that watches the requested credentialIssuerConfigs.
+func (c *credentialIssuerConfigs) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -91,44 +91,44 @@ func (c *pinnipedDiscoveryInfos) Watch(ctx context.Context, opts v1.ListOptions)
 	opts.Watch = true
 	return c.client.Get().
 		Namespace(c.ns).
-		Resource("pinnipeddiscoveryinfos").
+		Resource("credentialissuerconfigs").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
 		Watch(ctx)
 }
 
-// Create takes the representation of a pinnipedDiscoveryInfo and creates it.  Returns the server's representation of the pinnipedDiscoveryInfo, and an error, if there is any.
-func (c *pinnipedDiscoveryInfos) Create(ctx context.Context, pinnipedDiscoveryInfo *v1alpha1.PinnipedDiscoveryInfo, opts v1.CreateOptions) (result *v1alpha1.PinnipedDiscoveryInfo, err error) {
-	result = &v1alpha1.PinnipedDiscoveryInfo{}
+// Create takes the representation of a credentialIssuerConfig and creates it.  Returns the server's representation of the credentialIssuerConfig, and an error, if there is any.
+func (c *credentialIssuerConfigs) Create(ctx context.Context, credentialIssuerConfig *v1alpha1.CredentialIssuerConfig, opts v1.CreateOptions) (result *v1alpha1.CredentialIssuerConfig, err error) {
+	result = &v1alpha1.CredentialIssuerConfig{}
 	err = c.client.Post().
 		Namespace(c.ns).
-		Resource("pinnipeddiscoveryinfos").
+		Resource("credentialissuerconfigs").
 		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(pinnipedDiscoveryInfo).
+		Body(credentialIssuerConfig).
 		Do(ctx).
 		Into(result)
 	return
 }
 
-// Update takes the representation of a pinnipedDiscoveryInfo and updates it. Returns the server's representation of the pinnipedDiscoveryInfo, and an error, if there is any.
-func (c *pinnipedDiscoveryInfos) Update(ctx context.Context, pinnipedDiscoveryInfo *v1alpha1.PinnipedDiscoveryInfo, opts v1.UpdateOptions) (result *v1alpha1.PinnipedDiscoveryInfo, err error) {
-	result = &v1alpha1.PinnipedDiscoveryInfo{}
+// Update takes the representation of a credentialIssuerConfig and updates it. Returns the server's representation of the credentialIssuerConfig, and an error, if there is any.
+func (c *credentialIssuerConfigs) Update(ctx context.Context, credentialIssuerConfig *v1alpha1.CredentialIssuerConfig, opts v1.UpdateOptions) (result *v1alpha1.CredentialIssuerConfig, err error) {
+	result = &v1alpha1.CredentialIssuerConfig{}
 	err = c.client.Put().
 		Namespace(c.ns).
-		Resource("pinnipeddiscoveryinfos").
-		Name(pinnipedDiscoveryInfo.Name).
+		Resource("credentialissuerconfigs").
+		Name(credentialIssuerConfig.Name).
 		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(pinnipedDiscoveryInfo).
+		Body(credentialIssuerConfig).
 		Do(ctx).
 		Into(result)
 	return
 }
 
-// Delete takes name of the pinnipedDiscoveryInfo and deletes it. Returns an error if one occurs.
-func (c *pinnipedDiscoveryInfos) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
+// Delete takes name of the credentialIssuerConfig and deletes it. Returns an error if one occurs.
+func (c *credentialIssuerConfigs) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
 		Namespace(c.ns).
-		Resource("pinnipeddiscoveryinfos").
+		Resource("credentialissuerconfigs").
 		Name(name).
 		Body(&opts).
 		Do(ctx).
@@ -136,14 +136,14 @@ func (c *pinnipedDiscoveryInfos) Delete(ctx context.Context, name string, opts v
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *pinnipedDiscoveryInfos) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+func (c *credentialIssuerConfigs) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	var timeout time.Duration
 	if listOpts.TimeoutSeconds != nil {
 		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
 		Namespace(c.ns).
-		Resource("pinnipeddiscoveryinfos").
+		Resource("credentialissuerconfigs").
 		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(&opts).
@@ -151,12 +151,12 @@ func (c *pinnipedDiscoveryInfos) DeleteCollection(ctx context.Context, opts v1.D
 		Error()
 }
 
-// Patch applies the patch and returns the patched pinnipedDiscoveryInfo.
-func (c *pinnipedDiscoveryInfos) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.PinnipedDiscoveryInfo, err error) {
-	result = &v1alpha1.PinnipedDiscoveryInfo{}
+// Patch applies the patch and returns the patched credentialIssuerConfig.
+func (c *credentialIssuerConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.CredentialIssuerConfig, err error) {
+	result = &v1alpha1.CredentialIssuerConfig{}
 	err = c.client.Patch(pt).
 		Namespace(c.ns).
-		Resource("pinnipeddiscoveryinfos").
+		Resource("credentialissuerconfigs").
 		Name(name).
 		SubResource(subresources...).
 		VersionedParams(&opts, scheme.ParameterCodec).

@@ -3,7 +3,7 @@ Copyright 2020 VMware, Inc.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package discovery
+package issuerconfig
 
 import (
 	"context"
@@ -37,23 +37,23 @@ func TestInformerFilters(t *testing.T) {
 		var r *require.Assertions
 		var observableWithInformerOption *testutil.ObservableWithInformerOption
 		var configMapInformerFilter controller.Filter
-		var pinnipedDiscoveryInfoInformerFilter controller.Filter
+		var credentialIssuerConfigInformerFilter controller.Filter
 
 		it.Before(func() {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			configMapInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().ConfigMaps()
-			pinnipedDiscoveryInfoInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Crd().V1alpha1().PinnipedDiscoveryInfos()
+			credentialIssuerConfigInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Crd().V1alpha1().CredentialIssuerConfigs()
 			_ = NewPublisherController(
 				installedInNamespace,
 				nil,
 				nil,
 				configMapInformer,
-				pinnipedDiscoveryInfoInformer,
+				credentialIssuerConfigInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
 			)
 			configMapInformerFilter = observableWithInformerOption.GetFilterForInformer(configMapInformer)
-			pinnipedDiscoveryInfoInformerFilter = observableWithInformerOption.GetFilterForInformer(pinnipedDiscoveryInfoInformer)
+			credentialIssuerConfigInformerFilter = observableWithInformerOption.GetFilterForInformer(credentialIssuerConfigInformer)
 		})
 
 		when("watching ConfigMap objects", func() {
@@ -104,27 +104,27 @@ func TestInformerFilters(t *testing.T) {
 			})
 		})
 
-		when("watching PinnipedDiscoveryInfo objects", func() {
+		when("watching CredentialIssuerConfig objects", func() {
 			var subject controller.Filter
-			var target, wrongNamespace, wrongName, unrelated *crdpinnipedv1alpha1.PinnipedDiscoveryInfo
+			var target, wrongNamespace, wrongName, unrelated *crdpinnipedv1alpha1.CredentialIssuerConfig
 
 			it.Before(func() {
-				subject = pinnipedDiscoveryInfoInformerFilter
-				target = &crdpinnipedv1alpha1.PinnipedDiscoveryInfo{
+				subject = credentialIssuerConfigInformerFilter
+				target = &crdpinnipedv1alpha1.CredentialIssuerConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "pinniped-config", Namespace: installedInNamespace},
 				}
-				wrongNamespace = &crdpinnipedv1alpha1.PinnipedDiscoveryInfo{
+				wrongNamespace = &crdpinnipedv1alpha1.CredentialIssuerConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "pinniped-config", Namespace: "wrong-namespace"},
 				}
-				wrongName = &crdpinnipedv1alpha1.PinnipedDiscoveryInfo{
+				wrongName = &crdpinnipedv1alpha1.CredentialIssuerConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: installedInNamespace},
 				}
-				unrelated = &crdpinnipedv1alpha1.PinnipedDiscoveryInfo{
+				unrelated = &crdpinnipedv1alpha1.CredentialIssuerConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: "wrong-namespace"},
 				}
 			})
 
-			when("the target PinnipedDiscoveryInfo changes", func() {
+			when("the target CredentialIssuerConfig changes", func() {
 				it("returns true to trigger the sync method", func() {
 					r.True(subject.Add(target))
 					r.True(subject.Update(target, unrelated))
@@ -133,7 +133,7 @@ func TestInformerFilters(t *testing.T) {
 				})
 			})
 
-			when("a PinnipedDiscoveryInfo from another namespace changes", func() {
+			when("a CredentialIssuerConfig from another namespace changes", func() {
 				it("returns false to avoid triggering the sync method", func() {
 					r.False(subject.Add(wrongNamespace))
 					r.False(subject.Update(wrongNamespace, unrelated))
@@ -142,7 +142,7 @@ func TestInformerFilters(t *testing.T) {
 				})
 			})
 
-			when("a PinnipedDiscoveryInfo with a different name changes", func() {
+			when("a CredentialIssuerConfig with a different name changes", func() {
 				it("returns false to avoid triggering the sync method", func() {
 					r.False(subject.Add(wrongName))
 					r.False(subject.Update(wrongName, unrelated))
@@ -151,7 +151,7 @@ func TestInformerFilters(t *testing.T) {
 				})
 			})
 
-			when("a PinnipedDiscoveryInfo with a different name and a different namespace changes", func() {
+			when("a CredentialIssuerConfig with a different name and a different namespace changes", func() {
 				it("returns false to avoid triggering the sync method", func() {
 					r.False(subject.Add(unrelated))
 					r.False(subject.Update(unrelated, unrelated))
@@ -179,23 +179,23 @@ func TestSync(t *testing.T) {
 		var timeoutContextCancel context.CancelFunc
 		var syncContext *controller.Context
 
-		var expectedPinnipedDiscoveryInfo = func(expectedNamespace, expectedServerURL, expectedCAData string) (schema.GroupVersionResource, *crdpinnipedv1alpha1.PinnipedDiscoveryInfo) {
-			expectedPinnipedDiscoveryInfoGVR := schema.GroupVersionResource{
+		var expectedCredentialIssuerConfig = func(expectedNamespace, expectedServerURL, expectedCAData string) (schema.GroupVersionResource, *crdpinnipedv1alpha1.CredentialIssuerConfig) {
+			expectedCredentialIssuerConfigGVR := schema.GroupVersionResource{
 				Group:    crdpinnipedv1alpha1.GroupName,
 				Version:  "v1alpha1",
-				Resource: "pinnipeddiscoveryinfos",
+				Resource: "credentialissuerconfigs",
 			}
-			expectedPinnipedDiscoveryInfo := &crdpinnipedv1alpha1.PinnipedDiscoveryInfo{
+			expectedCredentialIssuerConfig := &crdpinnipedv1alpha1.CredentialIssuerConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "pinniped-config",
 					Namespace: expectedNamespace,
 				},
-				Spec: crdpinnipedv1alpha1.PinnipedDiscoveryInfoSpec{
+				Spec: crdpinnipedv1alpha1.CredentialIssuerConfigSpec{
 					Server:                   expectedServerURL,
 					CertificateAuthorityData: expectedCAData,
 				},
 			}
-			return expectedPinnipedDiscoveryInfoGVR, expectedPinnipedDiscoveryInfo
+			return expectedCredentialIssuerConfigGVR, expectedCredentialIssuerConfig
 		}
 
 		// Defer starting the informers until the last possible moment so that the
@@ -207,7 +207,7 @@ func TestSync(t *testing.T) {
 				serverOverride,
 				pinnipedAPIClient,
 				kubeInformers.Core().V1().ConfigMaps(),
-				pinnipedInformers.Crd().V1alpha1().PinnipedDiscoveryInfos(),
+				pinnipedInformers.Crd().V1alpha1().CredentialIssuerConfigs(),
 				controller.WithInformer,
 			)
 
@@ -268,13 +268,13 @@ func TestSync(t *testing.T) {
 					r.NoError(err)
 				})
 
-				when("the PinnipedDiscoveryInfo does not already exist", func() {
-					it("creates a PinnipedDiscoveryInfo", func() {
+				when("the CredentialIssuerConfig does not already exist", func() {
+					it("creates a CredentialIssuerConfig", func() {
 						startInformersAndController()
 						err := controller.TestSync(t, subject, *syncContext)
 						r.NoError(err)
 
-						expectedPinnipedDiscoveryInfoGVR, expectedPinnipedDiscoveryInfo := expectedPinnipedDiscoveryInfo(
+						expectedCredentialIssuerConfigGVR, expectedCredentialIssuerConfig := expectedCredentialIssuerConfig(
 							installedInNamespace,
 							kubeServerURL,
 							caData,
@@ -283,20 +283,20 @@ func TestSync(t *testing.T) {
 						r.Equal(
 							[]coretesting.Action{
 								coretesting.NewCreateAction(
-									expectedPinnipedDiscoveryInfoGVR,
+									expectedCredentialIssuerConfigGVR,
 									installedInNamespace,
-									expectedPinnipedDiscoveryInfo,
+									expectedCredentialIssuerConfig,
 								),
 							},
 							pinnipedAPIClient.Actions(),
 						)
 					})
 
-					when("creating the PinnipedDiscoveryInfo fails", func() {
+					when("creating the CredentialIssuerConfig fails", func() {
 						it.Before(func() {
 							pinnipedAPIClient.PrependReactor(
 								"create",
-								"pinnipeddiscoveryinfos",
+								"credentialissuerconfigs",
 								func(_ coretesting.Action) (bool, runtime.Object, error) {
 									return true, nil, errors.New("create failed")
 								},
@@ -306,7 +306,7 @@ func TestSync(t *testing.T) {
 						it("returns the create error", func() {
 							startInformersAndController()
 							err := controller.TestSync(t, subject, *syncContext)
-							r.EqualError(err, "could not create pinnipeddiscoveryinfo: create failed")
+							r.EqualError(err, "could not create credentialissuerconfig: create failed")
 						})
 					})
 
@@ -319,19 +319,19 @@ func TestSync(t *testing.T) {
 							err := controller.TestSync(t, subject, *syncContext)
 							r.NoError(err)
 
-							expectedPinnipedDiscoveryInfoGVR, expectedPinnipedDiscoveryInfo := expectedPinnipedDiscoveryInfo(
+							expectedCredentialIssuerConfigGVR, expectedCredentialIssuerConfig := expectedCredentialIssuerConfig(
 								installedInNamespace,
 								kubeServerURL,
 								caData,
 							)
-							expectedPinnipedDiscoveryInfo.Spec.Server = "https://some-server-override"
+							expectedCredentialIssuerConfig.Spec.Server = "https://some-server-override"
 
 							r.Equal(
 								[]coretesting.Action{
 									coretesting.NewCreateAction(
-										expectedPinnipedDiscoveryInfoGVR,
+										expectedCredentialIssuerConfigGVR,
 										installedInNamespace,
-										expectedPinnipedDiscoveryInfo,
+										expectedCredentialIssuerConfig,
 									),
 								},
 								pinnipedAPIClient.Actions(),
@@ -340,19 +340,19 @@ func TestSync(t *testing.T) {
 					})
 				})
 
-				when("the PinnipedDiscoveryInfo already exists", func() {
-					when("the PinnipedDiscoveryInfo is already up to date according to the data in the ConfigMap", func() {
+				when("the CredentialIssuerConfig already exists", func() {
+					when("the CredentialIssuerConfig is already up to date according to the data in the ConfigMap", func() {
 						it.Before(func() {
-							_, expectedPinnipedDiscoveryInfo := expectedPinnipedDiscoveryInfo(
+							_, expectedCredentialIssuerConfig := expectedCredentialIssuerConfig(
 								installedInNamespace,
 								kubeServerURL,
 								caData,
 							)
-							err := pinnipedInformerClient.Tracker().Add(expectedPinnipedDiscoveryInfo)
+							err := pinnipedInformerClient.Tracker().Add(expectedCredentialIssuerConfig)
 							r.NoError(err)
 						})
 
-						it("does not update the PinnipedDiscoveryInfo to avoid unnecessary etcd writes/api calls", func() {
+						it("does not update the CredentialIssuerConfig to avoid unnecessary etcd writes/api calls", func() {
 							startInformersAndController()
 							err := controller.TestSync(t, subject, *syncContext)
 							r.NoError(err)
@@ -361,43 +361,43 @@ func TestSync(t *testing.T) {
 						})
 					})
 
-					when("the PinnipedDiscoveryInfo is stale compared to the data in the ConfigMap", func() {
+					when("the CredentialIssuerConfig is stale compared to the data in the ConfigMap", func() {
 						it.Before(func() {
-							_, expectedPinnipedDiscoveryInfo := expectedPinnipedDiscoveryInfo(
+							_, expectedCredentialIssuerConfig := expectedCredentialIssuerConfig(
 								installedInNamespace,
 								kubeServerURL,
 								caData,
 							)
-							expectedPinnipedDiscoveryInfo.Spec.Server = "https://some-other-server"
-							r.NoError(pinnipedInformerClient.Tracker().Add(expectedPinnipedDiscoveryInfo))
-							r.NoError(pinnipedAPIClient.Tracker().Add(expectedPinnipedDiscoveryInfo))
+							expectedCredentialIssuerConfig.Spec.Server = "https://some-other-server"
+							r.NoError(pinnipedInformerClient.Tracker().Add(expectedCredentialIssuerConfig))
+							r.NoError(pinnipedAPIClient.Tracker().Add(expectedCredentialIssuerConfig))
 						})
 
-						it("updates the existing PinnipedDiscoveryInfo", func() {
+						it("updates the existing CredentialIssuerConfig", func() {
 							startInformersAndController()
 							err := controller.TestSync(t, subject, *syncContext)
 							r.NoError(err)
 
-							expectedPinnipedDiscoveryInfoGVR, expectedPinnipedDiscoveryInfo := expectedPinnipedDiscoveryInfo(
+							expectedCredentialIssuerConfigGVR, expectedCredentialIssuerConfig := expectedCredentialIssuerConfig(
 								installedInNamespace,
 								kubeServerURL,
 								caData,
 							)
 							expectedActions := []coretesting.Action{
 								coretesting.NewUpdateAction(
-									expectedPinnipedDiscoveryInfoGVR,
+									expectedCredentialIssuerConfigGVR,
 									installedInNamespace,
-									expectedPinnipedDiscoveryInfo,
+									expectedCredentialIssuerConfig,
 								),
 							}
 							r.Equal(expectedActions, pinnipedAPIClient.Actions())
 						})
 
-						when("updating the PinnipedDiscoveryInfo fails", func() {
+						when("updating the CredentialIssuerConfig fails", func() {
 							it.Before(func() {
 								pinnipedAPIClient.PrependReactor(
 									"update",
-									"pinnipeddiscoveryinfos",
+									"credentialissuerconfigs",
 									func(_ coretesting.Action) (bool, runtime.Object, error) {
 										return true, nil, errors.New("update failed")
 									},
@@ -407,7 +407,7 @@ func TestSync(t *testing.T) {
 							it("returns the update error", func() {
 								startInformersAndController()
 								err := controller.TestSync(t, subject, *syncContext)
-								r.EqualError(err, "could not update pinnipeddiscoveryinfo: update failed")
+								r.EqualError(err, "could not update credentialissuerconfig: update failed")
 							})
 						})
 					})

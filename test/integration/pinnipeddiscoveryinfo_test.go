@@ -19,7 +19,7 @@ import (
 	"github.com/suzerain-io/pinniped/test/library"
 )
 
-func TestSuccessfulPinnipedDiscoveryInfo(t *testing.T) {
+func TestSuccessfulCredentialIssuerConfig(t *testing.T) {
 	library.SkipUnlessIntegration(t)
 	namespaceName := library.Getenv(t, "PINNIPED_NAMESPACE")
 
@@ -32,14 +32,14 @@ func TestSuccessfulPinnipedDiscoveryInfo(t *testing.T) {
 	expectedLDCSpec := expectedLDCSpec(config)
 	configList, err := client.
 		CrdV1alpha1().
-		PinnipedDiscoveryInfos(namespaceName).
+		CredentialIssuerConfigs(namespaceName).
 		List(ctx, metav1.ListOptions{})
 	require.NoError(t, err)
 	require.Len(t, configList.Items, 1)
 	require.Equal(t, expectedLDCSpec, &configList.Items[0].Spec)
 }
 
-func TestReconcilingPinnipedDiscoveryInfo(t *testing.T) {
+func TestReconcilingCredentialIssuerConfig(t *testing.T) {
 	library.SkipUnlessIntegration(t)
 	namespaceName := library.Getenv(t, "PINNIPED_NAMESPACE")
 
@@ -50,18 +50,18 @@ func TestReconcilingPinnipedDiscoveryInfo(t *testing.T) {
 
 	err := client.
 		CrdV1alpha1().
-		PinnipedDiscoveryInfos(namespaceName).
+		CredentialIssuerConfigs(namespaceName).
 		Delete(ctx, "pinniped-config", metav1.DeleteOptions{})
 	require.NoError(t, err)
 
 	config := library.NewClientConfig(t)
 	expectedLDCSpec := expectedLDCSpec(config)
 
-	var actualLDC *crdpinnipedv1alpha1.PinnipedDiscoveryInfo
+	var actualLDC *crdpinnipedv1alpha1.CredentialIssuerConfig
 	for i := 0; i < 10; i++ {
 		actualLDC, err = client.
 			CrdV1alpha1().
-			PinnipedDiscoveryInfos(namespaceName).
+			CredentialIssuerConfigs(namespaceName).
 			Get(ctx, "pinniped-config", metav1.GetOptions{})
 		if err == nil {
 			break
@@ -72,8 +72,8 @@ func TestReconcilingPinnipedDiscoveryInfo(t *testing.T) {
 	require.Equal(t, expectedLDCSpec, &actualLDC.Spec)
 }
 
-func expectedLDCSpec(config *rest.Config) *crdpinnipedv1alpha1.PinnipedDiscoveryInfoSpec {
-	return &crdpinnipedv1alpha1.PinnipedDiscoveryInfoSpec{
+func expectedLDCSpec(config *rest.Config) *crdpinnipedv1alpha1.CredentialIssuerConfigSpec {
+	return &crdpinnipedv1alpha1.CredentialIssuerConfigSpec{
 		Server:                   config.Host,
 		CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.TLSClientConfig.CAData),
 	}

@@ -19,9 +19,9 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1.PinnipedDiscoveryInfo":         schema_api_apis_crdpinniped_v1alpha1_PinnipedDiscoveryInfo(ref),
-		"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1.PinnipedDiscoveryInfoList":     schema_api_apis_crdpinniped_v1alpha1_PinnipedDiscoveryInfoList(ref),
-		"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1.PinnipedDiscoveryInfoSpec":     schema_api_apis_crdpinniped_v1alpha1_PinnipedDiscoveryInfoSpec(ref),
+		"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1.CredentialIssuerConfig":        schema_api_apis_crdpinniped_v1alpha1_CredentialIssuerConfig(ref),
+		"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1.CredentialIssuerConfigList":    schema_api_apis_crdpinniped_v1alpha1_CredentialIssuerConfigList(ref),
+		"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1.CredentialIssuerConfigSpec":    schema_api_apis_crdpinniped_v1alpha1_CredentialIssuerConfigSpec(ref),
 		"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1.CredentialRequest":                schema_api_apis_pinniped_v1alpha1_CredentialRequest(ref),
 		"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1.CredentialRequestCredential":      schema_api_apis_pinniped_v1alpha1_CredentialRequestCredential(ref),
 		"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1.CredentialRequestList":            schema_api_apis_pinniped_v1alpha1_CredentialRequestList(ref),
@@ -83,7 +83,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 	}
 }
 
-func schema_api_apis_crdpinniped_v1alpha1_PinnipedDiscoveryInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_api_apis_crdpinniped_v1alpha1_CredentialIssuerConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -110,7 +110,7 @@ func schema_api_apis_crdpinniped_v1alpha1_PinnipedDiscoveryInfo(ref common.Refer
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1.PinnipedDiscoveryInfoSpec"),
+							Ref: ref("github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1.CredentialIssuerConfigSpec"),
 						},
 					},
 				},
@@ -118,11 +118,11 @@ func schema_api_apis_crdpinniped_v1alpha1_PinnipedDiscoveryInfo(ref common.Refer
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1.PinnipedDiscoveryInfoSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1.CredentialIssuerConfigSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
-func schema_api_apis_crdpinniped_v1alpha1_PinnipedDiscoveryInfoList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_api_apis_crdpinniped_v1alpha1_CredentialIssuerConfigList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -153,7 +153,7 @@ func schema_api_apis_crdpinniped_v1alpha1_PinnipedDiscoveryInfoList(ref common.R
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1.PinnipedDiscoveryInfo"),
+										Ref: ref("github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1.CredentialIssuerConfig"),
 									},
 								},
 							},
@@ -164,11 +164,11 @@ func schema_api_apis_crdpinniped_v1alpha1_PinnipedDiscoveryInfoList(ref common.R
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1.PinnipedDiscoveryInfo", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1.CredentialIssuerConfig", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
 	}
 }
 
-func schema_api_apis_crdpinniped_v1alpha1_PinnipedDiscoveryInfoSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_api_apis_crdpinniped_v1alpha1_CredentialIssuerConfigSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{

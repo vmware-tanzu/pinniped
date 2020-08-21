@@ -14,75 +14,75 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// PinnipedDiscoveryInfoLister helps list PinnipedDiscoveryInfos.
+// CredentialIssuerConfigLister helps list CredentialIssuerConfigs.
 // All objects returned here must be treated as read-only.
-type PinnipedDiscoveryInfoLister interface {
-	// List lists all PinnipedDiscoveryInfos in the indexer.
+type CredentialIssuerConfigLister interface {
+	// List lists all CredentialIssuerConfigs in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.PinnipedDiscoveryInfo, err error)
-	// PinnipedDiscoveryInfos returns an object that can list and get PinnipedDiscoveryInfos.
-	PinnipedDiscoveryInfos(namespace string) PinnipedDiscoveryInfoNamespaceLister
-	PinnipedDiscoveryInfoListerExpansion
+	List(selector labels.Selector) (ret []*v1alpha1.CredentialIssuerConfig, err error)
+	// CredentialIssuerConfigs returns an object that can list and get CredentialIssuerConfigs.
+	CredentialIssuerConfigs(namespace string) CredentialIssuerConfigNamespaceLister
+	CredentialIssuerConfigListerExpansion
 }
 
-// pinnipedDiscoveryInfoLister implements the PinnipedDiscoveryInfoLister interface.
-type pinnipedDiscoveryInfoLister struct {
+// credentialIssuerConfigLister implements the CredentialIssuerConfigLister interface.
+type credentialIssuerConfigLister struct {
 	indexer cache.Indexer
 }
 
-// NewPinnipedDiscoveryInfoLister returns a new PinnipedDiscoveryInfoLister.
-func NewPinnipedDiscoveryInfoLister(indexer cache.Indexer) PinnipedDiscoveryInfoLister {
-	return &pinnipedDiscoveryInfoLister{indexer: indexer}
+// NewCredentialIssuerConfigLister returns a new CredentialIssuerConfigLister.
+func NewCredentialIssuerConfigLister(indexer cache.Indexer) CredentialIssuerConfigLister {
+	return &credentialIssuerConfigLister{indexer: indexer}
 }
 
-// List lists all PinnipedDiscoveryInfos in the indexer.
-func (s *pinnipedDiscoveryInfoLister) List(selector labels.Selector) (ret []*v1alpha1.PinnipedDiscoveryInfo, err error) {
+// List lists all CredentialIssuerConfigs in the indexer.
+func (s *credentialIssuerConfigLister) List(selector labels.Selector) (ret []*v1alpha1.CredentialIssuerConfig, err error) {
 	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.PinnipedDiscoveryInfo))
+		ret = append(ret, m.(*v1alpha1.CredentialIssuerConfig))
 	})
 	return ret, err
 }
 
-// PinnipedDiscoveryInfos returns an object that can list and get PinnipedDiscoveryInfos.
-func (s *pinnipedDiscoveryInfoLister) PinnipedDiscoveryInfos(namespace string) PinnipedDiscoveryInfoNamespaceLister {
-	return pinnipedDiscoveryInfoNamespaceLister{indexer: s.indexer, namespace: namespace}
+// CredentialIssuerConfigs returns an object that can list and get CredentialIssuerConfigs.
+func (s *credentialIssuerConfigLister) CredentialIssuerConfigs(namespace string) CredentialIssuerConfigNamespaceLister {
+	return credentialIssuerConfigNamespaceLister{indexer: s.indexer, namespace: namespace}
 }
 
-// PinnipedDiscoveryInfoNamespaceLister helps list and get PinnipedDiscoveryInfos.
+// CredentialIssuerConfigNamespaceLister helps list and get CredentialIssuerConfigs.
 // All objects returned here must be treated as read-only.
-type PinnipedDiscoveryInfoNamespaceLister interface {
-	// List lists all PinnipedDiscoveryInfos in the indexer for a given namespace.
+type CredentialIssuerConfigNamespaceLister interface {
+	// List lists all CredentialIssuerConfigs in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.PinnipedDiscoveryInfo, err error)
-	// Get retrieves the PinnipedDiscoveryInfo from the indexer for a given namespace and name.
+	List(selector labels.Selector) (ret []*v1alpha1.CredentialIssuerConfig, err error)
+	// Get retrieves the CredentialIssuerConfig from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.PinnipedDiscoveryInfo, error)
-	PinnipedDiscoveryInfoNamespaceListerExpansion
+	Get(name string) (*v1alpha1.CredentialIssuerConfig, error)
+	CredentialIssuerConfigNamespaceListerExpansion
 }
 
-// pinnipedDiscoveryInfoNamespaceLister implements the PinnipedDiscoveryInfoNamespaceLister
+// credentialIssuerConfigNamespaceLister implements the CredentialIssuerConfigNamespaceLister
 // interface.
-type pinnipedDiscoveryInfoNamespaceLister struct {
+type credentialIssuerConfigNamespaceLister struct {
 	indexer   cache.Indexer
 	namespace string
 }
 
-// List lists all PinnipedDiscoveryInfos in the indexer for a given namespace.
-func (s pinnipedDiscoveryInfoNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.PinnipedDiscoveryInfo, err error) {
+// List lists all CredentialIssuerConfigs in the indexer for a given namespace.
+func (s credentialIssuerConfigNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.CredentialIssuerConfig, err error) {
 	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.PinnipedDiscoveryInfo))
+		ret = append(ret, m.(*v1alpha1.CredentialIssuerConfig))
 	})
 	return ret, err
 }
 
-// Get retrieves the PinnipedDiscoveryInfo from the indexer for a given namespace and name.
-func (s pinnipedDiscoveryInfoNamespaceLister) Get(name string) (*v1alpha1.PinnipedDiscoveryInfo, error) {
+// Get retrieves the CredentialIssuerConfig from the indexer for a given namespace and name.
+func (s credentialIssuerConfigNamespaceLister) Get(name string) (*v1alpha1.CredentialIssuerConfig, error) {
 	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
 	if err != nil {
 		return nil, err
 	}
 	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("pinnipeddiscoveryinfo"), name)
+		return nil, errors.NewNotFound(v1alpha1.Resource("credentialissuerconfig"), name)
 	}
-	return obj.(*v1alpha1.PinnipedDiscoveryInfo), nil
+	return obj.(*v1alpha1.CredentialIssuerConfig), nil
 }

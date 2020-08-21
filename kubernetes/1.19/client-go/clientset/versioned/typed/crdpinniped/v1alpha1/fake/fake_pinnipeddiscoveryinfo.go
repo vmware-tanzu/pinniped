@@ -19,31 +19,31 @@ import (
 	testing "k8s.io/client-go/testing"
 )
 
-// FakePinnipedDiscoveryInfos implements PinnipedDiscoveryInfoInterface
-type FakePinnipedDiscoveryInfos struct {
+// FakeCredentialIssuerConfigs implements CredentialIssuerConfigInterface
+type FakeCredentialIssuerConfigs struct {
 	Fake *FakeCrdV1alpha1
 	ns   string
 }
 
-var pinnipeddiscoveryinfosResource = schema.GroupVersionResource{Group: "crd.pinniped.dev", Version: "v1alpha1", Resource: "pinnipeddiscoveryinfos"}
+var credentialissuerconfigsResource = schema.GroupVersionResource{Group: "crd.pinniped.dev", Version: "v1alpha1", Resource: "credentialissuerconfigs"}
 
-var pinnipeddiscoveryinfosKind = schema.GroupVersionKind{Group: "crd.pinniped.dev", Version: "v1alpha1", Kind: "PinnipedDiscoveryInfo"}
+var credentialissuerconfigsKind = schema.GroupVersionKind{Group: "crd.pinniped.dev", Version: "v1alpha1", Kind: "CredentialIssuerConfig"}
 
-// Get takes name of the pinnipedDiscoveryInfo, and returns the corresponding pinnipedDiscoveryInfo object, and an error if there is any.
-func (c *FakePinnipedDiscoveryInfos) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.PinnipedDiscoveryInfo, err error) {
+// Get takes name of the credentialIssuerConfig, and returns the corresponding credentialIssuerConfig object, and an error if there is any.
+func (c *FakeCredentialIssuerConfigs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.CredentialIssuerConfig, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(pinnipeddiscoveryinfosResource, c.ns, name), &v1alpha1.PinnipedDiscoveryInfo{})
+		Invokes(testing.NewGetAction(credentialissuerconfigsResource, c.ns, name), &v1alpha1.CredentialIssuerConfig{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.PinnipedDiscoveryInfo), err
+	return obj.(*v1alpha1.CredentialIssuerConfig), err
 }
 
-// List takes label and field selectors, and returns the list of PinnipedDiscoveryInfos that match those selectors.
-func (c *FakePinnipedDiscoveryInfos) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.PinnipedDiscoveryInfoList, err error) {
+// List takes label and field selectors, and returns the list of CredentialIssuerConfigs that match those selectors.
+func (c *FakeCredentialIssuerConfigs) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.CredentialIssuerConfigList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(pinnipeddiscoveryinfosResource, pinnipeddiscoveryinfosKind, c.ns, opts), &v1alpha1.PinnipedDiscoveryInfoList{})
+		Invokes(testing.NewListAction(credentialissuerconfigsResource, credentialissuerconfigsKind, c.ns, opts), &v1alpha1.CredentialIssuerConfigList{})
 
 	if obj == nil {
 		return nil, err
@@ -53,8 +53,8 @@ func (c *FakePinnipedDiscoveryInfos) List(ctx context.Context, opts v1.ListOptio
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &v1alpha1.PinnipedDiscoveryInfoList{ListMeta: obj.(*v1alpha1.PinnipedDiscoveryInfoList).ListMeta}
-	for _, item := range obj.(*v1alpha1.PinnipedDiscoveryInfoList).Items {
+	list := &v1alpha1.CredentialIssuerConfigList{ListMeta: obj.(*v1alpha1.CredentialIssuerConfigList).ListMeta}
+	for _, item := range obj.(*v1alpha1.CredentialIssuerConfigList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)
 		}
@@ -62,58 +62,58 @@ func (c *FakePinnipedDiscoveryInfos) List(ctx context.Context, opts v1.ListOptio
 	return list, err
 }
 
-// Watch returns a watch.Interface that watches the requested pinnipedDiscoveryInfos.
-func (c *FakePinnipedDiscoveryInfos) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
+// Watch returns a watch.Interface that watches the requested credentialIssuerConfigs.
+func (c *FakeCredentialIssuerConfigs) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(pinnipeddiscoveryinfosResource, c.ns, opts))
+		InvokesWatch(testing.NewWatchAction(credentialissuerconfigsResource, c.ns, opts))
 
 }
 
-// Create takes the representation of a pinnipedDiscoveryInfo and creates it.  Returns the server's representation of the pinnipedDiscoveryInfo, and an error, if there is any.
-func (c *FakePinnipedDiscoveryInfos) Create(ctx context.Context, pinnipedDiscoveryInfo *v1alpha1.PinnipedDiscoveryInfo, opts v1.CreateOptions) (result *v1alpha1.PinnipedDiscoveryInfo, err error) {
+// Create takes the representation of a credentialIssuerConfig and creates it.  Returns the server's representation of the credentialIssuerConfig, and an error, if there is any.
+func (c *FakeCredentialIssuerConfigs) Create(ctx context.Context, credentialIssuerConfig *v1alpha1.CredentialIssuerConfig, opts v1.CreateOptions) (result *v1alpha1.CredentialIssuerConfig, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(pinnipeddiscoveryinfosResource, c.ns, pinnipedDiscoveryInfo), &v1alpha1.PinnipedDiscoveryInfo{})
+		Invokes(testing.NewCreateAction(credentialissuerconfigsResource, c.ns, credentialIssuerConfig), &v1alpha1.CredentialIssuerConfig{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.PinnipedDiscoveryInfo), err
+	return obj.(*v1alpha1.CredentialIssuerConfig), err
 }
 
-// Update takes the representation of a pinnipedDiscoveryInfo and updates it. Returns the server's representation of the pinnipedDiscoveryInfo, and an error, if there is any.
-func (c *FakePinnipedDiscoveryInfos) Update(ctx context.Context, pinnipedDiscoveryInfo *v1alpha1.PinnipedDiscoveryInfo, opts v1.UpdateOptions) (result *v1alpha1.PinnipedDiscoveryInfo, err error) {
+// Update takes the representation of a credentialIssuerConfig and updates it. Returns the server's representation of the credentialIssuerConfig, and an error, if there is any.
+func (c *FakeCredentialIssuerConfigs) Update(ctx context.Context, credentialIssuerConfig *v1alpha1.CredentialIssuerConfig, opts v1.UpdateOptions) (result *v1alpha1.CredentialIssuerConfig, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(pinnipeddiscoveryinfosResource, c.ns, pinnipedDiscoveryInfo), &v1alpha1.PinnipedDiscoveryInfo{})
+		Invokes(testing.NewUpdateAction(credentialissuerconfigsResource, c.ns, credentialIssuerConfig), &v1alpha1.CredentialIssuerConfig{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.PinnipedDiscoveryInfo), err
+	return obj.(*v1alpha1.CredentialIssuerConfig), err
 }
 
-// Delete takes name of the pinnipedDiscoveryInfo and deletes it. Returns an error if one occurs.
-func (c *FakePinnipedDiscoveryInfos) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
+// Delete takes name of the credentialIssuerConfig and deletes it. Returns an error if one occurs.
+func (c *FakeCredentialIssuerConfigs) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(pinnipeddiscoveryinfosResource, c.ns, name), &v1alpha1.PinnipedDiscoveryInfo{})
+		Invokes(testing.NewDeleteAction(credentialissuerconfigsResource, c.ns, name), &v1alpha1.CredentialIssuerConfig{})
 
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakePinnipedDiscoveryInfos) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(pinnipeddiscoveryinfosResource, c.ns, listOpts)
+func (c *FakeCredentialIssuerConfigs) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewDeleteCollectionAction(credentialissuerconfigsResource, c.ns, listOpts)
 
-	_, err := c.Fake.Invokes(action, &v1alpha1.PinnipedDiscoveryInfoList{})
+	_, err := c.Fake.Invokes(action, &v1alpha1.CredentialIssuerConfigList{})
 	return err
 }
 
-// Patch applies the patch and returns the patched pinnipedDiscoveryInfo.
-func (c *FakePinnipedDiscoveryInfos) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.PinnipedDiscoveryInfo, err error) {
+// Patch applies the patch and returns the patched credentialIssuerConfig.
+func (c *FakeCredentialIssuerConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.CredentialIssuerConfig, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(pinnipeddiscoveryinfosResource, c.ns, name, pt, data, subresources...), &v1alpha1.PinnipedDiscoveryInfo{})
+		Invokes(testing.NewPatchSubresourceAction(credentialissuerconfigsResource, c.ns, name, pt, data, subresources...), &v1alpha1.CredentialIssuerConfig{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*v1alpha1.PinnipedDiscoveryInfo), err
+	return obj.(*v1alpha1.CredentialIssuerConfig), err
 }

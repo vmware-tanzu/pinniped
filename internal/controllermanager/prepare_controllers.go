@@ -18,7 +18,7 @@ import (
 
 	"github.com/suzerain-io/controller-go"
 	"github.com/suzerain-io/pinniped/internal/controller/apicerts"
-	"github.com/suzerain-io/pinniped/internal/controller/discovery"
+	"github.com/suzerain-io/pinniped/internal/controller/issuerconfig"
 	"github.com/suzerain-io/pinniped/internal/provider"
 	pinnipedclientset "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned"
 	pinnipedinformers "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/informers/externalversions"
@@ -51,12 +51,12 @@ func PrepareControllers(
 	controllerManager := controller.
 		NewManager().
 		WithController(
-			discovery.NewPublisherController(
+			issuerconfig.NewPublisherController(
 				serverInstallationNamespace,
 				discoveryURLOverride,
 				pinnipedClient,
 				kubePublicNamespaceK8sInformers.Core().V1().ConfigMaps(),
-				installationNamespacePinnipedInformers.Crd().V1alpha1().PinnipedDiscoveryInfos(),
+				installationNamespacePinnipedInformers.Crd().V1alpha1().CredentialIssuerConfigs(),
 				controller.WithInformer,
 			),
 			singletonWorker,
@@ -156,7 +156,7 @@ func createInformers(
 	kubePublicNamespaceK8sInformers = k8sinformers.NewSharedInformerFactoryWithOptions(
 		k8sClient,
 		defaultResyncInterval,
-		k8sinformers.WithNamespace(discovery.ClusterInfoNamespace),
+		k8sinformers.WithNamespace(issuerconfig.ClusterInfoNamespace),
 	)
 	installationNamespaceK8sInformers = k8sinformers.NewSharedInformerFactoryWithOptions(
 		k8sClient,

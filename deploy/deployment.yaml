@@ -130,6 +130,17 @@ spec:
       #! "system-cluster-critical" cannot be used outside the kube-system namespace until Kubernetes >= 1.17,
       #! so we skip setting this for now (see https://github.com/kubernetes/kubernetes/issues/60596).
       #!priorityClassName: system-cluster-critical
+      #! This will help make sure our multiple pods run on different nodes, making
+      #! our deployment "more" "HA".
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: #@ data.values.app_name
+                topologyKey: kubernetes.io/hostname
 ---
 apiVersion: v1
 kind: Service

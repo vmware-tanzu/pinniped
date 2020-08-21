@@ -12,6 +12,10 @@ CODEGEN_IMAGE=${CODEGEN_IMAGE:-"gcr.io/tanzu-user-authentication/k8s-code-genera
 
 BASE_PKG="github.com/suzerain-io/pinniped"
 
+# This script assumes that your current working directory is the top of the module
+# in which you would like to generate code.
+MOD_DIR=$(pwd)
+
 function codegen::ensure_module_in_gopath() {
   # This should be something like "kubernetes/1.19/api".
   local pkg_name="$(realpath "--relative-to=$ROOT" "$MOD_DIR")"
@@ -49,6 +53,7 @@ function codegen::generate_for_module() {
 
   case "${mod_basename_for_version}" in
   1.19/api)
+    echo "GENERATING CODE for $mod_basename_for_version"
     codegen::invoke_code_generator generate-groups "${mod_basename_for_version}" \
       deepcopy,defaulter \
       "${BASE_PKG}/kubernetes/1.19/api/generated" \
@@ -62,12 +67,15 @@ function codegen::generate_for_module() {
       "pinniped:v1alpha1 crdpinniped:v1alpha1"
     ;;
   1.19/client-go)
+    echo "GENERATING CODE for $mod_basename_for_version"
     codegen::invoke_code_generator generate-groups "${mod_basename_for_version}" \
       client,lister,informer \
       "${BASE_PKG}/kubernetes/1.19/client-go" \
       "${BASE_PKG}/kubernetes/1.19/api/apis" \
       "pinniped:v1alpha1 crdpinniped:v1alpha1"
     ;;
+  *)
+    echo "Skipping $mod_basename_for_version because it does not contain any code to generate"
   esac
 }
 

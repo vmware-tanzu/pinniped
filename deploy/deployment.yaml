@@ -47,7 +47,6 @@ data:
   .dockerconfigjson: #@ data.values.image_pull_dockerconfigjson
 #@ end
 ---
-#! TODO set up healthy, ready, etc. probes correctly?
 #! TODO set resource minimums (e.g. 512MB RAM) to make sure we get scheduled onto a reasonable node?
 apiVersion: apps/v1
 kind: Deployment

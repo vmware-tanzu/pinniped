@@ -190,9 +190,12 @@ func TestSync(t *testing.T) {
 					Name:      "pinniped-config",
 					Namespace: expectedNamespace,
 				},
-				Spec: crdpinnipedv1alpha1.CredentialIssuerConfigSpec{
-					Server:                   expectedServerURL,
-					CertificateAuthorityData: expectedCAData,
+				Status: crdpinnipedv1alpha1.CredentialIssuerConfigStatus{
+					Strategies: []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{},
+					KubeConfigInfo: &crdpinnipedv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+						Server:                   expectedServerURL,
+						CertificateAuthorityData: expectedCAData,
+					},
 				},
 			}
 			return expectedCredentialIssuerConfigGVR, expectedCredentialIssuerConfig
@@ -324,7 +327,7 @@ func TestSync(t *testing.T) {
 								kubeServerURL,
 								caData,
 							)
-							expectedCredentialIssuerConfig.Spec.Server = "https://some-server-override"
+							expectedCredentialIssuerConfig.Status.KubeConfigInfo.Server = "https://some-server-override"
 
 							r.Equal(
 								[]coretesting.Action{
@@ -368,7 +371,7 @@ func TestSync(t *testing.T) {
 								kubeServerURL,
 								caData,
 							)
-							expectedCredentialIssuerConfig.Spec.Server = "https://some-other-server"
+							expectedCredentialIssuerConfig.Status.KubeConfigInfo.Server = "https://some-other-server"
 							r.NoError(pinnipedInformerClient.Tracker().Add(expectedCredentialIssuerConfig))
 							r.NoError(pinnipedAPIClient.Tracker().Add(expectedCredentialIssuerConfig))
 						})

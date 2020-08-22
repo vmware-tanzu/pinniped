@@ -91,6 +91,18 @@ func (c *FakeCredentialIssuerConfigs) Update(ctx context.Context, credentialIssu
 	return obj.(*v1alpha1.CredentialIssuerConfig), err
 }
 
+// UpdateStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+func (c *FakeCredentialIssuerConfigs) UpdateStatus(ctx context.Context, credentialIssuerConfig *v1alpha1.CredentialIssuerConfig, opts v1.UpdateOptions) (*v1alpha1.CredentialIssuerConfig, error) {
+	obj, err := c.Fake.
+		Invokes(testing.NewUpdateSubresourceAction(credentialissuerconfigsResource, "status", c.ns, credentialIssuerConfig), &v1alpha1.CredentialIssuerConfig{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha1.CredentialIssuerConfig), err
+}
+
 // Delete takes name of the credentialIssuerConfig and deletes it. Returns an error if one occurs.
 func (c *FakeCredentialIssuerConfigs) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.

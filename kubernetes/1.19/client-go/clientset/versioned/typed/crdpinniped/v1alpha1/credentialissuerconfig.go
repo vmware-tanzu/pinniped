@@ -29,6 +29,7 @@ type CredentialIssuerConfigsGetter interface {
 type CredentialIssuerConfigInterface interface {
 	Create(ctx context.Context, credentialIssuerConfig *v1alpha1.CredentialIssuerConfig, opts v1.CreateOptions) (*v1alpha1.CredentialIssuerConfig, error)
 	Update(ctx context.Context, credentialIssuerConfig *v1alpha1.CredentialIssuerConfig, opts v1.UpdateOptions) (*v1alpha1.CredentialIssuerConfig, error)
+	UpdateStatus(ctx context.Context, credentialIssuerConfig *v1alpha1.CredentialIssuerConfig, opts v1.UpdateOptions) (*v1alpha1.CredentialIssuerConfig, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
 	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.CredentialIssuerConfig, error)
@@ -117,6 +118,22 @@ func (c *credentialIssuerConfigs) Update(ctx context.Context, credentialIssuerCo
 		Namespace(c.ns).
 		Resource("credentialissuerconfigs").
 		Name(credentialIssuerConfig.Name).
+		VersionedParams(&opts, scheme.ParameterCodec).
+		Body(credentialIssuerConfig).
+		Do(ctx).
+		Into(result)
+	return
+}
+
+// UpdateStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+func (c *credentialIssuerConfigs) UpdateStatus(ctx context.Context, credentialIssuerConfig *v1alpha1.CredentialIssuerConfig, opts v1.UpdateOptions) (result *v1alpha1.CredentialIssuerConfig, err error) {
+	result = &v1alpha1.CredentialIssuerConfig{}
+	err = c.client.Put().
+		Namespace(c.ns).
+		Resource("credentialissuerconfigs").
+		Name(credentialIssuerConfig.Name).
+		SubResource("status").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(credentialIssuerConfig).
 		Do(ctx).

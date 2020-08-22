@@ -29,14 +29,14 @@ func TestSuccessfulCredentialIssuerConfig(t *testing.T) {
 	defer cancel()
 
 	config := library.NewClientConfig(t)
-	expectedLDCSpec := expectedLDCSpec(config)
+	expectedLDCStatus := expectedLDCStatus(config)
 	configList, err := client.
 		CrdV1alpha1().
 		CredentialIssuerConfigs(namespaceName).
 		List(ctx, metav1.ListOptions{})
 	require.NoError(t, err)
 	require.Len(t, configList.Items, 1)
-	require.Equal(t, expectedLDCSpec, &configList.Items[0].Spec)
+	require.Equal(t, expectedLDCStatus, &configList.Items[0].Status)
 }
 
 func TestReconcilingCredentialIssuerConfig(t *testing.T) {
@@ -55,7 +55,7 @@ func TestReconcilingCredentialIssuerConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	config := library.NewClientConfig(t)
-	expectedLDCSpec := expectedLDCSpec(config)
+	expectedLDCStatus := expectedLDCStatus(config)
 
 	var actualLDC *crdpinnipedv1alpha1.CredentialIssuerConfig
 	for i := 0; i < 10; i++ {
@@ -69,12 +69,15 @@ func TestReconcilingCredentialIssuerConfig(t *testing.T) {
 		time.Sleep(time.Millisecond * 750)
 	}
 	require.NoError(t, err)
-	require.Equal(t, expectedLDCSpec, &actualLDC.Spec)
+	require.Equal(t, expectedLDCStatus, &actualLDC.Status)
 }
 
-func expectedLDCSpec(config *rest.Config) *crdpinnipedv1alpha1.CredentialIssuerConfigSpec {
-	return &crdpinnipedv1alpha1.CredentialIssuerConfigSpec{
-		Server:                   config.Host,
-		CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.TLSClientConfig.CAData),
+func expectedLDCStatus(config *rest.Config) *crdpinnipedv1alpha1.CredentialIssuerConfigStatus {
+	return &crdpinnipedv1alpha1.CredentialIssuerConfigStatus{
+		Strategies: []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{},
+		KubeConfigInfo: &crdpinnipedv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+			Server:                   config.Host,
+			CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.TLSClientConfig.CAData),
+		},
 	}
 }

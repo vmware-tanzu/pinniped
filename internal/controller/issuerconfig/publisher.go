@@ -115,9 +115,12 @@ func (c *publisherController) Sync(ctx controller.Context) error {
 			Name:      configName,
 			Namespace: c.namespace,
 		},
-		Spec: crdpinnipedv1alpha1.CredentialIssuerConfigSpec{
-			Server:                   server,
-			CertificateAuthorityData: certificateAuthorityData,
+		Status: crdpinnipedv1alpha1.CredentialIssuerConfigStatus{
+			Strategies: []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{},
+			KubeConfigInfo: &crdpinnipedv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+				Server:                   server,
+				CertificateAuthorityData: certificateAuthorityData,
+			},
 		},
 	}
 	if err := c.createOrUpdateCredentialIssuerConfig(ctx.Context, &credentialIssuerConfig); err != nil {
@@ -129,34 +132,34 @@ func (c *publisherController) Sync(ctx controller.Context) error {
 
 func (c *publisherController) createOrUpdateCredentialIssuerConfig(
 	ctx context.Context,
-	credentialIssuerConfig *crdpinnipedv1alpha1.CredentialIssuerConfig,
+	newCredentialIssuerConfig *crdpinnipedv1alpha1.CredentialIssuerConfig,
 ) error {
 	existingCredentialIssuerConfig, err := c.credentialIssuerConfigInformer.
 		Lister().
 		CredentialIssuerConfigs(c.namespace).
-		Get(credentialIssuerConfig.Name)
+		Get(newCredentialIssuerConfig.Name)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return fmt.Errorf("could not get credentialissuerconfig: %w", err)
 	}
 
-	credentialIssuerConfigs := c.pinnipedClient.
-		CrdV1alpha1().
-		CredentialIssuerConfigs(c.namespace)
+	credentialIssuerConfigsClient := c.pinnipedClient.CrdV1alpha1().CredentialIssuerConfigs(c.namespace)
 	if notFound {
-		if _, err := credentialIssuerConfigs.Create(
+		if _, err := credentialIssuerConfigsClient.Create(
 			ctx,
-			credentialIssuerConfig,
+			newCredentialIssuerConfig,
 			metav1.CreateOptions{},
 		); err != nil {
 			return fmt.Errorf("could not create credentialissuerconfig: %w", err)
 		}
-	} else if !equal(existingCredentialIssuerConfig, credentialIssuerConfig) {
+	} else if !equal(existingCredentialIssuerConfig, newCredentialIssuerConfig) {
 		// Update just the fields we care about.
-		existingCredentialIssuerConfig.Spec.Server = credentialIssuerConfig.Spec.Server
-		existingCredentialIssuerConfig.Spec.CertificateAuthorityData = credentialIssuerConfig.Spec.CertificateAuthorityData
+		newServer := newCredentialIssuerConfig.Status.KubeConfigInfo.Server
+		newCA := newCredentialIssuerConfig.Status.KubeConfigInfo.CertificateAuthorityData
+		existingCredentialIssuerConfig.Status.KubeConfigInfo.Server = newServer
+		existingCredentialIssuerConfig.Status.KubeConfigInfo.CertificateAuthorityData = newCA
 
-		if _, err := credentialIssuerConfigs.Update(
+		if _, err := credentialIssuerConfigsClient.Update(
 			ctx,
 			existingCredentialIssuerConfig,
 			metav1.UpdateOptions{},
@@ -169,6 +172,6 @@ func (c *publisherController) createOrUpdateCredentialIssuerConfig(
 }
 
 func equal(a, b *crdpinnipedv1alpha1.CredentialIssuerConfig) bool {
-	return a.Spec.Server == b.Spec.Server &&
-		a.Spec.CertificateAuthorityData == b.Spec.CertificateAuthorityData
+	return a.Status.KubeConfigInfo.Server == b.Status.KubeConfigInfo.Server &&
+		a.Status.KubeConfigInfo.CertificateAuthorityData == b.Status.KubeConfigInfo.CertificateAuthorityData
 }

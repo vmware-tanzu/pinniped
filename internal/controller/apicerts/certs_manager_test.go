@@ -224,7 +224,7 @@ func TestManagerControllerSync(t *testing.T) {
 					// Validate the created cert using the CA, and also validate the cert's hostname
 					validCert := testutil.ValidateCertificate(t, actualCACert, actualCertChain)
 					validCert.RequireDNSName("pinniped-api." + installedInNamespace + ".svc")
-					validCert.RequireLifetime(time.Now(), time.Now().Add(certDuration), 2*time.Minute)
+					validCert.RequireLifetime(time.Now(), time.Now().Add(certDuration), 6*time.Minute)
 					validCert.RequireMatchesPrivateKey(actualPrivateKey)
 
 					// Make sure we updated the APIService caBundle and left it otherwise unchanged

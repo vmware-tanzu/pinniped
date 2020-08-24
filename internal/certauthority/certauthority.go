@@ -22,6 +22,14 @@ import (
 	"time"
 )
 
+// certBackdate is the amount of time before time.Now() that will be used to set
+// a certificate's NotBefore field.
+//
+// This could certainly be made configurable by an installer of pinniped, but we
+// will see if we can save adding a configuration knob with a reasonable default
+// here.
+const certBackdate = 5 * time.Minute
+
 type env struct {
 	// secure random number generators for various steps (usually crypto/rand.Reader, but broken out here for tests).
 	serialRNG  io.Reader
@@ -96,9 +104,9 @@ func newInternal(subject pkix.Name, env env) (*CA, error) {
 	}
 	ca.signer = privateKey
 
-	// Make a CA certificate valid for 100 years and backdated by one minute.
+	// Make a CA certificate valid for 100 years and backdated by some amount.
 	now := env.clock()
-	notBefore := now.Add(-1 * time.Minute)
+	notBefore := now.Add(-certBackdate)
 	notAfter := now.Add(24 * time.Hour * 365 * 100)
 
 	// Create CA cert template
@@ -141,9 +149,9 @@ func (c *CA) Issue(subject pkix.Name, dnsNames []string, ttl time.Duration) (*tl
 		return nil, fmt.Errorf("could not generate private key: %w", err)
 	}
 
-	// Make a CA caCert valid for the requested TTL and backdated by one minute.
+	// Make a CA caCert valid for the requested TTL and backdated by some amount.
 	now := c.env.clock()
-	notBefore := now.Add(-1 * time.Minute)
+	notBefore := now.Add(-certBackdate)
 	notAfter := now.Add(ttl)
 
 	// Parse the DER encoded certificate to get an x509.Certificate.

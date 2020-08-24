@@ -5,5 +5,5 @@
 set -euo pipefail
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
+xargs "$ROOT/hack/lib/verify-codegen.sh" < "${ROOT}/hack/lib/kube-versions.txt"
 "$ROOT/hack/module.sh" lint
-"$ROOT/hack/module.sh" codegen_verify

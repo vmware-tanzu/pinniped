@@ -35,7 +35,7 @@ func NewClientset(t *testing.T) kubernetes.Interface {
 func NewClientsetWithCertAndKey(t *testing.T, clientCertificateData, clientKeyData string) kubernetes.Interface {
 	t.Helper()
 
-	return newClientsetWithConfig(t, newClientConfigWithCertAndKey(t, clientCertificateData, clientKeyData))
+	return newClientsetWithConfig(t, newAnonymousClientRestConfigWithCertAndKeyAdded(t, clientCertificateData, clientKeyData))
 }
 
 func NewPinnipedClientset(t *testing.T) pinnipedclientset.Interface {
@@ -47,7 +47,7 @@ func NewPinnipedClientset(t *testing.T) pinnipedclientset.Interface {
 func NewAnonymousPinnipedClientset(t *testing.T) pinnipedclientset.Interface {
 	t.Helper()
 
-	return pinnipedclientset.NewForConfigOrDie(newAnonymousClientConfig(t))
+	return pinnipedclientset.NewForConfigOrDie(newAnonymousClientRestConfig(t))
 }
 
 func NewAggregatedClientset(t *testing.T) aggregatorclient.Interface {
@@ -78,7 +78,7 @@ func newClientsetWithConfig(t *testing.T, config *rest.Config) kubernetes.Interf
 // Ensures that we are not accidentally picking up any authentication info from the kube config file.
 // E.g. If your kube config were pointing at an Azure cluster, it would have both certs and a token,
 // and we don't want our tests to accidentally pick up that token.
-func newAnonymousClientConfig(t *testing.T) *rest.Config {
+func newAnonymousClientRestConfig(t *testing.T) *rest.Config {
 	t.Helper()
 
 	realConfig := NewClientConfig(t)
@@ -110,38 +110,11 @@ func newAnonymousClientConfig(t *testing.T) *rest.Config {
 }
 
 // Starting with an anonymous client config, add a cert and key to use for authentication in the API server.
-func newClientConfigWithCertAndKey(t *testing.T, clientCertificateData, clientKeyData string) *rest.Config {
+func newAnonymousClientRestConfigWithCertAndKeyAdded(t *testing.T, clientCertificateData, clientKeyData string) *rest.Config {
 	t.Helper()
 
-	realConfig := NewClientConfig(t)
-
-	out, err := ioutil.TempFile("", "pinniped-cert-and-key-kubeconfig-test-*")
-	require.NoError(t, err)
-	defer os.Remove(out.Name())
-
-	certAndKeyConfig := clientcmdapi.NewConfig()
-	certAndKeyConfig.Clusters["cert-and-key-cluster"] = &clientcmdapi.Cluster{
-		Server:                   realConfig.Host,
-		CertificateAuthorityData: realConfig.CAData,
-	}
-	certAndKeyConfig.AuthInfos["cert-and-key-auth-info"] = &clientcmdapi.AuthInfo{
-		ClientCertificateData: []byte(clientCertificateData),
-		ClientKeyData:         []byte(clientKeyData),
-	}
-	certAndKeyConfig.Contexts["cert-and-key"] = &clientcmdapi.Context{
-		Cluster:  "cert-and-key-cluster",
-		AuthInfo: "cert-and-key-auth-info",
-	}
-	certAndKeyConfig.CurrentContext = "cert-and-key"
-
-	data, err := clientcmd.Write(*certAndKeyConfig)
-	require.NoError(t, err)
-
-	_, err = out.Write(data)
-	require.NoError(t, err)
-
-	restConfig, err := clientcmd.BuildConfigFromFlags("", out.Name())
-	require.NoError(t, err)
-
-	return restConfig
+	config := newAnonymousClientRestConfig(t)
+	config.CertData = []byte(clientCertificateData)
+	config.KeyData = []byte(clientKeyData)
+	return config
 }

@@ -13,16 +13,6 @@ updates:
       interval: "daily"
 
   - package-ecosystem: "gomod"
-    directory: "/kubernetes/1.19/client-go/"
-    schedule:
-      interval: "daily"
-
-  - package-ecosystem: "gomod"
-    directory: "/kubernetes/1.19/api/"
-    schedule:
-      interval: "daily"
-
-  - package-ecosystem: "gomod"
     directory: "/pkg/client"
     schedule:
       interval: "daily"

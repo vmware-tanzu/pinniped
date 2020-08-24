@@ -18,10 +18,10 @@ if [[ -z "${CONTAINED:-}" ]]; then
         echo "generating code for ${kubeVersion} using ${CODEGEN_IMAGE}..."
         docker run --rm \
             --env CONTAINED=1 \
-            --volume "${ROOT}:/go/src/${BASE_PKG}" \
-            --workdir "/go/src/${BASE_PKG}" \
+            --volume "${ROOT}:/work" \
+            --workdir "/work" \
             "${CODEGEN_IMAGE}" \
-            "/go/src/${BASE_PKG}/hack/lib/$(basename "${BASH_SOURCE[0]}")" \
+            "/work/hack/lib/$(basename "${BASH_SOURCE[0]}")" \
             "${kubeVersion}" \
             | sed "s|^|${kubeVersion} > |"
     done
@@ -34,6 +34,13 @@ if [[ "${#KUBE_VERSIONS[@]}" -ne 1 ]]; then
     echo "when running in a container, we can only generate for a single kubernetes version" >&2
     exit 1
 fi
+
+# Link the root directory into GOPATH since that is where output ends up.
+GOPATH_ROOT="${GOPATH}/src/${BASE_PKG}"
+mkdir -p "$(dirname "${GOPATH_ROOT}")"
+ln -s "${ROOT}" "${GOPATH_ROOT}"
+ROOT="${GOPATH_ROOT}"
+cd "${ROOT}"
 
 # KUBE_VERSION is the full version (e.g., '1.19.0-rc.0').
 KUBE_VERSION="${KUBE_VERSIONS[0]}"

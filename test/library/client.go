@@ -17,7 +17,7 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	pinnipedclientset "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned"
+	pinnipedclientset "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned"
 )
 
 func NewClientConfig(t *testing.T) *rest.Config {

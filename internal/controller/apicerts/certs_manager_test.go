@@ -25,8 +25,8 @@ import (
 	aggregatorfake "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 
 	"github.com/suzerain-io/controller-go"
+	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1"
 	"github.com/suzerain-io/pinniped/internal/testutil"
-	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1"
 )
 
 func TestManagerControllerOptions(t *testing.T) {

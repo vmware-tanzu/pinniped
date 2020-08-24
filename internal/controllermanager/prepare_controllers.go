@@ -17,11 +17,11 @@ import (
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	"github.com/suzerain-io/controller-go"
+	pinnipedclientset "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned"
+	pinnipedinformers "github.com/suzerain-io/pinniped/generated/1.19/client/informers/externalversions"
 	"github.com/suzerain-io/pinniped/internal/controller/apicerts"
 	"github.com/suzerain-io/pinniped/internal/controller/discovery"
 	"github.com/suzerain-io/pinniped/internal/provider"
-	pinnipedclientset "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned"
-	pinnipedinformers "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/informers/externalversions"
 )
 
 const (

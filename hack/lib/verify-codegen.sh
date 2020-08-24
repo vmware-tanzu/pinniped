@@ -30,7 +30,7 @@ for kubeVersion in "${KUBE_VERSIONS[@]}"; do
     kubeMinorVersion="$(echo "${kubeVersion}" | cut -d"." -f1-2)"
     generatedVersionDir="${GENERATED_DIR}/${kubeMinorVersion}"
     backupVersionDir="${BACKUP_DIR}/${kubeMinorVersion}"
-    diff -Naupr "${generatedVersionDir}" "${backupVersionDir}" || ret=$?
+    diff -Naupr "${backupVersionDir}" "${generatedVersionDir}" || ret=$?
 done
 
 # If any of the versions differed, exit nonzero with an error message.

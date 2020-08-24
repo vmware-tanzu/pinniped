@@ -20,9 +20,9 @@ import (
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/klog/v2"
 
+	pinnipedapi "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped"
+	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1"
 	"github.com/suzerain-io/pinniped/internal/registry/credentialrequest"
-	pinnipedapi "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped"
-	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1"
 )
 
 var (

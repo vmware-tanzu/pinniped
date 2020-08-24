@@ -22,7 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1"
+	"github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1"
 	"github.com/suzerain-io/pinniped/test/library"
 )
 

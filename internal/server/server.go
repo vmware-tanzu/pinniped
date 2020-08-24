@@ -19,13 +19,13 @@ import (
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 
+	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1"
 	"github.com/suzerain-io/pinniped/internal/apiserver"
 	"github.com/suzerain-io/pinniped/internal/certauthority/kubecertauthority"
 	"github.com/suzerain-io/pinniped/internal/controllermanager"
 	"github.com/suzerain-io/pinniped/internal/downward"
 	"github.com/suzerain-io/pinniped/internal/provider"
 	"github.com/suzerain-io/pinniped/internal/registry/credentialrequest"
-	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1"
 	"github.com/suzerain-io/pinniped/pkg/config"
 )
 

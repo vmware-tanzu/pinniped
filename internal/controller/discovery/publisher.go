@@ -17,10 +17,10 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/suzerain-io/controller-go"
+	crdpinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
+	pinnipedclientset "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned"
+	crdpinnipedv1alpha1informers "github.com/suzerain-io/pinniped/generated/1.19/client/informers/externalversions/crdpinniped/v1alpha1"
 	pinnipedcontroller "github.com/suzerain-io/pinniped/internal/controller"
-	crdpinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1"
-	pinnipedclientset "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned"
-	crdpinnipedv1alpha1informers "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/informers/externalversions/crdpinniped/v1alpha1"
 )
 
 const (

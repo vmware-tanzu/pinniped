@@ -13,11 +13,10 @@ import (
 	"os"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
+	"github.com/suzerain-io/pinniped/internal/client"
 	"github.com/suzerain-io/pinniped/internal/constable"
-	"github.com/suzerain-io/pinniped/pkg/client"
 )
 
 func main() {
@@ -29,7 +28,7 @@ func main() {
 }
 
 type envGetter func(string) (string, bool)
-type tokenExchanger func(ctx context.Context, token, caBundle, apiEndpoint string) (*client.Credential, error)
+type tokenExchanger func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error)
 
 const ErrMissingEnvVar = constable.Error("failed to get credential: environment variable not set")
 
@@ -57,24 +56,7 @@ func run(envGetter envGetter, tokenExchanger tokenExchanger, outputWriter io.Wri
 		return fmt.Errorf("failed to get credential: %w", err)
 	}
 
-	var expiration *metav1.Time
-	if cred.ExpirationTimestamp != nil {
-		t := metav1.NewTime(*cred.ExpirationTimestamp)
-		expiration = &t
-	}
-	execCredential := clientauthenticationv1beta1.ExecCredential{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ExecCredential",
-			APIVersion: "client.authentication.k8s.io/v1beta1",
-		},
-		Status: &clientauthenticationv1beta1.ExecCredentialStatus{
-			ExpirationTimestamp:   expiration,
-			Token:                 cred.Token,
-			ClientCertificateData: cred.ClientCertificateData,
-			ClientKeyData:         cred.ClientKeyData,
-		},
-	}
-	err = json.NewEncoder(outputWriter).Encode(execCredential)
+	err = json.NewEncoder(outputWriter).Encode(cred)
 	if err != nil {
 		return fmt.Errorf("failed to marshal response to stdout: %w", err)
 	}

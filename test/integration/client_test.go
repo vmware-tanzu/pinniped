@@ -13,7 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/suzerain-io/pinniped/pkg/client"
+	"github.com/suzerain-io/pinniped/internal/client"
 	"github.com/suzerain-io/pinniped/test/library"
 )
 
@@ -71,11 +71,11 @@ func TestClient(t *testing.T) {
 	clientConfig := library.NewClientConfig(t)
 	resp, err := client.ExchangeToken(ctx, tmcClusterToken, string(clientConfig.CAData), clientConfig.Host)
 	require.NoError(t, err)
-	require.NotNil(t, resp.ExpirationTimestamp)
-	require.InDelta(t, time.Until(*resp.ExpirationTimestamp), 1*time.Hour, float64(3*time.Minute))
+	require.NotNil(t, resp.Status.ExpirationTimestamp)
+	require.InDelta(t, time.Until(resp.Status.ExpirationTimestamp.Time), 1*time.Hour, float64(3*time.Minute))
 
 	// Create a client using the certificate and key returned by the token exchange.
-	validClient := library.NewClientsetWithCertAndKey(t, resp.ClientCertificateData, resp.ClientKeyData)
+	validClient := library.NewClientsetWithCertAndKey(t, resp.Status.ClientCertificateData, resp.Status.ClientKeyData)
 
 	// Make a version request, which should succeed even without any authorization.
 	_, err = validClient.Discovery().ServerVersion()

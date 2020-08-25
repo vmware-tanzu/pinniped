@@ -15,7 +15,6 @@ require (
 	github.com/suzerain-io/controller-go v0.0.0-20200730212956-7f99b569ca9f
 	github.com/suzerain-io/pinniped/generated/1.19/apis v0.0.0-00010101000000-000000000000
 	github.com/suzerain-io/pinniped/generated/1.19/client v0.0.0-00010101000000-000000000000
-	github.com/suzerain-io/pinniped/pkg/client v0.0.0-00010101000000-000000000000
 	k8s.io/api v0.19.0-rc.0
 	k8s.io/apimachinery v0.19.0-rc.0
 	k8s.io/apiserver v0.19.0-rc.0
@@ -30,5 +29,4 @@ require (
 replace (
 	github.com/suzerain-io/pinniped/generated/1.19/apis => ./generated/1.19/apis
 	github.com/suzerain-io/pinniped/generated/1.19/client => ./generated/1.19/client
-	github.com/suzerain-io/pinniped/pkg/client => ./pkg/client
 )

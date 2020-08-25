@@ -3,6 +3,7 @@ module github.com/suzerain-io/pinniped
 go 1.14
 
 require (
+	github.com/davecgh/go-spew v1.1.1
 	github.com/go-logr/logr v0.2.0
 	github.com/golang/mock v1.4.3
 	github.com/golangci/golangci-lint v1.30.0

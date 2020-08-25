@@ -15,6 +15,7 @@ import (
 	"github.com/suzerain-io/pinniped/test/library"
 )
 
+// Smoke test to see if the kubeconfig works and the cluster is reachable.
 func TestGetNodes(t *testing.T) {
 	library.SkipUnlessIntegration(t)
 	cmd := exec.Command("kubectl", "get", "nodes")

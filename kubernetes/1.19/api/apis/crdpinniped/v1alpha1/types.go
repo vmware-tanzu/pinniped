@@ -7,6 +7,20 @@ package v1alpha1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+type StrategyType string
+type StrategyStatus string
+type StrategyReason string
+
+const (
+	KubeClusterSigningCertificateStrategyType = StrategyType("KubeClusterSigningCertificate")
+
+	SuccessStrategyStatus = StrategyStatus("Success")
+	ErrorStrategyStatus   = StrategyStatus("Error")
+
+	CouldNotFetchKeyStrategyReason = StrategyReason("CouldNotFetchKey")
+	FetchedKeyStrategyReason       = StrategyReason("FetchedKey")
+)
+
 type CredentialIssuerConfigStatus struct {
 	Strategies []CredentialIssuerConfigStrategy `json:"strategies"`
 
@@ -23,11 +37,11 @@ type CredentialIssuerConfigKubeConfigInfo struct {
 }
 
 type CredentialIssuerConfigStrategy struct {
-	Type           string      `json:"type,omitempty"`
-	Status         string      `json:"status,omitempty"`
-	Reason         string      `json:"reason,omitempty"`
-	Message        string      `json:"message,omitempty"`
-	LastUpdateTime metav1.Time `json:"lastUpdateTime"`
+	Type           StrategyType   `json:"type,omitempty"`
+	Status         StrategyStatus `json:"status,omitempty"`
+	Reason         StrategyReason `json:"reason,omitempty"`
+	Message        string         `json:"message,omitempty"`
+	LastUpdateTime metav1.Time    `json:"lastUpdateTime"`
 }
 
 // +genclient

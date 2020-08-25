@@ -22,6 +22,7 @@ import (
 
 func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 	library.SkipUnlessIntegration(t)
+	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
 
 	tests := []struct {
 		name          string
@@ -74,7 +75,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			namespaceName := library.Getenv(t, "PINNIPED_NAMESPACE")
+			namespaceName := library.GetEnv(t, "PINNIPED_NAMESPACE")
 
 			kubeClient := library.NewClientset(t)
 			aggregatedClient := library.NewAggregatedClientset(t)
@@ -108,7 +109,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 				return err == nil
 			}
 			assert.Eventually(t, secretIsRegenerated, 10*time.Second, 250*time.Millisecond)
-			require.NoError(t, err) // prints out the error in case of failure
+			require.NoError(t, err) // prints out the error and stops the test in case of failure
 			regeneratedCACert := secret.Data["caCertificate"]
 			regeneratedPrivateKey := secret.Data["tlsPrivateKey"]
 			regeneratedCertChain := secret.Data["tlsCertificateChain"]
@@ -125,7 +126,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 				return err == nil
 			}
 			assert.Eventually(t, aggregatedAPIUpdated, 10*time.Second, 250*time.Millisecond)
-			require.NoError(t, err) // prints out the error in case of failure
+			require.NoError(t, err) // prints out the error and stops the test in case of failure
 			require.Equal(t, regeneratedCACert, apiService.Spec.CABundle)
 
 			// Check that we can still make requests to the aggregated API through the kube API server,
@@ -147,7 +148,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			// Unfortunately, although our code changes all the certs immediately, it seems to take ~1 minute for
 			// the API machinery to notice that we updated our serving cert, causing 1 minute of downtime for our endpoint.
 			assert.Eventually(t, aggregatedAPIWorking, 2*time.Minute, 250*time.Millisecond)
-			require.NoError(t, err) // prints out the error in case of failure
+			require.NoError(t, err) // prints out the error and stops the test in case of failure
 		})
 	}
 }

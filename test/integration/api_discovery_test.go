@@ -16,6 +16,7 @@ import (
 
 func TestGetAPIResourceList(t *testing.T) {
 	library.SkipUnlessIntegration(t)
+	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
 
 	client := library.NewPinnipedClientset(t)
 
@@ -60,7 +61,7 @@ func TestGetAPIResourceList(t *testing.T) {
 		SingularName: "",
 	}
 
-	expectedLDCAPIResource := metav1.APIResource{
+	expectedCredentialIssuerConfigResource := metav1.APIResource{
 		Name:         "credentialissuerconfigs",
 		SingularName: "credentialissuerconfig",
 		Namespaced:   true,
@@ -79,8 +80,8 @@ func TestGetAPIResourceList(t *testing.T) {
 	actualAPIResource := actualCrdPinnipedResources.APIResources[0]
 	// workaround because its hard to predict the storage version hash (e.g. "t/+v41y+3e4=")
 	// so just don't worry about comparing that field
-	expectedLDCAPIResource.StorageVersionHash = actualAPIResource.StorageVersionHash
-	require.Equal(t, expectedLDCAPIResource, actualAPIResource)
+	expectedCredentialIssuerConfigResource.StorageVersionHash = actualAPIResource.StorageVersionHash
+	require.Equal(t, expectedCredentialIssuerConfigResource, actualAPIResource)
 }
 
 func findGroup(name string, groups []*metav1.APIGroup) *metav1.APIGroup {

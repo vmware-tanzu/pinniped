@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
@@ -19,65 +20,91 @@ import (
 	"github.com/suzerain-io/pinniped/test/library"
 )
 
-func TestSuccessfulCredentialIssuerConfig(t *testing.T) {
+func TestCredentialIssuerConfig(t *testing.T) {
 	library.SkipUnlessIntegration(t)
-	namespaceName := library.Getenv(t, "PINNIPED_NAMESPACE")
+	namespaceName := library.GetEnv(t, "PINNIPED_NAMESPACE")
 
+	config := library.NewClientConfig(t)
 	client := library.NewPinnipedClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	config := library.NewClientConfig(t)
-	expectedLDCStatus := expectedLDCStatus(config)
-	configList, err := client.
-		CrdV1alpha1().
-		CredentialIssuerConfigs(namespaceName).
-		List(ctx, metav1.ListOptions{})
-	require.NoError(t, err)
-	require.Len(t, configList.Items, 1)
-	require.Equal(t, expectedLDCStatus, &configList.Items[0].Status)
-}
+	t.Run("test successful CredentialIssuerConfig", func(t *testing.T) {
+		actualConfigList, err := client.
+			CrdV1alpha1().
+			CredentialIssuerConfigs(namespaceName).
+			List(ctx, metav1.ListOptions{})
+		require.NoError(t, err)
+		require.Len(t, actualConfigList.Items, 1)
 
-func TestReconcilingCredentialIssuerConfig(t *testing.T) {
-	library.SkipUnlessIntegration(t)
-	namespaceName := library.Getenv(t, "PINNIPED_NAMESPACE")
+		// Verify the published kube config info.
+		actualStatusKubeConfigInfo := actualConfigList.Items[0].Status.KubeConfigInfo
+		require.Equal(t, expectedStatusKubeConfigInfo(config), actualStatusKubeConfigInfo)
 
-	client := library.NewPinnipedClientset(t)
+		// Verify the cluster strategy status based on what's expected of the test cluster's ability to share signing keys.
+		actualStatusStrategies := actualConfigList.Items[0].Status.Strategies
+		require.Len(t, actualStatusStrategies, 1)
+		actualStatusStrategy := actualStatusStrategies[0]
+		require.Equal(t, crdpinnipedv1alpha1.KubeClusterSigningCertificateStrategyType, actualStatusStrategy.Type)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+		if library.ClusterHasCapability(t, library.ClusterSigningKeyIsAvailable) {
+			require.Equal(t, crdpinnipedv1alpha1.SuccessStrategyStatus, actualStatusStrategy.Status)
+			require.Equal(t, crdpinnipedv1alpha1.FetchedKeyStrategyReason, actualStatusStrategy.Reason)
+			require.Equal(t, "Key was fetched successfully", actualStatusStrategy.Message)
+		} else {
+			require.Equal(t, crdpinnipedv1alpha1.ErrorStrategyStatus, actualStatusStrategy.Status)
+			require.Equal(t, crdpinnipedv1alpha1.CouldNotFetchKeyStrategyReason, actualStatusStrategy.Reason)
+			require.Contains(t, actualStatusStrategy.Message, "some part of the error message")
+		}
 
-	err := client.
-		CrdV1alpha1().
-		CredentialIssuerConfigs(namespaceName).
-		Delete(ctx, "pinniped-config", metav1.DeleteOptions{})
-	require.NoError(t, err)
+		require.WithinDuration(t, time.Now(), actualStatusStrategy.LastUpdateTime.Local(), 10*time.Minute)
+	})
 
-	config := library.NewClientConfig(t)
-	expectedLDCStatus := expectedLDCStatus(config)
+	t.Run("reconciling CredentialIssuerConfig", func(t *testing.T) {
+		library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
 
-	var actualLDC *crdpinnipedv1alpha1.CredentialIssuerConfig
-	for i := 0; i < 10; i++ {
-		actualLDC, err = client.
+		existingConfig, err := client.
 			CrdV1alpha1().
 			CredentialIssuerConfigs(namespaceName).
 			Get(ctx, "pinniped-config", metav1.GetOptions{})
-		if err == nil {
-			break
+		require.NoError(t, err)
+		require.Len(t, existingConfig.Status.Strategies, 1)
+		initialStrategy := existingConfig.Status.Strategies[0]
+
+		// Mutate the existing object. Don't delete it because that would mess up its `Status.Strategies` array,
+		// since the reconciling controller is not currently responsible for that field.
+		existingConfig.Status.KubeConfigInfo.Server = "https://junk"
+		updatedConfig, err := client.
+			CrdV1alpha1().
+			CredentialIssuerConfigs(namespaceName).
+			Update(ctx, existingConfig, metav1.UpdateOptions{})
+		require.NoError(t, err)
+		require.Equal(t, "https://junk", updatedConfig.Status.KubeConfigInfo.Server)
+
+		// Expect that the object's mutated field is set back to what matches its source of truth.
+		var actualCredentialIssuerConfig *crdpinnipedv1alpha1.CredentialIssuerConfig
+		var getConfig = func() bool {
+			actualCredentialIssuerConfig, err = client.
+				CrdV1alpha1().
+				CredentialIssuerConfigs(namespaceName).
+				Get(ctx, "pinniped-config", metav1.GetOptions{})
+			return err == nil
 		}
-		time.Sleep(time.Millisecond * 750)
-	}
-	require.NoError(t, err)
-	require.Equal(t, expectedLDCStatus, &actualLDC.Status)
+		assert.Eventually(t, getConfig, 5*time.Second, 100*time.Millisecond)
+		require.NoError(t, err) // prints out the error and stops the test in case of failure
+		actualStatusKubeConfigInfo := actualCredentialIssuerConfig.Status.KubeConfigInfo
+		require.Equal(t, expectedStatusKubeConfigInfo(config), actualStatusKubeConfigInfo)
+
+		// The strategies should not have changed during reconciliation.
+		require.Len(t, actualCredentialIssuerConfig.Status.Strategies, 1)
+		require.Equal(t, initialStrategy, actualCredentialIssuerConfig.Status.Strategies[0])
+	})
 }
 
-func expectedLDCStatus(config *rest.Config) *crdpinnipedv1alpha1.CredentialIssuerConfigStatus {
-	return &crdpinnipedv1alpha1.CredentialIssuerConfigStatus{
-		Strategies: []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{},
-		KubeConfigInfo: &crdpinnipedv1alpha1.CredentialIssuerConfigKubeConfigInfo{
-			Server:                   config.Host,
-			CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.TLSClientConfig.CAData),
-		},
+func expectedStatusKubeConfigInfo(config *rest.Config) *crdpinnipedv1alpha1.CredentialIssuerConfigKubeConfigInfo {
+	return &crdpinnipedv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+		Server:                   config.Host,
+		CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.TLSClientConfig.CAData),
 	}
 }

@@ -14,9 +14,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	v1 "k8s.io/api/core/v1"
-
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -63,7 +62,8 @@ func addTestClusterRoleBinding(ctx context.Context, t *testing.T, adminClient ku
 
 func TestSuccessfulCredentialRequest(t *testing.T) {
 	library.SkipUnlessIntegration(t)
-	tmcClusterToken := library.Getenv(t, "PINNIPED_TMC_CLUSTER_TOKEN")
+	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
+	tmcClusterToken := library.GetEnv(t, "PINNIPED_TMC_CLUSTER_TOKEN")
 
 	response, err := makeRequest(t, v1alpha1.CredentialRequestSpec{
 		Type:  v1alpha1.TokenCredentialType,
@@ -121,7 +121,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 			return err == nil
 		}
 		assert.Eventually(t, canListNamespaces, 3*time.Second, 250*time.Millisecond)
-		require.NoError(t, err) // prints out the error in case of failure
+		require.NoError(t, err) // prints out the error and stops the test in case of failure
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	})
 
@@ -150,13 +150,15 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 			return err == nil
 		}
 		assert.Eventually(t, canListNamespaces, 3*time.Second, 250*time.Millisecond)
-		require.NoError(t, err) // prints out the error in case of failure
+		require.NoError(t, err) // prints out the error and stops the test in case of failure
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	})
 }
 
 func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
 	library.SkipUnlessIntegration(t)
+	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
+
 	response, err := makeRequest(t, v1alpha1.CredentialRequestSpec{
 		Type:  v1alpha1.TokenCredentialType,
 		Token: &v1alpha1.CredentialRequestTokenCredential{Value: "not a good token"},
@@ -171,6 +173,8 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 
 func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
 	library.SkipUnlessIntegration(t)
+	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
+
 	response, err := makeRequest(t, v1alpha1.CredentialRequestSpec{
 		Type:  v1alpha1.TokenCredentialType,
 		Token: nil,

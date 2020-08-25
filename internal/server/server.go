@@ -197,7 +197,7 @@ func getClusterCASigner(ctx context.Context, serverInstallationNamespace string)
 	if err != nil {
 		ticker.Stop()
 
-		updateErr := issuerconfig.CreateOrUpdateCredentialIssuerConfig(
+		if updateErr := issuerconfig.CreateOrUpdateCredentialIssuerConfig(
 			ctx,
 			serverInstallationNamespace,
 			pinnipedClient,
@@ -212,8 +212,9 @@ func getClusterCASigner(ctx context.Context, serverInstallationNamespace string)
 					},
 				}
 			},
-		)
-		klog.Errorf("error performing create or update on CredentialIssuerConfig to add strategy error: %w", updateErr)
+		); updateErr != nil {
+			klog.Errorf("error performing create or update on CredentialIssuerConfig to add strategy error: %s", updateErr.Error())
+		}
 
 		return nil, nil, fmt.Errorf("could not load cluster signing CA: %w", err)
 	}
@@ -235,6 +236,7 @@ func getClusterCASigner(ctx context.Context, serverInstallationNamespace string)
 		},
 	)
 	if updateErr != nil {
+		//nolint:goerr113
 		return nil, nil, fmt.Errorf("error performing create or update on CredentialIssuerConfig to add strategy success: %w", updateErr)
 	}
 

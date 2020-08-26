@@ -7,36 +7,54 @@
     Free for commercial use without attribution. https://pixabay.com/service/license/
 -->
 
-## About Pinniped
+## Overview
 
-Pinniped provides authentication for Kubernetes clusters.
+Pinniped provides identity services to Kubernetes.
 
-## Developing
+Pinniped allows cluster administrators to easily plugin upstream identity
+providers (IDPs) into Kubernetes clusters. This is achieved via a uniform
+install procedure across all types and origins of Kubernetes clusters,
+declarative configuration via Kubernetes APIs, enterprise-grade integrations
+with upstream IDPs, and distribution-specific integration mechanisms.
 
-### Running Lint
+### Use cases
 
-```cmd
-./hack/module.sh lint
-```
+* **Your team uses a large enterprise IDP, and has many clusters that they
+  manage**; Pinniped provides:
+  * seamless and robust integration with the upstream IDP,
+  * the ability to be easily installed across clusters of any type and origin,
+  * and a simplified login flow across all clusters.
+* **You are on a small team that shares a single cluster**; Pinniped provides:
+  * simple configuration for your team's specific needs,
+  * and individual, revocable identities.
 
-### Running Tests
+### Architecture
 
-```cmd
-./hack/module.sh unittest
-```
+Pinniped offers a credential exchange API via a Kubernetes aggregated API where
+a user can exchange an upstream IDP credential for a cluster-specific
+credential. A specific example of this exchange is provided below where:
+* the upstream IDP is a webhook that supports the [Kubernetes TokenReview
+  API](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#webhook-token-authentication),
+* the cluster-specific credential is minted using the cluster signing keypair to
+issue short-lived cluster certificates (note: this particular credential minting
+mechanism is temporary until the Kubernetes CSR API provides the ability to set
+a certificate TTL),
+* and the cluster-specific credential is provided to the `kubectl` binary using
+a [Kubernetes client-go credential
+plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins).
 
-### Pre-commit hooks
+![implementation](doc/img/pinniped.svg)
 
-This project uses the [pre-commit] to agree on some conventions about whitespace/file encoding.
+## Install
 
-```cmd
-$ brew install pre-commit
-[...]
-$ pre-commit install
-pre-commit installed at .git/hooks/pre-commit
-```
+To try out Pinniped, check out [our officially supported deployment mechanism
+with ytt](deploy/README.md).
 
-[pre-commit]: https://pre-commit.com/
+## Contribute
+
+If you want to contribute to (or just hack on) Pinniped (we encourage it!),
+first check out our [Code of Conduct](doc/code-of-conduct.md), and then [our
+contributing doc](doc/contributing.md).
 
 ## Licence
 

@@ -13,15 +13,20 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 
+	crdpinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
 	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1"
+	pinnipedclientset "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned"
 	"github.com/suzerain-io/pinniped/internal/apiserver"
 	"github.com/suzerain-io/pinniped/internal/certauthority/kubecertauthority"
+	"github.com/suzerain-io/pinniped/internal/controller/issuerconfig"
 	"github.com/suzerain-io/pinniped/internal/controllermanager"
 	"github.com/suzerain-io/pinniped/internal/downward"
 	"github.com/suzerain-io/pinniped/internal/provider"
@@ -99,8 +104,15 @@ func (a *App) runServer(ctx context.Context) error {
 		return fmt.Errorf("could not load config: %w", err)
 	}
 
+	// Discover in which namespace we are installed.
+	podInfo, err := downward.Load(a.downwardAPIPath)
+	if err != nil {
+		return fmt.Errorf("could not read pod metadata: %w", err)
+	}
+	serverInstallationNamespace := podInfo.Namespace
+
 	// Load the Kubernetes cluster signing CA.
-	k8sClusterCA, shutdownCA, err := getClusterCASigner()
+	k8sClusterCA, shutdownCA, err := getClusterCASigner(ctx, serverInstallationNamespace)
 	if err != nil {
 		return err
 	}
@@ -111,13 +123,6 @@ func (a *App) runServer(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("could not create webhook client: %w", err)
 	}
-
-	// Discover in which namespace we are installed.
-	podInfo, err := downward.Load(a.downwardAPIPath)
-	if err != nil {
-		return fmt.Errorf("could not read pod metadata: %w", err)
-	}
-	serverInstallationNamespace := podInfo.Namespace
 
 	// This cert provider will provide certs to the API server and will
 	// be mutated by a controller to keep the certs up to date with what
@@ -160,7 +165,7 @@ func (a *App) runServer(ctx context.Context) error {
 	return server.GenericAPIServer.PrepareRun().Run(ctx.Done())
 }
 
-func getClusterCASigner() (*kubecertauthority.CA, kubecertauthority.ShutdownFunc, error) {
+func getClusterCASigner(ctx context.Context, serverInstallationNamespace string) (credentialrequest.CertIssuer, kubecertauthority.ShutdownFunc, error) {
 	// Load the Kubernetes client configuration.
 	kubeConfig, err := restclient.InClusterConfig()
 	if err != nil {
@@ -173,19 +178,63 @@ func getClusterCASigner() (*kubecertauthority.CA, kubecertauthority.ShutdownFunc
 		return nil, nil, fmt.Errorf("could not initialize Kubernetes client: %w", err)
 	}
 
+	// Connect to the pinniped API.
+	pinnipedClient, err := pinnipedclientset.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not initialize pinniped client: %w", err)
+	}
+
 	// Make a clock tick that triggers a periodic refresh.
 	ticker := time.NewTicker(5 * time.Minute)
 
 	// Make a CA which uses the Kubernetes cluster API server's signing certs.
-	k8sClusterCA, shutdownCA, err := kubecertauthority.New(
+	k8sClusterCA, shutdownCA := kubecertauthority.New(
 		kubeClient,
 		kubecertauthority.NewPodCommandExecutor(kubeConfig, kubeClient),
 		ticker.C,
+		func() { // success callback
+			err = issuerconfig.CreateOrUpdateCredentialIssuerConfig(
+				ctx,
+				serverInstallationNamespace,
+				pinnipedClient,
+				func(configToUpdate *crdpinnipedv1alpha1.CredentialIssuerConfig) {
+					configToUpdate.Status.Strategies = []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{
+						{
+							Type:           crdpinnipedv1alpha1.KubeClusterSigningCertificateStrategyType,
+							Status:         crdpinnipedv1alpha1.SuccessStrategyStatus,
+							Reason:         crdpinnipedv1alpha1.FetchedKeyStrategyReason,
+							Message:        "Key was fetched successfully",
+							LastUpdateTime: metav1.Now(),
+						},
+					}
+				},
+			)
+			if err != nil {
+				klog.Errorf("error performing create or update on CredentialIssuerConfig to add strategy success: %s", err.Error())
+			}
+		},
+		func(err error) { // error callback
+			if updateErr := issuerconfig.CreateOrUpdateCredentialIssuerConfig(
+				ctx,
+				serverInstallationNamespace,
+				pinnipedClient,
+				func(configToUpdate *crdpinnipedv1alpha1.CredentialIssuerConfig) {
+					configToUpdate.Status.Strategies = []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{
+						{
+							Type:           crdpinnipedv1alpha1.KubeClusterSigningCertificateStrategyType,
+							Status:         crdpinnipedv1alpha1.ErrorStrategyStatus,
+							Reason:         crdpinnipedv1alpha1.CouldNotFetchKeyStrategyReason,
+							Message:        err.Error(),
+							LastUpdateTime: metav1.Now(),
+						},
+					}
+				},
+			); updateErr != nil {
+				klog.Errorf("error performing create or update on CredentialIssuerConfig to add strategy error: %s", updateErr.Error())
+			}
+		},
 	)
-	if err != nil {
-		ticker.Stop()
-		return nil, nil, fmt.Errorf("could not load cluster signing CA: %w", err)
-	}
+
 	return k8sClusterCA, func() { shutdownCA(); ticker.Stop() }, nil
 }
 

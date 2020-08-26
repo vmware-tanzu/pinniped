@@ -47,12 +47,12 @@ func (log *TranscriptLogger) Info(msg string, keysAndValues ...interface{}) {
 	})
 }
 
-func (log *TranscriptLogger) Error(err error, msg string, keysAndValues ...interface{}) {
+func (log *TranscriptLogger) Error(_ error, msg string, _ ...interface{}) {
 	log.lock.Lock()
 	defer log.lock.Unlock()
 	log.transcript = append(log.transcript, TranscriptLogMessage{
 		Level:   "error",
-		Message: fmt.Sprintf("%s: %v -- %v", msg, err, keysAndValues),
+		Message: msg,
 	})
 }
 

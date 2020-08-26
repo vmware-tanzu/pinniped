@@ -20,8 +20,8 @@ import (
 
 func TestGetDeployment(t *testing.T) {
 	library.SkipUnlessIntegration(t)
-	namespaceName := library.Getenv(t, "PINNIPED_NAMESPACE")
-	deploymentName := library.Getenv(t, "PINNIPED_APP_NAME")
+	namespaceName := library.GetEnv(t, "PINNIPED_NAMESPACE")
+	deploymentName := library.GetEnv(t, "PINNIPED_APP_NAME")
 
 	client := library.NewClientset(t)
 

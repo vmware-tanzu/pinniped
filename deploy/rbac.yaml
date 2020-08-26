@@ -1,3 +1,6 @@
+#! Copyright 2020 VMware, Inc.
+#! SPDX-License-Identifier: Apache-2.0
+
 #@ load("@ytt:data", "data")
 
 #! Give permission to various cluster-scoped objects
@@ -45,7 +48,7 @@ rules:
     resources: [secrets]
     verbs: [create, get, list, patch, update, watch, delete]
   - apiGroups: [crd.pinniped.dev]
-    resources: [pinnipeddiscoveryinfos]
+    resources: [credentialissuerconfigs]
     verbs: [create, get, list, update, watch]
 ---
 kind: RoleBinding

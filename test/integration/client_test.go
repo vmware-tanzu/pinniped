@@ -56,7 +56,8 @@ var maskKey = func(s string) string { return strings.ReplaceAll(s, "TESTING KEY"
 
 func TestClient(t *testing.T) {
 	library.SkipUnlessIntegration(t)
-	tmcClusterToken := library.Getenv(t, "PINNIPED_TMC_CLUSTER_TOKEN")
+	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
+	tmcClusterToken := library.GetEnv(t, "PINNIPED_TMC_CLUSTER_TOKEN")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

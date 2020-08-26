@@ -60,15 +60,15 @@ func TestGetAPIResourceList(t *testing.T) {
 		SingularName: "",
 	}
 
-	expectedLDCAPIResource := metav1.APIResource{
-		Name:         "pinnipeddiscoveryinfos",
-		SingularName: "pinnipeddiscoveryinfo",
+	expectedCredentialIssuerConfigResource := metav1.APIResource{
+		Name:         "credentialissuerconfigs",
+		SingularName: "credentialissuerconfig",
 		Namespaced:   true,
-		Kind:         "PinnipedDiscoveryInfo",
+		Kind:         "CredentialIssuerConfig",
 		Verbs: metav1.Verbs([]string{
 			"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch",
 		}),
-		ShortNames:         []string{"ldc"},
+		ShortNames:         []string{"cic"},
 		StorageVersionHash: "unknown: to be filled in automatically below",
 	}
 
@@ -79,8 +79,8 @@ func TestGetAPIResourceList(t *testing.T) {
 	actualAPIResource := actualCrdPinnipedResources.APIResources[0]
 	// workaround because its hard to predict the storage version hash (e.g. "t/+v41y+3e4=")
 	// so just don't worry about comparing that field
-	expectedLDCAPIResource.StorageVersionHash = actualAPIResource.StorageVersionHash
-	require.Equal(t, expectedLDCAPIResource, actualAPIResource)
+	expectedCredentialIssuerConfigResource.StorageVersionHash = actualAPIResource.StorageVersionHash
+	require.Equal(t, expectedCredentialIssuerConfigResource, actualAPIResource)
 }
 
 func findGroup(name string, groups []*metav1.APIGroup) *metav1.APIGroup {

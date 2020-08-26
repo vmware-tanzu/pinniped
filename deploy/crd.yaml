@@ -1,49 +1,85 @@
-#@ load("@ytt:data", "data")
+#! Copyright 2020 VMware, Inc.
+#! SPDX-License-Identifier: Apache-2.0
 
-#! Example of valid PinnipedDiscoveryInfo object:
+#! Example of valid CredentialIssuerConfig object:
 #! ---
 #! apiVersion: crd.pinniped.dev/v1alpha1
-#! kind: PinnipedDiscoveryInfo
+#! kind: CredentialIssuerConfig
 #! metadata:
-#!   name: login-discovery
+#!   name: credential-issuer-config
 #!   namespace: integration
-#! spec:
-#!   server: https://foo
-#!   certificateAuthorityData: bar
+#! status:
+#!   kubeConfigInfo:
+#!     server: https://foo
+#!     certificateAuthorityData: bar
+#!   strategies:
+#!     - type: KubeClusterSigningCertificate
+#!       status: Error
+#!       reason: CouldNotFetchKey
+#!       message: "There was an error getting the signing cert"
+#!       lastUpdateTime: 2020-08-21T20:08:18Z
+
+#@ load("@ytt:data", "data")
 
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: pinnipeddiscoveryinfos.crd.pinniped.dev
+  name: credentialissuerconfigs.crd.pinniped.dev
 spec:
   group: crd.pinniped.dev
   versions:
     #! Any changes to these schemas should also be reflected in the types.go file(s)
-    #! in https://github.com/suzerain-io/pinniped-api/tree/main/pkg/apis/pinniped
     - name: v1alpha1
       served: true
       storage: true
       schema:
         openAPIV3Schema:
           type: object
-          required: [spec]
           properties:
-            spec:
+            status:
               type: object
-              required: [server, certificateAuthorityData]
               properties:
-                server:
-                  type: string
-                  minLength: 1
-                  pattern: '^https://|^http://'
-                certificateAuthorityData:
-                  type: string
-                  minLength: 1
+                strategies:
+                  type: array
+                  items:
+                    type: object
+                    required: [ type, status, reason, message, lastUpdateTime ]
+                    properties:
+                      type: #! this property is called "type"
+                        type: string
+                        minLength: 1
+                        pattern: '^KubeClusterSigningCertificate$'
+                      status:
+                        type: string
+                        minLength: 1
+                        pattern: '^Success$|^Error$'
+                      reason:
+                        type: string
+                        minLength: 1
+                        pattern: '^CouldNotFetchKey$|^FetchedKey$'
+                      message:
+                        type: string
+                        minLength: 1
+                      lastUpdateTime:
+                        type: string
+                        format: date-time
+                        minLength: 1
+                kubeConfigInfo:
+                  type: object
+                  required: [ server, certificateAuthorityData ]
+                  properties:
+                    server:
+                      type: string
+                      minLength: 1
+                      pattern: '^https://|^http://'
+                    certificateAuthorityData:
+                      type: string
+                      minLength: 1
   scope: Namespaced
   names:
-    plural: pinnipeddiscoveryinfos
-    singular: pinnipeddiscoveryinfo
-    kind: PinnipedDiscoveryInfo
+    plural: credentialissuerconfigs
+    singular: credentialissuerconfig
+    kind: CredentialIssuerConfig
     shortNames:
-      - ldc
+      - cic

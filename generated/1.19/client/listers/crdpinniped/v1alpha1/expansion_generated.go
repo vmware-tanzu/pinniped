@@ -7,10 +7,10 @@ SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
 
-// PinnipedDiscoveryInfoListerExpansion allows custom methods to be added to
-// PinnipedDiscoveryInfoLister.
-type PinnipedDiscoveryInfoListerExpansion interface{}
+// CredentialIssuerConfigListerExpansion allows custom methods to be added to
+// CredentialIssuerConfigLister.
+type CredentialIssuerConfigListerExpansion interface{}
 
-// PinnipedDiscoveryInfoNamespaceListerExpansion allows custom methods to be added to
-// PinnipedDiscoveryInfoNamespaceLister.
-type PinnipedDiscoveryInfoNamespaceListerExpansion interface{}
+// CredentialIssuerConfigNamespaceListerExpansion allows custom methods to be added to
+// CredentialIssuerConfigNamespaceLister.
+type CredentialIssuerConfigNamespaceListerExpansion interface{}

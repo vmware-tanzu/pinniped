@@ -15,7 +15,7 @@ import (
 
 type CrdV1alpha1Interface interface {
 	RESTClient() rest.Interface
-	PinnipedDiscoveryInfosGetter
+	CredentialIssuerConfigsGetter
 }
 
 // CrdV1alpha1Client is used to interact with features provided by the crd.pinniped.dev group.
@@ -23,8 +23,8 @@ type CrdV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *CrdV1alpha1Client) PinnipedDiscoveryInfos(namespace string) PinnipedDiscoveryInfoInterface {
-	return newPinnipedDiscoveryInfos(c, namespace)
+func (c *CrdV1alpha1Client) CredentialIssuerConfigs(namespace string) CredentialIssuerConfigInterface {
+	return newCredentialIssuerConfigs(c, namespace)
 }
 
 // NewForConfig creates a new CrdV1alpha1Client for the given config.

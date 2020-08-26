@@ -14,9 +14,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	v1 "k8s.io/api/core/v1"
-
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,50 +25,11 @@ import (
 	"github.com/suzerain-io/pinniped/test/library"
 )
 
-func makeRequest(t *testing.T, spec v1alpha1.CredentialRequestSpec) (*v1alpha1.CredentialRequest, error) {
-	t.Helper()
-
-	client := library.NewAnonymousPinnipedClientset(t)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	return client.PinnipedV1alpha1().CredentialRequests().Create(ctx, &v1alpha1.CredentialRequest{
-		TypeMeta:   metav1.TypeMeta{},
-		ObjectMeta: metav1.ObjectMeta{},
-		Spec:       spec,
-	}, metav1.CreateOptions{})
-}
-
-func addTestClusterRoleBinding(ctx context.Context, t *testing.T, adminClient kubernetes.Interface, binding *rbacv1.ClusterRoleBinding) {
-	_, err := adminClient.RbacV1().ClusterRoleBindings().Get(ctx, binding.Name, metav1.GetOptions{})
-	if err != nil {
-		// "404 not found" errors are acceptable, but others would be unexpected
-		statusError, isStatus := err.(*errors.StatusError)
-		require.True(t, isStatus)
-		require.Equal(t, http.StatusNotFound, int(statusError.Status().Code))
-
-		_, err = adminClient.RbacV1().ClusterRoleBindings().Create(ctx, binding, metav1.CreateOptions{})
-		require.NoError(t, err)
-	}
-
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		err = adminClient.RbacV1().ClusterRoleBindings().Delete(ctx, binding.Name, metav1.DeleteOptions{})
-		require.NoError(t, err, "Test failed to clean up after itself")
-	})
-}
-
 func TestSuccessfulCredentialRequest(t *testing.T) {
 	library.SkipUnlessIntegration(t)
-	tmcClusterToken := library.Getenv(t, "PINNIPED_TMC_CLUSTER_TOKEN")
+	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
 
-	response, err := makeRequest(t, v1alpha1.CredentialRequestSpec{
-		Type:  v1alpha1.TokenCredentialType,
-		Token: &v1alpha1.CredentialRequestTokenCredential{Value: tmcClusterToken},
-	})
-
+	response, err := makeRequest(t, validCredentialRequestSpecWithRealToken(t))
 	require.NoError(t, err)
 
 	// Note: If this assertion fails then your TMC token might have expired. Get a fresh one and try again.
@@ -121,7 +81,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 			return err == nil
 		}
 		assert.Eventually(t, canListNamespaces, 3*time.Second, 250*time.Millisecond)
-		require.NoError(t, err) // prints out the error in case of failure
+		require.NoError(t, err) // prints out the error and stops the test in case of failure
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	})
 
@@ -150,13 +110,15 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 			return err == nil
 		}
 		assert.Eventually(t, canListNamespaces, 3*time.Second, 250*time.Millisecond)
-		require.NoError(t, err) // prints out the error in case of failure
+		require.NoError(t, err) // prints out the error and stops the test in case of failure
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	})
 }
 
 func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
 	library.SkipUnlessIntegration(t)
+	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
+
 	response, err := makeRequest(t, v1alpha1.CredentialRequestSpec{
 		Type:  v1alpha1.TokenCredentialType,
 		Token: &v1alpha1.CredentialRequestTokenCredential{Value: "not a good token"},
@@ -171,6 +133,8 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 
 func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
 	library.SkipUnlessIntegration(t)
+	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
+
 	response, err := makeRequest(t, v1alpha1.CredentialRequestSpec{
 		Type:  v1alpha1.TokenCredentialType,
 		Token: nil,
@@ -188,6 +152,63 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T
 
 	require.Empty(t, response.Spec)
 	require.Nil(t, response.Status.Credential)
+}
+
+func TestCredentialRequest_OtherwiseValidRequestWithRealTokenShouldFailWhenTheClusterIsNotCapable(t *testing.T) {
+	library.SkipUnlessIntegration(t)
+	library.SkipWhenClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
+
+	response, err := makeRequest(t, validCredentialRequestSpecWithRealToken(t))
+
+	require.NoError(t, err)
+
+	require.Empty(t, response.Spec)
+	require.Nil(t, response.Status.Credential)
+	require.Equal(t, stringPtr("authentication failed"), response.Status.Message)
+}
+
+func makeRequest(t *testing.T, spec v1alpha1.CredentialRequestSpec) (*v1alpha1.CredentialRequest, error) {
+	t.Helper()
+
+	client := library.NewAnonymousPinnipedClientset(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	return client.PinnipedV1alpha1().CredentialRequests().Create(ctx, &v1alpha1.CredentialRequest{
+		TypeMeta:   metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{},
+		Spec:       spec,
+	}, metav1.CreateOptions{})
+}
+
+func validCredentialRequestSpecWithRealToken(t *testing.T) v1alpha1.CredentialRequestSpec {
+	tmcClusterToken := library.GetEnv(t, "PINNIPED_TMC_CLUSTER_TOKEN")
+
+	return v1alpha1.CredentialRequestSpec{
+		Type:  v1alpha1.TokenCredentialType,
+		Token: &v1alpha1.CredentialRequestTokenCredential{Value: tmcClusterToken},
+	}
+}
+
+func addTestClusterRoleBinding(ctx context.Context, t *testing.T, adminClient kubernetes.Interface, binding *rbacv1.ClusterRoleBinding) {
+	_, err := adminClient.RbacV1().ClusterRoleBindings().Get(ctx, binding.Name, metav1.GetOptions{})
+	if err != nil {
+		// "404 not found" errors are acceptable, but others would be unexpected
+		statusError, isStatus := err.(*errors.StatusError)
+		require.True(t, isStatus)
+		require.Equal(t, http.StatusNotFound, int(statusError.Status().Code))
+
+		_, err = adminClient.RbacV1().ClusterRoleBindings().Create(ctx, binding, metav1.CreateOptions{})
+		require.NoError(t, err)
+	}
+
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		err = adminClient.RbacV1().ClusterRoleBindings().Delete(ctx, binding.Name, metav1.DeleteOptions{})
+		require.NoError(t, err, "Test failed to clean up after itself")
+	})
 }
 
 func stringPtr(s string) *string {

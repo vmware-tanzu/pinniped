@@ -13,8 +13,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// PinnipedDiscoveryInfos returns a PinnipedDiscoveryInfoInformer.
-	PinnipedDiscoveryInfos() PinnipedDiscoveryInfoInformer
+	// CredentialIssuerConfigs returns a CredentialIssuerConfigInformer.
+	CredentialIssuerConfigs() CredentialIssuerConfigInformer
 }
 
 type version struct {
@@ -28,7 +28,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// PinnipedDiscoveryInfos returns a PinnipedDiscoveryInfoInformer.
-func (v *version) PinnipedDiscoveryInfos() PinnipedDiscoveryInfoInformer {
-	return &pinnipedDiscoveryInfoInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+// CredentialIssuerConfigs returns a CredentialIssuerConfigInformer.
+func (v *version) CredentialIssuerConfigs() CredentialIssuerConfigInformer {
+	return &credentialIssuerConfigInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

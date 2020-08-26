@@ -17,8 +17,8 @@ type FakeCrdV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeCrdV1alpha1) PinnipedDiscoveryInfos(namespace string) v1alpha1.PinnipedDiscoveryInfoInterface {
-	return &FakePinnipedDiscoveryInfos{c, namespace}
+func (c *FakeCrdV1alpha1) CredentialIssuerConfigs(namespace string) v1alpha1.CredentialIssuerConfigInterface {
+	return &FakeCredentialIssuerConfigs{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

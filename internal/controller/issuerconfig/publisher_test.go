@@ -24,10 +24,10 @@ import (
 	coretesting "k8s.io/client-go/testing"
 
 	"github.com/suzerain-io/controller-go"
+	crdpinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
+	pinnipedfake "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned/fake"
+	pinnipedinformers "github.com/suzerain-io/pinniped/generated/1.19/client/informers/externalversions"
 	"github.com/suzerain-io/pinniped/internal/testutil"
-	crdpinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/crdpinniped/v1alpha1"
-	pinnipedfake "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/clientset/versioned/fake"
-	pinnipedinformers "github.com/suzerain-io/pinniped/kubernetes/1.19/client-go/informers/externalversions"
 )
 
 func TestInformerFilters(t *testing.T) {

@@ -21,7 +21,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/utils/trace"
 
-	pinnipedapi "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped"
+	pinnipedapi "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped"
 )
 
 // clientCertificateTTL is the TTL for short-lived client certificates returned by this API.

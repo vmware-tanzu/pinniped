@@ -38,20 +38,12 @@ function unittest_cmd() {
   echo "${cmd} -count 1 -short -race ./..."
 }
 
-function codegen_cmd() {
-  echo "${ROOT}/hack/lib/codegen.sh codegen::generate"
-}
-
-function codegen_verify_cmd() {
-  echo "${ROOT}/hack/lib/codegen.sh codegen::verify"
-}
-
 function with_modules() {
   local cmd_function="${1}"
   cmd="$(${cmd_function})"
 
   pushd "${ROOT}" >/dev/null
-  for mod_file in $(find . -maxdepth 4 -name go.mod | sort); do
+  for mod_file in $(find . -maxdepth 4 -not -path "./generated/*" -name go.mod | sort); do
     mod_dir="$(dirname "${mod_file}")"
     (
       echo "=> "
@@ -64,7 +56,7 @@ function with_modules() {
 
 function usage() {
   echo "Error: <task> must be specified"
-  echo "       module.sh <task> [tidy, lint, test, unittest, codegen, codegen_verify]"
+  echo "       module.sh <task> [tidy, lint, test, unittest]"
   exit 1
 }
 
@@ -81,12 +73,6 @@ function main() {
     ;;
   'unittest' | 'unittests' | 'units' | 'unit')
     with_modules 'unittest_cmd'
-    ;;
-  'codegen' | 'codegens')
-    with_modules 'codegen_cmd'
-    ;;
-  'codegen_verify' | 'verify_codegen')
-    with_modules 'codegen_verify_cmd'
     ;;
   *)
     usage

@@ -25,8 +25,8 @@ import (
 	aggregatorfake "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 
 	"github.com/suzerain-io/controller-go"
+	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1"
 	"github.com/suzerain-io/pinniped/internal/testutil"
-	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped/v1alpha1"
 )
 
 func TestManagerControllerOptions(t *testing.T) {
@@ -224,7 +224,7 @@ func TestManagerControllerSync(t *testing.T) {
 					// Validate the created cert using the CA, and also validate the cert's hostname
 					validCert := testutil.ValidateCertificate(t, actualCACert, actualCertChain)
 					validCert.RequireDNSName("pinniped-api." + installedInNamespace + ".svc")
-					validCert.RequireLifetime(time.Now(), time.Now().Add(certDuration), 2*time.Minute)
+					validCert.RequireLifetime(time.Now(), time.Now().Add(certDuration), 6*time.Minute)
 					validCert.RequireMatchesPrivateKey(actualPrivateKey)
 
 					// Make sure we updated the APIService caBundle and left it otherwise unchanged

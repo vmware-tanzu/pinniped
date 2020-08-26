@@ -145,7 +145,7 @@ func TestNewInternal(t *testing.T) {
 			},
 			wantCommonName: "Test CA",
 			wantNotAfter:   now.Add(100 * 365 * 24 * time.Hour),
-			wantNotBefore:  now.Add(-1 * time.Minute),
+			wantNotBefore:  now.Add(-5 * time.Minute),
 		},
 	}
 	for _, tt := range tests {

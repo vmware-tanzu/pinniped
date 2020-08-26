@@ -25,9 +25,9 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 
+	pinnipedapi "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped"
 	"github.com/suzerain-io/pinniped/internal/mocks/mockcertissuer"
 	"github.com/suzerain-io/pinniped/internal/testutil"
-	pinnipedapi "github.com/suzerain-io/pinniped/kubernetes/1.19/api/apis/pinniped"
 )
 
 type contextKey struct{}

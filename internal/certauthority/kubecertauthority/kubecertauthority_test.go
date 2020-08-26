@@ -209,7 +209,7 @@ func TestCA(t *testing.T) {
 					r.NoError(err)
 					validCert := testutil.ValidateCertificate(t, fakeCertPEM, string(certPEM))
 					validCert.RequireDNSName("example.com")
-					validCert.RequireLifetime(time.Now(), time.Now().Add(10*time.Minute), 2*time.Minute)
+					validCert.RequireLifetime(time.Now(), time.Now().Add(10*time.Minute), 6*time.Minute)
 					validCert.RequireMatchesPrivateKey(string(keyPEM))
 
 					// Tick the timer and wait for another refresh loop to complete.
@@ -245,7 +245,7 @@ func TestCA(t *testing.T) {
 
 					validCert2 := testutil.ValidateCertificate(t, fakeCert2PEM, secondCertPEM)
 					validCert2.RequireDNSName("example.com")
-					validCert2.RequireLifetime(time.Now(), time.Now().Add(10*time.Minute), 2*time.Minute)
+					validCert2.RequireLifetime(time.Now(), time.Now().Add(15*time.Minute), 6*time.Minute)
 					validCert2.RequireMatchesPrivateKey(secondKeyPEM)
 				})
 			})
@@ -322,7 +322,7 @@ func TestCA(t *testing.T) {
 					}, 5*time.Second, 10*time.Millisecond)
 					validCert := testutil.ValidateCertificate(t, fakeCertPEM, string(certPEM))
 					validCert.RequireDNSName("example.com")
-					validCert.RequireLifetime(time.Now(), time.Now().Add(10*time.Minute), 2*time.Minute)
+					validCert.RequireLifetime(time.Now().Add(-5*time.Minute), time.Now().Add(10*time.Minute), 1*time.Minute)
 					validCert.RequireMatchesPrivateKey(string(keyPEM))
 
 					r.Equal(1, callbacks.NumberOfTimesSuccessCalled())

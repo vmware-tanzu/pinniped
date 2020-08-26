@@ -22,7 +22,6 @@ import (
 
 func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 	library.SkipUnlessIntegration(t)
-	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
 
 	tests := []struct {
 		name          string

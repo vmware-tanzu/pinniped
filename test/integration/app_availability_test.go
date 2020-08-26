@@ -20,7 +20,6 @@ import (
 
 func TestGetDeployment(t *testing.T) {
 	library.SkipUnlessIntegration(t)
-	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
 	namespaceName := library.GetEnv(t, "PINNIPED_NAMESPACE")
 	deploymentName := library.GetEnv(t, "PINNIPED_APP_NAME")
 

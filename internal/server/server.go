@@ -165,7 +165,7 @@ func (a *App) runServer(ctx context.Context) error {
 	return server.GenericAPIServer.PrepareRun().Run(ctx.Done())
 }
 
-func getClusterCASigner(ctx context.Context, serverInstallationNamespace string) (*kubecertauthority.CA, kubecertauthority.ShutdownFunc, error) {
+func getClusterCASigner(ctx context.Context, serverInstallationNamespace string) (credentialrequest.CertIssuer, kubecertauthority.ShutdownFunc, error) {
 	// Load the Kubernetes client configuration.
 	kubeConfig, err := restclient.InClusterConfig()
 	if err != nil {
@@ -188,57 +188,52 @@ func getClusterCASigner(ctx context.Context, serverInstallationNamespace string)
 	ticker := time.NewTicker(5 * time.Minute)
 
 	// Make a CA which uses the Kubernetes cluster API server's signing certs.
-	k8sClusterCA, shutdownCA, err := kubecertauthority.New(
+	k8sClusterCA, shutdownCA := kubecertauthority.New(
 		kubeClient,
 		kubecertauthority.NewPodCommandExecutor(kubeConfig, kubeClient),
 		ticker.C,
-	)
-
-	if err != nil {
-		ticker.Stop()
-
-		if updateErr := issuerconfig.CreateOrUpdateCredentialIssuerConfig(
-			ctx,
-			serverInstallationNamespace,
-			pinnipedClient,
-			func(configToUpdate *crdpinnipedv1alpha1.CredentialIssuerConfig) {
-				configToUpdate.Status.Strategies = []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{
-					{
-						Type:           crdpinnipedv1alpha1.KubeClusterSigningCertificateStrategyType,
-						Status:         crdpinnipedv1alpha1.ErrorStrategyStatus,
-						Reason:         crdpinnipedv1alpha1.CouldNotFetchKeyStrategyReason,
-						Message:        err.Error(),
-						LastUpdateTime: metav1.Now(),
-					},
-				}
-			},
-		); updateErr != nil {
-			klog.Errorf("error performing create or update on CredentialIssuerConfig to add strategy error: %s", updateErr.Error())
-		}
-
-		return nil, nil, fmt.Errorf("could not load cluster signing CA: %w", err)
-	}
-
-	updateErr := issuerconfig.CreateOrUpdateCredentialIssuerConfig(
-		ctx,
-		serverInstallationNamespace,
-		pinnipedClient,
-		func(configToUpdate *crdpinnipedv1alpha1.CredentialIssuerConfig) {
-			configToUpdate.Status.Strategies = []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{
-				{
-					Type:           crdpinnipedv1alpha1.KubeClusterSigningCertificateStrategyType,
-					Status:         crdpinnipedv1alpha1.SuccessStrategyStatus,
-					Reason:         crdpinnipedv1alpha1.FetchedKeyStrategyReason,
-					Message:        "Key was fetched successfully",
-					LastUpdateTime: metav1.Now(),
+		func() { // success callback
+			err = issuerconfig.CreateOrUpdateCredentialIssuerConfig(
+				ctx,
+				serverInstallationNamespace,
+				pinnipedClient,
+				func(configToUpdate *crdpinnipedv1alpha1.CredentialIssuerConfig) {
+					configToUpdate.Status.Strategies = []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{
+						{
+							Type:           crdpinnipedv1alpha1.KubeClusterSigningCertificateStrategyType,
+							Status:         crdpinnipedv1alpha1.SuccessStrategyStatus,
+							Reason:         crdpinnipedv1alpha1.FetchedKeyStrategyReason,
+							Message:        "Key was fetched successfully",
+							LastUpdateTime: metav1.Now(),
+						},
+					}
 				},
+			)
+			if err != nil {
+				klog.Errorf("error performing create or update on CredentialIssuerConfig to add strategy success: %s", err.Error())
+			}
+		},
+		func(err error) { // error callback
+			if updateErr := issuerconfig.CreateOrUpdateCredentialIssuerConfig(
+				ctx,
+				serverInstallationNamespace,
+				pinnipedClient,
+				func(configToUpdate *crdpinnipedv1alpha1.CredentialIssuerConfig) {
+					configToUpdate.Status.Strategies = []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{
+						{
+							Type:           crdpinnipedv1alpha1.KubeClusterSigningCertificateStrategyType,
+							Status:         crdpinnipedv1alpha1.ErrorStrategyStatus,
+							Reason:         crdpinnipedv1alpha1.CouldNotFetchKeyStrategyReason,
+							Message:        err.Error(),
+							LastUpdateTime: metav1.Now(),
+						},
+					}
+				},
+			); updateErr != nil {
+				klog.Errorf("error performing create or update on CredentialIssuerConfig to add strategy error: %s", updateErr.Error())
 			}
 		},
 	)
-	if updateErr != nil {
-		//nolint:goerr113
-		return nil, nil, fmt.Errorf("error performing create or update on CredentialIssuerConfig to add strategy success: %w", updateErr)
-	}
 
 	return k8sClusterCA, func() { shutdownCA(); ticker.Stop() }, nil
 }

@@ -10,8 +10,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ghodss/yaml"
 	"github.com/stretchr/testify/require"
+	"sigs.k8s.io/yaml"
 )
 
 type TestClusterCapability string
@@ -54,5 +54,12 @@ func SkipUnlessClusterHasCapability(t *testing.T, capability TestClusterCapabili
 	t.Helper()
 	if !ClusterHasCapability(t, capability) {
 		t.Skipf(`skipping integration test because cluster lacks the "%s" capability`, capability)
+	}
+}
+
+func SkipWhenClusterHasCapability(t *testing.T, capability TestClusterCapability) {
+	t.Helper()
+	if ClusterHasCapability(t, capability) {
+		t.Skipf(`skipping integration test because cluster has the "%s" capability`, capability)
 	}
 }

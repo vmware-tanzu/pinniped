@@ -9,9 +9,9 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io/ioutil"
+	"sync"
 	"testing"
 	"time"
 
@@ -53,6 +53,46 @@ func (s *fakePodExecutor) Exec(podNamespace string, podName string, commandAndAr
 	return result, nil
 }
 
+type callbackRecorder struct {
+	numberOfTimesSuccessCalled int
+	numberOfTimesFailureCalled int
+	failureErrors              []error
+	mutex                      sync.Mutex
+}
+
+func (c *callbackRecorder) OnSuccess() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.numberOfTimesSuccessCalled++
+}
+
+func (c *callbackRecorder) OnFailure(err error) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.numberOfTimesFailureCalled++
+	c.failureErrors = append(c.failureErrors, err)
+}
+
+func (c *callbackRecorder) NumberOfTimesSuccessCalled() int {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	return c.numberOfTimesSuccessCalled
+}
+
+func (c *callbackRecorder) NumberOfTimesFailureCalled() int {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	return c.numberOfTimesFailureCalled
+}
+
+func (c *callbackRecorder) FailureErrors() []error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	var errs = make([]error, len(c.failureErrors))
+	copy(errs, c.failureErrors)
+	return errs
+}
+
 func TestCA(t *testing.T) {
 	spec.Run(t, "CA", func(t *testing.T, when spec.G, it spec.S) {
 		var r *require.Assertions
@@ -62,8 +102,28 @@ func TestCA(t *testing.T) {
 		var kubeAPIClient *kubernetesfake.Clientset
 		var fakeExecutor *fakePodExecutor
 		var neverTicker <-chan time.Time
-
+		var callbacks *callbackRecorder
 		var logger *testutil.TranscriptLogger
+
+		var requireInitialFailureLogMessage = func(specificErrorMessage string) {
+			r.Len(logger.Transcript(), 1)
+			r.Equal(
+				fmt.Sprintf("could not initially fetch the API server's signing key: %s\n", specificErrorMessage),
+				logger.Transcript()[0].Message,
+			)
+			r.Equal(logger.Transcript()[0].Level, "error")
+		}
+
+		var requireNotCapableOfIssuingCerts = func(subject *CA) {
+			certPEM, keyPEM, err := subject.IssuePEM(
+				pkix.Name{CommonName: "Test Server"},
+				[]string{"example.com"},
+				10*time.Minute,
+			)
+			r.Nil(certPEM)
+			r.Nil(keyPEM)
+			r.EqualError(err, "this cluster is not currently capable of issuing certificates")
+		}
 
 		it.Before(func() {
 			r = require.New(t)
@@ -104,6 +164,8 @@ func TestCA(t *testing.T) {
 				},
 			}
 
+			callbacks = &callbackRecorder{}
+
 			logger = testutil.NewTranscriptLogger(t)
 			klog.SetLogger(logger) // this is unfortunately a global logger, so can't run these tests in parallel :(
 		})
@@ -122,9 +184,7 @@ func TestCA(t *testing.T) {
 				it("finds the API server's signing key and uses it to issue certificates", func() {
 					fakeTicker := make(chan time.Time)
 
-					subject, shutdownFunc, err := New(kubeAPIClient, fakeExecutor, fakeTicker)
-					r.NoError(err)
-					r.NotNil(shutdownFunc)
+					subject, shutdownFunc := New(kubeAPIClient, fakeExecutor, fakeTicker, callbacks.OnSuccess, callbacks.OnFailure)
 					defer shutdownFunc()
 
 					r.Equal(2, fakeExecutor.callCount)
@@ -136,6 +196,9 @@ func TestCA(t *testing.T) {
 					r.Equal("kube-system", fakeExecutor.calledWithPodNamespace[1])
 					r.Equal("fake-pod", fakeExecutor.calledWithPodName[1])
 					r.Equal([]string{"cat", "/etc/kubernetes/ca/ca.key"}, fakeExecutor.calledWithCommandAndArgs[1])
+
+					r.Equal(1, callbacks.NumberOfTimesSuccessCalled())
+					r.Equal(0, callbacks.NumberOfTimesFailureCalled())
 
 					// Validate that we can issue a certificate signed by the original API server CA.
 					certPEM, keyPEM, err := subject.IssuePEM(
@@ -152,6 +215,10 @@ func TestCA(t *testing.T) {
 					// Tick the timer and wait for another refresh loop to complete.
 					fakeTicker <- time.Now()
 
+					r.Equal(1, callbacks.NumberOfTimesSuccessCalled())
+					r.Equal(0, callbacks.NumberOfTimesFailureCalled())
+
+					// Eventually it starts issuing certs using the new signing key.
 					var secondCertPEM, secondKeyPEM string
 					r.Eventually(func() bool {
 						certPEM, keyPEM, err := subject.IssuePEM(
@@ -191,11 +258,11 @@ func TestCA(t *testing.T) {
 				it("logs an error message", func() {
 					fakeTicker := make(chan time.Time)
 
-					subject, shutdownFunc, err := New(kubeAPIClient, fakeExecutor, fakeTicker)
-					r.NoError(err)
-					r.NotNil(shutdownFunc)
+					subject, shutdownFunc := New(kubeAPIClient, fakeExecutor, fakeTicker, callbacks.OnSuccess, callbacks.OnFailure)
 					defer shutdownFunc()
 					r.Equal(2, fakeExecutor.callCount)
+					r.Equal(1, callbacks.NumberOfTimesSuccessCalled())
+					r.Equal(0, callbacks.NumberOfTimesFailureCalled())
 
 					// Tick the timer and wait for another refresh loop to complete.
 					fakeTicker <- time.Now()
@@ -204,6 +271,10 @@ func TestCA(t *testing.T) {
 					r.Eventually(func() bool { return len(logger.Transcript()) >= 1 }, 5*time.Second, 10*time.Millisecond)
 					r.Contains(logger.Transcript()[0].Message, "could not create signer with API server secret: some exec error")
 					r.Equal(logger.Transcript()[0].Level, "error")
+
+					r.Equal(1, callbacks.NumberOfTimesSuccessCalled())
+					r.Equal(1, callbacks.NumberOfTimesFailureCalled())
+					r.EqualError(callbacks.FailureErrors()[0], "some exec error")
 
 					// Validate that we can still issue a certificate signed by the original API server CA.
 					certPEM, _, err := subject.IssuePEM(
@@ -216,16 +287,62 @@ func TestCA(t *testing.T) {
 				})
 			})
 
+			when("the exec commands fail the first time but subsequently returns the API server's keypair", func() {
+				it.Before(func() {
+					fakeExecutor.errorsToReturn = []error{fmt.Errorf("some exec error"), nil, nil}
+					fakeExecutor.resultsToReturn = []string{"", fakeCertPEM, fakeKeyPEM}
+				})
+
+				it("logs an error message and fails to issue certs until it can get the API server's keypair", func() {
+					fakeTicker := make(chan time.Time)
+
+					subject, shutdownFunc := New(kubeAPIClient, fakeExecutor, fakeTicker, callbacks.OnSuccess, callbacks.OnFailure)
+					defer shutdownFunc()
+					r.Equal(1, fakeExecutor.callCount)
+					r.Equal(0, callbacks.NumberOfTimesSuccessCalled())
+					r.Equal(1, callbacks.NumberOfTimesFailureCalled())
+					r.EqualError(callbacks.FailureErrors()[0], "some exec error")
+
+					requireInitialFailureLogMessage("some exec error")
+					requireNotCapableOfIssuingCerts(subject)
+
+					// Tick the timer and wait for another refresh loop to complete.
+					fakeTicker <- time.Now()
+
+					// Wait until it can start to issue certs, and then validate the issued cert.
+					var certPEM, keyPEM []byte
+					r.Eventually(func() bool {
+						var err error
+						certPEM, keyPEM, err = subject.IssuePEM(
+							pkix.Name{CommonName: "Test Server"},
+							[]string{"example.com"},
+							10*time.Minute,
+						)
+						return err == nil
+					}, 5*time.Second, 10*time.Millisecond)
+					validCert := testutil.ValidateCertificate(t, fakeCertPEM, string(certPEM))
+					validCert.RequireDNSName("example.com")
+					validCert.RequireLifetime(time.Now(), time.Now().Add(10*time.Minute), 2*time.Minute)
+					validCert.RequireMatchesPrivateKey(string(keyPEM))
+
+					r.Equal(1, callbacks.NumberOfTimesSuccessCalled())
+					r.Equal(1, callbacks.NumberOfTimesFailureCalled())
+				})
+			})
+
 			when("the exec commands succeed but return garbage", func() {
 				it.Before(func() {
 					fakeExecutor.resultsToReturn = []string{"not a cert", "not a private key"}
 				})
 
-				it("returns an error", func() {
-					subject, shutdownFunc, err := New(kubeAPIClient, fakeExecutor, neverTicker)
-					r.Nil(subject)
-					r.Nil(shutdownFunc)
-					r.EqualError(err, "could not load CA: tls: failed to find any PEM data in certificate input")
+				it("returns a CA who cannot issue certs", func() {
+					subject, shutdownFunc := New(kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
+					defer shutdownFunc()
+					requireInitialFailureLogMessage("could not load CA: tls: failed to find any PEM data in certificate input")
+					requireNotCapableOfIssuingCerts(subject)
+					r.Equal(0, callbacks.NumberOfTimesSuccessCalled())
+					r.Equal(1, callbacks.NumberOfTimesFailureCalled())
+					r.EqualError(callbacks.FailureErrors()[0], "could not load CA: tls: failed to find any PEM data in certificate input")
 				})
 			})
 
@@ -234,11 +351,14 @@ func TestCA(t *testing.T) {
 					fakeExecutor.errorsToReturn = []error{fmt.Errorf("some error"), nil}
 				})
 
-				it("returns an error", func() {
-					subject, shutdownFunc, err := New(kubeAPIClient, fakeExecutor, neverTicker)
-					r.Nil(subject)
-					r.Nil(shutdownFunc)
-					r.EqualError(err, "some error")
+				it("returns a CA who cannot issue certs", func() {
+					subject, shutdownFunc := New(kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
+					defer shutdownFunc()
+					requireInitialFailureLogMessage("some error")
+					requireNotCapableOfIssuingCerts(subject)
+					r.Equal(0, callbacks.NumberOfTimesSuccessCalled())
+					r.Equal(1, callbacks.NumberOfTimesFailureCalled())
+					r.EqualError(callbacks.FailureErrors()[0], "some error")
 				})
 			})
 
@@ -247,11 +367,14 @@ func TestCA(t *testing.T) {
 					fakeExecutor.errorsToReturn = []error{nil, fmt.Errorf("some error")}
 				})
 
-				it("returns an error", func() {
-					subject, shutdownFunc, err := New(kubeAPIClient, fakeExecutor, neverTicker)
-					r.Nil(subject)
-					r.Nil(shutdownFunc)
-					r.EqualError(err, "some error")
+				it("returns a CA who cannot issue certs", func() {
+					subject, shutdownFunc := New(kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
+					defer shutdownFunc()
+					requireInitialFailureLogMessage("some error")
+					requireNotCapableOfIssuingCerts(subject)
+					r.Equal(0, callbacks.NumberOfTimesSuccessCalled())
+					r.Equal(1, callbacks.NumberOfTimesFailureCalled())
+					r.EqualError(callbacks.FailureErrors()[0], "some error")
 				})
 			})
 		})
@@ -270,9 +393,7 @@ func TestCA(t *testing.T) {
 			})
 
 			it("finds the API server's signing key and uses it to issue certificates", func() {
-				_, shutdownFunc, err := New(kubeAPIClient, fakeExecutor, neverTicker)
-				r.NoError(err)
-				r.NotNil(shutdownFunc)
+				_, shutdownFunc := New(kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
 				defer shutdownFunc()
 
 				r.Equal(2, fakeExecutor.callCount)
@@ -300,9 +421,7 @@ func TestCA(t *testing.T) {
 			})
 
 			it("finds the API server's signing key and uses it to issue certificates", func() {
-				_, shutdownFunc, err := New(kubeAPIClient, fakeExecutor, neverTicker)
-				r.NoError(err)
-				r.NotNil(shutdownFunc)
+				_, shutdownFunc := New(kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
 				defer shutdownFunc()
 
 				r.Equal(2, fakeExecutor.callCount)
@@ -319,11 +438,14 @@ func TestCA(t *testing.T) {
 
 		when("the kube-controller-manager pod is not found", func() {
 			it("returns an error", func() {
-				subject, shutdownFunc, err := New(kubeAPIClient, fakeExecutor, neverTicker)
-				r.Nil(subject)
-				r.Nil(shutdownFunc)
-				r.True(errors.Is(err, ErrNoKubeControllerManagerPod))
+				subject, shutdownFunc := New(kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
+				defer shutdownFunc()
+				requireInitialFailureLogMessage("did not find kube-controller-manager pod")
+				requireNotCapableOfIssuingCerts(subject)
+				r.Equal(0, callbacks.NumberOfTimesSuccessCalled())
+				r.Equal(1, callbacks.NumberOfTimesFailureCalled())
+				r.EqualError(callbacks.FailureErrors()[0], "did not find kube-controller-manager pod")
 			})
 		})
-	}, spec.Report(report.Terminal{}))
+	}, spec.Sequential(), spec.Report(report.Terminal{}))
 }

@@ -30,6 +30,7 @@ import (
 
 // ErrNoKubeControllerManagerPod is returned when no kube-controller-manager pod is found on the cluster.
 const ErrNoKubeControllerManagerPod = constable.Error("did not find kube-controller-manager pod")
+const ErrIncapableOfIssuingCertificates = constable.Error("this cluster is not currently capable of issuing certificates")
 
 const k8sAPIServerCACertPEMDefaultPath = "/etc/kubernetes/ca/ca.pem"
 const k8sAPIServerCAKeyPEMDefaultPath = "/etc/kubernetes/ca/ca.key"
@@ -86,31 +87,50 @@ type CA struct {
 
 	shutdown, done chan struct{}
 
+	onSuccessfulRefresh SuccessCallback
+	onFailedRefresh     FailureCallback
+
 	lock         sync.RWMutex
 	activeSigner signer
 }
 
 type ShutdownFunc func()
+type SuccessCallback func()
+type FailureCallback func(error)
 
-// New creates a new instance of a CA which is has loaded the kube API server's private key
-// and is ready to issue certs, or an error. When successful, it also starts a goroutine
-// to periodically reload the kube API server's private key in case it changed, and returns
-// a function that can be used to shut down that goroutine.
-func New(kubeClient kubernetes.Interface, podCommandExecutor PodCommandExecutor, tick <-chan time.Time) (*CA, ShutdownFunc, error) {
+// New creates a new instance of a CA. It tries to load the kube API server's private key
+// immediately. If that succeeds then it calls the success callback and it is ready to issue certs.
+// When it fails to get the kube API server's private key, then it calls the failure callback and
+// it will try again on the next tick. It starts a goroutine to periodically reload the kube
+// API server's private key in case it failed previously or case the key has changed. It returns
+// a function that can be used to shut down that goroutine. Future attempts made by that goroutine
+// to get the key will also result in success or failure callbacks.
+func New(
+	kubeClient kubernetes.Interface,
+	podCommandExecutor PodCommandExecutor,
+	tick <-chan time.Time,
+	onSuccessfulRefresh SuccessCallback,
+	onFailedRefresh FailureCallback,
+) (*CA, ShutdownFunc) {
 	signer, err := createSignerWithAPIServerSecret(kubeClient, podCommandExecutor)
 	if err != nil {
-		// The initial load failed, so give up
-		return nil, nil, err
+		klog.Errorf("could not initially fetch the API server's signing key: %s", err)
+		signer = nil
+		onFailedRefresh(err)
+	} else {
+		onSuccessfulRefresh()
 	}
 	result := &CA{
-		kubeClient:         kubeClient,
-		podCommandExecutor: podCommandExecutor,
-		activeSigner:       signer,
-		shutdown:           make(chan struct{}),
-		done:               make(chan struct{}),
+		kubeClient:          kubeClient,
+		podCommandExecutor:  podCommandExecutor,
+		shutdown:            make(chan struct{}),
+		done:                make(chan struct{}),
+		onSuccessfulRefresh: onSuccessfulRefresh,
+		onFailedRefresh:     onFailedRefresh,
+		activeSigner:        signer,
 	}
 	go result.refreshLoop(tick)
-	return result, result.shutdownRefresh, nil
+	return result, result.shutdownRefresh
 }
 
 func createSignerWithAPIServerSecret(kubeClient kubernetes.Interface, podCommandExecutor PodCommandExecutor) (signer, error) {
@@ -152,11 +172,13 @@ func (c *CA) updateSigner() {
 	newSigner, err := createSignerWithAPIServerSecret(c.kubeClient, c.podCommandExecutor)
 	if err != nil {
 		klog.Errorf("could not create signer with API server secret: %s", err)
+		c.onFailedRefresh(err)
 		return
 	}
 	c.lock.Lock()
 	c.activeSigner = newSigner
 	c.lock.Unlock()
+	c.onSuccessfulRefresh()
 }
 
 func (c *CA) shutdownRefresh() {
@@ -170,6 +192,10 @@ func (c *CA) IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) (
 	c.lock.RLock()
 	signer := c.activeSigner
 	c.lock.RUnlock()
+
+	if signer == nil {
+		return nil, nil, ErrIncapableOfIssuingCertificates
+	}
 
 	return signer.IssuePEM(subject, dnsNames, ttl)
 }

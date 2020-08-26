@@ -74,24 +74,25 @@ func TestCredentialIssuerConfig(t *testing.T) {
 
 		// Mutate the existing object. Don't delete it because that would mess up its `Status.Strategies` array,
 		// since the reconciling controller is not currently responsible for that field.
-		existingConfig.Status.KubeConfigInfo.Server = "https://junk"
+		updatedServerValue := "https://junk"
+		existingConfig.Status.KubeConfigInfo.Server = updatedServerValue
 		updatedConfig, err := client.
 			CrdV1alpha1().
 			CredentialIssuerConfigs(namespaceName).
 			Update(ctx, existingConfig, metav1.UpdateOptions{})
 		require.NoError(t, err)
-		require.Equal(t, "https://junk", updatedConfig.Status.KubeConfigInfo.Server)
+		require.Equal(t, updatedServerValue, updatedConfig.Status.KubeConfigInfo.Server)
 
-		// Expect that the object's mutated field is set back to what matches its source of truth.
+		// Expect that the object's mutated field is set back to what matches its source of truth by the controller.
 		var actualCredentialIssuerConfig *crdpinnipedv1alpha1.CredentialIssuerConfig
-		var getConfig = func() bool {
+		var configChangesServerField = func() bool {
 			actualCredentialIssuerConfig, err = client.
 				CrdV1alpha1().
 				CredentialIssuerConfigs(namespaceName).
 				Get(ctx, "pinniped-config", metav1.GetOptions{})
-			return err == nil
+			return err == nil && actualCredentialIssuerConfig.Status.KubeConfigInfo.Server != updatedServerValue
 		}
-		assert.Eventually(t, getConfig, 5*time.Second, 100*time.Millisecond)
+		assert.Eventually(t, configChangesServerField, 10*time.Second, 100*time.Millisecond)
 		require.NoError(t, err) // prints out the error and stops the test in case of failure
 		actualStatusKubeConfigInfo := actualCredentialIssuerConfig.Status.KubeConfigInfo
 		require.Equal(t, expectedStatusKubeConfigInfo(config), actualStatusKubeConfigInfo)

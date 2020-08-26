@@ -16,7 +16,6 @@ import (
 
 func TestGetAPIResourceList(t *testing.T) {
 	library.SkipUnlessIntegration(t)
-	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
 
 	client := library.NewPinnipedClientset(t)
 

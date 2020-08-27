@@ -28,19 +28,25 @@ credential for a short-lived, cluster-specific credential. Pinniped supports var
 IDP types and implements different integration strategies for various Kubernetes
 distributions to make authentication possible.
 
+#### Supported Identity Provider Types
+
 The currently supported external IDP types are outlined here. More will be added in the future.
 
 1. Any webhook which implements the 
 [Kubernetes TokenReview API](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#webhook-token-authentication)
 
+#### Supported Cluster Integration Strategies
+
 The currently supported cluster integration strategies are outlined here. More
 will be added in the future.
 
-1. Pinniped hosts a credential exchange API via a Kubernetes aggregated API server.
+1. Pinniped hosts a credential exchange API endpoint via a Kubernetes aggregated API server.
 This API returns a new cluster-specific credential using the cluster's signing keypair to
 issue short-lived cluster certificates. (In the future, when the Kubernetes CSR API
-provides a way to create a short-lived certificate, then the Pinniped credential exchange API
+provides a way to issue short-lived certificates, then the Pinniped credential exchange API
 will use that instead of using the cluster's signing keypair.)
+
+#### `kubectl` Integration
 
 With any of the above IDPs and integration strategies, `kubectl` commands receive the
 cluster-specific credential via a 

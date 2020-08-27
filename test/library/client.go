@@ -18,6 +18,10 @@ import (
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	pinnipedclientset "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned"
+
+	// Import to initialize client auth plugins - the kubeconfig that we use for
+	// testing may use gcloud, az, oidc, etc.
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
 func NewClientConfig(t *testing.T) *rest.Config {

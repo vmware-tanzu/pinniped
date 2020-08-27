@@ -86,7 +86,8 @@ func TestLoad(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
-	got, err := New(pkix.Name{CommonName: "Test CA"})
+	now := time.Now()
+	got, err := New(pkix.Name{CommonName: "Test CA"}, time.Minute)
 	require.NoError(t, err)
 	require.NotNil(t, got)
 
@@ -94,6 +95,8 @@ func TestNew(t *testing.T) {
 	caCert, err := x509.ParseCertificate(got.caCertBytes)
 	require.NoError(t, err)
 	require.Equal(t, "Test CA", caCert.Subject.CommonName)
+	require.WithinDuration(t, now.Add(-5*time.Minute), caCert.NotBefore, 10*time.Second)
+	require.WithinDuration(t, now.Add(time.Minute), caCert.NotAfter, 10*time.Second)
 }
 
 func TestNewInternal(t *testing.T) {
@@ -101,6 +104,7 @@ func TestNewInternal(t *testing.T) {
 
 	tests := []struct {
 		name           string
+		ttl            time.Duration
 		env            env
 		wantErr        string
 		wantCommonName string
@@ -137,6 +141,7 @@ func TestNewInternal(t *testing.T) {
 		},
 		{
 			name: "success",
+			ttl:  time.Minute,
 			env: env{
 				serialRNG:  strings.NewReader(strings.Repeat("x", 64)),
 				keygenRNG:  strings.NewReader(strings.Repeat("y", 64)),
@@ -144,14 +149,14 @@ func TestNewInternal(t *testing.T) {
 				clock:      func() time.Time { return now },
 			},
 			wantCommonName: "Test CA",
-			wantNotAfter:   now.Add(100 * 365 * 24 * time.Hour),
+			wantNotAfter:   now.Add(time.Minute),
 			wantNotBefore:  now.Add(-5 * time.Minute),
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := newInternal(pkix.Name{CommonName: "Test CA"}, tt.env)
+			got, err := newInternal(pkix.Name{CommonName: "Test CA"}, tt.ttl, tt.env)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				require.Nil(t, got)

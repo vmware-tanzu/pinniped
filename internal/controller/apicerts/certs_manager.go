@@ -37,8 +37,8 @@ type certsManagerController struct {
 	aggregatorClient aggregatorclient.Interface
 	secretInformer   corev1informers.SecretInformer
 
-	// certDuration is the lifetime of the serving certificate that this
-	// controller will use when issuing the serving certificate.
+	// certDuration is the lifetime of both the serving certificate and its CA
+	// certificate that this controller will use when issuing the certificates.
 	certDuration time.Duration
 }
 
@@ -88,7 +88,7 @@ func (c *certsManagerController) Sync(ctx controller.Context) error {
 	}
 
 	// Create a CA.
-	aggregatedAPIServerCA, err := certauthority.New(pkix.Name{CommonName: "Pinniped CA"})
+	aggregatedAPIServerCA, err := certauthority.New(pkix.Name{CommonName: "Pinniped CA"}, c.certDuration)
 	if err != nil {
 		return fmt.Errorf("could not initialize CA: %w", err)
 	}

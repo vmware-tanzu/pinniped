@@ -11,7 +11,7 @@ assignees: ''
 
 Hey! Thanks for opening an issue!
 
-It is recommended you include screenshots and logs to help everyone achieve a shared understanding of the improvement.
+It is recommended that you include screenshots and logs to help everyone achieve a shared understanding of the improvement.
 
 -->
 

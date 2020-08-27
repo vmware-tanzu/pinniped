@@ -56,8 +56,8 @@ If you want to contribute to (or just hack on) Pinniped (we encourage it!),
 first check out our [Code of Conduct](doc/code-of-conduct.md), and then [our
 contributing doc](doc/contributing.md).
 
-## Licence
+## License
 
-Pinniped is open source and licenced under Apache License Version 2.0. See [LICENSE](LICENSE) file.
+Pinniped is open source and licensed under Apache License Version 2.0. See [LICENSE](LICENSE) file.
 
 Copyright 2020 VMware, Inc.

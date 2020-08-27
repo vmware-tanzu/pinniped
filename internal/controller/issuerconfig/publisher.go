@@ -94,7 +94,11 @@ func (c *publisherController) Sync(ctx controller.Context) error {
 		return nil
 	}
 
-	config, _ := clientcmd.Load([]byte(kubeConfig))
+	config, err := clientcmd.Load([]byte(kubeConfig))
+	if err != nil {
+		klog.InfoS("could not load kubeconfig configmap key")
+		return nil
+	}
 
 	var certificateAuthorityData, server string
 	for _, v := range config.Clusters {

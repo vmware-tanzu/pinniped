@@ -436,6 +436,26 @@ func TestSync(t *testing.T) {
 					r.Empty(pinnipedAPIClient.Actions())
 				})
 			})
+
+			when("the ConfigMap does not have a valid kubeconfig", func() {
+				it.Before(func() {
+					clusterInfoConfigMap := &corev1.ConfigMap{
+						ObjectMeta: metav1.ObjectMeta{Name: "cluster-info", Namespace: "kube-public"},
+						Data: map[string]string{
+							"kubeconfig": "this is an invalid kubeconfig",
+						},
+					}
+					err := kubeInformerClient.Tracker().Add(clusterInfoConfigMap)
+					r.NoError(err)
+				})
+
+				it("keeps waiting for it to be properly formatted", func() {
+					startInformersAndController()
+					err := controller.TestSync(t, subject, *syncContext)
+					r.NoError(err)
+					r.Empty(pinnipedAPIClient.Actions())
+				})
+			})
 		})
 
 		when("there is not a cluster-info ConfigMap in the kube-public namespace", func() {

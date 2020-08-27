@@ -19,7 +19,6 @@ RUN printf "machine github.com\n\
 WORKDIR /work
 # Get dependencies first so they can be cached as a layer
 COPY go.* ./
-COPY pkg/client/go.* ./pkg/client/
 COPY generated/1.19/apis/go.* ./generated/1.19/apis/
 COPY generated/1.19/client/go.* ./generated/1.19/client/
 RUN go mod download
@@ -34,7 +33,6 @@ COPY hack ./hack
 
 # Build the executable binary (CGO_ENABLED=0 means static linking)
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(hack/get-ldflags.sh)" -o out ./cmd/pinniped-server/...
-
 
 # Use a runtime image based on Debian slim
 FROM debian:10.5-slim

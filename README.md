@@ -66,6 +66,10 @@ Contributions are welcome. Before contributing, please see
 the [Code of Conduct](doc/code-of-conduct.md) and 
 [the contributing guide](doc/contributing.md).
 
+## Reporting Security Vulnerabilities
+
+Please follow the procedure described in [SECURITY.md](SECURITY.md).
+
 ## License
 
 Pinniped is open source and licensed under Apache License Version 2.0. See [LICENSE](LICENSE) file.

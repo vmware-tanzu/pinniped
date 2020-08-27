@@ -46,7 +46,7 @@ With any of the above IDPs and integration strategies, `kubectl` commands receiv
 cluster-specific credential via a 
 [Kubernetes client-go credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins).
 Users may use the Pinniped CLI as the credential plugin, or they may use any proprietary CLI
-built with the [Pinniped Go client library](pkg/client).
+built with the [Pinniped Go client library](generated).
 
 #### Cluster Authentication Sequence Diagram
 
@@ -54,8 +54,9 @@ built with the [Pinniped Go client library](pkg/client).
 
 ## Installation
 
-Currently, Pinniped supports self-hosted clusters where the teh Kube Controller Manager pod is accessible to Pinniped.
-Support for other type of Kubernetes distributions is coming soon.
+Currently, Pinniped supports self-hosted clusters where the Kube Controller Manager pod
+is accessible from Pinniped's pods.
+Support for other types of Kubernetes distributions is coming soon.
 
 To try Pinniped, see [deploy/README.md](deploy/README.md).
 

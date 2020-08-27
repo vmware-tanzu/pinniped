@@ -13,13 +13,17 @@ Hey! Thanks for opening an issue!
 
 IMPORTANT: If you believe this bug is a security issue, please don't use this template and follow our [security guidelines](/doc/security.md).
 
-We really recommend you including screenshots and lots to help us to achieve a shared understanding of the issue.
+We really recommend you including screenshots and logs to help us to achieve a shared understanding of the issue.
 
 -->
 
-**What happened? Please be specific and include screenshots and logs!**
+**What happened?**
 
-**What did you expect to happen? Please be specific and include proposed behavior!**
+> Please be specific and include screenshots and logs!
+
+**What did you expect to happen?**
+
+> Please be specific and include proposed behavior!
 
 **What is the simplest way to reproduce this behavior?**
 

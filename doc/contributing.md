@@ -27,7 +27,7 @@ guidelines in the issue and pull request templates!
 ## Features
 
 To suggest a feature, please first open an
-[issue](https://github.com/suzerain-io/pinniped/issues/new) and tag it with
+[issue](https://github.com/suzerain-io/pinniped/issues/new?template=feature-proposal.md) and tag it with
 `proposal`. The project team will work with you on your feature request.
 
 Once the feature request has been validated, a [pull

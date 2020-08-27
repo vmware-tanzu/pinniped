@@ -1,6 +1,6 @@
 ---
 name: Feature proposal
-about: Suggest a way to make improve this project
+about: Suggest a way to improve this project
 title: ''
 labels: ''
 assignees: ''
@@ -11,7 +11,7 @@ assignees: ''
 
 Hey! Thanks for opening an issue!
 
-We really recommend you including screenshots and logs to help us to achieve a shared understanding of the issue.
+It is recommended you include screenshots and logs to help everyone achieve a shared understanding of the improvement.
 
 -->
 
@@ -19,7 +19,7 @@ We really recommend you including screenshots and logs to help us to achieve a s
 
 > Please provide a clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
 
-**What is the best solution to solve the above problem?**
+**What is the best solution to the above problem?**
 
 > Please provide a clear and concise description of what the solution is.
 
@@ -29,7 +29,7 @@ We really recommend you including screenshots and logs to help us to achieve a s
 
 **How will this project improvement be tested?**
 
-> Please include your thoughts on how we can ensure that this improvement is tested thoroughly.
+> Please include your thoughts on how this improvement can be thoroughly tested.
 
 **In what environment do you hope to see this improvement?**
 - Pinniped server version:
@@ -43,4 +43,4 @@ We really recommend you including screenshots and logs to help us to achieve a s
 - Kernel (e.g. `uname -a`):
 - Others:
 
-**What else do we need to know?**
+**What else is there to know about this improvement?**

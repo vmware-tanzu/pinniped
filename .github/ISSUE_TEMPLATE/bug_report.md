@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Tell us about a problem you are experiencing
+about: Explain a problem you are experiencing
 title: ''
 labels: ''
 assignees: ''
@@ -13,7 +13,7 @@ Hey! Thanks for opening an issue!
 
 IMPORTANT: If you believe this bug is a security issue, please don't use this template and follow our [security guidelines](/doc/security.md).
 
-We really recommend you including screenshots and logs to help us to achieve a shared understanding of the issue.
+It is recommended that you include screenshots and logs to help everyone achieve a shared understanding of the bug.
 
 -->
 
@@ -39,4 +39,4 @@ We really recommend you including screenshots and logs to help us to achieve a s
 - Kernel (e.g. `uname -a`):
 - Others:
 
-**What else do we need to know?**
+**What else is there to know about this bug?**

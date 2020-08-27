@@ -7,16 +7,6 @@ updates:
     schedule:
       interval: "daily"
 
-  - package-ecosystem: "gomod"
-    directory: "/test "
-    schedule:
-      interval: "daily"
-
-  - package-ecosystem: "gomod"
-    directory: "/pkg/client"
-    schedule:
-      interval: "daily"
-
   - package-ecosystem: "docker"
     directory: "/"
     schedule:

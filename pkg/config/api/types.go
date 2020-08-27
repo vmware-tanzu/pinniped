@@ -45,7 +45,8 @@ type APIConfigSpec struct {
 type ServingCertificateConfigSpec struct {
 	// DurationSeconds is the validity period, in seconds, of the API serving
 	// certificate. By default, the serving certificate is issued for 31536000
-	// seconds (1 year).
+	// seconds (1 year). This value is also used for the serving certificate's
+	// CA certificate.
 	DurationSeconds *int64 `json:"durationSeconds,omitempty"`
 
 	// RenewBeforeSeconds is the period of time, in seconds, that pinniped will

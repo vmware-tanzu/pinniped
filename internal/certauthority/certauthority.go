@@ -85,11 +85,13 @@ func Load(certPEM string, keyPEM string) (*CA, error) {
 	}, nil
 }
 
-// New generates a fresh certificate authority with the given subject.
-func New(subject pkix.Name) (*CA, error) { return newInternal(subject, secureEnv()) }
+// New generates a fresh certificate authority with the given subject and ttl.
+func New(subject pkix.Name, ttl time.Duration) (*CA, error) {
+	return newInternal(subject, ttl, secureEnv())
+}
 
 // newInternal is the internal guts of New, broken out for easier testing.
-func newInternal(subject pkix.Name, env env) (*CA, error) {
+func newInternal(subject pkix.Name, ttl time.Duration, env env) (*CA, error) {
 	ca := CA{env: env}
 	// Generate a random serial for the CA
 	serialNumber, err := randomSerial(env.serialRNG)
@@ -104,10 +106,10 @@ func newInternal(subject pkix.Name, env env) (*CA, error) {
 	}
 	ca.signer = privateKey
 
-	// Make a CA certificate valid for 100 years and backdated by some amount.
+	// Make a CA certificate valid for some ttl and backdated by some amount.
 	now := env.clock()
 	notBefore := now.Add(-certBackdate)
-	notAfter := now.Add(24 * time.Hour * 365 * 100)
+	notAfter := now.Add(ttl)
 
 	// Create CA cert template
 	caTemplate := x509.Certificate{

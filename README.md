@@ -1,12 +1,5 @@
 # Pinniped
 
-<img src="https://cdn.pixabay.com/photo/2015/12/07/21/52/harbor-1081482_1280.png" alt="Image of pinniped" width="250px"/>
-
-<!--
-    Image source: https://pixabay.com/illustrations/harbor-seal-sitting-maine-marine-1081482/
-    Free for commercial use without attribution. https://pixabay.com/service/license/
--->
-
 ## Overview
 
 Pinniped provides identity services to Kubernetes.

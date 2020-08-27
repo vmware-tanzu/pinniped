@@ -14,7 +14,7 @@ you may want to know to get started.
 ## Bugs
 
 To file a bug report, please first open an
-[issue](https://github.com/suzerain-io/pinniped/issues/new). The project team
+[issue](https://github.com/suzerain-io/pinniped/issues/new?template=bug_report.md). The project team
 will work with you on your bug report.
 
 Once the bug has been validated, a [pull

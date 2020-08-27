@@ -1,11 +1,15 @@
 # Deploying
 
-This example deployment uses `ytt` and `kapp` from [k14s.io](https://k14s.io/).
+## Tools
 
-If you would rather not install these command-line tools directly on your machine,
-you can alternatively use the most recent version of this container image:
-https://hub.docker.com/r/k14s/image/tags
+This example deployment uses `ytt` from [Carvel](https://carvel.dev/) to template the YAML files.
+Either [install `ytt`](https://get-ytt.io/) or use the [container image from Dockerhub](https://hub.docker.com/r/k14s/image/tags).
 
-1. Fill in the values in [values.yml](values.yaml)
+## Procedure
+
+1. The configuration options are in [values.yml](values.yaml). Fill in the values in that file, or override those values
+   using `ytt` command-line options in the command below.
 2. In a terminal, cd to this `deploy` directory
-3. Run: `ytt --file . | kapp deploy --yes --app pinniped --diff-changes --file -`
+3. To generate the final YAML files, run: `ytt --file .`
+4. Deploy the generated YAML using your preferred deployment tool, such as `kubectl` or [`kapp`](https://get-kapp.io/).
+   For example: `ytt --file . | kapp deploy --yes --app pinniped --diff-changes --file -`

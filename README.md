@@ -4,50 +4,67 @@
 
 Pinniped provides identity services to Kubernetes.
 
-Pinniped allows cluster administrators to easily plugin upstream identity
+Pinniped allows cluster administrators to easily plug in external identity
 providers (IDPs) into Kubernetes clusters. This is achieved via a uniform
 install procedure across all types and origins of Kubernetes clusters,
 declarative configuration via Kubernetes APIs, enterprise-grade integrations
-with upstream IDPs, and distribution-specific integration mechanisms.
+with IDPs, and distribution-specific integration strategies.
 
-### Use cases
+### Example Use Cases
 
-* **Your team uses a large enterprise IDP, and has many clusters that they
-  manage**; Pinniped provides:
-  * seamless and robust integration with the upstream IDP,
-  * the ability to be easily installed across clusters of any type and origin,
-  * and a simplified login flow across all clusters.
-* **You are on a small team that shares a single cluster**; Pinniped provides:
-  * simple configuration for your team's specific needs,
-  * and individual, revocable identities.
+* Your team uses a large enterprise IDP, and has many clusters that they
+  manage. Pinniped provides:
+  * Seamless and robust integration with the IDP
+  * Easy installation across clusters of any type and origin
+  * A simplified login flow across all clusters
+* Your team shares a single cluster. Pinniped provides:
+  * Simple configuration to integrate an IDP
+  * Individual, revocable identities
 
 ### Architecture
 
-Pinniped offers a credential exchange API via a Kubernetes aggregated API where
-a user can exchange an upstream IDP credential for a cluster-specific
-credential. A specific example of this exchange is provided below where:
-* the upstream IDP is a webhook that supports the [Kubernetes TokenReview
-  API](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#webhook-token-authentication),
-* the cluster-specific credential is minted using the cluster signing keypair to
-issue short-lived cluster certificates (note: this particular credential minting
-mechanism is temporary until the Kubernetes CSR API provides the ability to set
-a certificate TTL),
-* and the cluster-specific credential is provided to the `kubectl` binary using
-a [Kubernetes client-go credential
-plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins).
+Pinniped offers credential exchange to enable a user to exchange an external IDP 
+credential for a short-lived, cluster-specific credential. Pinniped supports various
+IDP types and implements different integration strategies for various Kubernetes
+distributions to make authentication possible.
+
+The currently supported external IDP types are outlined here. More will be added in the future.
+
+1. Any webhook which implements the 
+[Kubernetes TokenReview API](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#webhook-token-authentication)
+
+The currently supported cluster integration strategies are outlined here. More
+will be added in the future.
+
+1. Pinniped hosts a credential exchange API via a Kubernetes aggregated API server.
+This API returns a new cluster-specific credential using the cluster's signing keypair to
+issue short-lived cluster certificates. (In the future, when the Kubernetes CSR API
+provides a way to create a short-lived certificate, then the Pinniped credential exchange API
+will use that instead of using the cluster's signing keypair.)
+
+With any of the above IDPs and integration strategies, `kubectl` commands receive the
+cluster-specific credential via a 
+[Kubernetes client-go credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins).
+Users may use the Pinniped CLI as the credential plugin, or they may use any proprietary CLI
+built with the [Pinniped Go client library](generated).
+
+#### Cluster Authentication Sequence Diagram
 
 ![implementation](doc/img/pinniped.svg)
 
-## Install
+## Installation
 
-To try out Pinniped, check out [our officially supported deployment mechanism
-with ytt](deploy/README.md).
+Currently, Pinniped supports self-hosted clusters where the Kube Controller Manager pod
+is accessible from Pinniped's pods.
+Support for other types of Kubernetes distributions is coming soon.
 
-## Contribute
+To try Pinniped, see [deploy/README.md](deploy/README.md).
 
-If you want to contribute to (or just hack on) Pinniped (we encourage it!),
-first check out our [Code of Conduct](doc/code-of-conduct.md), and then [our
-contributing doc](doc/contributing.md).
+## Contributions
+
+Contributions are welcome. Before contributing, please see
+the [Code of Conduct](doc/code-of-conduct.md) and 
+[the contributing guide](doc/contributing.md).
 
 ## License
 

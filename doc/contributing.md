@@ -1,11 +1,10 @@
 # Contributing to Pinniped
 
-We would love for you to contribute to Pinniped! Here is a basic list of things
-you may want to know to get started.
+Contributions to Pinniped are welcome. Here are some things to help you get started.
 
-1. Check out our [Code of Conduct](code-of-conduct.md).
-1. Learn about the [scope](scope.md) of our project.
-1. Coming soon: details about how to legally contribute to the project!
+1. Please see the [Code of Conduct](code-of-conduct.md).
+1. Learn about the [scope](scope.md) of the project.
+1. Coming soon: details about how to legally contribute to the project, including CLA/DCO details.
 1. See below for how to [file a bug report](#bugs).
 1. See below for how to [suggest a feature](#features).
 1. See below for how to [build the code](#building).
@@ -17,34 +16,32 @@ To file a bug report, please first open an
 [issue](https://github.com/suzerain-io/pinniped/issues/new?template=bug_report.md). The project team
 will work with you on your bug report.
 
-Once the bug has been validated, a [pull
-request](https://github.com/suzerain-io/pinniped/compare) can be opened to fix
-the bug.
+Once the bug has been validated, a [pull request](https://github.com/suzerain-io/pinniped/compare) 
+can be opened to fix the bug.
 
 For specifics on what to include in your bug report, please follow the
-guidelines in the issue and pull request templates!
+guidelines in the issue and pull request templates.
 
 ## Features
 
 To suggest a feature, please first open an
-[issue](https://github.com/suzerain-io/pinniped/issues/new?template=feature-proposal.md) and tag it with
-`proposal`. The project team will work with you on your feature request.
+[issue](https://github.com/suzerain-io/pinniped/issues/new?template=feature-proposal.md)
+and tag it with `proposal`. The project team will work with you on your feature request.
 
-Once the feature request has been validated, a [pull
-request](https://github.com/suzerain-io/pinniped/compare) can be opened to
-implement the feature.
+Once the feature request has been validated, a [pull request](https://github.com/suzerain-io/pinniped/compare) 
+can be opened to implement the feature.
 
 For specifics on what to include in your feature request, please follow the
-guidelines in the issue and pull request templates!
+guidelines in the issue and pull request templates.
 
 ## Building
 
-The [Dockerfile](../Dockerfile) at the root of the repo is how we build and
-package the `pinniped-server` code. After you make a change to the code, you can
-rebuild that docker image with the following command.
+The [Dockerfile](../Dockerfile) at the root of the repo can be used to build and
+package the `pinniped-server` code. After making a change to the code,
+rebuild the docker image with the following command.
 
-```cmd
-# From the root of the repo...
+```bash
+# From the root directory of the repo...
 docker build .
 ```
 
@@ -52,29 +49,27 @@ docker build .
 
 ### Running Lint
 
-```cmd
+```bash
 ./hack/module.sh lint
 ```
 
 ### Running Unit Tests
 
-```cmd
+```bash
 ./hack/module.sh unittest
 ```
 
 ### Running Integration Tests
 
-More details coming soon!
+Details coming soon.
 
-### Pre-commit hooks
+### Pre-commit Hooks
 
-This project uses the [pre-commit] to agree on some conventions about whitespace/file encoding.
+This project uses [pre-commit](https://pre-commit.com/) to agree on some conventions about whitespace/file encoding.
 
-```cmd
+```bash
 $ brew install pre-commit
 [...]
 $ pre-commit install
 pre-commit installed at .git/hooks/pre-commit
 ```
-
-[pre-commit]: https://pre-commit.com/

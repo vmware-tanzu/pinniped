@@ -50,7 +50,6 @@ data:
   .dockerconfigjson: #@ data.values.image_pull_dockerconfigjson
 #@ end
 ---
-#! TODO set resource minimums (e.g. 512MB RAM) to make sure we get scheduled onto a reasonable node?
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -83,6 +82,9 @@ spec:
           image: #@ data.values.image_repo + ":" + data.values.image_tag
           #@ end
           imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "128Mi"
           args:
             - --config=/etc/config/pinniped.yaml
             - --downward-api-path=/etc/podinfo

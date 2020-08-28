@@ -6,8 +6,9 @@ SPDX-License-Identifier: Apache-2.0
 package testutil
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -82,7 +83,7 @@ func (v *ValidCert) RequireMatchesPrivateKey(keyPEM string) {
 // There is nothing very special about the certificate that it creates, just
 // that it is a valid certificate that can be used for testing.
 func CreateCertificate(notBefore, notAfter time.Time) ([]byte, error) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, err
 	}

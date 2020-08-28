@@ -7,8 +7,9 @@ package apicerts
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"errors"
 	"testing"
@@ -197,11 +198,12 @@ func TestExpirerControllerSync(t *testing.T) {
 		{
 			name: "parse cert failure",
 			fillSecretData: func(t *testing.T, m map[string][]byte) {
-				privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+				privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 				require.NoError(t, err)
 
 				// See certs_manager.go for this constant.
-				m["tlsCertificateChain"] = x509.MarshalPKCS1PrivateKey(privateKey)
+				m["tlsCertificateChain"], err = x509.MarshalPKCS8PrivateKey(privateKey)
+				require.NoError(t, err)
 			},
 			wantDelete: false,
 		},

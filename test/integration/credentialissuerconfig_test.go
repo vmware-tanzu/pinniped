@@ -55,7 +55,7 @@ func TestCredentialIssuerConfig(t *testing.T) {
 		} else {
 			require.Equal(t, crdpinnipedv1alpha1.ErrorStrategyStatus, actualStatusStrategy.Status)
 			require.Equal(t, crdpinnipedv1alpha1.CouldNotFetchKeyStrategyReason, actualStatusStrategy.Reason)
-			require.Contains(t, actualStatusStrategy.Message, "some part of the error message")
+			require.Contains(t, actualStatusStrategy.Message, "did not find kube-controller-manager pod")
 			// For now, don't verify the kube config info because its not available on GKE. We'll need to address
 			// this somehow once we starting supporting those cluster types.
 			// Require `nil` to remind us to address this later for other types of clusters where it is available.

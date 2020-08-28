@@ -131,15 +131,22 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			// Check that we can still make requests to the aggregated API through the kube API server,
 			// because the kube API server uses these certs when proxying requests to the aggregated API server,
 			// so this is effectively checking that the aggregated API server is using these new certs.
+			// We ensure that 10 straight requests succeed so that we filter out false positives where a single
+			// pod has rotated their cert, but not the other ones sitting behind the service.
 			aggregatedAPIWorking := func() bool {
-				_, err = pinnipedClient.PinnipedV1alpha1().CredentialRequests().Create(ctx, &v1alpha1.CredentialRequest{
-					TypeMeta:   metav1.TypeMeta{},
-					ObjectMeta: metav1.ObjectMeta{},
-					Spec: v1alpha1.CredentialRequestSpec{
-						Type:  v1alpha1.TokenCredentialType,
-						Token: &v1alpha1.CredentialRequestTokenCredential{Value: "not a good token"},
-					},
-				}, metav1.CreateOptions{})
+				for i := 0; i < 10; i++ {
+					_, err = pinnipedClient.PinnipedV1alpha1().CredentialRequests().Create(ctx, &v1alpha1.CredentialRequest{
+						TypeMeta:   metav1.TypeMeta{},
+						ObjectMeta: metav1.ObjectMeta{},
+						Spec: v1alpha1.CredentialRequestSpec{
+							Type:  v1alpha1.TokenCredentialType,
+							Token: &v1alpha1.CredentialRequestTokenCredential{Value: "not a good token"},
+						},
+					}, metav1.CreateOptions{})
+					if err != nil {
+						break
+					}
+				}
 				// Should have got a success response with an error message inside it complaining about the token value.
 				return err == nil
 			}

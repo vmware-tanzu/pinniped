@@ -69,7 +69,7 @@ To try Pinniped, see [deploy/README.md](deploy/README.md).
 ## Contributions
 
 Contributions are welcome. Before contributing, please see
-the [Code of Conduct](doc/code-of-conduct.md) and 
+the [Code of Conduct](doc/code_of_conduct.md) and 
 [the contributing guide](doc/contributing.md).
 
 ## Reporting Security Vulnerabilities

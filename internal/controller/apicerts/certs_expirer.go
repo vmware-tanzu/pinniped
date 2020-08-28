@@ -18,9 +18,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"github.com/suzerain-io/controller-go"
 	"github.com/suzerain-io/pinniped/internal/constable"
 	pinnipedcontroller "github.com/suzerain-io/pinniped/internal/controller"
+	"github.com/suzerain-io/pinniped/internal/controllerlib"
 )
 
 type certsExpirerController struct {
@@ -33,7 +33,7 @@ type certsExpirerController struct {
 	renewBefore time.Duration
 }
 
-// NewCertsExpirerController returns a controller.Controller that will delete a
+// NewCertsExpirerController returns a controllerlib.Controller that will delete a
 // certificate secret once it gets within some threshold of its expiration time. The
 // deletion forces rotation of the secret with the help of other controllers.
 func NewCertsExpirerController(
@@ -42,9 +42,9 @@ func NewCertsExpirerController(
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	renewBefore time.Duration,
-) controller.Controller {
-	return controller.New(
-		controller.Config{
+) controllerlib.Controller {
+	return controllerlib.New(
+		controllerlib.Config{
 			Name: "certs-expirer-controller",
 			Syncer: &certsExpirerController{
 				namespace:      namespace,
@@ -56,13 +56,13 @@ func NewCertsExpirerController(
 		withInformer(
 			secretInformer,
 			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretName, namespace),
-			controller.InformerOption{},
+			controllerlib.InformerOption{},
 		),
 	)
 }
 
 // Sync implements controller.Syncer.Sync.
-func (c *certsExpirerController) Sync(ctx controller.Context) error {
+func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 	secret, err := c.secretInformer.Lister().Secrets(c.namespace).Get(certsSecretName)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {

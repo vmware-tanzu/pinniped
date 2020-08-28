@@ -24,7 +24,7 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	kubetesting "k8s.io/client-go/testing"
 
-	"github.com/suzerain-io/controller-go"
+	"github.com/suzerain-io/pinniped/internal/controllerlib"
 	"github.com/suzerain-io/pinniped/internal/testutil"
 )
 
@@ -247,15 +247,15 @@ func TestExpirerControllerSync(t *testing.T) {
 				namespace,
 				kubeAPIClient,
 				kubeInformers.Core().V1().Secrets(),
-				controller.WithInformer,
+				controllerlib.WithInformer,
 				test.renewBefore,
 			)
 
 			// Must start informers before calling TestRunSynchronously().
 			kubeInformers.Start(ctx.Done())
-			controller.TestRunSynchronously(t, c)
+			controllerlib.TestRunSynchronously(t, c)
 
-			err := controller.TestSync(t, c, controller.Context{
+			err := controllerlib.TestSync(t, c, controllerlib.Context{
 				Context: ctx,
 			})
 			if test.wantError != "" {

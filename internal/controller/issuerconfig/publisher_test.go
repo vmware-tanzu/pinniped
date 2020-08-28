@@ -23,10 +23,10 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 
-	"github.com/suzerain-io/controller-go"
 	crdpinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
 	pinnipedfake "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned/fake"
 	pinnipedinformers "github.com/suzerain-io/pinniped/generated/1.19/client/informers/externalversions"
+	"github.com/suzerain-io/pinniped/internal/controllerlib"
 	"github.com/suzerain-io/pinniped/internal/testutil"
 )
 
@@ -36,8 +36,8 @@ func TestInformerFilters(t *testing.T) {
 
 		var r *require.Assertions
 		var observableWithInformerOption *testutil.ObservableWithInformerOption
-		var configMapInformerFilter controller.Filter
-		var credentialIssuerConfigInformerFilter controller.Filter
+		var configMapInformerFilter controllerlib.Filter
+		var credentialIssuerConfigInformerFilter controllerlib.Filter
 
 		it.Before(func() {
 			r = require.New(t)
@@ -57,7 +57,7 @@ func TestInformerFilters(t *testing.T) {
 		})
 
 		when("watching ConfigMap objects", func() {
-			var subject controller.Filter
+			var subject controllerlib.Filter
 			var target, wrongNamespace, wrongName, unrelated *corev1.ConfigMap
 
 			it.Before(func() {
@@ -105,7 +105,7 @@ func TestInformerFilters(t *testing.T) {
 		})
 
 		when("watching CredentialIssuerConfig objects", func() {
-			var subject controller.Filter
+			var subject controllerlib.Filter
 			var target, wrongNamespace, wrongName, unrelated *crdpinnipedv1alpha1.CredentialIssuerConfig
 
 			it.Before(func() {
@@ -168,7 +168,7 @@ func TestSync(t *testing.T) {
 
 		var r *require.Assertions
 
-		var subject controller.Controller
+		var subject controllerlib.Controller
 		var serverOverride *string
 		var kubeInformerClient *kubernetesfake.Clientset
 		var pinnipedInformerClient *pinnipedfake.Clientset
@@ -177,7 +177,7 @@ func TestSync(t *testing.T) {
 		var pinnipedAPIClient *pinnipedfake.Clientset
 		var timeoutContext context.Context
 		var timeoutContextCancel context.CancelFunc
-		var syncContext *controller.Context
+		var syncContext *controllerlib.Context
 
 		var expectedCredentialIssuerConfig = func(expectedNamespace, expectedServerURL, expectedCAData string) (schema.GroupVersionResource, *crdpinnipedv1alpha1.CredentialIssuerConfig) {
 			expectedCredentialIssuerConfigGVR := schema.GroupVersionResource{
@@ -211,14 +211,14 @@ func TestSync(t *testing.T) {
 				pinnipedAPIClient,
 				kubeInformers.Core().V1().ConfigMaps(),
 				pinnipedInformers.Crd().V1alpha1().CredentialIssuerConfigs(),
-				controller.WithInformer,
+				controllerlib.WithInformer,
 			)
 
 			// Set this at the last second to support calling subject.Name().
-			syncContext = &controller.Context{
+			syncContext = &controllerlib.Context{
 				Context: timeoutContext,
 				Name:    subject.Name(),
-				Key: controller.Key{
+				Key: controllerlib.Key{
 					Namespace: "kube-public",
 					Name:      "cluster-info",
 				},
@@ -227,7 +227,7 @@ func TestSync(t *testing.T) {
 			// Must start informers before calling TestRunSynchronously()
 			kubeInformers.Start(timeoutContext.Done())
 			pinnipedInformers.Start(timeoutContext.Done())
-			controller.TestRunSynchronously(t, subject)
+			controllerlib.TestRunSynchronously(t, subject)
 		}
 
 		it.Before(func() {
@@ -274,7 +274,7 @@ func TestSync(t *testing.T) {
 				when("the CredentialIssuerConfig does not already exist", func() {
 					it("creates a CredentialIssuerConfig", func() {
 						startInformersAndController()
-						err := controller.TestSync(t, subject, *syncContext)
+						err := controllerlib.TestSync(t, subject, *syncContext)
 						r.NoError(err)
 
 						expectedCredentialIssuerConfigGVR, expectedCredentialIssuerConfig := expectedCredentialIssuerConfig(
@@ -308,7 +308,7 @@ func TestSync(t *testing.T) {
 
 						it("returns the create error", func() {
 							startInformersAndController()
-							err := controller.TestSync(t, subject, *syncContext)
+							err := controllerlib.TestSync(t, subject, *syncContext)
 							r.EqualError(err, "could not create or update credentialissuerconfig: create failed: create failed")
 						})
 					})
@@ -319,7 +319,7 @@ func TestSync(t *testing.T) {
 							*serverOverride = "https://some-server-override"
 
 							startInformersAndController()
-							err := controller.TestSync(t, subject, *syncContext)
+							err := controllerlib.TestSync(t, subject, *syncContext)
 							r.NoError(err)
 
 							expectedCredentialIssuerConfigGVR, expectedCredentialIssuerConfig := expectedCredentialIssuerConfig(
@@ -357,7 +357,7 @@ func TestSync(t *testing.T) {
 
 						it("does not update the CredentialIssuerConfig to avoid unnecessary etcd writes/api calls", func() {
 							startInformersAndController()
-							err := controller.TestSync(t, subject, *syncContext)
+							err := controllerlib.TestSync(t, subject, *syncContext)
 							r.NoError(err)
 
 							r.Empty(pinnipedAPIClient.Actions())
@@ -378,7 +378,7 @@ func TestSync(t *testing.T) {
 
 						it("updates the existing CredentialIssuerConfig", func() {
 							startInformersAndController()
-							err := controller.TestSync(t, subject, *syncContext)
+							err := controllerlib.TestSync(t, subject, *syncContext)
 							r.NoError(err)
 
 							expectedCredentialIssuerConfigGVR, expectedCredentialIssuerConfig := expectedCredentialIssuerConfig(
@@ -409,7 +409,7 @@ func TestSync(t *testing.T) {
 
 							it("returns the update error", func() {
 								startInformersAndController()
-								err := controller.TestSync(t, subject, *syncContext)
+								err := controllerlib.TestSync(t, subject, *syncContext)
 								r.EqualError(err, "could not create or update credentialissuerconfig: update failed")
 							})
 						})
@@ -431,7 +431,7 @@ func TestSync(t *testing.T) {
 
 				it("keeps waiting for it to exist", func() {
 					startInformersAndController()
-					err := controller.TestSync(t, subject, *syncContext)
+					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.NoError(err)
 					r.Empty(pinnipedAPIClient.Actions())
 				})
@@ -451,7 +451,7 @@ func TestSync(t *testing.T) {
 
 				it("keeps waiting for it to be properly formatted", func() {
 					startInformersAndController()
-					err := controller.TestSync(t, subject, *syncContext)
+					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.NoError(err)
 					r.Empty(pinnipedAPIClient.Actions())
 				})
@@ -472,7 +472,7 @@ func TestSync(t *testing.T) {
 
 			it("keeps waiting for one", func() {
 				startInformersAndController()
-				err := controller.TestSync(t, subject, *syncContext)
+				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 				r.Empty(pinnipedAPIClient.Actions())
 			})

@@ -18,9 +18,9 @@ import (
 	"k8s.io/klog/v2"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	"github.com/suzerain-io/controller-go"
 	"github.com/suzerain-io/pinniped/internal/certauthority"
 	pinnipedcontroller "github.com/suzerain-io/pinniped/internal/controller"
+	"github.com/suzerain-io/pinniped/internal/controllerlib"
 )
 
 const (
@@ -50,9 +50,9 @@ func NewCertsManagerController(
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	withInitialEvent pinnipedcontroller.WithInitialEventOptionFunc,
 	certDuration time.Duration,
-) controller.Controller {
-	return controller.New(
-		controller.Config{
+) controllerlib.Controller {
+	return controllerlib.New(
+		controllerlib.Config{
 			Name: "certs-manager-controller",
 			Syncer: &certsManagerController{
 				namespace:        namespace,
@@ -65,17 +65,17 @@ func NewCertsManagerController(
 		withInformer(
 			secretInformer,
 			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretName, namespace),
-			controller.InformerOption{},
+			controllerlib.InformerOption{},
 		),
 		// Be sure to run once even if the Secret that the informer is watching doesn't exist.
-		withInitialEvent(controller.Key{
+		withInitialEvent(controllerlib.Key{
 			Namespace: namespace,
 			Name:      certsSecretName,
 		}),
 	)
 }
 
-func (c *certsManagerController) Sync(ctx controller.Context) error {
+func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 	// Try to get the secret from the informer cache.
 	_, err := c.secretInformer.Lister().Secrets(c.namespace).Get(certsSecretName)
 	notFound := k8serrors.IsNotFound(err)

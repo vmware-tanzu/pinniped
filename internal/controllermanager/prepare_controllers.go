@@ -16,11 +16,11 @@ import (
 	restclient "k8s.io/client-go/rest"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	"github.com/suzerain-io/controller-go"
 	pinnipedclientset "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned"
 	pinnipedinformers "github.com/suzerain-io/pinniped/generated/1.19/client/informers/externalversions"
 	"github.com/suzerain-io/pinniped/internal/controller/apicerts"
 	"github.com/suzerain-io/pinniped/internal/controller/issuerconfig"
+	"github.com/suzerain-io/pinniped/internal/controllerlib"
 	"github.com/suzerain-io/pinniped/internal/provider"
 )
 
@@ -48,7 +48,7 @@ func PrepareControllers(
 		createInformers(serverInstallationNamespace, k8sClient, pinnipedClient)
 
 	// Create controller manager.
-	controllerManager := controller.
+	controllerManager := controllerlib.
 		NewManager().
 		WithController(
 			issuerconfig.NewPublisherController(
@@ -57,7 +57,7 @@ func PrepareControllers(
 				pinnipedClient,
 				kubePublicNamespaceK8sInformers.Core().V1().ConfigMaps(),
 				installationNamespacePinnipedInformers.Crd().V1alpha1().CredentialIssuerConfigs(),
-				controller.WithInformer,
+				controllerlib.WithInformer,
 			),
 			singletonWorker,
 		).
@@ -67,8 +67,8 @@ func PrepareControllers(
 				k8sClient,
 				aggregatorClient,
 				installationNamespaceK8sInformers.Core().V1().Secrets(),
-				controller.WithInformer,
-				controller.WithInitialEvent,
+				controllerlib.WithInformer,
+				controllerlib.WithInitialEvent,
 				servingCertDuration,
 			),
 			singletonWorker,
@@ -78,7 +78,7 @@ func PrepareControllers(
 				serverInstallationNamespace,
 				dynamicCertProvider,
 				installationNamespaceK8sInformers.Core().V1().Secrets(),
-				controller.WithInformer,
+				controllerlib.WithInformer,
 			),
 			singletonWorker,
 		).
@@ -87,7 +87,7 @@ func PrepareControllers(
 				serverInstallationNamespace,
 				k8sClient,
 				installationNamespaceK8sInformers.Core().V1().Secrets(),
-				controller.WithInformer,
+				controllerlib.WithInformer,
 				servingCertRenewBefore,
 			),
 			singletonWorker,

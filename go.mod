@@ -12,7 +12,6 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.6.1
-	github.com/suzerain-io/controller-go v0.0.0-20200730212956-7f99b569ca9f
 	github.com/suzerain-io/pinniped/generated/1.19/apis v0.0.0-00010101000000-000000000000
 	github.com/suzerain-io/pinniped/generated/1.19/client v0.0.0-00010101000000-000000000000
 	k8s.io/api v0.19.0

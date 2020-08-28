@@ -17,10 +17,12 @@ import (
 
 	"github.com/suzerain-io/pinniped/internal/controllerlib/test/integration/examplecontroller/api"
 	examplestart "github.com/suzerain-io/pinniped/internal/controllerlib/test/integration/examplecontroller/starter"
-	"github.com/suzerain-io/pinniped/internal/controllerlib/test/library"
+	"github.com/suzerain-io/pinniped/test/library"
 )
 
 func TestExampleController(t *testing.T) {
+	library.SkipUnlessIntegration(t)
+
 	config := library.NewClientConfig(t)
 
 	ctx, cancel := context.WithCancel(context.Background())

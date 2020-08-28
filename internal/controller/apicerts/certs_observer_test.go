@@ -18,7 +18,7 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
-	"github.com/suzerain-io/controller-go"
+	"github.com/suzerain-io/pinniped/internal/controllerlib"
 	"github.com/suzerain-io/pinniped/internal/provider"
 	"github.com/suzerain-io/pinniped/internal/testutil"
 )
@@ -29,7 +29,7 @@ func TestObserverControllerInformerFilters(t *testing.T) {
 
 		var r *require.Assertions
 		var observableWithInformerOption *testutil.ObservableWithInformerOption
-		var secretsInformerFilter controller.Filter
+		var secretsInformerFilter controllerlib.Filter
 
 		it.Before(func() {
 			r = require.New(t)
@@ -45,7 +45,7 @@ func TestObserverControllerInformerFilters(t *testing.T) {
 		})
 
 		when("watching Secret objects", func() {
-			var subject controller.Filter
+			var subject controllerlib.Filter
 			var target, wrongNamespace, wrongName, unrelated *corev1.Secret
 
 			it.Before(func() {
@@ -100,12 +100,12 @@ func TestObserverControllerSync(t *testing.T) {
 
 		var r *require.Assertions
 
-		var subject controller.Controller
+		var subject controllerlib.Controller
 		var kubeInformerClient *kubernetesfake.Clientset
 		var kubeInformers kubeinformers.SharedInformerFactory
 		var timeoutContext context.Context
 		var timeoutContextCancel context.CancelFunc
-		var syncContext *controller.Context
+		var syncContext *controllerlib.Context
 		var dynamicCertProvider provider.DynamicTLSServingCertProvider
 
 		// Defer starting the informers until the last possible moment so that the
@@ -116,14 +116,14 @@ func TestObserverControllerSync(t *testing.T) {
 				installedInNamespace,
 				dynamicCertProvider,
 				kubeInformers.Core().V1().Secrets(),
-				controller.WithInformer,
+				controllerlib.WithInformer,
 			)
 
 			// Set this at the last second to support calling subject.Name().
-			syncContext = &controller.Context{
+			syncContext = &controllerlib.Context{
 				Context: timeoutContext,
 				Name:    subject.Name(),
-				Key: controller.Key{
+				Key: controllerlib.Key{
 					Namespace: installedInNamespace,
 					Name:      "api-serving-cert",
 				},
@@ -131,7 +131,7 @@ func TestObserverControllerSync(t *testing.T) {
 
 			// Must start informers before calling TestRunSynchronously()
 			kubeInformers.Start(timeoutContext.Done())
-			controller.TestRunSynchronously(t, subject)
+			controllerlib.TestRunSynchronously(t, subject)
 		}
 
 		it.Before(func() {
@@ -164,7 +164,7 @@ func TestObserverControllerSync(t *testing.T) {
 
 			it("sets the dynamicCertProvider's cert and key to nil", func() {
 				startInformersAndController()
-				err := controller.TestSync(t, subject, *syncContext)
+				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
 				actualCertChain, actualKey := dynamicCertProvider.CurrentCertKeyContent()
@@ -194,7 +194,7 @@ func TestObserverControllerSync(t *testing.T) {
 
 			it("updates the dynamicCertProvider's cert and key", func() {
 				startInformersAndController()
-				err := controller.TestSync(t, subject, *syncContext)
+				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
 				actualCertChain, actualKey := dynamicCertProvider.CurrentCertKeyContent()
@@ -220,7 +220,7 @@ func TestObserverControllerSync(t *testing.T) {
 
 			it("set the missing values in the dynamicCertProvider as nil", func() {
 				startInformersAndController()
-				err := controller.TestSync(t, subject, *syncContext)
+				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
 				actualCertChain, actualKey := dynamicCertProvider.CurrentCertKeyContent()

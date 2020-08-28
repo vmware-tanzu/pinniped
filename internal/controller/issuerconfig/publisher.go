@@ -14,11 +14,11 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
-	"github.com/suzerain-io/controller-go"
 	crdpinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
 	pinnipedclientset "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned"
 	crdpinnipedv1alpha1informers "github.com/suzerain-io/pinniped/generated/1.19/client/informers/externalversions/crdpinniped/v1alpha1"
 	pinnipedcontroller "github.com/suzerain-io/pinniped/internal/controller"
+	"github.com/suzerain-io/pinniped/internal/controllerlib"
 )
 
 const (
@@ -45,9 +45,9 @@ func NewPublisherController(
 	configMapInformer corev1informers.ConfigMapInformer,
 	credentialIssuerConfigInformer crdpinnipedv1alpha1informers.CredentialIssuerConfigInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
-) controller.Controller {
-	return controller.New(
-		controller.Config{
+) controllerlib.Controller {
+	return controllerlib.New(
+		controllerlib.Config{
 			Name: "publisher-controller",
 			Syncer: &publisherController{
 				namespace:                      namespace,
@@ -60,17 +60,17 @@ func NewPublisherController(
 		withInformer(
 			configMapInformer,
 			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(clusterInfoName, ClusterInfoNamespace),
-			controller.InformerOption{},
+			controllerlib.InformerOption{},
 		),
 		withInformer(
 			credentialIssuerConfigInformer,
 			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(configName, namespace),
-			controller.InformerOption{},
+			controllerlib.InformerOption{},
 		),
 	)
 }
 
-func (c *publisherController) Sync(ctx controller.Context) error {
+func (c *publisherController) Sync(ctx controllerlib.Context) error {
 	configMap, err := c.configMapInformer.
 		Lister().
 		ConfigMaps(ClusterInfoNamespace).

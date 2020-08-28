@@ -24,8 +24,8 @@ import (
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	aggregatorfake "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 
-	"github.com/suzerain-io/controller-go"
 	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1"
+	"github.com/suzerain-io/pinniped/internal/controllerlib"
 	"github.com/suzerain-io/pinniped/internal/testutil"
 )
 
@@ -36,7 +36,7 @@ func TestManagerControllerOptions(t *testing.T) {
 		var r *require.Assertions
 		var observableWithInformerOption *testutil.ObservableWithInformerOption
 		var observableWithInitialEventOption *testutil.ObservableWithInitialEventOption
-		var secretsInformerFilter controller.Filter
+		var secretsInformerFilter controllerlib.Filter
 
 		it.Before(func() {
 			r = require.New(t)
@@ -56,7 +56,7 @@ func TestManagerControllerOptions(t *testing.T) {
 		})
 
 		when("watching Secret objects", func() {
-			var subject controller.Filter
+			var subject controllerlib.Filter
 			var target, wrongNamespace, wrongName, unrelated *corev1.Secret
 
 			it.Before(func() {
@@ -105,7 +105,7 @@ func TestManagerControllerOptions(t *testing.T) {
 
 		when("starting up", func() {
 			it("asks for an initial event because the Secret may not exist yet and it needs to run anyway", func() {
-				r.Equal(controller.Key{
+				r.Equal(controllerlib.Key{
 					Namespace: installedInNamespace,
 					Name:      "api-serving-cert",
 				}, observableWithInitialEventOption.GetInitialEventKey())
@@ -121,14 +121,14 @@ func TestManagerControllerSync(t *testing.T) {
 
 		var r *require.Assertions
 
-		var subject controller.Controller
+		var subject controllerlib.Controller
 		var kubeAPIClient *kubernetesfake.Clientset
 		var aggregatorAPIClient *aggregatorfake.Clientset
 		var kubeInformerClient *kubernetesfake.Clientset
 		var kubeInformers kubeinformers.SharedInformerFactory
 		var timeoutContext context.Context
 		var timeoutContextCancel context.CancelFunc
-		var syncContext *controller.Context
+		var syncContext *controllerlib.Context
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
@@ -139,16 +139,16 @@ func TestManagerControllerSync(t *testing.T) {
 				kubeAPIClient,
 				aggregatorAPIClient,
 				kubeInformers.Core().V1().Secrets(),
-				controller.WithInformer,
-				controller.WithInitialEvent,
+				controllerlib.WithInformer,
+				controllerlib.WithInitialEvent,
 				certDuration,
 			)
 
 			// Set this at the last second to support calling subject.Name().
-			syncContext = &controller.Context{
+			syncContext = &controllerlib.Context{
 				Context: timeoutContext,
 				Name:    subject.Name(),
-				Key: controller.Key{
+				Key: controllerlib.Key{
 					Namespace: installedInNamespace,
 					Name:      "api-serving-cert",
 				},
@@ -156,7 +156,7 @@ func TestManagerControllerSync(t *testing.T) {
 
 			// Must start informers before calling TestRunSynchronously()
 			kubeInformers.Start(timeoutContext.Done())
-			controller.TestRunSynchronously(t, subject)
+			controllerlib.TestRunSynchronously(t, subject)
 		}
 
 		it.Before(func() {
@@ -203,7 +203,7 @@ func TestManagerControllerSync(t *testing.T) {
 
 				it("creates the api-serving-cert Secret and updates the APIService's ca bundle", func() {
 					startInformersAndController()
-					err := controller.TestSync(t, subject, *syncContext)
+					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.NoError(err)
 
 					// Check all the relevant fields from the create Secret action
@@ -269,7 +269,7 @@ func TestManagerControllerSync(t *testing.T) {
 
 					it("returns the update error", func() {
 						startInformersAndController()
-						err := controller.TestSync(t, subject, *syncContext)
+						err := controllerlib.TestSync(t, subject, *syncContext)
 						r.EqualError(err, "could not update the API service: could not update API service: update failed")
 					})
 				})
@@ -287,7 +287,7 @@ func TestManagerControllerSync(t *testing.T) {
 
 				it("returns an error", func() {
 					startInformersAndController()
-					err := controller.TestSync(t, subject, *syncContext)
+					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.Error(err)
 					r.Regexp("could not get existing version of API service: .* not found", err.Error())
 				})
@@ -306,7 +306,7 @@ func TestManagerControllerSync(t *testing.T) {
 
 				it("returns the create error and does not update the APIService", func() {
 					startInformersAndController()
-					err := controller.TestSync(t, subject, *syncContext)
+					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.EqualError(err, "could not create secret: create failed")
 					r.Empty(aggregatorAPIClient.Actions())
 				})
@@ -327,7 +327,7 @@ func TestManagerControllerSync(t *testing.T) {
 
 			it("does not need to make any API calls with its API clients", func() {
 				startInformersAndController()
-				err := controller.TestSync(t, subject, *syncContext)
+				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 				r.Empty(kubeAPIClient.Actions())
 				r.Empty(aggregatorAPIClient.Actions())

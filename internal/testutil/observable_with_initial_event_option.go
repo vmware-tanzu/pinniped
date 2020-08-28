@@ -5,21 +5,21 @@ SPDX-License-Identifier: Apache-2.0
 
 package testutil
 
-import "github.com/suzerain-io/controller-go"
+import "github.com/suzerain-io/pinniped/internal/controllerlib"
 
 type ObservableWithInitialEventOption struct {
-	key controller.Key
+	key controllerlib.Key
 }
 
 func NewObservableWithInitialEventOption() *ObservableWithInitialEventOption {
 	return &ObservableWithInitialEventOption{}
 }
 
-func (i *ObservableWithInitialEventOption) WithInitialEvent(key controller.Key) controller.Option {
+func (i *ObservableWithInitialEventOption) WithInitialEvent(key controllerlib.Key) controllerlib.Option {
 	i.key = key
-	return controller.WithInitialEvent(key)
+	return controllerlib.WithInitialEvent(key)
 }
 
-func (i *ObservableWithInitialEventOption) GetInitialEventKey() controller.Key {
+func (i *ObservableWithInitialEventOption) GetInitialEventKey() controllerlib.Key {
 	return i.key
 }

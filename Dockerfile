@@ -3,19 +3,6 @@
 
 FROM golang:1.15.0 as build-env
 
-# It is important that these ARG's are defined after the FROM statement
-ARG ACCESS_TOKEN_USR="nothing"
-ARG ACCESS_TOKEN_PWD="nothing"
-
-# Create a netrc file using the credentials specified using --build-arg
-RUN printf "machine github.com\n\
-    login ${ACCESS_TOKEN_USR}\n\
-    password ${ACCESS_TOKEN_PWD}\n\
-    \n\
-    machine api.github.com\n\
-    login ${ACCESS_TOKEN_USR}\n\
-    password ${ACCESS_TOKEN_PWD}\n"\
-    >> /root/.netrc && chmod 600 /root/.netrc && mkdir /work && mkdir /work/out
 WORKDIR /work
 # Get dependencies first so they can be cached as a layer
 COPY go.* ./
@@ -32,7 +19,7 @@ COPY tools ./tools
 COPY hack ./hack
 
 # Build the executable binary (CGO_ENABLED=0 means static linking)
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(hack/get-ldflags.sh)" -o out ./cmd/pinniped-server/...
+RUN mkdir out && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(hack/get-ldflags.sh)" -o out ./cmd/pinniped-server/...
 
 # Use a runtime image based on Debian slim
 FROM debian:10.5-slim

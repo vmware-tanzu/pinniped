@@ -12,8 +12,8 @@ import (
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/klog/v2"
 
-	"github.com/suzerain-io/controller-go"
 	pinnipedcontroller "github.com/suzerain-io/pinniped/internal/controller"
+	"github.com/suzerain-io/pinniped/internal/controllerlib"
 	"github.com/suzerain-io/pinniped/internal/provider"
 )
 
@@ -28,9 +28,9 @@ func NewCertsObserverController(
 	dynamicCertProvider provider.DynamicTLSServingCertProvider,
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
-) controller.Controller {
-	return controller.New(
-		controller.Config{
+) controllerlib.Controller {
+	return controllerlib.New(
+		controllerlib.Config{
 			Name: "certs-observer-controller",
 			Syncer: &certsObserverController{
 				namespace:           namespace,
@@ -41,12 +41,12 @@ func NewCertsObserverController(
 		withInformer(
 			secretInformer,
 			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretName, namespace),
-			controller.InformerOption{},
+			controllerlib.InformerOption{},
 		),
 	)
 }
 
-func (c *certsObserverController) Sync(_ controller.Context) error {
+func (c *certsObserverController) Sync(_ controllerlib.Context) error {
 	// Try to get the secret from the informer cache.
 	certSecret, err := c.secretInformer.Lister().Secrets(c.namespace).Get(certsSecretName)
 	notFound := k8serrors.IsNotFound(err)

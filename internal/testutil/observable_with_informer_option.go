@@ -5,27 +5,27 @@ SPDX-License-Identifier: Apache-2.0
 
 package testutil
 
-import "github.com/suzerain-io/controller-go"
+import "github.com/suzerain-io/pinniped/internal/controllerlib"
 
 type ObservableWithInformerOption struct {
-	informerToFilterMap map[controller.InformerGetter]controller.Filter
+	informerToFilterMap map[controllerlib.InformerGetter]controllerlib.Filter
 }
 
 func NewObservableWithInformerOption() *ObservableWithInformerOption {
 	return &ObservableWithInformerOption{
-		informerToFilterMap: make(map[controller.InformerGetter]controller.Filter),
+		informerToFilterMap: make(map[controllerlib.InformerGetter]controllerlib.Filter),
 	}
 }
 
 func (i *ObservableWithInformerOption) WithInformer(
-	getter controller.InformerGetter,
-	filter controller.Filter,
-	opt controller.InformerOption,
-) controller.Option {
+	getter controllerlib.InformerGetter,
+	filter controllerlib.Filter,
+	opt controllerlib.InformerOption,
+) controllerlib.Option {
 	i.informerToFilterMap[getter] = filter
-	return controller.WithInformer(getter, filter, opt)
+	return controllerlib.WithInformer(getter, filter, opt)
 }
 
-func (i *ObservableWithInformerOption) GetFilterForInformer(getter controller.InformerGetter) controller.Filter {
+func (i *ObservableWithInformerOption) GetFilterForInformer(getter controllerlib.InformerGetter) controllerlib.Filter {
 	return i.informerToFilterMap[getter]
 }

@@ -12,6 +12,7 @@ import (
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 
 	crdpinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
 	pinnipedclientset "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned"
@@ -23,26 +24,31 @@ func CreateOrUpdateCredentialIssuerConfig(
 	pinnipedClient pinnipedclientset.Interface,
 	applyUpdatesToCredentialIssuerConfigFunc func(configToUpdate *crdpinnipedv1alpha1.CredentialIssuerConfig),
 ) error {
-	credentialIssuerConfigName := configName
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		existingCredentialIssuerConfig, err := pinnipedClient.
+			CrdV1alpha1().
+			CredentialIssuerConfigs(credentialIssuerConfigNamespace).
+			Get(ctx, configName, metav1.GetOptions{})
 
-	existingCredentialIssuerConfig, err := pinnipedClient.
-		CrdV1alpha1().
-		CredentialIssuerConfigs(credentialIssuerConfigNamespace).
-		Get(ctx, credentialIssuerConfigName, metav1.GetOptions{})
+		notFound := k8serrors.IsNotFound(err)
+		if err != nil && !notFound {
+			return fmt.Errorf("get failed: %w", err)
+		}
 
-	notFound := k8serrors.IsNotFound(err)
-	if err != nil && !notFound {
-		return fmt.Errorf("could not get credentialissuerconfig: %w", err)
+		return createOrUpdateCredentialIssuerConfig(
+			ctx,
+			existingCredentialIssuerConfig,
+			notFound,
+			configName,
+			credentialIssuerConfigNamespace,
+			pinnipedClient,
+			applyUpdatesToCredentialIssuerConfigFunc)
+	})
+
+	if err != nil {
+		return fmt.Errorf("could not create or update credentialissuerconfig: %w", err)
 	}
-
-	return createOrUpdateCredentialIssuerConfig(
-		ctx,
-		existingCredentialIssuerConfig,
-		notFound,
-		credentialIssuerConfigName,
-		credentialIssuerConfigNamespace,
-		pinnipedClient,
-		applyUpdatesToCredentialIssuerConfigFunc)
+	return nil
 }
 
 func createOrUpdateCredentialIssuerConfig(
@@ -62,7 +68,7 @@ func createOrUpdateCredentialIssuerConfig(
 		applyUpdatesToCredentialIssuerConfigFunc(credentialIssuerConfig)
 
 		if _, err := credentialIssuerConfigsClient.Create(ctx, credentialIssuerConfig, metav1.CreateOptions{}); err != nil {
-			return fmt.Errorf("could not create credentialissuerconfig: %w", err)
+			return fmt.Errorf("create failed: %w", err)
 		}
 	} else {
 		// Already exists, so check to see if we need to update it
@@ -75,7 +81,7 @@ func createOrUpdateCredentialIssuerConfig(
 		}
 
 		if _, err := credentialIssuerConfigsClient.Update(ctx, credentialIssuerConfig, metav1.UpdateOptions{}); err != nil {
-			return fmt.Errorf("could not update credentialissuerconfig: %w", err)
+			return err
 		}
 	}
 

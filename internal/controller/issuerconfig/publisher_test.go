@@ -309,7 +309,7 @@ func TestSync(t *testing.T) {
 						it("returns the create error", func() {
 							startInformersAndController()
 							err := controller.TestSync(t, subject, *syncContext)
-							r.EqualError(err, "could not create credentialissuerconfig: create failed")
+							r.EqualError(err, "could not create or update credentialissuerconfig: create failed: create failed")
 						})
 					})
 
@@ -410,7 +410,7 @@ func TestSync(t *testing.T) {
 							it("returns the update error", func() {
 								startInformersAndController()
 								err := controller.TestSync(t, subject, *syncContext)
-								r.EqualError(err, "could not update credentialissuerconfig: update failed")
+								r.EqualError(err, "could not create or update credentialissuerconfig: update failed")
 							})
 						})
 					})

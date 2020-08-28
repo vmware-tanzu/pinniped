@@ -865,6 +865,8 @@ k8s.io/gengo v0.0.0-20200428234225-8167cfdcfc14/go.mod h1:ezvh/TsK7cY6rbqRK0oQQ8
 k8s.io/klog/v2 v2.0.0/go.mod h1:PBfzABfn139FHAV07az/IF9Wp1bkk3vpT2XSJ76fSDE=
 k8s.io/klog/v2 v2.2.0 h1:XRvcwJozkgZ1UQJmfMGpvRthQHOvihEhYtDfAaxMz/A=
 k8s.io/klog/v2 v2.2.0/go.mod h1:Od+F08eJP+W3HUb4pSrPpgp9DGU4GzlpG/TmITuYh/Y=
+k8s.io/klog/v2 v2.3.0 h1:WmkrnW7fdrm0/DMClc+HIxtftvxVIPAhlVwMQo5yLco=
+k8s.io/klog/v2 v2.3.0/go.mod h1:Od+F08eJP+W3HUb4pSrPpgp9DGU4GzlpG/TmITuYh/Y=
 k8s.io/kube-aggregator v0.19.0 h1:rL4fsftMaqkKjaibArYDaBeqN41CHaJzgRJjUB9IrIg=
 k8s.io/kube-aggregator v0.19.0/go.mod h1:1Ln45PQggFAG8xOqWPIYMxUq8WNtpPnYsbUJ39DpF/A=
 k8s.io/kube-openapi v0.0.0-20200805222855-6aeccd4b50c6 h1:+WnxoVtG8TMiudHBSEtrVL1egv36TkkJm+bA8AxicmQ=

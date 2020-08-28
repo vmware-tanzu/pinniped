@@ -22,8 +22,7 @@ func UpdateAPIService(ctx context.Context, aggregatorClient aggregatorclient.Int
 	apiServiceName := pinnipedv1alpha1.SchemeGroupVersion.Version + "." + pinnipedv1alpha1.GroupName
 
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		// Retrieve the latest version of the Service before attempting update.
-		// RetryOnConflict uses exponential backoff to avoid exhausting the API server.
+		// Retrieve the latest version of the Service.
 		fetchedAPIService, err := apiServices.Get(ctx, apiServiceName, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not get existing version of API service: %w", err)

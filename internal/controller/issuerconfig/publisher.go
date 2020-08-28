@@ -126,6 +126,7 @@ func (c *publisherController) Sync(ctx controller.Context) error {
 			CertificateAuthorityData: certificateAuthorityData,
 		}
 	}
+
 	err = createOrUpdateCredentialIssuerConfig(
 		ctx.Context,
 		existingCredentialIssuerConfigFromInformerCache,
@@ -134,5 +135,9 @@ func (c *publisherController) Sync(ctx controller.Context) error {
 		c.namespace,
 		c.pinnipedClient,
 		updateServerAndCAFunc)
-	return err
+
+	if err != nil {
+		return fmt.Errorf("could not create or update credentialissuerconfig: %w", err)
+	}
+	return nil
 }

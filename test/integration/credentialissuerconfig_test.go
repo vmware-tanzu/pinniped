@@ -38,9 +38,7 @@ func TestCredentialIssuerConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, actualConfigList.Items, 1)
 
-		// Verify the published kube config info.
 		actualStatusKubeConfigInfo := actualConfigList.Items[0].Status.KubeConfigInfo
-		require.Equal(t, expectedStatusKubeConfigInfo(config), actualStatusKubeConfigInfo)
 
 		// Verify the cluster strategy status based on what's expected of the test cluster's ability to share signing keys.
 		actualStatusStrategies := actualConfigList.Items[0].Status.Strategies
@@ -52,10 +50,16 @@ func TestCredentialIssuerConfig(t *testing.T) {
 			require.Equal(t, crdpinnipedv1alpha1.SuccessStrategyStatus, actualStatusStrategy.Status)
 			require.Equal(t, crdpinnipedv1alpha1.FetchedKeyStrategyReason, actualStatusStrategy.Reason)
 			require.Equal(t, "Key was fetched successfully", actualStatusStrategy.Message)
+			// Verify the published kube config info.
+			require.Equal(t, expectedStatusKubeConfigInfo(config), actualStatusKubeConfigInfo)
 		} else {
 			require.Equal(t, crdpinnipedv1alpha1.ErrorStrategyStatus, actualStatusStrategy.Status)
 			require.Equal(t, crdpinnipedv1alpha1.CouldNotFetchKeyStrategyReason, actualStatusStrategy.Reason)
 			require.Contains(t, actualStatusStrategy.Message, "some part of the error message")
+			// For now, don't verify the kube config info because its not available on GKE. We'll need to address
+			// this somehow once we starting supporting those cluster types.
+			// Require `nil` to remind us to address this later for other types of clusters where it is available.
+			require.Nil(t, actualStatusKubeConfigInfo)
 		}
 
 		require.WithinDuration(t, time.Now(), actualStatusStrategy.LastUpdateTime.Local(), 10*time.Minute)

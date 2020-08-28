@@ -215,9 +215,6 @@ func TestCA(t *testing.T) {
 					// Tick the timer and wait for another refresh loop to complete.
 					fakeTicker <- time.Now()
 
-					r.Equal(1, callbacks.NumberOfTimesSuccessCalled())
-					r.Equal(0, callbacks.NumberOfTimesFailureCalled())
-
 					// Eventually it starts issuing certs using the new signing key.
 					var secondCertPEM, secondKeyPEM string
 					r.Eventually(func() bool {
@@ -242,6 +239,9 @@ func TestCA(t *testing.T) {
 						_, err = parsed.Verify(opts)
 						return err == nil
 					}, 5*time.Second, 100*time.Millisecond)
+
+					r.Equal(2, callbacks.NumberOfTimesSuccessCalled())
+					r.Equal(0, callbacks.NumberOfTimesFailureCalled())
 
 					validCert2 := testutil.ValidateCertificate(t, fakeCert2PEM, secondCertPEM)
 					validCert2.RequireDNSName("example.com")

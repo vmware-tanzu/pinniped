@@ -1,0 +1,8 @@
+# Configuration file for https://github.com/elastic/crd-ref-docs
+processor:
+  ignoreTypes: []
+  ignoreFields:
+    - "TypeMeta$"
+
+render:
+  kubernetesVersion: 1.19

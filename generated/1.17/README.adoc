@@ -24,8 +24,6 @@ Package crdpinniped is the internal version of the API.
 
 Package v1alpha1 is the v1alpha1 version of the API.
 
-nolint:gochecknoglobals,gochecknoinits
-
 
 
 [id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-17-apis-crdpinniped-v1alpha1-credentialissuerconfig"]
@@ -111,8 +109,6 @@ nolint:gochecknoglobals,gochecknoinits
 === pinniped.dev/pinniped
 
 Package pinniped is the internal version of the API.
-
-nolint:gochecknoglobals
 
 
 
@@ -215,8 +211,6 @@ nolint:gochecknoglobals
 === pinniped.dev/v1alpha1
 
 Package v1alpha1 is the v1alpha1 version of the API.
-
-nolint:gochecknoglobals,gochecknoinits
 
 
 

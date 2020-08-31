@@ -112,7 +112,8 @@ func schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfig(ref common.Refe
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStatus"),
+							Description: "Status of the credential issuer.",
+							Ref:         ref("github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStatus"),
 						},
 					},
 				},
@@ -128,23 +129,25 @@ func schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigKubeConfigInfo(r
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"server": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The K8s API server URL. Required.",
+							Description: "The K8s API server URL.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"certificateAuthorityData": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The K8s API server CA bundle. Required.",
+							Description: "The K8s API server CA bundle.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 				},
+				Required: []string{"server", "certificateAuthorityData"},
 			},
 		},
 	}
@@ -200,11 +203,13 @@ func schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigStatus(ref commo
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "Status of a credential issuer.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"strategies": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
+							Description: "List of integration strategies that were attempted by Pinniped.",
+							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
@@ -216,7 +221,8 @@ func schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigStatus(ref commo
 					},
 					"kubeConfigInfo": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigKubeConfigInfo"),
+							Description: "Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.",
+							Ref:         ref("github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigKubeConfigInfo"),
 						},
 					},
 				},
@@ -232,39 +238,45 @@ func schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigStrategy(ref com
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "Status of an integration strategy that was attempted by Pinniped.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"type": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "Type of integration attempted.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "Status of the attempted integration strategy.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"reason": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "Reason for the current status.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"message": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "Human-readable description of the current status.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"lastUpdateTime": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Description: "When the status was last checked.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
 				},
-				Required: []string{"lastUpdateTime"},
+				Required: []string{"type", "status", "reason", "message", "lastUpdateTime"},
 			},
 		},
 		Dependencies: []string{

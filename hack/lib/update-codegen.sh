@@ -152,3 +152,8 @@ crd-ref-docs \
     --renderer=asciidoctor \
     --templates-dir="${ROOT}/hack/lib/docs/templates" \
     --output-path="${ROOT}/generated/${KUBE_MINOR_VERSION}/README.adoc"
+
+# Generate CRD YAML
+(cd apis &&
+    controller-gen paths=./crdpinniped/v1alpha1 crd:trivialVersions=true output:crd:artifacts:config=../crds
+)

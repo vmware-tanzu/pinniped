@@ -23,7 +23,7 @@ with IDPs, and distribution-specific integration strategies.
 
 ### Architecture
 
-Pinniped offers credential exchange to enable a user to exchange an external IDP 
+Pinniped offers credential exchange to enable a user to exchange an external IDP
 credential for a short-lived, cluster-specific credential. Pinniped supports various
 IDP types and implements different integration strategies for various Kubernetes
 distributions to make authentication possible.
@@ -32,7 +32,7 @@ distributions to make authentication possible.
 
 The currently supported external IDP types are outlined here. More will be added in the future.
 
-1. Any webhook which implements the 
+1. Any webhook which implements the
 [Kubernetes TokenReview API](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#webhook-token-authentication)
 
 #### Supported Cluster Integration Strategies
@@ -49,7 +49,7 @@ will use that instead of using the cluster's signing keypair.)
 #### `kubectl` Integration
 
 With any of the above IDPs and integration strategies, `kubectl` commands receive the
-cluster-specific credential via a 
+cluster-specific credential via a
 [Kubernetes client-go credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins).
 Users may use the Pinniped CLI as the credential plugin, or they may use any proprietary CLI
 built with the [Pinniped Go client library](generated).
@@ -69,7 +69,7 @@ To try Pinniped, see [deploy/README.md](deploy/README.md).
 ## Contributions
 
 Contributions are welcome. Before contributing, please see
-the [Code of Conduct](doc/code_of_conduct.md) and 
+the [Code of Conduct](doc/code_of_conduct.md) and
 [the contributing guide](doc/contributing.md).
 
 ## Reporting Security Vulnerabilities

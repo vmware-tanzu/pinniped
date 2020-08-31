@@ -16,7 +16,7 @@ To file a bug report, please first open an
 [issue](https://github.com/suzerain-io/pinniped/issues/new?template=bug_report.md). The project team
 will work with you on your bug report.
 
-Once the bug has been validated, a [pull request](https://github.com/suzerain-io/pinniped/compare) 
+Once the bug has been validated, a [pull request](https://github.com/suzerain-io/pinniped/compare)
 can be opened to fix the bug.
 
 For specifics on what to include in your bug report, please follow the
@@ -28,7 +28,7 @@ To suggest a feature, please first open an
 [issue](https://github.com/suzerain-io/pinniped/issues/new?template=feature-proposal.md)
 and tag it with `proposal`. The project team will work with you on your feature request.
 
-Once the feature request has been validated, a [pull request](https://github.com/suzerain-io/pinniped/compare) 
+Once the feature request has been validated, a [pull request](https://github.com/suzerain-io/pinniped/compare)
 can be opened to implement the feature.
 
 For specifics on what to include in your feature request, please follow the

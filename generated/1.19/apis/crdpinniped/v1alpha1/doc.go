@@ -9,5 +9,5 @@ SPDX-License-Identifier: Apache-2.0
 // +k8s:defaulter-gen=TypeMeta
 // +groupName=crd.pinniped.dev
 
-// Package v1alpha1 is the v1alpha1 version of the API.
+// Package v1alpha1 is the v1alpha1 version of the Pinniped CRD-based API.
 package v1alpha1

@@ -12,7 +12,7 @@
 [id="{anchor_prefix}-crd-pinniped-dev-v1alpha1"]
 === crd.pinniped.dev/v1alpha1
 
-Package v1alpha1 is the v1alpha1 version of the API.
+Package v1alpha1 is the v1alpha1 version of the Pinniped CRD-based API.
 
 
 
@@ -31,7 +31,7 @@ Package v1alpha1 is the v1alpha1 version of the API.
 | Field | Description
 | *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`status`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-17-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]__ | 
+| *`status`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-17-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]__ | Status of the credential issuer.
 |===
 
 
@@ -48,8 +48,8 @@ Package v1alpha1 is the v1alpha1 version of the API.
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`server`* __string__ | The K8s API server URL. Required.
-| *`certificateAuthorityData`* __string__ | The K8s API server CA bundle. Required.
+| *`server`* __string__ | The K8s API server URL.
+| *`certificateAuthorityData`* __string__ | The K8s API server CA bundle.
 |===
 
 
@@ -58,7 +58,7 @@ Package v1alpha1 is the v1alpha1 version of the API.
 [id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-17-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus"]
 ==== CredentialIssuerConfigStatus 
 
-
+Status of a credential issuer.
 
 .Appears In:
 ****
@@ -68,8 +68,8 @@ Package v1alpha1 is the v1alpha1 version of the API.
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`strategies`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-17-apis-crdpinniped-v1alpha1-credentialissuerconfigstrategy[$$CredentialIssuerConfigStrategy$$] array__ | 
-| *`kubeConfigInfo`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-17-apis-crdpinniped-v1alpha1-credentialissuerconfigkubeconfiginfo[$$CredentialIssuerConfigKubeConfigInfo$$]__ | 
+| *`strategies`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-17-apis-crdpinniped-v1alpha1-credentialissuerconfigstrategy[$$CredentialIssuerConfigStrategy$$] array__ | List of integration strategies that were attempted by Pinniped.
+| *`kubeConfigInfo`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-17-apis-crdpinniped-v1alpha1-credentialissuerconfigkubeconfiginfo[$$CredentialIssuerConfigKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
 |===
 
 
@@ -86,11 +86,11 @@ Package v1alpha1 is the v1alpha1 version of the API.
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`type`* __StrategyType__ | 
-| *`status`* __StrategyStatus__ | 
-| *`reason`* __StrategyReason__ | 
-| *`message`* __string__ | 
-| *`lastUpdateTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#time-v1-meta[$$Time$$]__ | 
+| *`type`* __StrategyType__ | Type of integration attempted.
+| *`status`* __StrategyStatus__ | Status of the attempted integration strategy.
+| *`reason`* __StrategyReason__ | Reason for the current status.
+| *`message`* __string__ | Human-readable description of the current status.
+| *`lastUpdateTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#time-v1-meta[$$Time$$]__ | When the status was last checked.
 |===
 
 
@@ -98,7 +98,7 @@ Package v1alpha1 is the v1alpha1 version of the API.
 [id="{anchor_prefix}-pinniped-dev-v1alpha1"]
 === pinniped.dev/v1alpha1
 
-Package v1alpha1 is the v1alpha1 version of the API.
+Package v1alpha1 is the v1alpha1 version of the Pinniped aggregated API.
 
 
 

@@ -5,4 +5,4 @@ processor:
     - "TypeMeta$"
 
 render:
-  kubernetesVersion: 1.19
+  kubernetesVersion: KUBE_MINOR_VERSION

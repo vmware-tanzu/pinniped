@@ -145,9 +145,10 @@ echo "tidying ${OUTPUT_DIR}/client/go.mod..."
 (cd client && go mod tidy 2>&1 | sed "s|^|go-mod-tidy > |")
 
 # Generate API documentation
+sed "s|KUBE_MINOR_VERSION|${KUBE_MINOR_VERSION}|g" < "${ROOT}/hack/lib/docs/config.yaml" > /tmp/docs-config.yaml
 crd-ref-docs \
     --source-path="${ROOT}/generated/${KUBE_MINOR_VERSION}/apis" \
-    --config="${ROOT}/hack/lib/docs/config.yaml" \
+    --config=/tmp/docs-config.yaml \
     --renderer=asciidoctor \
     --templates-dir="${ROOT}/hack/lib/docs/templates" \
     --output-path="${ROOT}/generated/${KUBE_MINOR_VERSION}/README.adoc"

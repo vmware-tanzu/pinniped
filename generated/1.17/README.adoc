@@ -41,7 +41,7 @@ nolint:gochecknoglobals,gochecknoinits
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
 | *`status`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-17-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]__ | 
 |===
@@ -102,7 +102,7 @@ nolint:gochecknoglobals,gochecknoinits
 | *`status`* __StrategyStatus__ | 
 | *`reason`* __StrategyReason__ | 
 | *`message`* __string__ | 
-| *`lastUpdateTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#time-v1-meta[$$Time$$]__ | 
+| *`lastUpdateTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#time-v1-meta[$$Time$$]__ | 
 |===
 
 
@@ -129,7 +129,7 @@ nolint:gochecknoglobals
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`ObjectMeta`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#objectmeta-v1-meta[$$ObjectMeta$$]__ | 
+| *`ObjectMeta`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#objectmeta-v1-meta[$$ObjectMeta$$]__ | 
 | *`Spec`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-17-apis-pinniped-credentialrequestspec[$$CredentialRequestSpec$$]__ | 
 | *`Status`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-17-apis-pinniped-credentialrequeststatus[$$CredentialRequestStatus$$]__ | 
 |===
@@ -148,7 +148,7 @@ nolint:gochecknoglobals
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`ExpirationTimestamp`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#time-v1-meta[$$Time$$]__ | ExpirationTimestamp indicates a time when the provided credentials expire.
+| *`ExpirationTimestamp`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#time-v1-meta[$$Time$$]__ | ExpirationTimestamp indicates a time when the provided credentials expire.
 | *`Token`* __string__ | Token is a bearer token used by the client for request authentication.
 | *`ClientCertificateData`* __string__ | PEM-encoded client TLS certificates (including intermediates, if any).
 | *`ClientKeyData`* __string__ | PEM-encoded private key for the above certificate.
@@ -233,7 +233,7 @@ nolint:gochecknoglobals,gochecknoinits
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
 | *`spec`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-17-apis-pinniped-v1alpha1-credentialrequestspec[$$CredentialRequestSpec$$]__ | 
 | *`status`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-17-apis-pinniped-v1alpha1-credentialrequeststatus[$$CredentialRequestStatus$$]__ | 
@@ -253,7 +253,7 @@ nolint:gochecknoglobals,gochecknoinits
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`expirationTimestamp`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#time-v1-meta[$$Time$$]__ | ExpirationTimestamp indicates a time when the provided credentials expire.
+| *`expirationTimestamp`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#time-v1-meta[$$Time$$]__ | ExpirationTimestamp indicates a time when the provided credentials expire.
 | *`token`* __string__ | Token is a bearer token used by the client for request authentication.
 | *`clientCertificateData`* __string__ | PEM-encoded client TLS certificates (including intermediates, if any).
 | *`clientKeyData`* __string__ | PEM-encoded private key for the above certificate.

@@ -1,0 +1,12 @@
+# Configuration file for https://github.com/elastic/crd-ref-docs
+processor:
+
+  #  Ignore internal API versions
+  ignoreGroupVersions:
+    - "crd.pinniped.dev/crdpinniped"
+    - "pinniped.dev/pinniped"
+  ignoreFields:
+    - "TypeMeta$"
+
+render:
+  kubernetesVersion: KUBE_MINOR_VERSION

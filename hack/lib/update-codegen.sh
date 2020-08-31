@@ -66,6 +66,7 @@ echo "running in container to generate ${KUBE_VERSION} into ${OUTPUT_DIR}..."
 # variables in the template files and renaming them to strip the `.tmpl` extension.
 cp -R "${ROOT}/apis" "${OUTPUT_DIR}/apis"
 find "${OUTPUT_DIR}" -type f -exec sed -i "s|GENERATED_PKG|generated/${KUBE_MINOR_VERSION}|g" {} \;
+find "${OUTPUT_DIR}" -type f -not -name '*.tmpl' -exec rm {} \;
 find "${OUTPUT_DIR}" -type f -name '*.tmpl' -exec bash -c 'mv "$0" "${0%.tmpl}"' {} \;
 
 # Make the generated API code its own Go module.
@@ -142,3 +143,12 @@ echo "generating client code for our public API groups..."
 # Tidy up the .../client module
 echo "tidying ${OUTPUT_DIR}/client/go.mod..."
 (cd client && go mod tidy 2>&1 | sed "s|^|go-mod-tidy > |")
+
+# Generate API documentation
+sed "s|KUBE_MINOR_VERSION|${KUBE_MINOR_VERSION}|g" < "${ROOT}/hack/lib/docs/config.yaml" > /tmp/docs-config.yaml
+crd-ref-docs \
+    --source-path="${ROOT}/generated/${KUBE_MINOR_VERSION}/apis" \
+    --config=/tmp/docs-config.yaml \
+    --renderer=asciidoctor \
+    --templates-dir="${ROOT}/hack/lib/docs/templates" \
+    --output-path="${ROOT}/generated/${KUBE_MINOR_VERSION}/README.adoc"

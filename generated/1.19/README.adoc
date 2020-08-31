@@ -1,0 +1,199 @@
+// Generated documentation. Please do not edit.
+:anchor_prefix: k8s-api
+
+[id="{p}-api-reference"]
+== API Reference
+
+.Packages
+- xref:{anchor_prefix}-crd-pinniped-dev-v1alpha1[$$crd.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-pinniped-dev-v1alpha1[$$pinniped.dev/v1alpha1$$]
+
+
+[id="{anchor_prefix}-crd-pinniped-dev-v1alpha1"]
+=== crd.pinniped.dev/v1alpha1
+
+Package v1alpha1 is the v1alpha1 version of the API.
+
+
+
+[id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-crdpinniped-v1alpha1-credentialissuerconfig"]
+==== CredentialIssuerConfig 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-crdpinniped-v1alpha1-credentialissuerconfiglist[$$CredentialIssuerConfigList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`status`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]__ | 
+|===
+
+
+[id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-crdpinniped-v1alpha1-credentialissuerconfigkubeconfiginfo"]
+==== CredentialIssuerConfigKubeConfigInfo 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`server`* __string__ | The K8s API server URL. Required.
+| *`certificateAuthorityData`* __string__ | The K8s API server CA bundle. Required.
+|===
+
+
+
+
+[id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus"]
+==== CredentialIssuerConfigStatus 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-crdpinniped-v1alpha1-credentialissuerconfig[$$CredentialIssuerConfig$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`strategies`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-crdpinniped-v1alpha1-credentialissuerconfigstrategy[$$CredentialIssuerConfigStrategy$$] array__ | 
+| *`kubeConfigInfo`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-crdpinniped-v1alpha1-credentialissuerconfigkubeconfiginfo[$$CredentialIssuerConfigKubeConfigInfo$$]__ | 
+|===
+
+
+[id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-crdpinniped-v1alpha1-credentialissuerconfigstrategy"]
+==== CredentialIssuerConfigStrategy 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`type`* __StrategyType__ | 
+| *`status`* __StrategyStatus__ | 
+| *`reason`* __StrategyReason__ | 
+| *`message`* __string__ | 
+| *`lastUpdateTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#time-v1-meta[$$Time$$]__ | 
+|===
+
+
+
+[id="{anchor_prefix}-pinniped-dev-v1alpha1"]
+=== pinniped.dev/v1alpha1
+
+Package v1alpha1 is the v1alpha1 version of the API.
+
+
+
+[id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequest"]
+==== CredentialRequest 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequestlist[$$CredentialRequestList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`spec`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequestspec[$$CredentialRequestSpec$$]__ | 
+| *`status`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequeststatus[$$CredentialRequestStatus$$]__ | 
+|===
+
+
+[id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequestcredential"]
+==== CredentialRequestCredential 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequeststatus[$$CredentialRequestStatus$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`expirationTimestamp`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#time-v1-meta[$$Time$$]__ | ExpirationTimestamp indicates a time when the provided credentials expire.
+| *`token`* __string__ | Token is a bearer token used by the client for request authentication.
+| *`clientCertificateData`* __string__ | PEM-encoded client TLS certificates (including intermediates, if any).
+| *`clientKeyData`* __string__ | PEM-encoded private key for the above certificate.
+|===
+
+
+
+
+[id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequestspec"]
+==== CredentialRequestSpec 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequest[$$CredentialRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`type`* __CredentialType__ | Type of credential.
+| *`token`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequesttokencredential[$$CredentialRequestTokenCredential$$]__ | Token credential (when Type == TokenCredentialType).
+|===
+
+
+[id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequeststatus"]
+==== CredentialRequestStatus 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequest[$$CredentialRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`credential`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequestcredential[$$CredentialRequestCredential$$]__ | A Credential will be returned for a successful credential request.
+| *`message`* __string__ | An error message will be returned for an unsuccessful credential request.
+|===
+
+
+[id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequesttokencredential"]
+==== CredentialRequestTokenCredential 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequestspec[$$CredentialRequestSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`value`* __string__ | Value of the bearer token supplied with the credential request.
+|===
+
+

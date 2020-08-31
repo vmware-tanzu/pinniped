@@ -1,6 +1,10 @@
 # Configuration file for https://github.com/elastic/crd-ref-docs
 processor:
-  ignoreTypes: []
+
+  #  Ignore internal API versions
+  ignoreGroupVersions:
+    - "crd.pinniped.dev/crdpinniped"
+    - "pinniped.dev/pinniped"
   ignoreFields:
     - "TypeMeta$"
 

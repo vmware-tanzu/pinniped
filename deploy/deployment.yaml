@@ -58,7 +58,7 @@ metadata:
   labels:
     app: #@ data.values.app_name
 spec:
-  replicas: 2
+  replicas: #@ data.values.replicas
   selector:
     matchLabels:
       app: #@ data.values.app_name

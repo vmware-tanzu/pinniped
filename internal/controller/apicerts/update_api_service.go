@@ -6,6 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 package apicerts
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -26,6 +27,11 @@ func UpdateAPIService(ctx context.Context, aggregatorClient aggregatorclient.Int
 		fetchedAPIService, err := apiServices.Get(ctx, apiServiceName, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not get existing version of API service: %w", err)
+		}
+
+		if bytes.Equal(fetchedAPIService.Spec.CABundle, aggregatedAPIServerCA) {
+			// Already has the same value, perhaps because another process already updated the object, so no need to update.
+			return nil
 		}
 
 		// Update just the field we care about.

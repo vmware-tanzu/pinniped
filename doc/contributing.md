@@ -93,12 +93,41 @@ docker build .
 
 ### Running Integration Tests
 
-```bash
-./hack/prepare-for-integration-tests.sh && source /tmp/integration-test-env && go test -v -count 1 ./test/...
-```
+1. Install dependencies:
 
-The `./hack/prepare-for-integration-tests.sh` script will create a local
-[`kind`](https://kind.sigs.k8s.io/) cluster on which the integration tests will run.
+   - [`kind`](https://kind.sigs.k8s.io/docs/user/quick-start)
+   - [`tilt`](https://docs.tilt.dev/install.html)
+   - [`ytt`](https://carvel.dev/#getting-started)
+   - [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+
+   On macOS, these tools can be installed with [Homebrew](https://brew.sh/):
+
+   ```bash
+   brew install kind tilt-dev/tap/tilt k14s/tap/ytt kubectl
+   ```
+
+1. Create a local Kubernetes cluster using `kind`:
+
+   ```bash
+   kind create cluster --image kindest/node:v1.18.8
+   ```
+
+1. Install Pinniped and supporting dependencies using `tilt`:
+
+   ```bash
+   tilt up -f ./hack/lib/tilt/Tiltfile --stream
+   ```
+
+   Tilt will continue running and live-updating the Pinniped deployment whenever the code changes.
+
+1. Run the Pinniped integration tests:
+
+   ```bash
+   source ./hack/lib/tilt/integration-test.env && go test -v -count 1 ./test/integration
+   ```
+
+To uninstall the test environment, run `tilt down -f ./hack/lib/tilt/Tiltfile`.
+To destroy the local Kubernetes cluster, run `kind delete cluster`.
 
 ### Observing Tests on the Continuous Integration Environment
 

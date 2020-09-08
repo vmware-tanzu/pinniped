@@ -16,3 +16,7 @@
 
 # goland
 .idea
+
+# Intermediate files used by Tilt
+/hack/lib/tilt/build
+/hack/lib/tilt/integration-test.env

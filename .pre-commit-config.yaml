@@ -1,4 +1,4 @@
-exclude: '^generated/'
+exclude: '^(generated|hack/lib/tilt/tilt_modules)/'
 repos:
 - repo: git://github.com/pre-commit/pre-commit-hooks
   rev: v3.2.0

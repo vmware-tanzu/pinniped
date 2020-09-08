@@ -1,0 +1,95 @@
+load('ext://restart_process', 'docker_build_with_restart')
+disable_snapshots()
+analytics_settings(False)
+update_settings(max_parallel_updates=8)
+os.putenv('CGO_ENABLED', '0')
+os.putenv('GOOS', 'linux')
+os.putenv('GOARCH', 'amd64')
+os.putenv('CGO_ENABLED', '0')
+
+# Compile all of our ./cmd/... binaries.
+local_resource(
+  'compile',
+  'cd ../../../ && go build -v -ldflags "$(hack/get-ldflags.sh)" -o ./hack/lib/tilt/build ./cmd/...',
+  deps=['../../../cmd', '../../../internal', '../../../pkg', '../../../generated'],
+)
+
+# Build a container image for local-user-authenticator, with live-update enabled.
+docker_build_with_restart('image/local-user-auth', '.',
+    dockerfile='local-user-authenticator.Dockerfile',
+    entrypoint=['/usr/local/bin/local-user-authenticator'],
+    live_update=[sync('./build/local-user-authenticator', '/usr/local/bin/local-user-authenticator')],
+    only=['./build/local-user-authenticator'],
+)
+
+# Render the local-user-authenticator installation manifest using ytt.
+k8s_yaml(local([
+    'ytt',
+    '--file', '../../../deploy-local-user-authenticator',
+    '--data-value', 'image_repo=image/local-user-auth',
+    '--data-value', 'image_tag=tilt-dev',
+]))
+
+# Collect all the deployed local-user-authenticator resources under a "deploy/local-user-auth" resource tab.
+k8s_resource(
+    workload='local-user-authenticator',
+    new_name='deploy/local-user-auth',
+    objects=[
+        'local-user-authenticator:namespace',
+        'local-user-authenticator:serviceaccount',
+        'local-user-authenticator:role',
+        'local-user-authenticator:rolebinding',
+    ],
+)
+
+# Build a container image for the Pinniped server, with live-update enabled.
+docker_build_with_restart('image/pinniped', '.',
+    dockerfile='pinniped.Dockerfile',
+    entrypoint=['/usr/local/bin/pinniped-server'],
+    live_update=[sync('./build/pinniped-server', '/usr/local/bin/pinniped-server')],
+    only=['./build/pinniped-server'],
+)
+
+# Render the Pinniped server installation manifest using ytt.
+k8s_yaml(local([
+    'sh', '-c',
+    'ytt --file ../../../deploy ' +
+    '--data-value namespace=integration ' +
+    '--data-value image_repo=image/pinniped ' +
+    '--data-value image_tag=tilt-dev ' +
+    '--data-value discovery_url=$(TERM=dumb kubectl cluster-info | awk \'/Kubernetes master/ {print $NF}\') ' +
+    '--data-value-yaml replicas=1'
+]))
+
+# Collect all the deployed local-user-authenticator resources under a "deploy/pinniped" resource tab.
+k8s_resource(
+    workload='pinniped',
+    new_name='deploy/pinniped',
+    objects=[
+        'integration:namespace',
+        'credentialissuerconfigs.config.pinniped.dev:customresourcedefinition',
+        'webhookidentityproviders.idp.pinniped.dev:customresourcedefinition',
+        'pinniped:serviceaccount',
+        'pinniped-aggregated-api-server:role',
+        'pinniped-kube-system-pod-exec:role',
+        'pinniped-cluster-info-lister-watcher:role',
+        'pinniped-aggregated-api-server:clusterrole',
+        'pinniped-create-token-credential-requests:clusterrole',
+        'pinniped-aggregated-api-server:rolebinding',
+        'pinniped-kube-system-pod-exec:rolebinding',
+        'pinniped-extension-apiserver-authentication-reader:rolebinding',
+        'pinniped-cluster-info-lister-watcher:rolebinding',
+        'pinniped-aggregated-api-server:clusterrolebinding',
+        'pinniped-create-token-credential-requests:clusterrolebinding',
+        'pinniped:clusterrolebinding',
+        'pinniped-config:configmap',
+        'v1alpha1.login.pinniped.dev:apiservice',
+    ],
+)
+
+# Collect environment variables needed to run our integration test suite.
+local_resource(
+  'create-test-environment',
+  './ensure-integration-test-env.sh',
+  resource_deps=['deploy/local-user-auth', 'deploy/pinniped'],
+)

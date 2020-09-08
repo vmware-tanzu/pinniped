@@ -6,7 +6,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/go-logr/logr v0.2.1
 	github.com/golang/mock v1.4.4
-	github.com/golangci/golangci-lint v1.30.0
+	github.com/golangci/golangci-lint v1.31.0
 	github.com/google/go-cmp v0.5.2
 	github.com/sclevine/spec v1.4.0
 	github.com/spf13/cobra v1.0.0

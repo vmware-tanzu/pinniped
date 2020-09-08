@@ -9,6 +9,14 @@ set -euo pipefail
 #
 # Helper functions
 #
+TILT_MODE=${TILT_MODE:-no}
+function tilt_mode() {
+  if [[ "$TILT_MODE" == "yes" ]]; then
+    return 0
+  fi
+  return 1
+}
+
 function log_note() {
   GREEN='\033[0;32m'
   NC='\033[0m'
@@ -94,67 +102,71 @@ if [ "$(kubectl version --client=true --short | cut -d '.' -f 2)" -lt 18 ]; then
   exit 1
 fi
 
-#
-# Setup kind and build the app
-#
-log_note "Checking for running kind clusters..."
-if ! kind get clusters | grep -q -e '^kind$'; then
-  log_note "Creating a kind cluster..."
-  kind create cluster
-else
-  if ! kubectl cluster-info | grep master | grep -q 127.0.0.1; then
-    log_error "Seems like your kubeconfig is not targeting a local cluster."
-    log_error "Exiting to avoid accidentally running tests against a real cluster."
-    exit 1
-  fi
-fi
-
-registry="docker.io"
-repo="test/build"
-registry_repo="$registry/$repo"
-tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
-
-if [[ "$skip_build" == "yes" ]]; then
-  most_recent_tag=$(docker images "$repo" --format "{{.Tag}}" | head -1)
-  if [[ -n "$most_recent_tag" ]]; then
-    tag="$most_recent_tag"
-    do_build=no
+if ! tilt_mode; then
+  #
+  # Setup kind and build the app
+  #
+  log_note "Checking for running kind clusters..."
+  if ! kind get clusters | grep -q -e '^kind$'; then
+    log_note "Creating a kind cluster..."
+    kind create cluster
   else
-    # Oops, there was no previous build. Need to build anyway.
+    if ! kubectl cluster-info | grep master | grep -q 127.0.0.1; then
+      log_error "Seems like your kubeconfig is not targeting a local cluster."
+      log_error "Exiting to avoid accidentally running tests against a real cluster."
+      exit 1
+    fi
+  fi
+
+  registry="docker.io"
+  repo="test/build"
+  registry_repo="$registry/$repo"
+  tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
+
+  if [[ "$skip_build" == "yes" ]]; then
+    most_recent_tag=$(docker images "$repo" --format "{{.Tag}}" | head -1)
+    if [[ -n "$most_recent_tag" ]]; then
+      tag="$most_recent_tag"
+      do_build=no
+    else
+      # Oops, there was no previous build. Need to build anyway.
+      do_build=yes
+    fi
+  else
     do_build=yes
   fi
-else
-  do_build=yes
+
+  registry_repo_tag="${registry_repo}:${tag}"
+
+  if [[ "$do_build" == "yes" ]]; then
+    # Rebuild the code
+    log_note "Docker building the app..."
+    docker build . --tag "$registry_repo_tag"
+  fi
+
+  # Load it into the cluster
+  log_note "Loading the app's container image into the kind cluster..."
+  kind load docker-image "$registry_repo_tag"
+
+  manifest=/tmp/manifest.yaml
+
+  #
+  # Deploy local-user-authenticator
+  #
+  pushd deploy-local-user-authenticator >/dev/null
+
+  log_note "Deploying the local-user-authenticator app to the cluster..."
+  ytt --file . \
+    --data-value "image_repo=$registry_repo" \
+    --data-value "image_tag=$tag" >"$manifest"
+
+  kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
+  kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
+
+  popd >/dev/null
+
 fi
 
-registry_repo_tag="${registry_repo}:${tag}"
-
-if [[ "$do_build" == "yes" ]]; then
-  # Rebuild the code
-  log_note "Docker building the app..."
-  docker build . --tag "$registry_repo_tag"
-fi
-
-# Load it into the cluster
-log_note "Loading the app's container image into the kind cluster..."
-kind load docker-image "$registry_repo_tag"
-
-manifest=/tmp/manifest.yaml
-
-#
-# Deploy local-user-authenticator
-#
-pushd deploy-local-user-authenticator >/dev/null
-
-log_note "Deploying the local-user-authenticator app to the cluster..."
-ytt --file . \
-  --data-value "image_repo=$registry_repo" \
-  --data-value "image_tag=$tag" >"$manifest"
-
-kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
-kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
-
-popd >/dev/null
 
 test_username="test-username"
 test_groups="test-group-0,test-group-1"
@@ -180,22 +192,24 @@ webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authe
 webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/Kubernetes master/ {print $NF}')"
 
-#
-# Deploy Pinniped
-#
-pushd deploy >/dev/null
+if ! tilt_mode; then
+  #
+  # Deploy Pinniped
+  #
+  pushd deploy >/dev/null
 
-log_note "Deploying the Pinniped app to the cluster..."
-ytt --file . \
-  --data-value "app_name=$app_name" \
-  --data-value "namespace=$namespace" \
-  --data-value "image_repo=$registry_repo" \
-  --data-value "image_tag=$tag" \
-  --data-value "discovery_url=$discovery_url" >"$manifest"
+  log_note "Deploying the Pinniped app to the cluster..."
+  ytt --file . \
+    --data-value "app_name=$app_name" \
+    --data-value "namespace=$namespace" \
+    --data-value "image_repo=$registry_repo" \
+    --data-value "image_tag=$tag" \
+    --data-value "discovery_url=$discovery_url" >"$manifest"
 
-kapp deploy --yes --app "$app_name" --diff-changes --file "$manifest"
+  kapp deploy --yes --app "$app_name" --diff-changes --file "$manifest"
 
-popd >/dev/null
+  popd >/dev/null
+fi
 
 #
 # Create the environment file
@@ -233,7 +247,10 @@ log_note
 log_note 'Want to run integration tests in GoLand? Copy/paste this "Environment" value for GoLand run configurations:'
 log_note "    ${goland_vars}PINNIPED_CLUSTER_CAPABILITY_FILE=${kind_capabilities_file}"
 log_note
-log_note "You can rerun this script to redeploy local production code changes while you are working."
-log_note
-log_note "To delete the deployments, run 'kapp delete -a local-user-authenticator -y && kapp delete -a pinniped -y'."
-log_note "When you're finished, use 'kind delete cluster' to tear down the cluster."
+
+if ! tilt_mode; then
+  log_note "You can rerun this script to redeploy local production code changes while you are working."
+  log_note
+  log_note "To delete the deployments, run 'kapp delete -a local-user-authenticator -y && kapp delete -a pinniped -y'."
+  log_note "When you're finished, use 'kind delete cluster' to tear down the cluster."
+fi

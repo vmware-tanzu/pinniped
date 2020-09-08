@@ -1,0 +1,62 @@
+load('ext://restart_process', 'docker_build_with_restart')
+disable_snapshots()
+analytics_settings(False)
+update_settings(max_parallel_updates=8)
+
+# TODO: avoid needing these in this file.
+webhookURL = 'https://tanzuuserauthentication.stable.tmc-dev.cloud.vmware.com/v1alpha/clusters/c:01EHBFF2AHDZXZNP1MDPKHSCDR/auth/token'
+webhookCABundle = 'LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUZhekNDQTFPZ0F3SUJBZ0lSQUlJUXo3RFNRT05aUkdQZ3UyT0Npd0F3RFFZSktvWklodmNOQVFFTEJRQXcKVHpFTE1Ba0dBMVVFQmhNQ1ZWTXhLVEFuQmdOVkJBb1RJRWx1ZEdWeWJtVjBJRk5sWTNWeWFYUjVJRkpsYzJWaApjbU5vSUVkeWIzVndNUlV3RXdZRFZRUURFd3hKVTFKSElGSnZiM1FnV0RFd0hoY05NVFV3TmpBME1URXdORE00CldoY05NelV3TmpBME1URXdORE00V2pCUE1Rc3dDUVlEVlFRR0V3SlZVekVwTUNjR0ExVUVDaE1nU1c1MFpYSnUKWlhRZ1UyVmpkWEpwZEhrZ1VtVnpaV0Z5WTJnZ1IzSnZkWEF4RlRBVEJnTlZCQU1UREVsVFVrY2dVbTl2ZENCWQpNVENDQWlJd0RRWUpLb1pJaHZjTkFRRUJCUUFEZ2dJUEFEQ0NBZ29DZ2dJQkFLM29KSFAwRkRmem01NHJWeWdjCmg3N2N0OTg0a0l4dVBPWlhvSGozZGNLaS92VnFidllBVHlqYjNtaUdiRVNUdHJGai9SUVNhNzhmMHVveG15RisKMFRNOHVrajEzWG5mczdqL0V2RWhta3ZCaW9aeGFVcG1abXlQZmp4d3Y2MHBJZ2J6NU1EbWdLN2lTNCszbVg2VQpBNS9UUjVkOG1VZ2pVK2c0cms4S2I0TXUwVWxYaklCMHR0b3YwRGlOZXdOd0lSdDE4akE4K28rdTNkcGpxK3NXClQ4S09FVXQrend2by83VjNMdlN5ZTByZ1RCSWxESENOQXltZzRWTWs3QlBaN2htL0VMTktqRCtKbzJGUjNxeUgKQjVUMFkzSHNMdUp2VzVpQjRZbGNOSGxzZHU4N2tHSjU1dHVrbWk4bXhkQVE0UTdlMlJDT0Z2dTM5NmozeCtVQwpCNWlQTmdpVjUrSTNsZzAyZFo3N0RuS3hIWnU4QS9sSkJkaUIzUVcwS3RaQjZhd0JkcFVLRDlqZjFiMFNIelV2CktCZHMwcGpCcUFsa2QyNUhON3JPckZsZWFKMS9jdGFKeFFaQktUNVpQdDBtOVNUSkVhZGFvMHhBSDBhaG1iV24KT2xGdWhqdWVmWEtuRWdWNFdlMCtVWGdWQ3dPUGpkQXZCYkkrZTBvY1MzTUZFdnpHNnVCUUUzeERrM1N6eW5UbgpqaDhCQ05BdzFGdHhOclFIdXNFd01GeEl0NEk3bUtaOVlJcWlveW1DekxxOWd3UWJvb01EUWFIV0JmRWJ3cmJ3CnFIeUdPMGFvU0NxSTNIYWFkcjhmYXFVOUdZL3JPUE5rM3NnckRRb28vL2ZiNGhWQzFDTFFKMTNoZWY0WTUzQ0kKclU3bTJZczZ4dDBuVVc3L3ZHVDFNME5QQWdNQkFBR2pRakJBTUE0R0ExVWREd0VCL3dRRUF3SUJCakFQQmdOVgpIUk1CQWY4RUJUQURBUUgvTUIwR0ExVWREZ1FXQkJSNXRGbm1lN2JsNUFGemdBaUl5QnBZOXVtYmJqQU5CZ2txCmhraUc5dzBCQVFzRkFBT0NBZ0VBVlI5WXFieXlxRkRRRExIWUdta2dKeWtJckdGMVhJcHUrSUxsYVMvVjlsWkwKdWJoekVGblRJWmQrNTB4eCs3TFNZSzA1cUF2cUZ5RldoZkZRRGxucnp1Qlo2YnJKRmUrR25ZK0VnUGJrNlpHUQozQmViWWh0RjhHYVYwbnh2d3VvNzd4L1B5OWF1Si9HcHNNaXUvWDErbXZvaUJPdi8yWC9xa1NzaXNSY09qL0tLCk5GdFkyUHdCeVZTNXVDYk1pb2d6aVV3dGhEeUMzKzZXVndXNkxMdjN4TGZIVGp1Q3ZqSElJbk56a3RIQ2dLUTUKT1JBekk0Sk1QSitHc2xXWUhiNHBob3dpbTU3aWF6dFhPb0p3VGR3Sng0bkxDZ2ROYk9oZGpzbnZ6cXZIdTdVcgpUa1hXU3RBbXpPVnl5Z2hxcFpYakZhSDNwTzNKTEYrbCsvK3NLQUl1dnRkN3UrTnhlNUFXMHdkZVJsTjhOd2RDCmpOUEVscHpWbWJVcTRKVWFnRWl1VERrSHpzeEhwRktWSzdxNCs2M1NNMU45NVIxTmJkV2hzY2RDYitaQUp6VmMKb3lpM0I0M25qVE9RNXlPZisxQ2NlV3hHMWJRVnM1WnVmcHNNbGpxNFVpMC8xbHZoK3dqQ2hQNGtxS09KMnF4cQo0Umdxc2FoRFlWdlRIOXc3alhieUxlaU5kZDhYTTJ3OVUvdDd5MEZmLzl5aTBHRTQ0WmE0ckYyTE45ZDExVFBBCm1SR3VuVUhCY25XRXZnSkJRbDluSkVpVTBac252Z2MvdWJoUGdYUlI0WHEzN1owajRyN2cxU2dFRXp3eEE1N2QKZW15UHhnY1l4bi9lUjQ0L0tKNEVCcytsVkRSM3ZleUptK2tYUTk5YjIxLytqaDVYb3MxQW5YNWlJdHJlR0NjPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCi0tLS0tQkVHSU4gQ0VSVElGSUNBVEUtLS0tLQpNSUlEU2pDQ0FqS2dBd0lCQWdJUVJLK3dnTmFqSjdxSk1EbUdMdmhBYXpBTkJna3Foa2lHOXcwQkFRVUZBREEvCk1TUXdJZ1lEVlFRS0V4dEVhV2RwZEdGc0lGTnBaMjVoZEhWeVpTQlVjblZ6ZENCRGJ5NHhGekFWQmdOVkJBTVQKRGtSVFZDQlNiMjkwSUVOQklGZ3pNQjRYRFRBd01Ea3pNREl4TVRJeE9Wb1hEVEl4TURrek1ERTBNREV4TlZvdwpQekVrTUNJR0ExVUVDaE1iUkdsbmFYUmhiQ0JUYVdkdVlYUjFjbVVnVkhKMWMzUWdRMjh1TVJjd0ZRWURWUVFECkV3NUVVMVFnVW05dmRDQkRRU0JZTXpDQ0FTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUIKQU4rdjZaZFFDSU5YdE14aVpmYVFndXpIMHl4ck1NcGI3Tm5EZmNkQXdSZ1VpK0RvTTNaSkt1TS9JVW1UckU0TwpyejVJeTJYdS9OTWhEMlhTS3RreWo0emw5M2V3RW51MWxjQ0pvNm02N1hNdWVnd0dNb09pZm9vVU1NMFJvT0VxCk9MbDVDakg5VUwyQVpkKzNVV09EeU9LSVllcExZWUhzVW11NW91SkxHaWlmU0tPZUROb0pqajRYTGg3ZElOOWIKeGlxS3F5NjljSzNGQ3hvbGtIUnl4WHRxcXpUV01Jbi81V2dUZTFRTHlOYXU3RnFja2g0OVpMT014dCsveVVGdwo3Qlp5MVNic09GVTVROUQ4L1JoY1FQR1g2OVdhbTQwZHV0b2x1Y2JZMzhFVkFqcXIybTd4UGk3MVhBaWNQTmFECmFlUVFteGtxdGlsWDQrVTltNS93QWwwQ0F3RUFBYU5DTUVBd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBT0JnTlYKSFE4QkFmOEVCQU1DQVFZd0hRWURWUjBPQkJZRUZNU25zYVI3TEhINjIrRkxrSFgveEJWZ2hZa1FNQTBHQ1NxRwpTSWIzRFFFQkJRVUFBNElCQVFDakdpeWJGd0JjcVI3dUtHWTNPcitEeHo5THd3bWdsU0JkNDlsWlJOSStEVDY5CmlrdWdkQi9PRUlLY2RCb2RmcGdhM2NzVFM3TWdST1NSNmN6OGZhWGJhdVgrNXYzZ1R0MjNBRHExY0Vtdjh1WHIKQXZIUkFvc1p5NVE2WGtqRUdCNVlHVjhlQWxyd0RQR3hyYW5jV1lhTGJ1bVI5WWJLK3JsbU02cFpXODdpcHhaegpSOHNyekptd04walA0MVpMOWM4UERISXloOGJ3Ukx0VGNtMUQ5U1pJbWxKbnQxaXIvbWQyY1hqYkRhSldGQk01CkpER0ZvcWdDV2pCSDRkMVFCN3dDQ1pBQTYyUmpZSnNXdklqSkV1YlNmWkdMK1QweWpXVzA2WHl4VjNicXhiWW8KT2I4VlpSekk5bmVXYWdxTmR3dllrUXNFamdmYktiWUs3cDJDTlRVUQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0t'
+
+k8s_yaml(local([
+    'ytt',
+    '--file', '../../../deploy',
+    '--data-value', 'namespace=integration',
+    '--data-value', 'webhook_url='+webhookURL,
+    '--data-value', 'webhook_ca_bundle='+webhookCABundle,
+    '--data-value', 'image_repo=image',
+    '--data-value', 'image_tag=tilt-dev',
+    '--data-value-yaml', 'replicas=1',
+]))
+
+# TODO: re-use the existing BuildTime variable from our regular build
+local_resource(
+  'compile',
+  'cd ../../../ && '+
+    'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 '+
+    'go build -v '+
+    '-ldflags "$(hack/get-ldflags.sh)" '+
+    '-o ./hack/lib/tilt/build/pinniped-server '+
+    './cmd/pinniped-server',
+  deps=['../../../cmd', '../../../internal', '../../../pkg', '../../../generated'],
+)
+
+docker_build_with_restart('image', '.',
+    entrypoint=['/usr/local/bin/pinniped-server'],
+    live_update=[
+        sync('./build', '/usr/local/bin'),
+    ],
+)
+
+k8s_resource(
+    workload='pinniped',
+    new_name='deploy',
+    objects=[
+       'integration:namespace',
+       'credentialissuerconfigs.crd.pinniped.dev:customresourcedefinition',
+       'pinniped-service-account:serviceaccount',
+       'pinniped-aggregated-api-server-role:role',
+       'pinniped-kube-system-pod-exec-role:role',
+       'pinniped-cluster-info-lister-watcher-role:role',
+       'pinniped-aggregated-api-server-cluster-role:clusterrole',
+       'pinniped-credentialrequests-cluster-role:clusterrole',
+       'pinniped-aggregated-api-server-role-binding:rolebinding',
+       'pinniped-kube-system-pod-exec-role-binding:rolebinding',
+       'pinniped-extension-apiserver-authentication-reader-role-binding:rolebinding',
+       'pinniped-cluster-info-lister-watcher-role-binding:rolebinding',
+       'pinniped-aggregated-api-server-cluster-role-binding:clusterrolebinding',
+       'pinniped-credentialrequests-cluster-role-binding:clusterrolebinding',
+       'pinniped-service-account-cluster-role-binding:clusterrolebinding',
+       'pinniped-config:configmap',
+       'v1alpha1.pinniped.dev:apiservice',
+    ],
+)

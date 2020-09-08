@@ -16,3 +16,6 @@
 
 # goland
 .idea
+
+# Intermediate files used by Tilt
+/hack/lib/tilt/build

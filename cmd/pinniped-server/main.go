@@ -7,6 +7,7 @@ package main
 
 import (
 	"os"
+	"time"
 
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/pkg/version"
@@ -21,7 +22,12 @@ func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
-	klog.Infof("Running %s at %#v", rest.DefaultKubernetesUserAgent(), version.Get())
+	// Dump out the time since compile (mostly useful for benchmarking our local development cycle latency).
+	var timeSinceCompile time.Duration
+	if buildDate, err := time.Parse(time.RFC3339, version.Get().BuildDate); err == nil {
+		timeSinceCompile = time.Since(buildDate)
+	}
+	klog.Infof("Running %s at %#v (%s since build)", rest.DefaultKubernetesUserAgent(), version.Get(), timeSinceCompile)
 
 	ctx := genericapiserver.SetupSignalContext()
 

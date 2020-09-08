@@ -1,7 +1,7 @@
 # Copyright 2020 VMware, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.15.0 as build-env
+FROM golang:1.15.1 as build-env
 
 WORKDIR /work
 # Get dependencies first so they can be cached as a layer

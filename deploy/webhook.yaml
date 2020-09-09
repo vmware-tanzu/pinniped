@@ -1,0 +1,16 @@
+#! Copyright 2020 VMware, Inc.
+#! SPDX-License-Identifier: Apache-2.0
+
+#@ load("@ytt:data", "data")
+
+apiVersion: idp.pinniped.dev/v1alpha1
+kind: WebhookIdentityProvider
+metadata:
+  name: #@ data.values.app_name + "-webhook"
+  namespace: #@ data.values.namespace
+  labels:
+    app: #@ data.values.app_name
+spec:
+  endpoint: #@ data.values.webhook_url
+  tls:
+    certificateAuthorityData: #@ data.values.webhook_ca_bundle

@@ -37,16 +37,16 @@ type CertIssuer interface {
 	IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) ([]byte, []byte, error)
 }
 
-func NewREST(webhook authenticator.Token, issuer CertIssuer) *REST {
+func NewREST(tokenAuthenticator authenticator.Token, issuer CertIssuer) *REST {
 	return &REST{
-		webhook: webhook,
-		issuer:  issuer,
+		tokenAuthenticator: tokenAuthenticator,
+		issuer:             issuer,
 	}
 }
 
 type REST struct {
-	webhook authenticator.Token
-	issuer  CertIssuer
+	tokenAuthenticator authenticator.Token
+	issuer             CertIssuer
 }
 
 func (r *REST) New() runtime.Object {
@@ -78,7 +78,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		}
 	}()
 
-	authResponse, authenticated, err := r.webhook.AuthenticateToken(cancelCtx, credentialRequest.Spec.Token.Value)
+	authResponse, authenticated, err := r.tokenAuthenticator.AuthenticateToken(cancelCtx, credentialRequest.Spec.Token.Value)
 	if err != nil {
 		traceFailureWithError(t, "webhook authentication", err)
 		return failureResponse(), nil

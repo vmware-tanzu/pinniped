@@ -1,0 +1,30 @@
+#! Copyright 2020 VMware, Inc.
+#! SPDX-License-Identifier: Apache-2.0
+
+#@ load("@ytt:data", "data")
+
+#! Give permission to various objects within the app's own namespace
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: test-webhook-aggregated-api-server-role
+  namespace: test-webhook
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create, get, list, patch, update, watch]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: test-webhook-aggregated-api-server-role-binding
+  namespace: test-webhook
+subjects:
+  - kind: ServiceAccount
+    name: test-webhook-service-account
+    namespace: test-webhook
+roleRef:
+  kind: Role
+  name: test-webhook-aggregated-api-server-role
+  apiGroup: rbac.authorization.k8s.io

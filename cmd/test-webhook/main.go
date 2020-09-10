@@ -8,7 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 // This webhook is meant to be used in demo settings to play around with
 // Pinniped. As well, it can come in handy in integration tests.
 //
-// This webhook is NOT meant for production settings.
+// This webhook is NOT meant for use in production systems.
 package main
 
 import (
@@ -34,14 +34,24 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
+	"github.com/suzerain-io/pinniped/internal/controller/apicerts"
+	"github.com/suzerain-io/pinniped/internal/controllerlib"
 	"github.com/suzerain-io/pinniped/internal/provider"
 )
 
 const (
-	// namespace is the assumed namespace of this webhook. It is hardcoded now for
-	// simplicity, but should probably be made configurable in the future.
+	// This string must match the name of the Namespace declared in the deployment yaml.
 	namespace = "test-webhook"
+	// This string must match the name of the Service declared in the deployment yaml.
+	serviceName = "test-webhook"
 
+	// TODO there must be a better way to get this specific json result string without needing to hardcode it
+	unauthenticatedResponse = `{"apiVersion":"authentication.k8s.io/v1beta1","kind":"TokenReview","status":{"authenticated":false}}`
+
+	// TODO there must be a better way to get this specific json result string without needing to hardcode it
+	authenticatedResponseTemplate = `{"apiVersion":"authentication.k8s.io/v1beta1","kind":"TokenReview","status":{"authenticated":true,"user":{"username":"%s","uid":"%s","groups":%s}}}`
+
+	singletonWorker       = 1
 	defaultResyncInterval = 3 * time.Minute
 )
 
@@ -153,17 +163,21 @@ func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 	) == nil
 	if !passwordMatches {
 		respondWithUnauthenticated(rsp)
-	}
-
-	groupsBuf := bytes.NewBuffer(secret.Data["groups"])
-	gr := csv.NewReader(groupsBuf)
-	groups, err := gr.Read()
-	if err != nil {
-		klog.InfoS("could not read groups", "err", err)
-		rsp.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	trimSpace(groups)
+
+	groups := []string{}
+	groupsBuf := bytes.NewBuffer(secret.Data["groups"])
+	if groupsBuf.Len() > 0 {
+		groupsCSVReader := csv.NewReader(groupsBuf)
+		groups, err = groupsCSVReader.Read()
+		if err != nil {
+			klog.InfoS("could not read groups", "err", err)
+			rsp.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		trimLeadingAndTrailingWhitespace(groups)
+	}
 
 	respondWithAuthenticated(rsp, secret.ObjectMeta.Name, string(secret.UID), groups)
 }
@@ -177,7 +191,7 @@ func contains(ss []string, s string) bool {
 	return false
 }
 
-func trimSpace(ss []string) {
+func trimLeadingAndTrailingWhitespace(ss []string) {
 	for i := range ss {
 		ss[i] = strings.TrimSpace(ss[i])
 	}
@@ -185,16 +199,7 @@ func trimSpace(ss []string) {
 
 func respondWithUnauthenticated(rsp http.ResponseWriter) {
 	rsp.Header().Add("Content-Type", "application/json")
-
-	body := authenticationv1.TokenReview{
-		Status: authenticationv1.TokenReviewStatus{
-			Authenticated: false,
-		},
-	}
-	if err := json.NewEncoder(rsp).Encode(body); err != nil {
-		klog.InfoS("could not encode response", "err", err)
-		rsp.WriteHeader(http.StatusInternalServerError)
-	}
+	_, _ = rsp.Write([]byte(unauthenticatedResponse))
 }
 
 func respondWithAuthenticated(
@@ -203,21 +208,14 @@ func respondWithAuthenticated(
 	groups []string,
 ) {
 	rsp.Header().Add("Content-Type", "application/json")
-
-	body := authenticationv1.TokenReview{
-		Status: authenticationv1.TokenReviewStatus{
-			Authenticated: true,
-			User: authenticationv1.UserInfo{
-				Username: username,
-				UID:      uid,
-				Groups:   groups,
-			},
-		},
-	}
-	if err := json.NewEncoder(rsp).Encode(body); err != nil {
+	groupsJSONBytes, err := json.Marshal(groups)
+	if err != nil {
 		klog.InfoS("could not encode response", "err", err)
 		rsp.WriteHeader(http.StatusInternalServerError)
+		return
 	}
+	jsonBody := fmt.Sprintf(authenticatedResponseTemplate, username, uid, groupsJSONBytes)
+	_, _ = rsp.Write([]byte(jsonBody))
 }
 
 func newK8sClient() (kubernetes.Interface, error) {
@@ -235,19 +233,52 @@ func newK8sClient() (kubernetes.Interface, error) {
 	return kubeClient, nil
 }
 
-func startControllers(ctx context.Context) error {
-	return nil
+func startControllers(
+	ctx context.Context,
+	dynamicCertProvider provider.DynamicTLSServingCertProvider,
+	kubeClient kubernetes.Interface,
+	kubeInformers kubeinformers.SharedInformerFactory,
+) {
+	aVeryLongTime := time.Hour * 24 * 365 * 100
+
+	// Create controller manager.
+	controllerManager := controllerlib.
+		NewManager().
+		WithController(
+			apicerts.NewCertsManagerController(
+				namespace,
+				kubeClient,
+				kubeInformers.Core().V1().Secrets(),
+				controllerlib.WithInformer,
+				controllerlib.WithInitialEvent,
+				aVeryLongTime,
+				"test-webhook CA",
+				serviceName,
+			),
+			singletonWorker,
+		).
+		WithController(
+			apicerts.NewCertsObserverController(
+				namespace,
+				dynamicCertProvider,
+				kubeInformers.Core().V1().Secrets(),
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		)
+
+	kubeInformers.Start(ctx.Done())
+
+	go controllerManager.Start(ctx)
 }
 
 func startWebhook(
 	ctx context.Context,
 	l net.Listener,
+	dynamicCertProvider provider.DynamicTLSServingCertProvider,
 	secretInformer corev1informers.SecretInformer,
 ) error {
-	return newWebhook(
-		provider.NewDynamicTLSServingCertProvider(),
-		secretInformer,
-	).start(ctx, l)
+	return newWebhook(dynamicCertProvider, secretInformer).start(ctx, l)
 }
 
 func waitForSignal() os.Signal {
@@ -271,28 +302,26 @@ func run() error {
 		kubeinformers.WithNamespace(namespace),
 	)
 
-	if err := startControllers(ctx); err != nil {
-		return fmt.Errorf("cannot start controllers: %w", err)
-	}
+	dynamicCertProvider := provider.NewDynamicTLSServingCertProvider()
+
+	startControllers(ctx, dynamicCertProvider, kubeClient, kubeInformers)
 	klog.InfoS("controllers are ready")
 
-	l, err := net.Listen("tcp", "127.0.0.1:443")
+	//nolint: gosec
+	l, err := net.Listen("tcp", ":443")
 	if err != nil {
 		return fmt.Errorf("cannot create listener: %w", err)
 	}
 	defer l.Close()
 
-	if err := startWebhook(
-		ctx,
-		l,
-		kubeInformers.Core().V1().Secrets(),
-	); err != nil {
+	err = startWebhook(ctx, l, dynamicCertProvider, kubeInformers.Core().V1().Secrets())
+	if err != nil {
 		return fmt.Errorf("cannot start webhook: %w", err)
 	}
 	klog.InfoS("webhook is ready", "address", l.Addr().String())
 
-	signal := waitForSignal()
-	klog.InfoS("webhook exiting", "signal", signal)
+	gotSignal := waitForSignal()
+	klog.InfoS("webhook exiting", "signal", gotSignal)
 
 	return nil
 }

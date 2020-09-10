@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -43,60 +44,48 @@ func TestWebhook(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	uid, otherUID, colonUID := "some-uid", "some-other-uid", "some-colon-uid"
-	user, otherUser, colonUser := "some-user", "some-other-user", "some-colon-user"
-	password, otherPassword, colonPassword := "some-password", "some-other-password", "some-:-password"
+	user, otherUser, colonUser, noGroupUser, oneGroupUser, passwordUndefinedUser, emptyPasswordUser, underfinedGroupsUser :=
+		"some-user", "other-user", "colon-user", "no-group-user", "one-group-user", "password-undefined-user", "empty-password-user", "undefined-groups-user"
+	uid, otherUID, colonUID, noGroupUID, oneGroupUID, passwordUndefinedUID, emptyPasswordUID, underfinedGroupsUID :=
+		"some-uid", "other-uid", "colon-uid", "no-group-uid", "one-group-uid", "password-undefined-uid", "empty-password-uid", "undefined-groups-uid"
+	password, otherPassword, colonPassword, noGroupPassword, oneGroupPassword, undefinedGroupsPassword :=
+		"some-password", "other-password", "some-:-password", "no-group-password", "one-group-password", "undefined-groups-password"
+
 	group0, group1 := "some-group-0", "some-group-1"
-
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
-	require.NoError(t, err)
-
-	otherPasswordHash, err := bcrypt.GenerateFromPassword([]byte(otherPassword), bcrypt.MinCost)
-	require.NoError(t, err)
-
-	colonPasswordHash, err := bcrypt.GenerateFromPassword([]byte(colonPassword), bcrypt.MinCost)
-	require.NoError(t, err)
-
 	groups := group0 + " , " + group1
 
-	userSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			UID:       types.UID(uid),
-			Name:      user,
-			Namespace: "test-webhook",
-		},
-		Data: map[string][]byte{
-			"passwordHash": passwordHash,
-			"groups":       []byte(groups),
-		},
-	}
-	otherUserSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			UID:       types.UID(otherUID),
-			Name:      otherUser,
-			Namespace: "test-webhook",
-		},
-		Data: map[string][]byte{
-			"passwordHash": otherPasswordHash,
-			"groups":       []byte(groups),
-		},
-	}
-	colonUserSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			UID:       types.UID(colonUID),
-			Name:      colonUser,
-			Namespace: "test-webhook",
-		},
-		Data: map[string][]byte{
-			"passwordHash": colonPasswordHash,
-			"groups":       []byte(groups),
-		},
-	}
-
 	kubeClient := kubernetesfake.NewSimpleClientset()
-	require.NoError(t, kubeClient.Tracker().Add(userSecret))
-	require.NoError(t, kubeClient.Tracker().Add(otherUserSecret))
-	require.NoError(t, kubeClient.Tracker().Add(colonUserSecret))
+	addSecretToFakeClientTracker(t, kubeClient, user, uid, password, groups)
+	addSecretToFakeClientTracker(t, kubeClient, otherUser, otherUID, otherPassword, groups)
+	addSecretToFakeClientTracker(t, kubeClient, colonUser, colonUID, colonPassword, groups)
+	addSecretToFakeClientTracker(t, kubeClient, noGroupUser, noGroupUID, noGroupPassword, "")
+	addSecretToFakeClientTracker(t, kubeClient, oneGroupUser, oneGroupUID, oneGroupPassword, group0)
+	addSecretToFakeClientTracker(t, kubeClient, emptyPasswordUser, emptyPasswordUID, "", groups)
+
+	require.NoError(t, kubeClient.Tracker().Add(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:       types.UID(passwordUndefinedUID),
+			Name:      passwordUndefinedUser,
+			Namespace: "test-webhook",
+		},
+		Data: map[string][]byte{
+			"groups": []byte(groups),
+		},
+	}))
+
+	undefinedGroupsUserPasswordHash, err := bcrypt.GenerateFromPassword([]byte(undefinedGroupsPassword), bcrypt.MinCost)
+	require.NoError(t, err)
+
+	require.NoError(t, kubeClient.Tracker().Add(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:       types.UID(underfinedGroupsUID),
+			Name:      underfinedGroupsUser,
+			Namespace: "test-webhook",
+		},
+		Data: map[string][]byte{
+			"passwordHash": undefinedGroupsUserPasswordHash,
+		},
+	}))
 
 	secretInformer := createSecretInformer(t, kubeClient)
 
@@ -110,6 +99,12 @@ func TestWebhook(t *testing.T) {
 
 	client := newClient(caBundle, serverName)
 
+	goodURL := fmt.Sprintf("https://%s/authenticate", l.Addr().String())
+	goodRequestHeaders := map[string][]string{
+		"Content-Type": {"application/json"},
+		"Accept":       {"application/json"},
+	}
+
 	tests := []struct {
 		name    string
 		url     string
@@ -119,178 +114,187 @@ func TestWebhook(t *testing.T) {
 
 		wantStatus  int
 		wantHeaders map[string][]string
-		wantBody    *authenticationv1.TokenReview
+		wantBody    *string
 	}{
 		{
-			name:   "success",
-			url:    fmt.Sprintf("https://%s/authenticate", l.Addr().String()),
-			method: http.MethodPost,
-			headers: map[string][]string{
-				"Content-Type": []string{"application/json"},
-				"Accept":       []string{"application/json"},
-			},
+			name:    "success for a user who belongs to multiple groups",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
 			body: func() (io.ReadCloser, error) {
 				return newTokenReviewBody(user + ":" + password)
 			},
 			wantStatus: http.StatusOK,
 			wantHeaders: map[string][]string{
-				"Content-Type": []string{"application/json"},
+				"Content-Type": {"application/json"},
 			},
-			wantBody: &authenticationv1.TokenReview{
-				Status: authenticationv1.TokenReviewStatus{
-					Authenticated: true,
-					User: authenticationv1.UserInfo{
-						Username: user,
-						UID:      uid,
-						Groups:   []string{group0, group1},
-					},
-				},
-			},
+			wantBody: authenticatedResponseJSON(user, uid, []string{group0, group1}),
 		},
 		{
-			name:   "wrong username for password",
-			url:    fmt.Sprintf("https://%s/authenticate", l.Addr().String()),
-			method: http.MethodPost,
-			headers: map[string][]string{
-				"Content-Type": []string{"application/json"},
-				"Accept":       []string{"application/json"},
+			name:    "success for a user who belongs to one groups",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
+			body: func() (io.ReadCloser, error) {
+				return newTokenReviewBody(oneGroupUser + ":" + oneGroupPassword)
 			},
+			wantStatus: http.StatusOK,
+			wantHeaders: map[string][]string{
+				"Content-Type": {"application/json"},
+			},
+			wantBody: authenticatedResponseJSON(oneGroupUser, oneGroupUID, []string{group0}),
+		},
+		{
+			name:    "success for a user who belongs to no groups",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
+			body: func() (io.ReadCloser, error) {
+				return newTokenReviewBody(noGroupUser + ":" + noGroupPassword)
+			},
+			wantStatus: http.StatusOK,
+			wantHeaders: map[string][]string{
+				"Content-Type": {"application/json"},
+			},
+			wantBody: authenticatedResponseJSON(noGroupUser, noGroupUID, []string{}),
+		},
+		{
+			name:    "wrong username for password",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
 			body: func() (io.ReadCloser, error) {
 				return newTokenReviewBody(otherUser + ":" + password)
 			},
 			wantStatus: http.StatusOK,
 			wantHeaders: map[string][]string{
-				"Content-Type": []string{"application/json"},
+				"Content-Type": {"application/json"},
 			},
-			wantBody: &authenticationv1.TokenReview{
-				Status: authenticationv1.TokenReviewStatus{
-					Authenticated: false,
-				},
-			},
+			wantBody: unauthenticatedResponseJSON(),
 		},
 		{
-			name:   "wrong password for username",
-			url:    fmt.Sprintf("https://%s/authenticate", l.Addr().String()),
-			method: http.MethodPost,
-			headers: map[string][]string{
-				"Content-Type": []string{"application/json"},
-				"Accept":       []string{"application/json"},
+			name:    "when a user has no password hash in the secret",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
+			body: func() (io.ReadCloser, error) {
+				return newTokenReviewBody(passwordUndefinedUser + ":foo")
 			},
+			wantStatus: http.StatusOK,
+			wantHeaders: map[string][]string{
+				"Content-Type": {"application/json"},
+			},
+			wantBody: unauthenticatedResponseJSON(),
+		},
+		{
+			name:    "success for a user has no groups defined in the secret",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
+			body: func() (io.ReadCloser, error) {
+				return newTokenReviewBody(underfinedGroupsUser + ":" + undefinedGroupsPassword)
+			},
+			wantStatus: http.StatusOK,
+			wantHeaders: map[string][]string{
+				"Content-Type": {"application/json"},
+			},
+			wantBody: authenticatedResponseJSON(underfinedGroupsUser, underfinedGroupsUID, []string{}),
+		},
+		{
+			name:    "when a user has empty string as their password",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
+			body: func() (io.ReadCloser, error) {
+				return newTokenReviewBody(passwordUndefinedUser + ":foo")
+			},
+			wantStatus: http.StatusOK,
+			wantHeaders: map[string][]string{
+				"Content-Type": {"application/json"},
+			},
+			wantBody: unauthenticatedResponseJSON(),
+		},
+		{
+			name:    "wrong password for username",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
 			body: func() (io.ReadCloser, error) {
 				return newTokenReviewBody(user + ":" + otherPassword)
 			},
 			wantStatus: http.StatusOK,
 			wantHeaders: map[string][]string{
-				"Content-Type": []string{"application/json"},
+				"Content-Type": {"application/json"},
 			},
-			wantBody: &authenticationv1.TokenReview{
-				Status: authenticationv1.TokenReviewStatus{
-					Authenticated: false,
-				},
-			},
+			wantBody: unauthenticatedResponseJSON(),
 		},
 		{
-			name:   "non-existent password for username",
-			url:    fmt.Sprintf("https://%s/authenticate", l.Addr().String()),
-			method: http.MethodPost,
-			headers: map[string][]string{
-				"Content-Type": []string{"application/json"},
-				"Accept":       []string{"application/json"},
-			},
+			name:    "non-existent password for username",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
 			body: func() (io.ReadCloser, error) {
 				return newTokenReviewBody(user + ":" + "some-non-existent-password")
 			},
 			wantStatus: http.StatusOK,
 			wantHeaders: map[string][]string{
-				"Content-Type": []string{"application/json"},
+				"Content-Type": {"application/json"},
 			},
-			wantBody: &authenticationv1.TokenReview{
-				Status: authenticationv1.TokenReviewStatus{
-					Authenticated: false,
-				},
-			},
+			wantBody: unauthenticatedResponseJSON(),
 		},
 		{
-			name:   "non-existent username",
-			url:    fmt.Sprintf("https://%s/authenticate", l.Addr().String()),
-			method: http.MethodPost,
-			headers: map[string][]string{
-				"Content-Type": []string{"application/json"},
-				"Accept":       []string{"application/json"},
-			},
+			name:    "non-existent username",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
 			body: func() (io.ReadCloser, error) {
 				return newTokenReviewBody("some-non-existent-user" + ":" + password)
 			},
 			wantStatus: http.StatusOK,
 			wantHeaders: map[string][]string{
-				"Content-Type": []string{"application/json"},
+				"Content-Type": {"application/json"},
 			},
-			wantBody: &authenticationv1.TokenReview{
-				Status: authenticationv1.TokenReviewStatus{
-					Authenticated: false,
-				},
-			},
+			wantBody: unauthenticatedResponseJSON(),
 		},
 		{
-			name:   "invalid token (missing colon)",
-			url:    fmt.Sprintf("https://%s/authenticate", l.Addr().String()),
-			method: http.MethodPost,
-			headers: map[string][]string{
-				"Content-Type": []string{"application/json"},
-				"Accept":       []string{"application/json"},
-			},
+			name:    "bad token format (missing colon)",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
 			body: func() (io.ReadCloser, error) {
 				return newTokenReviewBody(user)
 			},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name:   "password contains colon",
-			url:    fmt.Sprintf("https://%s/authenticate", l.Addr().String()),
-			method: http.MethodPost,
-			headers: map[string][]string{
-				"Content-Type": []string{"application/json"},
-				"Accept":       []string{"application/json"},
-			},
+			name:    "password contains colon",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
 			body: func() (io.ReadCloser, error) {
 				return newTokenReviewBody(colonUser + ":" + colonPassword)
 			},
 			wantStatus: http.StatusOK,
 			wantHeaders: map[string][]string{
-				"Content-Type": []string{"application/json"},
+				"Content-Type": {"application/json"},
 			},
-			wantBody: &authenticationv1.TokenReview{
-				Status: authenticationv1.TokenReviewStatus{
-					Authenticated: true,
-					User: authenticationv1.UserInfo{
-						Username: colonUser,
-						UID:      colonUID,
-						Groups:   []string{group0, group1},
-					},
-				},
-			},
+			wantBody: authenticatedResponseJSON(colonUser, colonUID, []string{group0, group1}),
 		},
 		{
-			name:   "bad path",
-			url:    fmt.Sprintf("https://%s/tuna", l.Addr().String()),
-			method: http.MethodPost,
-			headers: map[string][]string{
-				"Content-Type": []string{"application/json"},
-				"Accept":       []string{"application/json"},
-			},
+			name:    "bad path",
+			url:     fmt.Sprintf("https://%s/tuna", l.Addr().String()),
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
 			body: func() (io.ReadCloser, error) {
 				return newTokenReviewBody("some-token")
 			},
 			wantStatus: http.StatusNotFound,
 		},
 		{
-			name:   "bad method",
-			url:    fmt.Sprintf("https://%s/authenticate", l.Addr().String()),
-			method: http.MethodGet,
-			headers: map[string][]string{
-				"Content-Type": []string{"application/json"},
-				"Accept":       []string{"application/json"},
-			},
+			name:    "bad method",
+			url:     goodURL,
+			method:  http.MethodGet,
+			headers: goodRequestHeaders,
 			body: func() (io.ReadCloser, error) {
 				return newTokenReviewBody("some-token")
 			},
@@ -298,11 +302,11 @@ func TestWebhook(t *testing.T) {
 		},
 		{
 			name:   "bad content type",
-			url:    fmt.Sprintf("https://%s/authenticate", l.Addr().String()),
+			url:    goodURL,
 			method: http.MethodPost,
 			headers: map[string][]string{
-				"Content-Type": []string{"application/xml"},
-				"Accept":       []string{"application/json"},
+				"Content-Type": {"application/xml"},
+				"Accept":       {"application/json"},
 			},
 			body: func() (io.ReadCloser, error) {
 				return newTokenReviewBody("some-token")
@@ -311,11 +315,11 @@ func TestWebhook(t *testing.T) {
 		},
 		{
 			name:   "bad accept",
-			url:    fmt.Sprintf("https://%s/authenticate", l.Addr().String()),
+			url:    goodURL,
 			method: http.MethodPost,
 			headers: map[string][]string{
-				"Content-Type": []string{"application/json"},
-				"Accept":       []string{"application/xml"},
+				"Content-Type": {"application/json"},
+				"Accept":       {"application/xml"},
 			},
 			body: func() (io.ReadCloser, error) {
 				return newTokenReviewBody("some-token")
@@ -323,23 +327,21 @@ func TestWebhook(t *testing.T) {
 			wantStatus: http.StatusUnsupportedMediaType,
 		},
 		{
-			name:   "bad body",
-			url:    fmt.Sprintf("https://%s/authenticate", l.Addr().String()),
-			method: http.MethodPost,
-			headers: map[string][]string{
-				"Content-Type": []string{"application/json"},
-				"Accept":       []string{"application/json"},
-			},
+			name:    "bad body",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
 			body: func() (io.ReadCloser, error) {
 				return ioutil.NopCloser(bytes.NewBuffer([]byte("invalid body"))), nil
 			},
 			wantStatus: http.StatusBadRequest,
 		},
 	}
+
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			url, err := url.Parse(test.url)
+			parsedURL, err := url.Parse(test.url)
 			require.NoError(t, err)
 
 			body, err := test.body()
@@ -347,25 +349,28 @@ func TestWebhook(t *testing.T) {
 
 			rsp, err := client.Do(&http.Request{
 				Method: test.method,
-				URL:    url,
+				URL:    parsedURL,
 				Header: test.headers,
 				Body:   body,
 			})
 			require.NoError(t, err)
 			defer rsp.Body.Close()
 
-			if test.wantStatus != 0 {
-				require.Equal(t, test.wantStatus, rsp.StatusCode)
-			}
+			require.Equal(t, test.wantStatus, rsp.StatusCode)
+
 			if test.wantHeaders != nil {
 				for k, v := range test.wantHeaders {
 					require.Equal(t, v, rsp.Header.Values(k))
 				}
 			}
+
+			responseBody, err := ioutil.ReadAll(rsp.Body)
+			require.NoError(t, err)
 			if test.wantBody != nil {
-				rspBody, err := newTokenReview(rsp.Body)
 				require.NoError(t, err)
-				require.Equal(t, test.wantBody, rspBody)
+				require.JSONEq(t, *test.wantBody, string(responseBody))
+			} else {
+				require.Empty(t, responseBody)
 			}
 		})
 	}
@@ -448,10 +453,57 @@ func newTokenReviewBody(token string) (io.ReadCloser, error) {
 	return ioutil.NopCloser(buf), err
 }
 
-// newTokenReview reads a JSON-encoded authenticationv1.TokenReview from an
-// io.Reader.
-func newTokenReview(body io.Reader) (*authenticationv1.TokenReview, error) {
-	var tr authenticationv1.TokenReview
-	err := json.NewDecoder(body).Decode(&tr)
-	return &tr, err
+func unauthenticatedResponseJSON() *string {
+	// Very specific expected result. Avoid using json package so we know exactly what we're asserting.
+	s := `{
+		"apiVersion": "authentication.k8s.io/v1beta1",
+        "kind": "TokenReview",
+		"status": {
+			"authenticated": false
+		}
+	}`
+	return &s
+}
+
+func authenticatedResponseJSON(user, uid string, groups []string) *string {
+	var quotedGroups []string
+	for _, group := range groups {
+		quotedGroups = append(quotedGroups, `"`+group+`"`)
+	}
+
+	// Very specific expected result. Avoid using json package so we know exactly what we're asserting.
+	authenticatedJSONTemplate := `{
+	  "apiVersion": "authentication.k8s.io/v1beta1",
+	  "kind": "TokenReview",
+	  "status": {
+		"authenticated": true,
+		"user": {
+		  "username": "%s",
+		  "uid": "%s",
+		  "groups": [%s]
+		}
+	  }
+	}`
+
+	s := fmt.Sprintf(authenticatedJSONTemplate, user, uid, strings.Join(quotedGroups, ","))
+	return &s
+}
+
+func addSecretToFakeClientTracker(t *testing.T, kubeClient *kubernetesfake.Clientset, username, uid, password, groups string) {
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+	require.NoError(t, err)
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:       types.UID(uid),
+			Name:      username,
+			Namespace: "test-webhook",
+		},
+		Data: map[string][]byte{
+			"passwordHash": passwordHash,
+			"groups":       []byte(groups),
+		},
+	}
+
+	require.NoError(t, kubeClient.Tracker().Add(secret))
 }

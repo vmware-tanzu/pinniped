@@ -19,13 +19,16 @@ COPY tools ./tools
 COPY hack ./hack
 
 # Build the executable binary (CGO_ENABLED=0 means static linking)
-RUN mkdir out && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(hack/get-ldflags.sh)" -o out ./cmd/pinniped-server/...
+RUN mkdir out \
+  && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(hack/get-ldflags.sh)" -o out ./cmd/pinniped-server/... \
+  && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o out ./cmd/test-webhook/...
 
 # Use a runtime image based on Debian slim
 FROM debian:10.5-slim
 
-# Copy the binary from the build-env stage
+# Copy the binaries from the build-env stage
 COPY --from=build-env /work/out/pinniped-server /usr/local/bin/pinniped-server
+COPY --from=build-env /work/out/test-webhook /usr/local/bin/test-webhook
 
 # Document the port
 EXPOSE 443

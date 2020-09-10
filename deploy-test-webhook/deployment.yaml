@@ -1,0 +1,63 @@
+#! Copyright 2020 VMware, Inc.
+#! SPDX-License-Identifier: Apache-2.0
+
+#@ load("@ytt:data", "data")
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-webhook
+  labels:
+    name: test-webhook
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-webhook-service-account
+  namespace: test-webhook
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-webhook
+  namespace: test-webhook
+  labels:
+    app: test-webhook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-webhook
+  template:
+    metadata:
+      labels:
+        app: test-webhook
+    spec:
+      serviceAccountName: test-webhook-service-account
+      containers:
+        - name: test-webhook
+          #@ if data.values.image_digest:
+          image:  #@ data.values.image_repo + "@" + data.values.image_digest
+          #@ else:
+          image: #@ data.values.image_repo + ":" + data.values.image_tag
+          #@ end
+          imagePullPolicy: IfNotPresent
+          command: #! override the default entrypoint
+            - /usr/local/bin/test-webhook
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-webhook
+  namespace: test-webhook
+  labels:
+    app: test-webhook
+spec:
+  type: ClusterIP
+  selector:
+    app: test-webhook
+  ports:
+    - protocol: TCP
+      port: 443
+      targetPort: 443

@@ -4,7 +4,7 @@
 
 If you would like to try Pinniped, but you don't have a compatible identity provider,
 you can use Pinniped's test identity provider.
-See [../deplot-test-webhook/README.md](../deplot-test-webhook/README.md)
+See [../deploy-test-webhook/README.md](../deploy-test-webhook/README.md)
 for details.
 
 ## Tools

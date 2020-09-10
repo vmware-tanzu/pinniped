@@ -66,7 +66,7 @@ func TestWebhook(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			UID:       types.UID(passwordUndefinedUID),
 			Name:      passwordUndefinedUser,
-			Namespace: "test-webhook",
+			Namespace: "local-user-authenticator",
 		},
 		Data: map[string][]byte{
 			"groups": []byte(groups),
@@ -80,7 +80,7 @@ func TestWebhook(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			UID:       types.UID(underfinedGroupsUID),
 			Name:      underfinedGroupsUser,
-			Namespace: "test-webhook",
+			Namespace: "local-user-authenticator",
 		},
 		Data: map[string][]byte{
 			"passwordHash": undefinedGroupsUserPasswordHash,
@@ -389,10 +389,10 @@ func createSecretInformer(t *testing.T, kubeClient kubernetes.Interface) corev1i
 func newCertProvider(t *testing.T) (provider.DynamicTLSServingCertProvider, []byte, string) {
 	t.Helper()
 
-	ca, err := certauthority.New(pkix.Name{CommonName: "test-webhook CA"}, time.Hour*24)
+	ca, err := certauthority.New(pkix.Name{CommonName: "local-user-authenticator CA"}, time.Hour*24)
 	require.NoError(t, err)
 
-	serverName := "test-webhook"
+	serverName := "local-user-authenticator"
 	cert, err := ca.Issue(
 		pkix.Name{CommonName: serverName},
 		[]string{},
@@ -482,7 +482,7 @@ func addSecretToFakeClientTracker(t *testing.T, kubeClient *kubernetesfake.Clien
 		ObjectMeta: metav1.ObjectMeta{
 			UID:       types.UID(uid),
 			Name:      username,
-			Namespace: "test-webhook",
+			Namespace: "local-user-authenticator",
 		},
 		Data: map[string][]byte{
 			"passwordHash": passwordHash,

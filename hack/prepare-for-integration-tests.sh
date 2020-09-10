@@ -212,24 +212,24 @@ else
   manifest=/tmp/manifest.yaml
 
   #
-  # Deploy test-webhook
+  # Deploy local-user-authenticator
   #
-  pushd deploy-test-webhook >/dev/null
+  pushd deploy-local-user-authenticator >/dev/null
 
-  log_note "Deploying the test-webhook app to the cluster..."
+  log_note "Deploying the local-user-authenticator app to the cluster..."
   ytt --file . \
     --data-value "image_repo=$registry_repo" \
     --data-value "image_tag=$tag" >"$manifest"
 
   echo
-  log_note "Full test-webhook app manifest with Secrets redacted..."
+  log_note "Full local-user-authenticator app manifest with Secrets redacted..."
   echo "--------------------------------------------------------------------------------"
   print_redacted_manifest $manifest
   echo "--------------------------------------------------------------------------------"
   echo
 
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
-  kapp deploy --yes --app test-webhook --diff-changes --file "$manifest"
+  kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
 
   popd >/dev/null
 
@@ -239,7 +239,7 @@ else
   test_password="test-password"
   test_groups="test-group-0,test-group-1"
   kubectl create secret generic "$test_username" \
-    --namespace test-webhook \
+    --namespace local-user-authenticator \
     --from-literal=groups="$test_groups" \
     --from-literal=passwordHash="$(htpasswd -nbBC 10 x "$test_password" | sed -e "s/^x://")" \
     --dry-run=client \
@@ -248,8 +248,8 @@ else
 
   app_name="pinniped"
   namespace="integration"
-  webhook_url="https://test-webhook.test-webhook.svc/authenticate"
-  webhook_ca_bundle="$(kubectl get secret api-serving-cert --namespace test-webhook -o 'jsonpath={.data.caCertificate}')"
+  webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
+  webhook_ca_bundle="$(kubectl get secret api-serving-cert --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
   discovery_url="$(TERM=dumb kubectl cluster-info | awk '/Kubernetes master/ {print $NF}')"
 
   #
@@ -312,5 +312,5 @@ EOF
   log_note
   log_note "When you're finished, use 'kind delete cluster' to tear down the cluster."
   log_note
-  log_note "To delete the deployments, run 'kapp delete -a test-webhook -y && kapp delete -a pinniped -y'."
+  log_note "To delete the deployments, run 'kapp delete -a local-user-authenticator -y && kapp delete -a pinniped -y'."
 fi

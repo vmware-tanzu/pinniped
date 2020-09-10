@@ -42,9 +42,9 @@ import (
 
 const (
 	// This string must match the name of the Namespace declared in the deployment yaml.
-	namespace = "test-webhook"
+	namespace = "local-user-authenticator"
 	// This string must match the name of the Service declared in the deployment yaml.
-	serviceName = "test-webhook"
+	serviceName = "local-user-authenticator"
 
 	// TODO there must be a better way to get this specific json result string without needing to hardcode it
 	unauthenticatedResponse = `{"apiVersion":"authentication.k8s.io/v1beta1","kind":"TokenReview","status":{"authenticated":false}}`
@@ -268,7 +268,7 @@ func startControllers(
 				controllerlib.WithInformer,
 				controllerlib.WithInitialEvent,
 				aVeryLongTime,
-				"test-webhook CA",
+				"local-user-authenticator CA",
 				serviceName,
 			),
 			singletonWorker,

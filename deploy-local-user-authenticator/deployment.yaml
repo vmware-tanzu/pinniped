@@ -7,36 +7,36 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: test-webhook
+  name: local-user-authenticator
   labels:
-    name: test-webhook
+    name: local-user-authenticator
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: test-webhook-service-account
-  namespace: test-webhook
+  name: local-user-authenticator-service-account
+  namespace: local-user-authenticator
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: test-webhook
-  namespace: test-webhook
+  name: local-user-authenticator
+  namespace: local-user-authenticator
   labels:
-    app: test-webhook
+    app: local-user-authenticator
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: test-webhook
+      app: local-user-authenticator
   template:
     metadata:
       labels:
-        app: test-webhook
+        app: local-user-authenticator
     spec:
-      serviceAccountName: test-webhook-service-account
+      serviceAccountName: local-user-authenticator-service-account
       containers:
-        - name: test-webhook
+        - name: local-user-authenticator
           #@ if data.values.image_digest:
           image:  #@ data.values.image_repo + "@" + data.values.image_digest
           #@ else:
@@ -44,19 +44,19 @@ spec:
           #@ end
           imagePullPolicy: IfNotPresent
           command: #! override the default entrypoint
-            - /usr/local/bin/test-webhook
+            - /usr/local/bin/local-user-authenticator
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: test-webhook
-  namespace: test-webhook
+  name: local-user-authenticator
+  namespace: local-user-authenticator
   labels:
-    app: test-webhook
+    app: local-user-authenticator
 spec:
   type: ClusterIP
   selector:
-    app: test-webhook
+    app: local-user-authenticator
   ports:
     - protocol: TCP
       port: 443

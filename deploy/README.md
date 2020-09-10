@@ -4,7 +4,7 @@
 
 If you would like to try Pinniped, but you don't have a compatible identity provider,
 you can use Pinniped's test identity provider.
-See [../deploy-test-webhook/README.md](../deploy-test-webhook/README.md)
+See [deploy-local-user-authenticator/README.md](../deploy-local-user-authenticator/README.md)
 for details.
 
 ## Tools

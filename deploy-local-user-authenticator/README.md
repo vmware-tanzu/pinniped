@@ -1,13 +1,13 @@
-# Deploying `test-webhook`
+# Deploying `local-user-authenticator`
 
-## What is `test-webhook`?
+## What is `local-user-authenticator`?
 
-The `test-webhook` app is an identity provider used for integration testing and demos.
+The `local-user-authenticator` app is an identity provider used for integration testing and demos.
 If you would like to demo Pinniped, but you don't have a compatible identity provider handy,
-you can use Pinniped's `test-webhook` identity provider. Note that this is not recommended for
+you can use Pinniped's `local-user-authenticator` identity provider. Note that this is not recommended for
 production use.
 
-The `test-webhook` is a Kubernetes Deployment which runs a webhook server that implements the Kubernetes
+The `local-user-authenticator` is a Kubernetes Deployment which runs a webhook server that implements the Kubernetes
 [Webhook Token Authentication interface](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#webhook-token-authentication).
 
 User accounts can be created and edited dynamically using `kubectl` commands (see below).
@@ -26,43 +26,43 @@ apache2-utils`).
 
 1. The configuration options are in [values.yml](values.yaml). Fill in the values in that file, or override those values
    using `ytt` command-line options in the command below.
-2. In a terminal, cd to this `deploy-test-webhook` directory
+2. In a terminal, cd to this `deploy-local-user-authenticator` directory
 3. To generate the final YAML files, run: `ytt --file .`
 4. Deploy the generated YAML using your preferred deployment tool, such as `kubectl` or [`kapp`](https://get-kapp.io/).
-   For example: `ytt --file . | kapp deploy --yes --app test-webhook --diff-changes --file -`
+   For example: `ytt --file . | kapp deploy --yes --app local-user-authenticator --diff-changes --file -`
 
 ## Configuring After Installing
 
 ### Create Users
 
 Use `kubectl` to create, edit, and delete user accounts by creating a `Secret` for each user account in the same
-namespace where `test-webhook` is deployed.  The name of the `Secret` resource is the username.
+namespace where `local-user-authenticator` is deployed.  The name of the `Secret` resource is the username.
 Store the user's group membership and `bcrypt` encrypted password as the contents of the `Secret`.
 For example, to create a user named `ryan` with the password `password123`
 who belongs to the groups `group1` and `group2`, use:
 
 ```bash
 kubectl create secret generic ryan \
-  --namespace test-webhook \
+  --namespace local-user-authenticator \
   --from-literal=groups=group1,group2 \
   --from-literal=passwordHash=$(htpasswd -nbBC 10 x password123 | sed -e "s/^x://")
 ```
 
-### Get the `test-webhook` App's Auto-Generated Certificate Authority Bundle
+### Get the `local-user-authenticator` App's Auto-Generated Certificate Authority Bundle
 
-Fetch the auto-generated CA bundle for the `test-webhook`'s HTTP TLS endpoint.
+Fetch the auto-generated CA bundle for the `local-user-authenticator`'s HTTP TLS endpoint.
 
 ```bash
-kubectl get secret api-serving-cert --namespace test-webhook \
+kubectl get secret api-serving-cert --namespace local-user-authenticator \
   -o jsonpath={.data.caCertificate} \
   | base64 -d \
-  | tee /tmp/test-webhook-ca
+  | tee /tmp/local-user-authenticator-ca
 ```
 
-### Configuring Pinniped to Use `test-webhook` as an Identity Provider
+### Configuring Pinniped to Use `local-user-authenticator` as an Identity Provider
 
-When installing Pinniped on the same cluster, configure `test-webhook` as an Identity Provider for Pinniped
-using the webhook URL `https://test-webhook.test-webhook.svc/authenticate`
+When installing Pinniped on the same cluster, configure `local-user-authenticator` as an Identity Provider for Pinniped
+using the webhook URL `https://local-user-authenticator.local-user-authenticator.svc/authenticate`
 along with the CA bundle fetched by the above command.
 
 ### Optional: Manually Test the Webhook Endpoint
@@ -76,14 +76,14 @@ along with the CA bundle fetched by the above command.
   1. Copy the CA bundle that was fetched above onto the new pod.
 
       ```bash
-      kubectl cp /tmp/test-webhook-ca curlpod:/tmp/test-webhook-ca
+      kubectl cp /tmp/local-user-authenticator-ca curlpod:/tmp/local-user-authenticator-ca
       ```
 
   1. Run a `curl` command to try to authenticate as the user created above.
 
       ```bash
-      kubectl -it exec curlpod -- curl https://test-webhook.test-webhook.svc/authenticate \
-        --cacert /tmp/test-webhook-ca \
+      kubectl -it exec curlpod -- curl https://local-user-authenticator.local-user-authenticator.svc/authenticate \
+        --cacert /tmp/local-user-authenticator-ca \
         -H 'Content-Type: application/json' -H 'Accept: application/json' -d '
       {
         "apiVersion": "authentication.k8s.io/v1beta1",

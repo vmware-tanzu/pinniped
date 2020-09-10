@@ -8,8 +8,8 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: test-webhook-aggregated-api-server-role
-  namespace: test-webhook
+  name: local-user-authenticator-aggregated-api-server-role
+  namespace: local-user-authenticator
 rules:
   - apiGroups: [""]
     resources: [secrets]
@@ -18,13 +18,13 @@ rules:
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: test-webhook-aggregated-api-server-role-binding
-  namespace: test-webhook
+  name: local-user-authenticator-aggregated-api-server-role-binding
+  namespace: local-user-authenticator
 subjects:
   - kind: ServiceAccount
-    name: test-webhook-service-account
-    namespace: test-webhook
+    name: local-user-authenticator-service-account
+    namespace: local-user-authenticator
 roleRef:
   kind: Role
-  name: test-webhook-aggregated-api-server-role
+  name: local-user-authenticator-aggregated-api-server-role
   apiGroup: rbac.authorization.k8s.io

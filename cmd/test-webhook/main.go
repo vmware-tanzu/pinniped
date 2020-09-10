@@ -18,6 +18,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"mime"
 	"net"
 	"net/http"
 	"os"
@@ -122,13 +123,15 @@ func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if !contains(req.Header.Values("Content-Type"), "application/json") {
-		klog.InfoS("wrong content type", "Content-Type", req.Header.Values("Content-Type"))
+	if !headerContains(req, "Content-Type", "application/json") {
+		klog.InfoS("content type is not application/json", "Content-Type", req.Header.Values("Content-Type"))
 		rsp.WriteHeader(http.StatusUnsupportedMediaType)
 		return
 	}
-	if !contains(req.Header.Values("Accept"), "application/json") {
-		klog.InfoS("wrong accept type", "Accept", req.Header.Values("Accept"))
+	if !headerContains(req, "Accept", "application/json") &&
+		!headerContains(req, "Accept", "application/*") &&
+		!headerContains(req, "Accept", "*/*") {
+		klog.InfoS("client does not accept application/json", "Accept", req.Header.Values("Accept"))
 		rsp.WriteHeader(http.StatusUnsupportedMediaType)
 		return
 	}
@@ -190,10 +193,15 @@ func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 	respondWithAuthenticated(rsp, secret.ObjectMeta.Name, string(secret.UID), groups)
 }
 
-func contains(ss []string, s string) bool {
-	for i := range ss {
-		if ss[i] == s {
-			return true
+func headerContains(req *http.Request, headerName, s string) bool {
+	headerValues := req.Header.Values(headerName)
+	for i := range headerValues {
+		mimeTypes := strings.Split(headerValues[i], ",")
+		for _, mimeType := range mimeTypes {
+			mediaType, _, _ := mime.ParseMediaType(mimeType)
+			if mediaType == s {
+				return true
+			}
 		}
 	}
 	return false

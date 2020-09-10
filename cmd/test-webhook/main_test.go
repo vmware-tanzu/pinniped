@@ -101,8 +101,8 @@ func TestWebhook(t *testing.T) {
 
 	goodURL := fmt.Sprintf("https://%s/authenticate", l.Addr().String())
 	goodRequestHeaders := map[string][]string{
-		"Content-Type": {"application/json"},
-		"Accept":       {"application/json"},
+		"Content-Type": {"application/json; charset=UTF-8"},
+		"Accept":       {"application/json, */*"},
 	}
 
 	tests := []struct {
@@ -117,74 +117,54 @@ func TestWebhook(t *testing.T) {
 		wantBody    *string
 	}{
 		{
-			name:    "success for a user who belongs to multiple groups",
-			url:     goodURL,
-			method:  http.MethodPost,
-			headers: goodRequestHeaders,
-			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody(user + ":" + password)
-			},
-			wantStatus: http.StatusOK,
-			wantHeaders: map[string][]string{
-				"Content-Type": {"application/json"},
-			},
-			wantBody: authenticatedResponseJSON(user, uid, []string{group0, group1}),
+			name:        "success for a user who belongs to multiple groups",
+			url:         goodURL,
+			method:      http.MethodPost,
+			headers:     goodRequestHeaders,
+			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(user + ":" + password) },
+			wantStatus:  http.StatusOK,
+			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
+			wantBody:    authenticatedResponseJSON(user, uid, []string{group0, group1}),
 		},
 		{
-			name:    "success for a user who belongs to one groups",
-			url:     goodURL,
-			method:  http.MethodPost,
-			headers: goodRequestHeaders,
-			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody(oneGroupUser + ":" + oneGroupPassword)
-			},
-			wantStatus: http.StatusOK,
-			wantHeaders: map[string][]string{
-				"Content-Type": {"application/json"},
-			},
-			wantBody: authenticatedResponseJSON(oneGroupUser, oneGroupUID, []string{group0}),
+			name:        "success for a user who belongs to one groups",
+			url:         goodURL,
+			method:      http.MethodPost,
+			headers:     goodRequestHeaders,
+			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(oneGroupUser + ":" + oneGroupPassword) },
+			wantStatus:  http.StatusOK,
+			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
+			wantBody:    authenticatedResponseJSON(oneGroupUser, oneGroupUID, []string{group0}),
 		},
 		{
-			name:    "success for a user who belongs to no groups",
-			url:     goodURL,
-			method:  http.MethodPost,
-			headers: goodRequestHeaders,
-			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody(noGroupUser + ":" + noGroupPassword)
-			},
-			wantStatus: http.StatusOK,
-			wantHeaders: map[string][]string{
-				"Content-Type": {"application/json"},
-			},
-			wantBody: authenticatedResponseJSON(noGroupUser, noGroupUID, []string{}),
+			name:        "success for a user who belongs to no groups",
+			url:         goodURL,
+			method:      http.MethodPost,
+			headers:     goodRequestHeaders,
+			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(noGroupUser + ":" + noGroupPassword) },
+			wantStatus:  http.StatusOK,
+			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
+			wantBody:    authenticatedResponseJSON(noGroupUser, noGroupUID, []string{}),
 		},
 		{
-			name:    "wrong username for password",
-			url:     goodURL,
-			method:  http.MethodPost,
-			headers: goodRequestHeaders,
-			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody(otherUser + ":" + password)
-			},
-			wantStatus: http.StatusOK,
-			wantHeaders: map[string][]string{
-				"Content-Type": {"application/json"},
-			},
-			wantBody: unauthenticatedResponseJSON(),
+			name:        "wrong username for password",
+			url:         goodURL,
+			method:      http.MethodPost,
+			headers:     goodRequestHeaders,
+			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(otherUser + ":" + password) },
+			wantStatus:  http.StatusOK,
+			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
+			wantBody:    unauthenticatedResponseJSON(),
 		},
 		{
-			name:    "when a user has no password hash in the secret",
-			url:     goodURL,
-			method:  http.MethodPost,
-			headers: goodRequestHeaders,
-			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody(passwordUndefinedUser + ":foo")
-			},
-			wantStatus: http.StatusOK,
-			wantHeaders: map[string][]string{
-				"Content-Type": {"application/json"},
-			},
-			wantBody: unauthenticatedResponseJSON(),
+			name:        "when a user has no password hash in the secret",
+			url:         goodURL,
+			method:      http.MethodPost,
+			headers:     goodRequestHeaders,
+			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(passwordUndefinedUser + ":foo") },
+			wantStatus:  http.StatusOK,
+			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
+			wantBody:    unauthenticatedResponseJSON(),
 		},
 		{
 			name:    "success for a user has no groups defined in the secret",
@@ -194,110 +174,82 @@ func TestWebhook(t *testing.T) {
 			body: func() (io.ReadCloser, error) {
 				return newTokenReviewBody(underfinedGroupsUser + ":" + undefinedGroupsPassword)
 			},
-			wantStatus: http.StatusOK,
-			wantHeaders: map[string][]string{
-				"Content-Type": {"application/json"},
-			},
-			wantBody: authenticatedResponseJSON(underfinedGroupsUser, underfinedGroupsUID, []string{}),
+			wantStatus:  http.StatusOK,
+			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
+			wantBody:    authenticatedResponseJSON(underfinedGroupsUser, underfinedGroupsUID, []string{}),
 		},
 		{
-			name:    "when a user has empty string as their password",
-			url:     goodURL,
-			method:  http.MethodPost,
-			headers: goodRequestHeaders,
-			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody(passwordUndefinedUser + ":foo")
-			},
-			wantStatus: http.StatusOK,
-			wantHeaders: map[string][]string{
-				"Content-Type": {"application/json"},
-			},
-			wantBody: unauthenticatedResponseJSON(),
+			name:        "when a user has empty string as their password",
+			url:         goodURL,
+			method:      http.MethodPost,
+			headers:     goodRequestHeaders,
+			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(passwordUndefinedUser + ":foo") },
+			wantStatus:  http.StatusOK,
+			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
+			wantBody:    unauthenticatedResponseJSON(),
 		},
 		{
-			name:    "wrong password for username",
-			url:     goodURL,
-			method:  http.MethodPost,
-			headers: goodRequestHeaders,
-			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody(user + ":" + otherPassword)
-			},
-			wantStatus: http.StatusOK,
-			wantHeaders: map[string][]string{
-				"Content-Type": {"application/json"},
-			},
-			wantBody: unauthenticatedResponseJSON(),
+			name:        "wrong password for username",
+			url:         goodURL,
+			method:      http.MethodPost,
+			headers:     goodRequestHeaders,
+			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(user + ":" + otherPassword) },
+			wantStatus:  http.StatusOK,
+			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
+			wantBody:    unauthenticatedResponseJSON(),
 		},
 		{
-			name:    "non-existent password for username",
-			url:     goodURL,
-			method:  http.MethodPost,
-			headers: goodRequestHeaders,
-			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody(user + ":" + "some-non-existent-password")
-			},
-			wantStatus: http.StatusOK,
-			wantHeaders: map[string][]string{
-				"Content-Type": {"application/json"},
-			},
-			wantBody: unauthenticatedResponseJSON(),
+			name:        "non-existent password for username",
+			url:         goodURL,
+			method:      http.MethodPost,
+			headers:     goodRequestHeaders,
+			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(user + ":" + "some-non-existent-password") },
+			wantStatus:  http.StatusOK,
+			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
+			wantBody:    unauthenticatedResponseJSON(),
 		},
 		{
-			name:    "non-existent username",
-			url:     goodURL,
-			method:  http.MethodPost,
-			headers: goodRequestHeaders,
-			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody("some-non-existent-user" + ":" + password)
-			},
-			wantStatus: http.StatusOK,
-			wantHeaders: map[string][]string{
-				"Content-Type": {"application/json"},
-			},
-			wantBody: unauthenticatedResponseJSON(),
+			name:        "non-existent username",
+			url:         goodURL,
+			method:      http.MethodPost,
+			headers:     goodRequestHeaders,
+			body:        func() (io.ReadCloser, error) { return newTokenReviewBody("some-non-existent-user" + ":" + password) },
+			wantStatus:  http.StatusOK,
+			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
+			wantBody:    unauthenticatedResponseJSON(),
 		},
 		{
-			name:    "bad token format (missing colon)",
-			url:     goodURL,
-			method:  http.MethodPost,
-			headers: goodRequestHeaders,
-			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody(user)
-			},
+			name:       "bad token format (missing colon)",
+			url:        goodURL,
+			method:     http.MethodPost,
+			headers:    goodRequestHeaders,
+			body:       func() (io.ReadCloser, error) { return newTokenReviewBody(user) },
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name:    "password contains colon",
-			url:     goodURL,
-			method:  http.MethodPost,
-			headers: goodRequestHeaders,
-			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody(colonUser + ":" + colonPassword)
-			},
-			wantStatus: http.StatusOK,
-			wantHeaders: map[string][]string{
-				"Content-Type": {"application/json"},
-			},
-			wantBody: authenticatedResponseJSON(colonUser, colonUID, []string{group0, group1}),
+			name:        "password contains colon",
+			url:         goodURL,
+			method:      http.MethodPost,
+			headers:     goodRequestHeaders,
+			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(colonUser + ":" + colonPassword) },
+			wantStatus:  http.StatusOK,
+			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
+			wantBody:    authenticatedResponseJSON(colonUser, colonUID, []string{group0, group1}),
 		},
 		{
-			name:    "bad path",
-			url:     fmt.Sprintf("https://%s/tuna", l.Addr().String()),
-			method:  http.MethodPost,
-			headers: goodRequestHeaders,
-			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody("some-token")
-			},
+			name:       "bad path",
+			url:        fmt.Sprintf("https://%s/tuna", l.Addr().String()),
+			method:     http.MethodPost,
+			headers:    goodRequestHeaders,
+			body:       func() (io.ReadCloser, error) { return newTokenReviewBody("some-token") },
 			wantStatus: http.StatusNotFound,
 		},
 		{
-			name:    "bad method",
-			url:     goodURL,
-			method:  http.MethodGet,
-			headers: goodRequestHeaders,
-			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody("some-token")
-			},
+			name:       "bad method",
+			url:        goodURL,
+			method:     http.MethodGet,
+			headers:    goodRequestHeaders,
+			body:       func() (io.ReadCloser, error) { return newTokenReviewBody("some-token") },
 			wantStatus: http.StatusMethodNotAllowed,
 		},
 		{
@@ -308,9 +260,7 @@ func TestWebhook(t *testing.T) {
 				"Content-Type": {"application/xml"},
 				"Accept":       {"application/json"},
 			},
-			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody("some-token")
-			},
+			body:       func() (io.ReadCloser, error) { return newTokenReviewBody("some-token") },
 			wantStatus: http.StatusUnsupportedMediaType,
 		},
 		{
@@ -321,19 +271,54 @@ func TestWebhook(t *testing.T) {
 				"Content-Type": {"application/json"},
 				"Accept":       {"application/xml"},
 			},
-			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody("some-token")
-			},
+			body:       func() (io.ReadCloser, error) { return newTokenReviewBody("some-token") },
 			wantStatus: http.StatusUnsupportedMediaType,
 		},
 		{
-			name:    "bad body",
-			url:     goodURL,
-			method:  http.MethodPost,
-			headers: goodRequestHeaders,
-			body: func() (io.ReadCloser, error) {
-				return ioutil.NopCloser(bytes.NewBuffer([]byte("invalid body"))), nil
+			name:   "success when there are multiple accepts and one of them is json",
+			url:    goodURL,
+			method: http.MethodPost,
+			headers: map[string][]string{
+				"Content-Type": {"application/json"},
+				"Accept":       {"something/else, application/xml, application/json"},
 			},
+			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(user + ":" + password) },
+			wantStatus:  http.StatusOK,
+			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
+			wantBody:    authenticatedResponseJSON(user, uid, []string{group0, group1}),
+		},
+		{
+			name:   "success when there are multiple accepts and one of them is */*",
+			url:    goodURL,
+			method: http.MethodPost,
+			headers: map[string][]string{
+				"Content-Type": {"application/json"},
+				"Accept":       {"something/else, */*, application/foo"},
+			},
+			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(user + ":" + password) },
+			wantStatus:  http.StatusOK,
+			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
+			wantBody:    authenticatedResponseJSON(user, uid, []string{group0, group1}),
+		},
+		{
+			name:   "success when there are multiple accepts and one of them is application/*",
+			url:    goodURL,
+			method: http.MethodPost,
+			headers: map[string][]string{
+				"Content-Type": {"application/json"},
+				"Accept":       {"something/else, application/*, application/foo"},
+			},
+			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(user + ":" + password) },
+			wantStatus:  http.StatusOK,
+			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
+			wantBody:    authenticatedResponseJSON(user, uid, []string{group0, group1}),
+		},
+		{
+			name:       "bad body",
+			url:        goodURL,
+			method:     http.MethodPost,
+			headers:    goodRequestHeaders,
+			body:       func() (io.ReadCloser, error) { return ioutil.NopCloser(bytes.NewBuffer([]byte("invalid body"))), nil },
 			wantStatus: http.StatusBadRequest,
 		},
 	}

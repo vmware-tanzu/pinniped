@@ -111,20 +111,24 @@ func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 
 	if req.URL.Path != "/authenticate" {
+		klog.InfoS("received request path other than /authenticate", "path", req.URL.Path)
 		rsp.WriteHeader(http.StatusNotFound)
 		return
 	}
 
 	if req.Method != http.MethodPost {
+		klog.InfoS("received request method other than post", "method", req.Method)
 		rsp.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
 	if !contains(req.Header.Values("Content-Type"), "application/json") {
+		klog.InfoS("wrong content type", "Content-Type", req.Header.Values("Content-Type"))
 		rsp.WriteHeader(http.StatusUnsupportedMediaType)
 		return
 	}
 	if !contains(req.Header.Values("Accept"), "application/json") {
+		klog.InfoS("wrong accept type", "Accept", req.Header.Values("Accept"))
 		rsp.WriteHeader(http.StatusUnsupportedMediaType)
 		return
 	}
@@ -138,6 +142,7 @@ func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 
 	tokenSegments := strings.SplitN(body.Spec.Token, ":", 2)
 	if len(tokenSegments) != 2 {
+		klog.InfoS("bad token format in request")
 		rsp.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -153,6 +158,7 @@ func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 	}
 
 	if notFound {
+		klog.InfoS("user not found")
 		respondWithUnauthenticated(rsp)
 		return
 	}
@@ -162,6 +168,7 @@ func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 		[]byte(password),
 	) == nil
 	if !passwordMatches {
+		klog.InfoS("invalid password in request")
 		respondWithUnauthenticated(rsp)
 		return
 	}
@@ -179,6 +186,7 @@ func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 		trimLeadingAndTrailingWhitespace(groups)
 	}
 
+	klog.InfoS("successful authentication")
 	respondWithAuthenticated(rsp, secret.ObjectMeta.Name, string(secret.UID), groups)
 }
 

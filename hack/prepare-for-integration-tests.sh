@@ -44,9 +44,9 @@ function log_note() {
   GREEN='\033[0;32m'
   NC='\033[0m'
   if [[ $COLORTERM =~ ^(truecolor|24bit)$ ]]; then
-    echo -e " ${GREEN}:)${NC} Note: $*"
+    echo -e "${GREEN}$*${NC}"
   else
-    echo " :) Note: $*"
+    echo "$*"
   fi
 }
 
@@ -54,9 +54,9 @@ function log_warning() {
   YELLOW='\033[0;33m'
   NC='\033[0m'
   if [[ $COLORTERM =~ ^(truecolor|24bit)$ ]]; then
-    echo -e " ${YELLOW}:/${NC} Warning: $*"
+    echo -e "😒${YELLOW} Warning: $* ${NC}"
   else
-    echo " :/ Warning: $*"
+    echo ":/ Warning: $*"
   fi
 }
 
@@ -64,9 +64,9 @@ function log_error() {
   RED='\033[0;31m'
   NC='\033[0m'
   if [[ $COLORTERM =~ ^(truecolor|24bit)$ ]]; then
-    echo -e " ${RED}:(${NC} Error: $*"
+    echo -e "🙁${RED} Error: $* ${NC}"
   else
-    echo " :( Error: $*"
+    echo ":( Error: $*"
   fi
 }
 
@@ -235,21 +235,21 @@ else
 
   log_note "Creating test user 'test-username'..."
   test_username="test-username"
+  # TODO AUTO-GENERATE PASSWORD
   test_password="test-password"
   test_groups="test-group-0,test-group-1"
   kubectl create secret generic "$test_username" \
     --namespace test-webhook \
     --from-literal=groups="$test_groups" \
-    --from-literal=passwordHash=$(htpasswd -nbBC 16 x "$test_password" | sed -e "s/^x://") \
+    --from-literal=passwordHash="$(htpasswd -nbBC 10 x "$test_password" | sed -e "s/^x://")" \
     --dry-run=client \
     --output yaml \
     | kubectl apply -f -
 
   app_name="pinniped"
   namespace="integration"
-  webhook_url="test-webhook.test-webhook.svc"
-  webhook_ca_bundle="$(kubectl get secret api-serving-cert --namespace test-webhook \
-    -o jsonpath={.data.caCertificate})"
+  webhook_url="https://test-webhook.test-webhook.svc/authenticate"
+  webhook_ca_bundle="$(kubectl get secret api-serving-cert --namespace test-webhook -o 'jsonpath={.data.caCertificate}')"
   discovery_url="$(TERM=dumb kubectl cluster-info | awk '/Kubernetes master/ {print $NF}')"
 
   #
@@ -295,6 +295,8 @@ PINNIPED_CLUSTER_CAPABILITY_YAML_EOF
 export PINNIPED_CLUSTER_CAPABILITY_YAML
 EOF
 
+  goland_vars=$(grep -v '^#' /tmp/integration-test-env | grep -E '^export .+=' | sed 's/export //g' | tr '\n' ';')
+
   log_note "Done!"
   log_note
   log_note "Ready to run integration tests. For example, you could run all tests using the following commands..."
@@ -303,9 +305,7 @@ EOF
   log_note '    (cd test && go test -count 1 ./...)'
   log_note
   log_note '"Environment" setting for GoLand run configurations:'
-  log_note -n '    '
-  goland_vars=$(grep -v '^#' /tmp/integration-test-env | grep -E '^export .+=' | sed 's/export //g' | tr '\n' ';')
-  log_note "${goland_vars}PINNIPED_CLUSTER_CAPABILITY_FILE=${kind_capabilities_file}"
+  log_note "    ${goland_vars}PINNIPED_CLUSTER_CAPABILITY_FILE=${kind_capabilities_file}"
   log_note
   log_note
   log_note "You can run this script again to deploy local production code changes while you are working."

@@ -45,7 +45,7 @@ who belongs to the groups `group1` and `group2`, use:
 kubectl create secret generic ryan \
   --namespace test-webhook \
   --from-literal=groups=group1,group2 \
-  --from-literal=passwordHash=$(htpasswd -nbBC 16 x password123 | sed -e "s/^x://")
+  --from-literal=passwordHash=$(htpasswd -nbBC 10 x password123 | sed -e "s/^x://")
 ```
 
 ### Get the `test-webhook` App's Auto-Generated Certificate Authority Bundle

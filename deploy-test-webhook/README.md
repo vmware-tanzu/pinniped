@@ -17,6 +17,11 @@ User accounts can be created and edited dynamically using `kubectl` commands (se
 This example deployment uses `ytt` from [Carvel](https://carvel.dev/) to template the YAML files.
 Either [install `ytt`](https://get-ytt.io/) or use the [container image from Dockerhub](https://hub.docker.com/r/k14s/image/tags).
 
+As well, this demo requires a tool capable of generating a `bcrypt` hash in order to interact with
+the webhook. The example below uses `htpasswd`, which is installed on most macOS systems, and can be
+installed on some Linux systems via the `apache2-utils` package (e.g., `apt-get install
+apache2-utils`).
+
 ## Procedure
 
 1. The configuration options are in [values.yml](values.yaml). Fill in the values in that file, or override those values
@@ -30,10 +35,10 @@ Either [install `ytt`](https://get-ytt.io/) or use the [container image from Doc
 
 ### Create Users
 
-Use `kubectl` to create, edit, and delete user accounts by creating a `Secret` for each user account in the same 
+Use `kubectl` to create, edit, and delete user accounts by creating a `Secret` for each user account in the same
 namespace where `test-webhook` is deployed.  The name of the `Secret` resource is the username.
 Store the user's group membership and `bcrypt` encrypted password as the contents of the `Secret`.
-For example, to create a user named `ryan` with the password `password123` 
+For example, to create a user named `ryan` with the password `password123`
 who belongs to the groups `group1` and `group2`, use:
 
 ```bash
@@ -96,7 +101,7 @@ along with the CA bundle fetched by the above command.
       {"apiVersion":"authentication.k8s.io/v1beta1","kind":"TokenReview","status":{"authenticated":true,"user":{"username":"ryan","uid":"19c433ec-8f58-44ca-9ef0-2d1081ccb876","groups":["group1","group2"]}}}
       ```
 
-      Trying the above `curl` command again with the wrong username or password in the body of the request 
+      Trying the above `curl` command again with the wrong username or password in the body of the request
       should result in a JSON response which indicates that the authentication failed.
 
       ```json
@@ -104,7 +109,7 @@ along with the CA bundle fetched by the above command.
       ```
 
   1. Remove the curl pod.
-  
+
       ```bash
       kubectl delete pod curlpod
       ```

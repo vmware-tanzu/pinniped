@@ -85,34 +85,36 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	})
 
-	t.Run("access as group", func(t *testing.T) {
-		addTestClusterRoleBinding(ctx, t, adminClient, &rbacv1.ClusterRoleBinding{
-			TypeMeta: metav1.TypeMeta{},
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "integration-test-group-readonly-role-binding",
-			},
-			Subjects: []rbacv1.Subject{{
-				Kind:     rbacv1.GroupKind,
-				APIGroup: rbacv1.GroupName,
-				Name:     "tmc:member",
-			}},
-			RoleRef: rbacv1.RoleRef{
-				Kind:     "ClusterRole",
-				APIGroup: rbacv1.GroupName,
-				Name:     "view",
-			},
-		})
+	for _, group := range getOrganizationalUnits(t, response.Status.Credential.ClientCertificateData) {
+		t.Run("access as group "+group, func(t *testing.T) {
+			addTestClusterRoleBinding(ctx, t, adminClient, &rbacv1.ClusterRoleBinding{
+				TypeMeta: metav1.TypeMeta{},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "integration-test-group-readonly-role-binding",
+				},
+				Subjects: []rbacv1.Subject{{
+					Kind:     rbacv1.GroupKind,
+					APIGroup: rbacv1.GroupName,
+					Name:     group,
+				}},
+				RoleRef: rbacv1.RoleRef{
+					Kind:     "ClusterRole",
+					APIGroup: rbacv1.GroupName,
+					Name:     "view",
+				},
+			})
 
-		// Use the client which is authenticated as the TMC group to list namespaces
-		var listNamespaceResponse *v1.NamespaceList
-		var canListNamespaces = func() bool {
-			listNamespaceResponse, err = clientWithCertFromCredentialRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-			return err == nil
-		}
-		assert.Eventually(t, canListNamespaces, 3*time.Second, 250*time.Millisecond)
-		require.NoError(t, err) // prints out the error and stops the test in case of failure
-		require.NotEmpty(t, listNamespaceResponse.Items)
-	})
+			// Use the client which is authenticated as the TMC group to list namespaces
+			var listNamespaceResponse *v1.NamespaceList
+			var canListNamespaces = func() bool {
+				listNamespaceResponse, err = clientWithCertFromCredentialRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+				return err == nil
+			}
+			assert.Eventually(t, canListNamespaces, 3*time.Second, 250*time.Millisecond)
+			require.NoError(t, err) // prints out the error and stops the test in case of failure
+			require.NotEmpty(t, listNamespaceResponse.Items)
+		})
+	}
 }
 
 func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
@@ -183,11 +185,11 @@ func makeRequest(t *testing.T, spec v1alpha1.CredentialRequestSpec) (*v1alpha1.C
 }
 
 func validCredentialRequestSpecWithRealToken(t *testing.T) v1alpha1.CredentialRequestSpec {
-	tmcClusterToken := library.GetEnv(t, "PINNIPED_TMC_CLUSTER_TOKEN")
+	token := library.GetEnv(t, "PINNIPED_CREDENTIAL_REQUEST_TOKEN")
 
 	return v1alpha1.CredentialRequestSpec{
 		Type:  v1alpha1.TokenCredentialType,
-		Token: &v1alpha1.CredentialRequestTokenCredential{Value: tmcClusterToken},
+		Token: &v1alpha1.CredentialRequestTokenCredential{Value: token},
 	}
 }
 
@@ -223,4 +225,14 @@ func getCommonName(t *testing.T, certPEM string) string {
 	require.NoError(t, err)
 
 	return cert.Subject.CommonName
+}
+
+func getOrganizationalUnits(t *testing.T, certPEM string) []string {
+	t.Helper()
+
+	pemBlock, _ := pem.Decode([]byte(certPEM))
+	cert, err := x509.ParseCertificate(pemBlock.Bytes)
+	require.NoError(t, err)
+
+	return cert.Subject.OrganizationalUnit
 }

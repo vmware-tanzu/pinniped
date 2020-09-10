@@ -57,7 +57,7 @@ var maskKey = func(s string) string { return strings.ReplaceAll(s, "TESTING KEY"
 func TestClient(t *testing.T) {
 	library.SkipUnlessIntegration(t)
 	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
-	tmcClusterToken := library.GetEnv(t, "PINNIPED_TMC_CLUSTER_TOKEN")
+	token := library.GetEnv(t, "PINNIPED_CREDENTIAL_REQUEST_TOKEN")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -69,7 +69,7 @@ func TestClient(t *testing.T) {
 
 	// Using the CA bundle and host from the current (admin) kubeconfig, do the token exchange.
 	clientConfig := library.NewClientConfig(t)
-	resp, err := client.ExchangeToken(ctx, tmcClusterToken, string(clientConfig.CAData), clientConfig.Host)
+	resp, err := client.ExchangeToken(ctx, token, string(clientConfig.CAData), clientConfig.Host)
 	require.NoError(t, err)
 	require.NotNil(t, resp.Status.ExpirationTimestamp)
 	require.InDelta(t, time.Until(resp.Status.ExpirationTimestamp.Time), 1*time.Hour, float64(3*time.Minute))

@@ -71,16 +71,43 @@ func TestUpdateAPIService(t *testing.T) {
 			}},
 		},
 		{
+			name: "happy path update when the pre-existing APIService already has the same CA bundle so there is no need to update",
+			mocks: func(c *aggregatorv1fake.Clientset) {
+				_ = c.Tracker().Add(&apiregistrationv1.APIService{
+					ObjectMeta: metav1.ObjectMeta{Name: apiServiceName},
+					Spec: apiregistrationv1.APIServiceSpec{
+						GroupPriorityMinimum: 999,
+						CABundle:             []byte("some-ca-bundle"),
+					},
+				})
+				c.PrependReactor("update", "apiservices", func(_ kubetesting.Action) (bool, runtime.Object, error) {
+					return true, nil, fmt.Errorf("should not encounter this error because update should be skipped in this case")
+				})
+			},
+			caInput: []byte("some-ca-bundle"),
+			wantObjects: []apiregistrationv1.APIService{{
+				ObjectMeta: metav1.ObjectMeta{Name: apiServiceName},
+				Spec: apiregistrationv1.APIServiceSpec{
+					GroupPriorityMinimum: 999,
+					CABundle:             []byte("some-ca-bundle"), // unchanged
+				},
+			}},
+		},
+		{
 			name: "error on update",
 			mocks: func(c *aggregatorv1fake.Clientset) {
 				_ = c.Tracker().Add(&apiregistrationv1.APIService{
 					ObjectMeta: metav1.ObjectMeta{Name: apiServiceName},
-					Spec:       apiregistrationv1.APIServiceSpec{},
+					Spec: apiregistrationv1.APIServiceSpec{
+						GroupPriorityMinimum: 999,
+						CABundle:             []byte("some-other-different-ca-bundle"),
+					},
 				})
 				c.PrependReactor("update", "apiservices", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, fmt.Errorf("error on update")
 				})
 			},
+			caInput: []byte("some-ca-bundle"),
 			wantErr: "could not update API service: error on update",
 		},
 		{
@@ -143,6 +170,7 @@ func TestUpdateAPIService(t *testing.T) {
 			}},
 		},
 	}
+
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {

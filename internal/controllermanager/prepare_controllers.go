@@ -47,6 +47,9 @@ func PrepareControllers(
 	kubePublicNamespaceK8sInformers, installationNamespaceK8sInformers, installationNamespacePinnipedInformers :=
 		createInformers(serverInstallationNamespace, k8sClient, pinnipedClient)
 
+	// This string must match the name of the Service declared in the deployment yaml.
+	const serviceName = "pinniped-api"
+
 	// Create controller manager.
 	controllerManager := controllerlib.
 		NewManager().
@@ -65,11 +68,21 @@ func PrepareControllers(
 			apicerts.NewCertsManagerController(
 				serverInstallationNamespace,
 				k8sClient,
-				aggregatorClient,
 				installationNamespaceK8sInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 				controllerlib.WithInitialEvent,
 				servingCertDuration,
+				"Pinniped CA",
+				serviceName,
+			),
+			singletonWorker,
+		).
+		WithController(
+			apicerts.NewAPIServiceUpdaterController(
+				serverInstallationNamespace,
+				aggregatorClient,
+				installationNamespaceK8sInformers.Core().V1().Secrets(),
+				controllerlib.WithInformer,
 			),
 			singletonWorker,
 		).

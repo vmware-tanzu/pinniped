@@ -16,7 +16,6 @@ import (
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	"github.com/suzerain-io/pinniped/internal/certauthority"
 	pinnipedcontroller "github.com/suzerain-io/pinniped/internal/controller"
@@ -32,34 +31,37 @@ const (
 )
 
 type certsManagerController struct {
-	namespace        string
-	k8sClient        kubernetes.Interface
-	aggregatorClient aggregatorclient.Interface
-	secretInformer   corev1informers.SecretInformer
+	namespace      string
+	k8sClient      kubernetes.Interface
+	secretInformer corev1informers.SecretInformer
 
 	// certDuration is the lifetime of both the serving certificate and its CA
 	// certificate that this controller will use when issuing the certificates.
 	certDuration time.Duration
+
+	generatedCACommonName                 string
+	serviceNameForGeneratedCertCommonName string
 }
 
-func NewCertsManagerController(
-	namespace string,
+func NewCertsManagerController(namespace string,
 	k8sClient kubernetes.Interface,
-	aggregatorClient aggregatorclient.Interface,
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	withInitialEvent pinnipedcontroller.WithInitialEventOptionFunc,
 	certDuration time.Duration,
+	generatedCACommonName string,
+	serviceNameForGeneratedCertCommonName string,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "certs-manager-controller",
 			Syncer: &certsManagerController{
-				namespace:        namespace,
-				k8sClient:        k8sClient,
-				aggregatorClient: aggregatorClient,
-				secretInformer:   secretInformer,
-				certDuration:     certDuration,
+				namespace:                             namespace,
+				k8sClient:                             k8sClient,
+				secretInformer:                        secretInformer,
+				certDuration:                          certDuration,
+				generatedCACommonName:                 generatedCACommonName,
+				serviceNameForGeneratedCertCommonName: serviceNameForGeneratedCertCommonName,
 			},
 		},
 		withInformer(
@@ -88,16 +90,13 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 	}
 
 	// Create a CA.
-	aggregatedAPIServerCA, err := certauthority.New(pkix.Name{CommonName: "Pinniped CA"}, c.certDuration)
+	aggregatedAPIServerCA, err := certauthority.New(pkix.Name{CommonName: c.generatedCACommonName}, c.certDuration)
 	if err != nil {
 		return fmt.Errorf("could not initialize CA: %w", err)
 	}
 
-	// This string must match the name of the Service declared in the deployment yaml.
-	const serviceName = "pinniped-api"
-
 	// Using the CA from above, create a TLS server cert for the aggregated API server to use.
-	serviceEndpoint := serviceName + "." + c.namespace + ".svc"
+	serviceEndpoint := c.serviceNameForGeneratedCertCommonName + "." + c.namespace + ".svc"
 	aggregatedAPIServerTLSCert, err := aggregatedAPIServerCA.Issue(
 		pkix.Name{CommonName: serviceEndpoint},
 		[]string{serviceEndpoint},
@@ -129,11 +128,6 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("could not create secret: %w", err)
 	}
 
-	// Update the APIService to give it the new CA bundle.
-	if err := UpdateAPIService(ctx.Context, c.aggregatorClient, aggregatedAPIServerCA.Bundle()); err != nil {
-		return fmt.Errorf("could not update the API service: %w", err)
-	}
-
-	klog.Info("certsManagerController Sync successfully created secret and updated API service")
+	klog.Info("certsManagerController Sync successfully created secret")
 	return nil
 }

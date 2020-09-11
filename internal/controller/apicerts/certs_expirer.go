@@ -69,7 +69,7 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("failed to get %s/%s secret: %w", c.namespace, certsSecretName, err)
 	}
 	if notFound {
-		klog.Info("certsExpirerController Sync() found that the secret does not exist yet or was deleted")
+		klog.Info("certsExpirerController Sync found that the secret does not exist yet or was deleted")
 		return nil
 	}
 
@@ -78,13 +78,13 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 		// If we can't read the cert, then really all we can do is log something,
 		// since if we returned an error then the controller lib would just call us
 		// again and again, which would probably yield the same results.
-		klog.Warningf("certsExpirerController Sync() found that the secret is malformed: %s", err.Error())
+		klog.Warningf("certsExpirerController Sync found that the secret is malformed: %s", err.Error())
 		return nil
 	}
 
 	certAge := time.Since(notBefore)
 	renewDelta := certAge - c.renewBefore
-	klog.Infof("certsExpirerController Sync() found a renew delta of %s", renewDelta)
+	klog.Infof("certsExpirerController Sync found a renew delta of %s", renewDelta)
 	if renewDelta >= 0 || time.Now().After(notAfter) {
 		err := c.k8sClient.
 			CoreV1().

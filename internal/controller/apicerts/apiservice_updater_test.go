@@ -21,26 +21,32 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
+	aggregatorfake "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 
+	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1"
 	"github.com/suzerain-io/pinniped/internal/controllerlib"
 	"github.com/suzerain-io/pinniped/internal/testutil"
 )
 
-func TestManagerControllerOptions(t *testing.T) {
+func TestAPIServiceUpdaterControllerOptions(t *testing.T) {
 	spec.Run(t, "options", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
 
 		var r *require.Assertions
 		var observableWithInformerOption *testutil.ObservableWithInformerOption
-		var observableWithInitialEventOption *testutil.ObservableWithInitialEventOption
 		var secretsInformerFilter controllerlib.Filter
 
 		it.Before(func() {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
-			observableWithInitialEventOption = testutil.NewObservableWithInitialEventOption()
 			secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
-			_ = NewCertsManagerController(installedInNamespace, nil, secretsInformer, observableWithInformerOption.WithInformer, observableWithInitialEventOption.WithInitialEvent, 0, "Pinniped CA", "pinniped-api")
+			_ = NewAPIServiceUpdaterController(
+				installedInNamespace,
+				nil,
+				secretsInformer,
+				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
+			)
 			secretsInformerFilter = observableWithInformerOption.GetFilterForInformer(secretsInformer)
 		})
 
@@ -91,27 +97,17 @@ func TestManagerControllerOptions(t *testing.T) {
 				})
 			})
 		})
-
-		when("starting up", func() {
-			it("asks for an initial event because the Secret may not exist yet and it needs to run anyway", func() {
-				r.Equal(controllerlib.Key{
-					Namespace: installedInNamespace,
-					Name:      "api-serving-cert",
-				}, observableWithInitialEventOption.GetInitialEventKey())
-			})
-		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))
 }
 
-func TestManagerControllerSync(t *testing.T) {
+func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
-		const certDuration = 12345678 * time.Second
 
 		var r *require.Assertions
 
 		var subject controllerlib.Controller
-		var kubeAPIClient *kubernetesfake.Clientset
+		var aggregatorAPIClient *aggregatorfake.Clientset
 		var kubeInformerClient *kubernetesfake.Clientset
 		var kubeInformers kubeinformers.SharedInformerFactory
 		var timeoutContext context.Context
@@ -122,15 +118,11 @@ func TestManagerControllerSync(t *testing.T) {
 		// nested Before's can keep adding things to the informer caches.
 		var startInformersAndController = func() {
 			// Set this at the last second to allow for injection of server override.
-			subject = NewCertsManagerController(
+			subject = NewAPIServiceUpdaterController(
 				installedInNamespace,
-				kubeAPIClient,
+				aggregatorAPIClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
-				controllerlib.WithInitialEvent,
-				certDuration,
-				"Pinniped CA",
-				"pinniped-api",
 			)
 
 			// Set this at the last second to support calling subject.Name().
@@ -155,7 +147,7 @@ func TestManagerControllerSync(t *testing.T) {
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
-			kubeAPIClient = kubernetesfake.NewSimpleClientset()
+			aggregatorAPIClient = aggregatorfake.NewSimpleClientset()
 		})
 
 		it.After(func() {
@@ -174,53 +166,11 @@ func TestManagerControllerSync(t *testing.T) {
 				r.NoError(err)
 			})
 
-			it("creates the api-serving-cert Secret", func() {
+			it("does not need to make any API calls with its API client", func() {
 				startInformersAndController()
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
-
-				// Check all the relevant fields from the create Secret action
-				r.Len(kubeAPIClient.Actions(), 1)
-				actualAction := kubeAPIClient.Actions()[0].(coretesting.CreateActionImpl)
-				r.Equal(schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, actualAction.GetResource())
-				r.Equal(installedInNamespace, actualAction.GetNamespace())
-				actualSecret := actualAction.GetObject().(*corev1.Secret)
-				r.Equal("api-serving-cert", actualSecret.Name)
-				r.Equal(installedInNamespace, actualSecret.Namespace)
-				actualCACert := actualSecret.StringData["caCertificate"]
-				actualPrivateKey := actualSecret.StringData["tlsPrivateKey"]
-				actualCertChain := actualSecret.StringData["tlsCertificateChain"]
-				r.NotEmpty(actualCACert)
-				r.NotEmpty(actualPrivateKey)
-				r.NotEmpty(actualCertChain)
-
-				// Validate the created CA's lifetime.
-				validCACert := testutil.ValidateCertificate(t, actualCACert, actualCACert)
-				validCACert.RequireLifetime(time.Now(), time.Now().Add(certDuration), 6*time.Minute)
-
-				// Validate the created cert using the CA, and also validate the cert's hostname
-				validCert := testutil.ValidateCertificate(t, actualCACert, actualCertChain)
-				validCert.RequireDNSName("pinniped-api." + installedInNamespace + ".svc")
-				validCert.RequireLifetime(time.Now(), time.Now().Add(certDuration), 6*time.Minute)
-				validCert.RequireMatchesPrivateKey(actualPrivateKey)
-			})
-
-			when("creating the Secret fails", func() {
-				it.Before(func() {
-					kubeAPIClient.PrependReactor(
-						"create",
-						"secrets",
-						func(_ coretesting.Action) (bool, runtime.Object, error) {
-							return true, nil, errors.New("create failed")
-						},
-					)
-				})
-
-				it("returns the create error", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, "could not create secret: create failed")
-				})
+				r.Empty(aggregatorAPIClient.Actions())
 			})
 		})
 
@@ -231,16 +181,96 @@ func TestManagerControllerSync(t *testing.T) {
 						Name:      "api-serving-cert",
 						Namespace: installedInNamespace,
 					},
+					Data: map[string][]byte{
+						"caCertificate":       []byte("fake CA cert"),
+						"tlsPrivateKey":       []byte("fake private key"),
+						"tlsCertificateChain": []byte("fake cert chain"),
+					},
 				}
 				err := kubeInformerClient.Tracker().Add(apiServingCertSecret)
 				r.NoError(err)
 			})
 
-			it("does not need to make any API calls with its API client", func() {
-				startInformersAndController()
-				err := controllerlib.TestSync(t, subject, *syncContext)
-				r.NoError(err)
-				r.Empty(kubeAPIClient.Actions())
+			when("the APIService exists", func() {
+				it.Before(func() {
+					apiService := &apiregistrationv1.APIService{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: pinnipedv1alpha1.SchemeGroupVersion.Version + "." + pinnipedv1alpha1.GroupName,
+						},
+						Spec: apiregistrationv1.APIServiceSpec{
+							CABundle:        nil,
+							VersionPriority: 1234,
+						},
+					}
+					err := aggregatorAPIClient.Tracker().Add(apiService)
+					r.NoError(err)
+				})
+
+				it("updates the APIService's ca bundle", func() {
+					startInformersAndController()
+					err := controllerlib.TestSync(t, subject, *syncContext)
+					r.NoError(err)
+
+					// Make sure we updated the APIService caBundle and left it otherwise unchanged
+					r.Len(aggregatorAPIClient.Actions(), 2)
+					r.Equal("get", aggregatorAPIClient.Actions()[0].GetVerb())
+					expectedAPIServiceName := pinnipedv1alpha1.SchemeGroupVersion.Version + "." + pinnipedv1alpha1.GroupName
+					expectedUpdateAction := coretesting.NewUpdateAction(
+						schema.GroupVersionResource{
+							Group:    apiregistrationv1.GroupName,
+							Version:  "v1",
+							Resource: "apiservices",
+						},
+						"",
+						&apiregistrationv1.APIService{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      expectedAPIServiceName,
+								Namespace: "",
+							},
+							Spec: apiregistrationv1.APIServiceSpec{
+								VersionPriority: 1234, // only the CABundle is updated, this other field is left unchanged
+								CABundle:        []byte("fake CA cert"),
+							},
+						},
+					)
+					r.Equal(expectedUpdateAction, aggregatorAPIClient.Actions()[1])
+				})
+
+				when("updating the APIService fails", func() {
+					it.Before(func() {
+						aggregatorAPIClient.PrependReactor(
+							"update",
+							"apiservices",
+							func(_ coretesting.Action) (bool, runtime.Object, error) {
+								return true, nil, errors.New("update failed")
+							},
+						)
+					})
+
+					it("returns the update error", func() {
+						startInformersAndController()
+						err := controllerlib.TestSync(t, subject, *syncContext)
+						r.EqualError(err, "could not update the API service: could not update API service: update failed")
+					})
+				})
+			})
+
+			when("the APIService does not exist", func() {
+				it.Before(func() {
+					unrelatedAPIService := &apiregistrationv1.APIService{
+						ObjectMeta: metav1.ObjectMeta{Name: "some other api service"},
+						Spec:       apiregistrationv1.APIServiceSpec{},
+					}
+					err := aggregatorAPIClient.Tracker().Add(unrelatedAPIService)
+					r.NoError(err)
+				})
+
+				it("returns an error", func() {
+					startInformersAndController()
+					err := controllerlib.TestSync(t, subject, *syncContext)
+					r.Error(err)
+					r.Regexp("could not get existing version of API service: .* not found", err.Error())
+				})
 			})
 		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))

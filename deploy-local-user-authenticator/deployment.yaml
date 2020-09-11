@@ -1,0 +1,63 @@
+#! Copyright 2020 VMware, Inc.
+#! SPDX-License-Identifier: Apache-2.0
+
+#@ load("@ytt:data", "data")
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: local-user-authenticator
+  labels:
+    name: local-user-authenticator
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: local-user-authenticator-service-account
+  namespace: local-user-authenticator
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: local-user-authenticator
+  namespace: local-user-authenticator
+  labels:
+    app: local-user-authenticator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: local-user-authenticator
+  template:
+    metadata:
+      labels:
+        app: local-user-authenticator
+    spec:
+      serviceAccountName: local-user-authenticator-service-account
+      containers:
+        - name: local-user-authenticator
+          #@ if data.values.image_digest:
+          image:  #@ data.values.image_repo + "@" + data.values.image_digest
+          #@ else:
+          image: #@ data.values.image_repo + ":" + data.values.image_tag
+          #@ end
+          imagePullPolicy: IfNotPresent
+          command: #! override the default entrypoint
+            - /usr/local/bin/local-user-authenticator
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: local-user-authenticator
+  namespace: local-user-authenticator
+  labels:
+    app: local-user-authenticator
+spec:
+  type: ClusterIP
+  selector:
+    app: local-user-authenticator
+  ports:
+    - protocol: TCP
+      port: 443
+      targetPort: 443

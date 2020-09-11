@@ -11,31 +11,31 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/klog/v2"
+	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	pinnipedcontroller "github.com/suzerain-io/pinniped/internal/controller"
 	"github.com/suzerain-io/pinniped/internal/controllerlib"
-	"github.com/suzerain-io/pinniped/internal/provider"
 )
 
-type certsObserverController struct {
-	namespace           string
-	dynamicCertProvider provider.DynamicTLSServingCertProvider
-	secretInformer      corev1informers.SecretInformer
+type apiServiceUpdaterController struct {
+	namespace        string
+	aggregatorClient aggregatorclient.Interface
+	secretInformer   corev1informers.SecretInformer
 }
 
-func NewCertsObserverController(
+func NewAPIServiceUpdaterController(
 	namespace string,
-	dynamicCertProvider provider.DynamicTLSServingCertProvider,
+	aggregatorClient aggregatorclient.Interface,
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
-			Name: "certs-observer-controller",
-			Syncer: &certsObserverController{
-				namespace:           namespace,
-				dynamicCertProvider: dynamicCertProvider,
-				secretInformer:      secretInformer,
+			Name: "certs-manager-controller",
+			Syncer: &apiServiceUpdaterController{
+				namespace:        namespace,
+				aggregatorClient: aggregatorClient,
+				secretInformer:   secretInformer,
 			},
 		},
 		withInformer(
@@ -46,7 +46,7 @@ func NewCertsObserverController(
 	)
 }
 
-func (c *certsObserverController) Sync(_ controllerlib.Context) error {
+func (c *apiServiceUpdaterController) Sync(ctx controllerlib.Context) error {
 	// Try to get the secret from the informer cache.
 	certSecret, err := c.secretInformer.Lister().Secrets(c.namespace).Get(certsSecretName)
 	notFound := k8serrors.IsNotFound(err)
@@ -54,14 +54,16 @@ func (c *certsObserverController) Sync(_ controllerlib.Context) error {
 		return fmt.Errorf("failed to get %s/%s secret: %w", c.namespace, certsSecretName, err)
 	}
 	if notFound {
-		klog.Info("certsObserverController Sync found that the secret does not exist yet or was deleted")
-		// The secret does not exist yet or was deleted.
-		c.dynamicCertProvider.Set(nil, nil)
+		// The secret does not exist yet, so nothing to do.
+		klog.Info("apiServiceUpdaterController Sync found that the secret does not exist yet or was deleted")
 		return nil
 	}
 
-	// Mutate the in-memory cert provider to update with the latest cert values.
-	c.dynamicCertProvider.Set(certSecret.Data[tlsCertificateChainSecretKey], certSecret.Data[tlsPrivateKeySecretKey])
-	klog.Info("certsObserverController Sync updated certs in the dynamic cert provider")
+	// Update the APIService to give it the new CA bundle.
+	if err := UpdateAPIService(ctx.Context, c.aggregatorClient, certSecret.Data[caCertificateSecretKey]); err != nil {
+		return fmt.Errorf("could not update the API service: %w", err)
+	}
+
+	klog.Info("apiServiceUpdaterController Sync successfully updated API service")
 	return nil
 }

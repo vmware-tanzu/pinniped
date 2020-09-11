@@ -1,5 +1,12 @@
 # Deploying
 
+## Connecting Pinniped to an Identity Provider
+
+If you would like to try Pinniped, but you don't have a compatible identity provider,
+you can use Pinniped's test identity provider.
+See [deploy-local-user-authenticator/README.md](../deploy-local-user-authenticator/README.md)
+for details.
+
 ## Tools
 
 This example deployment uses `ytt` from [Carvel](https://carvel.dev/) to template the YAML files.

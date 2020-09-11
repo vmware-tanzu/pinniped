@@ -19,16 +19,6 @@ function log_note() {
   fi
 }
 
-function log_warning() {
-  YELLOW='\033[0;33m'
-  NC='\033[0m'
-  if [[ $COLORTERM =~ ^(truecolor|24bit)$ ]]; then
-    echo -e "😒${YELLOW} Warning: $* ${NC}"
-  else
-    echo ":/ Warning: $*"
-  fi
-}
-
 function log_error() {
   RED='\033[0;31m'
   NC='\033[0m'
@@ -39,13 +29,20 @@ function log_error() {
   fi
 }
 
+function check_dependency() {
+  if ! command -v "$1" >/dev/null; then
+    log_error "Missing dependency..."
+    log_error "$2"
+    exit 1
+  fi
+}
+
 #
 # Handle argument parsing and help message
 #
 help=no
 skip_build=no
 
-PARAMS=""
 while (("$#")); do
   case "$1" in
   -h | --help)
@@ -61,57 +58,35 @@ while (("$#")); do
     exit 1
     ;;
   *)
-    PARAMS="$PARAMS $1"
-    shift
+    log_error "Unsupported positional arg $1" >&2
+    exit 1
     ;;
   esac
 done
-eval set -- "$PARAMS"
 
 if [[ "$help" == "yes" ]]; then
   me="$(basename "${BASH_SOURCE[0]}")"
-  echo "Usage:"
-  echo "   $me [flags] [path/to/pinniped]"
-  echo
-  echo "   path/to/pinniped    default: \$PWD ($PWD)"
-  echo
-  echo "Flags:"
-  echo "   -h, --help:              print this usage"
-  echo "   -s, --skip-build:        reuse the most recently built image of the app instead of building"
+  log_note "Usage:"
+  log_note "   $me [flags]"
+  log_note
+  log_note "Flags:"
+  log_note "   -h, --help:              print this usage"
+  log_note "   -s, --skip-build:        reuse the most recently built image of the app instead of building"
   exit 1
 fi
 
-pinniped_path="${1-$PWD}"
+pinniped_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$pinniped_path" || exit 1
 
 #
 # Check for dependencies
 #
-if ! command -v kind >/dev/null; then
-  log_error "Please install kind. e.g. 'brew install kind' for MacOS"
-  exit 1
-fi
-
-if ! command -v ytt >/dev/null; then
-  log_error "Please install ytt. e.g. 'brew tap k14s/tap && brew install ytt' for MacOS"
-  exit 1
-fi
-
-if ! command -v kapp >/dev/null; then
-  log_error "Please install kapp. e.g. 'brew tap k14s/tap && brew install kapp' for MacOS"
-  exit 1
-fi
-
-if ! command -v kubectl >/dev/null; then
-  log_error "Please install kubectl. e.g. 'brew install kubectl' for MacOS"
-  exit 1
-fi
-
-cd "$pinniped_path" || exit 1
-
-if [[ ! -f Dockerfile || ! -d deploy ]]; then
-  log_error "$pinniped_path does not appear to be the path to the source code repo directory"
-  exit 1
-fi
+check_dependency docker "Please install docker. See https://docs.docker.com/get-docker"
+check_dependency kind "Please install kind. e.g. 'brew install kind' for MacOS"
+check_dependency ytt "Please install ytt. e.g. 'brew tap k14s/tap && brew install ytt' for MacOS"
+check_dependency kapp "Please install kapp. e.g. 'brew tap k14s/tap && brew install kapp' for MacOS"
+check_dependency kubectl "Please install kubectl. e.g. 'brew install kubectl' for MacOS"
+check_dependency htpasswd "Please install htpasswd. Should be pre-installed on MacOS. Usually found in 'apache2-utils' package for linux."
 
 #
 # Setup kind and build the app
@@ -181,7 +156,7 @@ set +o pipefail
 test_password="$(cat /dev/urandom | env LC_CTYPE=C tr -dc 'a-z0-9' | fold -w 32 | head -n 1)"
 set -o pipefail
 if [[ ${#test_password} -ne 32 ]]; then
-  log_error "Could not create random test user password"
+  log_error "Could not create test user's random password"
   exit 1
 fi
 log_note "Creating test user '$test_username'..."
@@ -245,19 +220,15 @@ EOF
 #
 goland_vars=$(grep -v '^#' /tmp/integration-test-env | grep -E '^export .+=' | sed 's/export //g' | tr '\n' ';')
 
-log_note "Done!"
 log_note
-log_note "Ready to run integration tests. For example, you could run all tests using the following commands..."
+log_note "🚀 Ready to run integration tests! For example..."
 log_note "    cd $pinniped_path"
-log_note '    source /tmp/integration-test-env'
-log_note '    (cd test && go test -count 1 ./...)'
+log_note '    source /tmp/integration-test-env && go test -v -count 1 ./test/...'
 log_note
-log_note '"Environment" setting for GoLand run configurations:'
+log_note 'Want to run integration tests in GoLand? Copy/paste this "Environment" value for GoLand run configurations:'
 log_note "    ${goland_vars}PINNIPED_CLUSTER_CAPABILITY_FILE=${kind_capabilities_file}"
 log_note
-log_note
-log_note "You can run this script again to deploy local production code changes while you are working."
-log_note
-log_note "When you're finished, use 'kind delete cluster' to tear down the cluster."
+log_note "You can rerun this script to redeploy local production code changes while you are working."
 log_note
 log_note "To delete the deployments, run 'kapp delete -a local-user-authenticator -y && kapp delete -a pinniped -y'."
+log_note "When you're finished, use 'kind delete cluster' to tear down the cluster."

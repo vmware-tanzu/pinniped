@@ -2,16 +2,13 @@
 
 # This script can be used to prepare a kind cluster and deploy the app.
 # You can call this script again to redeploy the app.
-# It will also output instructions on how to run the integration or uninstall tests.
-
-# TODO: get rid of references to ci repo
-# TODO: fix uninstall test setup
-# TODO: add flag to let user provide registry/tag for their image
-# \- (this can be used by kind integration tests from kind-load-and-docker-run-any-script.sh)
-# TODO: add flag to setup current-context for integration tests
+# It will also output instructions on how to run the integration.
 
 set -euo pipefail
 
+#
+# Helper functions
+#
 function log_note() {
   GREEN='\033[0;32m'
   NC='\033[0m'
@@ -42,9 +39,11 @@ function log_error() {
   fi
 }
 
+#
+# Handle argument parsing and help message
+#
 help=no
 skip_build=no
-prepare_for_uninstall_test=no
 
 PARAMS=""
 while (("$#")); do
@@ -55,10 +54,6 @@ while (("$#")); do
     ;;
   -s | --skip-build)
     skip_build=yes
-    shift
-    ;;
-  -u | --prepare-uninstall)
-    prepare_for_uninstall_test=yes
     shift
     ;;
   -*)
@@ -76,19 +71,21 @@ eval set -- "$PARAMS"
 if [[ "$help" == "yes" ]]; then
   me="$(basename "${BASH_SOURCE[0]}")"
   echo "Usage:"
-  echo "   $me [flags] [path/to/pinniped] [path/to/pinniped-ci]"
+  echo "   $me [flags] [path/to/pinniped]"
   echo
   echo "   path/to/pinniped    default: \$PWD ($PWD)"
   echo
   echo "Flags:"
   echo "   -h, --help:              print this usage"
   echo "   -s, --skip-build:        reuse the most recently built image of the app instead of building"
-  echo "   -u, --prepare-uninstall: delete the kind cluster and prepare to run the install+uninstall test"
   exit 1
 fi
 
 pinniped_path="${1-$PWD}"
 
+#
+# Check for dependencies
+#
 if ! command -v kind >/dev/null; then
   log_error "Please install kind. e.g. 'brew install kind' for MacOS"
   exit 1
@@ -116,11 +113,9 @@ if [[ ! -f Dockerfile || ! -d deploy ]]; then
   exit 1
 fi
 
-if [[ "$prepare_for_uninstall_test" == "yes" ]]; then
-  log_note "Deleting running kind clusters to prepare a clean slate for the install+uninstall test..."
-  kind delete cluster
-fi
-
+#
+# Setup kind and build the app
+#
 log_note "Checking for running kind clusters..."
 if ! kind get clusters | grep -q -e '^kind$'; then
   log_note "Creating a kind cluster..."
@@ -163,89 +158,74 @@ fi
 log_note "Loading the app's container image into the kind cluster..."
 kind load docker-image "$registry_repo_tag"
 
-if [[ "$prepare_for_uninstall_test" == "yes" ]]; then
-  cat <<EOF >/tmp/uninstall-test-env
-# The following env vars should be set before running $pinniped_ci_path/pipelines/shared-tasks/run-uninstall-test/run-uninstall-test.sh
-export IMAGE_REPO="$registry_repo"
-export IMAGE_TAG="$tag"
-export PINNIPED_DISCOVERY_URL="$discovery_url"
-EOF
+manifest=/tmp/manifest.yaml
 
-  log_note "Done!"
-  log_note
-  log_note "Ready to run the uninstall test."
-  log_note "    cd $pinniped_path"
-  log_note '    source /tmp/uninstall-test-env'
-  log_note "    $pinniped_ci_path/pipelines/shared-tasks/run-uninstall-test/run-uninstall-test.sh"
-  log_note
-  log_note "When you're finished, use 'kind delete cluster' to tear down the cluster."
+#
+# Deploy local-user-authenticator
+#
+pushd deploy-local-user-authenticator >/dev/null
 
-else
-  manifest=/tmp/manifest.yaml
+log_note "Deploying the local-user-authenticator app to the cluster..."
+ytt --file . \
+  --data-value "image_repo=$registry_repo" \
+  --data-value "image_tag=$tag" >"$manifest"
 
-  #
-  # Deploy local-user-authenticator
-  #
-  pushd deploy-local-user-authenticator >/dev/null
+kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
+kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
 
-  log_note "Deploying the local-user-authenticator app to the cluster..."
-  ytt --file . \
-    --data-value "image_repo=$registry_repo" \
-    --data-value "image_tag=$tag" >"$manifest"
+popd >/dev/null
 
-  kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
-  kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
+test_username="test-username"
+test_groups="test-group-0,test-group-1"
+set +o pipefail
+test_password="$(cat /dev/urandom | env LC_CTYPE=C tr -dc 'a-z0-9' | fold -w 32 | head -n 1)"
+set -o pipefail
+if [[ ${#test_password} -ne 32 ]]; then
+  log_error "Could not create random test user password"
+  exit 1
+fi
+echo "Creating test user '$test_username'..."
+kubectl create secret generic "$test_username" \
+  --namespace local-user-authenticator \
+  --from-literal=groups="$test_groups" \
+  --from-literal=passwordHash="$(htpasswd -nbBC 10 x "$test_password" | sed -e "s/^x://")" \
+  --dry-run=client \
+  --output yaml |
+  kubectl apply -f -
 
-  popd >/dev/null
+app_name="pinniped"
+namespace="integration"
+webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
+webhook_ca_bundle="$(kubectl get secret api-serving-cert --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
+discovery_url="$(TERM=dumb kubectl cluster-info | awk '/Kubernetes master/ {print $NF}')"
 
-  test_username="test-username"
-  test_groups="test-group-0,test-group-1"
-  set +o pipefail
-  test_password="$(cat /dev/urandom | env LC_CTYPE=C tr -dc 'a-z0-9' | fold -w 32 | head -n 1)"
-  set -o pipefail
-  if [[ ${#test_password} -ne 32 ]]; then
-    log_error "Could not create random test user password"
-    exit 1
-  fi
-  echo "Creating test user '$test_username'..."
-  kubectl create secret generic "$test_username" \
-    --namespace local-user-authenticator \
-    --from-literal=groups="$test_groups" \
-    --from-literal=passwordHash="$(htpasswd -nbBC 10 x "$test_password" | sed -e "s/^x://")" \
-    --dry-run=client \
-    --output yaml \
-    | kubectl apply -f -
+#
+# Deploy Pinniped
+#
+pushd deploy >/dev/null
 
-  app_name="pinniped"
-  namespace="integration"
-  webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
-  webhook_ca_bundle="$(kubectl get secret api-serving-cert --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
-  discovery_url="$(TERM=dumb kubectl cluster-info | awk '/Kubernetes master/ {print $NF}')"
+log_note "Deploying the Pinniped app to the cluster..."
+ytt --file . \
+  --data-value "app_name=$app_name" \
+  --data-value "namespace=$namespace" \
+  --data-value "image_repo=$registry_repo" \
+  --data-value "image_tag=$tag" \
+  --data-value "webhook_url=$webhook_url" \
+  --data-value "webhook_ca_bundle=$webhook_ca_bundle" \
+  --data-value "discovery_url=$discovery_url" >"$manifest"
 
-  #
-  # Deploy Pinniped
-  #
-  pushd deploy >/dev/null
+kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
+kapp deploy --yes --app "$app_name" --diff-changes --file "$manifest"
 
-  log_note "Deploying the Pinniped app to the cluster..."
-  ytt --file . \
-    --data-value "app_name=$app_name" \
-    --data-value "namespace=$namespace" \
-    --data-value "image_repo=$registry_repo" \
-    --data-value "image_tag=$tag" \
-    --data-value "webhook_url=$webhook_url" \
-    --data-value "webhook_ca_bundle=$webhook_ca_bundle" \
-    --data-value "discovery_url=$discovery_url" >"$manifest"
+popd >/dev/null
 
-  kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
-  kapp deploy --yes --app "$app_name" --diff-changes --file "$manifest"
+#
+# Create the environment file
+#
+kind_capabilities_file="$pinniped_path/test/cluster_capabilities/kind.yaml"
+pinniped_cluster_capability_file_content=$(cat "$kind_capabilities_file")
 
-  popd >/dev/null
-
-  kind_capabilities_file="$pinniped_path/test/cluster_capabilities/kind.yaml"
-  pinniped_cluster_capability_file_content=$(cat "$kind_capabilities_file")
-
-  cat <<EOF >/tmp/integration-test-env
+cat <<EOF >/tmp/integration-test-env
 # The following env vars should be set before running 'cd test && go test ./...'
 export PINNIPED_NAMESPACE=${namespace}
 export PINNIPED_APP_NAME=${app_name}
@@ -260,22 +240,24 @@ PINNIPED_CLUSTER_CAPABILITY_YAML_EOF
 export PINNIPED_CLUSTER_CAPABILITY_YAML
 EOF
 
-  goland_vars=$(grep -v '^#' /tmp/integration-test-env | grep -E '^export .+=' | sed 's/export //g' | tr '\n' ';')
+#
+# Print instructions for next steps
+#
+goland_vars=$(grep -v '^#' /tmp/integration-test-env | grep -E '^export .+=' | sed 's/export //g' | tr '\n' ';')
 
-  log_note "Done!"
-  log_note
-  log_note "Ready to run integration tests. For example, you could run all tests using the following commands..."
-  log_note "    cd $pinniped_path"
-  log_note '    source /tmp/integration-test-env'
-  log_note '    (cd test && go test -count 1 ./...)'
-  log_note
-  log_note '"Environment" setting for GoLand run configurations:'
-  log_note "    ${goland_vars}PINNIPED_CLUSTER_CAPABILITY_FILE=${kind_capabilities_file}"
-  log_note
-  log_note
-  log_note "You can run this script again to deploy local production code changes while you are working."
-  log_note
-  log_note "When you're finished, use 'kind delete cluster' to tear down the cluster."
-  log_note
-  log_note "To delete the deployments, run 'kapp delete -a local-user-authenticator -y && kapp delete -a pinniped -y'."
-fi
+log_note "Done!"
+log_note
+log_note "Ready to run integration tests. For example, you could run all tests using the following commands..."
+log_note "    cd $pinniped_path"
+log_note '    source /tmp/integration-test-env'
+log_note '    (cd test && go test -count 1 ./...)'
+log_note
+log_note '"Environment" setting for GoLand run configurations:'
+log_note "    ${goland_vars}PINNIPED_CLUSTER_CAPABILITY_FILE=${kind_capabilities_file}"
+log_note
+log_note
+log_note "You can run this script again to deploy local production code changes while you are working."
+log_note
+log_note "When you're finished, use 'kind delete cluster' to tear down the cluster."
+log_note
+log_note "To delete the deployments, run 'kapp delete -a local-user-authenticator -y && kapp delete -a pinniped -y'."

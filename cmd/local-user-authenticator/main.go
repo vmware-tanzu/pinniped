@@ -109,12 +109,11 @@ func (w *webhook) start(ctx context.Context, l net.Listener) error {
 }
 
 func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
-	defer req.Body.Close()
-
 	username, password, err := getUsernameAndPasswordFromRequest(rsp, req)
 	if err != nil {
 		return
 	}
+	defer req.Body.Close()
 
 	secret, err := w.secretInformer.Lister().Secrets(namespace).Get(username)
 	notFound := k8serrors.IsNotFound(err)
@@ -181,6 +180,12 @@ func getUsernameAndPasswordFromRequest(rsp http.ResponseWriter, req *http.Reques
 		!headerContains(req, "Accept", "*/*") {
 		klog.InfoS("client does not accept application/json", "Accept", req.Header.Values("Accept"))
 		rsp.WriteHeader(http.StatusUnsupportedMediaType)
+		return "", "", invalidRequest
+	}
+
+	if req.Body == nil {
+		klog.InfoS("invalid nil body")
+		rsp.WriteHeader(http.StatusBadRequest)
 		return "", "", invalidRequest
 	}
 

@@ -61,7 +61,15 @@ docker build .
 
 ### Running Integration Tests
 
-Details coming soon.
+```bash
+./hack/prepare-for-integration-tests.sh
+source /tmp/integration-test-env
+(cd test && go test -count 1 ./...)
+```
+
+The `./hack/prepare-for-integration-tests.sh` script will create a local
+[`kind`](https://kind.sigs.k8s.io/) cluster on which the integration tests will
+be run.
 
 ### Pre-commit Hooks
 

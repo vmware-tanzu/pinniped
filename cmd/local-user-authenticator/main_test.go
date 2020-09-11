@@ -451,9 +451,9 @@ func unauthenticatedResponseJSON() *string {
 }
 
 func authenticatedResponseJSON(user, uid string, groups []string) *string {
-	var quotedGroups []string
-	for _, group := range groups {
-		quotedGroups = append(quotedGroups, `"`+group+`"`)
+	quotedGroups := make([]string, len(groups))
+	for i, group := range groups {
+		quotedGroups[i] = `"` + group + `"`
 	}
 
 	// Very specific expected result. Avoid using json package so we know exactly what we're asserting.

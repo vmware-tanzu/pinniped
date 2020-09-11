@@ -93,6 +93,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 	})
 
 	for _, group := range expectedTestUserGroups {
+		group := group
 		t.Run("access as group "+group, func(t *testing.T) {
 			addTestClusterRoleBinding(ctx, t, adminClient, &rbacv1.ClusterRoleBinding{
 				TypeMeta: metav1.TypeMeta{},

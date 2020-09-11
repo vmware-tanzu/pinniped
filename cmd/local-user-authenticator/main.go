@@ -35,6 +35,7 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
+	"github.com/suzerain-io/pinniped/internal/constable"
 	"github.com/suzerain-io/pinniped/internal/controller/apicerts"
 	"github.com/suzerain-io/pinniped/internal/controllerlib"
 	"github.com/suzerain-io/pinniped/internal/provider"
@@ -46,14 +47,13 @@ const (
 	// This string must match the name of the Service declared in the deployment yaml.
 	serviceName = "local-user-authenticator"
 
-	// TODO there must be a better way to get this specific json result string without needing to hardcode it
-	unauthenticatedResponse = `{"apiVersion":"authentication.k8s.io/v1beta1","kind":"TokenReview","status":{"authenticated":false}}`
-
-	// TODO there must be a better way to get this specific json result string without needing to hardcode it
+	unauthenticatedResponse       = `{"apiVersion":"authentication.k8s.io/v1beta1","kind":"TokenReview","status":{"authenticated":false}}`
 	authenticatedResponseTemplate = `{"apiVersion":"authentication.k8s.io/v1beta1","kind":"TokenReview","status":{"authenticated":true,"user":{"username":"%s","uid":"%s","groups":%s}}}`
 
 	singletonWorker       = 1
 	defaultResyncInterval = 3 * time.Minute
+
+	invalidRequest = constable.Error("invalid request")
 )
 
 type webhook struct {
@@ -111,46 +111,10 @@ func (w *webhook) start(ctx context.Context, l net.Listener) error {
 func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 
-	if req.URL.Path != "/authenticate" {
-		klog.InfoS("received request path other than /authenticate", "path", req.URL.Path)
-		rsp.WriteHeader(http.StatusNotFound)
+	username, password, err := getUsernameAndPasswordFromRequest(rsp, req)
+	if err != nil {
 		return
 	}
-
-	if req.Method != http.MethodPost {
-		klog.InfoS("received request method other than post", "method", req.Method)
-		rsp.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	if !headerContains(req, "Content-Type", "application/json") {
-		klog.InfoS("content type is not application/json", "Content-Type", req.Header.Values("Content-Type"))
-		rsp.WriteHeader(http.StatusUnsupportedMediaType)
-		return
-	}
-	if !headerContains(req, "Accept", "application/json") &&
-		!headerContains(req, "Accept", "application/*") &&
-		!headerContains(req, "Accept", "*/*") {
-		klog.InfoS("client does not accept application/json", "Accept", req.Header.Values("Accept"))
-		rsp.WriteHeader(http.StatusUnsupportedMediaType)
-		return
-	}
-
-	var body authenticationv1.TokenReview
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		klog.InfoS("failed to decode body", "err", err)
-		rsp.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	tokenSegments := strings.SplitN(body.Spec.Token, ":", 2)
-	if len(tokenSegments) != 2 {
-		klog.InfoS("bad token format in request")
-		rsp.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	username := tokenSegments[0]
-	password := tokenSegments[1]
 
 	secret, err := w.secretInformer.Lister().Secrets(namespace).Get(username)
 	notFound := k8serrors.IsNotFound(err)
@@ -191,6 +155,50 @@ func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 
 	klog.InfoS("successful authentication")
 	respondWithAuthenticated(rsp, secret.ObjectMeta.Name, string(secret.UID), groups)
+}
+
+func getUsernameAndPasswordFromRequest(rsp http.ResponseWriter, req *http.Request) (string, string, error) {
+	if req.URL.Path != "/authenticate" {
+		klog.InfoS("received request path other than /authenticate", "path", req.URL.Path)
+		rsp.WriteHeader(http.StatusNotFound)
+		return "", "", invalidRequest
+	}
+
+	if req.Method != http.MethodPost {
+		klog.InfoS("received request method other than post", "method", req.Method)
+		rsp.WriteHeader(http.StatusMethodNotAllowed)
+		return "", "", invalidRequest
+	}
+
+	if !headerContains(req, "Content-Type", "application/json") {
+		klog.InfoS("content type is not application/json", "Content-Type", req.Header.Values("Content-Type"))
+		rsp.WriteHeader(http.StatusUnsupportedMediaType)
+		return "", "", invalidRequest
+	}
+
+	if !headerContains(req, "Accept", "application/json") &&
+		!headerContains(req, "Accept", "application/*") &&
+		!headerContains(req, "Accept", "*/*") {
+		klog.InfoS("client does not accept application/json", "Accept", req.Header.Values("Accept"))
+		rsp.WriteHeader(http.StatusUnsupportedMediaType)
+		return "", "", invalidRequest
+	}
+
+	var body authenticationv1.TokenReview
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		klog.InfoS("failed to decode body", "err", err)
+		rsp.WriteHeader(http.StatusBadRequest)
+		return "", "", invalidRequest
+	}
+
+	tokenSegments := strings.SplitN(body.Spec.Token, ":", 2)
+	if len(tokenSegments) != 2 {
+		klog.InfoS("bad token format in request")
+		rsp.WriteHeader(http.StatusBadRequest)
+		return "", "", invalidRequest
+	}
+
+	return tokenSegments[0], tokenSegments[1], nil
 }
 
 func headerContains(req *http.Request, headerName, s string) bool {

@@ -184,7 +184,7 @@ if [[ ${#test_password} -ne 32 ]]; then
   log_error "Could not create random test user password"
   exit 1
 fi
-echo "Creating test user '$test_username'..."
+log_note "Creating test user '$test_username'..."
 kubectl create secret generic "$test_username" \
   --namespace local-user-authenticator \
   --from-literal=groups="$test_groups" \

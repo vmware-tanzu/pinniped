@@ -194,6 +194,19 @@ func TestCreate(t *testing.T) {
 			requireOneLogStatement(r, logger, `"failure" failureType:webhook authentication,msg:some webhook error`)
 		})
 
+		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsNilResponseWithAuthenticatedFalse", func() {
+			webhook := FakeToken{
+				returnResponse:        nil,
+				returnUnauthenticated: false,
+			}
+			storage := NewREST(&webhook, nil)
+
+			response, err := callCreate(context.Background(), storage, validCredentialRequest())
+
+			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
+			requireOneLogStatement(r, logger, `"success" userID:<none>,idpAuthenticated:true,pinnipedAuthenticated:false`)
+		})
+
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookDoesNotReturnAnyUserInfo", func() {
 			webhook := FakeToken{
 				returnResponse:        &authenticator.Response{},

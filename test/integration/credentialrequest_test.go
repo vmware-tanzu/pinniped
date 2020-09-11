@@ -37,11 +37,9 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 	response, err := makeRequest(t, validCredentialRequestSpecWithRealToken(t))
 	require.NoError(t, err)
 
-	// Note: If this assertion fails then your TMC token might have expired. Get a fresh one and try again.
-	require.Empty(t, response.Status.Message)
-
-	require.Empty(t, response.Spec)
 	require.NotNil(t, response.Status.Credential)
+	require.Empty(t, response.Status.Message)
+	require.Empty(t, response.Spec)
 	require.Empty(t, response.Status.Credential.Token)
 	require.NotEmpty(t, response.Status.Credential.ClientCertificateData)
 	require.Equal(t, testUsername, getCommonName(t, response.Status.Credential.ClientCertificateData))
@@ -81,7 +79,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 			},
 		})
 
-		// Use the client which is authenticated as the TMC user to list namespaces
+		// Use the client which is authenticated as the test user to list namespaces
 		var listNamespaceResponse *v1.NamespaceList
 		var canListNamespaces = func() bool {
 			listNamespaceResponse, err = clientWithCertFromCredentialRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
@@ -112,7 +110,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 				},
 			})
 
-			// Use the client which is authenticated as the TMC group to list namespaces
+			// Use the client which is authenticated as the test user to list namespaces
 			var listNamespaceResponse *v1.NamespaceList
 			var canListNamespaces = func() bool {
 				listNamespaceResponse, err = clientWithCertFromCredentialRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})

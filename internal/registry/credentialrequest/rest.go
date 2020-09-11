@@ -17,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
-	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/utils/trace"
 
@@ -84,8 +83,8 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		traceFailureWithError(t, "webhook authentication", err)
 		return failureResponse(), nil
 	}
-	if !authenticated || authResponse.User == nil || authResponse.User.GetName() == "" {
-		traceSuccess(t, authResponse.User, authenticated, false)
+	if !authenticated || authResponse == nil || authResponse.User == nil || authResponse.User.GetName() == "" {
+		traceSuccess(t, authResponse, authenticated, false)
 		return failureResponse(), nil
 	}
 
@@ -105,7 +104,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		return failureResponse(), nil
 	}
 
-	traceSuccess(t, authResponse.User, authenticated, true)
+	traceSuccess(t, authResponse, authenticated, true)
 
 	return &pinnipedapi.CredentialRequest{
 		Status: pinnipedapi.CredentialRequestStatus{
@@ -171,10 +170,10 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 	return credentialRequest, nil
 }
 
-func traceSuccess(t *trace.Trace, user user.Info, webhookAuthenticated bool, pinnipedAuthenticated bool) {
+func traceSuccess(t *trace.Trace, response *authenticator.Response, webhookAuthenticated bool, pinnipedAuthenticated bool) {
 	userID := "<none>"
-	if user != nil {
-		userID = user.GetUID()
+	if response != nil && response.User != nil {
+		userID = response.User.GetUID()
 	}
 	t.Step("success",
 		trace.Field{Key: "userID", Value: userID},

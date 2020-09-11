@@ -135,7 +135,7 @@ func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 		[]byte(password),
 	) == nil
 	if !passwordMatches {
-		klog.InfoS("invalid password in request")
+		klog.InfoS("authentication failed: wrong password")
 		respondWithUnauthenticated(rsp)
 		return
 	}

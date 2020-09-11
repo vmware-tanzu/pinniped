@@ -41,13 +41,15 @@ import (
 func TestWebhook(t *testing.T) {
 	t.Parallel()
 
+	const namespace = "local-user-authenticator"
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	user, otherUser, colonUser, noGroupUser, oneGroupUser, passwordUndefinedUser, emptyPasswordUser, underfinedGroupsUser :=
-		"some-user", "other-user", "colon-user", "no-group-user", "one-group-user", "password-undefined-user", "empty-password-user", "undefined-groups-user"
-	uid, otherUID, colonUID, noGroupUID, oneGroupUID, passwordUndefinedUID, emptyPasswordUID, underfinedGroupsUID :=
-		"some-uid", "other-uid", "colon-uid", "no-group-uid", "one-group-uid", "password-undefined-uid", "empty-password-uid", "undefined-groups-uid"
+	user, otherUser, colonUser, noGroupUser, oneGroupUser, passwordUndefinedUser, emptyPasswordUser, invalidPasswordHashUser, undefinedGroupsUser :=
+		"some-user", "other-user", "colon-user", "no-group-user", "one-group-user", "password-undefined-user", "empty-password-user", "invalid-password-hash-user", "undefined-groups-user"
+	uid, otherUID, colonUID, noGroupUID, oneGroupUID, passwordUndefinedUID, emptyPasswordUID, invalidPasswordHashUID, undefinedGroupsUID :=
+		"some-uid", "other-uid", "colon-uid", "no-group-uid", "one-group-uid", "password-undefined-uid", "empty-password-uid", "invalid-password-hash-uid", "undefined-groups-uid"
 	password, otherPassword, colonPassword, noGroupPassword, oneGroupPassword, undefinedGroupsPassword :=
 		"some-password", "other-password", "some-:-password", "no-group-password", "one-group-password", "undefined-groups-password"
 
@@ -66,7 +68,7 @@ func TestWebhook(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			UID:       types.UID(passwordUndefinedUID),
 			Name:      passwordUndefinedUser,
-			Namespace: "local-user-authenticator",
+			Namespace: namespace,
 		},
 		Data: map[string][]byte{
 			"groups": []byte(groups),
@@ -78,12 +80,24 @@ func TestWebhook(t *testing.T) {
 
 	require.NoError(t, kubeClient.Tracker().Add(&corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			UID:       types.UID(underfinedGroupsUID),
-			Name:      underfinedGroupsUser,
-			Namespace: "local-user-authenticator",
+			UID:       types.UID(undefinedGroupsUID),
+			Name:      undefinedGroupsUser,
+			Namespace: namespace,
 		},
 		Data: map[string][]byte{
 			"passwordHash": undefinedGroupsUserPasswordHash,
+		},
+	}))
+
+	require.NoError(t, kubeClient.Tracker().Add(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:       types.UID(invalidPasswordHashUID),
+			Name:      invalidPasswordHashUser,
+			Namespace: namespace,
+		},
+		Data: map[string][]byte{
+			"groups":       []byte(groups),
+			"passwordHash": []byte("not a valid password hash"),
 		},
 	}))
 
@@ -167,16 +181,26 @@ func TestWebhook(t *testing.T) {
 			wantBody:    unauthenticatedResponseJSON(),
 		},
 		{
+			name:        "when a user has an invalid password hash in the secret",
+			url:         goodURL,
+			method:      http.MethodPost,
+			headers:     goodRequestHeaders,
+			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(invalidPasswordHashUser + ":foo") },
+			wantStatus:  http.StatusOK,
+			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
+			wantBody:    unauthenticatedResponseJSON(),
+		},
+		{
 			name:    "success for a user has no groups defined in the secret",
 			url:     goodURL,
 			method:  http.MethodPost,
 			headers: goodRequestHeaders,
 			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody(underfinedGroupsUser + ":" + undefinedGroupsPassword)
+				return newTokenReviewBody(undefinedGroupsUser + ":" + undefinedGroupsPassword)
 			},
 			wantStatus:  http.StatusOK,
 			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
-			wantBody:    authenticatedResponseJSON(underfinedGroupsUser, underfinedGroupsUID, []string{}),
+			wantBody:    authenticatedResponseJSON(undefinedGroupsUser, undefinedGroupsUID, []string{}),
 		},
 		{
 			name:        "when a user has empty string as their password",
@@ -389,15 +413,12 @@ func createSecretInformer(t *testing.T, kubeClient kubernetes.Interface) corev1i
 func newCertProvider(t *testing.T) (provider.DynamicTLSServingCertProvider, []byte, string) {
 	t.Helper()
 
-	ca, err := certauthority.New(pkix.Name{CommonName: "local-user-authenticator CA"}, time.Hour*24)
+	serverName := "local-user-authenticator"
+
+	ca, err := certauthority.New(pkix.Name{CommonName: serverName + " CA"}, time.Hour*24)
 	require.NoError(t, err)
 
-	serverName := "local-user-authenticator"
-	cert, err := ca.Issue(
-		pkix.Name{CommonName: serverName},
-		[]string{serverName},
-		time.Hour*24,
-	)
+	cert, err := ca.Issue(pkix.Name{CommonName: serverName}, []string{serverName}, time.Hour*24)
 	require.NoError(t, err)
 
 	certPEM, keyPEM, err := certauthority.ToPEM(cert)
@@ -482,7 +503,7 @@ func addSecretToFakeClientTracker(t *testing.T, kubeClient *kubernetesfake.Clien
 		ObjectMeta: metav1.ObjectMeta{
 			UID:       types.UID(uid),
 			Name:      username,
-			Namespace: "local-user-authenticator",
+			Namespace: namespace,
 		},
 		Data: map[string][]byte{
 			"passwordHash": passwordHash,

@@ -191,6 +191,18 @@ func getUsernameAndPasswordFromRequest(rsp http.ResponseWriter, req *http.Reques
 		return "", "", invalidRequest
 	}
 
+	if body.APIVersion != authenticationv1.SchemeGroupVersion.String() {
+		klog.InfoS("invalid TokenReview apiVersion", "apiVersion", body.APIVersion)
+		rsp.WriteHeader(http.StatusBadRequest)
+		return "", "", invalidRequest
+	}
+
+	if body.Kind != "TokenReview" {
+		klog.InfoS("invalid TokenReview kind", "kind", body.Kind)
+		rsp.WriteHeader(http.StatusBadRequest)
+		return "", "", invalidRequest
+	}
+
 	tokenSegments := strings.SplitN(body.Spec.Token, ":", 2)
 	if len(tokenSegments) != 2 {
 		klog.InfoS("bad token format in request")

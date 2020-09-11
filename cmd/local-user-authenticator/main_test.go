@@ -261,6 +261,46 @@ func TestWebhook(t *testing.T) {
 			wantBody:    authenticatedResponseJSON(colonUser, colonUID, []string{group0, group1}),
 		},
 		{
+			name:    "bad TokenReview group",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
+			body: func() (io.ReadCloser, error) {
+				return newTokenReviewBody(
+					user+":"+password,
+					"wrong-group/v1",
+				)
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:    "bad TokenReview version",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
+			body: func() (io.ReadCloser, error) {
+				return newTokenReviewBody(
+					user+":"+password,
+					"authentication.k8s.io/wrong-version",
+				)
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:    "bad TokenReview kind",
+			url:     goodURL,
+			method:  http.MethodPost,
+			headers: goodRequestHeaders,
+			body: func() (io.ReadCloser, error) {
+				return newTokenReviewBody(
+					user+":"+password,
+					authenticationv1.SchemeGroupVersion.String(),
+					"wrong-kind",
+				)
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
 			name:       "bad path",
 			url:        fmt.Sprintf("https://%s/tuna", l.Addr().String()),
 			method:     http.MethodPost,
@@ -448,9 +488,23 @@ func newClient(caBundle []byte, serverName string) *http.Client {
 
 // newTokenReviewBody creates an io.ReadCloser that contains a JSON-encoded
 // TokenReview request.
-func newTokenReviewBody(token string) (io.ReadCloser, error) {
+func newTokenReviewBody(token string, extra ...string) (io.ReadCloser, error) {
+	v := authenticationv1.SchemeGroupVersion.String()
+	if len(extra) > 0 {
+		v = extra[0]
+	}
+
+	k := "TokenReview"
+	if len(extra) > 1 {
+		k = extra[1]
+	}
+
 	buf := bytes.NewBuffer([]byte{})
 	tr := authenticationv1.TokenReview{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: v,
+			Kind:       k,
+		},
 		Spec: authenticationv1.TokenReviewSpec{
 			Token: token,
 		},

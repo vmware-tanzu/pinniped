@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
-	authenticationv1 "k8s.io/api/authentication/v1"
+	authenticationv1beta1 "k8s.io/api/authentication/v1beta1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	kubeinformers "k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
@@ -184,14 +184,14 @@ func getUsernameAndPasswordFromRequest(rsp http.ResponseWriter, req *http.Reques
 		return "", "", invalidRequest
 	}
 
-	var body authenticationv1.TokenReview
+	var body authenticationv1beta1.TokenReview
 	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
 		klog.InfoS("failed to decode body", "err", err)
 		rsp.WriteHeader(http.StatusBadRequest)
 		return "", "", invalidRequest
 	}
 
-	if body.APIVersion != authenticationv1.SchemeGroupVersion.String() {
+	if body.APIVersion != authenticationv1beta1.SchemeGroupVersion.String() {
 		klog.InfoS("invalid TokenReview apiVersion", "apiVersion", body.APIVersion)
 		rsp.WriteHeader(http.StatusBadRequest)
 		return "", "", invalidRequest

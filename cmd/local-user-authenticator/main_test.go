@@ -25,7 +25,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
-	authenticationv1 "k8s.io/api/authentication/v1"
+	authenticationv1beta1 "k8s.io/api/authentication/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -294,7 +294,7 @@ func TestWebhook(t *testing.T) {
 			body: func() (io.ReadCloser, error) {
 				return newTokenReviewBody(
 					user+":"+password,
-					authenticationv1.SchemeGroupVersion.String(),
+					authenticationv1beta1.SchemeGroupVersion.String(),
 					"wrong-kind",
 				)
 			},
@@ -489,7 +489,7 @@ func newClient(caBundle []byte, serverName string) *http.Client {
 // newTokenReviewBody creates an io.ReadCloser that contains a JSON-encoded
 // TokenReview request.
 func newTokenReviewBody(token string, extra ...string) (io.ReadCloser, error) {
-	v := authenticationv1.SchemeGroupVersion.String()
+	v := authenticationv1beta1.SchemeGroupVersion.String()
 	if len(extra) > 0 {
 		v = extra[0]
 	}
@@ -500,12 +500,12 @@ func newTokenReviewBody(token string, extra ...string) (io.ReadCloser, error) {
 	}
 
 	buf := bytes.NewBuffer([]byte{})
-	tr := authenticationv1.TokenReview{
+	tr := authenticationv1beta1.TokenReview{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: v,
 			Kind:       k,
 		},
-		Spec: authenticationv1.TokenReviewSpec{
+		Spec: authenticationv1beta1.TokenReviewSpec{
 			Token: token,
 		},
 	}

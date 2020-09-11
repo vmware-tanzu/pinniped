@@ -2,7 +2,7 @@
 
 Contributions to Pinniped are welcome. Here are some things to help you get started.
 
-1. Please see the [Code of Conduct](code-of-conduct.md).
+1. Please see the [Code of Conduct](code_of_conduct.md).
 1. Learn about the [scope](scope.md) of the project.
 1. Coming soon: details about how to legally contribute to the project, including CLA/DCO details.
 1. See below for how to [file a bug report](#bugs).
@@ -37,8 +37,7 @@ guidelines in the issue and pull request templates.
 ## Building
 
 The [Dockerfile](../Dockerfile) at the root of the repo can be used to build and
-package the `pinniped-server` code. After making a change to the code,
-rebuild the docker image with the following command.
+package the code. After making a change to the code, rebuild the docker image with the following command.
 
 ```bash
 # From the root directory of the repo...
@@ -56,20 +55,17 @@ docker build .
 ### Running Unit Tests
 
 ```bash
-./hack/module.sh unittest
+./hack/module.sh units
 ```
 
 ### Running Integration Tests
 
 ```bash
-./hack/prepare-for-integration-tests.sh
-source /tmp/integration-test-env
-(cd test && go test -count 1 ./...)
+./hack/prepare-for-integration-tests.sh && source /tmp/integration-test-env && go test -v -count 1 ./test/...
 ```
 
 The `./hack/prepare-for-integration-tests.sh` script will create a local
-[`kind`](https://kind.sigs.k8s.io/) cluster on which the integration tests will
-be run.
+[`kind`](https://kind.sigs.k8s.io/) cluster on which the integration tests will run.
 
 ### Pre-commit Hooks
 

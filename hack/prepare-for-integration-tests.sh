@@ -201,7 +201,7 @@ kind_capabilities_file="$pinniped_path/test/cluster_capabilities/kind.yaml"
 pinniped_cluster_capability_file_content=$(cat "$kind_capabilities_file")
 
 cat <<EOF >/tmp/integration-test-env
-# The following env vars should be set before running 'cd test && go test ./...'
+# The following env vars should be set before running 'go test -v -count 1 ./test/...'
 export PINNIPED_NAMESPACE=${namespace}
 export PINNIPED_APP_NAME=${app_name}
 export PINNIPED_TEST_USER_USERNAME=${test_username}

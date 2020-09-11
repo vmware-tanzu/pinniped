@@ -29,6 +29,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	authenticationv1beta1 "k8s.io/api/authentication/v1beta1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeinformers "k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -46,9 +47,6 @@ const (
 	namespace = "local-user-authenticator"
 	// This string must match the name of the Service declared in the deployment yaml.
 	serviceName = "local-user-authenticator"
-
-	unauthenticatedResponse       = `{"apiVersion":"authentication.k8s.io/v1beta1","kind":"TokenReview","status":{"authenticated":false}}`
-	authenticatedResponseTemplate = `{"apiVersion":"authentication.k8s.io/v1beta1","kind":"TokenReview","status":{"authenticated":true,"user":{"username":"%s","uid":"%s","groups":%s}}}`
 
 	singletonWorker       = 1
 	defaultResyncInterval = 3 * time.Minute
@@ -240,7 +238,20 @@ func trimLeadingAndTrailingWhitespace(ss []string) {
 
 func respondWithUnauthenticated(rsp http.ResponseWriter) {
 	rsp.Header().Add("Content-Type", "application/json")
-	_, _ = rsp.Write([]byte(unauthenticatedResponse))
+
+	body := authenticationv1beta1.TokenReview{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "TokenReview",
+			APIVersion: authenticationv1beta1.SchemeGroupVersion.String(),
+		},
+		Status: authenticationv1beta1.TokenReviewStatus{
+			Authenticated: false,
+		},
+	}
+	if err := json.NewEncoder(rsp).Encode(body); err != nil {
+		klog.InfoS("could not encode response", "err", err)
+		rsp.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
 func respondWithAuthenticated(
@@ -249,14 +260,24 @@ func respondWithAuthenticated(
 	groups []string,
 ) {
 	rsp.Header().Add("Content-Type", "application/json")
-	groupsJSONBytes, err := json.Marshal(groups)
-	if err != nil {
+	body := authenticationv1beta1.TokenReview{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "TokenReview",
+			APIVersion: authenticationv1beta1.SchemeGroupVersion.String(),
+		},
+		Status: authenticationv1beta1.TokenReviewStatus{
+			Authenticated: true,
+			User: authenticationv1beta1.UserInfo{
+				Username: username,
+				Groups:   groups,
+				UID:      uid,
+			},
+		},
+	}
+	if err := json.NewEncoder(rsp).Encode(body); err != nil {
 		klog.InfoS("could not encode response", "err", err)
 		rsp.WriteHeader(http.StatusInternalServerError)
-		return
 	}
-	jsonBody := fmt.Sprintf(authenticatedResponseTemplate, username, uid, groupsJSONBytes)
-	_, _ = rsp.Write([]byte(jsonBody))
 }
 
 func newK8sClient() (kubernetes.Interface, error) {

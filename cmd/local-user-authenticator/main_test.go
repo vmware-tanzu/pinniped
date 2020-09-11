@@ -19,7 +19,6 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +27,7 @@ import (
 	authenticationv1beta1 "k8s.io/api/authentication/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kubeinformers "k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
@@ -128,7 +128,7 @@ func TestWebhook(t *testing.T) {
 
 		wantStatus  int
 		wantHeaders map[string][]string
-		wantBody    *string
+		wantBody    *authenticationv1beta1.TokenReview
 	}{
 		{
 			name:        "success for a user who belongs to multiple groups",
@@ -158,7 +158,7 @@ func TestWebhook(t *testing.T) {
 			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(noGroupUser + ":" + noGroupPassword) },
 			wantStatus:  http.StatusOK,
 			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
-			wantBody:    authenticatedResponseJSON(noGroupUser, noGroupUID, []string{}),
+			wantBody:    authenticatedResponseJSON(noGroupUser, noGroupUID, nil),
 		},
 		{
 			name:        "wrong username for password",
@@ -200,7 +200,7 @@ func TestWebhook(t *testing.T) {
 			},
 			wantStatus:  http.StatusOK,
 			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
-			wantBody:    authenticatedResponseJSON(undefinedGroupsUser, undefinedGroupsUID, []string{}),
+			wantBody:    authenticatedResponseJSON(undefinedGroupsUser, undefinedGroupsUID, nil),
 		},
 		{
 			name:        "when a user has empty string as their password",
@@ -266,9 +266,13 @@ func TestWebhook(t *testing.T) {
 			method:  http.MethodPost,
 			headers: goodRequestHeaders,
 			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody(
+				return newTokenReviewBodyWithGVK(
 					user+":"+password,
-					"wrong-group/v1",
+					&schema.GroupVersionKind{
+						Group:   "bad group",
+						Version: authenticationv1beta1.SchemeGroupVersion.Version,
+						Kind:    "TokenReview",
+					},
 				)
 			},
 			wantStatus: http.StatusBadRequest,
@@ -279,9 +283,13 @@ func TestWebhook(t *testing.T) {
 			method:  http.MethodPost,
 			headers: goodRequestHeaders,
 			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody(
+				return newTokenReviewBodyWithGVK(
 					user+":"+password,
-					"authentication.k8s.io/wrong-version",
+					&schema.GroupVersionKind{
+						Group:   authenticationv1beta1.SchemeGroupVersion.Group,
+						Version: "bad version",
+						Kind:    "TokenReview",
+					},
 				)
 			},
 			wantStatus: http.StatusBadRequest,
@@ -292,10 +300,13 @@ func TestWebhook(t *testing.T) {
 			method:  http.MethodPost,
 			headers: goodRequestHeaders,
 			body: func() (io.ReadCloser, error) {
-				return newTokenReviewBody(
+				return newTokenReviewBodyWithGVK(
 					user+":"+password,
-					authenticationv1beta1.SchemeGroupVersion.String(),
-					"wrong-kind",
+					&schema.GroupVersionKind{
+						Group:   authenticationv1beta1.SchemeGroupVersion.Group,
+						Version: authenticationv1beta1.SchemeGroupVersion.Version,
+						Kind:    "wrong-kind",
+					},
 				)
 			},
 			wantStatus: http.StatusBadRequest,
@@ -417,7 +428,10 @@ func TestWebhook(t *testing.T) {
 			require.NoError(t, err)
 			if test.wantBody != nil {
 				require.NoError(t, err)
-				require.JSONEq(t, *test.wantBody, string(responseBody))
+
+				var tr authenticationv1beta1.TokenReview
+				require.NoError(t, json.Unmarshal(responseBody, &tr))
+				require.Equal(t, test.wantBody, &tr)
 			} else {
 				require.Empty(t, responseBody)
 			}
@@ -486,24 +500,28 @@ func newClient(caBundle []byte, serverName string) *http.Client {
 	}
 }
 
-// newTokenReviewBody creates an io.ReadCloser that contains a JSON-encoded
-// TokenReview request.
-func newTokenReviewBody(token string, extra ...string) (io.ReadCloser, error) {
-	v := authenticationv1beta1.SchemeGroupVersion.String()
-	if len(extra) > 0 {
-		v = extra[0]
-	}
+// newTokenReviewBody creates an io.ReadCloser that contains a JSON-encodeed
+// TokenReview request with expected APIVersion and Kind fields.
+func newTokenReviewBody(token string) (io.ReadCloser, error) {
+	return newTokenReviewBodyWithGVK(
+		token,
+		&schema.GroupVersionKind{
+			Group:   authenticationv1beta1.SchemeGroupVersion.Group,
+			Version: authenticationv1beta1.SchemeGroupVersion.Version,
+			Kind:    "TokenReview",
+		},
+	)
+}
 
-	k := "TokenReview"
-	if len(extra) > 1 {
-		k = extra[1]
-	}
-
+// newTokenReviewBodyWithGVK creates an io.ReadCloser that contains a
+// JSON-encoded TokenReview request. The TypeMeta fields of the TokenReview are
+// filled in with the provided gvk.
+func newTokenReviewBodyWithGVK(token string, gvk *schema.GroupVersionKind) (io.ReadCloser, error) {
 	buf := bytes.NewBuffer([]byte{})
 	tr := authenticationv1beta1.TokenReview{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: v,
-			Kind:       k,
+			APIVersion: gvk.GroupVersion().String(),
+			Kind:       gvk.Kind,
 		},
 		Spec: authenticationv1beta1.TokenReviewSpec{
 			Token: token,
@@ -513,40 +531,33 @@ func newTokenReviewBody(token string, extra ...string) (io.ReadCloser, error) {
 	return ioutil.NopCloser(buf), err
 }
 
-func unauthenticatedResponseJSON() *string {
-	// Very specific expected result. Avoid using json package so we know exactly what we're asserting.
-	s := `{
-		"apiVersion": "authentication.k8s.io/v1beta1",
-        "kind": "TokenReview",
-		"status": {
-			"authenticated": false
-		}
-	}`
-	return &s
+func unauthenticatedResponseJSON() *authenticationv1beta1.TokenReview {
+	return &authenticationv1beta1.TokenReview{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "TokenReview",
+			APIVersion: "authentication.k8s.io/v1beta1",
+		},
+		Status: authenticationv1beta1.TokenReviewStatus{
+			Authenticated: false,
+		},
+	}
 }
 
-func authenticatedResponseJSON(user, uid string, groups []string) *string {
-	quotedGroups := make([]string, len(groups))
-	for i, group := range groups {
-		quotedGroups[i] = `"` + group + `"`
+func authenticatedResponseJSON(user, uid string, groups []string) *authenticationv1beta1.TokenReview {
+	return &authenticationv1beta1.TokenReview{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "TokenReview",
+			APIVersion: "authentication.k8s.io/v1beta1",
+		},
+		Status: authenticationv1beta1.TokenReviewStatus{
+			Authenticated: true,
+			User: authenticationv1beta1.UserInfo{
+				Username: user,
+				Groups:   groups,
+				UID:      uid,
+			},
+		},
 	}
-
-	// Very specific expected result. Avoid using json package so we know exactly what we're asserting.
-	authenticatedJSONTemplate := `{
-	  "apiVersion": "authentication.k8s.io/v1beta1",
-	  "kind": "TokenReview",
-	  "status": {
-		"authenticated": true,
-		"user": {
-		  "username": "%s",
-		  "uid": "%s",
-		  "groups": [%s]
-		}
-	  }
-	}`
-
-	s := fmt.Sprintf(authenticatedJSONTemplate, user, uid, strings.Join(quotedGroups, ","))
-	return &s
 }
 
 func addSecretToFakeClientTracker(t *testing.T, kubeClient *kubernetesfake.Clientset, username, uid, password, groups string) {

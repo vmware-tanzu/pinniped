@@ -395,7 +395,7 @@ func newCertProvider(t *testing.T) (provider.DynamicTLSServingCertProvider, []by
 	serverName := "local-user-authenticator"
 	cert, err := ca.Issue(
 		pkix.Name{CommonName: serverName},
-		[]string{},
+		[]string{serverName},
 		time.Hour*24,
 	)
 	require.NoError(t, err)

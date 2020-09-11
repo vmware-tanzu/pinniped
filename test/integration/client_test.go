@@ -57,7 +57,7 @@ var maskKey = func(s string) string { return strings.ReplaceAll(s, "TESTING KEY"
 func TestClient(t *testing.T) {
 	library.SkipUnlessIntegration(t)
 	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
-	token := library.GetEnv(t, "PINNIPED_CREDENTIAL_REQUEST_TOKEN")
+	token := library.GetEnv(t, "PINNIPED_TEST_USER_TOKEN")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

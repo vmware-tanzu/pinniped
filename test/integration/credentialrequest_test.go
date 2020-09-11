@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +29,10 @@ import (
 func TestSuccessfulCredentialRequest(t *testing.T) {
 	library.SkipUnlessIntegration(t)
 	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
+	testUsername := library.GetEnv(t, "PINNIPED_TEST_USER_USERNAME")
+	expectedTestUserGroups := strings.Split(
+		strings.ReplaceAll(library.GetEnv(t, "PINNIPED_TEST_USER_GROUPS"), " ", ""), ",",
+	)
 
 	response, err := makeRequest(t, validCredentialRequestSpecWithRealToken(t))
 	require.NoError(t, err)
@@ -39,6 +44,8 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 	require.NotNil(t, response.Status.Credential)
 	require.Empty(t, response.Status.Credential.Token)
 	require.NotEmpty(t, response.Status.Credential.ClientCertificateData)
+	require.Equal(t, testUsername, getCommonName(t, response.Status.Credential.ClientCertificateData))
+	require.ElementsMatch(t, expectedTestUserGroups, getOrganizations(t, response.Status.Credential.ClientCertificateData))
 	require.NotEmpty(t, response.Status.Credential.ClientKeyData)
 	require.NotNil(t, response.Status.Credential.ExpirationTimestamp)
 	require.InDelta(t, time.Until(response.Status.Credential.ExpirationTimestamp.Time), 1*time.Hour, float64(3*time.Minute))
@@ -65,7 +72,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 			Subjects: []rbacv1.Subject{{
 				Kind:     rbacv1.UserKind,
 				APIGroup: rbacv1.GroupName,
-				Name:     getCommonName(t, response.Status.Credential.ClientCertificateData),
+				Name:     testUsername,
 			}},
 			RoleRef: rbacv1.RoleRef{
 				Kind:     "ClusterRole",
@@ -85,7 +92,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	})
 
-	for _, group := range getOrganizationalUnits(t, response.Status.Credential.ClientCertificateData) {
+	for _, group := range expectedTestUserGroups {
 		t.Run("access as group "+group, func(t *testing.T) {
 			addTestClusterRoleBinding(ctx, t, adminClient, &rbacv1.ClusterRoleBinding{
 				TypeMeta: metav1.TypeMeta{},
@@ -185,8 +192,7 @@ func makeRequest(t *testing.T, spec v1alpha1.CredentialRequestSpec) (*v1alpha1.C
 }
 
 func validCredentialRequestSpecWithRealToken(t *testing.T) v1alpha1.CredentialRequestSpec {
-	token := library.GetEnv(t, "PINNIPED_CREDENTIAL_REQUEST_TOKEN")
-
+	token := library.GetEnv(t, "PINNIPED_TEST_USER_TOKEN")
 	return v1alpha1.CredentialRequestSpec{
 		Type:  v1alpha1.TokenCredentialType,
 		Token: &v1alpha1.CredentialRequestTokenCredential{Value: token},
@@ -227,12 +233,12 @@ func getCommonName(t *testing.T, certPEM string) string {
 	return cert.Subject.CommonName
 }
 
-func getOrganizationalUnits(t *testing.T, certPEM string) []string {
+func getOrganizations(t *testing.T, certPEM string) []string {
 	t.Helper()
 
 	pemBlock, _ := pem.Decode([]byte(certPEM))
 	cert, err := x509.ParseCertificate(pemBlock.Bytes)
 	require.NoError(t, err)
 
-	return cert.Subject.OrganizationalUnit
+	return cert.Subject.Organization
 }

@@ -12,34 +12,6 @@
 
 set -euo pipefail
 
-function print_or_redact_doc() {
-  doc_kind=$(echo "$1" | awk '/^kind: / {print $2}')
-  if [[ -z "$doc_kind" ]]; then
-    echo "warning: <empty kind>"
-  elif [[ $doc_kind == "Secret" || $doc_kind == "secret" ]]; then
-    echo
-    echo "---"
-    echo "<SECRET REDACTED>"
-  else
-    printf "%s\n" "$1"
-  fi
-}
-
-function print_redacted_manifest() {
-  doc=""
-  while IFS="" read -r line || [ -n "$line" ]; do
-    if [[ $line == "---" ]]; then
-      if [[ -n "$doc" ]]; then
-        print_or_redact_doc "$doc"
-      fi
-      doc=""
-    fi
-    doc=$(printf "%s\n%s" "$doc" "$line")
-  done <"$1"
-
-  print_or_redact_doc "$doc"
-}
-
 function log_note() {
   GREEN='\033[0;32m'
   NC='\033[0m'
@@ -221,23 +193,21 @@ else
     --data-value "image_repo=$registry_repo" \
     --data-value "image_tag=$tag" >"$manifest"
 
-  echo
-  log_note "Full local-user-authenticator app manifest with Secrets redacted..."
-  echo "--------------------------------------------------------------------------------"
-  print_redacted_manifest $manifest
-  echo "--------------------------------------------------------------------------------"
-  echo
-
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
   kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
 
   popd >/dev/null
 
-  log_note "Creating test user 'test-username'..."
   test_username="test-username"
-  # TODO AUTO-GENERATE PASSWORD
-  test_password="test-password"
   test_groups="test-group-0,test-group-1"
+  set +o pipefail
+  test_password="$(cat /dev/urandom | env LC_CTYPE=C tr -dc 'a-z0-9' | fold -w 32 | head -n 1)"
+  set -o pipefail
+  if [[ ${#test_password} -ne 32 ]]; then
+    log_error "Could not create random test user password"
+    exit 1
+  fi
+  echo "Creating test user '$test_username'..."
   kubectl create secret generic "$test_username" \
     --namespace local-user-authenticator \
     --from-literal=groups="$test_groups" \
@@ -267,13 +237,6 @@ else
     --data-value "webhook_ca_bundle=$webhook_ca_bundle" \
     --data-value "discovery_url=$discovery_url" >"$manifest"
 
-  echo
-  log_note "Full Pinniped app manifest with Secrets redacted..."
-  echo "--------------------------------------------------------------------------------"
-  print_redacted_manifest $manifest
-  echo "--------------------------------------------------------------------------------"
-  echo
-
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
   kapp deploy --yes --app "$app_name" --diff-changes --file "$manifest"
 
@@ -286,7 +249,9 @@ else
 # The following env vars should be set before running 'cd test && go test ./...'
 export PINNIPED_NAMESPACE=${namespace}
 export PINNIPED_APP_NAME=${app_name}
-export PINNIPED_CREDENTIAL_REQUEST_TOKEN=${test_username}:${test_password}
+export PINNIPED_TEST_USER_USERNAME=${test_username}
+export PINNIPED_TEST_USER_GROUPS=${test_groups}
+export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
 
 read -r -d '' PINNIPED_CLUSTER_CAPABILITY_YAML << PINNIPED_CLUSTER_CAPABILITY_YAML_EOF || true
 ${pinniped_cluster_capability_file_content}

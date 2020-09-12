@@ -29,6 +29,7 @@ import (
 	"github.com/suzerain-io/pinniped/internal/controller/issuerconfig"
 	"github.com/suzerain-io/pinniped/internal/controllermanager"
 	"github.com/suzerain-io/pinniped/internal/downward"
+	"github.com/suzerain-io/pinniped/internal/here"
 	"github.com/suzerain-io/pinniped/internal/provider"
 	"github.com/suzerain-io/pinniped/internal/registry/credentialrequest"
 	"github.com/suzerain-io/pinniped/pkg/config"
@@ -62,10 +63,11 @@ func (a *App) Run() error {
 // Create the server command and save it into the App.
 func (a *App) addServerCommand(ctx context.Context, args []string, stdout, stderr io.Writer) {
 	cmd := &cobra.Command{
-		Use: `pinniped-server`,
-		Long: "pinniped-server provides a generic API for mapping an external\n" +
-			"credential from somewhere to an internal credential to be used for\n" +
-			"authenticating to the Kubernetes API.",
+		Use: "pinniped-server",
+		Long: here.Doc(`
+			pinniped-server provides a generic API for mapping an external
+			credential from somewhere to an internal credential to be used for
+			authenticating to the Kubernetes API.`),
 		RunE: func(cmd *cobra.Command, args []string) error { return a.runServer(ctx) },
 		Args: cobra.NoArgs,
 	}

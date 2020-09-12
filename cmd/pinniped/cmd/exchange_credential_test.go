@@ -3,7 +3,7 @@ Copyright 2020 VMware, Inc.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package main
+package cmd
 
 import (
 	"bytes"
@@ -21,8 +21,8 @@ import (
 	"github.com/suzerain-io/pinniped/internal/testutil"
 )
 
-func TestRun(t *testing.T) {
-	spec.Run(t, "main.run", func(t *testing.T, when spec.G, it spec.S) {
+func TestExchangeCredential(t *testing.T) {
+	spec.Run(t, "cmd.exchangeCredential", func(t *testing.T, when spec.G, it spec.S) {
 		var r *require.Assertions
 		var buffer *bytes.Buffer
 		var tokenExchanger tokenExchanger
@@ -49,19 +49,19 @@ func TestRun(t *testing.T) {
 		when("env vars are missing", func() {
 			it("returns an error when PINNIPED_TOKEN is missing", func() {
 				delete(fakeEnv, "PINNIPED_TOKEN")
-				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
+				err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
 				r.EqualError(err, "failed to get credential: environment variable not set: PINNIPED_TOKEN")
 			})
 
 			it("returns an error when PINNIPED_CA_BUNDLE is missing", func() {
 				delete(fakeEnv, "PINNIPED_CA_BUNDLE")
-				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
+				err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
 				r.EqualError(err, "failed to get credential: environment variable not set: PINNIPED_CA_BUNDLE")
 			})
 
 			it("returns an error when PINNIPED_K8S_API_ENDPOINT is missing", func() {
 				delete(fakeEnv, "PINNIPED_K8S_API_ENDPOINT")
-				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
+				err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
 				r.EqualError(err, "failed to get credential: environment variable not set: PINNIPED_K8S_API_ENDPOINT")
 			})
 		})
@@ -74,7 +74,7 @@ func TestRun(t *testing.T) {
 			})
 
 			it("returns an error", func() {
-				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
+				err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
 				r.EqualError(err, "failed to get credential: some error")
 			})
 		})
@@ -91,7 +91,7 @@ func TestRun(t *testing.T) {
 			})
 
 			it("returns an error", func() {
-				err := run(envGetter, tokenExchanger, &testutil.ErrorWriter{ReturnError: fmt.Errorf("some IO error")}, 30*time.Second)
+				err := exchangeCredential(envGetter, tokenExchanger, &testutil.ErrorWriter{ReturnError: fmt.Errorf("some IO error")}, 30*time.Second)
 				r.EqualError(err, "failed to marshal response to stdout: some IO error")
 			})
 		})
@@ -113,7 +113,7 @@ func TestRun(t *testing.T) {
 			})
 
 			it("returns an error", func() {
-				err := run(envGetter, tokenExchanger, buffer, 1*time.Millisecond)
+				err := exchangeCredential(envGetter, tokenExchanger, buffer, 1*time.Millisecond)
 				r.EqualError(err, "failed to get credential: context deadline exceeded")
 			})
 		})
@@ -141,7 +141,7 @@ func TestRun(t *testing.T) {
 			})
 
 			it("writes the execCredential to the given writer", func() {
-				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
+				err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
 				r.NoError(err)
 				r.Equal(fakeEnv["PINNIPED_TOKEN"], actualToken)
 				r.Equal(fakeEnv["PINNIPED_CA_BUNDLE"], actualCaBundle)

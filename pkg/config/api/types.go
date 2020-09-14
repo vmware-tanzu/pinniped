@@ -7,21 +7,8 @@ package api
 
 // Config contains knobs to setup an instance of pinniped.
 type Config struct {
-	WebhookConfig WebhookConfigSpec `json:"webhook"`
 	DiscoveryInfo DiscoveryInfoSpec `json:"discovery"`
 	APIConfig     APIConfigSpec     `json:"api"`
-}
-
-// WebhookConfig contains configuration knobs specific to pinniped's use
-// of a webhook for token validation.
-type WebhookConfigSpec struct {
-	// URL contains the URL of the webhook that pinniped will use
-	// to validate external credentials.
-	URL string `json:"url"`
-
-	// CABundle contains PEM-encoded certificate authority certificates used
-	// to validate TLS connections to the WebhookURL.
-	CABundle []byte `json:"caBundle"`
 }
 
 // DiscoveryInfoSpec contains configuration knobs specific to

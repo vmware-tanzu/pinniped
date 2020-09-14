@@ -11,16 +11,23 @@ import (
 	"github.com/suzerain-io/pinniped/internal/controllerlib"
 )
 
-func NameAndNamespaceExactMatchFilterFactory(name, namespace string) controllerlib.FilterFuncs {
-	objMatchesFunc := func(obj metav1.Object) bool {
+func NameAndNamespaceExactMatchFilterFactory(name, namespace string) controllerlib.Filter {
+	return SimpleFilter(func(obj metav1.Object) bool {
 		return obj.GetName() == name && obj.GetNamespace() == namespace
-	}
+	})
+}
+
+// NoOpFilter returns a controllerlib.Filter that allows all objects.
+func NoOpFilter() controllerlib.Filter {
+	return SimpleFilter(func(object metav1.Object) bool { return true })
+}
+
+// SimpleFilter takes a single boolean match function on a metav1.Object and wraps it into a proper controllerlib.Filter.
+func SimpleFilter(match func(metav1.Object) bool) controllerlib.Filter {
 	return controllerlib.FilterFuncs{
-		AddFunc: objMatchesFunc,
-		UpdateFunc: func(oldObj, newObj metav1.Object) bool {
-			return objMatchesFunc(oldObj) || objMatchesFunc(newObj)
-		},
-		DeleteFunc: objMatchesFunc,
+		AddFunc:    match,
+		UpdateFunc: func(oldObj, newObj metav1.Object) bool { return match(oldObj) || match(newObj) },
+		DeleteFunc: match,
 	}
 }
 

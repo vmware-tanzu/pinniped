@@ -26,6 +26,7 @@ import (
 	pinnipedclientset "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned"
 	"github.com/suzerain-io/pinniped/internal/apiserver"
 	"github.com/suzerain-io/pinniped/internal/certauthority/kubecertauthority"
+	"github.com/suzerain-io/pinniped/internal/controller/identityprovider/idpcache"
 	"github.com/suzerain-io/pinniped/internal/controller/issuerconfig"
 	"github.com/suzerain-io/pinniped/internal/controllermanager"
 	"github.com/suzerain-io/pinniped/internal/downward"
@@ -118,11 +119,8 @@ func (a *App) runServer(ctx context.Context) error {
 	}
 	defer shutdownCA()
 
-	// Create a WebhookTokenAuthenticator.
-	webhookTokenAuthenticator, err := config.NewWebhook(cfg.WebhookConfig)
-	if err != nil {
-		return fmt.Errorf("could not create webhook client: %w", err)
-	}
+	// Initialize the cache of active identity providers.
+	idpCache := idpcache.New()
 
 	// This cert provider will provide certs to the API server and will
 	// be mutated by a controller to keep the certs up to date with what
@@ -139,6 +137,7 @@ func (a *App) runServer(ctx context.Context) error {
 		dynamicCertProvider,
 		time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds)*time.Second,
 		time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds)*time.Second,
+		idpCache,
 	)
 	if err != nil {
 		return fmt.Errorf("could not prepare controllers: %w", err)
@@ -147,7 +146,7 @@ func (a *App) runServer(ctx context.Context) error {
 	// Get the aggregated API server config.
 	aggregatedAPIServerConfig, err := getAggregatedAPIServerConfig(
 		dynamicCertProvider,
-		webhookTokenAuthenticator,
+		idpCache,
 		k8sClusterCA,
 		startControllersFunc,
 	)

@@ -1,7 +1,7 @@
 # Project Scope
 
 The Pinniped project is guided by the following principles.
-* Pinniped lets you plug any upstream identitiy providers into
+* Pinniped lets you plug any external identitiy providers into
   Kubernetes. These integrations follow enterprise-grade security principles.
 * Pinniped is easy to install and use on any Kubernetes cluster via
   distribution-specific integration mechanisms.
@@ -10,7 +10,7 @@ The Pinniped project is guided by the following principles.
   clusters at one time.
 * Pinniped provides enterprise-grade security posture via secure defaults and
   revocable or very short-lived credentials.
-* Where possible, Pinniped will contribute ideas and code to upstream
+* Where possible, Pinniped will contribute ideas and code to external
   Kubernetes.
 
 When contributing to Pinniped, please consider whether your contribution follows

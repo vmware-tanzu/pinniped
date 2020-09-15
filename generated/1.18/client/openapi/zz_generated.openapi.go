@@ -531,7 +531,8 @@ func schema_118_apis_pinniped_v1alpha1_CredentialRequest(ref common.ReferenceCal
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "CredentialRequest submits an IDP-specific credential to Pinniped in exchange for a cluster-specific credential.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
 						SchemaProps: spec.SchemaProps{
@@ -574,7 +575,8 @@ func schema_118_apis_pinniped_v1alpha1_CredentialRequestCredential(ref common.Re
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "CredentialRequestCredential is the cluster-specific credential returned on a successful CredentialRequest. It contains either a valid bearer token or a valid TLS certificate and corresponding private key for the cluster.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"expirationTimestamp": {
 						SchemaProps: spec.SchemaProps{
@@ -662,7 +664,8 @@ func schema_118_apis_pinniped_v1alpha1_CredentialRequestSpec(ref common.Referenc
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "CredentialRequestSpec is the specification of a CredentialRequest, expected on requests to the Pinniped API",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"type": {
 						SchemaProps: spec.SchemaProps{
@@ -689,7 +692,8 @@ func schema_118_apis_pinniped_v1alpha1_CredentialRequestStatus(ref common.Refere
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "CredentialRequestStatus is the status of a CredentialRequest, returned on responses to the Pinniped API.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"credential": {
 						SchemaProps: spec.SchemaProps{
@@ -716,7 +720,8 @@ func schema_118_apis_pinniped_v1alpha1_CredentialRequestTokenCredential(ref comm
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "CredentialRequestTokenCredential holds a bearer token issued by an upstream identity provider.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"value": {
 						SchemaProps: spec.SchemaProps{

@@ -88,6 +88,12 @@ check_dependency kapp "Please install kapp. e.g. 'brew tap k14s/tap && brew inst
 check_dependency kubectl "Please install kubectl. e.g. 'brew install kubectl' for MacOS"
 check_dependency htpasswd "Please install htpasswd. Should be pre-installed on MacOS. Usually found in 'apache2-utils' package for linux."
 
+# Require kubectl >= 1.18.x
+if [ "$(kubectl version --client=true --short | cut -d '.' -f 2)" -lt 18 ]; then
+  echo "kubectl >= 1.18.x is required, you have $(kubectl version --client=true --short | cut -d ':' -f2)"
+  exit 1
+fi
+
 #
 # Setup kind and build the app
 #

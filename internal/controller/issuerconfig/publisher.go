@@ -24,10 +24,10 @@ import (
 const (
 	ClusterInfoNamespace = "kube-public"
 
+	ConfigName = "pinniped-config"
+
 	clusterInfoName         = "cluster-info"
 	clusterInfoConfigMapKey = "kubeconfig"
-
-	configName = "pinniped-config"
 )
 
 type publisherController struct {
@@ -64,7 +64,7 @@ func NewPublisherController(
 		),
 		withInformer(
 			credentialIssuerConfigInformer,
-			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(configName, namespace),
+			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(ConfigName, namespace),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -114,7 +114,7 @@ func (c *publisherController) Sync(ctx controllerlib.Context) error {
 	existingCredentialIssuerConfigFromInformerCache, err := c.credentialIssuerConfigInformer.
 		Lister().
 		CredentialIssuerConfigs(c.namespace).
-		Get(configName)
+		Get(ConfigName)
 	notFound = k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return fmt.Errorf("could not get credentialissuerconfig: %w", err)
@@ -131,7 +131,7 @@ func (c *publisherController) Sync(ctx controllerlib.Context) error {
 		ctx.Context,
 		existingCredentialIssuerConfigFromInformerCache,
 		notFound,
-		configName,
+		ConfigName,
 		c.namespace,
 		c.pinnipedClient,
 		updateServerAndCAFunc)

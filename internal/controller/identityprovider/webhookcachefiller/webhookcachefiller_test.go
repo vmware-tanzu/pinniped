@@ -159,7 +159,7 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 		spec := &idpv1alpha1.WebhookIdentityProviderSpec{
 			Endpoint: url,
 			TLS: &idpv1alpha1.TLSSpec{
-				CertificateAuthorityData: base64.RawStdEncoding.EncodeToString([]byte(caBundle)),
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(caBundle)),
 			},
 		}
 		res, err := newWebhookAuthenticator(spec, ioutil.TempFile, clientcmd.WriteToFile)

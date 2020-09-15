@@ -10,7 +10,7 @@ The Pinniped project is guided by the following principles.
   clusters at one time.
 * Pinniped provides enterprise-grade security posture via secure defaults and
   revocable or very short-lived credentials.
-* Where possible, Pinniped will contribute ideas and code to external
+* Where possible, Pinniped will contribute ideas and code to upstream
   Kubernetes.
 
 When contributing to Pinniped, please consider whether your contribution follows

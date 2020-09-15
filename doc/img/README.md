@@ -1,8 +1,12 @@
-# README
+# `doc/img` README
 
-Note! Some of the image files in this directory (e.g.,
-[pinniped.svg](pinniped.svg)) were generated using
-[`plantuml`](https://plantuml.com/). To use `plantuml` to regenerate the image
-files, you simply run `plantuml -tsvg <file.txt>` from this directory. For
-example, to regenerate [pinniped.svg](pinniped.svg), run `plantuml -tsvg
-pinniped.txt`.
+## How to Update these Images
+
+- [pinniped.svg](pinniped.svg) was generated using [`plantuml`](https://plantuml.com/).
+  To regenerate the image, run `plantuml -tsvg pinniped.txt` from this directory.
+
+- [pinniped_architecture.svg](pinniped_architecture.svg) was created on [draw.io](https://draw.io).
+  It can be opened again for editing on that site by choosing "File" -> "Open from" -> "Device".
+  Because it includes embedded icons it should be exported using "File" -> "Export as" -> "SVG",
+  with the "Transparent Background", "Embed Images", and "Include a copy of my diagram" options
+  checked. The icons in this diagram are from their "CAE" shapes set.

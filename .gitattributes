@@ -1,0 +1,2 @@
+*.go.tmpl linguist-language=Go
+generated/** linguist-generated

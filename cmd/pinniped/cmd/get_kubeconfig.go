@@ -169,7 +169,7 @@ func getKubeConfig(
 	kubeClientCreator func(restConfig *rest.Config) (pinnipedclientset.Interface, error),
 ) error {
 	if token == "" {
-		return fmt.Errorf("--" + getKubeConfigCmdTokenFlagName + " flag value cannot be empty")
+		return constable.Error("--" + getKubeConfigCmdTokenFlagName + " flag value cannot be empty")
 	}
 
 	fullPathToSelf, err := os.Executable()
@@ -193,7 +193,7 @@ func getKubeConfig(
 		return constable.Error(`CredentialIssuerConfig "pinniped-config" was missing KubeConfigInfo`)
 	}
 
-	v1Cluster, err := copyCurrentClusterFromExistingKubeConfig(err, currentKubeConfig, currentContextNameOverride)
+	v1Cluster, err := copyCurrentClusterFromExistingKubeConfig(currentKubeConfig, currentContextNameOverride)
 	if err != nil {
 		return err
 	}
@@ -244,12 +244,12 @@ func fetchPinnipedCredentialIssuerConfig(clientConfig clientcmd.ClientConfig, ku
 	credentialIssuerConfig, err := clientset.CrdV1alpha1().CredentialIssuerConfigs(pinnipedInstallationNamespace).Get(ctx, issuerconfig.ConfigName, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf(
+			return nil, constable.Error(fmt.Sprintf(
 				`CredentialIssuerConfig "%s" was not found in namespace "%s". Is Pinniped installed on this cluster in namespace "%s"?`,
 				issuerconfig.ConfigName,
 				pinnipedInstallationNamespace,
 				pinnipedInstallationNamespace,
-			)
+			))
 		}
 		return nil, err
 	}
@@ -280,7 +280,7 @@ func writeConfigAsYAML(outputWriter io.Writer, config v1.Config) error {
 	return nil
 }
 
-func copyCurrentClusterFromExistingKubeConfig(err error, currentKubeConfig clientcmdapi.Config, currentContextNameOverride string) (v1.Cluster, error) {
+func copyCurrentClusterFromExistingKubeConfig(currentKubeConfig clientcmdapi.Config, currentContextNameOverride string) (v1.Cluster, error) {
 	v1Cluster := v1.Cluster{}
 
 	contextName := currentKubeConfig.CurrentContext
@@ -288,7 +288,7 @@ func copyCurrentClusterFromExistingKubeConfig(err error, currentKubeConfig clien
 		contextName = currentContextNameOverride
 	}
 
-	err = v1.Convert_api_Cluster_To_v1_Cluster(
+	err := v1.Convert_api_Cluster_To_v1_Cluster(
 		currentKubeConfig.Clusters[currentKubeConfig.Contexts[contextName].Cluster],
 		&v1Cluster,
 		nil,

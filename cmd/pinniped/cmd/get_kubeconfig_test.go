@@ -201,6 +201,7 @@ func TestNewGetKubeConfigCmd(t *testing.T) {
 	}, spec.Parallel(), spec.Report(report.Terminal{}))
 }
 
+//nolint: unparam
 func expectedKubeconfigYAML(clusterCAData, clusterServer, command, token, pinnipedEndpoint, pinnipedCABundle string) string {
 	return here.Docf(`
 		apiVersion: v1
@@ -636,6 +637,5 @@ func TestGetKubeConfig(t *testing.T) {
 				r.Empty(outputBuffer.String())
 			})
 		})
-
 	}, spec.Parallel(), spec.Report(report.Terminal{}))
 }

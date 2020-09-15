@@ -36,6 +36,22 @@ func NewClientset(t *testing.T) kubernetes.Interface {
 	return newClientsetWithConfig(t, NewClientConfig(t))
 }
 
+func NewClientsetForKubeConfig(t *testing.T, kubeConfig string) kubernetes.Interface {
+	t.Helper()
+
+	kubeConfigFile, err := ioutil.TempFile("", "pinniped-cli-test-*")
+	require.NoError(t, err)
+	defer os.Remove(kubeConfigFile.Name())
+
+	_, err = kubeConfigFile.Write([]byte(kubeConfig))
+	require.NoError(t, err)
+
+	restConfig, err := clientcmd.BuildConfigFromFlags("", kubeConfigFile.Name())
+	require.NoError(t, err)
+
+	return newClientsetWithConfig(t, restConfig)
+}
+
 func NewClientsetWithCertAndKey(t *testing.T, clientCertificateData, clientKeyData string) kubernetes.Interface {
 	t.Helper()
 

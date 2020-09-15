@@ -4,6 +4,7 @@ processor:
   #  Ignore internal API versions
   ignoreGroupVersions:
     - "crd.pinniped.dev/crdpinniped"
+    - "idp.pinniped.dev/idp"
     - "pinniped.dev/pinniped"
   ignoreFields:
     - "TypeMeta$"

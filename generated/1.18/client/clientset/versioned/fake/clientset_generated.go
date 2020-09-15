@@ -11,6 +11,8 @@ import (
 	clientset "github.com/suzerain-io/pinniped/generated/1.18/client/clientset/versioned"
 	crdv1alpha1 "github.com/suzerain-io/pinniped/generated/1.18/client/clientset/versioned/typed/crdpinniped/v1alpha1"
 	fakecrdv1alpha1 "github.com/suzerain-io/pinniped/generated/1.18/client/clientset/versioned/typed/crdpinniped/v1alpha1/fake"
+	idpv1alpha1 "github.com/suzerain-io/pinniped/generated/1.18/client/clientset/versioned/typed/idp/v1alpha1"
+	fakeidpv1alpha1 "github.com/suzerain-io/pinniped/generated/1.18/client/clientset/versioned/typed/idp/v1alpha1/fake"
 	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.18/client/clientset/versioned/typed/pinniped/v1alpha1"
 	fakepinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.18/client/clientset/versioned/typed/pinniped/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -70,6 +72,11 @@ var _ clientset.Interface = &Clientset{}
 // CrdV1alpha1 retrieves the CrdV1alpha1Client
 func (c *Clientset) CrdV1alpha1() crdv1alpha1.CrdV1alpha1Interface {
 	return &fakecrdv1alpha1.FakeCrdV1alpha1{Fake: &c.Fake}
+}
+
+// IDPV1alpha1 retrieves the IDPV1alpha1Client
+func (c *Clientset) IDPV1alpha1() idpv1alpha1.IDPV1alpha1Interface {
+	return &fakeidpv1alpha1.FakeIDPV1alpha1{Fake: &c.Fake}
 }
 
 // PinnipedV1alpha1 retrieves the PinnipedV1alpha1Client

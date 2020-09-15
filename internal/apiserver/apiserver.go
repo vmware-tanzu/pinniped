@@ -57,7 +57,7 @@ type Config struct {
 }
 
 type ExtraConfig struct {
-	Webhook                       authenticator.Token
+	TokenAuthenticator            authenticator.Token
 	Issuer                        credentialrequest.CertIssuer
 	StartControllersPostStartHook func(ctx context.Context)
 }
@@ -111,7 +111,7 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 		NegotiatedSerializer:         Codecs,
 	}
 
-	credentialRequestStorage := credentialrequest.NewREST(c.ExtraConfig.Webhook, c.ExtraConfig.Issuer)
+	credentialRequestStorage := credentialrequest.NewREST(c.ExtraConfig.TokenAuthenticator, c.ExtraConfig.Issuer)
 
 	v1alpha1Storage, ok := apiGroupInfo.VersionedResourcesStorageMap[gvr.Version]
 	if !ok {

@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	crdv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned/typed/crdpinniped/v1alpha1"
+	idpv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned/typed/idp/v1alpha1"
 	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned/typed/pinniped/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
@@ -20,6 +21,7 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	CrdV1alpha1() crdv1alpha1.CrdV1alpha1Interface
+	IDPV1alpha1() idpv1alpha1.IDPV1alpha1Interface
 	PinnipedV1alpha1() pinnipedv1alpha1.PinnipedV1alpha1Interface
 }
 
@@ -28,12 +30,18 @@ type Interface interface {
 type Clientset struct {
 	*discovery.DiscoveryClient
 	crdV1alpha1      *crdv1alpha1.CrdV1alpha1Client
+	iDPV1alpha1      *idpv1alpha1.IDPV1alpha1Client
 	pinnipedV1alpha1 *pinnipedv1alpha1.PinnipedV1alpha1Client
 }
 
 // CrdV1alpha1 retrieves the CrdV1alpha1Client
 func (c *Clientset) CrdV1alpha1() crdv1alpha1.CrdV1alpha1Interface {
 	return c.crdV1alpha1
+}
+
+// IDPV1alpha1 retrieves the IDPV1alpha1Client
+func (c *Clientset) IDPV1alpha1() idpv1alpha1.IDPV1alpha1Interface {
+	return c.iDPV1alpha1
 }
 
 // PinnipedV1alpha1 retrieves the PinnipedV1alpha1Client
@@ -66,6 +74,10 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+	cs.iDPV1alpha1, err = idpv1alpha1.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 	cs.pinnipedV1alpha1, err = pinnipedv1alpha1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
@@ -83,6 +95,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
 	cs.crdV1alpha1 = crdv1alpha1.NewForConfigOrDie(c)
+	cs.iDPV1alpha1 = idpv1alpha1.NewForConfigOrDie(c)
 	cs.pinnipedV1alpha1 = pinnipedv1alpha1.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
@@ -93,6 +106,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.crdV1alpha1 = crdv1alpha1.New(c)
+	cs.iDPV1alpha1 = idpv1alpha1.New(c)
 	cs.pinnipedV1alpha1 = pinnipedv1alpha1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)

@@ -27,10 +27,6 @@ func TestFromPath(t *testing.T) {
 				DiscoveryInfo: api.DiscoveryInfoSpec{
 					URL: stringPtr("https://some.discovery/url"),
 				},
-				WebhookConfig: api.WebhookConfigSpec{
-					URL:      "https://tuna.com/fish?marlin",
-					CABundle: []byte("-----BEGIN CERTIFICATE-----..."),
-				},
 				APIConfig: api.APIConfigSpec{
 					ServingCertificateConfig: api.ServingCertificateConfigSpec{
 						DurationSeconds:    int64Ptr(3600),
@@ -45,10 +41,6 @@ func TestFromPath(t *testing.T) {
 			wantConfig: &api.Config{
 				DiscoveryInfo: api.DiscoveryInfoSpec{
 					URL: nil,
-				},
-				WebhookConfig: api.WebhookConfigSpec{
-					URL:      "https://tuna.com/fish?marlin",
-					CABundle: []byte("-----BEGIN CERTIFICATE-----..."),
 				},
 				APIConfig: api.APIConfigSpec{
 					ServingCertificateConfig: api.ServingCertificateConfigSpec{

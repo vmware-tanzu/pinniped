@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	v1alpha1 "github.com/suzerain-io/pinniped/generated/1.18/apis/crdpinniped/v1alpha1"
+	idpv1alpha1 "github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1"
 	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.18/apis/pinniped/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
@@ -45,6 +46,10 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=crd.pinniped.dev, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("credentialissuerconfigs"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha1().CredentialIssuerConfigs().Informer()}, nil
+
+		// Group=idp.pinniped.dev, Version=v1alpha1
+	case idpv1alpha1.SchemeGroupVersion.WithResource("webhookidentityproviders"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.IDP().V1alpha1().WebhookIdentityProviders().Informer()}, nil
 
 		// Group=pinniped.dev, Version=v1alpha1
 	case pinnipedv1alpha1.SchemeGroupVersion.WithResource("credentialrequests"):

@@ -189,7 +189,6 @@ ytt --file . \
   --data-value "webhook_ca_bundle=$webhook_ca_bundle" \
   --data-value "discovery_url=$discovery_url" >"$manifest"
 
-kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
 kapp deploy --yes --app "$app_name" --diff-changes --file "$manifest"
 
 popd >/dev/null

@@ -10,6 +10,8 @@ relationship) and returns a credential which is understood by the host
 Kubernetes cluster. To learn more about this integration, see [Cluster
 Integration Strategies](#cluster-integration-strategies).
 
+<img src="img/pinniped_architecture.svg" alt="Pinniped Architecture Sketch" width="300px"/>
+
 ## External Identity Provider Integrations
 
 Pinniped will consume identity from one or more external identity providers
@@ -61,7 +63,3 @@ built with the [Pinniped Go client library](generated).
 ## Example Cluster Authentication Sequence Diagram
 
 ![example-cluster-authentication-sequence-diagram](img/pinniped.svg)
-
-## Example Deployment Architecture
-
-![example-deployment-architecture](img/pinniped-architecture.svg)

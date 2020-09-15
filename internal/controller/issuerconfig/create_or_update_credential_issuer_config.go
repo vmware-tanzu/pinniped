@@ -28,7 +28,7 @@ func CreateOrUpdateCredentialIssuerConfig(
 		existingCredentialIssuerConfig, err := pinnipedClient.
 			CrdV1alpha1().
 			CredentialIssuerConfigs(credentialIssuerConfigNamespace).
-			Get(ctx, configName, metav1.GetOptions{})
+			Get(ctx, ConfigName, metav1.GetOptions{})
 
 		notFound := k8serrors.IsNotFound(err)
 		if err != nil && !notFound {
@@ -39,7 +39,7 @@ func CreateOrUpdateCredentialIssuerConfig(
 			ctx,
 			existingCredentialIssuerConfig,
 			notFound,
-			configName,
+			ConfigName,
 			credentialIssuerConfigNamespace,
 			pinnipedClient,
 			applyUpdatesToCredentialIssuerConfigFunc)

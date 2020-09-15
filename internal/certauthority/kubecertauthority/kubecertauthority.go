@@ -17,6 +17,7 @@ import (
 
 	"github.com/spf13/pflag"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/deprecated/scheme"
 	"k8s.io/client-go/kubernetes"
@@ -134,7 +135,7 @@ func New(
 }
 
 func createSignerWithAPIServerSecret(kubeClient kubernetes.Interface, podCommandExecutor PodCommandExecutor) (signer, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	pod, err := findControllerManagerPod(ctx, kubeClient)
@@ -143,17 +144,66 @@ func createSignerWithAPIServerSecret(kubeClient kubernetes.Interface, podCommand
 	}
 	certPath, keyPath := getKeypairFilePaths(pod)
 
-	certPEM, err := podCommandExecutor.Exec(pod.Namespace, pod.Name, "cat", certPath)
+	f := false
+	newPod, err := kubeClient.CoreV1().Pods(pod.Namespace).Create(ctx, &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "pinniped-signer-",
+			Namespace:    pod.Namespace,
+		},
+		Spec: v1.PodSpec{
+			Volumes: pod.Spec.Volumes,
+			Containers: []v1.Container{
+				{
+					Name:    "pinniped-signer",
+					Image:   "busybox@sha256:d366a4665ab44f0648d7a00ae3fae139d55e32f9712c67accd604bb55df9d05a",
+					Command: []string{"/bin/sleep", "60"},
+					Resources: v1.ResourceRequirements{
+						Limits: v1.ResourceList{
+							v1.ResourceMemory: resource.MustParse("16Mi"),
+							v1.ResourceCPU:    resource.MustParse("10m"),
+						},
+						Requests: v1.ResourceList{
+							v1.ResourceMemory: resource.MustParse("16Mi"),
+							v1.ResourceCPU:    resource.MustParse("10m"),
+						},
+					},
+					VolumeMounts: pod.Spec.Containers[0].VolumeMounts,
+				},
+			},
+			RestartPolicy:                v1.RestartPolicyNever,
+			NodeSelector:                 pod.Spec.NodeSelector,
+			AutomountServiceAccountToken: &f,
+			NodeName:                     pod.Spec.NodeName,
+			Tolerations:                  pod.Spec.Tolerations,
+		},
+	}, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	keyPEM, err := podCommandExecutor.Exec(pod.Namespace, pod.Name, "cat", keyPath)
-	if err != nil {
-		return nil, err
-	}
+	defer func() {
+		zero := int64(0)
+		_ = kubeClient.CoreV1().Pods(newPod.Namespace).Delete(ctx, newPod.Name, metav1.DeleteOptions{GracePeriodSeconds: &zero})
+	}()
 
-	return certauthority.Load(certPEM, keyPEM)
+	for {
+		if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) < 5*time.Second {
+			return nil, fmt.Errorf("timed out while waiting for exec on temporary pod")
+		}
+
+		time.Sleep(1 * time.Second)
+		certPEM, err := podCommandExecutor.Exec(newPod.Namespace, newPod.Name, "cat", certPath)
+		if err != nil {
+			continue
+		}
+
+		keyPEM, err := podCommandExecutor.Exec(newPod.Namespace, newPod.Name, "cat", keyPath)
+		if err != nil {
+			continue
+		}
+
+		return certauthority.Load(certPEM, keyPEM)
+	}
 }
 
 func (c *CA) refreshLoop(tick <-chan time.Time) {

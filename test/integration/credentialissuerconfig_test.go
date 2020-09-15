@@ -36,6 +36,10 @@ func TestCredentialIssuerConfig(t *testing.T) {
 			CredentialIssuerConfigs(namespaceName).
 			List(ctx, metav1.ListOptions{})
 		require.NoError(t, err)
+		for _, config := range actualConfigList.Items {
+			t.Logf("found CredentialIssuerConfig: %+v", config)
+		}
+
 		require.Len(t, actualConfigList.Items, 1)
 
 		actualStatusKubeConfigInfo := actualConfigList.Items[0].Status.KubeConfigInfo

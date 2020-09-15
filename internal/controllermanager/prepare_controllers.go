@@ -133,6 +133,10 @@ func PrepareControllers(
 		installationNamespaceK8sInformers.Start(ctx.Done())
 		installationNamespacePinnipedInformers.Start(ctx.Done())
 
+		kubePublicNamespaceK8sInformers.WaitForCacheSync(ctx.Done())
+		installationNamespaceK8sInformers.WaitForCacheSync(ctx.Done())
+		installationNamespacePinnipedInformers.WaitForCacheSync(ctx.Done())
+
 		go controllerManager.Start(ctx)
 	}, nil
 }

@@ -26,6 +26,7 @@ import (
 
 	"github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
 	pinnipedclientset "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned"
+	"github.com/suzerain-io/pinniped/internal/constable"
 	"github.com/suzerain-io/pinniped/internal/controller/issuerconfig"
 	"github.com/suzerain-io/pinniped/internal/here"
 )
@@ -39,8 +40,42 @@ const (
 
 //nolint: gochecknoinits
 func init() {
-	getKubeConfigCmd := &cobra.Command{
-		Run:   runGetKubeConfig,
+	rootCmd.AddCommand(newGetKubeConfigCmd(os.Args, os.Stdout, os.Stderr).cmd)
+}
+
+type getKubeConfigCommand struct {
+	// runFunc is called by the cobra.Command.Run hook. It is included here for
+	// testability.
+	runFunc func(
+		stdout, stderr io.Writer,
+		token, kubeconfigPathOverride, currentContextOverride, pinnipedInstallationNamespace string,
+	)
+
+	// cmd is the cobra.Command for this CLI command. It is included here for
+	// testability.
+	cmd *cobra.Command
+}
+
+func newGetKubeConfigCmd(args []string, stdout, stderr io.Writer) *getKubeConfigCommand {
+	c := &getKubeConfigCommand{
+		runFunc: runGetKubeConfig,
+	}
+
+	c.cmd = &cobra.Command{
+		Run: func(cmd *cobra.Command, _ []string) {
+			token := cmd.Flag(getKubeConfigCmdTokenFlagName).Value.String()
+			kubeconfigPathOverride := cmd.Flag(getKubeConfigCmdKubeconfigFlagName).Value.String()
+			currentContextOverride := cmd.Flag(getKubeConfigCmdKubeconfigContextFlagName).Value.String()
+			pinnipedInstallationNamespace := cmd.Flag(getKubeConfigCmdPinnipedNamespaceFlagName).Value.String()
+			c.runFunc(
+				stdout,
+				stderr,
+				token,
+				kubeconfigPathOverride,
+				currentContextOverride,
+				pinnipedInstallationNamespace,
+			)
+		},
 		Args:  cobra.NoArgs, // do not accept positional arguments for this command
 		Use:   "get-kubeconfig",
 		Short: "Print a kubeconfig for authenticating into a cluster via Pinniped",
@@ -63,50 +98,52 @@ func init() {
 		`),
 	}
 
-	rootCmd.AddCommand(getKubeConfigCmd)
+	c.cmd.SetArgs(args)
+	c.cmd.SetOut(stdout)
+	c.cmd.SetErr(stderr)
 
-	getKubeConfigCmd.Flags().StringP(
+	c.cmd.Flags().StringP(
 		getKubeConfigCmdTokenFlagName,
 		"",
 		"",
 		"Credential to include in the resulting kubeconfig output (Required)",
 	)
-	err := getKubeConfigCmd.MarkFlagRequired(getKubeConfigCmdTokenFlagName)
+	err := c.cmd.MarkFlagRequired(getKubeConfigCmdTokenFlagName)
 	if err != nil {
 		panic(err)
 	}
 
-	getKubeConfigCmd.Flags().StringP(
+	c.cmd.Flags().StringP(
 		getKubeConfigCmdKubeconfigFlagName,
 		"",
 		"",
 		"Path to the kubeconfig file",
 	)
 
-	getKubeConfigCmd.Flags().StringP(
+	c.cmd.Flags().StringP(
 		getKubeConfigCmdKubeconfigContextFlagName,
 		"",
 		"",
 		"Kubeconfig context override",
 	)
 
-	getKubeConfigCmd.Flags().StringP(
+	c.cmd.Flags().StringP(
 		getKubeConfigCmdPinnipedNamespaceFlagName,
 		"",
 		"pinniped",
 		"Namespace in which Pinniped was installed",
 	)
+
+	return c
 }
 
-func runGetKubeConfig(cmd *cobra.Command, _ []string) {
-	token := cmd.Flag(getKubeConfigCmdTokenFlagName).Value.String()
-	kubeconfigPathOverride := cmd.Flag(getKubeConfigCmdKubeconfigFlagName).Value.String()
-	currentContextOverride := cmd.Flag(getKubeConfigCmdKubeconfigContextFlagName).Value.String()
-	pinnipedInstallationNamespace := cmd.Flag(getKubeConfigCmdPinnipedNamespaceFlagName).Value.String()
-
+func runGetKubeConfig(
+	stdout, stderr io.Writer,
+	token, kubeconfigPathOverride, currentContextOverride, pinnipedInstallationNamespace string,
+) {
 	err := getKubeConfig(
-		os.Stdout,
-		os.Stderr,
+		stdout,
+		stderr,
 		token,
 		kubeconfigPathOverride,
 		currentContextOverride,
@@ -152,12 +189,14 @@ func getKubeConfig(
 		return err
 	}
 
+	if credentialIssuerConfig.Status.KubeConfigInfo == nil {
+		return constable.Error(`CredentialIssuerConfig "pinniped-config" was missing KubeConfigInfo`)
+	}
+
 	v1Cluster, err := copyCurrentClusterFromExistingKubeConfig(err, currentKubeConfig, currentContextNameOverride)
 	if err != nil {
 		return err
 	}
-
-	// TODO handle when credentialIssuerConfig has no Status or no KubeConfigInfo
 
 	err = issueWarningForNonMatchingServerOrCA(v1Cluster, credentialIssuerConfig, warningsWriter)
 	if err != nil {

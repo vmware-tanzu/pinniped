@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
 	"testing"
 
@@ -25,7 +26,180 @@ import (
 	"github.com/suzerain-io/pinniped/internal/here"
 )
 
-// TODO write a test for the help message and command line flags similar to server_test.go
+const (
+	knownGoodUsage = `
+Usage:
+  get-kubeconfig [flags]
+
+Flags:
+  -h, --help                        help for get-kubeconfig
+      --kubeconfig string           Path to the kubeconfig file
+      --kubeconfig-context string   Kubeconfig context override
+      --pinniped-namespace string   Namespace in which Pinniped was installed (default "pinniped")
+      --token string                Credential to include in the resulting kubeconfig output (Required)
+
+`
+
+	knownGoodHelp = `Print a kubeconfig for authenticating into a cluster via Pinniped.
+
+Requires admin-like access to the cluster using the current
+kubeconfig context in order to access Pinniped's metadata.
+The current kubeconfig is found similar to how kubectl finds it:
+using the value of the --kubeconfig option, or if that is not
+specified then from the value of the KUBECONFIG environment
+variable, or if that is not specified then it defaults to
+.kube/config in your home directory.
+
+Prints a kubeconfig which is suitable to access the cluster using
+Pinniped as the authentication mechanism. This kubeconfig output
+can be saved to a file and used with future kubectl commands, e.g.:
+    pinniped get-kubeconfig --token $MY_TOKEN > $HOME/mycluster-kubeconfig
+    kubectl --kubeconfig $HOME/mycluster-kubeconfig get pods
+
+Usage:
+  get-kubeconfig [flags]
+
+Flags:
+  -h, --help                        help for get-kubeconfig
+      --kubeconfig string           Path to the kubeconfig file
+      --kubeconfig-context string   Kubeconfig context override
+      --pinniped-namespace string   Namespace in which Pinniped was installed (default "pinniped")
+      --token string                Credential to include in the resulting kubeconfig output (Required)
+`
+)
+
+func TestNewGetKubeConfigCmd(t *testing.T) {
+	spec.Run(t, "newGetKubeConfigCmd", func(t *testing.T, when spec.G, it spec.S) {
+		var r *require.Assertions
+		var stdout, stderr *bytes.Buffer
+
+		it.Before(func() {
+			r = require.New(t)
+
+			stdout, stderr = bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{})
+		})
+
+		it("passes all flags to runFunc", func() {
+			args := []string{
+				"--token", "some-token",
+				"--kubeconfig", "some-kubeconfig",
+				"--kubeconfig-context", "some-kubeconfig-context",
+				"--pinniped-namespace", "some-pinniped-namespace",
+			}
+			c := newGetKubeConfigCmd(args, stdout, stderr)
+
+			runFuncCalled := false
+			c.runFunc = func(
+				out, err io.Writer,
+				token, kubeconfigPathOverride, currentContextOverride, pinnipedInstallationNamespace string,
+			) {
+				runFuncCalled = true
+				r.Equal("some-token", token)
+				r.Equal("some-kubeconfig", kubeconfigPathOverride)
+				r.Equal("some-kubeconfig-context", currentContextOverride)
+				r.Equal("some-pinniped-namespace", pinnipedInstallationNamespace)
+			}
+
+			r.NoError(c.cmd.Execute())
+			r.True(runFuncCalled)
+			r.Empty(stdout.String())
+			r.Empty(stderr.String())
+		})
+
+		it("requires the 'token' flag", func() {
+			args := []string{
+				"--kubeconfig", "some-kubeconfig",
+				"--kubeconfig-context", "some-kubeconfig-context",
+				"--pinniped-namespace", "some-pinniped-namespace",
+			}
+			c := newGetKubeConfigCmd(args, stdout, stderr)
+
+			runFuncCalled := false
+			c.runFunc = func(
+				out, err io.Writer,
+				token, kubeconfigPathOverride, currentContextOverride, pinnipedInstallationNamespace string,
+			) {
+				runFuncCalled = true
+			}
+
+			errorMessage := `required flag(s) "token" not set`
+			r.EqualError(c.cmd.Execute(), errorMessage)
+			r.False(runFuncCalled)
+
+			output := "Error: " + errorMessage + knownGoodUsage
+			r.Equal(output, stdout.String())
+			r.Empty(stderr.String())
+		})
+
+		it("defaults the flags correctly", func() {
+			args := []string{
+				"--token", "some-token",
+			}
+			c := newGetKubeConfigCmd(args, stdout, stderr)
+
+			runFuncCalled := false
+			c.runFunc = func(
+				out, err io.Writer,
+				token, kubeconfigPathOverride, currentContextOverride, pinnipedInstallationNamespace string,
+			) {
+				runFuncCalled = true
+				r.Equal("some-token", token)
+				r.Equal("", kubeconfigPathOverride)
+				r.Equal("", currentContextOverride)
+				r.Equal("pinniped", pinnipedInstallationNamespace)
+			}
+
+			r.NoError(c.cmd.Execute())
+			r.True(runFuncCalled)
+			r.Empty(stdout.String())
+			r.Empty(stderr.String())
+		})
+
+		it("fails when args are passed", func() {
+			args := []string{
+				"--token", "some-token",
+				"some-arg",
+			}
+			c := newGetKubeConfigCmd(args, stdout, stderr)
+
+			runFuncCalled := false
+			c.runFunc = func(
+				out, err io.Writer,
+				token, kubeconfigPathOverride, currentContextOverride, pinnipedInstallationNamespace string,
+			) {
+				runFuncCalled = true
+			}
+
+			errorMessage := `unknown command "some-arg" for "get-kubeconfig"`
+			r.EqualError(c.cmd.Execute(), errorMessage)
+			r.False(runFuncCalled)
+
+			output := "Error: " + errorMessage + knownGoodUsage
+			r.Equal(output, stdout.String())
+			r.Empty(stderr.String())
+		})
+
+		it("prints a nice help message", func() {
+			args := []string{
+				"--help",
+			}
+			c := newGetKubeConfigCmd(args, stdout, stderr)
+
+			runFuncCalled := false
+			c.runFunc = func(
+				out, err io.Writer,
+				token, kubeconfigPathOverride, currentContextOverride, pinnipedInstallationNamespace string,
+			) {
+				runFuncCalled = true
+			}
+
+			r.NoError(c.cmd.Execute())
+			r.False(runFuncCalled)
+			r.Equal(knownGoodHelp, stdout.String())
+			r.Empty(stderr.String())
+		})
+	}, spec.Parallel(), spec.Report(report.Terminal{}))
+}
 
 func expectedKubeconfigYAML(clusterCAData, clusterServer, command, token, pinnipedEndpoint, pinnipedCABundle string) string {
 	return here.Docf(`
@@ -380,6 +554,45 @@ func TestGetKubeConfig(t *testing.T) {
 						"fake-certificate-authority-data-value",
 					), outputBuffer.String())
 				})
+			})
+		})
+
+		when("the CredentialIssuerConfig is found on the cluster with an empty KubeConfigInfo", func() {
+			it.Before(func() {
+				r.NoError(pinnipedClient.Tracker().Add(
+					&crdpinnipedv1alpha1.CredentialIssuerConfig{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "CredentialIssuerConfig",
+							APIVersion: crdpinnipedv1alpha1.SchemeGroupVersion.String(),
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "pinniped-config",
+							Namespace: "some-namespace",
+						},
+						Status: crdpinnipedv1alpha1.CredentialIssuerConfigStatus{},
+					},
+				))
+			})
+
+			it("returns an error", func() {
+				kubeClientCreatorFuncWasCalled := false
+				err := getKubeConfig(outputBuffer,
+					warningsBuffer,
+					"some-token",
+					"./testdata/kubeconfig.yaml",
+					"",
+					"some-namespace",
+					func(restConfig *rest.Config) (pinnipedclientset.Interface, error) {
+						kubeClientCreatorFuncWasCalled = true
+						r.Equal("https://fake-server-url-value", restConfig.Host)
+						r.Equal("fake-certificate-authority-data-value", string(restConfig.CAData))
+						return pinnipedClient, nil
+					},
+				)
+				r.True(kubeClientCreatorFuncWasCalled)
+				r.EqualError(err, `CredentialIssuerConfig "pinniped-config" was missing KubeConfigInfo`)
+				r.Empty(warningsBuffer.String())
+				r.Empty(outputBuffer.String())
 			})
 		})
 

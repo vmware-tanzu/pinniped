@@ -14,11 +14,15 @@ import (
 	k8sinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
+	"k8s.io/klog/v2/klogr"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	pinnipedclientset "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned"
 	pinnipedinformers "github.com/suzerain-io/pinniped/generated/1.19/client/informers/externalversions"
 	"github.com/suzerain-io/pinniped/internal/controller/apicerts"
+	"github.com/suzerain-io/pinniped/internal/controller/identityprovider/idpcache"
+	"github.com/suzerain-io/pinniped/internal/controller/identityprovider/webhookcachecleaner"
+	"github.com/suzerain-io/pinniped/internal/controller/identityprovider/webhookcachefiller"
 	"github.com/suzerain-io/pinniped/internal/controller/issuerconfig"
 	"github.com/suzerain-io/pinniped/internal/controllerlib"
 	"github.com/suzerain-io/pinniped/internal/provider"
@@ -36,6 +40,7 @@ func PrepareControllers(
 	dynamicCertProvider provider.DynamicTLSServingCertProvider,
 	servingCertDuration time.Duration,
 	servingCertRenewBefore time.Duration,
+	idpCache *idpcache.Cache,
 ) (func(ctx context.Context), error) {
 	// Create k8s clients.
 	k8sClient, aggregatorClient, pinnipedClient, err := createClients()
@@ -104,6 +109,22 @@ func PrepareControllers(
 				servingCertRenewBefore,
 			),
 			singletonWorker,
+		).
+		WithController(
+			webhookcachefiller.New(
+				idpCache,
+				installationNamespacePinnipedInformers.IDP().V1alpha1().WebhookIdentityProviders(),
+				klogr.New(),
+			),
+			singletonWorker,
+		).
+		WithController(
+			webhookcachecleaner.New(
+				idpCache,
+				installationNamespacePinnipedInformers.IDP().V1alpha1().WebhookIdentityProviders(),
+				klogr.New(),
+			),
+			singletonWorker,
 		)
 
 	// Return a function which starts the informers and controllers.
@@ -111,6 +132,10 @@ func PrepareControllers(
 		kubePublicNamespaceK8sInformers.Start(ctx.Done())
 		installationNamespaceK8sInformers.Start(ctx.Done())
 		installationNamespacePinnipedInformers.Start(ctx.Done())
+
+		kubePublicNamespaceK8sInformers.WaitForCacheSync(ctx.Done())
+		installationNamespaceK8sInformers.WaitForCacheSync(ctx.Done())
+		installationNamespacePinnipedInformers.WaitForCacheSync(ctx.Done())
 
 		go controllerManager.Start(ctx)
 	}, nil

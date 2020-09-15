@@ -14,6 +14,7 @@ import (
 
 	versioned "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned"
 	crdpinniped "github.com/suzerain-io/pinniped/generated/1.19/client/informers/externalversions/crdpinniped"
+	idp "github.com/suzerain-io/pinniped/generated/1.19/client/informers/externalversions/idp"
 	internalinterfaces "github.com/suzerain-io/pinniped/generated/1.19/client/informers/externalversions/internalinterfaces"
 	pinniped "github.com/suzerain-io/pinniped/generated/1.19/client/informers/externalversions/pinniped"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -163,11 +164,16 @@ type SharedInformerFactory interface {
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
 	Crd() crdpinniped.Interface
+	IDP() idp.Interface
 	Pinniped() pinniped.Interface
 }
 
 func (f *sharedInformerFactory) Crd() crdpinniped.Interface {
 	return crdpinniped.New(f, f.namespace, f.tweakListOptions)
+}
+
+func (f *sharedInformerFactory) IDP() idp.Interface {
+	return idp.New(f, f.namespace, f.tweakListOptions)
 }
 
 func (f *sharedInformerFactory) Pinniped() pinniped.Interface {

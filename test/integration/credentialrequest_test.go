@@ -14,9 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -61,65 +59,16 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 		response.Status.Credential.ClientKeyData,
 	)
 
-	t.Run("access as user", func(t *testing.T) {
-		addTestClusterRoleBinding(ctx, t, adminClient, &rbacv1.ClusterRoleBinding{
-			TypeMeta: metav1.TypeMeta{},
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "integration-test-user-readonly-role-binding",
-			},
-			Subjects: []rbacv1.Subject{{
-				Kind:     rbacv1.UserKind,
-				APIGroup: rbacv1.GroupName,
-				Name:     testUsername,
-			}},
-			RoleRef: rbacv1.RoleRef{
-				Kind:     "ClusterRole",
-				APIGroup: rbacv1.GroupName,
-				Name:     "view",
-			},
-		})
-
-		// Use the client which is authenticated as the test user to list namespaces
-		var listNamespaceResponse *v1.NamespaceList
-		var canListNamespaces = func() bool {
-			listNamespaceResponse, err = clientWithCertFromCredentialRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-			return err == nil
-		}
-		assert.Eventually(t, canListNamespaces, 3*time.Second, 250*time.Millisecond)
-		require.NoError(t, err) // prints out the error and stops the test in case of failure
-		require.NotEmpty(t, listNamespaceResponse.Items)
-	})
-
+	t.Run(
+		"access as user",
+		accessAsUserTest(ctx, adminClient, testUsername, clientWithCertFromCredentialRequest),
+	)
 	for _, group := range expectedTestUserGroups {
 		group := group
-		t.Run("access as group "+group, func(t *testing.T) {
-			addTestClusterRoleBinding(ctx, t, adminClient, &rbacv1.ClusterRoleBinding{
-				TypeMeta: metav1.TypeMeta{},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "integration-test-group-readonly-role-binding",
-				},
-				Subjects: []rbacv1.Subject{{
-					Kind:     rbacv1.GroupKind,
-					APIGroup: rbacv1.GroupName,
-					Name:     group,
-				}},
-				RoleRef: rbacv1.RoleRef{
-					Kind:     "ClusterRole",
-					APIGroup: rbacv1.GroupName,
-					Name:     "view",
-				},
-			})
-
-			// Use the client which is authenticated as the test user to list namespaces
-			var listNamespaceResponse *v1.NamespaceList
-			var canListNamespaces = func() bool {
-				listNamespaceResponse, err = clientWithCertFromCredentialRequest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-				return err == nil
-			}
-			assert.Eventually(t, canListNamespaces, 3*time.Second, 250*time.Millisecond)
-			require.NoError(t, err) // prints out the error and stops the test in case of failure
-			require.NotEmpty(t, listNamespaceResponse.Items)
-		})
+		t.Run(
+			"access as group "+group,
+			accessAsGroupTest(ctx, adminClient, group, clientWithCertFromCredentialRequest),
+		)
 	}
 }
 

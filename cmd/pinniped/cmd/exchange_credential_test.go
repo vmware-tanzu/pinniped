@@ -3,12 +3,13 @@ Copyright 2020 VMware, Inc.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package main
+package cmd
 
 import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
@@ -18,11 +19,107 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
+	"github.com/suzerain-io/pinniped/internal/here"
 	"github.com/suzerain-io/pinniped/internal/testutil"
 )
 
-func TestRun(t *testing.T) {
-	spec.Run(t, "main.run", func(t *testing.T, when spec.G, it spec.S) {
+var (
+	knownGoodUsageForExchangeCredential = here.Doc(`
+		Usage:
+		  exchange-credential [flags]
+
+		Flags:
+		  -h, --help   help for exchange-credential
+
+		`)
+
+	knownGoodHelpForExchangeCredential = here.Doc(`
+		Exchange a credential which proves your identity for a time-limited,
+		cluster-specific access credential.
+
+		Designed to be conveniently used as an credential plugin for kubectl.
+		See the help message for 'pinniped get-kubeconfig' for more
+		information about setting up a kubeconfig file using Pinniped.
+
+		Requires all of the following environment variables, which are
+		typically set in the kubeconfig:
+		  - PINNIPED_TOKEN: the token to send to Pinniped for exchange
+		  - PINNIPED_CA_BUNDLE: the CA bundle to trust when calling
+			Pinniped's HTTPS endpoint
+		  - PINNIPED_K8S_API_ENDPOINT: the URL for the Pinniped credential
+			exchange API
+
+		For more information about credential plugins in general, see
+		https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins
+
+		Usage:
+		  exchange-credential [flags]
+
+		Flags:
+		  -h, --help   help for exchange-credential
+	`)
+)
+
+func TestNewCredentialExchangeCmd(t *testing.T) {
+	spec.Run(t, "newCredentialExchangeCmd", func(t *testing.T, when spec.G, it spec.S) {
+		var r *require.Assertions
+		var stdout, stderr *bytes.Buffer
+
+		it.Before(func() {
+			r = require.New(t)
+
+			stdout, stderr = bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{})
+		})
+
+		it("calls runFunc and does not print usage or help when correct arguments and flags are used", func() {
+			c := newExchangeCredentialCmd([]string{}, stdout, stderr)
+
+			runFuncCalled := false
+			c.runFunc = func(out, err io.Writer) {
+				runFuncCalled = true
+			}
+
+			r.NoError(c.cmd.Execute())
+			r.True(runFuncCalled)
+			r.Empty(stdout.String())
+			r.Empty(stderr.String())
+		})
+
+		it("fails when args are passed", func() {
+			c := newExchangeCredentialCmd([]string{"some-arg"}, stdout, stderr)
+
+			runFuncCalled := false
+			c.runFunc = func(out, err io.Writer) {
+				runFuncCalled = true
+			}
+
+			errorMessage := `unknown command "some-arg" for "exchange-credential"`
+			r.EqualError(c.cmd.Execute(), errorMessage)
+			r.False(runFuncCalled)
+
+			output := "Error: " + errorMessage + "\n" + knownGoodUsageForExchangeCredential
+			r.Equal(output, stdout.String())
+			r.Empty(stderr.String())
+		})
+
+		it("prints a nice help message", func() {
+			c := newExchangeCredentialCmd([]string{"--help"}, stdout, stderr)
+
+			runFuncCalled := false
+			c.runFunc = func(out, err io.Writer) {
+				runFuncCalled = true
+			}
+
+			r.NoError(c.cmd.Execute())
+			r.False(runFuncCalled)
+			r.Equal(knownGoodHelpForExchangeCredential, stdout.String())
+			r.Empty(stderr.String())
+		})
+	}, spec.Parallel(), spec.Report(report.Terminal{}))
+}
+
+func TestExchangeCredential(t *testing.T) {
+	spec.Run(t, "cmd.exchangeCredential", func(t *testing.T, when spec.G, it spec.S) {
 		var r *require.Assertions
 		var buffer *bytes.Buffer
 		var tokenExchanger tokenExchanger
@@ -49,19 +146,19 @@ func TestRun(t *testing.T) {
 		when("env vars are missing", func() {
 			it("returns an error when PINNIPED_TOKEN is missing", func() {
 				delete(fakeEnv, "PINNIPED_TOKEN")
-				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
+				err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
 				r.EqualError(err, "failed to get credential: environment variable not set: PINNIPED_TOKEN")
 			})
 
 			it("returns an error when PINNIPED_CA_BUNDLE is missing", func() {
 				delete(fakeEnv, "PINNIPED_CA_BUNDLE")
-				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
+				err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
 				r.EqualError(err, "failed to get credential: environment variable not set: PINNIPED_CA_BUNDLE")
 			})
 
 			it("returns an error when PINNIPED_K8S_API_ENDPOINT is missing", func() {
 				delete(fakeEnv, "PINNIPED_K8S_API_ENDPOINT")
-				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
+				err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
 				r.EqualError(err, "failed to get credential: environment variable not set: PINNIPED_K8S_API_ENDPOINT")
 			})
 		})
@@ -74,7 +171,7 @@ func TestRun(t *testing.T) {
 			})
 
 			it("returns an error", func() {
-				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
+				err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
 				r.EqualError(err, "failed to get credential: some error")
 			})
 		})
@@ -91,7 +188,7 @@ func TestRun(t *testing.T) {
 			})
 
 			it("returns an error", func() {
-				err := run(envGetter, tokenExchanger, &testutil.ErrorWriter{ReturnError: fmt.Errorf("some IO error")}, 30*time.Second)
+				err := exchangeCredential(envGetter, tokenExchanger, &testutil.ErrorWriter{ReturnError: fmt.Errorf("some IO error")}, 30*time.Second)
 				r.EqualError(err, "failed to marshal response to stdout: some IO error")
 			})
 		})
@@ -113,7 +210,7 @@ func TestRun(t *testing.T) {
 			})
 
 			it("returns an error", func() {
-				err := run(envGetter, tokenExchanger, buffer, 1*time.Millisecond)
+				err := exchangeCredential(envGetter, tokenExchanger, buffer, 1*time.Millisecond)
 				r.EqualError(err, "failed to get credential: context deadline exceeded")
 			})
 		})
@@ -141,7 +238,7 @@ func TestRun(t *testing.T) {
 			})
 
 			it("writes the execCredential to the given writer", func() {
-				err := run(envGetter, tokenExchanger, buffer, 30*time.Second)
+				err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
 				r.NoError(err)
 				r.Equal(fakeEnv["PINNIPED_TOKEN"], actualToken)
 				r.Equal(fakeEnv["PINNIPED_CA_BUNDLE"], actualCaBundle)

@@ -34,6 +34,10 @@ To learn more, see [architecture.md](doc/architecture.md).
 
 ![example-deployment-architecture](doc/img/pinniped-architecture.svg)
 
+## Trying Pinniped
+
+Care to kick the tires? It's easy to [install and try Pinniped](doc/demo.md).
+
 ## Installation
 
 Currently, Pinniped supports self-hosted clusters where the Kube Controller Manager pod

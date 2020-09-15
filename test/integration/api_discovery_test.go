@@ -22,65 +22,119 @@ func TestGetAPIResourceList(t *testing.T) {
 	groups, resources, err := client.Discovery().ServerGroupsAndResources()
 	require.NoError(t, err)
 
-	t.Run("has group", func(t *testing.T) {
-		require.Contains(t, groups, &metav1.APIGroup{
-			Name: "pinniped.dev",
-			Versions: []metav1.GroupVersionForDiscovery{
-				{
+	tests := []struct {
+		group             metav1.APIGroup
+		resourceByVersion map[string][]metav1.APIResource
+	}{
+		{
+			group: metav1.APIGroup{
+				Name: "pinniped.dev",
+				Versions: []metav1.GroupVersionForDiscovery{
+					{
+						GroupVersion: "pinniped.dev/v1alpha1",
+						Version:      "v1alpha1",
+					},
+				},
+				PreferredVersion: metav1.GroupVersionForDiscovery{
 					GroupVersion: "pinniped.dev/v1alpha1",
 					Version:      "v1alpha1",
 				},
 			},
-			PreferredVersion: metav1.GroupVersionForDiscovery{
-				GroupVersion: "pinniped.dev/v1alpha1",
-				Version:      "v1alpha1",
+			resourceByVersion: map[string][]metav1.APIResource{
+				"pinniped.dev/v1alpha1": {
+					{
+						Name:       "credentialrequests",
+						Kind:       "CredentialRequest",
+						Verbs:      []string{"create"},
+						Namespaced: false,
+
+						// This is currently an empty string in the response; maybe it should not be
+						// empty? Seems like no harm in keeping it like this for now, but feel free
+						// to update in the future if there is a compelling reason to do so.
+						SingularName: "",
+					},
+				},
 			},
-		})
-	})
-
-	t.Run("has non-CRD APIs", func(t *testing.T) {
-		expectResources(t, "pinniped.dev/v1alpha1", resources, []metav1.APIResource{
-			{
-				Name:       "credentialrequests",
-				Kind:       "CredentialRequest",
-				Verbs:      []string{"create"},
-				Namespaced: false,
-
-				// This is currently an empty string in the response; maybe it should not be
-				// empty? Seems like no harm in keeping it like this for now, but feel free
-				// to update in the future if there is a compelling reason to do so.
-				SingularName: "",
+		},
+		{
+			group: metav1.APIGroup{
+				Name: "crd.pinniped.dev",
+				Versions: []metav1.GroupVersionForDiscovery{
+					{
+						GroupVersion: "crd.pinniped.dev/v1alpha1",
+						Version:      "v1alpha1",
+					},
+				},
+				PreferredVersion: metav1.GroupVersionForDiscovery{
+					GroupVersion: "crd.pinniped.dev/v1alpha1",
+					Version:      "v1alpha1",
+				},
 			},
-		})
-	})
-
-	t.Run("has CRD APIs", func(t *testing.T) {
-		expectResources(t, "crd.pinniped.dev/v1alpha1", resources, []metav1.APIResource{
-			{
-				Name:         "credentialissuerconfigs",
-				SingularName: "credentialissuerconfig",
-				Namespaced:   true,
-				Kind:         "CredentialIssuerConfig",
-				Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
-				ShortNames:   []string{"cic"},
+			resourceByVersion: map[string][]metav1.APIResource{
+				"crd.pinniped.dev/v1alpha1": {
+					{
+						Name:         "credentialissuerconfigs",
+						SingularName: "credentialissuerconfig",
+						Namespaced:   true,
+						Kind:         "CredentialIssuerConfig",
+						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
+						ShortNames:   []string{"cic"},
+					},
+				},
 			},
-		})
-	})
-}
-
-func expectResources(t *testing.T, groupVersion string, resources []*metav1.APIResourceList, expected []metav1.APIResource) {
-	var actualResourceList *metav1.APIResourceList
-	for _, resource := range resources {
-		if resource.GroupVersion == groupVersion {
-			actualResourceList = resource.DeepCopy()
-		}
+		},
+		{
+			group: metav1.APIGroup{
+				Name: "idp.pinniped.dev",
+				Versions: []metav1.GroupVersionForDiscovery{
+					{
+						GroupVersion: "idp.pinniped.dev/v1alpha1",
+						Version:      "v1alpha1",
+					},
+				},
+				PreferredVersion: metav1.GroupVersionForDiscovery{
+					GroupVersion: "idp.pinniped.dev/v1alpha1",
+					Version:      "v1alpha1",
+				},
+			},
+			resourceByVersion: map[string][]metav1.APIResource{
+				"idp.pinniped.dev/v1alpha1": {
+					{
+						Name:         "webhookidentityproviders",
+						SingularName: "webhookidentityprovider",
+						Namespaced:   true,
+						Kind:         "WebhookIdentityProvider",
+						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
+						ShortNames:   []string{"webhookidp", "webhookidps"},
+						Categories:   []string{"all", "idp", "idps"},
+					},
+				},
+			},
+		},
 	}
-	require.NotNilf(t, actualResourceList, "could not find groupVersion %s", groupVersion)
 
-	// Because its hard to predict the storage version hash (e.g. "t/+v41y+3e4="), we just don't
-	// worry about comparing that field.
-	for i := range actualResourceList.APIResources {
-		actualResourceList.APIResources[i].StorageVersionHash = ""
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.group.Name, func(t *testing.T) {
+			require.Contains(t, groups, &tt.group)
+
+			for groupVersion, expectedResources := range tt.resourceByVersion {
+				// Find the actual resource list and make a copy.
+				var actualResourceList *metav1.APIResourceList
+				for _, resource := range resources {
+					if resource.GroupVersion == groupVersion {
+						actualResourceList = resource.DeepCopy()
+					}
+				}
+				require.NotNilf(t, actualResourceList, "could not find groupVersion %s", groupVersion)
+
+				// Because its hard to predict the storage version hash (e.g. "t/+v41y+3e4="), we just don't
+				// worry about comparing that field.
+				for i := range actualResourceList.APIResources {
+					actualResourceList.APIResources[i].StorageVersionHash = ""
+				}
+				require.EqualValues(t, expectedResources, actualResourceList.APIResources, "unexpected API resources")
+			}
+		})
 	}
-	require.EqualValues(t, expected, actualResourceList.APIResources, "unexpected API resources")
 }

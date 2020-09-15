@@ -24,6 +24,12 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/suzerain-io/pinniped/generated/1.18/apis/crdpinniped/v1alpha1.CredentialIssuerConfigList":           schema_118_apis_crdpinniped_v1alpha1_CredentialIssuerConfigList(ref),
 		"github.com/suzerain-io/pinniped/generated/1.18/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStatus":         schema_118_apis_crdpinniped_v1alpha1_CredentialIssuerConfigStatus(ref),
 		"github.com/suzerain-io/pinniped/generated/1.18/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStrategy":       schema_118_apis_crdpinniped_v1alpha1_CredentialIssuerConfigStrategy(ref),
+		"github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.Condition":                                    schema_118_apis_idp_v1alpha1_Condition(ref),
+		"github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.TLSSpec":                                      schema_118_apis_idp_v1alpha1_TLSSpec(ref),
+		"github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.WebhookIdentityProvider":                      schema_118_apis_idp_v1alpha1_WebhookIdentityProvider(ref),
+		"github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.WebhookIdentityProviderList":                  schema_118_apis_idp_v1alpha1_WebhookIdentityProviderList(ref),
+		"github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.WebhookIdentityProviderSpec":                  schema_118_apis_idp_v1alpha1_WebhookIdentityProviderSpec(ref),
+		"github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.WebhookIdentityProviderStatus":                schema_118_apis_idp_v1alpha1_WebhookIdentityProviderStatus(ref),
 		"github.com/suzerain-io/pinniped/generated/1.18/apis/pinniped/v1alpha1.CredentialRequest":                       schema_118_apis_pinniped_v1alpha1_CredentialRequest(ref),
 		"github.com/suzerain-io/pinniped/generated/1.18/apis/pinniped/v1alpha1.CredentialRequestCredential":             schema_118_apis_pinniped_v1alpha1_CredentialRequestCredential(ref),
 		"github.com/suzerain-io/pinniped/generated/1.18/apis/pinniped/v1alpha1.CredentialRequestList":                   schema_118_apis_pinniped_v1alpha1_CredentialRequestList(ref),
@@ -283,11 +289,250 @@ func schema_118_apis_crdpinniped_v1alpha1_CredentialIssuerConfigStrategy(ref com
 	}
 }
 
+func schema_118_apis_idp_v1alpha1_Condition(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Condition status of a resource (mirrored from the metav1.Condition type added in Kubernetes 1.19). In a future API version we can switch to using the upstream type. See https://github.com/kubernetes/apimachinery/blob/v0.19.0/pkg/apis/meta/v1/types.go#L1353-L1413.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Description: "type of condition in CamelCase or in foo.example.com/CamelCase.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "status of the condition, one of True, False, Unknown.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"lastTransitionTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"reason": {
+						SchemaProps: spec.SchemaProps{
+							Description: "reason contains a programmatic identifier indicating the reason for the condition's last transition. Producers of specific condition types may define expected values and meanings for this field, and whether the values are considered a guaranteed API. The value should be a CamelCase string. This field may not be empty.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Description: "message is a human readable message indicating details about the transition. This may be an empty string.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"type", "status", "lastTransitionTime", "reason", "message"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_118_apis_idp_v1alpha1_TLSSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Configuration for configuring TLS on various identity providers.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"certificateAuthorityData": {
+						SchemaProps: spec.SchemaProps{
+							Description: "X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_118_apis_idp_v1alpha1_WebhookIdentityProvider(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "WebhookIdentityProvider describes the configuration of a Pinniped webhook identity provider.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Spec for configuring the identity provider.",
+							Ref:         ref("github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.WebhookIdentityProviderSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Status of the identity provider.",
+							Ref:         ref("github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.WebhookIdentityProviderStatus"),
+						},
+					},
+				},
+				Required: []string{"spec"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.WebhookIdentityProviderSpec", "github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.WebhookIdentityProviderStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_118_apis_idp_v1alpha1_WebhookIdentityProviderList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "List of WebhookIdentityProvider objects.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.WebhookIdentityProvider"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.WebhookIdentityProvider", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_118_apis_idp_v1alpha1_WebhookIdentityProviderSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Spec for configuring a webhook identity provider.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"endpoint": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Webhook server endpoint URL.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"tls": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TLS configuration.",
+							Ref:         ref("github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.TLSSpec"),
+						},
+					},
+				},
+				Required: []string{"endpoint"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.TLSSpec"},
+	}
+}
+
+func schema_118_apis_idp_v1alpha1_WebhookIdentityProviderStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Status of a webhook identity provider.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type":       "map",
+								"x-kubernetes-patch-merge-key": "type",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Represents the observations of an identity provider's current state.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.Condition"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1.Condition"},
+	}
+}
+
 func schema_118_apis_pinniped_v1alpha1_CredentialRequest(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "CredentialRequest submits an IDP-specific credential to Pinniped in exchange for a cluster-specific credential.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
 						SchemaProps: spec.SchemaProps{
@@ -330,7 +575,8 @@ func schema_118_apis_pinniped_v1alpha1_CredentialRequestCredential(ref common.Re
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "CredentialRequestCredential is the cluster-specific credential returned on a successful CredentialRequest. It contains either a valid bearer token or a valid TLS certificate and corresponding private key for the cluster.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"expirationTimestamp": {
 						SchemaProps: spec.SchemaProps{
@@ -418,7 +664,8 @@ func schema_118_apis_pinniped_v1alpha1_CredentialRequestSpec(ref common.Referenc
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "CredentialRequestSpec is the specification of a CredentialRequest, expected on requests to the Pinniped API",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"type": {
 						SchemaProps: spec.SchemaProps{
@@ -445,7 +692,8 @@ func schema_118_apis_pinniped_v1alpha1_CredentialRequestStatus(ref common.Refere
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "CredentialRequestStatus is the status of a CredentialRequest, returned on responses to the Pinniped API.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"credential": {
 						SchemaProps: spec.SchemaProps{
@@ -472,7 +720,8 @@ func schema_118_apis_pinniped_v1alpha1_CredentialRequestTokenCredential(ref comm
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "CredentialRequestTokenCredential holds a bearer token issued by an upstream identity provider.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"value": {
 						SchemaProps: spec.SchemaProps{

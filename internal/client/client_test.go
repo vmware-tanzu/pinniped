@@ -8,10 +8,8 @@ package client
 import (
 	"context"
 	"encoding/json"
-	"encoding/pem"
 	"io/ioutil"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -20,19 +18,8 @@ import (
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
 	"github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1"
+	"github.com/suzerain-io/pinniped/internal/testutil"
 )
-
-func startTestServer(t *testing.T, handler http.HandlerFunc) (string, string) {
-	t.Helper()
-	server := httptest.NewTLSServer(handler)
-	t.Cleanup(server.Close)
-
-	caBundle := string(pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: server.TLS.Certificates[0].Certificate[0],
-	}))
-	return caBundle, server.URL
-}
 
 func TestExchangeToken(t *testing.T) {
 	t.Parallel()
@@ -48,7 +35,7 @@ func TestExchangeToken(t *testing.T) {
 	t.Run("server error", func(t *testing.T) {
 		t.Parallel()
 		// Start a test server that returns only 500 errors.
-		caBundle, endpoint := startTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte("some server error"))
 		})
@@ -62,7 +49,7 @@ func TestExchangeToken(t *testing.T) {
 		t.Parallel()
 		// Start a test server that returns success but with an error message
 		errorMessage := "some login failure"
-		caBundle, endpoint := startTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("content-type", "application/json")
 			_ = json.NewEncoder(w).Encode(&v1alpha1.CredentialRequest{
 				TypeMeta: metav1.TypeMeta{APIVersion: "pinniped.dev/v1alpha1", Kind: "CredentialRequest"},
@@ -80,7 +67,7 @@ func TestExchangeToken(t *testing.T) {
 		expires := metav1.NewTime(time.Now().Truncate(time.Second))
 
 		// Start a test server that returns successfully and asserts various properties of the request.
-		caBundle, endpoint := startTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 			require.Equal(t, http.MethodPost, r.Method)
 			require.Equal(t, "/apis/pinniped.dev/v1alpha1/credentialrequests", r.URL.Path)
 			require.Equal(t, "application/json", r.Header.Get("content-type"))

@@ -9,6 +9,7 @@ package fake
 
 import (
 	crdv1alpha1 "github.com/suzerain-io/pinniped/generated/1.17/apis/crdpinniped/v1alpha1"
+	idpv1alpha1 "github.com/suzerain-io/pinniped/generated/1.17/apis/idp/v1alpha1"
 	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.17/apis/pinniped/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -22,6 +23,7 @@ var codecs = serializer.NewCodecFactory(scheme)
 var parameterCodec = runtime.NewParameterCodec(scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
 	crdv1alpha1.AddToScheme,
+	idpv1alpha1.AddToScheme,
 	pinnipedv1alpha1.AddToScheme,
 }
 

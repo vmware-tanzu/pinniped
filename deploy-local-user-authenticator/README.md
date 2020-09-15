@@ -14,8 +14,9 @@ User accounts can be created and edited dynamically using `kubectl` commands (se
 
 ## Tools
 
-This example deployment uses `ytt` from [Carvel](https://carvel.dev/) to template the YAML files.
-Either [install `ytt`](https://get-ytt.io/) or use the [container image from Dockerhub](https://hub.docker.com/r/k14s/image/tags).
+This example deployment uses `ytt` and `kapp` from [Carvel](https://carvel.dev/) to template the YAML files
+and to deploy the app.
+Either [install `ytt` and `kapp`](https://carvel.dev/) or use the [container image from Dockerhub](https://hub.docker.com/r/k14s/image/tags).
 
 As well, this demo requires a tool capable of generating a `bcrypt` hash in order to interact with
 the webhook. The example below uses `htpasswd`, which is installed on most macOS systems, and can be

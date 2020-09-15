@@ -8,7 +8,6 @@ package issuerconfig
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -27,6 +26,7 @@ import (
 	pinnipedfake "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned/fake"
 	pinnipedinformers "github.com/suzerain-io/pinniped/generated/1.19/client/informers/externalversions"
 	"github.com/suzerain-io/pinniped/internal/controllerlib"
+	"github.com/suzerain-io/pinniped/internal/here"
 	"github.com/suzerain-io/pinniped/internal/testutil"
 )
 
@@ -256,14 +256,15 @@ func TestSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{Name: "cluster-info", Namespace: "kube-public"},
 						// Note that go fmt puts tabs in our file, which we must remove from our configmap yaml below.
 						Data: map[string]string{
-							"kubeconfig": strings.ReplaceAll(`
-							kind: Config
-							apiVersion: v1
-							clusters:
-							- name: ""
-							  cluster:
-							    certificate-authority-data: "`+caData+`"
-							    server: "`+kubeServerURL+`"`, "\t", "  "),
+							"kubeconfig": here.Docf(`
+								kind: Config
+								apiVersion: v1
+								clusters:
+								- name: ""
+								  cluster:
+									certificate-authority-data: "%s"
+									server: "%s"`,
+								caData, kubeServerURL),
 							"uninteresting-key": "uninteresting-value",
 						},
 					}

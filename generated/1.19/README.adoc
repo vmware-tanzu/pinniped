@@ -6,6 +6,7 @@
 
 .Packages
 - xref:{anchor_prefix}-crd-pinniped-dev-v1alpha1[$$crd.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-idp-pinniped-dev-v1alpha1[$$idp.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-pinniped-dev-v1alpha1[$$pinniped.dev/v1alpha1$$]
 
 
@@ -95,6 +96,110 @@ Status of a credential issuer.
 
 
 
+[id="{anchor_prefix}-idp-pinniped-dev-v1alpha1"]
+=== idp.pinniped.dev/v1alpha1
+
+Package v1alpha1 is the v1alpha1 version of the Pinniped identity provider API.
+
+
+
+[id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-idp-v1alpha1-condition"]
+==== Condition 
+
+Condition status of a resource (mirrored from the metav1.Condition type added in Kubernetes 1.19). In a future API version we can switch to using the upstream type. See https://github.com/kubernetes/apimachinery/blob/v0.19.0/pkg/apis/meta/v1/types.go#L1353-L1413.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-idp-v1alpha1-webhookidentityproviderstatus[$$WebhookIdentityProviderStatus$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`type`* __string__ | type of condition in CamelCase or in foo.example.com/CamelCase. --- Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be useful (see .node.status.conditions), the ability to deconflict is important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+| *`status`* __ConditionStatus__ | status of the condition, one of True, False, Unknown.
+| *`observedGeneration`* __integer__ | observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance.
+| *`lastTransitionTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#time-v1-meta[$$Time$$]__ | lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+| *`reason`* __string__ | reason contains a programmatic identifier indicating the reason for the condition's last transition. Producers of specific condition types may define expected values and meanings for this field, and whether the values are considered a guaranteed API. The value should be a CamelCase string. This field may not be empty.
+| *`message`* __string__ | message is a human readable message indicating details about the transition. This may be an empty string.
+|===
+
+
+[id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-idp-v1alpha1-tlsspec"]
+==== TLSSpec 
+
+Configuration for configuring TLS on various identity providers.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-idp-v1alpha1-webhookidentityproviderspec[$$WebhookIdentityProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`certificateAuthorityData`* __string__ | X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted.
+|===
+
+
+[id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-idp-v1alpha1-webhookidentityprovider"]
+==== WebhookIdentityProvider 
+
+WebhookIdentityProvider describes the configuration of a Pinniped webhook identity provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-idp-v1alpha1-webhookidentityproviderlist[$$WebhookIdentityProviderList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`spec`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-idp-v1alpha1-webhookidentityproviderspec[$$WebhookIdentityProviderSpec$$]__ | Spec for configuring the identity provider.
+| *`status`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-idp-v1alpha1-webhookidentityproviderstatus[$$WebhookIdentityProviderStatus$$]__ | Status of the identity provider.
+|===
+
+
+
+
+[id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-idp-v1alpha1-webhookidentityproviderspec"]
+==== WebhookIdentityProviderSpec 
+
+Spec for configuring a webhook identity provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-idp-v1alpha1-webhookidentityprovider[$$WebhookIdentityProvider$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`endpoint`* __string__ | Webhook server endpoint URL.
+| *`tls`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration.
+|===
+
+
+[id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-idp-v1alpha1-webhookidentityproviderstatus"]
+==== WebhookIdentityProviderStatus 
+
+Status of a webhook identity provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-idp-v1alpha1-webhookidentityprovider[$$WebhookIdentityProvider$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`conditions`* __xref:{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-idp-v1alpha1-condition[$$Condition$$]__ | Represents the observations of an identity provider's current state.
+|===
+
+
+
 [id="{anchor_prefix}-pinniped-dev-v1alpha1"]
 === pinniped.dev/v1alpha1
 
@@ -105,7 +210,7 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped aggregated API.
 [id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequest"]
 ==== CredentialRequest 
 
-
+CredentialRequest submits an IDP-specific credential to Pinniped in exchange for a cluster-specific credential.
 
 .Appears In:
 ****
@@ -125,7 +230,7 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped aggregated API.
 [id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequestcredential"]
 ==== CredentialRequestCredential 
 
-
+CredentialRequestCredential is the cluster-specific credential returned on a successful CredentialRequest. It contains either a valid bearer token or a valid TLS certificate and corresponding private key for the cluster.
 
 .Appears In:
 ****
@@ -147,7 +252,7 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped aggregated API.
 [id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequestspec"]
 ==== CredentialRequestSpec 
 
-
+CredentialRequestSpec is the specification of a CredentialRequest, expected on requests to the Pinniped API
 
 .Appears In:
 ****
@@ -165,7 +270,7 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped aggregated API.
 [id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequeststatus"]
 ==== CredentialRequestStatus 
 
-
+CredentialRequestStatus is the status of a CredentialRequest, returned on responses to the Pinniped API.
 
 .Appears In:
 ****
@@ -183,7 +288,7 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped aggregated API.
 [id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequesttokencredential"]
 ==== CredentialRequestTokenCredential 
 
-
+CredentialRequestTokenCredential holds a bearer token issued by an upstream identity provider.
 
 .Appears In:
 ****

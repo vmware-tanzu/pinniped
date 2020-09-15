@@ -29,9 +29,6 @@ data:
   pinniped.yaml: |
     discovery:
       url: (@= data.values.discovery_url or "null" @)
-    webhook:
-      url: (@= data.values.webhook_url @)
-      caBundle: (@= data.values.webhook_ca_bundle @)
     api:
       servingCertificate:
         durationSeconds: (@= str(data.values.api_serving_certificate_duration_seconds) @)

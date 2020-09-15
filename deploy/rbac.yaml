@@ -47,8 +47,8 @@ rules:
   - apiGroups: [""]
     resources: [secrets]
     verbs: [create, get, list, patch, update, watch, delete]
-  - apiGroups: [crd.pinniped.dev]
-    resources: [credentialissuerconfigs]
+  - apiGroups: [crd.pinniped.dev, idp.pinniped.dev]
+    resources: ["*"]
     verbs: [create, get, list, update, watch]
 ---
 kind: RoleBinding

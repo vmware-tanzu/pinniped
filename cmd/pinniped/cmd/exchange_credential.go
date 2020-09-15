@@ -23,19 +23,39 @@ import (
 
 //nolint: gochecknoinits
 func init() {
-	exchangeCredentialCmd := &cobra.Command{
-		Run:   runExchangeCredential,
+	rootCmd.AddCommand(newExchangeCredentialCmd(os.Args, os.Stdout, os.Stderr).cmd)
+}
+
+type exchangeCredentialCommand struct {
+	// runFunc is called by the cobra.Command.Run hook. It is included here for
+	// testability.
+	runFunc func(stdout, stderr io.Writer)
+
+	// cmd is the cobra.Command for this CLI command. It is included here for
+	// testability.
+	cmd *cobra.Command
+}
+
+func newExchangeCredentialCmd(args []string, stdout, stderr io.Writer) *exchangeCredentialCommand {
+	c := &exchangeCredentialCommand{
+		runFunc: runExchangeCredential,
+	}
+
+	c.cmd = &cobra.Command{
+		Run: func(cmd *cobra.Command, _ []string) {
+			c.runFunc(stdout, stderr)
+		},
 		Args:  cobra.NoArgs, // do not accept positional arguments for this command
 		Use:   "exchange-credential",
 		Short: "Exchange a credential for a cluster-specific access credential",
 		Long: here.Doc(`
 			Exchange a credential which proves your identity for a time-limited,
 			cluster-specific access credential.
-			
+
 			Designed to be conveniently used as an credential plugin for kubectl.
 			See the help message for 'pinniped get-kubeconfig' for more
 			information about setting up a kubeconfig file using Pinniped.
-			
+
 			Requires all of the following environment variables, which are
 			typically set in the kubeconfig:
 			  - PINNIPED_TOKEN: the token to send to Pinniped for exchange
@@ -43,13 +63,17 @@ func init() {
 				Pinniped's HTTPS endpoint
 			  - PINNIPED_K8S_API_ENDPOINT: the URL for the Pinniped credential
 				exchange API
-			
+
 			For more information about credential plugins in general, see
 			https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins
 		`),
 	}
 
-	rootCmd.AddCommand(exchangeCredentialCmd)
+	c.cmd.SetArgs(args)
+	c.cmd.SetOut(stdout)
+	c.cmd.SetErr(stderr)
+
+	return c
 }
 
 type envGetter func(string) (string, bool)
@@ -57,8 +81,8 @@ type tokenExchanger func(ctx context.Context, token, caBundle, apiEndpoint strin
 
 const ErrMissingEnvVar = constable.Error("failed to get credential: environment variable not set")
 
-func runExchangeCredential(_ *cobra.Command, _ []string) {
-	err := exchangeCredential(os.LookupEnv, client.ExchangeToken, os.Stdout, 30*time.Second)
+func runExchangeCredential(stdout, _ io.Writer) {
+	err := exchangeCredential(os.LookupEnv, client.ExchangeToken, stdout, 30*time.Second)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 		os.Exit(1)

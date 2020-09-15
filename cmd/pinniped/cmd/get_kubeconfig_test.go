@@ -26,46 +26,47 @@ import (
 	"github.com/suzerain-io/pinniped/internal/here"
 )
 
-const (
-	knownGoodUsage = `
-Usage:
-  get-kubeconfig [flags]
+var (
+	knownGoodUsageForGetKubeConfig = here.Doc(`
+		Usage:
+		  get-kubeconfig [flags]
 
-Flags:
-  -h, --help                        help for get-kubeconfig
-      --kubeconfig string           Path to the kubeconfig file
-      --kubeconfig-context string   Kubeconfig context override
-      --pinniped-namespace string   Namespace in which Pinniped was installed (default "pinniped")
-      --token string                Credential to include in the resulting kubeconfig output (Required)
+		Flags:
+		  -h, --help                        help for get-kubeconfig
+			  --kubeconfig string           Path to the kubeconfig file
+			  --kubeconfig-context string   Kubeconfig context override
+			  --pinniped-namespace string   Namespace in which Pinniped was installed (default "pinniped")
+			  --token string                Credential to include in the resulting kubeconfig output (Required)
 
-`
+		`)
 
-	knownGoodHelp = `Print a kubeconfig for authenticating into a cluster via Pinniped.
+	knownGoodHelpForGetKubeConfig = here.Doc(`
+		Print a kubeconfig for authenticating into a cluster via Pinniped.
 
-Requires admin-like access to the cluster using the current
-kubeconfig context in order to access Pinniped's metadata.
-The current kubeconfig is found similar to how kubectl finds it:
-using the value of the --kubeconfig option, or if that is not
-specified then from the value of the KUBECONFIG environment
-variable, or if that is not specified then it defaults to
-.kube/config in your home directory.
+		Requires admin-like access to the cluster using the current
+		kubeconfig context in order to access Pinniped's metadata.
+		The current kubeconfig is found similar to how kubectl finds it:
+		using the value of the --kubeconfig option, or if that is not
+		specified then from the value of the KUBECONFIG environment
+		variable, or if that is not specified then it defaults to
+		.kube/config in your home directory.
 
-Prints a kubeconfig which is suitable to access the cluster using
-Pinniped as the authentication mechanism. This kubeconfig output
-can be saved to a file and used with future kubectl commands, e.g.:
-    pinniped get-kubeconfig --token $MY_TOKEN > $HOME/mycluster-kubeconfig
-    kubectl --kubeconfig $HOME/mycluster-kubeconfig get pods
+		Prints a kubeconfig which is suitable to access the cluster using
+		Pinniped as the authentication mechanism. This kubeconfig output
+		can be saved to a file and used with future kubectl commands, e.g.:
+			pinniped get-kubeconfig --token $MY_TOKEN > $HOME/mycluster-kubeconfig
+			kubectl --kubeconfig $HOME/mycluster-kubeconfig get pods
 
-Usage:
-  get-kubeconfig [flags]
+		Usage:
+		  get-kubeconfig [flags]
 
-Flags:
-  -h, --help                        help for get-kubeconfig
-      --kubeconfig string           Path to the kubeconfig file
-      --kubeconfig-context string   Kubeconfig context override
-      --pinniped-namespace string   Namespace in which Pinniped was installed (default "pinniped")
-      --token string                Credential to include in the resulting kubeconfig output (Required)
-`
+		Flags:
+		  -h, --help                        help for get-kubeconfig
+			  --kubeconfig string           Path to the kubeconfig file
+			  --kubeconfig-context string   Kubeconfig context override
+			  --pinniped-namespace string   Namespace in which Pinniped was installed (default "pinniped")
+			  --token string                Credential to include in the resulting kubeconfig output (Required)
+		`)
 )
 
 func TestNewGetKubeConfigCmd(t *testing.T) {
@@ -126,7 +127,7 @@ func TestNewGetKubeConfigCmd(t *testing.T) {
 			r.EqualError(c.cmd.Execute(), errorMessage)
 			r.False(runFuncCalled)
 
-			output := "Error: " + errorMessage + knownGoodUsage
+			output := "Error: " + errorMessage + "\n" + knownGoodUsageForGetKubeConfig
 			r.Equal(output, stdout.String())
 			r.Empty(stderr.String())
 		})
@@ -174,7 +175,7 @@ func TestNewGetKubeConfigCmd(t *testing.T) {
 			r.EqualError(c.cmd.Execute(), errorMessage)
 			r.False(runFuncCalled)
 
-			output := "Error: " + errorMessage + knownGoodUsage
+			output := "Error: " + errorMessage + "\n" + knownGoodUsageForGetKubeConfig
 			r.Equal(output, stdout.String())
 			r.Empty(stderr.String())
 		})
@@ -195,7 +196,7 @@ func TestNewGetKubeConfigCmd(t *testing.T) {
 
 			r.NoError(c.cmd.Execute())
 			r.False(runFuncCalled)
-			r.Equal(knownGoodHelp, stdout.String())
+			r.Equal(knownGoodHelpForGetKubeConfig, stdout.String())
 			r.Empty(stderr.String())
 		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))

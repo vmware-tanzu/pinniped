@@ -58,6 +58,10 @@ built with the [Pinniped Go client library](generated).
 
 ![implementation](doc/img/pinniped.svg)
 
+## Trying Pinniped
+
+Care to kick the tires? It's easy to [install and try Pinniped](doc/demo.md).
+
 ## Installation
 
 Currently, Pinniped supports self-hosted clusters where the Kube Controller Manager pod

@@ -9,8 +9,9 @@ for details.
 
 ## Tools
 
-This example deployment uses `ytt` from [Carvel](https://carvel.dev/) to template the YAML files.
-Either [install `ytt`](https://get-ytt.io/) or use the [container image from Dockerhub](https://hub.docker.com/r/k14s/image/tags).
+This example deployment uses `ytt` and `kapp` from [Carvel](https://carvel.dev/) to template the YAML files
+and to deploy the app.
+Either [install `ytt` and `kapp`](https://carvel.dev/) or use the [container image from Dockerhub](https://hub.docker.com/r/k14s/image/tags).
 
 ## Procedure
 

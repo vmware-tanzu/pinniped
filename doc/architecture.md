@@ -31,7 +31,13 @@ The currently supported external IDP types are outlined here. More will be added
 in the future.
 
 1. Any webhook which implements the
-[Kubernetes TokenReview API](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#webhook-token-authentication)
+   [Kubernetes TokenReview API](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#webhook-token-authentication).
+
+   In addition to allowing the integration of any existing IDP which implements this API, webhooks also
+   serve as an extension point for Pinniped by allowing for integration of arbitrary custom authenticators.
+   While a custom implementation may be in any language or framework, this project provides a
+   sample implementation in Golang. See the `ServeHTTP` method of
+   [cmd/local-user-authenticator/main.go](../cmd/local-user-authenticator/main.go).
 
 ## Cluster Integration Strategies
 

@@ -123,5 +123,5 @@ func getCABundle(spec *idpv1alpha1.TLSSpec) ([]byte, error) {
 	if spec == nil {
 		return nil, nil
 	}
-	return base64.RawStdEncoding.DecodeString(spec.CertificateAuthorityData)
+	return base64.StdEncoding.DecodeString(spec.CertificateAuthorityData)
 }

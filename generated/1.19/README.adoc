@@ -210,7 +210,7 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped aggregated API.
 [id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequest"]
 ==== CredentialRequest 
 
-
+CredentialRequest submits an IDP-specific credential to Pinniped in exchange for a cluster-specific credential.
 
 .Appears In:
 ****
@@ -230,7 +230,7 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped aggregated API.
 [id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequestcredential"]
 ==== CredentialRequestCredential 
 
-
+CredentialRequestCredential is the cluster-specific credential returned on a successful CredentialRequest. It contains either a valid bearer token or a valid TLS certificate and corresponding private key for the cluster.
 
 .Appears In:
 ****
@@ -252,7 +252,7 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped aggregated API.
 [id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequestspec"]
 ==== CredentialRequestSpec 
 
-
+CredentialRequestSpec is the specification of a CredentialRequest, expected on requests to the Pinniped API
 
 .Appears In:
 ****
@@ -270,7 +270,7 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped aggregated API.
 [id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequeststatus"]
 ==== CredentialRequestStatus 
 
-
+CredentialRequestStatus is the status of a CredentialRequest, returned on responses to the Pinniped API.
 
 .Appears In:
 ****
@@ -288,7 +288,7 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped aggregated API.
 [id="{anchor_prefix}-github-com-suzerain-io-pinniped-generated-1-19-apis-pinniped-v1alpha1-credentialrequesttokencredential"]
 ==== CredentialRequestTokenCredential 
 
-
+CredentialRequestTokenCredential holds a bearer token issued by an upstream identity provider.
 
 .Appears In:
 ****

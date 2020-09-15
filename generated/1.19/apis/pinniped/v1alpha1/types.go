@@ -13,19 +13,23 @@ const (
 	TokenCredentialType = CredentialType("token")
 )
 
+// CredentialRequestTokenCredential holds a bearer token issued by an upstream identity provider.
 type CredentialRequestTokenCredential struct {
 	// Value of the bearer token supplied with the credential request.
-	Value string `json:"value,omitempty" protobuf:"bytes,1,opt,name=value"`
+	Value string `json:"value,omitempty"`
 }
 
+// CredentialRequestSpec is the specification of a CredentialRequest, expected on requests to the Pinniped API
 type CredentialRequestSpec struct {
 	// Type of credential.
-	Type CredentialType `json:"type,omitempty" protobuf:"bytes,1,opt,name=type"`
+	Type CredentialType `json:"type,omitempty"`
 
 	// Token credential (when Type == TokenCredentialType).
-	Token *CredentialRequestTokenCredential `json:"token,omitempty" protobuf:"bytes,2,opt,name=token"`
+	Token *CredentialRequestTokenCredential `json:"token,omitempty"`
 }
 
+// CredentialRequestCredential is the cluster-specific credential returned on a successful CredentialRequest. It
+// contains either a valid bearer token or a valid TLS certificate and corresponding private key for the cluster.
 type CredentialRequestCredential struct {
 	// ExpirationTimestamp indicates a time when the provided credentials expire.
 	ExpirationTimestamp metav1.Time `json:"expirationTimestamp,omitempty"`
@@ -40,6 +44,7 @@ type CredentialRequestCredential struct {
 	ClientKeyData string `json:"clientKeyData,omitempty"`
 }
 
+// CredentialRequestStatus is the status of a CredentialRequest, returned on responses to the Pinniped API.
 type CredentialRequestStatus struct {
 	// A Credential will be returned for a successful credential request.
 	// +optional
@@ -50,25 +55,25 @@ type CredentialRequestStatus struct {
 	Message *string `json:"message,omitempty"`
 }
 
+// CredentialRequest submits an IDP-specific credential to Pinniped in exchange for a cluster-specific credential.
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 type CredentialRequest struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   CredentialRequestSpec   `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
-	Status CredentialRequestStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
+	Spec   CredentialRequestSpec   `json:"spec,omitempty"`
+	Status CredentialRequestStatus `json:"status,omitempty"`
 }
 
-// +genclient:nonNamespaced
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // CredentialRequestList is a list of CredentialRequest objects.
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type CredentialRequestList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty"`
 
-	Items []CredentialRequest `json:"items" protobuf:"bytes,2,rep,name=items"`
+	Items []CredentialRequest `json:"items"`
 }

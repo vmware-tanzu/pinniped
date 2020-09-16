@@ -75,7 +75,7 @@ func newExchangeCredentialCmd(args []string, stdout, stderr io.Writer) *exchange
 }
 
 type envGetter func(string) (string, bool)
-type tokenExchanger func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error)
+type tokenExchanger func(ctx context.Context, namespace, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error)
 
 const ErrMissingEnvVar = constable.Error("failed to get credential: environment variable not set")
 
@@ -90,6 +90,11 @@ func runExchangeCredential(stdout, _ io.Writer) {
 func exchangeCredential(envGetter envGetter, tokenExchanger tokenExchanger, outputWriter io.Writer, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+
+	namespace, varExists := envGetter("PINNIPED_NAMESPACE")
+	if !varExists {
+		return envVarNotSetError("PINNIPED_NAMESPACE")
+	}
 
 	token, varExists := envGetter("PINNIPED_TOKEN")
 	if !varExists {
@@ -106,7 +111,7 @@ func exchangeCredential(envGetter envGetter, tokenExchanger tokenExchanger, outp
 		return envVarNotSetError("PINNIPED_K8S_API_ENDPOINT")
 	}
 
-	cred, err := tokenExchanger(ctx, token, caBundle, apiEndpoint)
+	cred, err := tokenExchanger(ctx, namespace, token, caBundle, apiEndpoint)
 	if err != nil {
 		return fmt.Errorf("failed to get credential: %w", err)
 	}

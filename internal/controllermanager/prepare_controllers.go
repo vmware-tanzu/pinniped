@@ -15,6 +15,7 @@ import (
 	"k8s.io/klog/v2/klogr"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
+	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1"
 	pinnipedclientset "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned"
 	pinnipedinformers "github.com/suzerain-io/pinniped/generated/1.19/client/informers/externalversions"
 	"github.com/suzerain-io/pinniped/internal/controller/apicerts"
@@ -83,6 +84,7 @@ func PrepareControllers(
 		WithController(
 			apicerts.NewAPIServiceUpdaterController(
 				serverInstallationNamespace,
+				pinnipedv1alpha1.SchemeGroupVersion.Version+"."+pinnipedv1alpha1.GroupName,
 				aggregatorClient,
 				installationNamespaceK8sInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,

@@ -41,6 +41,7 @@ func TestAPIServiceUpdaterControllerOptions(t *testing.T) {
 			secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
 			_ = NewAPIServiceUpdaterController(
 				installedInNamespace,
+				pinnipedv1alpha1.SchemeGroupVersion.Version+"."+pinnipedv1alpha1.GroupName,
 				nil,
 				secretsInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
@@ -118,6 +119,7 @@ func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewAPIServiceUpdaterController(
 				installedInNamespace,
+				pinnipedv1alpha1.SchemeGroupVersion.Version+"."+pinnipedv1alpha1.GroupName,
 				aggregatorAPIClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,

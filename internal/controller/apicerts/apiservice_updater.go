@@ -19,10 +19,12 @@ type apiServiceUpdaterController struct {
 	namespace        string
 	aggregatorClient aggregatorclient.Interface
 	secretInformer   corev1informers.SecretInformer
+	apiServiceName   string
 }
 
 func NewAPIServiceUpdaterController(
 	namespace string,
+	apiServiceName string,
 	aggregatorClient aggregatorclient.Interface,
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
@@ -34,6 +36,7 @@ func NewAPIServiceUpdaterController(
 				namespace:        namespace,
 				aggregatorClient: aggregatorClient,
 				secretInformer:   secretInformer,
+				apiServiceName:   apiServiceName,
 			},
 		},
 		withInformer(
@@ -58,7 +61,7 @@ func (c *apiServiceUpdaterController) Sync(ctx controllerlib.Context) error {
 	}
 
 	// Update the APIService to give it the new CA bundle.
-	if err := UpdateAPIService(ctx.Context, c.aggregatorClient, certSecret.Data[caCertificateSecretKey]); err != nil {
+	if err := UpdateAPIService(ctx.Context, c.aggregatorClient, c.apiServiceName, certSecret.Data[caCertificateSecretKey]); err != nil {
 		return fmt.Errorf("could not update the API service: %w", err)
 	}
 

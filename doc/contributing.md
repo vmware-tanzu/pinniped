@@ -16,6 +16,8 @@ The maintainers aspire to hold a video conference every other week with the Pinn
 Any community member may request to add topics to the agenda by contacting a [maintainer](../MAINTAINERS.md)
 in advance, or by attending and raising the topic during time remaining after the agenda is covered.
 Typical agenda items include topics regarding the roadmap, feature requests, bug reports, pull requests, etc.
+A [public document](https://docs.google.com/document/d/1qYA35wZV-6bxcH5375vOnIGkNBo7e4OROgsV4Sj8WjQ)
+tracks the agendas and notes for these meetings.
 
 These meetings are currently scheduled for the first and third Thursday mornings of each month
 at 8 AM Pacific Time, using this [Zoom meeting](https://VMware.zoom.us/j/95817013210?pwd=U1NDRjVvck9jNWpXUGFhYmxraWVIUT09&from=msft).

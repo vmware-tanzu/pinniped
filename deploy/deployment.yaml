@@ -173,3 +173,20 @@ spec:
     name: pinniped-api
     namespace: #@ data.values.namespace
     port: 443
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.login.pinniped.dev
+  labels:
+    app: #@ data.values.app_name
+spec:
+  version: v1alpha1
+  group: login.pinniped.dev
+  groupPriorityMinimum: 2500
+  versionPriority: 10
+  #! caBundle: Do not include this key here. Starts out null, will be updated/owned by the golang code.
+  service:
+    name: pinniped-api
+    namespace: #@ data.values.namespace
+    port: 443

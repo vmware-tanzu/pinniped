@@ -1,7 +1,5 @@
-/*
-Copyright 2020 the Pinniped contributors. All Rights Reserved.
-SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 // Package kubecertauthority implements a signer backed by the kubernetes controller-manager signing
 // keys (accessed via the kubernetes Exec API).

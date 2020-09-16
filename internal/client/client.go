@@ -1,7 +1,5 @@
-/*
-Copyright 2020 the Pinniped contributors. All Rights Reserved.
-SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 // Package client is a wrapper for interacting with Pinniped's CredentialRequest API.
 package client

@@ -1,7 +1,5 @@
-/*
-Copyright 2020 the Pinniped contributors. All Rights Reserved.
-SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 // Package downward implements a client interface for interacting with Kubernetes "downwardAPI" volumes.
 // See https://kubernetes.io/docs/tasks/inject-data-application/downward-api-volume-expose-pod-information/.

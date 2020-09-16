@@ -1,7 +1,5 @@
-/*
-Copyright 2020 the Pinniped contributors. All Rights Reserved.
-SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 // Package webhookcachecleaner implements a controller for garbage collectting webhook IDPs from an IDP cache.
 package webhookcachecleaner

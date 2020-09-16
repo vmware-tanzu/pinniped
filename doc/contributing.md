@@ -10,6 +10,17 @@ Contributions to Pinniped are welcome. Here are some things to help you get star
 1. See below for how to [build the code](#building).
 1. See below for how to [run the tests](#testing).
 
+## Meeting with the Maintainers
+
+The maintainers aspire to hold a video conference every other week with the Pinniped community.
+Any community member may request to add topics to the agenda by contacting a [maintainer](../MAINTAINERS.md)
+in advance, or by attending and raising the topic during time remaining after the agenda is covered.
+Typical agenda items include topics regarding the roadmap, feature requests, bug reports, pull requests, etc.
+
+These meetings are currently scheduled for the first and third Thursday mornings of each month
+at 8 AM Pacific Time, using this [Zoom meeting](https://VMware.zoom.us/j/95817013210?pwd=U1NDRjVvck9jNWpXUGFhYmxraWVIUT09&from=msft).
+If the meeting day falls on a US holiday, please consider that occurrence of the meeting to be canceled.
+
 ## Bugs
 
 To file a bug report, please first open an
@@ -33,6 +44,17 @@ can be opened to implement the feature.
 
 For specifics on what to include in your feature request, please follow the
 guidelines in the issue and pull request templates.
+
+## Issues
+
+Github [issues](https://github.com/suzerain-io/pinniped/issues) can also be used for general
+inquiries and discussion regarding the project.
+
+Need an idea for a project to get started contributing? Take a look at the open
+[issues](https://github.com/suzerain-io/pinniped/issues).
+Also check to see if any open issues are labeled with
+["good first issue"](https://github.com/suzerain-io/pinniped/labels/good%20first%20issue)
+or ["help wanted"](https://github.com/suzerain-io/pinniped/labels/help%20wanted).
 
 ## Building
 
@@ -67,7 +89,21 @@ docker build .
 The `./hack/prepare-for-integration-tests.sh` script will create a local
 [`kind`](https://kind.sigs.k8s.io/) cluster on which the integration tests will run.
 
-### Pre-commit Hooks
+### Observing Tests on the Continuous Integration Environment
+
+CI will not be triggered on a pull request until the pull request is reviewed and
+approved for CI by a project [maintainer](../MAINTAINERS.md). Once CI is triggered,
+the progress and results will appear on the Github page for that
+[pull request](https://github.com/suzerain-io/pinniped/pulls) as checks. Links
+will appear to view the details of each check.
+
+## Documentation
+
+Any pull request which adds a new feature or changes the behavior of any feature which was previously documented
+should include updates to the documentation. All documentation lives in this repository. This project aspires to
+follow the Kubernetes [documentation style guide](https://kubernetes.io/docs/contribute/style/style-guide).
+
+## Pre-commit Hooks
 
 This project uses [pre-commit](https://pre-commit.com/) to agree on some conventions about whitespace/file encoding.
 
@@ -77,3 +113,9 @@ $ brew install pre-commit
 $ pre-commit install
 pre-commit installed at .git/hooks/pre-commit
 ```
+
+## Becoming a Pinniped Maintainer
+
+Regular contributors who are active in the Pinniped community and who have contributed at least several
+significant pull requests may be considered for promotion to become a maintainer upon request. Please
+contact an existing [maintainer](../MAINTAINERS.md) if you would like to be considered.

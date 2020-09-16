@@ -58,4 +58,4 @@ Please follow the procedure described in [SECURITY.md](SECURITY.md).
 
 Pinniped is open source and licensed under Apache License Version 2.0. See [LICENSE](LICENSE) file.
 
-Copyright 2020 VMware, Inc.
+Copyright 2020 the Pinniped contributors. All Rights Reserved.

@@ -1,4 +1,4 @@
-# Copyright 2020 VMware, Inc.
+# Copyright 2020 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 FROM golang:1.15.1 as build-env

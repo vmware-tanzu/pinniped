@@ -1,7 +1,5 @@
-/*
-Copyright 2020 VMware, Inc.
-SPDX-License-Identifier: Apache-2.0
-*/
+// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 // Package certauthority implements a simple x509 certificate authority suitable for use in an aggregated API service.
 package certauthority

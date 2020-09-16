@@ -64,7 +64,7 @@ linters-settings:
     statements: 50
   goheader:
     template: |-
-        Copyright 2020 VMware, Inc.
+        Copyright 2020 the Pinniped contributors. All Rights Reserved.
         SPDX-License-Identifier: Apache-2.0
   goimports:
     local-prefixes: github.com/suzerain-io

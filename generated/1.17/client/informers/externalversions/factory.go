@@ -14,6 +14,7 @@ import (
 	crdpinniped "github.com/suzerain-io/pinniped/generated/1.17/client/informers/externalversions/crdpinniped"
 	idp "github.com/suzerain-io/pinniped/generated/1.17/client/informers/externalversions/idp"
 	internalinterfaces "github.com/suzerain-io/pinniped/generated/1.17/client/informers/externalversions/internalinterfaces"
+	login "github.com/suzerain-io/pinniped/generated/1.17/client/informers/externalversions/login"
 	pinniped "github.com/suzerain-io/pinniped/generated/1.17/client/informers/externalversions/pinniped"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -163,6 +164,7 @@ type SharedInformerFactory interface {
 
 	Crd() crdpinniped.Interface
 	IDP() idp.Interface
+	Login() login.Interface
 	Pinniped() pinniped.Interface
 }
 
@@ -172,6 +174,10 @@ func (f *sharedInformerFactory) Crd() crdpinniped.Interface {
 
 func (f *sharedInformerFactory) IDP() idp.Interface {
 	return idp.New(f, f.namespace, f.tweakListOptions)
+}
+
+func (f *sharedInformerFactory) Login() login.Interface {
+	return login.New(f, f.namespace, f.tweakListOptions)
 }
 
 func (f *sharedInformerFactory) Pinniped() pinniped.Interface {

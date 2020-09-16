@@ -20,7 +20,7 @@ A [public document](https://docs.google.com/document/d/1qYA35wZV-6bxcH5375vOnIGk
 tracks the agendas and notes for these meetings.
 
 These meetings are currently scheduled for the first and third Thursday mornings of each month
-at 8 AM Pacific Time, using this [Zoom meeting](https://VMware.zoom.us/j/95817013210?pwd=U1NDRjVvck9jNWpXUGFhYmxraWVIUT09&from=msft).
+at 8 AM Pacific Time, using this [Zoom meeting](https://VMware.zoom.us/j/94638309756?pwd=V3NvRXJIdDg5QVc0TUdFM2dYRzgrUT09).
 If the meeting day falls on a US holiday, please consider that occurrence of the meeting to be canceled.
 
 ## Bugs

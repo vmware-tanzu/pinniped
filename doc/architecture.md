@@ -5,25 +5,19 @@ clusters. Pinniped hopes to enable this access across a wide range of Kubernetes
 environments with zero configuration.
 
 This integration is implemented using a credential exchange API which takes as
-input a credential from the external IDP (or internal federation trust
-relationship) and returns a credential which is understood by the host
-Kubernetes cluster. To learn more about this integration, see [Cluster
-Integration Strategies](#cluster-integration-strategies).
+input a credential from the external IDP and returns a credential which is understood by the host
+Kubernetes cluster.
 
 <img src="img/pinniped_architecture.svg" alt="Pinniped Architecture Sketch" width="300px"/>
+
+Pinniped supports various IDP types and implements different integration strategies
+for various Kubernetes distributions to make authentication possible.
 
 ## External Identity Provider Integrations
 
 Pinniped will consume identity from one or more external identity providers
-(IDPs). Administrators will configure external IDPs via [Kubernetes custom
-resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/),
-allowing Pinniped to be managed using GitOps and standard Kubernetes tools.
-
-IDP integration support will be driven by empirical use case.
-
-IDPs that support only just-in-time flows (such as OIDC) can be optionally
-paired with a separate directory backend to enable directory-based flows such as
-first-class support for policy editing UX.
+(IDPs). Administrators will configure external IDPs via Kubernetes custom
+resources allowing Pinniped to be managed using GitOps and standard Kubernetes tools.
 
 ### Supported External Identity Provider Types
 

@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/suzerain-io/pinniped/pkg/config/api"
+	"github.com/vmware-tanzu/pinniped/pkg/config/api"
 )
 
 func TestFromPath(t *testing.T) {

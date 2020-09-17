@@ -13,9 +13,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 
-	"github.com/suzerain-io/pinniped/internal/controllerlib/test/integration/examplecontroller/api"
-	examplestart "github.com/suzerain-io/pinniped/internal/controllerlib/test/integration/examplecontroller/starter"
-	"github.com/suzerain-io/pinniped/test/library"
+	"github.com/vmware-tanzu/pinniped/internal/controllerlib/test/integration/examplecontroller/api"
+	examplestart "github.com/vmware-tanzu/pinniped/internal/controllerlib/test/integration/examplecontroller/starter"
+	"github.com/vmware-tanzu/pinniped/test/library"
 )
 
 func TestExampleController(t *testing.T) {

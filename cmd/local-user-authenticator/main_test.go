@@ -32,8 +32,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
-	"github.com/suzerain-io/pinniped/internal/certauthority"
-	"github.com/suzerain-io/pinniped/internal/provider"
+	"github.com/vmware-tanzu/pinniped/internal/certauthority"
+	"github.com/vmware-tanzu/pinniped/internal/provider"
 )
 
 func TestWebhook(t *testing.T) {

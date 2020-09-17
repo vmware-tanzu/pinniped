@@ -6,7 +6,7 @@
 package fake
 
 import (
-	v1alpha1 "github.com/suzerain-io/pinniped/generated/1.18/client/clientset/versioned/typed/idp/v1alpha1"
+	v1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.18/client/clientset/versioned/typed/idp/v1alpha1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )

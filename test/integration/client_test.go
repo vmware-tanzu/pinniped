@@ -11,9 +11,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/suzerain-io/pinniped/internal/client"
-	"github.com/suzerain-io/pinniped/internal/here"
-	"github.com/suzerain-io/pinniped/test/library"
+	"github.com/vmware-tanzu/pinniped/internal/client"
+	"github.com/vmware-tanzu/pinniped/internal/here"
+	"github.com/vmware-tanzu/pinniped/test/library"
 )
 
 // Test certificate and private key that should get an authentication error. Generated with cfssl [1], like this:

@@ -23,7 +23,7 @@
 ### General Steps
 
 1. Install Pinniped by following the directions in [deploy/README.md](../deploy/README.md).
-1. Download the Pinniped CLI from [Pinniped's github Releases page](https://github.com/suzerain-io/pinniped/releases/latest).
+1. Download the Pinniped CLI from [Pinniped's github Releases page](https://github.com/vmware-tanzu/pinniped/releases/latest).
 1. Generate a kubeconfig using the Pinniped CLI. Run `pinniped get-kubeconfig --help` for more information.
 1. Run `kubectl` commands using the generated kubeconfig to authenticate using Pinniped during those commands.
 
@@ -53,7 +53,7 @@
 1. Clone this repo.
 
     ```bash
-    git clone https://github.com/suzerain-io/pinniped.git /tmp/pinniped --depth 1
+    git clone https://github.com/vmware-tanzu/pinniped.git /tmp/pinniped --depth 1
     ```
 
 1. Deploy the `local-user-authenticator` app:
@@ -90,7 +90,7 @@
    ```
 
 1. Download the latest version of the Pinniped CLI binary for your platform
-   from [Pinniped's github Releases page](https://github.com/suzerain-io/pinniped/releases/latest).
+   from [Pinniped's github Releases page](https://github.com/vmware-tanzu/pinniped/releases/latest).
 
 1. Move the Pinniped CLI binary to your preferred directory and add the executable bit,
    e.g. `chmod +x /usr/local/bin/pinniped`.

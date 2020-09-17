@@ -13,7 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/suzerain-io/pinniped/test/library"
+	"github.com/vmware-tanzu/pinniped/test/library"
 )
 
 func TestGetDeployment(t *testing.T) {

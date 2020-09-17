@@ -6,8 +6,8 @@
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/suzerain-io/pinniped/generated/1.17/apis/idp/v1alpha1"
-	"github.com/suzerain-io/pinniped/generated/1.17/client/clientset/versioned/scheme"
+	v1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.17/apis/idp/v1alpha1"
+	"github.com/vmware-tanzu/pinniped/generated/1.17/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 

@@ -22,9 +22,9 @@ import (
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	aggregatorfake "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 
-	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1"
-	"github.com/suzerain-io/pinniped/internal/controllerlib"
-	"github.com/suzerain-io/pinniped/internal/testutil"
+	pinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1"
+	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
+	"github.com/vmware-tanzu/pinniped/internal/testutil"
 )
 
 func TestAPIServiceUpdaterControllerOptions(t *testing.T) {

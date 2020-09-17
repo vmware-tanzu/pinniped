@@ -6,7 +6,7 @@ package controller
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/suzerain-io/pinniped/internal/controllerlib"
+	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
 )
 
 func NameAndNamespaceExactMatchFilterFactory(name, namespace string) controllerlib.Filter {

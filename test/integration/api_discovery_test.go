@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/suzerain-io/pinniped/test/library"
+	"github.com/vmware-tanzu/pinniped/test/library"
 )
 
 func TestGetAPIResourceList(t *testing.T) {

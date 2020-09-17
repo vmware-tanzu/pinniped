@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/suzerain-io/pinniped/test/library"
+	"github.com/vmware-tanzu/pinniped/test/library"
 )
 
 // Smoke test to see if the kubeconfig works and the cluster is reachable.

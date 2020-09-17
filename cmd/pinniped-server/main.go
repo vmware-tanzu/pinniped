@@ -12,7 +12,7 @@ import (
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 
-	"github.com/suzerain-io/pinniped/internal/server"
+	"github.com/vmware-tanzu/pinniped/internal/server"
 )
 
 func main() {

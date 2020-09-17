@@ -34,10 +34,10 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
-	"github.com/suzerain-io/pinniped/internal/constable"
-	"github.com/suzerain-io/pinniped/internal/controller/apicerts"
-	"github.com/suzerain-io/pinniped/internal/controllerlib"
-	"github.com/suzerain-io/pinniped/internal/provider"
+	"github.com/vmware-tanzu/pinniped/internal/constable"
+	"github.com/vmware-tanzu/pinniped/internal/controller/apicerts"
+	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
+	"github.com/vmware-tanzu/pinniped/internal/provider"
 )
 
 const (

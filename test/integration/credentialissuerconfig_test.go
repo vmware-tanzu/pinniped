@@ -14,8 +14,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 
-	crdpinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	"github.com/suzerain-io/pinniped/test/library"
+	crdpinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
+	"github.com/vmware-tanzu/pinniped/test/library"
 )
 
 func TestCredentialIssuerConfig(t *testing.T) {

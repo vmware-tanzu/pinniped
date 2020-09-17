@@ -18,9 +18,9 @@ import (
 	coretesting "k8s.io/client-go/testing"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 
-	"github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	crdpinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	pinnipedfake "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned/fake"
+	"github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
+	crdpinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
+	pinnipedfake "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/fake"
 )
 
 func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {

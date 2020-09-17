@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
 	"go.pinniped.dev/internal/client"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/test/library"
@@ -68,7 +70,13 @@ func TestClient(t *testing.T) {
 
 	// Using the CA bundle and host from the current (admin) kubeconfig, do the token exchange.
 	clientConfig := library.NewClientConfig(t)
-	resp, err := client.ExchangeToken(ctx, namespace, token, string(clientConfig.CAData), clientConfig.Host)
+
+	idp := corev1.TypedLocalObjectReference{
+		APIGroup: &idpv1alpha1.SchemeGroupVersion.Group,
+		Kind:     "WebhookIdentityProvider",
+		Name:     "pinniped-webhook",
+	}
+	resp, err := client.ExchangeToken(ctx, namespace, idp, token, string(clientConfig.CAData), clientConfig.Host)
 	require.NoError(t, err)
 	require.NotNil(t, resp.Status.ExpirationTimestamp)
 	require.InDelta(t, time.Until(resp.Status.ExpirationTimestamp.Time), 1*time.Hour, float64(3*time.Minute))

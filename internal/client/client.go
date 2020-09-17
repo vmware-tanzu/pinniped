@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 	"k8s.io/client-go/tools/clientcmd"
@@ -21,15 +22,18 @@ import (
 // ErrLoginFailed is returned by ExchangeToken when the server rejects the login request.
 var ErrLoginFailed = errors.New("login failed")
 
-// ExchangeToken exchanges an opaque token using the Pinniped CredentialRequest API, returning a client-go ExecCredential valid on the target cluster.
-func ExchangeToken(ctx context.Context, namespace string, token string, caBundle string, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
+// ExchangeToken exchanges an opaque token using the Pinniped TokenCredentialRequest API, returning a client-go ExecCredential valid on the target cluster.
+func ExchangeToken(ctx context.Context, namespace string, idp corev1.TypedLocalObjectReference, token string, caBundle string, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
 	client, err := getClient(apiEndpoint, caBundle)
 	if err != nil {
 		return nil, fmt.Errorf("could not get API client: %w", err)
 	}
 
 	resp, err := client.LoginV1alpha1().TokenCredentialRequests(namespace).Create(ctx, &v1alpha1.TokenCredentialRequest{
-		Spec: v1alpha1.TokenCredentialRequestSpec{Token: token},
+		Spec: v1alpha1.TokenCredentialRequestSpec{
+			Token:            token,
+			IdentityProvider: idp,
+		},
 	}, metav1.CreateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("could not login: %w", err)

@@ -77,8 +77,7 @@
    ```bash
    kubectl get secret api-serving-cert --namespace local-user-authenticator \
      -o jsonpath={.data.caCertificate} \
-     | base64 -d \
-     | tee /tmp/local-user-authenticator-ca
+     | tee /tmp/local-user-authenticator-ca-base64-encoded
    ```
 1. Deploy Pinniped.
 
@@ -86,7 +85,7 @@
     cd /tmp/pinniped/deploy
     ytt --file . \
       --data-value "webhook_url=https://local-user-authenticator.local-user-authenticator.svc/authenticate" \
-      --data-value "webhook_ca_bundle=$(cat /tmp/local-user-authenticator-ca)" \
+      --data-value "webhook_ca_bundle=$(cat local-user-authenticator-ca-base64-encoded)" \
       | kapp deploy --yes --app pinniped --diff-changes --file -
    ```
 
@@ -96,11 +95,23 @@
 1. Move the Pinniped CLI binary to your preferred directory and add the executable bit,
    e.g. `chmod +x /usr/local/bin/pinniped`.
 
-1. Generate a kubeconfig.
+1. Generate a kubeconfig for the current cluster. Use `--token` to include a token which should
+   allow you to authenticate as the user that you created above.
 
    ```bash
    pinniped get-kubeconfig --token "pinny-the-seal:password123" > /tmp/pinniped-kubeconfig
    ```
+
+1. Try using the generated kubeconfig to issue arbitrary `kubectl` commands as
+   the `pinny-the-seal` user.
+
+   ```bash
+   kubectl --kubeconfig /tmp/pinniped-kubeconfig get pods -n pinniped
+   ```
+
+   Because this user has no RBAC permissions on this cluster, the previous command
+   results in the error `Error from server (Forbidden): pods is forbidden: User "pinny-the-seal" cannot list resource "pods" in API group "" in the namespace "pinniped"`.
+   However, this does prove that you are authenticated and acting as the "pinny-the-seal" user.
 
 1. Create RBAC rules for the test user to give them permissions to perform actions on the cluster.
    For example, grant the test user permission to view all cluster resources.
@@ -114,3 +125,5 @@
    ```bash
    kubectl --kubeconfig /tmp/pinniped-kubeconfig get pods -n pinniped
    ```
+
+   The user has permission to list pods, so the command succeeds! 🎉

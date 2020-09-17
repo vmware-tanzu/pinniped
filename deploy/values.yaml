@@ -15,13 +15,20 @@ image_repo: docker.io/getpinniped/pinniped-server
 image_digest: #! e.g. sha256:f3c4fdfd3ef865d4b97a1fd295d94acc3f0c654c46b6f27ffad5cf80216903c8
 image_tag: latest
 
-webhook_url: #! e.g., https://example.com
-webhook_ca_bundle: #! e.g., LS0tLS1CRUdJTiBDRVJUSUZJQ0F...
-
-discovery_url: #! e.g., https://example.com
-
-#! e.g. the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username="USERNAME" --docker-password="PASSWORD" --dry-run=client -o json | jq -r '.data[".dockerconfigjson"]'
+#! Specifies a secret to be used when pulling the above container image.
+#! Can be used when the above image_repo is a private registry.
+#! Typically the value would be the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username="USERNAME" --docker-password="PASSWORD" --dry-run=client -o json | jq -r '.data[".dockerconfigjson"]'
+#! Optional.
 image_pull_dockerconfigjson: #! e.g. {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}
+
+#! Configure a webhook identity provider.
+webhook_url: #! e.g., https://example.com
+webhook_ca_bundle: #! Must be a base64 encoded PEM certificate. e.g., LS0tLS1CRUdJTiBDRVJUSUZJQ0F...
+
+#! Pinniped will try to guess the right K8s API URL for sharing that information with potential clients.
+#! This settings allows the guess to be overridden.
+#! Optional.
+discovery_url: #! e.g., https://example.com
 
 #! Specify the duration and renewal interval for the API serving certificate.
 #! The defaults are set to expire the cert about every 30 days, and to rotate it

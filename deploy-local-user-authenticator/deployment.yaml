@@ -17,6 +17,19 @@ metadata:
   name: local-user-authenticator-service-account
   namespace: local-user-authenticator
 ---
+#@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
+apiVersion: v1
+kind: Secret
+metadata:
+  name: image-pull-secret
+  namespace: local-user-authenticator
+  labels:
+    app: local-user-authenticator
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: #@ data.values.image_pull_dockerconfigjson
+#@ end
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -35,6 +48,10 @@ spec:
         app: local-user-authenticator
     spec:
       serviceAccountName: local-user-authenticator-service-account
+      #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
+      imagePullSecrets:
+        - name: image-pull-secret
+      #@ end
       containers:
         - name: local-user-authenticator
           #@ if data.values.image_digest:

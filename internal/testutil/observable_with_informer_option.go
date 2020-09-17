@@ -3,7 +3,7 @@
 
 package testutil
 
-import "github.com/suzerain-io/pinniped/internal/controllerlib"
+import "github.com/vmware-tanzu/pinniped/internal/controllerlib"
 
 type ObservableWithInformerOption struct {
 	informerToFilterMap map[controllerlib.InformerGetter]controllerlib.Filter

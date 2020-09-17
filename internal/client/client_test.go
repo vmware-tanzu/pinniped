@@ -15,8 +15,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
-	"github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1"
-	"github.com/suzerain-io/pinniped/internal/testutil"
+	"github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1"
+	"github.com/vmware-tanzu/pinniped/internal/testutil"
 )
 
 func TestExchangeToken(t *testing.T) {

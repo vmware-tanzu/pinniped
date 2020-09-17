@@ -16,9 +16,9 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
-	"github.com/suzerain-io/pinniped/internal/controllerlib"
-	"github.com/suzerain-io/pinniped/internal/provider"
-	"github.com/suzerain-io/pinniped/internal/testutil"
+	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
+	"github.com/vmware-tanzu/pinniped/internal/provider"
+	"github.com/vmware-tanzu/pinniped/internal/testutil"
 )
 
 func TestObserverControllerInformerFilters(t *testing.T) {

@@ -26,10 +26,10 @@ If the meeting day falls on a US holiday, please consider that occurrence of the
 ## Bugs
 
 To file a bug report, please first open an
-[issue](https://github.com/suzerain-io/pinniped/issues/new?template=bug_report.md). The project team
+[issue](https://github.com/vmware-tanzu/pinniped/issues/new?template=bug_report.md). The project team
 will work with you on your bug report.
 
-Once the bug has been validated, a [pull request](https://github.com/suzerain-io/pinniped/compare)
+Once the bug has been validated, a [pull request](https://github.com/vmware-tanzu/pinniped/compare)
 can be opened to fix the bug.
 
 For specifics on what to include in your bug report, please follow the
@@ -38,10 +38,10 @@ guidelines in the issue and pull request templates.
 ## Features
 
 To suggest a feature, please first open an
-[issue](https://github.com/suzerain-io/pinniped/issues/new?template=feature-proposal.md)
+[issue](https://github.com/vmware-tanzu/pinniped/issues/new?template=feature-proposal.md)
 and tag it with `proposal`. The project team will work with you on your feature request.
 
-Once the feature request has been validated, a [pull request](https://github.com/suzerain-io/pinniped/compare)
+Once the feature request has been validated, a [pull request](https://github.com/vmware-tanzu/pinniped/compare)
 can be opened to implement the feature.
 
 For specifics on what to include in your feature request, please follow the
@@ -49,14 +49,14 @@ guidelines in the issue and pull request templates.
 
 ## Issues
 
-Github [issues](https://github.com/suzerain-io/pinniped/issues) can also be used for general
+Github [issues](https://github.com/vmware-tanzu/pinniped/issues) can also be used for general
 inquiries and discussion regarding the project.
 
 Need an idea for a project to get started contributing? Take a look at the open
-[issues](https://github.com/suzerain-io/pinniped/issues).
+[issues](https://github.com/vmware-tanzu/pinniped/issues).
 Also check to see if any open issues are labeled with
-["good first issue"](https://github.com/suzerain-io/pinniped/labels/good%20first%20issue)
-or ["help wanted"](https://github.com/suzerain-io/pinniped/labels/help%20wanted).
+["good first issue"](https://github.com/vmware-tanzu/pinniped/labels/good%20first%20issue)
+or ["help wanted"](https://github.com/vmware-tanzu/pinniped/labels/help%20wanted).
 
 ## Building
 
@@ -96,7 +96,7 @@ The `./hack/prepare-for-integration-tests.sh` script will create a local
 CI will not be triggered on a pull request until the pull request is reviewed and
 approved for CI by a project [maintainer](../MAINTAINERS.md). Once CI is triggered,
 the progress and results will appear on the Github page for that
-[pull request](https://github.com/suzerain-io/pinniped/pulls) as checks. Links
+[pull request](https://github.com/vmware-tanzu/pinniped/pulls) as checks. Links
 will appear to view the details of each check.
 
 ## Documentation

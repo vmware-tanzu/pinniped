@@ -18,11 +18,11 @@ import (
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/klog/v2"
 
-	loginapi "github.com/suzerain-io/pinniped/generated/1.19/apis/login"
-	loginv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1"
-	pinnipedapi "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped"
-	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1"
-	"github.com/suzerain-io/pinniped/internal/registry/credentialrequest"
+	loginapi "github.com/vmware-tanzu/pinniped/generated/1.19/apis/login"
+	loginv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1"
+	pinnipedapi "github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped"
+	pinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1"
+	"github.com/vmware-tanzu/pinniped/internal/registry/credentialrequest"
 )
 
 var (

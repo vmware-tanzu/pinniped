@@ -17,8 +17,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
-	"github.com/suzerain-io/pinniped/internal/here"
-	"github.com/suzerain-io/pinniped/internal/testutil"
+	"github.com/vmware-tanzu/pinniped/internal/here"
+	"github.com/vmware-tanzu/pinniped/internal/testutil"
 )
 
 var (

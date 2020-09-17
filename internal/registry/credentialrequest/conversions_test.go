@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	loginapi "github.com/suzerain-io/pinniped/generated/1.19/apis/login"
-	pinnipedapi "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped"
+	loginapi "github.com/vmware-tanzu/pinniped/generated/1.19/apis/login"
+	pinnipedapi "github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped"
 )
 
 func TestConversions(t *testing.T) {

@@ -14,7 +14,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/suzerain-io/pinniped/test/library"
+	"github.com/vmware-tanzu/pinniped/test/library"
 )
 
 func TestCLI(t *testing.T) {
@@ -65,7 +65,7 @@ func buildPinnipedCLI(t *testing.T) (string, func()) {
 		"build",
 		"-o",
 		pinnipedExe,
-		"github.com/suzerain-io/pinniped/cmd/pinniped",
+		"github.com/vmware-tanzu/pinniped/cmd/pinniped",
 	).CombinedOutput()
 	require.NoError(t, err, string(output))
 

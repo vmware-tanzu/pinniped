@@ -23,10 +23,10 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 
-	loginapi "github.com/suzerain-io/pinniped/generated/1.19/apis/login"
-	pinnipedapi "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped"
-	"github.com/suzerain-io/pinniped/internal/mocks/mockcertissuer"
-	"github.com/suzerain-io/pinniped/internal/testutil"
+	loginapi "github.com/vmware-tanzu/pinniped/generated/1.19/apis/login"
+	pinnipedapi "github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped"
+	"github.com/vmware-tanzu/pinniped/internal/mocks/mockcertissuer"
+	"github.com/vmware-tanzu/pinniped/internal/testutil"
 )
 
 type contextKey struct{}

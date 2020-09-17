@@ -4,8 +4,8 @@
 package credentialrequest
 
 import (
-	loginapi "github.com/suzerain-io/pinniped/generated/1.19/apis/login"
-	pinnipedapi "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped"
+	loginapi "github.com/vmware-tanzu/pinniped/generated/1.19/apis/login"
+	pinnipedapi "github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped"
 )
 
 func convertToLoginAPI(input *pinnipedapi.CredentialRequest) *loginapi.TokenCredentialRequest {

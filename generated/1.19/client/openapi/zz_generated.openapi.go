@@ -17,80 +17,80 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfig":               schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfig(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigKubeConfigInfo": schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigKubeConfigInfo(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigList":           schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigList(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStatus":         schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigStatus(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStrategy":       schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigStrategy(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.Condition":                                    schema_119_apis_idp_v1alpha1_Condition(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.TLSSpec":                                      schema_119_apis_idp_v1alpha1_TLSSpec(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProvider":                      schema_119_apis_idp_v1alpha1_WebhookIdentityProvider(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderList":                  schema_119_apis_idp_v1alpha1_WebhookIdentityProviderList(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderSpec":                  schema_119_apis_idp_v1alpha1_WebhookIdentityProviderSpec(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderStatus":                schema_119_apis_idp_v1alpha1_WebhookIdentityProviderStatus(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1.ClusterCredential":                          schema_119_apis_login_v1alpha1_ClusterCredential(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequest":                     schema_119_apis_login_v1alpha1_TokenCredentialRequest(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequestList":                 schema_119_apis_login_v1alpha1_TokenCredentialRequestList(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequestSpec":                 schema_119_apis_login_v1alpha1_TokenCredentialRequestSpec(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequestStatus":               schema_119_apis_login_v1alpha1_TokenCredentialRequestStatus(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequest":                       schema_119_apis_pinniped_v1alpha1_CredentialRequest(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestCredential":             schema_119_apis_pinniped_v1alpha1_CredentialRequestCredential(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestList":                   schema_119_apis_pinniped_v1alpha1_CredentialRequestList(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestSpec":                   schema_119_apis_pinniped_v1alpha1_CredentialRequestSpec(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestStatus":                 schema_119_apis_pinniped_v1alpha1_CredentialRequestStatus(ref),
-		"github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestTokenCredential":        schema_119_apis_pinniped_v1alpha1_CredentialRequestTokenCredential(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                                                                 schema_pkg_apis_meta_v1_APIGroup(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroupList":                                                             schema_pkg_apis_meta_v1_APIGroupList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":                                                              schema_pkg_apis_meta_v1_APIResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResourceList":                                                          schema_pkg_apis_meta_v1_APIResourceList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIVersions":                                                              schema_pkg_apis_meta_v1_APIVersions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Condition":                                                                schema_pkg_apis_meta_v1_Condition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.CreateOptions":                                                            schema_pkg_apis_meta_v1_CreateOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.DeleteOptions":                                                            schema_pkg_apis_meta_v1_DeleteOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Duration":                                                                 schema_pkg_apis_meta_v1_Duration(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ExportOptions":                                                            schema_pkg_apis_meta_v1_ExportOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.FieldsV1":                                                                 schema_pkg_apis_meta_v1_FieldsV1(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GetOptions":                                                               schema_pkg_apis_meta_v1_GetOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupKind":                                                                schema_pkg_apis_meta_v1_GroupKind(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupResource":                                                            schema_pkg_apis_meta_v1_GroupResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersion":                                                             schema_pkg_apis_meta_v1_GroupVersion(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionForDiscovery":                                                 schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionKind":                                                         schema_pkg_apis_meta_v1_GroupVersionKind(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionResource":                                                     schema_pkg_apis_meta_v1_GroupVersionResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.InternalEvent":                                                            schema_pkg_apis_meta_v1_InternalEvent(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector":                                                            schema_pkg_apis_meta_v1_LabelSelector(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelectorRequirement":                                                 schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.List":                                                                     schema_pkg_apis_meta_v1_List(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta":                                                                 schema_pkg_apis_meta_v1_ListMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ListOptions":                                                              schema_pkg_apis_meta_v1_ListOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry":                                                       schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.MicroTime":                                                                schema_pkg_apis_meta_v1_MicroTime(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta":                                                               schema_pkg_apis_meta_v1_ObjectMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.OwnerReference":                                                           schema_pkg_apis_meta_v1_OwnerReference(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadata":                                                    schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadataList":                                                schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Patch":                                                                    schema_pkg_apis_meta_v1_Patch(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PatchOptions":                                                             schema_pkg_apis_meta_v1_PatchOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Preconditions":                                                            schema_pkg_apis_meta_v1_Preconditions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.RootPaths":                                                                schema_pkg_apis_meta_v1_RootPaths(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ServerAddressByClientCIDR":                                                schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Status":                                                                   schema_pkg_apis_meta_v1_Status(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusCause":                                                              schema_pkg_apis_meta_v1_StatusCause(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusDetails":                                                            schema_pkg_apis_meta_v1_StatusDetails(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Table":                                                                    schema_pkg_apis_meta_v1_Table(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableColumnDefinition":                                                    schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableOptions":                                                             schema_pkg_apis_meta_v1_TableOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRow":                                                                 schema_pkg_apis_meta_v1_TableRow(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRowCondition":                                                        schema_pkg_apis_meta_v1_TableRowCondition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Time":                                                                     schema_pkg_apis_meta_v1_Time(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Timestamp":                                                                schema_pkg_apis_meta_v1_Timestamp(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TypeMeta":                                                                 schema_pkg_apis_meta_v1_TypeMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.UpdateOptions":                                                            schema_pkg_apis_meta_v1_UpdateOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.WatchEvent":                                                               schema_pkg_apis_meta_v1_WatchEvent(ref),
-		"k8s.io/apimachinery/pkg/runtime.RawExtension":                                                                  schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
-		"k8s.io/apimachinery/pkg/runtime.TypeMeta":                                                                      schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
-		"k8s.io/apimachinery/pkg/runtime.Unknown":                                                                       schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
-		"k8s.io/apimachinery/pkg/version.Info":                                                                          schema_k8sio_apimachinery_pkg_version_Info(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfig":               schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfig(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigKubeConfigInfo": schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigKubeConfigInfo(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigList":           schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigList(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStatus":         schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigStatus(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStrategy":       schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigStrategy(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.Condition":                                    schema_119_apis_idp_v1alpha1_Condition(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.TLSSpec":                                      schema_119_apis_idp_v1alpha1_TLSSpec(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProvider":                      schema_119_apis_idp_v1alpha1_WebhookIdentityProvider(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderList":                  schema_119_apis_idp_v1alpha1_WebhookIdentityProviderList(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderSpec":                  schema_119_apis_idp_v1alpha1_WebhookIdentityProviderSpec(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderStatus":                schema_119_apis_idp_v1alpha1_WebhookIdentityProviderStatus(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1.ClusterCredential":                          schema_119_apis_login_v1alpha1_ClusterCredential(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequest":                     schema_119_apis_login_v1alpha1_TokenCredentialRequest(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequestList":                 schema_119_apis_login_v1alpha1_TokenCredentialRequestList(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequestSpec":                 schema_119_apis_login_v1alpha1_TokenCredentialRequestSpec(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequestStatus":               schema_119_apis_login_v1alpha1_TokenCredentialRequestStatus(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequest":                       schema_119_apis_pinniped_v1alpha1_CredentialRequest(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestCredential":             schema_119_apis_pinniped_v1alpha1_CredentialRequestCredential(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestList":                   schema_119_apis_pinniped_v1alpha1_CredentialRequestList(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestSpec":                   schema_119_apis_pinniped_v1alpha1_CredentialRequestSpec(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestStatus":                 schema_119_apis_pinniped_v1alpha1_CredentialRequestStatus(ref),
+		"github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestTokenCredential":        schema_119_apis_pinniped_v1alpha1_CredentialRequestTokenCredential(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                                                                  schema_pkg_apis_meta_v1_APIGroup(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroupList":                                                              schema_pkg_apis_meta_v1_APIGroupList(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":                                                               schema_pkg_apis_meta_v1_APIResource(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResourceList":                                                           schema_pkg_apis_meta_v1_APIResourceList(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIVersions":                                                               schema_pkg_apis_meta_v1_APIVersions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Condition":                                                                 schema_pkg_apis_meta_v1_Condition(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.CreateOptions":                                                             schema_pkg_apis_meta_v1_CreateOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.DeleteOptions":                                                             schema_pkg_apis_meta_v1_DeleteOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Duration":                                                                  schema_pkg_apis_meta_v1_Duration(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ExportOptions":                                                             schema_pkg_apis_meta_v1_ExportOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.FieldsV1":                                                                  schema_pkg_apis_meta_v1_FieldsV1(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GetOptions":                                                                schema_pkg_apis_meta_v1_GetOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupKind":                                                                 schema_pkg_apis_meta_v1_GroupKind(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupResource":                                                             schema_pkg_apis_meta_v1_GroupResource(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersion":                                                              schema_pkg_apis_meta_v1_GroupVersion(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionForDiscovery":                                                  schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionKind":                                                          schema_pkg_apis_meta_v1_GroupVersionKind(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionResource":                                                      schema_pkg_apis_meta_v1_GroupVersionResource(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.InternalEvent":                                                             schema_pkg_apis_meta_v1_InternalEvent(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector":                                                             schema_pkg_apis_meta_v1_LabelSelector(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelectorRequirement":                                                  schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.List":                                                                      schema_pkg_apis_meta_v1_List(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta":                                                                  schema_pkg_apis_meta_v1_ListMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ListOptions":                                                               schema_pkg_apis_meta_v1_ListOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry":                                                        schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.MicroTime":                                                                 schema_pkg_apis_meta_v1_MicroTime(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta":                                                                schema_pkg_apis_meta_v1_ObjectMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.OwnerReference":                                                            schema_pkg_apis_meta_v1_OwnerReference(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadata":                                                     schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadataList":                                                 schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Patch":                                                                     schema_pkg_apis_meta_v1_Patch(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.PatchOptions":                                                              schema_pkg_apis_meta_v1_PatchOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Preconditions":                                                             schema_pkg_apis_meta_v1_Preconditions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.RootPaths":                                                                 schema_pkg_apis_meta_v1_RootPaths(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ServerAddressByClientCIDR":                                                 schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Status":                                                                    schema_pkg_apis_meta_v1_Status(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusCause":                                                               schema_pkg_apis_meta_v1_StatusCause(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusDetails":                                                             schema_pkg_apis_meta_v1_StatusDetails(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Table":                                                                     schema_pkg_apis_meta_v1_Table(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableColumnDefinition":                                                     schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableOptions":                                                              schema_pkg_apis_meta_v1_TableOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRow":                                                                  schema_pkg_apis_meta_v1_TableRow(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRowCondition":                                                         schema_pkg_apis_meta_v1_TableRowCondition(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Time":                                                                      schema_pkg_apis_meta_v1_Time(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Timestamp":                                                                 schema_pkg_apis_meta_v1_Timestamp(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TypeMeta":                                                                  schema_pkg_apis_meta_v1_TypeMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.UpdateOptions":                                                             schema_pkg_apis_meta_v1_UpdateOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.WatchEvent":                                                                schema_pkg_apis_meta_v1_WatchEvent(ref),
+		"k8s.io/apimachinery/pkg/runtime.RawExtension":                                                                   schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
+		"k8s.io/apimachinery/pkg/runtime.TypeMeta":                                                                       schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
+		"k8s.io/apimachinery/pkg/runtime.Unknown":                                                                        schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
+		"k8s.io/apimachinery/pkg/version.Info":                                                                           schema_k8sio_apimachinery_pkg_version_Info(ref),
 	}
 }
 
@@ -122,7 +122,7 @@ func schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfig(ref common.Refe
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Status of the credential issuer.",
-							Ref:         ref("github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStatus"),
+							Ref:         ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStatus"),
 						},
 					},
 				},
@@ -130,7 +130,7 @@ func schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfig(ref common.Refe
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -193,7 +193,7 @@ func schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigList(ref common.
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfig"),
+										Ref: ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfig"),
 									},
 								},
 							},
@@ -204,7 +204,7 @@ func schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigList(ref common.
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfig", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			"github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfig", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
 	}
 }
 
@@ -222,7 +222,7 @@ func schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigStatus(ref commo
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStrategy"),
+										Ref: ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStrategy"),
 									},
 								},
 							},
@@ -231,7 +231,7 @@ func schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigStatus(ref commo
 					"kubeConfigInfo": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.",
-							Ref:         ref("github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigKubeConfigInfo"),
+							Ref:         ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigKubeConfigInfo"),
 						},
 					},
 				},
@@ -239,7 +239,7 @@ func schema_119_apis_crdpinniped_v1alpha1_CredentialIssuerConfigStatus(ref commo
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigKubeConfigInfo", "github.com/suzerain-io/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStrategy"},
+			"github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigKubeConfigInfo", "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1.CredentialIssuerConfigStrategy"},
 	}
 }
 
@@ -399,13 +399,13 @@ func schema_119_apis_idp_v1alpha1_WebhookIdentityProvider(ref common.ReferenceCa
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Spec for configuring the identity provider.",
-							Ref:         ref("github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderSpec"),
+							Ref:         ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderSpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Status of the identity provider.",
-							Ref:         ref("github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderStatus"),
+							Ref:         ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderStatus"),
 						},
 					},
 				},
@@ -413,7 +413,7 @@ func schema_119_apis_idp_v1alpha1_WebhookIdentityProvider(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderSpec", "github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderSpec", "github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -449,7 +449,7 @@ func schema_119_apis_idp_v1alpha1_WebhookIdentityProviderList(ref common.Referen
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProvider"),
+										Ref: ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProvider"),
 									},
 								},
 							},
@@ -460,7 +460,7 @@ func schema_119_apis_idp_v1alpha1_WebhookIdentityProviderList(ref common.Referen
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProvider", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			"github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProvider", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
 	}
 }
 
@@ -481,7 +481,7 @@ func schema_119_apis_idp_v1alpha1_WebhookIdentityProviderSpec(ref common.Referen
 					"tls": {
 						SchemaProps: spec.SchemaProps{
 							Description: "TLS configuration.",
-							Ref:         ref("github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.TLSSpec"),
+							Ref:         ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.TLSSpec"),
 						},
 					},
 				},
@@ -489,7 +489,7 @@ func schema_119_apis_idp_v1alpha1_WebhookIdentityProviderSpec(ref common.Referen
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.TLSSpec"},
+			"github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.TLSSpec"},
 	}
 }
 
@@ -517,7 +517,7 @@ func schema_119_apis_idp_v1alpha1_WebhookIdentityProviderStatus(ref common.Refer
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.Condition"),
+										Ref: ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.Condition"),
 									},
 								},
 							},
@@ -527,7 +527,7 @@ func schema_119_apis_idp_v1alpha1_WebhookIdentityProviderStatus(ref common.Refer
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1.Condition"},
+			"github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1.Condition"},
 	}
 }
 
@@ -601,19 +601,19 @@ func schema_119_apis_login_v1alpha1_TokenCredentialRequest(ref common.ReferenceC
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequestSpec"),
+							Ref: ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequestSpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequestStatus"),
+							Ref: ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequestStatus"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequestSpec", "github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequestStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequestSpec", "github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequestStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -649,7 +649,7 @@ func schema_119_apis_login_v1alpha1_TokenCredentialRequestList(ref common.Refere
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequest"),
+										Ref: ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequest"),
 									},
 								},
 							},
@@ -660,7 +660,7 @@ func schema_119_apis_login_v1alpha1_TokenCredentialRequestList(ref common.Refere
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequest", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			"github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1.TokenCredentialRequest", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
 	}
 }
 
@@ -694,7 +694,7 @@ func schema_119_apis_login_v1alpha1_TokenCredentialRequestStatus(ref common.Refe
 					"credential": {
 						SchemaProps: spec.SchemaProps{
 							Description: "A Credential will be returned for a successful credential request.",
-							Ref:         ref("github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1.ClusterCredential"),
+							Ref:         ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1.ClusterCredential"),
 						},
 					},
 					"message": {
@@ -708,7 +708,7 @@ func schema_119_apis_login_v1alpha1_TokenCredentialRequestStatus(ref common.Refe
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1.ClusterCredential"},
+			"github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1.ClusterCredential"},
 	}
 }
 
@@ -740,19 +740,19 @@ func schema_119_apis_pinniped_v1alpha1_CredentialRequest(ref common.ReferenceCal
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestSpec"),
+							Ref: ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestSpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestStatus"),
+							Ref: ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestStatus"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestSpec", "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestSpec", "github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -830,7 +830,7 @@ func schema_119_apis_pinniped_v1alpha1_CredentialRequestList(ref common.Referenc
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequest"),
+										Ref: ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequest"),
 									},
 								},
 							},
@@ -841,7 +841,7 @@ func schema_119_apis_pinniped_v1alpha1_CredentialRequestList(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequest", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			"github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequest", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
 	}
 }
 
@@ -862,14 +862,14 @@ func schema_119_apis_pinniped_v1alpha1_CredentialRequestSpec(ref common.Referenc
 					"token": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Token credential (when Type == TokenCredentialType).",
-							Ref:         ref("github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestTokenCredential"),
+							Ref:         ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestTokenCredential"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestTokenCredential"},
+			"github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestTokenCredential"},
 	}
 }
 
@@ -883,7 +883,7 @@ func schema_119_apis_pinniped_v1alpha1_CredentialRequestStatus(ref common.Refere
 					"credential": {
 						SchemaProps: spec.SchemaProps{
 							Description: "A Credential will be returned for a successful credential request.",
-							Ref:         ref("github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestCredential"),
+							Ref:         ref("github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestCredential"),
 						},
 					},
 					"message": {
@@ -897,7 +897,7 @@ func schema_119_apis_pinniped_v1alpha1_CredentialRequestStatus(ref common.Refere
 			},
 		},
 		Dependencies: []string{
-			"github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestCredential"},
+			"github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1.CredentialRequestCredential"},
 	}
 }
 

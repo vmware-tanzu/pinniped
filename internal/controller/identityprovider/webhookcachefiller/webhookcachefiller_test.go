@@ -19,13 +19,13 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
-	idpv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1"
-	pinnipedfake "github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned/fake"
-	pinnipedinformers "github.com/suzerain-io/pinniped/generated/1.19/client/informers/externalversions"
-	"github.com/suzerain-io/pinniped/internal/controller/identityprovider/idpcache"
-	"github.com/suzerain-io/pinniped/internal/controllerlib"
-	"github.com/suzerain-io/pinniped/internal/testutil"
-	"github.com/suzerain-io/pinniped/internal/testutil/testlogger"
+	idpv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1"
+	pinnipedfake "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/fake"
+	pinnipedinformers "github.com/vmware-tanzu/pinniped/generated/1.19/client/informers/externalversions"
+	"github.com/vmware-tanzu/pinniped/internal/controller/identityprovider/idpcache"
+	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
+	"github.com/vmware-tanzu/pinniped/internal/testutil"
+	"github.com/vmware-tanzu/pinniped/internal/testutil/testlogger"
 )
 
 func TestController(t *testing.T) {

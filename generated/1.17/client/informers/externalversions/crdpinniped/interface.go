@@ -6,8 +6,8 @@
 package crdpinniped
 
 import (
-	v1alpha1 "github.com/suzerain-io/pinniped/generated/1.17/client/informers/externalversions/crdpinniped/v1alpha1"
-	internalinterfaces "github.com/suzerain-io/pinniped/generated/1.17/client/informers/externalversions/internalinterfaces"
+	v1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.17/client/informers/externalversions/crdpinniped/v1alpha1"
+	internalinterfaces "github.com/vmware-tanzu/pinniped/generated/1.17/client/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to each of this group's versions.

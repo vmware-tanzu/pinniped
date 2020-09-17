@@ -67,4 +67,4 @@ linters-settings:
         Copyright 2020 the Pinniped contributors. All Rights Reserved.
         SPDX-License-Identifier: Apache-2.0
   goimports:
-    local-prefixes: github.com/suzerain-io
+    local-prefixes: github.com/vmware-tanzu

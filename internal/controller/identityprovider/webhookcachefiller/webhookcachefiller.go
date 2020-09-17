@@ -20,11 +20,11 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/klog/v2"
 
-	idpv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/idp/v1alpha1"
-	idpinformers "github.com/suzerain-io/pinniped/generated/1.19/client/informers/externalversions/idp/v1alpha1"
-	pinnipedcontroller "github.com/suzerain-io/pinniped/internal/controller"
-	"github.com/suzerain-io/pinniped/internal/controller/identityprovider/idpcache"
-	"github.com/suzerain-io/pinniped/internal/controllerlib"
+	idpv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1"
+	idpinformers "github.com/vmware-tanzu/pinniped/generated/1.19/client/informers/externalversions/idp/v1alpha1"
+	pinnipedcontroller "github.com/vmware-tanzu/pinniped/internal/controller"
+	"github.com/vmware-tanzu/pinniped/internal/controller/identityprovider/idpcache"
+	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
 )
 
 // New instantiates a new controllerlib.Controller which will populate the provided idpcache.Cache.

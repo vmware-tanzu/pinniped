@@ -5,7 +5,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 KUBE_VERSIONS=("$@")
-BASE_PKG="github.com/suzerain-io/pinniped"
+BASE_PKG="github.com/vmware-tanzu/pinniped"
 export GO111MODULE="on"
 
 # If we're not running in a container, assume that we want to loop over and run each build

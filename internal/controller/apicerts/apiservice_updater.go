@@ -11,8 +11,8 @@ import (
 	"k8s.io/klog/v2"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	pinnipedcontroller "github.com/suzerain-io/pinniped/internal/controller"
-	"github.com/suzerain-io/pinniped/internal/controllerlib"
+	pinnipedcontroller "github.com/vmware-tanzu/pinniped/internal/controller"
+	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
 )
 
 type apiServiceUpdaterController struct {

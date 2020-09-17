@@ -13,8 +13,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/events"
 
-	"github.com/suzerain-io/pinniped/internal/controllerlib"
-	examplecontroller "github.com/suzerain-io/pinniped/internal/controllerlib/test/integration/examplecontroller/controller"
+	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
+	examplecontroller "github.com/vmware-tanzu/pinniped/internal/controllerlib/test/integration/examplecontroller/controller"
 )
 
 func StartExampleController(ctx context.Context, config *rest.Config, secretData string) error {

@@ -14,9 +14,9 @@ import (
 	"github.com/spf13/cobra"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
-	"github.com/suzerain-io/pinniped/internal/client"
-	"github.com/suzerain-io/pinniped/internal/constable"
-	"github.com/suzerain-io/pinniped/internal/here"
+	"github.com/vmware-tanzu/pinniped/internal/client"
+	"github.com/vmware-tanzu/pinniped/internal/constable"
+	"github.com/vmware-tanzu/pinniped/internal/here"
 )
 
 //nolint: gochecknoinits

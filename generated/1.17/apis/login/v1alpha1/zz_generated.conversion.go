@@ -10,7 +10,7 @@ package v1alpha1
 import (
 	unsafe "unsafe"
 
-	login "github.com/suzerain-io/pinniped/generated/1.17/apis/login"
+	login "github.com/vmware-tanzu/pinniped/generated/1.17/apis/login"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )

@@ -6,10 +6,10 @@
 package fake
 
 import (
-	crdv1alpha1 "github.com/suzerain-io/pinniped/generated/1.18/apis/crdpinniped/v1alpha1"
-	idpv1alpha1 "github.com/suzerain-io/pinniped/generated/1.18/apis/idp/v1alpha1"
-	loginv1alpha1 "github.com/suzerain-io/pinniped/generated/1.18/apis/login/v1alpha1"
-	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.18/apis/pinniped/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.18/apis/crdpinniped/v1alpha1"
+	idpv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.18/apis/idp/v1alpha1"
+	loginv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.18/apis/login/v1alpha1"
+	pinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.18/apis/pinniped/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

@@ -14,8 +14,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
-	"github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1"
-	"github.com/suzerain-io/pinniped/generated/1.19/client/clientset/versioned"
+	"github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1"
+	"github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned"
 )
 
 // ErrLoginFailed is returned by ExchangeToken when the server rejects the login request.

@@ -84,9 +84,10 @@
 
    ```bash
     cd /tmp/pinniped/deploy
-    ytt --file . | kapp deploy --yes --app pinniped --diff-changes --file - \
+    ytt --file . \
       --data-value "webhook_url=https://local-user-authenticator.local-user-authenticator.svc/authenticate" \
-      --data-value "webhook_ca_bundle=$(cat /tmp/local-user-authenticator-ca)"
+      --data-value "webhook_ca_bundle=$(cat /tmp/local-user-authenticator-ca)" \
+      | kapp deploy --yes --app pinniped --diff-changes --file -
    ```
 
 1. Download the latest version of the Pinniped CLI binary for your platform

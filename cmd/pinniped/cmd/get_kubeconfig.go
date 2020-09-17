@@ -201,7 +201,7 @@ func getKubeConfig(
 		return err
 	}
 
-	config := newPinnipedKubeconfig(v1Cluster, fullPathToSelf, token)
+	config := newPinnipedKubeconfig(v1Cluster, fullPathToSelf, token, pinnipedInstallationNamespace)
 
 	err = writeConfigAsYAML(outputWriter, config)
 	if err != nil {
@@ -298,7 +298,7 @@ func copyCurrentClusterFromExistingKubeConfig(currentKubeConfig clientcmdapi.Con
 	return v1Cluster, nil
 }
 
-func newPinnipedKubeconfig(v1Cluster v1.Cluster, fullPathToSelf string, token string) v1.Config {
+func newPinnipedKubeconfig(v1Cluster v1.Cluster, fullPathToSelf string, token string, namespace string) v1.Config {
 	clusterName := "pinniped-cluster"
 	userName := "pinniped-user"
 
@@ -329,9 +329,21 @@ func newPinnipedKubeconfig(v1Cluster v1.Cluster, fullPathToSelf string, token st
 						Command: fullPathToSelf,
 						Args:    []string{"exchange-credential"},
 						Env: []v1.ExecEnvVar{
-							{Name: "PINNIPED_K8S_API_ENDPOINT", Value: v1Cluster.Server},
-							{Name: "PINNIPED_CA_BUNDLE", Value: string(v1Cluster.CertificateAuthorityData)},
-							{Name: "PINNIPED_TOKEN", Value: token},
+							{
+								Name:  "PINNIPED_K8S_API_ENDPOINT",
+								Value: v1Cluster.Server,
+							},
+							{
+								Name:  "PINNIPED_CA_BUNDLE",
+								Value: string(v1Cluster.CertificateAuthorityData)},
+							{
+								Name:  "PINNIPED_NAMESPACE",
+								Value: namespace,
+							},
+							{
+								Name:  "PINNIPED_TOKEN",
+								Value: token,
+							},
 						},
 						APIVersion: clientauthenticationv1beta1.SchemeGroupVersion.String(),
 						InstallHint: "The Pinniped CLI is required to authenticate to the current cluster.\n" +

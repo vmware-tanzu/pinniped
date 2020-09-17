@@ -201,7 +201,7 @@ func TestNewGetKubeConfigCmd(t *testing.T) {
 }
 
 //nolint: unparam
-func expectedKubeconfigYAML(clusterCAData, clusterServer, command, token, pinnipedEndpoint, pinnipedCABundle string) string {
+func expectedKubeconfigYAML(clusterCAData, clusterServer, command, token, pinnipedEndpoint, pinnipedCABundle, namespace string) string {
 	return here.Docf(`
 		apiVersion: v1
 		clusters:
@@ -230,12 +230,14 @@ func expectedKubeconfigYAML(clusterCAData, clusterServer, command, token, pinnip
 				value: %s
 			  - name: PINNIPED_CA_BUNDLE
 				value: %s
+			  - name: PINNIPED_NAMESPACE
+			    value: %s
 			  - name: PINNIPED_TOKEN
 				value: %s
 			  installHint: |-
 				The Pinniped CLI is required to authenticate to the current cluster.
 				For more information, please visit https://pinniped.dev
-		`, clusterCAData, clusterServer, command, pinnipedEndpoint, pinnipedCABundle, token)
+		`, clusterCAData, clusterServer, command, pinnipedEndpoint, pinnipedCABundle, namespace, token)
 }
 
 func newCredentialIssuerConfig(server, certificateAuthorityData string) *crdpinnipedv1alpha1.CredentialIssuerConfig {
@@ -311,6 +313,7 @@ func TestGetKubeConfig(t *testing.T) {
 					"some-token",
 					"https://fake-server-url-value",
 					"fake-certificate-authority-data-value",
+					"some-namespace",
 				), outputBuffer.String())
 			})
 
@@ -358,6 +361,7 @@ func TestGetKubeConfig(t *testing.T) {
 							"some-token",
 							"https://some-other-fake-server-url-value",
 							"some-other-fake-certificate-authority-data-value",
+							"some-namespace",
 						), outputBuffer.String())
 					})
 				})
@@ -449,6 +453,7 @@ func TestGetKubeConfig(t *testing.T) {
 						"some-token",
 						"https://fake-server-url-value",
 						"fake-certificate-authority-data-value",
+						"some-namespace",
 					), outputBuffer.String())
 				})
 			})
@@ -512,6 +517,7 @@ func TestGetKubeConfig(t *testing.T) {
 						"some-token",
 						"https://fake-server-url-value",
 						"fake-certificate-authority-data-value",
+						"some-namespace",
 					), outputBuffer.String())
 				})
 			})
@@ -552,6 +558,7 @@ func TestGetKubeConfig(t *testing.T) {
 						"some-token",
 						"https://fake-server-url-value",
 						"fake-certificate-authority-data-value",
+						"some-namespace",
 					), outputBuffer.String())
 				})
 			})

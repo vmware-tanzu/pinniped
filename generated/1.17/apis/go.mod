@@ -3,4 +3,4 @@ module github.com/suzerain-io/pinniped/generated/1.17/apis
 
 go 1.13
 
-require k8s.io/apimachinery v0.17.9
+require k8s.io/apimachinery v0.17.11

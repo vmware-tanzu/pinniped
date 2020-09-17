@@ -15,7 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
-	"github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1"
+	"github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1"
 	"github.com/suzerain-io/pinniped/internal/testutil"
 )
 
@@ -25,7 +25,7 @@ func TestExchangeToken(t *testing.T) {
 
 	t.Run("invalid configuration", func(t *testing.T) {
 		t.Parallel()
-		got, err := ExchangeToken(ctx, "", "", "")
+		got, err := ExchangeToken(ctx, "test-namespace", "", "", "")
 		require.EqualError(t, err, "could not get API client: invalid configuration: no configuration has been provided, try setting KUBERNETES_MASTER environment variable")
 		require.Nil(t, got)
 	})
@@ -38,8 +38,8 @@ func TestExchangeToken(t *testing.T) {
 			_, _ = w.Write([]byte("some server error"))
 		})
 
-		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
-		require.EqualError(t, err, `could not login: an error on the server ("some server error") has prevented the request from succeeding (post credentialrequests.pinniped.dev)`)
+		got, err := ExchangeToken(ctx, "test-namespace", "", caBundle, endpoint)
+		require.EqualError(t, err, `could not login: an error on the server ("some server error") has prevented the request from succeeding (post tokencredentialrequests.login.pinniped.dev)`)
 		require.Nil(t, got)
 	})
 
@@ -49,14 +49,29 @@ func TestExchangeToken(t *testing.T) {
 		errorMessage := "some login failure"
 		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("content-type", "application/json")
-			_ = json.NewEncoder(w).Encode(&v1alpha1.CredentialRequest{
-				TypeMeta: metav1.TypeMeta{APIVersion: "pinniped.dev/v1alpha1", Kind: "CredentialRequest"},
-				Status:   v1alpha1.CredentialRequestStatus{Message: &errorMessage},
+			_ = json.NewEncoder(w).Encode(&v1alpha1.TokenCredentialRequest{
+				TypeMeta: metav1.TypeMeta{APIVersion: "login.pinniped.dev/v1alpha1", Kind: "TokenCredentialRequest"},
+				Status:   v1alpha1.TokenCredentialRequestStatus{Message: &errorMessage},
 			})
 		})
 
-		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
+		got, err := ExchangeToken(ctx, "test-namespace", "", caBundle, endpoint)
 		require.EqualError(t, err, `login failed: some login failure`)
+		require.Nil(t, got)
+	})
+
+	t.Run("login failure unknown error", func(t *testing.T) {
+		t.Parallel()
+		// Start a test server that returns without any error message but also without valid credentials
+		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("content-type", "application/json")
+			_ = json.NewEncoder(w).Encode(&v1alpha1.TokenCredentialRequest{
+				TypeMeta: metav1.TypeMeta{APIVersion: "login.pinniped.dev/v1alpha1", Kind: "TokenCredentialRequest"},
+			})
+		})
+
+		got, err := ExchangeToken(ctx, "test-namespace", "", caBundle, endpoint)
+		require.EqualError(t, err, `login failed: unknown`)
 		require.Nil(t, got)
 	})
 
@@ -67,21 +82,20 @@ func TestExchangeToken(t *testing.T) {
 		// Start a test server that returns successfully and asserts various properties of the request.
 		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 			require.Equal(t, http.MethodPost, r.Method)
-			require.Equal(t, "/apis/pinniped.dev/v1alpha1/credentialrequests", r.URL.Path)
+			require.Equal(t, "/apis/login.pinniped.dev/v1alpha1/namespaces/test-namespace/tokencredentialrequests", r.URL.Path)
 			require.Equal(t, "application/json", r.Header.Get("content-type"))
 
 			body, err := ioutil.ReadAll(r.Body)
 			require.NoError(t, err)
 			require.JSONEq(t,
 				`{
-				  "kind": "CredentialRequest",
-				  "apiVersion": "pinniped.dev/v1alpha1",
+				  "kind": "TokenCredentialRequest",
+				  "apiVersion": "login.pinniped.dev/v1alpha1",
 				  "metadata": {
 					"creationTimestamp": null
 				  },
 				  "spec": {
-					"type": "token",
-					"token": {}
+					"token": "test-token"
 				  },
 				  "status": {}
 				}`,
@@ -89,10 +103,10 @@ func TestExchangeToken(t *testing.T) {
 			)
 
 			w.Header().Set("content-type", "application/json")
-			_ = json.NewEncoder(w).Encode(&v1alpha1.CredentialRequest{
-				TypeMeta: metav1.TypeMeta{APIVersion: "pinniped.dev/v1alpha1", Kind: "CredentialRequest"},
-				Status: v1alpha1.CredentialRequestStatus{
-					Credential: &v1alpha1.CredentialRequestCredential{
+			_ = json.NewEncoder(w).Encode(&v1alpha1.TokenCredentialRequest{
+				TypeMeta: metav1.TypeMeta{APIVersion: "login.pinniped.dev/v1alpha1", Kind: "TokenCredentialRequest"},
+				Status: v1alpha1.TokenCredentialRequestStatus{
+					Credential: &v1alpha1.ClusterCredential{
 						ExpirationTimestamp:   expires,
 						ClientCertificateData: "test-certificate",
 						ClientKeyData:         "test-key",
@@ -101,7 +115,7 @@ func TestExchangeToken(t *testing.T) {
 			})
 		})
 
-		got, err := ExchangeToken(ctx, "", caBundle, endpoint)
+		got, err := ExchangeToken(ctx, "test-namespace", "test-token", caBundle, endpoint)
 		require.NoError(t, err)
 		require.Equal(t, &clientauthenticationv1beta1.ExecCredential{
 			TypeMeta: metav1.TypeMeta{

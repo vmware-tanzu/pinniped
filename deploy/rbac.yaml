@@ -104,6 +104,9 @@ rules:
   - apiGroups: [pinniped.dev]
     resources: [credentialrequests]
     verbs: [create]
+  - apiGroups: [login.pinniped.dev]
+    resources: [tokencredentialrequests]
+    verbs: [create]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

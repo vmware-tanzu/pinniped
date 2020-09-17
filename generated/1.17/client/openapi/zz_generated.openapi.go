@@ -28,6 +28,11 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/suzerain-io/pinniped/generated/1.17/apis/idp/v1alpha1.WebhookIdentityProviderList":                  schema_117_apis_idp_v1alpha1_WebhookIdentityProviderList(ref),
 		"github.com/suzerain-io/pinniped/generated/1.17/apis/idp/v1alpha1.WebhookIdentityProviderSpec":                  schema_117_apis_idp_v1alpha1_WebhookIdentityProviderSpec(ref),
 		"github.com/suzerain-io/pinniped/generated/1.17/apis/idp/v1alpha1.WebhookIdentityProviderStatus":                schema_117_apis_idp_v1alpha1_WebhookIdentityProviderStatus(ref),
+		"github.com/suzerain-io/pinniped/generated/1.17/apis/login/v1alpha1.ClusterCredential":                          schema_117_apis_login_v1alpha1_ClusterCredential(ref),
+		"github.com/suzerain-io/pinniped/generated/1.17/apis/login/v1alpha1.TokenCredentialRequest":                     schema_117_apis_login_v1alpha1_TokenCredentialRequest(ref),
+		"github.com/suzerain-io/pinniped/generated/1.17/apis/login/v1alpha1.TokenCredentialRequestList":                 schema_117_apis_login_v1alpha1_TokenCredentialRequestList(ref),
+		"github.com/suzerain-io/pinniped/generated/1.17/apis/login/v1alpha1.TokenCredentialRequestSpec":                 schema_117_apis_login_v1alpha1_TokenCredentialRequestSpec(ref),
+		"github.com/suzerain-io/pinniped/generated/1.17/apis/login/v1alpha1.TokenCredentialRequestStatus":               schema_117_apis_login_v1alpha1_TokenCredentialRequestStatus(ref),
 		"github.com/suzerain-io/pinniped/generated/1.17/apis/pinniped/v1alpha1.CredentialRequest":                       schema_117_apis_pinniped_v1alpha1_CredentialRequest(ref),
 		"github.com/suzerain-io/pinniped/generated/1.17/apis/pinniped/v1alpha1.CredentialRequestCredential":             schema_117_apis_pinniped_v1alpha1_CredentialRequestCredential(ref),
 		"github.com/suzerain-io/pinniped/generated/1.17/apis/pinniped/v1alpha1.CredentialRequestList":                   schema_117_apis_pinniped_v1alpha1_CredentialRequestList(ref),
@@ -522,6 +527,187 @@ func schema_117_apis_idp_v1alpha1_WebhookIdentityProviderStatus(ref common.Refer
 		},
 		Dependencies: []string{
 			"github.com/suzerain-io/pinniped/generated/1.17/apis/idp/v1alpha1.Condition"},
+	}
+}
+
+func schema_117_apis_login_v1alpha1_ClusterCredential(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ClusterCredential is the cluster-specific credential returned on a successful credential request. It contains either a valid bearer token or a valid TLS certificate and corresponding private key for the cluster.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"expirationTimestamp": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ExpirationTimestamp indicates a time when the provided credentials expire.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"token": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Token is a bearer token used by the client for request authentication.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"clientCertificateData": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PEM-encoded client TLS certificates (including intermediates, if any).",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"clientKeyData": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PEM-encoded private key for the above certificate.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_117_apis_login_v1alpha1_TokenCredentialRequest(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TokenCredentialRequest submits an IDP-specific credential to Pinniped in exchange for a cluster-specific credential.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/suzerain-io/pinniped/generated/1.17/apis/login/v1alpha1.TokenCredentialRequestSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/suzerain-io/pinniped/generated/1.17/apis/login/v1alpha1.TokenCredentialRequestStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/suzerain-io/pinniped/generated/1.17/apis/login/v1alpha1.TokenCredentialRequestSpec", "github.com/suzerain-io/pinniped/generated/1.17/apis/login/v1alpha1.TokenCredentialRequestStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_117_apis_login_v1alpha1_TokenCredentialRequestList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TokenCredentialRequestList is a list of TokenCredentialRequest objects.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/suzerain-io/pinniped/generated/1.17/apis/login/v1alpha1.TokenCredentialRequest"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/suzerain-io/pinniped/generated/1.17/apis/login/v1alpha1.TokenCredentialRequest", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_117_apis_login_v1alpha1_TokenCredentialRequestSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TokenCredentialRequestSpec is the specification of a TokenCredentialRequest, expected on requests to the Pinniped API.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"token": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Bearer token supplied with the credential request.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_117_apis_login_v1alpha1_TokenCredentialRequestStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TokenCredentialRequestStatus is the status of a TokenCredentialRequest, returned on responses to the Pinniped API.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"credential": {
+						SchemaProps: spec.SchemaProps{
+							Description: "A Credential will be returned for a successful credential request.",
+							Ref:         ref("github.com/suzerain-io/pinniped/generated/1.17/apis/login/v1alpha1.ClusterCredential"),
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Description: "An error message will be returned for an unsuccessful credential request.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/suzerain-io/pinniped/generated/1.17/apis/login/v1alpha1.ClusterCredential"},
 	}
 }
 

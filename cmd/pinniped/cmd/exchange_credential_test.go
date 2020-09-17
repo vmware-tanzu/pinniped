@@ -135,6 +135,7 @@ func TestExchangeCredential(t *testing.T) {
 			r = require.New(t)
 			buffer = new(bytes.Buffer)
 			fakeEnv = map[string]string{
+				"PINNIPED_NAMESPACE":        "namespace from env",
 				"PINNIPED_TOKEN":            "token from env",
 				"PINNIPED_CA_BUNDLE":        "ca bundle from env",
 				"PINNIPED_K8S_API_ENDPOINT": "k8s api from env",
@@ -142,6 +143,12 @@ func TestExchangeCredential(t *testing.T) {
 		})
 
 		when("env vars are missing", func() {
+			it("returns an error when PINNIPED_NAMESPACE is missing", func() {
+				delete(fakeEnv, "PINNIPED_NAMESPACE")
+				err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
+				r.EqualError(err, "failed to get credential: environment variable not set: PINNIPED_NAMESPACE")
+			})
+
 			it("returns an error when PINNIPED_TOKEN is missing", func() {
 				delete(fakeEnv, "PINNIPED_TOKEN")
 				err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
@@ -163,7 +170,7 @@ func TestExchangeCredential(t *testing.T) {
 
 		when("the token exchange fails", func() {
 			it.Before(func() {
-				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
+				tokenExchanger = func(ctx context.Context, namespace, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
 					return nil, fmt.Errorf("some error")
 				}
 			})
@@ -176,7 +183,7 @@ func TestExchangeCredential(t *testing.T) {
 
 		when("the JSON encoder fails", func() {
 			it.Before(func() {
-				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
+				tokenExchanger = func(ctx context.Context, namespace, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
 					return &clientauthenticationv1beta1.ExecCredential{
 						Status: &clientauthenticationv1beta1.ExecCredentialStatus{
 							Token: "some token",
@@ -193,7 +200,7 @@ func TestExchangeCredential(t *testing.T) {
 
 		when("the token exchange times out", func() {
 			it.Before(func() {
-				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
+				tokenExchanger = func(ctx context.Context, namespace, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
 					select {
 					case <-time.After(100 * time.Millisecond):
 						return &clientauthenticationv1beta1.ExecCredential{
@@ -214,11 +221,11 @@ func TestExchangeCredential(t *testing.T) {
 		})
 
 		when("the token exchange succeeds", func() {
-			var actualToken, actualCaBundle, actualAPIEndpoint string
+			var actualNamespace, actualToken, actualCaBundle, actualAPIEndpoint string
 
 			it.Before(func() {
-				tokenExchanger = func(ctx context.Context, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
-					actualToken, actualCaBundle, actualAPIEndpoint = token, caBundle, apiEndpoint
+				tokenExchanger = func(ctx context.Context, namespace, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
+					actualNamespace, actualToken, actualCaBundle, actualAPIEndpoint = namespace, token, caBundle, apiEndpoint
 					now := metav1.NewTime(time.Date(2020, 7, 29, 1, 2, 3, 0, time.UTC))
 					return &clientauthenticationv1beta1.ExecCredential{
 						TypeMeta: metav1.TypeMeta{
@@ -238,6 +245,7 @@ func TestExchangeCredential(t *testing.T) {
 			it("writes the execCredential to the given writer", func() {
 				err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
 				r.NoError(err)
+				r.Equal(fakeEnv["PINNIPED_NAMESPACE"], actualNamespace)
 				r.Equal(fakeEnv["PINNIPED_TOKEN"], actualToken)
 				r.Equal(fakeEnv["PINNIPED_CA_BUNDLE"], actualCaBundle)
 				r.Equal(fakeEnv["PINNIPED_K8S_API_ENDPOINT"], actualAPIEndpoint)

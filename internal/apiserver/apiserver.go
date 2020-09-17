@@ -18,6 +18,8 @@ import (
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/klog/v2"
 
+	loginapi "github.com/suzerain-io/pinniped/generated/1.19/apis/login"
+	loginv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/login/v1alpha1"
 	pinnipedapi "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped"
 	pinnipedv1alpha1 "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped/v1alpha1"
 	"github.com/suzerain-io/pinniped/internal/registry/credentialrequest"
@@ -35,6 +37,8 @@ var (
 func init() {
 	utilruntime.Must(pinnipedv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(pinnipedapi.AddToScheme(scheme))
+	utilruntime.Must(loginv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(loginapi.AddToScheme(scheme))
 
 	// add the options to empty v1
 	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
@@ -98,28 +102,21 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 		GenericAPIServer: genericServer,
 	}
 
-	gvr := pinnipedv1alpha1.SchemeGroupVersion.WithResource("credentialrequests")
-
-	apiGroupInfo := genericapiserver.APIGroupInfo{
-		PrioritizedVersions:          []schema.GroupVersion{gvr.GroupVersion()},
-		VersionedResourcesStorageMap: map[string]map[string]rest.Storage{},
-		OptionsExternalVersion:       &schema.GroupVersion{Version: "v1"},
-		Scheme:                       scheme,
-		ParameterCodec:               metav1.ParameterCodec,
-		NegotiatedSerializer:         Codecs,
-	}
-
-	credentialRequestStorage := credentialrequest.NewREST(c.ExtraConfig.TokenAuthenticator, c.ExtraConfig.Issuer)
-
-	v1alpha1Storage, ok := apiGroupInfo.VersionedResourcesStorageMap[gvr.Version]
-	if !ok {
-		v1alpha1Storage = map[string]rest.Storage{}
-	}
-	v1alpha1Storage[gvr.Resource] = credentialRequestStorage
-	apiGroupInfo.VersionedResourcesStorageMap[gvr.Version] = v1alpha1Storage
-
-	if err := s.GenericAPIServer.InstallAPIGroup(&apiGroupInfo); err != nil {
-		return nil, fmt.Errorf("install API group error: %w", err)
+	restHandler := credentialrequest.NewREST(c.ExtraConfig.TokenAuthenticator, c.ExtraConfig.Issuer)
+	for gvr, storage := range map[schema.GroupVersionResource]rest.Storage{
+		pinnipedv1alpha1.SchemeGroupVersion.WithResource("credentialrequests"):   restHandler.PinnipedV1alpha1Storage(),
+		loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests"): restHandler.LoginV1alpha1Storage(),
+	} {
+		if err := s.GenericAPIServer.InstallAPIGroup(&genericapiserver.APIGroupInfo{
+			PrioritizedVersions:          []schema.GroupVersion{gvr.GroupVersion()},
+			VersionedResourcesStorageMap: map[string]map[string]rest.Storage{gvr.Version: {gvr.Resource: storage}},
+			OptionsExternalVersion:       &schema.GroupVersion{Version: "v1"},
+			Scheme:                       scheme,
+			ParameterCodec:               metav1.ParameterCodec,
+			NegotiatedSerializer:         Codecs,
+		}); err != nil {
+			return nil, fmt.Errorf("could not install API group %s: %w", gvr.String(), err)
+		}
 	}
 
 	s.GenericAPIServer.AddPostStartHookOrDie("start-controllers",

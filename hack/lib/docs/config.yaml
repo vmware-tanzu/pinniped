@@ -6,6 +6,7 @@ processor:
     - "crd.pinniped.dev/crdpinniped"
     - "idp.pinniped.dev/idp"
     - "pinniped.dev/pinniped"
+    - "login.pinniped.dev/login"
   ignoreFields:
     - "TypeMeta$"
 

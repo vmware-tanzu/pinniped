@@ -18,18 +18,19 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/utils/trace"
 
+	loginapi "github.com/suzerain-io/pinniped/generated/1.19/apis/login"
 	pinnipedapi "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped"
 )
 
 // clientCertificateTTL is the TTL for short-lived client certificates returned by this API.
 const clientCertificateTTL = 1 * time.Hour
 
-var (
-	_ rest.Creater                 = &REST{}
-	_ rest.NamespaceScopedStrategy = &REST{}
-	_ rest.Scoper                  = &REST{}
-	_ rest.Storage                 = &REST{}
-)
+type Storage interface {
+	rest.Creater
+	rest.NamespaceScopedStrategy
+	rest.Scoper
+	rest.Storage
+}
 
 type CertIssuer interface {
 	IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) ([]byte, []byte, error)
@@ -47,17 +48,37 @@ type REST struct {
 	issuer             CertIssuer
 }
 
-func (r *REST) New() runtime.Object {
-	return &pinnipedapi.CredentialRequest{}
-}
+// PinnipedV1alpha1Storage returns a wrapper of the REST which serves the pinniped.dev/v1alpha1 API.
+func (r *REST) PinnipedV1alpha1Storage() Storage { return &oldAPIREST{r} }
 
-func (r *REST) NamespaceScoped() bool {
-	return false
-}
+type oldAPIREST struct{ *REST }
+
+func (*oldAPIREST) New() runtime.Object { return &pinnipedapi.CredentialRequest{} }
+
+func (*oldAPIREST) NamespaceScoped() bool { return false }
+
+// LoginV1alpha1Storage returns a wrapper of the REST which serves the login.pinniped.dev/v1alpha1 API.
+func (r *REST) LoginV1alpha1Storage() Storage { return &newAPIREST{r} }
+
+type newAPIREST struct{ *REST }
+
+func (*newAPIREST) New() runtime.Object { return &loginapi.TokenCredentialRequest{} }
+
+func (*newAPIREST) NamespaceScoped() bool { return true }
 
 func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
-	t := trace.FromContext(ctx).Nest("create CredentialRequest")
+	t := trace.FromContext(ctx).Nest("create", trace.Field{
+		Key:   "kind",
+		Value: obj.GetObjectKind().GroupVersionKind().Kind,
+	})
 	defer t.Log()
+
+	// If the incoming request is from the newer version of the API, convert it into the older API and map the result back later.
+	convertResponse := func(in *pinnipedapi.CredentialRequest) runtime.Object { return in }
+	if req, ok := obj.(*loginapi.TokenCredentialRequest); ok {
+		obj = convertFromLoginAPI(req)
+		convertResponse = func(in *pinnipedapi.CredentialRequest) runtime.Object { return convertToLoginAPI(in) }
+	}
 
 	credentialRequest, err := validateRequest(ctx, obj, createValidation, options, t)
 	if err != nil {
@@ -79,11 +100,11 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	authResponse, authenticated, err := r.tokenAuthenticator.AuthenticateToken(cancelCtx, credentialRequest.Spec.Token.Value)
 	if err != nil {
 		traceFailureWithError(t, "webhook authentication", err)
-		return failureResponse(), nil
+		return convertResponse(failureResponse()), nil
 	}
 	if !authenticated || authResponse == nil || authResponse.User == nil || authResponse.User.GetName() == "" {
 		traceSuccess(t, authResponse, authenticated, false)
-		return failureResponse(), nil
+		return convertResponse(failureResponse()), nil
 	}
 
 	username := authResponse.User.GetName()
@@ -104,7 +125,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	traceSuccess(t, authResponse, authenticated, true)
 
-	return &pinnipedapi.CredentialRequest{
+	return convertResponse(&pinnipedapi.CredentialRequest{
 		Status: pinnipedapi.CredentialRequestStatus{
 			Credential: &pinnipedapi.CredentialRequestCredential{
 				ExpirationTimestamp:   metav1.NewTime(time.Now().UTC().Add(clientCertificateTTL)),
@@ -112,7 +133,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 				ClientKeyData:         string(keyPEM),
 			},
 		},
-	}, nil
+	}), nil
 }
 
 func validateRequest(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions, t *trace.Trace) (*pinnipedapi.CredentialRequest, error) {

@@ -23,6 +23,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 
+	loginapi "github.com/suzerain-io/pinniped/generated/1.19/apis/login"
 	pinnipedapi "github.com/suzerain-io/pinniped/generated/1.19/apis/pinniped"
 	"github.com/suzerain-io/pinniped/internal/mocks/mockcertissuer"
 	"github.com/suzerain-io/pinniped/internal/testutil"
@@ -113,6 +114,61 @@ func TestCreate(t *testing.T) {
 			r.Equal(response, &pinnipedapi.CredentialRequest{
 				Status: pinnipedapi.CredentialRequestStatus{
 					Credential: &pinnipedapi.CredentialRequestCredential{
+						ExpirationTimestamp:   metav1.Time{},
+						ClientCertificateData: "test-cert",
+						ClientKeyData:         "test-key",
+					},
+				},
+			})
+			r.Equal(requestToken, webhook.calledWithToken)
+			requireOneLogStatement(r, logger, `"success" userID:test-user-uid,idpAuthenticated:true`)
+		})
+
+		it("CreateSucceedsWhenGivenANewLoginAPITokenAndTheWebhookAuthenticatesTheToken", func() {
+			webhook := FakeToken{
+				returnResponse: &authenticator.Response{
+					User: &user.DefaultInfo{
+						Name:   "test-user",
+						UID:    "test-user-uid",
+						Groups: []string{"test-group-1", "test-group-2"},
+					},
+				},
+				returnUnauthenticated: false,
+			}
+
+			issuer := mockcertissuer.NewMockCertIssuer(ctrl)
+			issuer.EXPECT().IssuePEM(
+				pkix.Name{
+					CommonName:   "test-user",
+					Organization: []string{"test-group-1", "test-group-2"}},
+				[]string{},
+				1*time.Hour,
+			).Return([]byte("test-cert"), []byte("test-key"), nil)
+
+			storage := NewREST(&webhook, issuer)
+			requestToken := "a token"
+
+			response, err := callCreate(context.Background(), storage, &loginapi.TokenCredentialRequest{
+				TypeMeta: metav1.TypeMeta{},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "request name",
+				},
+				Spec: loginapi.TokenCredentialRequestSpec{
+					Token: requestToken,
+				},
+			})
+
+			r.NoError(err)
+			r.IsType(&loginapi.TokenCredentialRequest{}, response)
+
+			expires := response.(*loginapi.TokenCredentialRequest).Status.Credential.ExpirationTimestamp
+			r.NotNil(expires)
+			r.InDelta(time.Now().Add(1*time.Hour).Unix(), expires.Unix(), 5)
+			response.(*loginapi.TokenCredentialRequest).Status.Credential.ExpirationTimestamp = metav1.Time{}
+
+			r.Equal(response, &loginapi.TokenCredentialRequest{
+				Status: loginapi.TokenCredentialRequestStatus{
+					Credential: &loginapi.ClusterCredential{
 						ExpirationTimestamp:   metav1.Time{},
 						ClientCertificateData: "test-cert",
 						ClientKeyData:         "test-key",
@@ -442,10 +498,10 @@ func requireOneLogStatement(r *require.Assertions, logger *testutil.TranscriptLo
 	r.Contains(transcript[0].Message, messageContains)
 }
 
-func callCreate(ctx context.Context, storage *REST, credentialRequest *pinnipedapi.CredentialRequest) (runtime.Object, error) {
+func callCreate(ctx context.Context, storage *REST, obj runtime.Object) (runtime.Object, error) {
 	return storage.Create(
 		ctx,
-		credentialRequest,
+		obj,
 		rest.ValidateAllObjectFunc,
 		&metav1.CreateOptions{
 			DryRun: []string{},

@@ -21,7 +21,7 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/pinniped/internal/testutil"
+	"go.pinniped.dev/internal/testutil"
 )
 
 type fakePodExecutor struct {

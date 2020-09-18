@@ -22,11 +22,11 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	v1 "k8s.io/client-go/tools/clientcmd/api/v1"
 
-	"github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	pinnipedclientset "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned"
-	"github.com/vmware-tanzu/pinniped/internal/constable"
-	"github.com/vmware-tanzu/pinniped/internal/controller/issuerconfig"
-	"github.com/vmware-tanzu/pinniped/internal/here"
+	"go.pinniped.dev/generated/1.19/apis/crdpinniped/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/controller/issuerconfig"
+	"go.pinniped.dev/internal/here"
 )
 
 const (

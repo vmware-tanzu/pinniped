@@ -16,9 +16,9 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
-	"github.com/vmware-tanzu/pinniped/internal/provider"
-	"github.com/vmware-tanzu/pinniped/internal/testutil"
+	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/provider"
+	"go.pinniped.dev/internal/testutil"
 )
 
 func TestObserverControllerInformerFilters(t *testing.T) {

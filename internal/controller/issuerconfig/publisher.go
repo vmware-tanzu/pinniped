@@ -12,11 +12,11 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
-	crdpinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	pinnipedclientset "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned"
-	crdpinnipedv1alpha1informers "github.com/vmware-tanzu/pinniped/generated/1.19/client/informers/externalversions/crdpinniped/v1alpha1"
-	pinnipedcontroller "github.com/vmware-tanzu/pinniped/internal/controller"
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
+	crdpinnipedv1alpha1 "go.pinniped.dev/generated/1.19/apis/crdpinniped/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	crdpinnipedv1alpha1informers "go.pinniped.dev/generated/1.19/client/informers/externalversions/crdpinniped/v1alpha1"
+	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	"go.pinniped.dev/internal/controllerlib"
 )
 
 const (

@@ -6,8 +6,8 @@
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1"
-	"github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/scheme"
+	v1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
+	"go.pinniped.dev/generated/1.19/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 

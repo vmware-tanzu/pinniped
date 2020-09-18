@@ -3,7 +3,7 @@
 
 // +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=package
-// +k8s:conversion-gen=github.com/vmware-tanzu/pinniped/generated/1.17/apis/idp
+// +k8s:conversion-gen=go.pinniped.dev/generated/1.17/apis/idp
 // +k8s:defaulter-gen=TypeMeta
 // +groupName=idp.pinniped.dev
 // +groupGoName=IDP

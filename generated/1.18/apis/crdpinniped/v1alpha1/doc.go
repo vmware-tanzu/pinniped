@@ -3,7 +3,7 @@
 
 // +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=package
-// +k8s:conversion-gen=github.com/vmware-tanzu/pinniped/generated/1.18/apis/crdpinniped
+// +k8s:conversion-gen=go.pinniped.dev/generated/1.18/apis/crdpinniped
 // +k8s:defaulter-gen=TypeMeta
 // +groupName=crd.pinniped.dev
 

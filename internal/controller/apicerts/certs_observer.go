@@ -10,9 +10,9 @@ import (
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/klog/v2"
 
-	pinnipedcontroller "github.com/vmware-tanzu/pinniped/internal/controller"
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
-	"github.com/vmware-tanzu/pinniped/internal/provider"
+	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/provider"
 )
 
 type certsObserverController struct {

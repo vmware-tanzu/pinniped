@@ -18,14 +18,14 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped CRD-based API.
 
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfig"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfig"]
 ==== CredentialIssuerConfig 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfiglist[$$CredentialIssuerConfigList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfiglist[$$CredentialIssuerConfigList$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -33,18 +33,18 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped CRD-based API.
 | Field | Description
 | *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`status`* __xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]__ | Status of the credential issuer.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]__ | Status of the credential issuer.
 |===
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigkubeconfiginfo"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigkubeconfiginfo"]
 ==== CredentialIssuerConfigKubeConfigInfo 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -57,32 +57,32 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped CRD-based API.
 
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus"]
 ==== CredentialIssuerConfigStatus 
 
 Status of a credential issuer.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfig[$$CredentialIssuerConfig$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfig[$$CredentialIssuerConfig$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`strategies`* __xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstrategy[$$CredentialIssuerConfigStrategy$$] array__ | List of integration strategies that were attempted by Pinniped.
-| *`kubeConfigInfo`* __xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigkubeconfiginfo[$$CredentialIssuerConfigKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
+| *`strategies`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstrategy[$$CredentialIssuerConfigStrategy$$] array__ | List of integration strategies that were attempted by Pinniped.
+| *`kubeConfigInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigkubeconfiginfo[$$CredentialIssuerConfigKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
 |===
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstrategy"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstrategy"]
 ==== CredentialIssuerConfigStrategy 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -104,14 +104,14 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped identity provider API.
 
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-idp-v1alpha1-condition"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-idp-v1alpha1-condition"]
 ==== Condition 
 
 Condition status of a resource (mirrored from the metav1.Condition type added in Kubernetes 1.19). In a future API version we can switch to using the upstream type. See https://github.com/kubernetes/apimachinery/blob/v0.19.0/pkg/apis/meta/v1/types.go#L1353-L1413.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-idp-v1alpha1-webhookidentityproviderstatus[$$WebhookIdentityProviderStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-idp-v1alpha1-webhookidentityproviderstatus[$$WebhookIdentityProviderStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -126,14 +126,14 @@ Condition status of a resource (mirrored from the metav1.Condition type added in
 |===
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-idp-v1alpha1-tlsspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-idp-v1alpha1-tlsspec"]
 ==== TLSSpec 
 
 Configuration for configuring TLS on various identity providers.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-idp-v1alpha1-webhookidentityproviderspec[$$WebhookIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-idp-v1alpha1-webhookidentityproviderspec[$$WebhookIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -143,14 +143,14 @@ Configuration for configuring TLS on various identity providers.
 |===
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-idp-v1alpha1-webhookidentityprovider"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-idp-v1alpha1-webhookidentityprovider"]
 ==== WebhookIdentityProvider 
 
 WebhookIdentityProvider describes the configuration of a Pinniped webhook identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-idp-v1alpha1-webhookidentityproviderlist[$$WebhookIdentityProviderList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-idp-v1alpha1-webhookidentityproviderlist[$$WebhookIdentityProviderList$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -158,45 +158,45 @@ WebhookIdentityProvider describes the configuration of a Pinniped webhook identi
 | Field | Description
 | *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-idp-v1alpha1-webhookidentityproviderspec[$$WebhookIdentityProviderSpec$$]__ | Spec for configuring the identity provider.
-| *`status`* __xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-idp-v1alpha1-webhookidentityproviderstatus[$$WebhookIdentityProviderStatus$$]__ | Status of the identity provider.
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-idp-v1alpha1-webhookidentityproviderspec[$$WebhookIdentityProviderSpec$$]__ | Spec for configuring the identity provider.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-idp-v1alpha1-webhookidentityproviderstatus[$$WebhookIdentityProviderStatus$$]__ | Status of the identity provider.
 |===
 
 
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-idp-v1alpha1-webhookidentityproviderspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-idp-v1alpha1-webhookidentityproviderspec"]
 ==== WebhookIdentityProviderSpec 
 
 Spec for configuring a webhook identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-idp-v1alpha1-webhookidentityprovider[$$WebhookIdentityProvider$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-idp-v1alpha1-webhookidentityprovider[$$WebhookIdentityProvider$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
 | *`endpoint`* __string__ | Webhook server endpoint URL.
-| *`tls`* __xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration.
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration.
 |===
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-idp-v1alpha1-webhookidentityproviderstatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-idp-v1alpha1-webhookidentityproviderstatus"]
 ==== WebhookIdentityProviderStatus 
 
 Status of a webhook identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-idp-v1alpha1-webhookidentityprovider[$$WebhookIdentityProvider$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-idp-v1alpha1-webhookidentityprovider[$$WebhookIdentityProvider$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`conditions`* __xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-idp-v1alpha1-condition[$$Condition$$]__ | Represents the observations of an identity provider's current state.
+| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-idp-v1alpha1-condition[$$Condition$$]__ | Represents the observations of an identity provider's current state.
 |===
 
 
@@ -208,14 +208,14 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped login API.
 
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-login-v1alpha1-clustercredential"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-clustercredential"]
 ==== ClusterCredential 
 
 ClusterCredential is the cluster-specific credential returned on a successful credential request. It contains either a valid bearer token or a valid TLS certificate and corresponding private key for the cluster.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-login-v1alpha1-tokencredentialrequeststatus[$$TokenCredentialRequestStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequeststatus[$$TokenCredentialRequestStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -228,14 +228,14 @@ ClusterCredential is the cluster-specific credential returned on a successful cr
 |===
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-login-v1alpha1-tokencredentialrequest"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequest"]
 ==== TokenCredentialRequest 
 
 TokenCredentialRequest submits an IDP-specific credential to Pinniped in exchange for a cluster-specific credential.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-login-v1alpha1-tokencredentialrequestlist[$$TokenCredentialRequestList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequestlist[$$TokenCredentialRequestList$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -243,21 +243,21 @@ TokenCredentialRequest submits an IDP-specific credential to Pinniped in exchang
 | Field | Description
 | *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-login-v1alpha1-tokencredentialrequestspec[$$TokenCredentialRequestSpec$$]__ | 
-| *`status`* __xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-login-v1alpha1-tokencredentialrequeststatus[$$TokenCredentialRequestStatus$$]__ | 
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequestspec[$$TokenCredentialRequestSpec$$]__ | 
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequeststatus[$$TokenCredentialRequestStatus$$]__ | 
 |===
 
 
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-login-v1alpha1-tokencredentialrequestspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequestspec"]
 ==== TokenCredentialRequestSpec 
 
 TokenCredentialRequestSpec is the specification of a TokenCredentialRequest, expected on requests to the Pinniped API.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-login-v1alpha1-tokencredentialrequest[$$TokenCredentialRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequest[$$TokenCredentialRequest$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -267,20 +267,20 @@ TokenCredentialRequestSpec is the specification of a TokenCredentialRequest, exp
 |===
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-login-v1alpha1-tokencredentialrequeststatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequeststatus"]
 ==== TokenCredentialRequestStatus 
 
 TokenCredentialRequestStatus is the status of a TokenCredentialRequest, returned on responses to the Pinniped API.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-login-v1alpha1-tokencredentialrequest[$$TokenCredentialRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequest[$$TokenCredentialRequest$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`credential`* __xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-login-v1alpha1-clustercredential[$$ClusterCredential$$]__ | A Credential will be returned for a successful credential request.
+| *`credential`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-clustercredential[$$ClusterCredential$$]__ | A Credential will be returned for a successful credential request.
 | *`message`* __string__ | An error message will be returned for an unsuccessful credential request.
 |===
 
@@ -293,14 +293,14 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped aggregated API.
 
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-pinniped-v1alpha1-credentialrequest"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-pinniped-v1alpha1-credentialrequest"]
 ==== CredentialRequest 
 
 CredentialRequest submits an IDP-specific credential to Pinniped in exchange for a cluster-specific credential.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-pinniped-v1alpha1-credentialrequestlist[$$CredentialRequestList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-pinniped-v1alpha1-credentialrequestlist[$$CredentialRequestList$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -308,19 +308,19 @@ CredentialRequest submits an IDP-specific credential to Pinniped in exchange for
 | Field | Description
 | *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-pinniped-v1alpha1-credentialrequestspec[$$CredentialRequestSpec$$]__ | 
-| *`status`* __xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-pinniped-v1alpha1-credentialrequeststatus[$$CredentialRequestStatus$$]__ | 
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-pinniped-v1alpha1-credentialrequestspec[$$CredentialRequestSpec$$]__ | 
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-pinniped-v1alpha1-credentialrequeststatus[$$CredentialRequestStatus$$]__ | 
 |===
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-pinniped-v1alpha1-credentialrequestcredential"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-pinniped-v1alpha1-credentialrequestcredential"]
 ==== CredentialRequestCredential 
 
 CredentialRequestCredential is the cluster-specific credential returned on a successful CredentialRequest. It contains either a valid bearer token or a valid TLS certificate and corresponding private key for the cluster.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-pinniped-v1alpha1-credentialrequeststatus[$$CredentialRequestStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-pinniped-v1alpha1-credentialrequeststatus[$$CredentialRequestStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -335,50 +335,50 @@ CredentialRequestCredential is the cluster-specific credential returned on a suc
 
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-pinniped-v1alpha1-credentialrequestspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-pinniped-v1alpha1-credentialrequestspec"]
 ==== CredentialRequestSpec 
 
 CredentialRequestSpec is the specification of a CredentialRequest, expected on requests to the Pinniped API
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-pinniped-v1alpha1-credentialrequest[$$CredentialRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-pinniped-v1alpha1-credentialrequest[$$CredentialRequest$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
 | *`type`* __CredentialType__ | Type of credential.
-| *`token`* __xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-pinniped-v1alpha1-credentialrequesttokencredential[$$CredentialRequestTokenCredential$$]__ | Token credential (when Type == TokenCredentialType).
+| *`token`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-pinniped-v1alpha1-credentialrequesttokencredential[$$CredentialRequestTokenCredential$$]__ | Token credential (when Type == TokenCredentialType).
 |===
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-pinniped-v1alpha1-credentialrequeststatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-pinniped-v1alpha1-credentialrequeststatus"]
 ==== CredentialRequestStatus 
 
 CredentialRequestStatus is the status of a CredentialRequest, returned on responses to the Pinniped API.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-pinniped-v1alpha1-credentialrequest[$$CredentialRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-pinniped-v1alpha1-credentialrequest[$$CredentialRequest$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`credential`* __xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-pinniped-v1alpha1-credentialrequestcredential[$$CredentialRequestCredential$$]__ | A Credential will be returned for a successful credential request.
+| *`credential`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-pinniped-v1alpha1-credentialrequestcredential[$$CredentialRequestCredential$$]__ | A Credential will be returned for a successful credential request.
 | *`message`* __string__ | An error message will be returned for an unsuccessful credential request.
 |===
 
 
-[id="{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-pinniped-v1alpha1-credentialrequesttokencredential"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-pinniped-v1alpha1-credentialrequesttokencredential"]
 ==== CredentialRequestTokenCredential 
 
 CredentialRequestTokenCredential holds a bearer token issued by an upstream identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-github-com-vmware-tanzu-pinniped-generated-1-18-apis-pinniped-v1alpha1-credentialrequestspec[$$CredentialRequestSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-pinniped-v1alpha1-credentialrequestspec[$$CredentialRequestSpec$$]
 ****
 
 [cols="25a,75a", options="header"]

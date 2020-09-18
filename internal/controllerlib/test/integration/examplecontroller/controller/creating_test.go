@@ -17,8 +17,8 @@ import (
 	coretesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/events"
 
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib/test/integration/examplecontroller/api"
+	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/controllerlib/test/integration/examplecontroller/api"
 )
 
 func TestNewExampleCreatingController(t *testing.T) {

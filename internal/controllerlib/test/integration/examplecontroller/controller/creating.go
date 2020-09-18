@@ -16,8 +16,8 @@ import (
 	"k8s.io/client-go/tools/events"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib/test/integration/examplecontroller/api"
+	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/controllerlib/test/integration/examplecontroller/api"
 )
 
 //nolint:funlen

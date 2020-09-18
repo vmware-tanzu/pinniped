@@ -11,7 +11,7 @@ import (
 
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
+	"go.pinniped.dev/internal/controllerlib"
 )
 
 var (

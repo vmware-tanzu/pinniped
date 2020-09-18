@@ -15,17 +15,17 @@ import (
 	"k8s.io/klog/v2/klogr"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	loginv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1"
-	pinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1"
-	pinnipedclientset "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned"
-	pinnipedinformers "github.com/vmware-tanzu/pinniped/generated/1.19/client/informers/externalversions"
-	"github.com/vmware-tanzu/pinniped/internal/controller/apicerts"
-	"github.com/vmware-tanzu/pinniped/internal/controller/identityprovider/idpcache"
-	"github.com/vmware-tanzu/pinniped/internal/controller/identityprovider/webhookcachecleaner"
-	"github.com/vmware-tanzu/pinniped/internal/controller/identityprovider/webhookcachefiller"
-	"github.com/vmware-tanzu/pinniped/internal/controller/issuerconfig"
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
-	"github.com/vmware-tanzu/pinniped/internal/provider"
+	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
+	pinnipedv1alpha1 "go.pinniped.dev/generated/1.19/apis/pinniped/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
+	"go.pinniped.dev/internal/controller/apicerts"
+	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
+	"go.pinniped.dev/internal/controller/identityprovider/webhookcachecleaner"
+	"go.pinniped.dev/internal/controller/identityprovider/webhookcachefiller"
+	"go.pinniped.dev/internal/controller/issuerconfig"
+	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/provider"
 )
 
 const (

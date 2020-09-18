@@ -8,10 +8,10 @@ package versioned
 import (
 	"fmt"
 
-	crdv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.17/client/clientset/versioned/typed/crdpinniped/v1alpha1"
-	idpv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.17/client/clientset/versioned/typed/idp/v1alpha1"
-	loginv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.17/client/clientset/versioned/typed/login/v1alpha1"
-	pinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.17/client/clientset/versioned/typed/pinniped/v1alpha1"
+	crdv1alpha1 "go.pinniped.dev/generated/1.17/client/clientset/versioned/typed/crdpinniped/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/1.17/client/clientset/versioned/typed/idp/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/1.17/client/clientset/versioned/typed/login/v1alpha1"
+	pinnipedv1alpha1 "go.pinniped.dev/generated/1.17/client/clientset/versioned/typed/pinniped/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"

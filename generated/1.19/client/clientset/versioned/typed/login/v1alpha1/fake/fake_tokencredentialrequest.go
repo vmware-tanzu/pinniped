@@ -8,7 +8,7 @@ package fake
 import (
 	"context"
 
-	v1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1"
+	v1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

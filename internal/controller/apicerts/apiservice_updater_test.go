@@ -30,6 +30,7 @@ import (
 func TestAPIServiceUpdaterControllerOptions(t *testing.T) {
 	spec.Run(t, "options", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
+		const certsSecretResourceName = "some-resource-name"
 
 		var r *require.Assertions
 		var observableWithInformerOption *testutil.ObservableWithInformerOption
@@ -41,6 +42,7 @@ func TestAPIServiceUpdaterControllerOptions(t *testing.T) {
 			secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
 			_ = NewAPIServiceUpdaterController(
 				installedInNamespace,
+				certsSecretResourceName,
 				loginv1alpha1.SchemeGroupVersion.Version+"."+loginv1alpha1.GroupName,
 				nil,
 				secretsInformer,
@@ -55,8 +57,8 @@ func TestAPIServiceUpdaterControllerOptions(t *testing.T) {
 
 			it.Before(func() {
 				subject = secretsInformerFilter
-				target = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "api-serving-cert", Namespace: installedInNamespace}}
-				wrongNamespace = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "api-serving-cert", Namespace: "wrong-namespace"}}
+				target = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: certsSecretResourceName, Namespace: installedInNamespace}}
+				wrongNamespace = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: certsSecretResourceName, Namespace: "wrong-namespace"}}
 				wrongName = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: installedInNamespace}}
 				unrelated = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: "wrong-namespace"}}
 			})
@@ -102,6 +104,7 @@ func TestAPIServiceUpdaterControllerOptions(t *testing.T) {
 func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
+		const certsSecretResourceName = "some-resource-name"
 
 		var r *require.Assertions
 
@@ -119,6 +122,7 @@ func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewAPIServiceUpdaterController(
 				installedInNamespace,
+				certsSecretResourceName,
 				loginv1alpha1.SchemeGroupVersion.Version+"."+loginv1alpha1.GroupName,
 				aggregatorAPIClient,
 				kubeInformers.Core().V1().Secrets(),
@@ -131,7 +135,7 @@ func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 				Name:    subject.Name(),
 				Key: controllerlib.Key{
 					Namespace: installedInNamespace,
-					Name:      "api-serving-cert",
+					Name:      certsSecretResourceName,
 				},
 			}
 
@@ -154,7 +158,7 @@ func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 			timeoutContextCancel()
 		})
 
-		when("there is not yet an api-serving-cert Secret in the installation namespace or it was deleted", func() {
+		when("there is not yet a serving cert Secret in the installation namespace or it was deleted", func() {
 			it.Before(func() {
 				unrelatedSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
@@ -174,11 +178,11 @@ func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 			})
 		})
 
-		when("there is an api-serving-cert Secret already in the installation namespace", func() {
+		when("there is a serving cert Secret already in the installation namespace", func() {
 			it.Before(func() {
 				apiServingCertSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "api-serving-cert",
+						Name:      certsSecretResourceName,
 						Namespace: installedInNamespace,
 					},
 					Data: map[string][]byte{

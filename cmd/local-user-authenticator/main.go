@@ -301,12 +301,15 @@ func startControllers(
 ) {
 	aVeryLongTime := time.Hour * 24 * 365 * 100
 
+	const certsSecretResourceName = "local-user-authenticator-tls-serving-certificate"
+
 	// Create controller manager.
 	controllerManager := controllerlib.
 		NewManager().
 		WithController(
 			apicerts.NewCertsManagerController(
 				namespace,
+				certsSecretResourceName,
 				kubeClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
@@ -320,6 +323,7 @@ func startControllers(
 		WithController(
 			apicerts.NewCertsObserverController(
 				namespace,
+				certsSecretResourceName,
 				dynamicCertProvider,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
@@ -367,7 +371,7 @@ func run() error {
 	startControllers(ctx, dynamicCertProvider, kubeClient, kubeInformers)
 	klog.InfoS("controllers are ready")
 
-	//nolint: gosec
+	//nolint: gosec // Intentionally binding to all network interfaces.
 	l, err := net.Listen("tcp", ":443")
 	if err != nil {
 		return fmt.Errorf("cannot create listener: %w", err)

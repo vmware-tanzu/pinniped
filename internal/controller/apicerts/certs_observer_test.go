@@ -24,6 +24,7 @@ import (
 func TestObserverControllerInformerFilters(t *testing.T) {
 	spec.Run(t, "informer filters", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
+		const certsSecretResourceName = "some-resource-name"
 
 		var r *require.Assertions
 		var observableWithInformerOption *testutil.ObservableWithInformerOption
@@ -35,6 +36,7 @@ func TestObserverControllerInformerFilters(t *testing.T) {
 			secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
 			_ = NewCertsObserverController(
 				installedInNamespace,
+				certsSecretResourceName,
 				nil,
 				secretsInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
@@ -48,8 +50,8 @@ func TestObserverControllerInformerFilters(t *testing.T) {
 
 			it.Before(func() {
 				subject = secretsInformerFilter
-				target = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "api-serving-cert", Namespace: installedInNamespace}}
-				wrongNamespace = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "api-serving-cert", Namespace: "wrong-namespace"}}
+				target = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: certsSecretResourceName, Namespace: installedInNamespace}}
+				wrongNamespace = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: certsSecretResourceName, Namespace: "wrong-namespace"}}
 				wrongName = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: installedInNamespace}}
 				unrelated = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: "wrong-namespace"}}
 			})
@@ -95,6 +97,7 @@ func TestObserverControllerInformerFilters(t *testing.T) {
 func TestObserverControllerSync(t *testing.T) {
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
+		const certsSecretResourceName = "some-resource-name"
 
 		var r *require.Assertions
 
@@ -112,6 +115,7 @@ func TestObserverControllerSync(t *testing.T) {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewCertsObserverController(
 				installedInNamespace,
+				certsSecretResourceName,
 				dynamicCertProvider,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
@@ -123,7 +127,7 @@ func TestObserverControllerSync(t *testing.T) {
 				Name:    subject.Name(),
 				Key: controllerlib.Key{
 					Namespace: installedInNamespace,
-					Name:      "api-serving-cert",
+					Name:      certsSecretResourceName,
 				},
 			}
 
@@ -146,7 +150,7 @@ func TestObserverControllerSync(t *testing.T) {
 			timeoutContextCancel()
 		})
 
-		when("there is not yet an api-serving-cert Secret in the installation namespace or it was deleted", func() {
+		when("there is not yet a serving cert Secret in the installation namespace or it was deleted", func() {
 			it.Before(func() {
 				unrelatedSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
@@ -171,11 +175,11 @@ func TestObserverControllerSync(t *testing.T) {
 			})
 		})
 
-		when("there is an api-serving-cert Secret with the expected keys already in the installation namespace", func() {
+		when("there is a serving cert Secret with the expected keys already in the installation namespace", func() {
 			it.Before(func() {
 				apiServingCertSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "api-serving-cert",
+						Name:      certsSecretResourceName,
 						Namespace: installedInNamespace,
 					},
 					Data: map[string][]byte{
@@ -201,11 +205,11 @@ func TestObserverControllerSync(t *testing.T) {
 			})
 		})
 
-		when("the api-serving-cert Secret exists but is missing the expected keys", func() {
+		when("the serving cert Secret exists but is missing the expected keys", func() {
 			it.Before(func() {
 				apiServingCertSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "api-serving-cert",
+						Name:      certsSecretResourceName,
 						Namespace: installedInNamespace,
 					},
 					Data: map[string][]byte{},

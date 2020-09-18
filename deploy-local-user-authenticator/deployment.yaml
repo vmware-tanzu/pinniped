@@ -14,7 +14,7 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: local-user-authenticator-service-account
+  name: local-user-authenticator
   namespace: local-user-authenticator
 ---
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
@@ -47,7 +47,7 @@ spec:
       labels:
         app: local-user-authenticator
     spec:
-      serviceAccountName: local-user-authenticator-service-account
+      serviceAccountName: local-user-authenticator
       #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
       imagePullSecrets:
         - name: image-pull-secret

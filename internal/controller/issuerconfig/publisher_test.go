@@ -30,6 +30,7 @@ import (
 
 func TestInformerFilters(t *testing.T) {
 	spec.Run(t, "informer filters", func(t *testing.T, when spec.G, it spec.S) {
+		const credentialIssuerConfigResourceName = "some-resource-name"
 		const installedInNamespace = "some-namespace"
 
 		var r *require.Assertions
@@ -44,6 +45,7 @@ func TestInformerFilters(t *testing.T) {
 			credentialIssuerConfigInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().CredentialIssuerConfigs()
 			_ = NewPublisherController(
 				installedInNamespace,
+				credentialIssuerConfigResourceName,
 				nil,
 				nil,
 				configMapInformer,
@@ -109,10 +111,10 @@ func TestInformerFilters(t *testing.T) {
 			it.Before(func() {
 				subject = credentialIssuerConfigInformerFilter
 				target = &configv1alpha1.CredentialIssuerConfig{
-					ObjectMeta: metav1.ObjectMeta{Name: "pinniped-config", Namespace: installedInNamespace},
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerConfigResourceName, Namespace: installedInNamespace},
 				}
 				wrongNamespace = &configv1alpha1.CredentialIssuerConfig{
-					ObjectMeta: metav1.ObjectMeta{Name: "pinniped-config", Namespace: "wrong-namespace"},
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerConfigResourceName, Namespace: "wrong-namespace"},
 				}
 				wrongName = &configv1alpha1.CredentialIssuerConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: installedInNamespace},
@@ -162,6 +164,7 @@ func TestInformerFilters(t *testing.T) {
 
 func TestSync(t *testing.T) {
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
+		const credentialIssuerConfigResourceName = "some-resource-name"
 		const installedInNamespace = "some-namespace"
 
 		var r *require.Assertions
@@ -185,7 +188,7 @@ func TestSync(t *testing.T) {
 			}
 			expectedCredentialIssuerConfig := &configv1alpha1.CredentialIssuerConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "pinniped-config",
+					Name:      credentialIssuerConfigResourceName,
 					Namespace: expectedNamespace,
 				},
 				Status: configv1alpha1.CredentialIssuerConfigStatus{
@@ -205,6 +208,7 @@ func TestSync(t *testing.T) {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewPublisherController(
 				installedInNamespace,
+				credentialIssuerConfigResourceName,
 				serverOverride,
 				pinnipedAPIClient,
 				kubeInformers.Core().V1().ConfigMaps(),

@@ -30,7 +30,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 		var pinnipedAPIClient *pinnipedfake.Clientset
 		var credentialIssuerConfigGVR schema.GroupVersionResource
 		const installationNamespace = "some-namespace"
-		const configName = "pinniped-config"
+		const credentialIssuerConfigResourceName = "some-resource-name"
 
 		it.Before(func() {
 			r = require.New(t)
@@ -45,7 +45,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 
 		when("the config does not exist", func() {
 			it("creates a new config which includes only the updates made by the func parameter", func() {
-				err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, pinnipedAPIClient,
+				err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, credentialIssuerConfigResourceName, pinnipedAPIClient,
 					func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
 						configToUpdate.Status.KubeConfigInfo = &configv1alpha1.CredentialIssuerConfigKubeConfigInfo{
 							CertificateAuthorityData: "some-ca-value",
@@ -54,7 +54,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 				)
 				r.NoError(err)
 
-				expectedGetAction := coretesting.NewGetAction(credentialIssuerConfigGVR, installationNamespace, configName)
+				expectedGetAction := coretesting.NewGetAction(credentialIssuerConfigGVR, installationNamespace, credentialIssuerConfigResourceName)
 
 				expectedCreateAction := coretesting.NewCreateAction(
 					credentialIssuerConfigGVR,
@@ -62,7 +62,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 					&configv1alpha1.CredentialIssuerConfig{
 						TypeMeta: metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      configName,
+							Name:      credentialIssuerConfigResourceName,
 							Namespace: installationNamespace,
 						},
 						Status: configv1alpha1.CredentialIssuerConfigStatus{
@@ -86,7 +86,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 				})
 
 				it("returns an error", func() {
-					err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, pinnipedAPIClient,
+					err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, credentialIssuerConfigResourceName, pinnipedAPIClient,
 						func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {},
 					)
 					r.EqualError(err, "could not create or update credentialissuerconfig: create failed: error on create")
@@ -101,7 +101,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 				existingConfig = &configv1alpha1.CredentialIssuerConfig{
 					TypeMeta: metav1.TypeMeta{},
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      configName,
+						Name:      credentialIssuerConfigResourceName,
 						Namespace: installationNamespace,
 					},
 					Status: configv1alpha1.CredentialIssuerConfigStatus{
@@ -124,14 +124,14 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 			})
 
 			it("updates the existing config to only apply the updates made by the func parameter", func() {
-				err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, pinnipedAPIClient,
+				err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, credentialIssuerConfigResourceName, pinnipedAPIClient,
 					func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
 						configToUpdate.Status.KubeConfigInfo.CertificateAuthorityData = "new-ca-value"
 					},
 				)
 				r.NoError(err)
 
-				expectedGetAction := coretesting.NewGetAction(credentialIssuerConfigGVR, installationNamespace, configName)
+				expectedGetAction := coretesting.NewGetAction(credentialIssuerConfigGVR, installationNamespace, credentialIssuerConfigResourceName)
 
 				// Only the edited field should be changed.
 				expectedUpdatedConfig := existingConfig.DeepCopy()
@@ -142,7 +142,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 			})
 
 			it("avoids the cost of an update if the local updates made by the func parameter did not actually change anything", func() {
-				err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, pinnipedAPIClient,
+				err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, credentialIssuerConfigResourceName, pinnipedAPIClient,
 					func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
 						configToUpdate.Status.KubeConfigInfo.CertificateAuthorityData = "initial-ca-value"
 
@@ -154,7 +154,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 				)
 				r.NoError(err)
 
-				expectedGetAction := coretesting.NewGetAction(credentialIssuerConfigGVR, installationNamespace, configName)
+				expectedGetAction := coretesting.NewGetAction(credentialIssuerConfigGVR, installationNamespace, credentialIssuerConfigResourceName)
 				r.Equal([]coretesting.Action{expectedGetAction}, pinnipedAPIClient.Actions())
 			})
 
@@ -166,7 +166,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 				})
 
 				it("returns an error", func() {
-					err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, pinnipedAPIClient,
+					err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, credentialIssuerConfigResourceName, pinnipedAPIClient,
 						func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {},
 					)
 					r.EqualError(err, "could not create or update credentialissuerconfig: get failed: error on get")
@@ -181,7 +181,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 				})
 
 				it("returns an error", func() {
-					err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, pinnipedAPIClient,
+					err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, credentialIssuerConfigResourceName, pinnipedAPIClient,
 						func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
 							configToUpdate.Status.KubeConfigInfo.CertificateAuthorityData = "new-ca-value"
 						},
@@ -215,14 +215,14 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 				})
 
 				it("retries updates on conflict", func() {
-					err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, pinnipedAPIClient,
+					err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, credentialIssuerConfigResourceName, pinnipedAPIClient,
 						func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
 							configToUpdate.Status.KubeConfigInfo.CertificateAuthorityData = "new-ca-value"
 						},
 					)
 					r.NoError(err)
 
-					expectedGetAction := coretesting.NewGetAction(credentialIssuerConfigGVR, installationNamespace, configName)
+					expectedGetAction := coretesting.NewGetAction(credentialIssuerConfigGVR, installationNamespace, credentialIssuerConfigResourceName)
 
 					// The first attempted update only includes its own edits.
 					firstExpectedUpdatedConfig := existingConfig.DeepCopy()

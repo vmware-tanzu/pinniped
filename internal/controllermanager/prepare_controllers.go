@@ -25,6 +25,7 @@ import (
 	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/provider"
+	"go.pinniped.dev/pkg/config/api"
 )
 
 const (
@@ -35,6 +36,7 @@ const (
 // Prepare the controllers and their informers and return a function that will start them when called.
 func PrepareControllers(
 	serverInstallationNamespace string,
+	namesConfig api.NamesConfigSpec,
 	discoveryURLOverride *string,
 	dynamicCertProvider provider.DynamicTLSServingCertProvider,
 	servingCertDuration time.Duration,
@@ -51,15 +53,12 @@ func PrepareControllers(
 	kubePublicNamespaceK8sInformers, installationNamespaceK8sInformers, installationNamespacePinnipedInformers :=
 		createInformers(serverInstallationNamespace, k8sClient, pinnipedClient)
 
-	// This string must match the name of the Service declared in the deployment yaml.
-	const serviceName = "pinniped-api"
-
 	// Create controller manager.
 	controllerManager := controllerlib.
 		NewManager().
 		WithController(
-			issuerconfig.NewPublisherController(
-				serverInstallationNamespace,
+			issuerconfig.NewPublisherController(serverInstallationNamespace,
+				namesConfig.CredentialIssuerConfig,
 				discoveryURLOverride,
 				pinnipedClient,
 				kubePublicNamespaceK8sInformers.Core().V1().ConfigMaps(),
@@ -71,19 +70,21 @@ func PrepareControllers(
 		WithController(
 			apicerts.NewCertsManagerController(
 				serverInstallationNamespace,
+				namesConfig.ServingCertificateSecret,
 				k8sClient,
 				installationNamespaceK8sInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 				controllerlib.WithInitialEvent,
 				servingCertDuration,
 				"Pinniped CA",
-				serviceName,
+				namesConfig.APIService,
 			),
 			singletonWorker,
 		).
 		WithController(
 			apicerts.NewAPIServiceUpdaterController(
 				serverInstallationNamespace,
+				namesConfig.ServingCertificateSecret,
 				loginv1alpha1.SchemeGroupVersion.Version+"."+loginv1alpha1.GroupName,
 				aggregatorClient,
 				installationNamespaceK8sInformers.Core().V1().Secrets(),
@@ -94,6 +95,7 @@ func PrepareControllers(
 		WithController(
 			apicerts.NewCertsObserverController(
 				serverInstallationNamespace,
+				namesConfig.ServingCertificateSecret,
 				dynamicCertProvider,
 				installationNamespaceK8sInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
@@ -103,6 +105,7 @@ func PrepareControllers(
 		WithController(
 			apicerts.NewCertsExpirerController(
 				serverInstallationNamespace,
+				namesConfig.ServingCertificateSecret,
 				k8sClient,
 				installationNamespaceK8sInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
@@ -177,7 +180,7 @@ func createClients() (
 		return nil, nil, nil, fmt.Errorf("could not initialize pinniped client: %w", err)
 	}
 
-	//nolint: nakedret
+	//nolint: nakedret // Short function. Makes the order of return values more clear.
 	return
 }
 

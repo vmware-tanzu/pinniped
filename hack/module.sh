@@ -35,7 +35,7 @@ function unittest_cmd() {
   else
     cmd='go test'
   fi
-  echo "${cmd} -count 1 -short -race ./..."
+  echo "${cmd} -short -race ./..."
 }
 
 function with_modules() {

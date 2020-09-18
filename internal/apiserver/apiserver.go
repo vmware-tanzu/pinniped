@@ -26,8 +26,7 @@ import (
 var (
 	//nolint: gochecknoglobals
 	scheme = runtime.NewScheme()
-	//nolint: gochecknoglobals
-	//nolint: golint
+	//nolint: gochecknoglobals, golint
 	Codecs = serializer.NewCodecFactory(scheme)
 )
 

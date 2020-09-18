@@ -14,7 +14,6 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/spf13/cobra"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 	"k8s.io/client-go/rest"
@@ -25,7 +24,6 @@ import (
 	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 	"go.pinniped.dev/internal/constable"
-	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/here"
 )
 
@@ -239,20 +237,27 @@ func fetchPinnipedCredentialIssuerConfig(clientConfig clientcmd.ClientConfig, ku
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancelFunc()
 
-	credentialIssuerConfig, err := clientset.ConfigV1alpha1().CredentialIssuerConfigs(pinnipedInstallationNamespace).Get(ctx, issuerconfig.ConfigName, metav1.GetOptions{})
+	credentialIssuerConfigs, err := clientset.ConfigV1alpha1().CredentialIssuerConfigs(pinnipedInstallationNamespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, constable.Error(fmt.Sprintf(
-				`CredentialIssuerConfig "%s" was not found in namespace "%s". Is Pinniped installed on this cluster in namespace "%s"?`,
-				issuerconfig.ConfigName,
-				pinnipedInstallationNamespace,
-				pinnipedInstallationNamespace,
-			))
-		}
 		return nil, err
 	}
 
-	return credentialIssuerConfig, nil
+	if len(credentialIssuerConfigs.Items) == 0 {
+		return nil, constable.Error(fmt.Sprintf(
+			`No CredentialIssuerConfig was found in namespace "%s". Is Pinniped installed on this cluster in namespace "%s"?`,
+			pinnipedInstallationNamespace,
+			pinnipedInstallationNamespace,
+		))
+	}
+
+	if len(credentialIssuerConfigs.Items) > 1 {
+		return nil, constable.Error(fmt.Sprintf(
+			`More than one CredentialIssuerConfig was found in namespace "%s"`,
+			pinnipedInstallationNamespace,
+		))
+	}
+
+	return &credentialIssuerConfigs.Items[0], nil
 }
 
 func newClientConfig(kubeconfigPathOverride string, currentContextName string) clientcmd.ClientConfig {

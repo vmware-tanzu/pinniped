@@ -113,7 +113,7 @@ func (a *App) runServer(ctx context.Context) error {
 	serverInstallationNamespace := podInfo.Namespace
 
 	// Load the Kubernetes cluster signing CA.
-	k8sClusterCA, shutdownCA, err := getClusterCASigner(ctx, serverInstallationNamespace)
+	k8sClusterCA, shutdownCA, err := getClusterCASigner(ctx, serverInstallationNamespace, cfg.NamesConfig.CredentialIssuerConfig)
 	if err != nil {
 		return err
 	}
@@ -133,6 +133,7 @@ func (a *App) runServer(ctx context.Context) error {
 	// post start hook of the aggregated API server.
 	startControllersFunc, err := controllermanager.PrepareControllers(
 		serverInstallationNamespace,
+		cfg.NamesConfig,
 		cfg.DiscoveryInfo.URL,
 		dynamicCertProvider,
 		time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds)*time.Second,
@@ -164,7 +165,10 @@ func (a *App) runServer(ctx context.Context) error {
 	return server.GenericAPIServer.PrepareRun().Run(ctx.Done())
 }
 
-func getClusterCASigner(ctx context.Context, serverInstallationNamespace string) (credentialrequest.CertIssuer, kubecertauthority.ShutdownFunc, error) {
+func getClusterCASigner(
+	ctx context.Context, serverInstallationNamespace string,
+	credentialIssuerConfigResourceName string,
+) (credentialrequest.CertIssuer, kubecertauthority.ShutdownFunc, error) {
 	// Load the Kubernetes client configuration.
 	kubeConfig, err := restclient.InClusterConfig()
 	if err != nil {
@@ -195,6 +199,7 @@ func getClusterCASigner(ctx context.Context, serverInstallationNamespace string)
 			err = issuerconfig.CreateOrUpdateCredentialIssuerConfig(
 				ctx,
 				serverInstallationNamespace,
+				credentialIssuerConfigResourceName,
 				pinnipedClient,
 				func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
 					configToUpdate.Status.Strategies = []configv1alpha1.CredentialIssuerConfigStrategy{
@@ -216,6 +221,7 @@ func getClusterCASigner(ctx context.Context, serverInstallationNamespace string)
 			if updateErr := issuerconfig.CreateOrUpdateCredentialIssuerConfig(
 				ctx,
 				serverInstallationNamespace,
+				credentialIssuerConfigResourceName,
 				pinnipedClient,
 				func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
 					configToUpdate.Status.Strategies = []configv1alpha1.CredentialIssuerConfigStrategy{

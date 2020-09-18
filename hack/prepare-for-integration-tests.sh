@@ -177,7 +177,7 @@ kubectl create secret generic "$test_username" \
 app_name="pinniped"
 namespace="integration"
 webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
-webhook_ca_bundle="$(kubectl get secret api-serving-cert --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
+webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/Kubernetes master/ {print $NF}')"
 
 #

@@ -14,7 +14,7 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: #@ data.values.app_name + "-service-account"
+  name: #@ data.values.app_name
   namespace: #@ data.values.namespace
 ---
 apiVersion: v1
@@ -25,6 +25,7 @@ metadata:
   labels:
     app: #@ data.values.app_name
 data:
+  #! If names.apiService is changed in this ConfigMap, must also change name of the ClusterIP Service resource below.
   #@yaml/text-templated-strings
   pinniped.yaml: |
     discovery:
@@ -33,6 +34,10 @@ data:
       servingCertificate:
         durationSeconds: (@= str(data.values.api_serving_certificate_duration_seconds) @)
         renewBeforeSeconds: (@= str(data.values.api_serving_certificate_renew_before_seconds) @)
+    names:
+      servingCertificateSecret: (@= data.values.app_name + "-api-tls-serving-certificate" @)
+      credentialIssuerConfig: (@= data.values.app_name + "-config" @)
+      apiService: (@= data.values.app_name + "-api" @)
 ---
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
 apiVersion: v1
@@ -66,7 +71,7 @@ spec:
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ""
     spec:
-      serviceAccountName: #@ data.values.app_name + "-service-account"
+      serviceAccountName: #@ data.values.app_name
       #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
       imagePullSecrets:
         - name: image-pull-secret
@@ -144,7 +149,8 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: pinniped-api #! the golang code assumes this specific name as part of the common name during cert generation
+  #! If name is changed, must also change names.apiService in the ConfigMap above
+  name: #@ data.values.app_name + "-api"
   namespace: #@ data.values.namespace
   labels:
     app: #@ data.values.app_name

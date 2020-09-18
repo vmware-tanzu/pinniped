@@ -8,7 +8,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: #@ data.values.app_name + "-aggregated-api-server-cluster-role"
+  name: #@ data.values.app_name + "-aggregated-api-server"
 rules:
   - apiGroups: [""]
     resources: [namespaces]
@@ -23,14 +23,14 @@ rules:
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: #@ data.values.app_name + "-aggregated-api-server-cluster-role-binding"
+  name: #@ data.values.app_name + "-aggregated-api-server"
 subjects:
   - kind: ServiceAccount
-    name: #@ data.values.app_name + "-service-account"
+    name: #@ data.values.app_name
     namespace: #@ data.values.namespace
 roleRef:
   kind: ClusterRole
-  name: #@ data.values.app_name + "-aggregated-api-server-cluster-role"
+  name: #@ data.values.app_name + "-aggregated-api-server"
   apiGroup: rbac.authorization.k8s.io
 
 #! Give permission to various objects within the app's own namespace
@@ -38,7 +38,7 @@ roleRef:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: #@ data.values.app_name + "-aggregated-api-server-role"
+  name: #@ data.values.app_name + "-aggregated-api-server"
   namespace: #@ data.values.namespace
 rules:
   - apiGroups: [""]
@@ -54,15 +54,15 @@ rules:
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: #@ data.values.app_name + "-aggregated-api-server-role-binding"
+  name: #@ data.values.app_name + "-aggregated-api-server"
   namespace: #@ data.values.namespace
 subjects:
   - kind: ServiceAccount
-    name: #@ data.values.app_name + "-service-account"
+    name: #@ data.values.app_name
     namespace: #@ data.values.namespace
 roleRef:
   kind: Role
-  name: #@ data.values.app_name + "-aggregated-api-server-role"
+  name: #@ data.values.app_name + "-aggregated-api-server"
   apiGroup: rbac.authorization.k8s.io
 
 #! Give permission to list pods and pod exec in the kube-system namespace so we can find the API server's private key
@@ -70,7 +70,7 @@ roleRef:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: #@ data.values.app_name + "-kube-system-pod-exec-role"
+  name: #@ data.values.app_name + "-kube-system-pod-exec"
   namespace: kube-system
 rules:
   - apiGroups: [""]
@@ -83,23 +83,23 @@ rules:
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: #@ data.values.app_name + "-kube-system-pod-exec-role-binding"
+  name: #@ data.values.app_name + "-kube-system-pod-exec"
   namespace: kube-system
 subjects:
   - kind: ServiceAccount
-    name: #@ data.values.app_name + "-service-account"
+    name: #@ data.values.app_name
     namespace: #@ data.values.namespace
 roleRef:
   kind: Role
-  name: #@ data.values.app_name + "-kube-system-pod-exec-role"
+  name: #@ data.values.app_name + "-kube-system-pod-exec"
   apiGroup: rbac.authorization.k8s.io
 
-#! Allow both authenticated and unauthenticated CredentialRequests (i.e. allow all requests)
+#! Allow both authenticated and unauthenticated TokenCredentialRequests (i.e. allow all requests)
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: #@ data.values.app_name + "-credentialrequests-cluster-role"
+  name: #@ data.values.app_name + "-create-token-credential-requests"
 rules:
   - apiGroups: [login.pinniped.dev]
     resources: [tokencredentialrequests]
@@ -108,7 +108,7 @@ rules:
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: #@ data.values.app_name + "-credentialrequests-cluster-role-binding"
+  name: #@ data.values.app_name + "-create-token-credential-requests"
 subjects:
   - kind: Group
     name: system:authenticated
@@ -118,7 +118,7 @@ subjects:
     apiGroup: rbac.authorization.k8s.io
 roleRef:
   kind: ClusterRole
-  name: #@ data.values.app_name + "-credentialrequests-cluster-role"
+  name: #@ data.values.app_name + "-create-token-credential-requests"
   apiGroup: rbac.authorization.k8s.io
 
 #! Give permissions for subjectaccessreviews, tokenreview that is needed by aggregated api servers
@@ -126,11 +126,11 @@ roleRef:
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: #@ data.values.app_name + "-service-account-cluster-role-binding"
+  name: #@ data.values.app_name
   namespace: #@ data.values.namespace
 subjects:
   - kind: ServiceAccount
-    name: #@ data.values.app_name + "-service-account"
+    name: #@ data.values.app_name
     namespace: #@ data.values.namespace
 roleRef:
   kind: ClusterRole
@@ -142,11 +142,11 @@ roleRef:
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: #@ data.values.app_name + "-extension-apiserver-authentication-reader-role-binding"
+  name: #@ data.values.app_name + "-extension-apiserver-authentication-reader"
   namespace: kube-system
 subjects:
   - kind: ServiceAccount
-    name: #@ data.values.app_name + "-service-account"
+    name: #@ data.values.app_name
     namespace: #@ data.values.namespace
 roleRef:
   kind: Role
@@ -158,7 +158,7 @@ roleRef:
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: #@ data.values.app_name + "-cluster-info-lister-watcher-role"
+  name: #@ data.values.app_name + "-cluster-info-lister-watcher"
   namespace: kube-public
 rules:
   - apiGroups: [""]
@@ -168,13 +168,13 @@ rules:
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: #@ data.values.app_name + "-cluster-info-lister-watcher-role-binding"
+  name: #@ data.values.app_name + "-cluster-info-lister-watcher"
   namespace: kube-public
 subjects:
   - kind: ServiceAccount
-    name: #@ data.values.app_name + "-service-account"
+    name: #@ data.values.app_name
     namespace: #@ data.values.namespace
 roleRef:
   kind: Role
-  name: #@ data.values.app_name + "-cluster-info-lister-watcher-role"
+  name: #@ data.values.app_name + "-cluster-info-lister-watcher"
   apiGroup: rbac.authorization.k8s.io

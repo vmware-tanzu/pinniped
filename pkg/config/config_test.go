@@ -4,23 +4,38 @@
 package config
 
 import (
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/pkg/config/api"
 )
 
 func TestFromPath(t *testing.T) {
 	tests := []struct {
 		name       string
-		path       string
+		yaml       string
 		wantConfig *api.Config
 		wantError  string
 	}{
 		{
 			name: "Happy",
-			path: "testdata/happy.yaml",
+			yaml: here.Doc(`
+				---
+				discovery:
+				  url: https://some.discovery/url
+				api:
+				  servingCertificate:
+					durationSeconds: 3600
+					renewBeforeSeconds: 2400
+				names:
+				  servingCertificateSecret: pinniped-api-tls-serving-certificate
+				  credentialIssuerConfig: pinniped-config
+				  apiService: pinniped-api
+			`),
 			wantConfig: &api.Config{
 				DiscoveryInfo: api.DiscoveryInfoSpec{
 					URL: stringPtr("https://some.discovery/url"),
@@ -31,11 +46,22 @@ func TestFromPath(t *testing.T) {
 						RenewBeforeSeconds: int64Ptr(2400),
 					},
 				},
+				NamesConfig: api.NamesConfigSpec{
+					ServingCertificateSecret: "pinniped-api-tls-serving-certificate",
+					CredentialIssuerConfig:   "pinniped-config",
+					APIService:               "pinniped-api",
+				},
 			},
 		},
 		{
-			name: "Default",
-			path: "testdata/default.yaml",
+			name: "When only the required fields are present, causes other fields to be defaulted",
+			yaml: here.Doc(`
+				---
+				names:
+				  servingCertificateSecret: pinniped-api-tls-serving-certificate
+				  credentialIssuerConfig: pinniped-config
+				  apiService: pinniped-api
+			`),
 			wantConfig: &api.Config{
 				DiscoveryInfo: api.DiscoveryInfoSpec{
 					URL: nil,
@@ -46,28 +72,112 @@ func TestFromPath(t *testing.T) {
 						RenewBeforeSeconds: int64Ptr(60 * 60 * 24 * 30 * 9), // about 9 months
 					},
 				},
+				NamesConfig: api.NamesConfigSpec{
+					ServingCertificateSecret: "pinniped-api-tls-serving-certificate",
+					CredentialIssuerConfig:   "pinniped-config",
+					APIService:               "pinniped-api",
+				},
 			},
 		},
 		{
-			name:      "InvalidDurationRenewBefore",
-			path:      "testdata/invalid-duration-renew-before.yaml",
+			name:      "Empty",
+			yaml:      here.Doc(``),
+			wantError: "validate names: missing required names: servingCertificateSecret, credentialIssuerConfig, apiService",
+		},
+		{
+			name: "Missing apiService name",
+			yaml: here.Doc(`
+				---
+				names:
+				  servingCertificateSecret: pinniped-api-tls-serving-certificate
+				  credentialIssuerConfig: pinniped-config
+			`),
+			wantError: "validate names: missing required names: apiService",
+		},
+		{
+			name: "Missing credentialIssuerConfig name",
+			yaml: here.Doc(`
+				---
+				names:
+				  servingCertificateSecret: pinniped-api-tls-serving-certificate
+				  apiService: pinniped-api
+			`),
+			wantError: "validate names: missing required names: credentialIssuerConfig",
+		},
+		{
+			name: "Missing servingCertificateSecret name",
+			yaml: here.Doc(`
+				---
+				names:
+				  credentialIssuerConfig: pinniped-config
+				  apiService: pinniped-api
+			`),
+			wantError: "validate names: missing required names: servingCertificateSecret",
+		},
+		{
+			name: "InvalidDurationRenewBefore",
+			yaml: here.Doc(`
+				---
+				api:
+				  servingCertificate:
+					durationSeconds: 2400
+					renewBeforeSeconds: 3600
+				names:
+				  servingCertificateSecret: pinniped-api-tls-serving-certificate
+				  credentialIssuerConfig: pinniped-config
+				  apiService: pinniped-api
+			`),
 			wantError: "validate api: durationSeconds cannot be smaller than renewBeforeSeconds",
 		},
 		{
-			name:      "NegativeRenewBefore",
-			path:      "testdata/negative-renew-before.yaml",
+			name: "NegativeRenewBefore",
+			yaml: here.Doc(`
+				---
+				api:
+				  servingCertificate:
+					durationSeconds: 2400
+					renewBeforeSeconds: -10
+				names:
+				  servingCertificateSecret: pinniped-api-tls-serving-certificate
+				  credentialIssuerConfig: pinniped-config
+				  apiService: pinniped-api
+			`),
 			wantError: "validate api: renewBefore must be positive",
 		},
 		{
-			name:      "ZeroRenewBefore",
-			path:      "testdata/zero-renew-before.yaml",
+			name: "ZeroRenewBefore",
+			yaml: here.Doc(`
+				---
+				api:
+				  servingCertificate:
+					durationSeconds: 2400
+					renewBeforeSeconds: -10
+				names:
+				  servingCertificateSecret: pinniped-api-tls-serving-certificate
+				  credentialIssuerConfig: pinniped-config
+				  apiService: pinniped-api
+			`),
 			wantError: "validate api: renewBefore must be positive",
 		},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			config, err := FromPath(test.path)
+			// Write yaml to temp file
+			f, err := ioutil.TempFile("", "pinniped-test-config-yaml-*")
+			require.NoError(t, err)
+			defer func() {
+				err := os.Remove(f.Name())
+				require.NoError(t, err)
+			}()
+			_, err = f.WriteString(test.yaml)
+			require.NoError(t, err)
+			err = f.Close()
+			require.NoError(t, err)
+
+			// Test FromPath()
+			config, err := FromPath(f.Name())
+
 			if test.wantError != "" {
 				require.EqualError(t, err, test.wantError)
 			} else {

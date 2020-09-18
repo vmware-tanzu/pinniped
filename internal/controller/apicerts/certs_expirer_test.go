@@ -29,6 +29,8 @@ import (
 func TestExpirerControllerFilters(t *testing.T) {
 	t.Parallel()
 
+	const certsSecretResourceName = "some-resource-name"
+
 	tests := []struct {
 		name      string
 		namespace string
@@ -40,7 +42,7 @@ func TestExpirerControllerFilters(t *testing.T) {
 			namespace: "good-namespace",
 			secret: corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "api-serving-cert",
+					Name:      certsSecretResourceName,
 					Namespace: "good-namespace",
 				},
 			},
@@ -62,7 +64,7 @@ func TestExpirerControllerFilters(t *testing.T) {
 			namespace: "good-namespacee",
 			secret: corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "api-serving-cert",
+					Name:      certsSecretResourceName,
 					Namespace: "bad-namespace",
 				},
 			},
@@ -92,6 +94,7 @@ func TestExpirerControllerFilters(t *testing.T) {
 			withInformer := testutil.NewObservableWithInformerOption()
 			_ = NewCertsExpirerController(
 				test.namespace,
+				certsSecretResourceName,
 				nil, // k8sClient, not needed
 				secretsInformer,
 				withInformer.WithInformer,
@@ -110,6 +113,8 @@ func TestExpirerControllerFilters(t *testing.T) {
 
 func TestExpirerControllerSync(t *testing.T) {
 	t.Parallel()
+
+	const certsSecretResourceName = "some-resource-name"
 
 	tests := []struct {
 		name                string
@@ -220,7 +225,7 @@ func TestExpirerControllerSync(t *testing.T) {
 			}
 
 			kubeInformerClient := kubernetesfake.NewSimpleClientset()
-			name := "api-serving-cert" // See certs_manager.go.
+			name := certsSecretResourceName
 			namespace := "some-namespace"
 			if test.fillSecretData != nil {
 				secret := &corev1.Secret{
@@ -243,6 +248,7 @@ func TestExpirerControllerSync(t *testing.T) {
 
 			c := NewCertsExpirerController(
 				namespace,
+				certsSecretResourceName,
 				kubeAPIClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,

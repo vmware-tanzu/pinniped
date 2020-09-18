@@ -1,7 +1,0 @@
----
-discovery:
-  url: https://some.discovery/url
-api:
-  servingCertificate:
-    durationSeconds: 3600
-    renewBeforeSeconds: 2400

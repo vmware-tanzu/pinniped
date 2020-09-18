@@ -19,7 +19,7 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
-	crdpinnipedv1alpha1 "go.pinniped.dev/generated/1.19/apis/crdpinniped/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
 	pinnipedv1alpha1 "go.pinniped.dev/generated/1.19/apis/pinniped/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 	"go.pinniped.dev/internal/apiserver"
@@ -196,12 +196,12 @@ func getClusterCASigner(ctx context.Context, serverInstallationNamespace string)
 				ctx,
 				serverInstallationNamespace,
 				pinnipedClient,
-				func(configToUpdate *crdpinnipedv1alpha1.CredentialIssuerConfig) {
-					configToUpdate.Status.Strategies = []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{
+				func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
+					configToUpdate.Status.Strategies = []configv1alpha1.CredentialIssuerConfigStrategy{
 						{
-							Type:           crdpinnipedv1alpha1.KubeClusterSigningCertificateStrategyType,
-							Status:         crdpinnipedv1alpha1.SuccessStrategyStatus,
-							Reason:         crdpinnipedv1alpha1.FetchedKeyStrategyReason,
+							Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+							Status:         configv1alpha1.SuccessStrategyStatus,
+							Reason:         configv1alpha1.FetchedKeyStrategyReason,
 							Message:        "Key was fetched successfully",
 							LastUpdateTime: metav1.Now(),
 						},
@@ -217,12 +217,12 @@ func getClusterCASigner(ctx context.Context, serverInstallationNamespace string)
 				ctx,
 				serverInstallationNamespace,
 				pinnipedClient,
-				func(configToUpdate *crdpinnipedv1alpha1.CredentialIssuerConfig) {
-					configToUpdate.Status.Strategies = []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{
+				func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
+					configToUpdate.Status.Strategies = []configv1alpha1.CredentialIssuerConfigStrategy{
 						{
-							Type:           crdpinnipedv1alpha1.KubeClusterSigningCertificateStrategyType,
-							Status:         crdpinnipedv1alpha1.ErrorStrategyStatus,
-							Reason:         crdpinnipedv1alpha1.CouldNotFetchKeyStrategyReason,
+							Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+							Status:         configv1alpha1.ErrorStrategyStatus,
+							Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
 							Message:        err.Error(),
 							LastUpdateTime: metav1.Now(),
 						},

@@ -6,7 +6,7 @@
 package scheme
 
 import (
-	crdv1alpha1 "go.pinniped.dev/generated/1.18/apis/crdpinniped/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/1.18/apis/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/1.18/apis/idp/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/1.18/apis/login/v1alpha1"
 	pinnipedv1alpha1 "go.pinniped.dev/generated/1.18/apis/pinniped/v1alpha1"
@@ -21,7 +21,7 @@ var Scheme = runtime.NewScheme()
 var Codecs = serializer.NewCodecFactory(Scheme)
 var ParameterCodec = runtime.NewParameterCodec(Scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
-	crdv1alpha1.AddToScheme,
+	configv1alpha1.AddToScheme,
 	idpv1alpha1.AddToScheme,
 	loginv1alpha1.AddToScheme,
 	pinnipedv1alpha1.AddToScheme,

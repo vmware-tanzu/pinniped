@@ -5,27 +5,27 @@
 == API Reference
 
 .Packages
-- xref:{anchor_prefix}-crd-pinniped-dev-v1alpha1[$$crd.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-config-pinniped-dev-v1alpha1[$$config.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-idp-pinniped-dev-v1alpha1[$$idp.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-login-pinniped-dev-v1alpha1[$$login.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-pinniped-dev-v1alpha1[$$pinniped.dev/v1alpha1$$]
 
 
-[id="{anchor_prefix}-crd-pinniped-dev-v1alpha1"]
-=== crd.pinniped.dev/v1alpha1
+[id="{anchor_prefix}-config-pinniped-dev-v1alpha1"]
+=== config.pinniped.dev/v1alpha1
 
-Package v1alpha1 is the v1alpha1 version of the Pinniped CRD-based API.
+Package v1alpha1 is the v1alpha1 version of the Pinniped configuration API.
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfig"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-credentialissuerconfig"]
 ==== CredentialIssuerConfig 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfiglist[$$CredentialIssuerConfigList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-credentialissuerconfiglist[$$CredentialIssuerConfigList$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -33,18 +33,18 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped CRD-based API.
 | Field | Description
 | *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]__ | Status of the credential issuer.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]__ | Status of the credential issuer.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigkubeconfiginfo"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-credentialissuerconfigkubeconfiginfo"]
 ==== CredentialIssuerConfigKubeConfigInfo 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -57,32 +57,32 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped CRD-based API.
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-credentialissuerconfigstatus"]
 ==== CredentialIssuerConfigStatus 
 
 Status of a credential issuer.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfig[$$CredentialIssuerConfig$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-credentialissuerconfig[$$CredentialIssuerConfig$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`strategies`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstrategy[$$CredentialIssuerConfigStrategy$$] array__ | List of integration strategies that were attempted by Pinniped.
-| *`kubeConfigInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigkubeconfiginfo[$$CredentialIssuerConfigKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
+| *`strategies`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-credentialissuerconfigstrategy[$$CredentialIssuerConfigStrategy$$] array__ | List of integration strategies that were attempted by Pinniped.
+| *`kubeConfigInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-credentialissuerconfigkubeconfiginfo[$$CredentialIssuerConfigKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstrategy"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-credentialissuerconfigstrategy"]
 ==== CredentialIssuerConfigStrategy 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-crdpinniped-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
 ****
 
 [cols="25a,75a", options="header"]

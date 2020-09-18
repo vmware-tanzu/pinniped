@@ -22,7 +22,7 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	v1 "k8s.io/client-go/tools/clientcmd/api/v1"
 
-	"go.pinniped.dev/generated/1.19/apis/crdpinniped/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/controller/issuerconfig"
@@ -211,7 +211,7 @@ func getKubeConfig(
 	return nil
 }
 
-func issueWarningForNonMatchingServerOrCA(v1Cluster v1.Cluster, credentialIssuerConfig *v1alpha1.CredentialIssuerConfig, warningsWriter io.Writer) error {
+func issueWarningForNonMatchingServerOrCA(v1Cluster v1.Cluster, credentialIssuerConfig *configv1alpha1.CredentialIssuerConfig, warningsWriter io.Writer) error {
 	credentialIssuerConfigCA, err := base64.StdEncoding.DecodeString(credentialIssuerConfig.Status.KubeConfigInfo.CertificateAuthorityData)
 	if err != nil {
 		return err
@@ -226,7 +226,7 @@ func issueWarningForNonMatchingServerOrCA(v1Cluster v1.Cluster, credentialIssuer
 	return nil
 }
 
-func fetchPinnipedCredentialIssuerConfig(clientConfig clientcmd.ClientConfig, kubeClientCreator func(restConfig *rest.Config) (pinnipedclientset.Interface, error), pinnipedInstallationNamespace string) (*v1alpha1.CredentialIssuerConfig, error) {
+func fetchPinnipedCredentialIssuerConfig(clientConfig clientcmd.ClientConfig, kubeClientCreator func(restConfig *rest.Config) (pinnipedclientset.Interface, error), pinnipedInstallationNamespace string) (*configv1alpha1.CredentialIssuerConfig, error) {
 	restConfig, err := clientConfig.ClientConfig()
 	if err != nil {
 		return nil, err
@@ -239,7 +239,7 @@ func fetchPinnipedCredentialIssuerConfig(clientConfig clientcmd.ClientConfig, ku
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancelFunc()
 
-	credentialIssuerConfig, err := clientset.CrdV1alpha1().CredentialIssuerConfigs(pinnipedInstallationNamespace).Get(ctx, issuerconfig.ConfigName, metav1.GetOptions{})
+	credentialIssuerConfig, err := clientset.ConfigV1alpha1().CredentialIssuerConfigs(pinnipedInstallationNamespace).Get(ctx, issuerconfig.ConfigName, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, constable.Error(fmt.Sprintf(

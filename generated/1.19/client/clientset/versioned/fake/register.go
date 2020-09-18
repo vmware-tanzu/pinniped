@@ -6,7 +6,7 @@
 package fake
 
 import (
-	crdv1alpha1 "go.pinniped.dev/generated/1.19/apis/crdpinniped/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
 	pinnipedv1alpha1 "go.pinniped.dev/generated/1.19/apis/pinniped/v1alpha1"
@@ -21,7 +21,7 @@ var scheme = runtime.NewScheme()
 var codecs = serializer.NewCodecFactory(scheme)
 
 var localSchemeBuilder = runtime.SchemeBuilder{
-	crdv1alpha1.AddToScheme,
+	configv1alpha1.AddToScheme,
 	idpv1alpha1.AddToScheme,
 	loginv1alpha1.AddToScheme,
 	pinnipedv1alpha1.AddToScheme,

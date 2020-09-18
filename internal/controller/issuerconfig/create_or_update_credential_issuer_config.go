@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 
-	crdpinnipedv1alpha1 "go.pinniped.dev/generated/1.19/apis/crdpinniped/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 )
 
@@ -20,11 +20,11 @@ func CreateOrUpdateCredentialIssuerConfig(
 	ctx context.Context,
 	credentialIssuerConfigNamespace string,
 	pinnipedClient pinnipedclientset.Interface,
-	applyUpdatesToCredentialIssuerConfigFunc func(configToUpdate *crdpinnipedv1alpha1.CredentialIssuerConfig),
+	applyUpdatesToCredentialIssuerConfigFunc func(configToUpdate *configv1alpha1.CredentialIssuerConfig),
 ) error {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		existingCredentialIssuerConfig, err := pinnipedClient.
-			CrdV1alpha1().
+			ConfigV1alpha1().
 			CredentialIssuerConfigs(credentialIssuerConfigNamespace).
 			Get(ctx, ConfigName, metav1.GetOptions{})
 
@@ -51,14 +51,14 @@ func CreateOrUpdateCredentialIssuerConfig(
 
 func createOrUpdateCredentialIssuerConfig(
 	ctx context.Context,
-	existingCredentialIssuerConfig *crdpinnipedv1alpha1.CredentialIssuerConfig,
+	existingCredentialIssuerConfig *configv1alpha1.CredentialIssuerConfig,
 	notFound bool,
 	credentialIssuerConfigName string,
 	credentialIssuerConfigNamespace string,
 	pinnipedClient pinnipedclientset.Interface,
-	applyUpdatesToCredentialIssuerConfigFunc func(configToUpdate *crdpinnipedv1alpha1.CredentialIssuerConfig),
+	applyUpdatesToCredentialIssuerConfigFunc func(configToUpdate *configv1alpha1.CredentialIssuerConfig),
 ) error {
-	credentialIssuerConfigsClient := pinnipedClient.CrdV1alpha1().CredentialIssuerConfigs(credentialIssuerConfigNamespace)
+	credentialIssuerConfigsClient := pinnipedClient.ConfigV1alpha1().CredentialIssuerConfigs(credentialIssuerConfigNamespace)
 
 	if notFound {
 		// Create it
@@ -89,15 +89,15 @@ func createOrUpdateCredentialIssuerConfig(
 func minimalValidCredentialIssuerConfig(
 	credentialIssuerConfigName string,
 	credentialIssuerConfigNamespace string,
-) *crdpinnipedv1alpha1.CredentialIssuerConfig {
-	return &crdpinnipedv1alpha1.CredentialIssuerConfig{
+) *configv1alpha1.CredentialIssuerConfig {
+	return &configv1alpha1.CredentialIssuerConfig{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      credentialIssuerConfigName,
 			Namespace: credentialIssuerConfigNamespace,
 		},
-		Status: crdpinnipedv1alpha1.CredentialIssuerConfigStatus{
-			Strategies:     []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{},
+		Status: configv1alpha1.CredentialIssuerConfigStatus{
+			Strategies:     []configv1alpha1.CredentialIssuerConfigStrategy{},
 			KubeConfigInfo: nil,
 		},
 	}

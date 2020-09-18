@@ -7,8 +7,8 @@ package fake
 
 import (
 	clientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
-	crdv1alpha1 "go.pinniped.dev/generated/1.19/client/clientset/versioned/typed/crdpinniped/v1alpha1"
-	fakecrdv1alpha1 "go.pinniped.dev/generated/1.19/client/clientset/versioned/typed/crdpinniped/v1alpha1/fake"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/client/clientset/versioned/typed/config/v1alpha1"
+	fakeconfigv1alpha1 "go.pinniped.dev/generated/1.19/client/clientset/versioned/typed/config/v1alpha1/fake"
 	idpv1alpha1 "go.pinniped.dev/generated/1.19/client/clientset/versioned/typed/idp/v1alpha1"
 	fakeidpv1alpha1 "go.pinniped.dev/generated/1.19/client/clientset/versioned/typed/idp/v1alpha1/fake"
 	loginv1alpha1 "go.pinniped.dev/generated/1.19/client/clientset/versioned/typed/login/v1alpha1"
@@ -69,9 +69,9 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 
 var _ clientset.Interface = &Clientset{}
 
-// CrdV1alpha1 retrieves the CrdV1alpha1Client
-func (c *Clientset) CrdV1alpha1() crdv1alpha1.CrdV1alpha1Interface {
-	return &fakecrdv1alpha1.FakeCrdV1alpha1{Fake: &c.Fake}
+// ConfigV1alpha1 retrieves the ConfigV1alpha1Client
+func (c *Clientset) ConfigV1alpha1() configv1alpha1.ConfigV1alpha1Interface {
+	return &fakeconfigv1alpha1.FakeConfigV1alpha1{Fake: &c.Fake}
 }
 
 // IDPV1alpha1 retrieves the IDPV1alpha1Client

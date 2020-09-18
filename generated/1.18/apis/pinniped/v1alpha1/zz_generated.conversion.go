@@ -10,7 +10,7 @@ package v1alpha1
 import (
 	unsafe "unsafe"
 
-	pinniped "github.com/vmware-tanzu/pinniped/generated/1.18/apis/pinniped"
+	pinniped "go.pinniped.dev/generated/1.18/apis/pinniped"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )

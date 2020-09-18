@@ -15,9 +15,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/pinniped/internal/certauthority"
-	pinnipedcontroller "github.com/vmware-tanzu/pinniped/internal/controller"
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
+	"go.pinniped.dev/internal/certauthority"
+	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	"go.pinniped.dev/internal/controllerlib"
 )
 
 const (

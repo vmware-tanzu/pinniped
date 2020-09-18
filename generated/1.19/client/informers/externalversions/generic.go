@@ -8,10 +8,10 @@ package externalversions
 import (
 	"fmt"
 
-	v1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	idpv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1"
-	loginv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1"
-	pinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1"
+	v1alpha1 "go.pinniped.dev/generated/1.19/apis/crdpinniped/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
+	pinnipedv1alpha1 "go.pinniped.dev/generated/1.19/apis/pinniped/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )

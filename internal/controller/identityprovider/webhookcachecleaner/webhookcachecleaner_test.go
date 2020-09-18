@@ -13,12 +13,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 
-	idpv1alpha "github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1"
-	pinnipedfake "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/fake"
-	pinnipedinformers "github.com/vmware-tanzu/pinniped/generated/1.19/client/informers/externalversions"
-	"github.com/vmware-tanzu/pinniped/internal/controller/identityprovider/idpcache"
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
-	"github.com/vmware-tanzu/pinniped/internal/testutil/testlogger"
+	idpv1alpha "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
+	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
+	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
+	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
+	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/testutil/testlogger"
 )
 
 func TestController(t *testing.T) {

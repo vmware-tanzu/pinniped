@@ -20,12 +20,12 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 
-	crdpinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	pinnipedfake "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/fake"
-	pinnipedinformers "github.com/vmware-tanzu/pinniped/generated/1.19/client/informers/externalversions"
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
-	"github.com/vmware-tanzu/pinniped/internal/here"
-	"github.com/vmware-tanzu/pinniped/internal/testutil"
+	crdpinnipedv1alpha1 "go.pinniped.dev/generated/1.19/apis/crdpinniped/v1alpha1"
+	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
+	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
+	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/testutil"
 )
 
 func TestInformerFilters(t *testing.T) {

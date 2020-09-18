@@ -9,8 +9,8 @@ import (
 	"context"
 	"time"
 
-	v1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	scheme "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/scheme"
+	v1alpha1 "go.pinniped.dev/generated/1.19/apis/crdpinniped/v1alpha1"
+	scheme "go.pinniped.dev/generated/1.19/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"

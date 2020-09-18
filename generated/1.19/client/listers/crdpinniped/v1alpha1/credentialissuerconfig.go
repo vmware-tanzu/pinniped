@@ -6,7 +6,7 @@
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
+	v1alpha1 "go.pinniped.dev/generated/1.19/apis/crdpinniped/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"

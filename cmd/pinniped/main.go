@@ -3,7 +3,7 @@
 
 package main
 
-import "github.com/vmware-tanzu/pinniped/cmd/pinniped/cmd"
+import "go.pinniped.dev/cmd/pinniped/cmd"
 
 func main() {
 	cmd.Execute()

@@ -13,9 +13,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1"
-	"github.com/vmware-tanzu/pinniped/internal/testutil"
-	"github.com/vmware-tanzu/pinniped/test/library"
+	"go.pinniped.dev/generated/1.19/apis/pinniped/v1alpha1"
+	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/test/library"
 )
 
 func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {

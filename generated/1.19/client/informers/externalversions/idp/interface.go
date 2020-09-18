@@ -6,8 +6,8 @@
 package idp
 
 import (
-	v1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/client/informers/externalversions/idp/v1alpha1"
-	internalinterfaces "github.com/vmware-tanzu/pinniped/generated/1.19/client/informers/externalversions/internalinterfaces"
+	v1alpha1 "go.pinniped.dev/generated/1.19/client/informers/externalversions/idp/v1alpha1"
+	internalinterfaces "go.pinniped.dev/generated/1.19/client/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to each of this group's versions.

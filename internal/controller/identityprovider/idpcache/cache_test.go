@@ -12,8 +12,8 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
-	"github.com/vmware-tanzu/pinniped/internal/mocks/mocktokenauthenticator"
+	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/mocks/mocktokenauthenticator"
 )
 
 func TestCache(t *testing.T) {

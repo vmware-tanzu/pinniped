@@ -11,8 +11,8 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/vmware-tanzu/pinniped/internal/constable"
-	"github.com/vmware-tanzu/pinniped/pkg/config/api"
+	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/pkg/config/api"
 )
 
 const (

@@ -12,8 +12,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 
-	crdpinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	pinnipedclientset "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned"
+	crdpinnipedv1alpha1 "go.pinniped.dev/generated/1.19/apis/crdpinniped/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 )
 
 func CreateOrUpdateCredentialIssuerConfig(

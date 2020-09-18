@@ -3,7 +3,7 @@
 
 package testutil
 
-import "github.com/vmware-tanzu/pinniped/internal/controllerlib"
+import "go.pinniped.dev/internal/controllerlib"
 
 type ObservableWithInitialEventOption struct {
 	key controllerlib.Key

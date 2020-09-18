@@ -15,7 +15,7 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	pinnipedclientset "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 
 	// Import to initialize client auth plugins - the kubeconfig that we use for
 	// testing may use gcloud, az, oidc, etc.

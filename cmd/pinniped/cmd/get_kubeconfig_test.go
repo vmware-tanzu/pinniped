@@ -200,8 +200,17 @@ func TestNewGetKubeConfigCmd(t *testing.T) {
 	}, spec.Parallel(), spec.Report(report.Terminal{}))
 }
 
-//nolint: unparam
-func expectedKubeconfigYAML(clusterCAData, clusterServer, command, token, pinnipedEndpoint, pinnipedCABundle, namespace string) string {
+func expectedKubeconfigYAML(
+	clusterCAData,
+	clusterServer,
+	command,
+	// nolint: unparam // Pass in the token even if it is always the same in practice
+	token,
+	pinnipedEndpoint,
+	pinnipedCABundle,
+	// nolint: unparam // Pass in the namespace even if it is always the same in practice
+	namespace string,
+) string {
 	return here.Docf(`
 		apiVersion: v1
 		clusters:
@@ -240,15 +249,21 @@ func expectedKubeconfigYAML(clusterCAData, clusterServer, command, token, pinnip
 		`, clusterCAData, clusterServer, command, pinnipedEndpoint, pinnipedCABundle, namespace, token)
 }
 
-func newCredentialIssuerConfig(server, certificateAuthorityData string) *crdpinnipedv1alpha1.CredentialIssuerConfig {
+func newCredentialIssuerConfig(
+	name,
+	//nolint: unparam // Pass in the namespace even if it is always the same in practice
+	namespace,
+	server,
+	certificateAuthorityData string,
+) *crdpinnipedv1alpha1.CredentialIssuerConfig {
 	return &crdpinnipedv1alpha1.CredentialIssuerConfig{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "CredentialIssuerConfig",
 			APIVersion: crdpinnipedv1alpha1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pinniped-config",
-			Namespace: "some-namespace",
+			Name:      name,
+			Namespace: namespace,
 		},
 		Status: crdpinnipedv1alpha1.CredentialIssuerConfigStatus{
 			KubeConfigInfo: &crdpinnipedv1alpha1.CredentialIssuerConfigKubeConfigInfo{
@@ -266,6 +281,7 @@ func TestGetKubeConfig(t *testing.T) {
 		var warningsBuffer *bytes.Buffer
 		var fullPathToSelf string
 		var pinnipedClient *pinnipedfake.Clientset
+		const installationNamespace = "some-namespace"
 
 		it.Before(func() {
 			r = require.New(t)
@@ -283,7 +299,12 @@ func TestGetKubeConfig(t *testing.T) {
 		when("the CredentialIssuerConfig is found on the cluster with a configuration that matches the existing kubeconfig", func() {
 			it.Before(func() {
 				r.NoError(pinnipedClient.Tracker().Add(
-					newCredentialIssuerConfig("https://fake-server-url-value", "fake-certificate-authority-data-value"),
+					newCredentialIssuerConfig(
+						"some-cic-name",
+						installationNamespace,
+						"https://fake-server-url-value",
+						"fake-certificate-authority-data-value",
+					),
 				))
 			})
 
@@ -294,7 +315,7 @@ func TestGetKubeConfig(t *testing.T) {
 					"some-token",
 					"./testdata/kubeconfig.yaml",
 					"",
-					"some-namespace",
+					installationNamespace,
 					func(restConfig *rest.Config) (pinnipedclientset.Interface, error) {
 						kubeClientCreatorFuncWasCalled = true
 						r.Equal("https://fake-server-url-value", restConfig.Host)
@@ -313,7 +334,7 @@ func TestGetKubeConfig(t *testing.T) {
 					"some-token",
 					"https://fake-server-url-value",
 					"fake-certificate-authority-data-value",
-					"some-namespace",
+					installationNamespace,
 				), outputBuffer.String())
 			})
 
@@ -327,10 +348,12 @@ func TestGetKubeConfig(t *testing.T) {
 							Resource: "credentialissuerconfigs",
 						},
 						newCredentialIssuerConfig(
+							"some-cic-name",
+							installationNamespace,
 							"https://some-other-fake-server-url-value",
 							"some-other-fake-certificate-authority-data-value",
 						),
-						"some-namespace",
+						installationNamespace,
 					))
 				})
 
@@ -342,7 +365,7 @@ func TestGetKubeConfig(t *testing.T) {
 							"some-token",
 							"./testdata/kubeconfig.yaml",
 							"some-other-context",
-							"some-namespace",
+							installationNamespace,
 							func(restConfig *rest.Config) (pinnipedclientset.Interface, error) {
 								kubeClientCreatorFuncWasCalled = true
 								r.Equal("https://some-other-fake-server-url-value", restConfig.Host)
@@ -361,7 +384,7 @@ func TestGetKubeConfig(t *testing.T) {
 							"some-token",
 							"https://some-other-fake-server-url-value",
 							"some-other-fake-certificate-authority-data-value",
-							"some-namespace",
+							installationNamespace,
 						), outputBuffer.String())
 					})
 				})
@@ -373,7 +396,7 @@ func TestGetKubeConfig(t *testing.T) {
 							"some-token",
 							"./testdata/kubeconfig.yaml",
 							"this-context-name-does-not-exist-in-kubeconfig.yaml",
-							"some-namespace",
+							installationNamespace,
 							func(restConfig *rest.Config) (pinnipedclientset.Interface, error) { return pinnipedClient, nil },
 						)
 						r.EqualError(err, `context "this-context-name-does-not-exist-in-kubeconfig.yaml" does not exist`)
@@ -390,7 +413,7 @@ func TestGetKubeConfig(t *testing.T) {
 						"",
 						"./testdata/kubeconfig.yaml",
 						"",
-						"some-namespace",
+						installationNamespace,
 						func(restConfig *rest.Config) (pinnipedclientset.Interface, error) { return pinnipedClient, nil },
 					)
 					r.EqualError(err, "--token flag value cannot be empty")
@@ -406,7 +429,7 @@ func TestGetKubeConfig(t *testing.T) {
 						"some-token",
 						"./testdata/this-file-does-not-exist.yaml",
 						"",
-						"some-namespace",
+						installationNamespace,
 						func(restConfig *rest.Config) (pinnipedclientset.Interface, error) { return pinnipedClient, nil },
 					)
 					r.EqualError(err, "stat ./testdata/this-file-does-not-exist.yaml: no such file or directory")
@@ -434,7 +457,7 @@ func TestGetKubeConfig(t *testing.T) {
 						"some-token",
 						"",
 						"",
-						"some-namespace",
+						installationNamespace,
 						func(restConfig *rest.Config) (pinnipedclientset.Interface, error) {
 							kubeClientCreatorFuncWasCalled = true
 							r.Equal("https://fake-server-url-value", restConfig.Host)
@@ -453,7 +476,7 @@ func TestGetKubeConfig(t *testing.T) {
 						"some-token",
 						"https://fake-server-url-value",
 						"fake-certificate-authority-data-value",
-						"some-namespace",
+						installationNamespace,
 					), outputBuffer.String())
 				})
 			})
@@ -474,7 +497,39 @@ func TestGetKubeConfig(t *testing.T) {
 							return pinnipedClient, nil
 						},
 					)
-					r.EqualError(err, `CredentialIssuerConfig "pinniped-config" was not found in namespace "this-is-the-wrong-namespace". Is Pinniped installed on this cluster in namespace "this-is-the-wrong-namespace"?`)
+					r.EqualError(err, `No CredentialIssuerConfig was found in namespace "this-is-the-wrong-namespace". Is Pinniped installed on this cluster in namespace "this-is-the-wrong-namespace"?`)
+					r.True(kubeClientCreatorFuncWasCalled)
+				})
+			})
+
+			when("there is more than one CredentialIssuerConfig is found on the cluster", func() {
+				it.Before(func() {
+					r.NoError(pinnipedClient.Tracker().Add(
+						newCredentialIssuerConfig(
+							"another-cic-name",
+							installationNamespace,
+							"https://fake-server-url-value",
+							"fake-certificate-authority-data-value",
+						),
+					))
+				})
+
+				it("returns an error", func() {
+					kubeClientCreatorFuncWasCalled := false
+					err := getKubeConfig(outputBuffer,
+						warningsBuffer,
+						"some-token",
+						"./testdata/kubeconfig.yaml",
+						"",
+						installationNamespace,
+						func(restConfig *rest.Config) (pinnipedclientset.Interface, error) {
+							kubeClientCreatorFuncWasCalled = true
+							r.Equal("https://fake-server-url-value", restConfig.Host)
+							r.Equal("fake-certificate-authority-data-value", string(restConfig.CAData))
+							return pinnipedClient, nil
+						},
+					)
+					r.EqualError(err, `More than one CredentialIssuerConfig was found in namespace "some-namespace"`)
 					r.True(kubeClientCreatorFuncWasCalled)
 				})
 			})
@@ -484,7 +539,12 @@ func TestGetKubeConfig(t *testing.T) {
 			when("the Server doesn't match", func() {
 				it.Before(func() {
 					r.NoError(pinnipedClient.Tracker().Add(
-						newCredentialIssuerConfig("non-matching-pinniped-server-url", "fake-certificate-authority-data-value"),
+						newCredentialIssuerConfig(
+							"some-cic-name",
+							installationNamespace,
+							"non-matching-pinniped-server-url",
+							"fake-certificate-authority-data-value",
+						),
 					))
 				})
 
@@ -495,7 +555,7 @@ func TestGetKubeConfig(t *testing.T) {
 						"some-token",
 						"./testdata/kubeconfig.yaml",
 						"",
-						"some-namespace",
+						installationNamespace,
 						func(restConfig *rest.Config) (pinnipedclientset.Interface, error) {
 							kubeClientCreatorFuncWasCalled = true
 							r.Equal("https://fake-server-url-value", restConfig.Host)
@@ -517,7 +577,7 @@ func TestGetKubeConfig(t *testing.T) {
 						"some-token",
 						"https://fake-server-url-value",
 						"fake-certificate-authority-data-value",
-						"some-namespace",
+						installationNamespace,
 					), outputBuffer.String())
 				})
 			})
@@ -525,7 +585,12 @@ func TestGetKubeConfig(t *testing.T) {
 			when("the CA doesn't match", func() {
 				it.Before(func() {
 					r.NoError(pinnipedClient.Tracker().Add(
-						newCredentialIssuerConfig("https://fake-server-url-value", "non-matching-certificate-authority-data-value"),
+						newCredentialIssuerConfig(
+							"some-cic-name",
+							installationNamespace,
+							"https://fake-server-url-value",
+							"non-matching-certificate-authority-data-value",
+						),
 					))
 				})
 
@@ -536,7 +601,7 @@ func TestGetKubeConfig(t *testing.T) {
 						"some-token",
 						"./testdata/kubeconfig.yaml",
 						"",
-						"some-namespace",
+						installationNamespace,
 						func(restConfig *rest.Config) (pinnipedclientset.Interface, error) {
 							kubeClientCreatorFuncWasCalled = true
 							r.Equal("https://fake-server-url-value", restConfig.Host)
@@ -558,7 +623,7 @@ func TestGetKubeConfig(t *testing.T) {
 						"some-token",
 						"https://fake-server-url-value",
 						"fake-certificate-authority-data-value",
-						"some-namespace",
+						installationNamespace,
 					), outputBuffer.String())
 				})
 			})
@@ -574,7 +639,7 @@ func TestGetKubeConfig(t *testing.T) {
 						},
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "pinniped-config",
-							Namespace: "some-namespace",
+							Namespace: installationNamespace,
 						},
 						Status: crdpinnipedv1alpha1.CredentialIssuerConfigStatus{},
 					},
@@ -588,7 +653,7 @@ func TestGetKubeConfig(t *testing.T) {
 					"some-token",
 					"./testdata/kubeconfig.yaml",
 					"",
-					"some-namespace",
+					installationNamespace,
 					func(restConfig *rest.Config) (pinnipedclientset.Interface, error) {
 						kubeClientCreatorFuncWasCalled = true
 						r.Equal("https://fake-server-url-value", restConfig.Host)
@@ -611,7 +676,7 @@ func TestGetKubeConfig(t *testing.T) {
 					"some-token",
 					"./testdata/kubeconfig.yaml",
 					"",
-					"some-namespace",
+					installationNamespace,
 					func(restConfig *rest.Config) (pinnipedclientset.Interface, error) {
 						kubeClientCreatorFuncWasCalled = true
 						r.Equal("https://fake-server-url-value", restConfig.Host)
@@ -620,7 +685,7 @@ func TestGetKubeConfig(t *testing.T) {
 					},
 				)
 				r.True(kubeClientCreatorFuncWasCalled)
-				r.EqualError(err, `CredentialIssuerConfig "pinniped-config" was not found in namespace "some-namespace". Is Pinniped installed on this cluster in namespace "some-namespace"?`)
+				r.EqualError(err, `No CredentialIssuerConfig was found in namespace "some-namespace". Is Pinniped installed on this cluster in namespace "some-namespace"?`)
 				r.Empty(warningsBuffer.String())
 				r.Empty(outputBuffer.String())
 			})
@@ -633,7 +698,7 @@ func TestGetKubeConfig(t *testing.T) {
 					"some-token",
 					"./testdata/kubeconfig.yaml",
 					"",
-					"some-namespace",
+					installationNamespace,
 					func(restConfig *rest.Config) (pinnipedclientset.Interface, error) {
 						return nil, fmt.Errorf("some error getting CredentialIssuerConfig")
 					},

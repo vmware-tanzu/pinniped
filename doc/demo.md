@@ -75,7 +75,7 @@
 1. Fetch the auto-generated CA bundle for the `local-user-authenticator`'s HTTP TLS endpoint.
 
    ```bash
-   kubectl get secret api-serving-cert --namespace local-user-authenticator \
+   kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator \
      -o jsonpath={.data.caCertificate} \
      | tee /tmp/local-user-authenticator-ca-base64-encoded
    ```
@@ -101,7 +101,7 @@
    ```bash
    pinniped get-kubeconfig --token "pinny-the-seal:password123" > /tmp/pinniped-kubeconfig
    ```
-   
+
    Note that the above command will print a warning to the screen. You can ignore this warning.
    Pinniped tries to auto-discover the URL for the Kubernetes API server, but it is not able
    to do so on kind clusters. The warning is just letting you know that the Pinniped CLI decided

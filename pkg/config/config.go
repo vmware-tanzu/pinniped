@@ -8,6 +8,7 @@ package config
 import (
 	"fmt"
 	"io/ioutil"
+	"strings"
 
 	"sigs.k8s.io/yaml"
 
@@ -44,6 +45,10 @@ func FromPath(path string) (*api.Config, error) {
 		return nil, fmt.Errorf("validate api: %w", err)
 	}
 
+	if err := validateNames(&config.NamesConfig); err != nil {
+		return nil, fmt.Errorf("validate names: %w", err)
+	}
+
 	return &config, nil
 }
 
@@ -55,6 +60,27 @@ func maybeSetAPIDefaults(apiConfig *api.APIConfigSpec) {
 	if apiConfig.ServingCertificateConfig.RenewBeforeSeconds == nil {
 		apiConfig.ServingCertificateConfig.RenewBeforeSeconds = int64Ptr(about9Months)
 	}
+}
+
+func validateNames(names *api.NamesConfigSpec) error {
+	missingNames := []string{}
+	if names == nil {
+		missingNames = append(missingNames, "servingCertificateSecret", "credentialIssuerConfig", "apiService")
+	} else {
+		if names.ServingCertificateSecret == "" {
+			missingNames = append(missingNames, "servingCertificateSecret")
+		}
+		if names.CredentialIssuerConfig == "" {
+			missingNames = append(missingNames, "credentialIssuerConfig")
+		}
+		if names.APIService == "" {
+			missingNames = append(missingNames, "apiService")
+		}
+	}
+	if len(missingNames) > 0 {
+		return constable.Error("missing required names: " + strings.Join(missingNames, ", "))
+	}
+	return nil
 }
 
 func validateAPI(apiConfig *api.APIConfigSpec) error {

@@ -54,7 +54,7 @@ kubectl create secret generic ryan \
 Fetch the auto-generated CA bundle for the `local-user-authenticator`'s HTTP TLS endpoint.
 
 ```bash
-kubectl get secret api-serving-cert --namespace local-user-authenticator \
+kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator \
   -o jsonpath={.data.caCertificate} \
   | base64 -d \
   | tee /tmp/local-user-authenticator-ca

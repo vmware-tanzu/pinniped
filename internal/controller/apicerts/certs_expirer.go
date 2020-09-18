@@ -22,9 +22,10 @@ import (
 )
 
 type certsExpirerController struct {
-	namespace      string
-	k8sClient      kubernetes.Interface
-	secretInformer corev1informers.SecretInformer
+	namespace               string
+	certsSecretResourceName string
+	k8sClient               kubernetes.Interface
+	secretInformer          corev1informers.SecretInformer
 
 	// renewBefore is the amount of time after the cert's issuance where
 	// this controller will start to try to rotate it.
@@ -36,6 +37,7 @@ type certsExpirerController struct {
 // deletion forces rotation of the secret with the help of other controllers.
 func NewCertsExpirerController(
 	namespace string,
+	certsSecretResourceName string,
 	k8sClient kubernetes.Interface,
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
@@ -45,15 +47,16 @@ func NewCertsExpirerController(
 		controllerlib.Config{
 			Name: "certs-expirer-controller",
 			Syncer: &certsExpirerController{
-				namespace:      namespace,
-				k8sClient:      k8sClient,
-				secretInformer: secretInformer,
-				renewBefore:    renewBefore,
+				namespace:               namespace,
+				certsSecretResourceName: certsSecretResourceName,
+				k8sClient:               k8sClient,
+				secretInformer:          secretInformer,
+				renewBefore:             renewBefore,
 			},
 		},
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretName, namespace),
+			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretResourceName, namespace),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -61,10 +64,10 @@ func NewCertsExpirerController(
 
 // Sync implements controller.Syncer.Sync.
 func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
-	secret, err := c.secretInformer.Lister().Secrets(c.namespace).Get(certsSecretName)
+	secret, err := c.secretInformer.Lister().Secrets(c.namespace).Get(c.certsSecretResourceName)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
-		return fmt.Errorf("failed to get %s/%s secret: %w", c.namespace, certsSecretName, err)
+		return fmt.Errorf("failed to get %s/%s secret: %w", c.namespace, c.certsSecretResourceName, err)
 	}
 	if notFound {
 		klog.Info("certsExpirerController Sync found that the secret does not exist yet or was deleted")
@@ -87,7 +90,7 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 		err := c.k8sClient.
 			CoreV1().
 			Secrets(c.namespace).
-			Delete(ctx.Context, certsSecretName, metav1.DeleteOptions{})
+			Delete(ctx.Context, c.certsSecretResourceName, metav1.DeleteOptions{})
 		if err != nil {
 			// Do return an error here so that the controller library will reschedule
 			// us to try deleting this cert again.

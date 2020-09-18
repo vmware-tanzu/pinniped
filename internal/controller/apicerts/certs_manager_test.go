@@ -27,6 +27,7 @@ import (
 func TestManagerControllerOptions(t *testing.T) {
 	spec.Run(t, "options", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
+		const certsSecretResourceName = "some-resource-name"
 
 		var r *require.Assertions
 		var observableWithInformerOption *testutil.ObservableWithInformerOption
@@ -38,7 +39,17 @@ func TestManagerControllerOptions(t *testing.T) {
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			observableWithInitialEventOption = testutil.NewObservableWithInitialEventOption()
 			secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
-			_ = NewCertsManagerController(installedInNamespace, nil, secretsInformer, observableWithInformerOption.WithInformer, observableWithInitialEventOption.WithInitialEvent, 0, "Pinniped CA", "pinniped-api")
+			_ = NewCertsManagerController(
+				installedInNamespace,
+				certsSecretResourceName,
+				nil,
+				secretsInformer,
+				observableWithInformerOption.WithInformer,
+				observableWithInitialEventOption.WithInitialEvent,
+				0,
+				"Pinniped CA",
+				"pinniped-api",
+			)
 			secretsInformerFilter = observableWithInformerOption.GetFilterForInformer(secretsInformer)
 		})
 
@@ -48,8 +59,8 @@ func TestManagerControllerOptions(t *testing.T) {
 
 			it.Before(func() {
 				subject = secretsInformerFilter
-				target = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "api-serving-cert", Namespace: installedInNamespace}}
-				wrongNamespace = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "api-serving-cert", Namespace: "wrong-namespace"}}
+				target = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: certsSecretResourceName, Namespace: installedInNamespace}}
+				wrongNamespace = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: certsSecretResourceName, Namespace: "wrong-namespace"}}
 				wrongName = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: installedInNamespace}}
 				unrelated = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: "wrong-namespace"}}
 			})
@@ -94,7 +105,7 @@ func TestManagerControllerOptions(t *testing.T) {
 			it("asks for an initial event because the Secret may not exist yet and it needs to run anyway", func() {
 				r.Equal(controllerlib.Key{
 					Namespace: installedInNamespace,
-					Name:      "api-serving-cert",
+					Name:      certsSecretResourceName,
 				}, observableWithInitialEventOption.GetInitialEventKey())
 			})
 		})
@@ -104,6 +115,7 @@ func TestManagerControllerOptions(t *testing.T) {
 func TestManagerControllerSync(t *testing.T) {
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
+		const certsSecretResourceName = "some-resource-name"
 		const certDuration = 12345678 * time.Second
 
 		var r *require.Assertions
@@ -122,6 +134,7 @@ func TestManagerControllerSync(t *testing.T) {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewCertsManagerController(
 				installedInNamespace,
+				certsSecretResourceName,
 				kubeAPIClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
@@ -137,7 +150,7 @@ func TestManagerControllerSync(t *testing.T) {
 				Name:    subject.Name(),
 				Key: controllerlib.Key{
 					Namespace: installedInNamespace,
-					Name:      "api-serving-cert",
+					Name:      certsSecretResourceName,
 				},
 			}
 
@@ -160,7 +173,7 @@ func TestManagerControllerSync(t *testing.T) {
 			timeoutContextCancel()
 		})
 
-		when("there is not yet an api-serving-cert Secret in the installation namespace or it was deleted", func() {
+		when("there is not yet a serving cert Secret in the installation namespace or it was deleted", func() {
 			it.Before(func() {
 				unrelatedSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
@@ -172,7 +185,7 @@ func TestManagerControllerSync(t *testing.T) {
 				r.NoError(err)
 			})
 
-			it("creates the api-serving-cert Secret", func() {
+			it("creates the serving cert Secret", func() {
 				startInformersAndController()
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
@@ -183,7 +196,7 @@ func TestManagerControllerSync(t *testing.T) {
 				r.Equal(schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, actualAction.GetResource())
 				r.Equal(installedInNamespace, actualAction.GetNamespace())
 				actualSecret := actualAction.GetObject().(*corev1.Secret)
-				r.Equal("api-serving-cert", actualSecret.Name)
+				r.Equal(certsSecretResourceName, actualSecret.Name)
 				r.Equal(installedInNamespace, actualSecret.Namespace)
 				actualCACert := actualSecret.StringData["caCertificate"]
 				actualPrivateKey := actualSecret.StringData["tlsPrivateKey"]
@@ -222,11 +235,11 @@ func TestManagerControllerSync(t *testing.T) {
 			})
 		})
 
-		when("there is an api-serving-cert Secret already in the installation namespace", func() {
+		when("there is a serving cert Secret already in the installation namespace", func() {
 			it.Before(func() {
 				apiServingCertSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "api-serving-cert",
+						Name:      certsSecretResourceName,
 						Namespace: installedInNamespace,
 					},
 				}

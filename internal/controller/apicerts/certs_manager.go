@@ -21,17 +21,16 @@ import (
 )
 
 const (
-	//nolint: gosec
-	certsSecretName              = "api-serving-cert"
 	caCertificateSecretKey       = "caCertificate"
 	tlsPrivateKeySecretKey       = "tlsPrivateKey"
 	tlsCertificateChainSecretKey = "tlsCertificateChain"
 )
 
 type certsManagerController struct {
-	namespace      string
-	k8sClient      kubernetes.Interface
-	secretInformer corev1informers.SecretInformer
+	namespace               string
+	certsSecretResourceName string
+	k8sClient               kubernetes.Interface
+	secretInformer          corev1informers.SecretInformer
 
 	// certDuration is the lifetime of both the serving certificate and its CA
 	// certificate that this controller will use when issuing the certificates.
@@ -41,7 +40,9 @@ type certsManagerController struct {
 	serviceNameForGeneratedCertCommonName string
 }
 
-func NewCertsManagerController(namespace string,
+func NewCertsManagerController(
+	namespace string,
+	certsSecretResourceName string,
 	k8sClient kubernetes.Interface,
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
@@ -55,6 +56,7 @@ func NewCertsManagerController(namespace string,
 			Name: "certs-manager-controller",
 			Syncer: &certsManagerController{
 				namespace:                             namespace,
+				certsSecretResourceName:               certsSecretResourceName,
 				k8sClient:                             k8sClient,
 				secretInformer:                        secretInformer,
 				certDuration:                          certDuration,
@@ -64,23 +66,23 @@ func NewCertsManagerController(namespace string,
 		},
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretName, namespace),
+			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretResourceName, namespace),
 			controllerlib.InformerOption{},
 		),
 		// Be sure to run once even if the Secret that the informer is watching doesn't exist.
 		withInitialEvent(controllerlib.Key{
 			Namespace: namespace,
-			Name:      certsSecretName,
+			Name:      certsSecretResourceName,
 		}),
 	)
 }
 
 func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 	// Try to get the secret from the informer cache.
-	_, err := c.secretInformer.Lister().Secrets(c.namespace).Get(certsSecretName)
+	_, err := c.secretInformer.Lister().Secrets(c.namespace).Get(c.certsSecretResourceName)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
-		return fmt.Errorf("failed to get %s/%s secret: %w", c.namespace, certsSecretName, err)
+		return fmt.Errorf("failed to get %s/%s secret: %w", c.namespace, c.certsSecretResourceName, err)
 	}
 	if !notFound {
 		// The secret already exists, so nothing to do.
@@ -112,7 +114,7 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 	secret := corev1.Secret{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      certsSecretName,
+			Name:      c.certsSecretResourceName,
 			Namespace: c.namespace,
 		},
 		StringData: map[string]string{

@@ -3,10 +3,11 @@
 
 package api
 
-// Config contains knobs to setup an instance of pinniped.
+// Config contains knobs to setup an instance of Pinniped.
 type Config struct {
 	DiscoveryInfo DiscoveryInfoSpec `json:"discovery"`
 	APIConfig     APIConfigSpec     `json:"api"`
+	NamesConfig   NamesConfigSpec   `json:"names"`
 }
 
 // DiscoveryInfoSpec contains configuration knobs specific to
@@ -18,10 +19,17 @@ type DiscoveryInfoSpec struct {
 	URL *string `json:"url,omitempty"`
 }
 
-// APIConfigSpec contains configuration knobs for the pinniped API.
+// APIConfigSpec contains configuration knobs for the Pinniped API.
 //nolint: golint
 type APIConfigSpec struct {
 	ServingCertificateConfig ServingCertificateConfigSpec `json:"servingCertificate"`
+}
+
+// NamesConfigSpec configures the names of some Kubernetes resources for Pinniped.
+type NamesConfigSpec struct {
+	ServingCertificateSecret string `json:"servingCertificateSecret"`
+	CredentialIssuerConfig   string `json:"credentialIssuerConfig"`
+	APIService               string `json:"apiService"`
 }
 
 // ServingCertificateConfigSpec contains the configuration knobs for the API's
@@ -34,10 +42,10 @@ type ServingCertificateConfigSpec struct {
 	// CA certificate.
 	DurationSeconds *int64 `json:"durationSeconds,omitempty"`
 
-	// RenewBeforeSeconds is the period of time, in seconds, that pinniped will
+	// RenewBeforeSeconds is the period of time, in seconds, that Pinniped will
 	// wait before rotating the serving certificate. This period of time starts
 	// upon issuance of the serving certificate. This must be less than
-	// DurationSeconds. By default, pinniped begins rotation after 23328000
+	// DurationSeconds. By default, Pinniped begins rotation after 23328000
 	// seconds (about 9 months).
 	RenewBeforeSeconds *int64 `json:"renewBeforeSeconds,omitempty"`
 }

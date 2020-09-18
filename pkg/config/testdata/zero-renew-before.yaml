@@ -1,5 +1,0 @@
----
-api:
-  servingCertificate:
-    durationSeconds: 2400
-    renewBeforeSeconds: -10

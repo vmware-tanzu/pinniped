@@ -19,6 +19,7 @@ import (
 func CreateOrUpdateCredentialIssuerConfig(
 	ctx context.Context,
 	credentialIssuerConfigNamespace string,
+	credentialIssuerConfigResourceName string,
 	pinnipedClient pinnipedclientset.Interface,
 	applyUpdatesToCredentialIssuerConfigFunc func(configToUpdate *crdpinnipedv1alpha1.CredentialIssuerConfig),
 ) error {
@@ -26,7 +27,7 @@ func CreateOrUpdateCredentialIssuerConfig(
 		existingCredentialIssuerConfig, err := pinnipedClient.
 			CrdV1alpha1().
 			CredentialIssuerConfigs(credentialIssuerConfigNamespace).
-			Get(ctx, ConfigName, metav1.GetOptions{})
+			Get(ctx, credentialIssuerConfigResourceName, metav1.GetOptions{})
 
 		notFound := k8serrors.IsNotFound(err)
 		if err != nil && !notFound {
@@ -37,7 +38,7 @@ func CreateOrUpdateCredentialIssuerConfig(
 			ctx,
 			existingCredentialIssuerConfig,
 			notFound,
-			ConfigName,
+			credentialIssuerConfigResourceName,
 			credentialIssuerConfigNamespace,
 			pinnipedClient,
 			applyUpdatesToCredentialIssuerConfigFunc)

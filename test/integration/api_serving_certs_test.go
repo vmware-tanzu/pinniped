@@ -21,6 +21,8 @@ import (
 func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 	library.SkipUnlessIntegration(t)
 
+	const defaultServingCertResourceName = "pinniped-api-tls-serving-certificate"
+
 	tests := []struct {
 		name          string
 		forceRotation func(context.Context, kubernetes.Interface, string) error
@@ -36,7 +38,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 				return kubeClient.
 					CoreV1().
 					Secrets(namespace).
-					Delete(ctx, "api-serving-cert", metav1.DeleteOptions{})
+					Delete(ctx, defaultServingCertResourceName, metav1.DeleteOptions{})
 			},
 		},
 		{
@@ -51,7 +53,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 				secret, err := kubeClient.
 					CoreV1().
 					Secrets(namespace).
-					Get(ctx, "api-serving-cert", metav1.GetOptions{})
+					Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})
 				if err != nil {
 					return err
 				}
@@ -83,7 +85,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			const apiServiceName = "v1alpha1.pinniped.dev"
 
 			// Get the initial auto-generated version of the Secret.
-			secret, err := kubeClient.CoreV1().Secrets(namespaceName).Get(ctx, "api-serving-cert", metav1.GetOptions{})
+			secret, err := kubeClient.CoreV1().Secrets(namespaceName).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})
 			require.NoError(t, err)
 			initialCACert := secret.Data["caCertificate"]
 			initialPrivateKey := secret.Data["tlsPrivateKey"]
@@ -102,7 +104,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 
 			// Expect that the Secret comes back right away with newly minted certs.
 			secretIsRegenerated := func() bool {
-				secret, err = kubeClient.CoreV1().Secrets(namespaceName).Get(ctx, "api-serving-cert", metav1.GetOptions{})
+				secret, err = kubeClient.CoreV1().Secrets(namespaceName).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})
 				return err == nil
 			}
 			assert.Eventually(t, secretIsRegenerated, 10*time.Second, 250*time.Millisecond)

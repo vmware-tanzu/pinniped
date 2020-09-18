@@ -16,14 +16,16 @@ import (
 )
 
 type apiServiceUpdaterController struct {
-	namespace        string
-	aggregatorClient aggregatorclient.Interface
-	secretInformer   corev1informers.SecretInformer
-	apiServiceName   string
+	namespace               string
+	certsSecretResourceName string
+	aggregatorClient        aggregatorclient.Interface
+	secretInformer          corev1informers.SecretInformer
+	apiServiceName          string
 }
 
 func NewAPIServiceUpdaterController(
 	namespace string,
+	certsSecretResourceName string,
 	apiServiceName string,
 	aggregatorClient aggregatorclient.Interface,
 	secretInformer corev1informers.SecretInformer,
@@ -33,15 +35,16 @@ func NewAPIServiceUpdaterController(
 		controllerlib.Config{
 			Name: "certs-manager-controller",
 			Syncer: &apiServiceUpdaterController{
-				namespace:        namespace,
-				aggregatorClient: aggregatorClient,
-				secretInformer:   secretInformer,
-				apiServiceName:   apiServiceName,
+				namespace:               namespace,
+				certsSecretResourceName: certsSecretResourceName,
+				aggregatorClient:        aggregatorClient,
+				secretInformer:          secretInformer,
+				apiServiceName:          apiServiceName,
 			},
 		},
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretName, namespace),
+			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretResourceName, namespace),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -49,10 +52,10 @@ func NewAPIServiceUpdaterController(
 
 func (c *apiServiceUpdaterController) Sync(ctx controllerlib.Context) error {
 	// Try to get the secret from the informer cache.
-	certSecret, err := c.secretInformer.Lister().Secrets(c.namespace).Get(certsSecretName)
+	certSecret, err := c.secretInformer.Lister().Secrets(c.namespace).Get(c.certsSecretResourceName)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
-		return fmt.Errorf("failed to get %s/%s secret: %w", c.namespace, certsSecretName, err)
+		return fmt.Errorf("failed to get %s/%s secret: %w", c.namespace, c.certsSecretResourceName, err)
 	}
 	if notFound {
 		// The secret does not exist yet, so nothing to do.

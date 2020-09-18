@@ -16,13 +16,15 @@ import (
 )
 
 type certsObserverController struct {
-	namespace           string
-	dynamicCertProvider provider.DynamicTLSServingCertProvider
-	secretInformer      corev1informers.SecretInformer
+	namespace               string
+	certsSecretResourceName string
+	dynamicCertProvider     provider.DynamicTLSServingCertProvider
+	secretInformer          corev1informers.SecretInformer
 }
 
 func NewCertsObserverController(
 	namespace string,
+	certsSecretResourceName string,
 	dynamicCertProvider provider.DynamicTLSServingCertProvider,
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
@@ -31,14 +33,15 @@ func NewCertsObserverController(
 		controllerlib.Config{
 			Name: "certs-observer-controller",
 			Syncer: &certsObserverController{
-				namespace:           namespace,
-				dynamicCertProvider: dynamicCertProvider,
-				secretInformer:      secretInformer,
+				namespace:               namespace,
+				certsSecretResourceName: certsSecretResourceName,
+				dynamicCertProvider:     dynamicCertProvider,
+				secretInformer:          secretInformer,
 			},
 		},
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretName, namespace),
+			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(certsSecretResourceName, namespace),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -46,10 +49,10 @@ func NewCertsObserverController(
 
 func (c *certsObserverController) Sync(_ controllerlib.Context) error {
 	// Try to get the secret from the informer cache.
-	certSecret, err := c.secretInformer.Lister().Secrets(c.namespace).Get(certsSecretName)
+	certSecret, err := c.secretInformer.Lister().Secrets(c.namespace).Get(c.certsSecretResourceName)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
-		return fmt.Errorf("failed to get %s/%s secret: %w", c.namespace, certsSecretName, err)
+		return fmt.Errorf("failed to get %s/%s secret: %w", c.namespace, c.certsSecretResourceName, err)
 	}
 	if notFound {
 		klog.Info("certsObserverController Sync found that the secret does not exist yet or was deleted")

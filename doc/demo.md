@@ -85,7 +85,7 @@
     cd /tmp/pinniped/deploy
     ytt --file . \
       --data-value "webhook_url=https://local-user-authenticator.local-user-authenticator.svc/authenticate" \
-      --data-value "webhook_ca_bundle=$(cat local-user-authenticator-ca-base64-encoded)" \
+      --data-value "webhook_ca_bundle=$(cat /tmp/local-user-authenticator-ca-base64-encoded)" \
       | kapp deploy --yes --app pinniped --diff-changes --file -
    ```
 

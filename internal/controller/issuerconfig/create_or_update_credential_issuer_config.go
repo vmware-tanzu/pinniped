@@ -6,8 +6,8 @@ package issuerconfig
 import (
 	"context"
 	"fmt"
-	"reflect"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
@@ -73,7 +73,7 @@ func createOrUpdateCredentialIssuerConfig(
 		credentialIssuerConfig := existingCredentialIssuerConfig.DeepCopy()
 		applyUpdatesToCredentialIssuerConfigFunc(credentialIssuerConfig)
 
-		if reflect.DeepEqual(existingCredentialIssuerConfig.Status, credentialIssuerConfig.Status) {
+		if equality.Semantic.DeepEqual(existingCredentialIssuerConfig, credentialIssuerConfig) {
 			// Nothing interesting would change as a result of this update, so skip it
 			return nil
 		}

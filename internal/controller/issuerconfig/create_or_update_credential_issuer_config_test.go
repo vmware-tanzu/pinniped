@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
@@ -145,6 +146,11 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 				err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, pinnipedAPIClient,
 					func(configToUpdate *v1alpha1.CredentialIssuerConfig) {
 						configToUpdate.Status.KubeConfigInfo.CertificateAuthorityData = "initial-ca-value"
+
+						t := configToUpdate.Status.Strategies[0].LastUpdateTime
+						loc, err := time.LoadLocation("Asia/Shanghai")
+						r.NoError(err)
+						configToUpdate.Status.Strategies[0].LastUpdateTime = metav1.NewTime(t.In(loc))
 					},
 				)
 				r.NoError(err)

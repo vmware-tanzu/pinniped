@@ -16,7 +16,6 @@ import (
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
-	pinnipedv1alpha1 "go.pinniped.dev/generated/1.19/apis/pinniped/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
 	"go.pinniped.dev/internal/controller/apicerts"
@@ -79,16 +78,6 @@ func PrepareControllers(
 				servingCertDuration,
 				"Pinniped CA",
 				serviceName,
-			),
-			singletonWorker,
-		).
-		WithController(
-			apicerts.NewAPIServiceUpdaterController(
-				serverInstallationNamespace,
-				pinnipedv1alpha1.SchemeGroupVersion.Version+"."+pinnipedv1alpha1.GroupName,
-				aggregatorClient,
-				installationNamespaceK8sInformers.Core().V1().Secrets(),
-				controllerlib.WithInformer,
 			),
 			singletonWorker,
 		).

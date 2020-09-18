@@ -13,8 +13,6 @@ import (
 	fakeidpv1alpha1 "go.pinniped.dev/generated/1.18/client/clientset/versioned/typed/idp/v1alpha1/fake"
 	loginv1alpha1 "go.pinniped.dev/generated/1.18/client/clientset/versioned/typed/login/v1alpha1"
 	fakeloginv1alpha1 "go.pinniped.dev/generated/1.18/client/clientset/versioned/typed/login/v1alpha1/fake"
-	pinnipedv1alpha1 "go.pinniped.dev/generated/1.18/client/clientset/versioned/typed/pinniped/v1alpha1"
-	fakepinnipedv1alpha1 "go.pinniped.dev/generated/1.18/client/clientset/versioned/typed/pinniped/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -82,9 +80,4 @@ func (c *Clientset) IDPV1alpha1() idpv1alpha1.IDPV1alpha1Interface {
 // LoginV1alpha1 retrieves the LoginV1alpha1Client
 func (c *Clientset) LoginV1alpha1() loginv1alpha1.LoginV1alpha1Interface {
 	return &fakeloginv1alpha1.FakeLoginV1alpha1{Fake: &c.Fake}
-}
-
-// PinnipedV1alpha1 retrieves the PinnipedV1alpha1Client
-func (c *Clientset) PinnipedV1alpha1() pinnipedv1alpha1.PinnipedV1alpha1Interface {
-	return &fakepinnipedv1alpha1.FakePinnipedV1alpha1{Fake: &c.Fake}
 }

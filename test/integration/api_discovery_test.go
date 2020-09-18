@@ -26,25 +26,25 @@ func TestGetAPIResourceList(t *testing.T) {
 	}{
 		{
 			group: metav1.APIGroup{
-				Name: "pinniped.dev",
+				Name: "login.pinniped.dev",
 				Versions: []metav1.GroupVersionForDiscovery{
 					{
-						GroupVersion: "pinniped.dev/v1alpha1",
+						GroupVersion: "login.pinniped.dev/v1alpha1",
 						Version:      "v1alpha1",
 					},
 				},
 				PreferredVersion: metav1.GroupVersionForDiscovery{
-					GroupVersion: "pinniped.dev/v1alpha1",
+					GroupVersion: "login.pinniped.dev/v1alpha1",
 					Version:      "v1alpha1",
 				},
 			},
 			resourceByVersion: map[string][]metav1.APIResource{
-				"pinniped.dev/v1alpha1": {
+				"login.pinniped.dev/v1alpha1": {
 					{
-						Name:       "credentialrequests",
-						Kind:       "CredentialRequest",
+						Name:       "tokencredentialrequests",
+						Kind:       "TokenCredentialRequest",
 						Verbs:      []string{"create"},
-						Namespaced: false,
+						Namespaced: true,
 
 						// This is currently an empty string in the response; maybe it should not be
 						// empty? Seems like no harm in keeping it like this for now, but feel free

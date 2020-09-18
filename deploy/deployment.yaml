@@ -160,23 +160,6 @@ spec:
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
 metadata:
-  name: v1alpha1.pinniped.dev
-  labels:
-    app: #@ data.values.app_name
-spec:
-  version: v1alpha1
-  group: pinniped.dev
-  groupPriorityMinimum: 2500 #! TODO what is the right value? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
-  versionPriority: 10 #! TODO what is the right value? https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#apiservicespec-v1beta1-apiregistration-k8s-io
-  #! caBundle: Do not include this key here. Starts out null, will be updated/owned by the golang code.
-  service:
-    name: pinniped-api
-    namespace: #@ data.values.namespace
-    port: 443
----
-apiVersion: apiregistration.k8s.io/v1
-kind: APIService
-metadata:
   name: v1alpha1.login.pinniped.dev
   labels:
     app: #@ data.values.app_name

@@ -11,7 +11,6 @@ import (
 	v1alpha1 "go.pinniped.dev/generated/1.18/apis/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/1.18/apis/idp/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/1.18/apis/login/v1alpha1"
-	pinnipedv1alpha1 "go.pinniped.dev/generated/1.18/apis/pinniped/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -53,10 +52,6 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		// Group=login.pinniped.dev, Version=v1alpha1
 	case loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Login().V1alpha1().TokenCredentialRequests().Informer()}, nil
-
-		// Group=pinniped.dev, Version=v1alpha1
-	case pinnipedv1alpha1.SchemeGroupVersion.WithResource("credentialrequests"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Pinniped().V1alpha1().CredentialRequests().Informer()}, nil
 
 	}
 

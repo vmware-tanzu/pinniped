@@ -15,7 +15,6 @@ import (
 	idp "go.pinniped.dev/generated/1.17/client/informers/externalversions/idp"
 	internalinterfaces "go.pinniped.dev/generated/1.17/client/informers/externalversions/internalinterfaces"
 	login "go.pinniped.dev/generated/1.17/client/informers/externalversions/login"
-	pinniped "go.pinniped.dev/generated/1.17/client/informers/externalversions/pinniped"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -165,7 +164,6 @@ type SharedInformerFactory interface {
 	Config() config.Interface
 	IDP() idp.Interface
 	Login() login.Interface
-	Pinniped() pinniped.Interface
 }
 
 func (f *sharedInformerFactory) Config() config.Interface {
@@ -178,8 +176,4 @@ func (f *sharedInformerFactory) IDP() idp.Interface {
 
 func (f *sharedInformerFactory) Login() login.Interface {
 	return login.New(f, f.namespace, f.tweakListOptions)
-}
-
-func (f *sharedInformerFactory) Pinniped() pinniped.Interface {
-	return pinniped.New(f, f.namespace, f.tweakListOptions)
 }

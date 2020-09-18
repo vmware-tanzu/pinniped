@@ -17,11 +17,11 @@ import (
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	aggregatorv1fake "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 
-	pinnipedv1alpha1 "go.pinniped.dev/generated/1.19/apis/pinniped/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
 )
 
 func TestUpdateAPIService(t *testing.T) {
-	const apiServiceName = "v1alpha1.pinniped.dev"
+	const apiServiceName = "v1alpha1.login.pinniped.dev"
 
 	tests := []struct {
 		name        string
@@ -181,7 +181,7 @@ func TestUpdateAPIService(t *testing.T) {
 				tt.mocks(client)
 			}
 
-			err := UpdateAPIService(ctx, client, pinnipedv1alpha1.SchemeGroupVersion.Version+"."+pinnipedv1alpha1.GroupName, tt.caInput)
+			err := UpdateAPIService(ctx, client, loginv1alpha1.SchemeGroupVersion.Version+"."+loginv1alpha1.GroupName, tt.caInput)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				return

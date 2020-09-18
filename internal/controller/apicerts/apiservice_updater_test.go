@@ -22,7 +22,7 @@ import (
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	aggregatorfake "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 
-	pinnipedv1alpha1 "go.pinniped.dev/generated/1.19/apis/pinniped/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -41,7 +41,7 @@ func TestAPIServiceUpdaterControllerOptions(t *testing.T) {
 			secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
 			_ = NewAPIServiceUpdaterController(
 				installedInNamespace,
-				pinnipedv1alpha1.SchemeGroupVersion.Version+"."+pinnipedv1alpha1.GroupName,
+				loginv1alpha1.SchemeGroupVersion.Version+"."+loginv1alpha1.GroupName,
 				nil,
 				secretsInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
@@ -119,7 +119,7 @@ func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewAPIServiceUpdaterController(
 				installedInNamespace,
-				pinnipedv1alpha1.SchemeGroupVersion.Version+"."+pinnipedv1alpha1.GroupName,
+				loginv1alpha1.SchemeGroupVersion.Version+"."+loginv1alpha1.GroupName,
 				aggregatorAPIClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
@@ -195,7 +195,7 @@ func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 				it.Before(func() {
 					apiService := &apiregistrationv1.APIService{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: pinnipedv1alpha1.SchemeGroupVersion.Version + "." + pinnipedv1alpha1.GroupName,
+							Name: loginv1alpha1.SchemeGroupVersion.Version + "." + loginv1alpha1.GroupName,
 						},
 						Spec: apiregistrationv1.APIServiceSpec{
 							CABundle:        nil,
@@ -214,7 +214,7 @@ func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 					// Make sure we updated the APIService caBundle and left it otherwise unchanged
 					r.Len(aggregatorAPIClient.Actions(), 2)
 					r.Equal("get", aggregatorAPIClient.Actions()[0].GetVerb())
-					expectedAPIServiceName := pinnipedv1alpha1.SchemeGroupVersion.Version + "." + pinnipedv1alpha1.GroupName
+					expectedAPIServiceName := loginv1alpha1.SchemeGroupVersion.Version + "." + loginv1alpha1.GroupName
 					expectedUpdateAction := coretesting.NewUpdateAction(
 						schema.GroupVersionResource{
 							Group:    apiregistrationv1.GroupName,

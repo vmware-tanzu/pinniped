@@ -20,7 +20,7 @@ import (
 	"k8s.io/klog/v2"
 
 	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
-	pinnipedv1alpha1 "go.pinniped.dev/generated/1.19/apis/pinniped/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 	"go.pinniped.dev/internal/apiserver"
 	"go.pinniped.dev/internal/certauthority/kubecertauthority"
@@ -45,7 +45,7 @@ type App struct {
 
 // This is ignored for now because we turn off etcd storage below, but this is
 // the right prefix in case we turn it back on.
-const defaultEtcdPathPrefix = "/registry/" + pinnipedv1alpha1.GroupName
+const defaultEtcdPathPrefix = "/registry/" + loginv1alpha1.GroupName
 
 // New constructs a new App with command line args, stdout and stderr.
 func New(ctx context.Context, args []string, stdout, stderr io.Writer) *App {
@@ -246,7 +246,7 @@ func getAggregatedAPIServerConfig(
 ) (*apiserver.Config, error) {
 	recommendedOptions := genericoptions.NewRecommendedOptions(
 		defaultEtcdPathPrefix,
-		apiserver.Codecs.LegacyCodec(pinnipedv1alpha1.SchemeGroupVersion),
+		apiserver.Codecs.LegacyCodec(loginv1alpha1.SchemeGroupVersion),
 		// TODO we should check to see if all the other default settings are acceptable for us
 	)
 	recommendedOptions.Etcd = nil // turn off etcd storage because we don't need it yet

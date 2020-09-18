@@ -27,12 +27,40 @@ func TestCLI(t *testing.T) {
 		strings.ReplaceAll(library.GetEnv(t, "PINNIPED_TEST_USER_GROUPS"), " ", ""), ",",
 	)
 
+	// Remove all Pinniped environment variables for the remainder of this test
+	// because some of their names clash with the env vars expected by our
+	// kubectl exec plugin. We would like this test to prove that the exec
+	// plugin receives all of the necessary env vars via the auto-generated
+	// kubeconfig from the Pinniped CLI.
+	initialEnvVars := make(map[string]string)
+	for _, e := range os.Environ() {
+		pair := strings.SplitN(e, "=", 2)
+		name := pair[0]
+		value := pair[1]
+		if strings.HasPrefix(name, "PINNIPED_") {
+			initialEnvVars[name] = value
+			err := os.Unsetenv(name)
+			require.NoError(t, err)
+		}
+	}
+	// Put them back for other tests to use after this one
+	t.Cleanup(func() {
+		for k, v := range initialEnvVars {
+			err := os.Setenv(k, v)
+			require.NoError(t, err)
+		}
+	})
+
 	// Build pinniped CLI.
 	pinnipedExe, cleanupFunc := buildPinnipedCLI(t)
 	defer cleanupFunc()
 
 	// Run pinniped CLI to get kubeconfig.
 	kubeConfig := runPinnipedCLI(t, pinnipedExe, token, namespaceName)
+
+	// In addition to the client-go based testing below, also try the kubeconfig
+	// with kubectl once just in case it is somehow different.
+	runKubectlCLI(t, kubeConfig, namespaceName, testUsername)
 
 	// Create Kubernetes client with kubeconfig from pinniped CLI.
 	kubeClient := library.NewClientsetForKubeConfig(t, kubeConfig)
@@ -84,6 +112,41 @@ func runPinnipedCLI(t *testing.T, pinnipedExe, token, namespaceName string) stri
 		"--pinniped-namespace", namespaceName,
 	).CombinedOutput()
 	require.NoError(t, err, string(output))
+
+	return string(output)
+}
+
+func runKubectlCLI(t *testing.T, kubeConfig, namespaceName, username string) string {
+	t.Helper()
+
+	f, err := ioutil.TempFile("", "pinniped-generated-kubeconfig-*")
+	require.NoError(t, err)
+	defer func() {
+		err := os.Remove(f.Name())
+		require.NoError(t, err)
+	}()
+	_, err = f.WriteString(kubeConfig)
+	require.NoError(t, err)
+	err = f.Close()
+	require.NoError(t, err)
+
+	output, err := exec.Command(
+		"kubectl",
+		"get",
+		"pods",
+		"--kubeconfig", f.Name(),
+		"--namespace", namespaceName,
+	).CombinedOutput()
+
+	// Expect an error because this user has no RBAC permission. However, the
+	// error message should state that we had already authenticated as the test user.
+	expectedErrorMessage := `Error from server (Forbidden): pods is forbidden: User "` +
+		username +
+		`" cannot list resource "pods" in API group "" in the namespace "` +
+		namespaceName +
+		`"` + "\n"
+	require.EqualError(t, err, "exit status 1")
+	require.Equal(t, expectedErrorMessage, string(output))
 
 	return string(output)
 }

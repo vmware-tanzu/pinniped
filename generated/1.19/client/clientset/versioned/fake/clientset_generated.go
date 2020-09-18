@@ -6,15 +6,13 @@
 package fake
 
 import (
-	clientset "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned"
-	crdv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/typed/crdpinniped/v1alpha1"
-	fakecrdv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/typed/crdpinniped/v1alpha1/fake"
-	idpv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/typed/idp/v1alpha1"
-	fakeidpv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/typed/idp/v1alpha1/fake"
-	loginv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/typed/login/v1alpha1"
-	fakeloginv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/typed/login/v1alpha1/fake"
-	pinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/typed/pinniped/v1alpha1"
-	fakepinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/typed/pinniped/v1alpha1/fake"
+	clientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/client/clientset/versioned/typed/config/v1alpha1"
+	fakeconfigv1alpha1 "go.pinniped.dev/generated/1.19/client/clientset/versioned/typed/config/v1alpha1/fake"
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/client/clientset/versioned/typed/idp/v1alpha1"
+	fakeidpv1alpha1 "go.pinniped.dev/generated/1.19/client/clientset/versioned/typed/idp/v1alpha1/fake"
+	loginv1alpha1 "go.pinniped.dev/generated/1.19/client/clientset/versioned/typed/login/v1alpha1"
+	fakeloginv1alpha1 "go.pinniped.dev/generated/1.19/client/clientset/versioned/typed/login/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -69,9 +67,9 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 
 var _ clientset.Interface = &Clientset{}
 
-// CrdV1alpha1 retrieves the CrdV1alpha1Client
-func (c *Clientset) CrdV1alpha1() crdv1alpha1.CrdV1alpha1Interface {
-	return &fakecrdv1alpha1.FakeCrdV1alpha1{Fake: &c.Fake}
+// ConfigV1alpha1 retrieves the ConfigV1alpha1Client
+func (c *Clientset) ConfigV1alpha1() configv1alpha1.ConfigV1alpha1Interface {
+	return &fakeconfigv1alpha1.FakeConfigV1alpha1{Fake: &c.Fake}
 }
 
 // IDPV1alpha1 retrieves the IDPV1alpha1Client
@@ -82,9 +80,4 @@ func (c *Clientset) IDPV1alpha1() idpv1alpha1.IDPV1alpha1Interface {
 // LoginV1alpha1 retrieves the LoginV1alpha1Client
 func (c *Clientset) LoginV1alpha1() loginv1alpha1.LoginV1alpha1Interface {
 	return &fakeloginv1alpha1.FakeLoginV1alpha1{Fake: &c.Fake}
-}
-
-// PinnipedV1alpha1 retrieves the PinnipedV1alpha1Client
-func (c *Clientset) PinnipedV1alpha1() pinnipedv1alpha1.PinnipedV1alpha1Interface {
-	return &fakepinnipedv1alpha1.FakePinnipedV1alpha1{Fake: &c.Fake}
 }

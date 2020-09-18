@@ -18,8 +18,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1"
-	"github.com/vmware-tanzu/pinniped/test/library"
+	"go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
+	"go.pinniped.dev/test/library"
 )
 
 func TestSuccessfulCredentialRequest(t *testing.T) {
@@ -74,10 +74,7 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 	library.SkipUnlessIntegration(t)
 	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
 
-	response, err := makeRequest(t, v1alpha1.CredentialRequestSpec{
-		Type:  v1alpha1.TokenCredentialType,
-		Token: &v1alpha1.CredentialRequestTokenCredential{Value: "not a good token"},
-	})
+	response, err := makeRequest(t, v1alpha1.TokenCredentialRequestSpec{Token: "not a good token"})
 
 	require.NoError(t, err)
 
@@ -90,10 +87,7 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T
 	library.SkipUnlessIntegration(t)
 	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
 
-	response, err := makeRequest(t, v1alpha1.CredentialRequestSpec{
-		Type:  v1alpha1.TokenCredentialType,
-		Token: nil,
-	})
+	response, err := makeRequest(t, v1alpha1.TokenCredentialRequestSpec{Token: ""})
 
 	require.Error(t, err)
 	statusError, isStatus := err.(*errors.StatusError)
@@ -122,7 +116,7 @@ func TestCredentialRequest_OtherwiseValidRequestWithRealTokenShouldFailWhenTheCl
 	require.Equal(t, stringPtr("authentication failed"), response.Status.Message)
 }
 
-func makeRequest(t *testing.T, spec v1alpha1.CredentialRequestSpec) (*v1alpha1.CredentialRequest, error) {
+func makeRequest(t *testing.T, spec v1alpha1.TokenCredentialRequestSpec) (*v1alpha1.TokenCredentialRequest, error) {
 	t.Helper()
 
 	client := library.NewAnonymousPinnipedClientset(t)
@@ -130,19 +124,16 @@ func makeRequest(t *testing.T, spec v1alpha1.CredentialRequestSpec) (*v1alpha1.C
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	return client.PinnipedV1alpha1().CredentialRequests().Create(ctx, &v1alpha1.CredentialRequest{
+	ns := library.GetEnv(t, "PINNIPED_NAMESPACE")
+	return client.LoginV1alpha1().TokenCredentialRequests(ns).Create(ctx, &v1alpha1.TokenCredentialRequest{
 		TypeMeta:   metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{},
 		Spec:       spec,
 	}, metav1.CreateOptions{})
 }
 
-func validCredentialRequestSpecWithRealToken(t *testing.T) v1alpha1.CredentialRequestSpec {
-	token := library.GetEnv(t, "PINNIPED_TEST_USER_TOKEN")
-	return v1alpha1.CredentialRequestSpec{
-		Type:  v1alpha1.TokenCredentialType,
-		Token: &v1alpha1.CredentialRequestTokenCredential{Value: token},
-	}
+func validCredentialRequestSpecWithRealToken(t *testing.T) v1alpha1.TokenCredentialRequestSpec {
+	return v1alpha1.TokenCredentialRequestSpec{Token: library.GetEnv(t, "PINNIPED_TEST_USER_TOKEN")}
 }
 
 func addTestClusterRoleBinding(ctx context.Context, t *testing.T, adminClient kubernetes.Interface, binding *rbacv1.ClusterRoleBinding) {

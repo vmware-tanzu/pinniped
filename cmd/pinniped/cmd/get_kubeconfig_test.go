@@ -18,10 +18,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 
-	crdpinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	pinnipedclientset "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned"
-	pinnipedfake "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/fake"
-	"github.com/vmware-tanzu/pinniped/internal/here"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
+	"go.pinniped.dev/internal/here"
 )
 
 var (
@@ -255,18 +255,18 @@ func newCredentialIssuerConfig(
 	namespace,
 	server,
 	certificateAuthorityData string,
-) *crdpinnipedv1alpha1.CredentialIssuerConfig {
-	return &crdpinnipedv1alpha1.CredentialIssuerConfig{
+) *configv1alpha1.CredentialIssuerConfig {
+	return &configv1alpha1.CredentialIssuerConfig{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "CredentialIssuerConfig",
-			APIVersion: crdpinnipedv1alpha1.SchemeGroupVersion.String(),
+			APIVersion: configv1alpha1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Status: crdpinnipedv1alpha1.CredentialIssuerConfigStatus{
-			KubeConfigInfo: &crdpinnipedv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+		Status: configv1alpha1.CredentialIssuerConfigStatus{
+			KubeConfigInfo: &configv1alpha1.CredentialIssuerConfigKubeConfigInfo{
 				Server:                   server,
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(certificateAuthorityData)),
 			},
@@ -343,8 +343,8 @@ func TestGetKubeConfig(t *testing.T) {
 					// update the Server and CertificateAuthorityData to make them match the other kubeconfig context
 					r.NoError(pinnipedClient.Tracker().Update(
 						schema.GroupVersionResource{
-							Group:    crdpinnipedv1alpha1.GroupName,
-							Version:  crdpinnipedv1alpha1.SchemeGroupVersion.Version,
+							Group:    configv1alpha1.GroupName,
+							Version:  configv1alpha1.SchemeGroupVersion.Version,
 							Resource: "credentialissuerconfigs",
 						},
 						newCredentialIssuerConfig(
@@ -632,16 +632,16 @@ func TestGetKubeConfig(t *testing.T) {
 		when("the CredentialIssuerConfig is found on the cluster with an empty KubeConfigInfo", func() {
 			it.Before(func() {
 				r.NoError(pinnipedClient.Tracker().Add(
-					&crdpinnipedv1alpha1.CredentialIssuerConfig{
+					&configv1alpha1.CredentialIssuerConfig{
 						TypeMeta: metav1.TypeMeta{
 							Kind:       "CredentialIssuerConfig",
-							APIVersion: crdpinnipedv1alpha1.SchemeGroupVersion.String(),
+							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
 						},
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "pinniped-config",
 							Namespace: installationNamespace,
 						},
-						Status: crdpinnipedv1alpha1.CredentialIssuerConfigStatus{},
+						Status: configv1alpha1.CredentialIssuerConfigStatus{},
 					},
 				))
 			})

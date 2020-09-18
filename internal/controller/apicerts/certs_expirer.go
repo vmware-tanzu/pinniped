@@ -16,9 +16,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/pinniped/internal/constable"
-	pinnipedcontroller "github.com/vmware-tanzu/pinniped/internal/controller"
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
+	"go.pinniped.dev/internal/constable"
+	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	"go.pinniped.dev/internal/controllerlib"
 )
 
 type certsExpirerController struct {

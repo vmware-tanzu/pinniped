@@ -10,12 +10,11 @@ import (
 	sync "sync"
 	time "time"
 
-	versioned "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned"
-	crdpinniped "github.com/vmware-tanzu/pinniped/generated/1.19/client/informers/externalversions/crdpinniped"
-	idp "github.com/vmware-tanzu/pinniped/generated/1.19/client/informers/externalversions/idp"
-	internalinterfaces "github.com/vmware-tanzu/pinniped/generated/1.19/client/informers/externalversions/internalinterfaces"
-	login "github.com/vmware-tanzu/pinniped/generated/1.19/client/informers/externalversions/login"
-	pinniped "github.com/vmware-tanzu/pinniped/generated/1.19/client/informers/externalversions/pinniped"
+	versioned "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	config "go.pinniped.dev/generated/1.19/client/informers/externalversions/config"
+	idp "go.pinniped.dev/generated/1.19/client/informers/externalversions/idp"
+	internalinterfaces "go.pinniped.dev/generated/1.19/client/informers/externalversions/internalinterfaces"
+	login "go.pinniped.dev/generated/1.19/client/informers/externalversions/login"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -162,14 +161,13 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
-	Crd() crdpinniped.Interface
+	Config() config.Interface
 	IDP() idp.Interface
 	Login() login.Interface
-	Pinniped() pinniped.Interface
 }
 
-func (f *sharedInformerFactory) Crd() crdpinniped.Interface {
-	return crdpinniped.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) Config() config.Interface {
+	return config.New(f, f.namespace, f.tweakListOptions)
 }
 
 func (f *sharedInformerFactory) IDP() idp.Interface {
@@ -178,8 +176,4 @@ func (f *sharedInformerFactory) IDP() idp.Interface {
 
 func (f *sharedInformerFactory) Login() login.Interface {
 	return login.New(f, f.namespace, f.tweakListOptions)
-}
-
-func (f *sharedInformerFactory) Pinniped() pinniped.Interface {
-	return pinniped.New(f, f.namespace, f.tweakListOptions)
 }

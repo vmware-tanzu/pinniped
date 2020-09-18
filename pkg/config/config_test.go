@@ -10,8 +10,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/vmware-tanzu/pinniped/internal/here"
-	"github.com/vmware-tanzu/pinniped/pkg/config/api"
+	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/pkg/config/api"
 )
 
 func TestFromPath(t *testing.T) {

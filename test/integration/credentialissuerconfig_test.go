@@ -14,8 +14,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 
-	crdpinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	"github.com/vmware-tanzu/pinniped/test/library"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
+	"go.pinniped.dev/test/library"
 )
 
 func TestCredentialIssuerConfig(t *testing.T) {
@@ -30,7 +30,7 @@ func TestCredentialIssuerConfig(t *testing.T) {
 
 	t.Run("test successful CredentialIssuerConfig", func(t *testing.T) {
 		actualConfigList, err := client.
-			CrdV1alpha1().
+			ConfigV1alpha1().
 			CredentialIssuerConfigs(namespaceName).
 			List(ctx, metav1.ListOptions{})
 		require.NoError(t, err)
@@ -43,17 +43,17 @@ func TestCredentialIssuerConfig(t *testing.T) {
 		actualStatusStrategies := actualConfigList.Items[0].Status.Strategies
 		require.Len(t, actualStatusStrategies, 1)
 		actualStatusStrategy := actualStatusStrategies[0]
-		require.Equal(t, crdpinnipedv1alpha1.KubeClusterSigningCertificateStrategyType, actualStatusStrategy.Type)
+		require.Equal(t, configv1alpha1.KubeClusterSigningCertificateStrategyType, actualStatusStrategy.Type)
 
 		if library.ClusterHasCapability(t, library.ClusterSigningKeyIsAvailable) {
-			require.Equal(t, crdpinnipedv1alpha1.SuccessStrategyStatus, actualStatusStrategy.Status)
-			require.Equal(t, crdpinnipedv1alpha1.FetchedKeyStrategyReason, actualStatusStrategy.Reason)
+			require.Equal(t, configv1alpha1.SuccessStrategyStatus, actualStatusStrategy.Status)
+			require.Equal(t, configv1alpha1.FetchedKeyStrategyReason, actualStatusStrategy.Reason)
 			require.Equal(t, "Key was fetched successfully", actualStatusStrategy.Message)
 			// Verify the published kube config info.
 			require.Equal(t, expectedStatusKubeConfigInfo(config), actualStatusKubeConfigInfo)
 		} else {
-			require.Equal(t, crdpinnipedv1alpha1.ErrorStrategyStatus, actualStatusStrategy.Status)
-			require.Equal(t, crdpinnipedv1alpha1.CouldNotFetchKeyStrategyReason, actualStatusStrategy.Reason)
+			require.Equal(t, configv1alpha1.ErrorStrategyStatus, actualStatusStrategy.Status)
+			require.Equal(t, configv1alpha1.CouldNotFetchKeyStrategyReason, actualStatusStrategy.Reason)
 			require.Contains(t, actualStatusStrategy.Message, "did not find kube-controller-manager pod")
 			// For now, don't verify the kube config info because its not available on GKE. We'll need to address
 			// this somehow once we starting supporting those cluster types.
@@ -68,7 +68,7 @@ func TestCredentialIssuerConfig(t *testing.T) {
 		library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
 
 		existingConfig, err := client.
-			CrdV1alpha1().
+			ConfigV1alpha1().
 			CredentialIssuerConfigs(namespaceName).
 			Get(ctx, "pinniped-config", metav1.GetOptions{})
 		require.NoError(t, err)
@@ -80,17 +80,17 @@ func TestCredentialIssuerConfig(t *testing.T) {
 		updatedServerValue := "https://junk"
 		existingConfig.Status.KubeConfigInfo.Server = updatedServerValue
 		updatedConfig, err := client.
-			CrdV1alpha1().
+			ConfigV1alpha1().
 			CredentialIssuerConfigs(namespaceName).
 			Update(ctx, existingConfig, metav1.UpdateOptions{})
 		require.NoError(t, err)
 		require.Equal(t, updatedServerValue, updatedConfig.Status.KubeConfigInfo.Server)
 
 		// Expect that the object's mutated field is set back to what matches its source of truth by the controller.
-		var actualCredentialIssuerConfig *crdpinnipedv1alpha1.CredentialIssuerConfig
+		var actualCredentialIssuerConfig *configv1alpha1.CredentialIssuerConfig
 		var configChangesServerField = func() bool {
 			actualCredentialIssuerConfig, err = client.
-				CrdV1alpha1().
+				ConfigV1alpha1().
 				CredentialIssuerConfigs(namespaceName).
 				Get(ctx, "pinniped-config", metav1.GetOptions{})
 			return err == nil && actualCredentialIssuerConfig.Status.KubeConfigInfo.Server != updatedServerValue
@@ -106,8 +106,8 @@ func TestCredentialIssuerConfig(t *testing.T) {
 	})
 }
 
-func expectedStatusKubeConfigInfo(config *rest.Config) *crdpinnipedv1alpha1.CredentialIssuerConfigKubeConfigInfo {
-	return &crdpinnipedv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+func expectedStatusKubeConfigInfo(config *rest.Config) *configv1alpha1.CredentialIssuerConfigKubeConfigInfo {
+	return &configv1alpha1.CredentialIssuerConfigKubeConfigInfo{
 		Server:                   config.Host,
 		CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.TLSClientConfig.CAData),
 	}

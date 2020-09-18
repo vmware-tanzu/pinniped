@@ -12,11 +12,11 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
-	crdpinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	pinnipedclientset "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned"
-	crdpinnipedv1alpha1informers "github.com/vmware-tanzu/pinniped/generated/1.19/client/informers/externalversions/crdpinniped/v1alpha1"
-	pinnipedcontroller "github.com/vmware-tanzu/pinniped/internal/controller"
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	configv1alpha1informers "go.pinniped.dev/generated/1.19/client/informers/externalversions/config/v1alpha1"
+	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	"go.pinniped.dev/internal/controllerlib"
 )
 
 const (
@@ -31,7 +31,7 @@ type publisherController struct {
 	serverOverride                     *string
 	pinnipedClient                     pinnipedclientset.Interface
 	configMapInformer                  corev1informers.ConfigMapInformer
-	credentialIssuerConfigInformer     crdpinnipedv1alpha1informers.CredentialIssuerConfigInformer
+	credentialIssuerConfigInformer     configv1alpha1informers.CredentialIssuerConfigInformer
 }
 
 func NewPublisherController(namespace string,
@@ -39,7 +39,7 @@ func NewPublisherController(namespace string,
 	serverOverride *string,
 	pinnipedClient pinnipedclientset.Interface,
 	configMapInformer corev1informers.ConfigMapInformer,
-	credentialIssuerConfigInformer crdpinnipedv1alpha1informers.CredentialIssuerConfigInformer,
+	credentialIssuerConfigInformer configv1alpha1informers.CredentialIssuerConfigInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
@@ -117,8 +117,8 @@ func (c *publisherController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("could not get credentialissuerconfig: %w", err)
 	}
 
-	updateServerAndCAFunc := func(c *crdpinnipedv1alpha1.CredentialIssuerConfig) {
-		c.Status.KubeConfigInfo = &crdpinnipedv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+	updateServerAndCAFunc := func(c *configv1alpha1.CredentialIssuerConfig) {
+		c.Status.KubeConfigInfo = &configv1alpha1.CredentialIssuerConfigKubeConfigInfo{
 			Server:                   server,
 			CertificateAuthorityData: certificateAuthorityData,
 		}

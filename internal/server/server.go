@@ -19,19 +19,19 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
-	crdpinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	pinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1"
-	pinnipedclientset "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned"
-	"github.com/vmware-tanzu/pinniped/internal/apiserver"
-	"github.com/vmware-tanzu/pinniped/internal/certauthority/kubecertauthority"
-	"github.com/vmware-tanzu/pinniped/internal/controller/identityprovider/idpcache"
-	"github.com/vmware-tanzu/pinniped/internal/controller/issuerconfig"
-	"github.com/vmware-tanzu/pinniped/internal/controllermanager"
-	"github.com/vmware-tanzu/pinniped/internal/downward"
-	"github.com/vmware-tanzu/pinniped/internal/here"
-	"github.com/vmware-tanzu/pinniped/internal/provider"
-	"github.com/vmware-tanzu/pinniped/internal/registry/credentialrequest"
-	"github.com/vmware-tanzu/pinniped/pkg/config"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	"go.pinniped.dev/internal/apiserver"
+	"go.pinniped.dev/internal/certauthority/kubecertauthority"
+	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
+	"go.pinniped.dev/internal/controller/issuerconfig"
+	"go.pinniped.dev/internal/controllermanager"
+	"go.pinniped.dev/internal/downward"
+	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/provider"
+	"go.pinniped.dev/internal/registry/credentialrequest"
+	"go.pinniped.dev/pkg/config"
 )
 
 // App is an object that represents the pinniped-server application.
@@ -45,7 +45,7 @@ type App struct {
 
 // This is ignored for now because we turn off etcd storage below, but this is
 // the right prefix in case we turn it back on.
-const defaultEtcdPathPrefix = "/registry/" + pinnipedv1alpha1.GroupName
+const defaultEtcdPathPrefix = "/registry/" + loginv1alpha1.GroupName
 
 // New constructs a new App with command line args, stdout and stderr.
 func New(ctx context.Context, args []string, stdout, stderr io.Writer) *App {
@@ -201,12 +201,12 @@ func getClusterCASigner(
 				serverInstallationNamespace,
 				credentialIssuerConfigResourceName,
 				pinnipedClient,
-				func(configToUpdate *crdpinnipedv1alpha1.CredentialIssuerConfig) {
-					configToUpdate.Status.Strategies = []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{
+				func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
+					configToUpdate.Status.Strategies = []configv1alpha1.CredentialIssuerConfigStrategy{
 						{
-							Type:           crdpinnipedv1alpha1.KubeClusterSigningCertificateStrategyType,
-							Status:         crdpinnipedv1alpha1.SuccessStrategyStatus,
-							Reason:         crdpinnipedv1alpha1.FetchedKeyStrategyReason,
+							Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+							Status:         configv1alpha1.SuccessStrategyStatus,
+							Reason:         configv1alpha1.FetchedKeyStrategyReason,
 							Message:        "Key was fetched successfully",
 							LastUpdateTime: metav1.Now(),
 						},
@@ -223,12 +223,12 @@ func getClusterCASigner(
 				serverInstallationNamespace,
 				credentialIssuerConfigResourceName,
 				pinnipedClient,
-				func(configToUpdate *crdpinnipedv1alpha1.CredentialIssuerConfig) {
-					configToUpdate.Status.Strategies = []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{
+				func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
+					configToUpdate.Status.Strategies = []configv1alpha1.CredentialIssuerConfigStrategy{
 						{
-							Type:           crdpinnipedv1alpha1.KubeClusterSigningCertificateStrategyType,
-							Status:         crdpinnipedv1alpha1.ErrorStrategyStatus,
-							Reason:         crdpinnipedv1alpha1.CouldNotFetchKeyStrategyReason,
+							Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+							Status:         configv1alpha1.ErrorStrategyStatus,
+							Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
 							Message:        err.Error(),
 							LastUpdateTime: metav1.Now(),
 						},
@@ -252,7 +252,7 @@ func getAggregatedAPIServerConfig(
 ) (*apiserver.Config, error) {
 	recommendedOptions := genericoptions.NewRecommendedOptions(
 		defaultEtcdPathPrefix,
-		apiserver.Codecs.LegacyCodec(pinnipedv1alpha1.SchemeGroupVersion),
+		apiserver.Codecs.LegacyCodec(loginv1alpha1.SchemeGroupVersion),
 		// TODO we should check to see if all the other default settings are acceptable for us
 	)
 	recommendedOptions.Etcd = nil // turn off etcd storage because we don't need it yet

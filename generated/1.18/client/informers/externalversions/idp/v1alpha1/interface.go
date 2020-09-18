@@ -6,7 +6,7 @@
 package v1alpha1
 
 import (
-	internalinterfaces "github.com/vmware-tanzu/pinniped/generated/1.18/client/informers/externalversions/internalinterfaces"
+	internalinterfaces "go.pinniped.dev/generated/1.18/client/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to all the informers in this group version.

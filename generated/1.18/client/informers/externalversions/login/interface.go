@@ -6,8 +6,8 @@
 package login
 
 import (
-	internalinterfaces "github.com/vmware-tanzu/pinniped/generated/1.18/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.18/client/informers/externalversions/login/v1alpha1"
+	internalinterfaces "go.pinniped.dev/generated/1.18/client/informers/externalversions/internalinterfaces"
+	v1alpha1 "go.pinniped.dev/generated/1.18/client/informers/externalversions/login/v1alpha1"
 )
 
 // Interface provides access to each of this group's versions.

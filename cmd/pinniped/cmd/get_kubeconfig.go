@@ -21,10 +21,10 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	v1 "k8s.io/client-go/tools/clientcmd/api/v1"
 
-	"github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	pinnipedclientset "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned"
-	"github.com/vmware-tanzu/pinniped/internal/constable"
-	"github.com/vmware-tanzu/pinniped/internal/here"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/here"
 )
 
 const (
@@ -209,7 +209,7 @@ func getKubeConfig(
 	return nil
 }
 
-func issueWarningForNonMatchingServerOrCA(v1Cluster v1.Cluster, credentialIssuerConfig *v1alpha1.CredentialIssuerConfig, warningsWriter io.Writer) error {
+func issueWarningForNonMatchingServerOrCA(v1Cluster v1.Cluster, credentialIssuerConfig *configv1alpha1.CredentialIssuerConfig, warningsWriter io.Writer) error {
 	credentialIssuerConfigCA, err := base64.StdEncoding.DecodeString(credentialIssuerConfig.Status.KubeConfigInfo.CertificateAuthorityData)
 	if err != nil {
 		return err
@@ -224,7 +224,7 @@ func issueWarningForNonMatchingServerOrCA(v1Cluster v1.Cluster, credentialIssuer
 	return nil
 }
 
-func fetchPinnipedCredentialIssuerConfig(clientConfig clientcmd.ClientConfig, kubeClientCreator func(restConfig *rest.Config) (pinnipedclientset.Interface, error), pinnipedInstallationNamespace string) (*v1alpha1.CredentialIssuerConfig, error) {
+func fetchPinnipedCredentialIssuerConfig(clientConfig clientcmd.ClientConfig, kubeClientCreator func(restConfig *rest.Config) (pinnipedclientset.Interface, error), pinnipedInstallationNamespace string) (*configv1alpha1.CredentialIssuerConfig, error) {
 	restConfig, err := clientConfig.ClientConfig()
 	if err != nil {
 		return nil, err
@@ -237,7 +237,7 @@ func fetchPinnipedCredentialIssuerConfig(clientConfig clientcmd.ClientConfig, ku
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancelFunc()
 
-	credentialIssuerConfigs, err := clientset.CrdV1alpha1().CredentialIssuerConfigs(pinnipedInstallationNamespace).List(ctx, metav1.ListOptions{})
+	credentialIssuerConfigs, err := clientset.ConfigV1alpha1().CredentialIssuerConfigs(pinnipedInstallationNamespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}

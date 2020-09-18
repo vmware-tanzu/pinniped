@@ -22,8 +22,8 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	kubetesting "k8s.io/client-go/testing"
 
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
-	"github.com/vmware-tanzu/pinniped/internal/testutil"
+	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/testutil"
 )
 
 func TestExpirerControllerFilters(t *testing.T) {

@@ -20,12 +20,12 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 
-	crdpinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	pinnipedfake "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/fake"
-	pinnipedinformers "github.com/vmware-tanzu/pinniped/generated/1.19/client/informers/externalversions"
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
-	"github.com/vmware-tanzu/pinniped/internal/here"
-	"github.com/vmware-tanzu/pinniped/internal/testutil"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
+	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
+	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
+	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/testutil"
 )
 
 func TestInformerFilters(t *testing.T) {
@@ -42,8 +42,16 @@ func TestInformerFilters(t *testing.T) {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			configMapInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().ConfigMaps()
-			credentialIssuerConfigInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Crd().V1alpha1().CredentialIssuerConfigs()
-			_ = NewPublisherController(installedInNamespace, credentialIssuerConfigResourceName, nil, nil, configMapInformer, credentialIssuerConfigInformer, observableWithInformerOption.WithInformer)
+			credentialIssuerConfigInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().CredentialIssuerConfigs()
+			_ = NewPublisherController(
+				installedInNamespace,
+				credentialIssuerConfigResourceName,
+				nil,
+				nil,
+				configMapInformer,
+				credentialIssuerConfigInformer,
+				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
+			)
 			configMapInformerFilter = observableWithInformerOption.GetFilterForInformer(configMapInformer)
 			credentialIssuerConfigInformerFilter = observableWithInformerOption.GetFilterForInformer(credentialIssuerConfigInformer)
 		})
@@ -98,20 +106,20 @@ func TestInformerFilters(t *testing.T) {
 
 		when("watching CredentialIssuerConfig objects", func() {
 			var subject controllerlib.Filter
-			var target, wrongNamespace, wrongName, unrelated *crdpinnipedv1alpha1.CredentialIssuerConfig
+			var target, wrongNamespace, wrongName, unrelated *configv1alpha1.CredentialIssuerConfig
 
 			it.Before(func() {
 				subject = credentialIssuerConfigInformerFilter
-				target = &crdpinnipedv1alpha1.CredentialIssuerConfig{
+				target = &configv1alpha1.CredentialIssuerConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerConfigResourceName, Namespace: installedInNamespace},
 				}
-				wrongNamespace = &crdpinnipedv1alpha1.CredentialIssuerConfig{
+				wrongNamespace = &configv1alpha1.CredentialIssuerConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerConfigResourceName, Namespace: "wrong-namespace"},
 				}
-				wrongName = &crdpinnipedv1alpha1.CredentialIssuerConfig{
+				wrongName = &configv1alpha1.CredentialIssuerConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: installedInNamespace},
 				}
-				unrelated = &crdpinnipedv1alpha1.CredentialIssuerConfig{
+				unrelated = &configv1alpha1.CredentialIssuerConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: "wrong-namespace"},
 				}
 			})
@@ -172,20 +180,20 @@ func TestSync(t *testing.T) {
 		var timeoutContextCancel context.CancelFunc
 		var syncContext *controllerlib.Context
 
-		var expectedCredentialIssuerConfig = func(expectedNamespace, expectedServerURL, expectedCAData string) (schema.GroupVersionResource, *crdpinnipedv1alpha1.CredentialIssuerConfig) {
+		var expectedCredentialIssuerConfig = func(expectedNamespace, expectedServerURL, expectedCAData string) (schema.GroupVersionResource, *configv1alpha1.CredentialIssuerConfig) {
 			expectedCredentialIssuerConfigGVR := schema.GroupVersionResource{
-				Group:    crdpinnipedv1alpha1.GroupName,
+				Group:    configv1alpha1.GroupName,
 				Version:  "v1alpha1",
 				Resource: "credentialissuerconfigs",
 			}
-			expectedCredentialIssuerConfig := &crdpinnipedv1alpha1.CredentialIssuerConfig{
+			expectedCredentialIssuerConfig := &configv1alpha1.CredentialIssuerConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      credentialIssuerConfigResourceName,
 					Namespace: expectedNamespace,
 				},
-				Status: crdpinnipedv1alpha1.CredentialIssuerConfigStatus{
-					Strategies: []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{},
-					KubeConfigInfo: &crdpinnipedv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+				Status: configv1alpha1.CredentialIssuerConfigStatus{
+					Strategies: []configv1alpha1.CredentialIssuerConfigStrategy{},
+					KubeConfigInfo: &configv1alpha1.CredentialIssuerConfigKubeConfigInfo{
 						Server:                   expectedServerURL,
 						CertificateAuthorityData: expectedCAData,
 					},
@@ -204,7 +212,7 @@ func TestSync(t *testing.T) {
 				serverOverride,
 				pinnipedAPIClient,
 				kubeInformers.Core().V1().ConfigMaps(),
-				pinnipedInformers.Crd().V1alpha1().CredentialIssuerConfigs(),
+				pinnipedInformers.Config().V1alpha1().CredentialIssuerConfigs(),
 				controllerlib.WithInformer,
 			)
 

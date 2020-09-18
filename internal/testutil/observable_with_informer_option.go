@@ -3,7 +3,7 @@
 
 package testutil
 
-import "github.com/vmware-tanzu/pinniped/internal/controllerlib"
+import "go.pinniped.dev/internal/controllerlib"
 
 type ObservableWithInformerOption struct {
 	informerToFilterMap map[controllerlib.InformerGetter]controllerlib.Filter

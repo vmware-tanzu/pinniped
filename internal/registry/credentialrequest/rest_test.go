@@ -23,10 +23,9 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 
-	loginapi "github.com/vmware-tanzu/pinniped/generated/1.19/apis/login"
-	pinnipedapi "github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped"
-	"github.com/vmware-tanzu/pinniped/internal/mocks/mockcertissuer"
-	"github.com/vmware-tanzu/pinniped/internal/testutil"
+	loginapi "go.pinniped.dev/generated/1.19/apis/login"
+	"go.pinniped.dev/internal/mocks/mockcertissuer"
+	"go.pinniped.dev/internal/testutil"
 )
 
 type contextKey struct{}
@@ -104,16 +103,16 @@ func TestCreate(t *testing.T) {
 			response, err := callCreate(context.Background(), storage, validCredentialRequestWithToken(requestToken))
 
 			r.NoError(err)
-			r.IsType(&pinnipedapi.CredentialRequest{}, response)
+			r.IsType(&loginapi.TokenCredentialRequest{}, response)
 
-			expires := response.(*pinnipedapi.CredentialRequest).Status.Credential.ExpirationTimestamp
+			expires := response.(*loginapi.TokenCredentialRequest).Status.Credential.ExpirationTimestamp
 			r.NotNil(expires)
 			r.InDelta(time.Now().Add(1*time.Hour).Unix(), expires.Unix(), 5)
-			response.(*pinnipedapi.CredentialRequest).Status.Credential.ExpirationTimestamp = metav1.Time{}
+			response.(*loginapi.TokenCredentialRequest).Status.Credential.ExpirationTimestamp = metav1.Time{}
 
-			r.Equal(response, &pinnipedapi.CredentialRequest{
-				Status: pinnipedapi.CredentialRequestStatus{
-					Credential: &pinnipedapi.CredentialRequestCredential{
+			r.Equal(response, &loginapi.TokenCredentialRequest{
+				Status: loginapi.TokenCredentialRequestStatus{
+					Credential: &loginapi.ClusterCredential{
 						ExpirationTimestamp:   metav1.Time{},
 						ClientCertificateData: "test-cert",
 						ClientKeyData:         "test-key",
@@ -315,47 +314,10 @@ func TestCreate(t *testing.T) {
 			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:not a CredentialRequest`)
 		})
 
-		it("CreateFailsWhenTokenIsNilInRequest", func() {
-			storage := NewREST(&FakeToken{}, nil)
-			response, err := callCreate(context.Background(), storage, credentialRequest(pinnipedapi.CredentialRequestSpec{
-				Type:  pinnipedapi.TokenCredentialType,
-				Token: nil,
-			}))
-
-			requireAPIError(t, response, err, apierrors.IsInvalid,
-				`.pinniped.dev "request name" is invalid: spec.token.value: Required value: token must be supplied`)
-			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:token must be supplied`)
-		})
-
-		it("CreateFailsWhenTypeInRequestIsMissing", func() {
-			storage := NewREST(&FakeToken{}, nil)
-			response, err := callCreate(context.Background(), storage, credentialRequest(pinnipedapi.CredentialRequestSpec{
-				Type:  "",
-				Token: &pinnipedapi.CredentialRequestTokenCredential{Value: "a token"},
-			}))
-
-			requireAPIError(t, response, err, apierrors.IsInvalid,
-				`.pinniped.dev "request name" is invalid: spec.type: Required value: type must be supplied`)
-			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:type must be supplied`)
-		})
-
-		it("CreateFailsWhenTypeInRequestIsNotLegal", func() {
-			storage := NewREST(&FakeToken{}, nil)
-			response, err := callCreate(context.Background(), storage, credentialRequest(pinnipedapi.CredentialRequestSpec{
-				Type:  "this in an invalid type",
-				Token: &pinnipedapi.CredentialRequestTokenCredential{Value: "a token"},
-			}))
-
-			requireAPIError(t, response, err, apierrors.IsInvalid,
-				`.pinniped.dev "request name" is invalid: spec.type: Invalid value: "this in an invalid type": unrecognized type`)
-			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:unrecognized type`)
-		})
-
 		it("CreateFailsWhenTokenValueIsEmptyInRequest", func() {
 			storage := NewREST(&FakeToken{}, nil)
-			response, err := callCreate(context.Background(), storage, credentialRequest(pinnipedapi.CredentialRequestSpec{
-				Type:  pinnipedapi.TokenCredentialType,
-				Token: &pinnipedapi.CredentialRequestTokenCredential{Value: ""},
+			response, err := callCreate(context.Background(), storage, credentialRequest(loginapi.TokenCredentialRequestSpec{
+				Token: "",
 			}))
 
 			requireAPIError(t, response, err, apierrors.IsInvalid,
@@ -387,8 +349,8 @@ func TestCreate(t *testing.T) {
 				context.Background(),
 				validCredentialRequestWithToken(requestToken),
 				func(ctx context.Context, obj runtime.Object) error {
-					credentialRequest, _ := obj.(*pinnipedapi.CredentialRequest)
-					credentialRequest.Spec.Token.Value = "foobaz"
+					credentialRequest, _ := obj.(*loginapi.TokenCredentialRequest)
+					credentialRequest.Spec.Token = "foobaz"
 					return nil
 				},
 				&metav1.CreateOptions{})
@@ -409,9 +371,9 @@ func TestCreate(t *testing.T) {
 				context.Background(),
 				validCredentialRequest(),
 				func(ctx context.Context, obj runtime.Object) error {
-					credentialRequest, _ := obj.(*pinnipedapi.CredentialRequest)
+					credentialRequest, _ := obj.(*loginapi.TokenCredentialRequest)
 					validationFunctionWasCalled = true
-					validationFunctionSawTokenValue = credentialRequest.Spec.Token.Value
+					validationFunctionSawTokenValue = credentialRequest.Spec.Token
 					return nil
 				},
 				&metav1.CreateOptions{})
@@ -508,19 +470,16 @@ func callCreate(ctx context.Context, storage *REST, obj runtime.Object) (runtime
 		})
 }
 
-func validCredentialRequest() *pinnipedapi.CredentialRequest {
+func validCredentialRequest() *loginapi.TokenCredentialRequest {
 	return validCredentialRequestWithToken("some token")
 }
 
-func validCredentialRequestWithToken(token string) *pinnipedapi.CredentialRequest {
-	return credentialRequest(pinnipedapi.CredentialRequestSpec{
-		Type:  pinnipedapi.TokenCredentialType,
-		Token: &pinnipedapi.CredentialRequestTokenCredential{Value: token},
-	})
+func validCredentialRequestWithToken(token string) *loginapi.TokenCredentialRequest {
+	return credentialRequest(loginapi.TokenCredentialRequestSpec{Token: token})
 }
 
-func credentialRequest(spec pinnipedapi.CredentialRequestSpec) *pinnipedapi.CredentialRequest {
-	return &pinnipedapi.CredentialRequest{
+func credentialRequest(spec loginapi.TokenCredentialRequestSpec) *loginapi.TokenCredentialRequest {
+	return &loginapi.TokenCredentialRequest{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "request name",
@@ -550,8 +509,8 @@ func requireAPIError(t *testing.T, response runtime.Object, err error, expectedE
 func requireSuccessfulResponseWithAuthenticationFailureMessage(t *testing.T, err error, response runtime.Object) {
 	t.Helper()
 	require.NoError(t, err)
-	require.Equal(t, response, &pinnipedapi.CredentialRequest{
-		Status: pinnipedapi.CredentialRequestStatus{
+	require.Equal(t, response, &loginapi.TokenCredentialRequest{
+		Status: loginapi.TokenCredentialRequestStatus{
 			Credential: nil,
 			Message:    stringPtr("authentication failed"),
 		},

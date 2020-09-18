@@ -18,11 +18,9 @@ import (
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/klog/v2"
 
-	loginapi "github.com/vmware-tanzu/pinniped/generated/1.19/apis/login"
-	loginv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1"
-	pinnipedapi "github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped"
-	pinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1"
-	"github.com/vmware-tanzu/pinniped/internal/registry/credentialrequest"
+	loginapi "go.pinniped.dev/generated/1.19/apis/login"
+	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
+	"go.pinniped.dev/internal/registry/credentialrequest"
 )
 
 var (
@@ -34,8 +32,6 @@ var (
 
 //nolint: gochecknoinits
 func init() {
-	utilruntime.Must(pinnipedv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(pinnipedapi.AddToScheme(scheme))
 	utilruntime.Must(loginv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(loginapi.AddToScheme(scheme))
 
@@ -101,21 +97,17 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 		GenericAPIServer: genericServer,
 	}
 
-	restHandler := credentialrequest.NewREST(c.ExtraConfig.TokenAuthenticator, c.ExtraConfig.Issuer)
-	for gvr, storage := range map[schema.GroupVersionResource]rest.Storage{
-		pinnipedv1alpha1.SchemeGroupVersion.WithResource("credentialrequests"):   restHandler.PinnipedV1alpha1Storage(),
-		loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests"): restHandler.LoginV1alpha1Storage(),
-	} {
-		if err := s.GenericAPIServer.InstallAPIGroup(&genericapiserver.APIGroupInfo{
-			PrioritizedVersions:          []schema.GroupVersion{gvr.GroupVersion()},
-			VersionedResourcesStorageMap: map[string]map[string]rest.Storage{gvr.Version: {gvr.Resource: storage}},
-			OptionsExternalVersion:       &schema.GroupVersion{Version: "v1"},
-			Scheme:                       scheme,
-			ParameterCodec:               metav1.ParameterCodec,
-			NegotiatedSerializer:         Codecs,
-		}); err != nil {
-			return nil, fmt.Errorf("could not install API group %s: %w", gvr.String(), err)
-		}
+	gvr := loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")
+	storage := credentialrequest.NewREST(c.ExtraConfig.TokenAuthenticator, c.ExtraConfig.Issuer)
+	if err := s.GenericAPIServer.InstallAPIGroup(&genericapiserver.APIGroupInfo{
+		PrioritizedVersions:          []schema.GroupVersion{gvr.GroupVersion()},
+		VersionedResourcesStorageMap: map[string]map[string]rest.Storage{gvr.Version: {gvr.Resource: storage}},
+		OptionsExternalVersion:       &schema.GroupVersion{Version: "v1"},
+		Scheme:                       scheme,
+		ParameterCodec:               metav1.ParameterCodec,
+		NegotiatedSerializer:         Codecs,
+	}); err != nil {
+		return nil, fmt.Errorf("could not install API group %s: %w", gvr.String(), err)
 	}
 
 	s.GenericAPIServer.AddPostStartHookOrDie("start-controllers",

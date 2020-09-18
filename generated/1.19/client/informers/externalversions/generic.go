@@ -8,10 +8,9 @@ package externalversions
 import (
 	"fmt"
 
-	v1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	idpv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/idp/v1alpha1"
-	loginv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/login/v1alpha1"
-	pinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/pinniped/v1alpha1"
+	v1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -42,9 +41,9 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=crd.pinniped.dev, Version=v1alpha1
+	// Group=config.pinniped.dev, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("credentialissuerconfigs"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha1().CredentialIssuerConfigs().Informer()}, nil
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().CredentialIssuerConfigs().Informer()}, nil
 
 		// Group=idp.pinniped.dev, Version=v1alpha1
 	case idpv1alpha1.SchemeGroupVersion.WithResource("webhookidentityproviders"):
@@ -53,10 +52,6 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		// Group=login.pinniped.dev, Version=v1alpha1
 	case loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Login().V1alpha1().TokenCredentialRequests().Informer()}, nil
-
-		// Group=pinniped.dev, Version=v1alpha1
-	case pinnipedv1alpha1.SchemeGroupVersion.WithResource("credentialrequests"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Pinniped().V1alpha1().CredentialRequests().Informer()}, nil
 
 	}
 

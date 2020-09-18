@@ -20,8 +20,8 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib"
-	"github.com/vmware-tanzu/pinniped/internal/testutil"
+	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/testutil"
 )
 
 func TestManagerControllerOptions(t *testing.T) {

@@ -1,4 +1,4 @@
-module github.com/vmware-tanzu/pinniped
+module go.pinniped.dev
 
 go 1.14
 
@@ -15,8 +15,8 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.6.1
-	github.com/vmware-tanzu/pinniped/generated/1.19/apis v0.0.0-00010101000000-000000000000
-	github.com/vmware-tanzu/pinniped/generated/1.19/client v0.0.0-00010101000000-000000000000
+	go.pinniped.dev/generated/1.19/apis v0.0.0-00010101000000-000000000000
+	go.pinniped.dev/generated/1.19/client v0.0.0-00010101000000-000000000000
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	k8s.io/api v0.19.0
 	k8s.io/apimachinery v0.19.0
@@ -30,6 +30,6 @@ require (
 )
 
 replace (
-	github.com/vmware-tanzu/pinniped/generated/1.19/apis => ./generated/1.19/apis
-	github.com/vmware-tanzu/pinniped/generated/1.19/client => ./generated/1.19/client
+	go.pinniped.dev/generated/1.19/apis => ./generated/1.19/apis
+	go.pinniped.dev/generated/1.19/client => ./generated/1.19/client
 )

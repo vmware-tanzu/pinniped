@@ -13,9 +13,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 
-	"github.com/vmware-tanzu/pinniped/internal/controllerlib/test/integration/examplecontroller/api"
-	examplestart "github.com/vmware-tanzu/pinniped/internal/controllerlib/test/integration/examplecontroller/starter"
-	"github.com/vmware-tanzu/pinniped/test/library"
+	"go.pinniped.dev/internal/controllerlib/test/integration/examplecontroller/api"
+	examplestart "go.pinniped.dev/internal/controllerlib/test/integration/examplecontroller/starter"
+	"go.pinniped.dev/test/library"
 )
 
 func TestExampleController(t *testing.T) {

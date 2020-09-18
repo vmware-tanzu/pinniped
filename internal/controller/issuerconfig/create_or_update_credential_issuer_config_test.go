@@ -19,9 +19,8 @@ import (
 	coretesting "k8s.io/client-go/testing"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 
-	"github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	crdpinnipedv1alpha1 "github.com/vmware-tanzu/pinniped/generated/1.19/apis/crdpinniped/v1alpha1"
-	pinnipedfake "github.com/vmware-tanzu/pinniped/generated/1.19/client/clientset/versioned/fake"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
+	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
 )
 
 func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
@@ -38,8 +37,8 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 			ctx = context.Background()
 			pinnipedAPIClient = pinnipedfake.NewSimpleClientset()
 			credentialIssuerConfigGVR = schema.GroupVersionResource{
-				Group:    crdpinnipedv1alpha1.GroupName,
-				Version:  crdpinnipedv1alpha1.SchemeGroupVersion.Version,
+				Group:    configv1alpha1.GroupName,
+				Version:  configv1alpha1.SchemeGroupVersion.Version,
 				Resource: "credentialissuerconfigs",
 			}
 		})
@@ -47,8 +46,8 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 		when("the config does not exist", func() {
 			it("creates a new config which includes only the updates made by the func parameter", func() {
 				err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, credentialIssuerConfigResourceName, pinnipedAPIClient,
-					func(configToUpdate *v1alpha1.CredentialIssuerConfig) {
-						configToUpdate.Status.KubeConfigInfo = &crdpinnipedv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+					func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
+						configToUpdate.Status.KubeConfigInfo = &configv1alpha1.CredentialIssuerConfigKubeConfigInfo{
 							CertificateAuthorityData: "some-ca-value",
 						}
 					},
@@ -60,15 +59,15 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 				expectedCreateAction := coretesting.NewCreateAction(
 					credentialIssuerConfigGVR,
 					installationNamespace,
-					&crdpinnipedv1alpha1.CredentialIssuerConfig{
+					&configv1alpha1.CredentialIssuerConfig{
 						TypeMeta: metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      credentialIssuerConfigResourceName,
 							Namespace: installationNamespace,
 						},
-						Status: crdpinnipedv1alpha1.CredentialIssuerConfigStatus{
-							Strategies: []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{},
-							KubeConfigInfo: &crdpinnipedv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+						Status: configv1alpha1.CredentialIssuerConfigStatus{
+							Strategies: []configv1alpha1.CredentialIssuerConfigStrategy{},
+							KubeConfigInfo: &configv1alpha1.CredentialIssuerConfigKubeConfigInfo{
 								Server:                   "",
 								CertificateAuthorityData: "some-ca-value",
 							},
@@ -88,7 +87,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 
 				it("returns an error", func() {
 					err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, credentialIssuerConfigResourceName, pinnipedAPIClient,
-						func(configToUpdate *v1alpha1.CredentialIssuerConfig) {},
+						func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {},
 					)
 					r.EqualError(err, "could not create or update credentialissuerconfig: create failed: error on create")
 				})
@@ -96,26 +95,26 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 		})
 
 		when("the config already exists", func() {
-			var existingConfig *crdpinnipedv1alpha1.CredentialIssuerConfig
+			var existingConfig *configv1alpha1.CredentialIssuerConfig
 
 			it.Before(func() {
-				existingConfig = &crdpinnipedv1alpha1.CredentialIssuerConfig{
+				existingConfig = &configv1alpha1.CredentialIssuerConfig{
 					TypeMeta: metav1.TypeMeta{},
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      credentialIssuerConfigResourceName,
 						Namespace: installationNamespace,
 					},
-					Status: crdpinnipedv1alpha1.CredentialIssuerConfigStatus{
-						Strategies: []crdpinnipedv1alpha1.CredentialIssuerConfigStrategy{
+					Status: configv1alpha1.CredentialIssuerConfigStatus{
+						Strategies: []configv1alpha1.CredentialIssuerConfigStrategy{
 							{
-								Type:           crdpinnipedv1alpha1.KubeClusterSigningCertificateStrategyType,
-								Status:         crdpinnipedv1alpha1.SuccessStrategyStatus,
-								Reason:         crdpinnipedv1alpha1.FetchedKeyStrategyReason,
+								Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+								Status:         configv1alpha1.SuccessStrategyStatus,
+								Reason:         configv1alpha1.FetchedKeyStrategyReason,
 								Message:        "initial-message",
 								LastUpdateTime: metav1.Now(),
 							},
 						},
-						KubeConfigInfo: &crdpinnipedv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+						KubeConfigInfo: &configv1alpha1.CredentialIssuerConfigKubeConfigInfo{
 							Server:                   "initial-server-value",
 							CertificateAuthorityData: "initial-ca-value",
 						},
@@ -126,7 +125,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 
 			it("updates the existing config to only apply the updates made by the func parameter", func() {
 				err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, credentialIssuerConfigResourceName, pinnipedAPIClient,
-					func(configToUpdate *v1alpha1.CredentialIssuerConfig) {
+					func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
 						configToUpdate.Status.KubeConfigInfo.CertificateAuthorityData = "new-ca-value"
 					},
 				)
@@ -144,7 +143,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 
 			it("avoids the cost of an update if the local updates made by the func parameter did not actually change anything", func() {
 				err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, credentialIssuerConfigResourceName, pinnipedAPIClient,
-					func(configToUpdate *v1alpha1.CredentialIssuerConfig) {
+					func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
 						configToUpdate.Status.KubeConfigInfo.CertificateAuthorityData = "initial-ca-value"
 
 						t := configToUpdate.Status.Strategies[0].LastUpdateTime
@@ -168,7 +167,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 
 				it("returns an error", func() {
 					err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, credentialIssuerConfigResourceName, pinnipedAPIClient,
-						func(configToUpdate *v1alpha1.CredentialIssuerConfig) {},
+						func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {},
 					)
 					r.EqualError(err, "could not create or update credentialissuerconfig: get failed: error on get")
 				})
@@ -183,7 +182,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 
 				it("returns an error", func() {
 					err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, credentialIssuerConfigResourceName, pinnipedAPIClient,
-						func(configToUpdate *v1alpha1.CredentialIssuerConfig) {
+						func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
 							configToUpdate.Status.KubeConfigInfo.CertificateAuthorityData = "new-ca-value"
 						},
 					)
@@ -192,7 +191,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 			})
 
 			when("there is a conflict error while updating the existing object on the first try and the next try succeeds", func() {
-				var slightlyDifferentExistingConfig *crdpinnipedv1alpha1.CredentialIssuerConfig
+				var slightlyDifferentExistingConfig *configv1alpha1.CredentialIssuerConfig
 
 				it.Before(func() {
 					hit := false
@@ -217,7 +216,7 @@ func TestCreateOrUpdateCredentialIssuerConfig(t *testing.T) {
 
 				it("retries updates on conflict", func() {
 					err := CreateOrUpdateCredentialIssuerConfig(ctx, installationNamespace, credentialIssuerConfigResourceName, pinnipedAPIClient,
-						func(configToUpdate *v1alpha1.CredentialIssuerConfig) {
+						func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
 							configToUpdate.Status.KubeConfigInfo.CertificateAuthorityData = "new-ca-value"
 						},
 					)

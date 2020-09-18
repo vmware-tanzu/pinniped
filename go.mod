@@ -18,10 +18,10 @@ require (
 	go.pinniped.dev/generated/1.19/apis v0.0.0-00010101000000-000000000000
 	go.pinniped.dev/generated/1.19/client v0.0.0-00010101000000-000000000000
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	k8s.io/api v0.19.0
-	k8s.io/apimachinery v0.19.0
+	k8s.io/api v0.19.2
+	k8s.io/apimachinery v0.19.2
 	k8s.io/apiserver v0.19.0
-	k8s.io/client-go v0.19.0
+	k8s.io/client-go v0.19.2
 	k8s.io/component-base v0.19.0
 	k8s.io/klog/v2 v2.3.0
 	k8s.io/kube-aggregator v0.19.0

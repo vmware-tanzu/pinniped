@@ -11,7 +11,7 @@ import (
 	time "time"
 
 	versioned "go.pinniped.dev/generated/1.18/client/clientset/versioned"
-	crdpinniped "go.pinniped.dev/generated/1.18/client/informers/externalversions/crdpinniped"
+	config "go.pinniped.dev/generated/1.18/client/informers/externalversions/config"
 	idp "go.pinniped.dev/generated/1.18/client/informers/externalversions/idp"
 	internalinterfaces "go.pinniped.dev/generated/1.18/client/informers/externalversions/internalinterfaces"
 	login "go.pinniped.dev/generated/1.18/client/informers/externalversions/login"
@@ -162,14 +162,14 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
-	Crd() crdpinniped.Interface
+	Config() config.Interface
 	IDP() idp.Interface
 	Login() login.Interface
 	Pinniped() pinniped.Interface
 }
 
-func (f *sharedInformerFactory) Crd() crdpinniped.Interface {
-	return crdpinniped.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) Config() config.Interface {
+	return config.New(f, f.namespace, f.tweakListOptions)
 }
 
 func (f *sharedInformerFactory) IDP() idp.Interface {

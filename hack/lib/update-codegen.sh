@@ -109,7 +109,7 @@ echo "generating API-related code for our public API groups..."
         deepcopy \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "pinniped:v1alpha1 crdpinniped:v1alpha1 idp:v1alpha1 login:v1alpha1" \
+        "pinniped:v1alpha1 config:v1alpha1 idp:v1alpha1 login:v1alpha1" \
         --go-header-file "${ROOT}/hack/boilerplate.go.txt" 2>&1 | sed "s|^|gen-api > |"
 )
 
@@ -121,7 +121,7 @@ echo "generating API-related code for our internal API groups..."
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "pinniped:v1alpha1 crdpinniped:v1alpha1 idp:v1alpha1 login:v1alpha1" \
+        "pinniped:v1alpha1 config:v1alpha1 idp:v1alpha1 login:v1alpha1" \
         --go-header-file "${ROOT}/hack/boilerplate.go.txt"  2>&1 | sed "s|^|gen-int-api > |"
 )
 
@@ -136,7 +136,7 @@ echo "generating client code for our public API groups..."
         client,lister,informer \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "pinniped:v1alpha1 crdpinniped:v1alpha1 idp:v1alpha1 login:v1alpha1" \
+        "pinniped:v1alpha1 config:v1alpha1 idp:v1alpha1 login:v1alpha1" \
         --go-header-file "${ROOT}/hack/boilerplate.go.txt"  2>&1 | sed "s|^|gen-client > |"
 )
 
@@ -155,6 +155,6 @@ crd-ref-docs \
 
 # Generate CRD YAML
 (cd apis &&
-    controller-gen paths=./crdpinniped/v1alpha1 crd:trivialVersions=true output:crd:artifacts:config=../crds &&
+    controller-gen paths=./config/v1alpha1 crd:trivialVersions=true output:crd:artifacts:config=../crds &&
     controller-gen paths=./idp/v1alpha1 crd:trivialVersions=true output:crd:artifacts:config=../crds
 )

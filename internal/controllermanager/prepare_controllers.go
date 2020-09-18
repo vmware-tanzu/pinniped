@@ -64,7 +64,7 @@ func PrepareControllers(
 				discoveryURLOverride,
 				pinnipedClient,
 				kubePublicNamespaceK8sInformers.Core().V1().ConfigMaps(),
-				installationNamespacePinnipedInformers.Crd().V1alpha1().CredentialIssuerConfigs(),
+				installationNamespacePinnipedInformers.Config().V1alpha1().CredentialIssuerConfigs(),
 				controllerlib.WithInformer,
 			),
 			singletonWorker,

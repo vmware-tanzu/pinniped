@@ -56,20 +56,20 @@ func TestGetAPIResourceList(t *testing.T) {
 		},
 		{
 			group: metav1.APIGroup{
-				Name: "crd.pinniped.dev",
+				Name: "config.pinniped.dev",
 				Versions: []metav1.GroupVersionForDiscovery{
 					{
-						GroupVersion: "crd.pinniped.dev/v1alpha1",
+						GroupVersion: "config.pinniped.dev/v1alpha1",
 						Version:      "v1alpha1",
 					},
 				},
 				PreferredVersion: metav1.GroupVersionForDiscovery{
-					GroupVersion: "crd.pinniped.dev/v1alpha1",
+					GroupVersion: "config.pinniped.dev/v1alpha1",
 					Version:      "v1alpha1",
 				},
 			},
 			resourceByVersion: map[string][]metav1.APIResource{
-				"crd.pinniped.dev/v1alpha1": {
+				"config.pinniped.dev/v1alpha1": {
 					{
 						Name:         "credentialissuerconfigs",
 						SingularName: "credentialissuerconfig",

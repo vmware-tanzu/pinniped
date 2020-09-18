@@ -130,6 +130,7 @@ func runKubectlCLI(t *testing.T, kubeConfig, namespaceName, username string) str
 	err = f.Close()
 	require.NoError(t, err)
 
+	//nolint: gosec
 	output, err := exec.Command(
 		"kubectl",
 		"get",

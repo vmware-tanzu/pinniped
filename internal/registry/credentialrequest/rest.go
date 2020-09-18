@@ -19,7 +19,6 @@ import (
 	"k8s.io/utils/trace"
 
 	loginapi "go.pinniped.dev/generated/1.19/apis/login"
-	pinnipedapi "go.pinniped.dev/generated/1.19/apis/pinniped"
 )
 
 // clientCertificateTTL is the TTL for short-lived client certificates returned by this API.
@@ -48,23 +47,13 @@ type REST struct {
 	issuer             CertIssuer
 }
 
-// PinnipedV1alpha1Storage returns a wrapper of the REST which serves the pinniped.dev/v1alpha1 API.
-func (r *REST) PinnipedV1alpha1Storage() Storage { return &oldAPIREST{r} }
+func (*REST) New() runtime.Object {
+	return &loginapi.TokenCredentialRequest{}
+}
 
-type oldAPIREST struct{ *REST }
-
-func (*oldAPIREST) New() runtime.Object { return &pinnipedapi.CredentialRequest{} }
-
-func (*oldAPIREST) NamespaceScoped() bool { return false }
-
-// LoginV1alpha1Storage returns a wrapper of the REST which serves the login.pinniped.dev/v1alpha1 API.
-func (r *REST) LoginV1alpha1Storage() Storage { return &newAPIREST{r} }
-
-type newAPIREST struct{ *REST }
-
-func (*newAPIREST) New() runtime.Object { return &loginapi.TokenCredentialRequest{} }
-
-func (*newAPIREST) NamespaceScoped() bool { return true }
+func (*REST) NamespaceScoped() bool {
+	return true
+}
 
 func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
 	t := trace.FromContext(ctx).Nest("create", trace.Field{
@@ -72,13 +61,6 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		Value: obj.GetObjectKind().GroupVersionKind().Kind,
 	})
 	defer t.Log()
-
-	// If the incoming request is from the newer version of the API, convert it into the older API and map the result back later.
-	convertResponse := func(in *pinnipedapi.CredentialRequest) runtime.Object { return in }
-	if req, ok := obj.(*loginapi.TokenCredentialRequest); ok {
-		obj = convertFromLoginAPI(req)
-		convertResponse = func(in *pinnipedapi.CredentialRequest) runtime.Object { return convertToLoginAPI(in) }
-	}
 
 	credentialRequest, err := validateRequest(ctx, obj, createValidation, options, t)
 	if err != nil {
@@ -97,14 +79,14 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		}
 	}()
 
-	authResponse, authenticated, err := r.tokenAuthenticator.AuthenticateToken(cancelCtx, credentialRequest.Spec.Token.Value)
+	authResponse, authenticated, err := r.tokenAuthenticator.AuthenticateToken(cancelCtx, credentialRequest.Spec.Token)
 	if err != nil {
 		traceFailureWithError(t, "webhook authentication", err)
-		return convertResponse(failureResponse()), nil
+		return failureResponse(), nil
 	}
 	if !authenticated || authResponse == nil || authResponse.User == nil || authResponse.User.GetName() == "" {
 		traceSuccess(t, authResponse, authenticated, false)
-		return convertResponse(failureResponse()), nil
+		return failureResponse(), nil
 	}
 
 	username := authResponse.User.GetName()
@@ -125,41 +107,28 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	traceSuccess(t, authResponse, authenticated, true)
 
-	return convertResponse(&pinnipedapi.CredentialRequest{
-		Status: pinnipedapi.CredentialRequestStatus{
-			Credential: &pinnipedapi.CredentialRequestCredential{
+	return &loginapi.TokenCredentialRequest{
+		Status: loginapi.TokenCredentialRequestStatus{
+			Credential: &loginapi.ClusterCredential{
 				ExpirationTimestamp:   metav1.NewTime(time.Now().UTC().Add(clientCertificateTTL)),
 				ClientCertificateData: string(certPEM),
 				ClientKeyData:         string(keyPEM),
 			},
 		},
-	}), nil
+	}, nil
 }
 
-func validateRequest(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions, t *trace.Trace) (*pinnipedapi.CredentialRequest, error) {
-	credentialRequest, ok := obj.(*pinnipedapi.CredentialRequest)
+func validateRequest(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions, t *trace.Trace) (*loginapi.TokenCredentialRequest, error) {
+	credentialRequest, ok := obj.(*loginapi.TokenCredentialRequest)
 	if !ok {
 		traceValidationFailure(t, "not a CredentialRequest")
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("not a CredentialRequest: %#v", obj))
 	}
 
-	if len(credentialRequest.Spec.Type) == 0 {
-		traceValidationFailure(t, "type must be supplied")
-		errs := field.ErrorList{field.Required(field.NewPath("spec", "type"), "type must be supplied")}
-		return nil, apierrors.NewInvalid(pinnipedapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
-	}
-
-	if credentialRequest.Spec.Type != pinnipedapi.TokenCredentialType {
-		traceValidationFailure(t, "unrecognized type")
-		errs := field.ErrorList{field.Invalid(field.NewPath("spec", "type"), credentialRequest.Spec.Type, "unrecognized type")}
-		return nil, apierrors.NewInvalid(pinnipedapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
-	}
-
-	token := credentialRequest.Spec.Token
-	if token == nil || len(token.Value) == 0 {
+	if len(credentialRequest.Spec.Token) == 0 {
 		traceValidationFailure(t, "token must be supplied")
 		errs := field.ErrorList{field.Required(field.NewPath("spec", "token", "value"), "token must be supplied")}
-		return nil, apierrors.NewInvalid(pinnipedapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
+		return nil, apierrors.NewInvalid(loginapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
 	}
 
 	// just a sanity check, not sure how to honor a dry run on a virtual API
@@ -167,7 +136,7 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 		if len(options.DryRun) != 0 {
 			traceValidationFailure(t, "dryRun not supported")
 			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, nil)}
-			return nil, apierrors.NewInvalid(pinnipedapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
+			return nil, apierrors.NewInvalid(loginapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
 		}
 	}
 
@@ -178,8 +147,7 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 	//   they already got the token.
 	if createValidation != nil {
 		requestForValidation := obj.DeepCopyObject()
-		credentialRequestCopy, _ := requestForValidation.(*pinnipedapi.CredentialRequest)
-		credentialRequestCopy.Spec.Token.Value = ""
+		requestForValidation.(*loginapi.TokenCredentialRequest).Spec.Token = ""
 		if err := createValidation(ctx, requestForValidation); err != nil {
 			traceFailureWithError(t, "validation webhook", err)
 			return nil, err
@@ -215,10 +183,10 @@ func traceFailureWithError(t *trace.Trace, failureType string, err error) {
 	)
 }
 
-func failureResponse() *pinnipedapi.CredentialRequest {
+func failureResponse() *loginapi.TokenCredentialRequest {
 	m := "authentication failed"
-	return &pinnipedapi.CredentialRequest{
-		Status: pinnipedapi.CredentialRequestStatus{
+	return &loginapi.TokenCredentialRequest{
+		Status: loginapi.TokenCredentialRequestStatus{
 			Credential: nil,
 			Message:    &m,
 		},

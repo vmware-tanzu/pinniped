@@ -101,9 +101,6 @@ kind: ClusterRole
 metadata:
   name: #@ data.values.app_name + "-credentialrequests-cluster-role"
 rules:
-  - apiGroups: [pinniped.dev]
-    resources: [credentialrequests]
-    verbs: [create]
   - apiGroups: [login.pinniped.dev]
     resources: [tokencredentialrequests]
     verbs: [create]

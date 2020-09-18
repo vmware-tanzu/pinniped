@@ -13,7 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"go.pinniped.dev/generated/1.19/apis/pinniped/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/test/library"
 )
@@ -80,7 +80,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
 
-			const apiServiceName = "v1alpha1.pinniped.dev"
+			const apiServiceName = "v1alpha1.login.pinniped.dev"
 
 			// Get the initial auto-generated version of the Secret.
 			secret, err := kubeClient.CoreV1().Secrets(namespaceName).Get(ctx, "api-serving-cert", metav1.GetOptions{})
@@ -133,13 +133,10 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			// pod has rotated their cert, but not the other ones sitting behind the service.
 			aggregatedAPIWorking := func() bool {
 				for i := 0; i < 10; i++ {
-					_, err = pinnipedClient.PinnipedV1alpha1().CredentialRequests().Create(ctx, &v1alpha1.CredentialRequest{
+					_, err = pinnipedClient.LoginV1alpha1().TokenCredentialRequests(namespaceName).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 						TypeMeta:   metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{},
-						Spec: v1alpha1.CredentialRequestSpec{
-							Type:  v1alpha1.TokenCredentialType,
-							Token: &v1alpha1.CredentialRequestTokenCredential{Value: "not a good token"},
-						},
+						Spec:       loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token"},
 					}, metav1.CreateOptions{})
 					if err != nil {
 						break

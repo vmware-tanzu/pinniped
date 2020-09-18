@@ -101,6 +101,11 @@
    ```bash
    pinniped get-kubeconfig --token "pinny-the-seal:password123" > /tmp/pinniped-kubeconfig
    ```
+   
+   Note that the above command will print a warning to the screen. You can ignore this warning.
+   Pinniped tries to auto-discover the URL for the Kubernetes API server, but it is not able
+   to do so on kind clusters. The warning is just letting you know that the Pinniped CLI decided
+   to ignore the auto-discovery URL and instead use the URL from your existing kubeconfig.
 
 1. Try using the generated kubeconfig to issue arbitrary `kubectl` commands as
    the `pinny-the-seal` user.

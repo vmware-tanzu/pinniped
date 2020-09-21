@@ -30,6 +30,9 @@ func ExchangeToken(ctx context.Context, namespace string, idp corev1.TypedLocalO
 	}
 
 	resp, err := client.LoginV1alpha1().TokenCredentialRequests(namespace).Create(ctx, &v1alpha1.TokenCredentialRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+		},
 		Spec: v1alpha1.TokenCredentialRequestSpec{
 			Token:            token,
 			IdentityProvider: idp,

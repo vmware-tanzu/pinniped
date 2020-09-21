@@ -100,7 +100,8 @@ func TestExchangeToken(t *testing.T) {
 				  "kind": "TokenCredentialRequest",
 				  "apiVersion": "login.pinniped.dev/v1alpha1",
 				  "metadata": {
-					"creationTimestamp": null
+					"creationTimestamp": null,
+					"namespace": "test-namespace"
 				  },
 				  "spec": {
 					"token": "test-token",

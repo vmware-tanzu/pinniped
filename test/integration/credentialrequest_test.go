@@ -7,19 +7,15 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/pem"
-	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-
 	"go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
 	"go.pinniped.dev/test/library"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestSuccessfulCredentialRequest(t *testing.T) {
@@ -134,26 +130,6 @@ func makeRequest(t *testing.T, spec v1alpha1.TokenCredentialRequestSpec) (*v1alp
 
 func validCredentialRequestSpecWithRealToken(t *testing.T) v1alpha1.TokenCredentialRequestSpec {
 	return v1alpha1.TokenCredentialRequestSpec{Token: library.GetEnv(t, "PINNIPED_TEST_USER_TOKEN")}
-}
-
-func addTestClusterRoleBinding(ctx context.Context, t *testing.T, adminClient kubernetes.Interface, binding *rbacv1.ClusterRoleBinding) {
-	_, err := adminClient.RbacV1().ClusterRoleBindings().Get(ctx, binding.Name, metav1.GetOptions{})
-	if err != nil {
-		// "404 not found" errors are acceptable, but others would be unexpected
-		statusError, isStatus := err.(*errors.StatusError)
-		require.True(t, isStatus)
-		require.Equal(t, http.StatusNotFound, int(statusError.Status().Code))
-
-		_, err = adminClient.RbacV1().ClusterRoleBindings().Create(ctx, binding, metav1.CreateOptions{})
-		require.NoError(t, err)
-	}
-
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		err = adminClient.RbacV1().ClusterRoleBindings().Delete(ctx, binding.Name, metav1.DeleteOptions{})
-		require.NoError(t, err, "Test failed to clean up after itself")
-	})
 }
 
 func stringPtr(s string) *string {

@@ -25,12 +25,13 @@ import (
 )
 
 func TestAnnotaterControllerFilter(t *testing.T) {
-	runFilterTest(
+	defineSharedKubecertagentFilterSpecs(
 		t,
 		"AnnotaterControllerFilter",
 		func(
 			agentPodTemplate *corev1.Pod,
-			podsInformer corev1informers.PodInformer,
+			kubeSystemPodInformer corev1informers.PodInformer,
+			agentPodInformer corev1informers.PodInformer,
 			observableWithInformerOption *testutil.ObservableWithInformerOption,
 		) {
 			_ = NewAnnotaterController(
@@ -38,7 +39,8 @@ func TestAnnotaterControllerFilter(t *testing.T) {
 					Template: agentPodTemplate,
 				},
 				nil, // k8sClient, shouldn't matter
-				podsInformer,
+				kubeSystemPodInformer,
+				agentPodInformer,
 				observableWithInformerOption.WithInformer,
 			)
 		},
@@ -61,8 +63,10 @@ func TestAnnotaterControllerSync(t *testing.T) {
 
 		var subject controllerlib.Controller
 		var kubeAPIClient *kubernetesfake.Clientset
-		var kubeInformerClient *kubernetesfake.Clientset
-		var kubeInformers kubeinformers.SharedInformerFactory
+		var kubeSystemInformerClient *kubernetesfake.Clientset
+		var kubeSystemInformers kubeinformers.SharedInformerFactory
+		var agentInformerClient *kubernetesfake.Clientset
+		var agentInformers kubeinformers.SharedInformerFactory
 		var timeoutContext context.Context
 		var timeoutContextCancel context.CancelFunc
 		var syncContext *controllerlib.Context
@@ -132,15 +136,9 @@ func TestAnnotaterControllerSync(t *testing.T) {
 		agentPod := agentPodTemplate.DeepCopy()
 		agentPod.Namespace = kubeSystemNamespace
 		agentPod.Name += controllerManagerPodHash
-		agentPod.OwnerReferences = []metav1.OwnerReference{
-			{
-				APIVersion:         "v1",
-				Kind:               "Pod",
-				Name:               controllerManagerPod.Name,
-				UID:                controllerManagerPod.UID,
-				Controller:         boolPtr(true),
-				BlockOwnerDeletion: boolPtr(true),
-			},
+		agentPod.Annotations = map[string]string{
+			"kube-cert-agent.pinniped.dev/controller-manager-name": controllerManagerPod.Name,
+			"kube-cert-agent.pinniped.dev/controller-manager-uid":  string(controllerManagerPod.UID),
 		}
 		agentPod.Spec.Containers[0].VolumeMounts = controllerManagerPod.Spec.Containers[0].VolumeMounts
 		agentPod.Spec.RestartPolicy = corev1.RestartPolicyNever
@@ -166,7 +164,8 @@ func TestAnnotaterControllerSync(t *testing.T) {
 					KeyPathAnnotation:  keyPathAnnotation,
 				},
 				kubeAPIClient,
-				kubeInformers.Core().V1().Pods(),
+				kubeSystemInformers.Core().V1().Pods(),
+				agentInformers.Core().V1().Pods(),
 				controllerlib.WithInformer,
 			)
 
@@ -181,24 +180,30 @@ func TestAnnotaterControllerSync(t *testing.T) {
 			}
 
 			// Must start informers before calling TestRunSynchronously()
-			kubeInformers.Start(timeoutContext.Done())
+			kubeSystemInformers.Start(timeoutContext.Done())
+			agentInformers.Start(timeoutContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
 		it.Before(func() {
 			r = require.New(t)
 
-			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
-
-			kubeInformerClient = kubernetesfake.NewSimpleClientset()
-			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
 			kubeAPIClient = kubernetesfake.NewSimpleClientset()
+
+			kubeSystemInformerClient = kubernetesfake.NewSimpleClientset()
+			kubeSystemInformers = kubeinformers.NewSharedInformerFactory(kubeSystemInformerClient, 0)
+
+			agentInformerClient = kubernetesfake.NewSimpleClientset()
+			agentInformers = kubeinformers.NewSharedInformerFactory(agentInformerClient, 0)
+
+			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
 
 			// Add a pod into the test that doesn't matter to make sure we don't accidentally trigger any
 			// logic on this thing.
 			ignorablePod := corev1.Pod{}
 			ignorablePod.Name = "some-ignorable-pod"
-			r.NoError(kubeInformerClient.Tracker().Add(&ignorablePod))
+			r.NoError(kubeSystemInformerClient.Tracker().Add(&ignorablePod))
+			r.NoError(agentInformerClient.Tracker().Add(&ignorablePod))
 			r.NoError(kubeAPIClient.Tracker().Add(&ignorablePod))
 		})
 
@@ -208,13 +213,13 @@ func TestAnnotaterControllerSync(t *testing.T) {
 
 		when("there is an agent pod without annotations set", func() {
 			it.Before(func() {
-				r.NoError(kubeInformerClient.Tracker().Add(agentPod))
+				r.NoError(agentInformerClient.Tracker().Add(agentPod))
 				r.NoError(kubeAPIClient.Tracker().Add(agentPod))
 			})
 
 			when("there is a matching controller manager pod", func() {
 				it.Before(func() {
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -223,7 +228,6 @@ func TestAnnotaterControllerSync(t *testing.T) {
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 					updatedAgentPod := agentPod.DeepCopy()
-					updatedAgentPod.Annotations = make(map[string]string)
 					updatedAgentPod.Annotations[certPathAnnotation] = certPath
 					updatedAgentPod.Annotations[keyPathAnnotation] = keyPath
 
@@ -247,7 +251,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 						"--cluster-signing-cert-file", certPath,
 						"--cluster-signing-key-file", keyPath,
 					}
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -256,7 +260,6 @@ func TestAnnotaterControllerSync(t *testing.T) {
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 					updatedAgentPod := agentPod.DeepCopy()
-					updatedAgentPod.Annotations = make(map[string]string)
 					updatedAgentPod.Annotations[certPathAnnotation] = certPath
 					updatedAgentPod.Annotations[keyPathAnnotation] = keyPath
 
@@ -280,7 +283,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 						"--cluster-signing-cert-file-blah", certPath,
 						"--cluster-signing-key-file-blah", keyPath,
 					}
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -301,7 +304,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 						"--cluster-signing-cert-file-blah", certPath,
 						"--cluster-signing-key-file", keyPath,
 					}
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -310,7 +313,6 @@ func TestAnnotaterControllerSync(t *testing.T) {
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 					updatedAgentPod := agentPod.DeepCopy()
-					updatedAgentPod.Annotations = make(map[string]string)
 					updatedAgentPod.Annotations[keyPathAnnotation] = keyPath
 					r.Equal(
 						[]coretesting.Action{
@@ -332,7 +334,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 						"--cluster-signing-cert-file", certPath,
 						"--cluster-signing-key-file-blah", keyPath,
 					}
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -341,7 +343,6 @@ func TestAnnotaterControllerSync(t *testing.T) {
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 					updatedAgentPod := agentPod.DeepCopy()
-					updatedAgentPod.Annotations = make(map[string]string)
 					updatedAgentPod.Annotations[certPathAnnotation] = certPath
 					r.Equal(
 						[]coretesting.Action{
@@ -359,7 +360,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 			when("there is a non-matching controller manager pod via uid", func() {
 				it.Before(func() {
 					controllerManagerPod.UID = "some-other-controller-manager-uid"
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -376,7 +377,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 			when("there is a non-matching controller manager pod via name", func() {
 				it.Before(func() {
 					controllerManagerPod.Name = "some-other-controller-manager-name"
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -396,13 +397,13 @@ func TestAnnotaterControllerSync(t *testing.T) {
 				agentPod.Annotations = make(map[string]string)
 				agentPod.Annotations[certPathAnnotation] = certPath
 				agentPod.Annotations[keyPathAnnotation] = keyPath
-				r.NoError(kubeInformerClient.Tracker().Add(agentPod))
+				r.NoError(agentInformerClient.Tracker().Add(agentPod))
 				r.NoError(kubeAPIClient.Tracker().Add(agentPod))
 			})
 
 			when("there is a matching controller manager pod", func() {
 				it.Before(func() {
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -419,16 +420,15 @@ func TestAnnotaterControllerSync(t *testing.T) {
 
 		when("there is an agent pod with the wrong cert annotation", func() {
 			it.Before(func() {
-				agentPod.Annotations = make(map[string]string)
 				agentPod.Annotations[certPathAnnotation] = "wrong"
 				agentPod.Annotations[keyPathAnnotation] = keyPath
-				r.NoError(kubeInformerClient.Tracker().Add(agentPod))
+				r.NoError(agentInformerClient.Tracker().Add(agentPod))
 				r.NoError(kubeAPIClient.Tracker().Add(agentPod))
 			})
 
 			when("there is a matching controller manager pod", func() {
 				it.Before(func() {
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -454,16 +454,15 @@ func TestAnnotaterControllerSync(t *testing.T) {
 
 		when("there is an agent pod with the wrong key annotation", func() {
 			it.Before(func() {
-				agentPod.Annotations = make(map[string]string)
 				agentPod.Annotations[certPathAnnotation] = certPath
 				agentPod.Annotations[keyPathAnnotation] = "key"
-				r.NoError(kubeInformerClient.Tracker().Add(agentPod))
+				r.NoError(agentInformerClient.Tracker().Add(agentPod))
 				r.NoError(kubeAPIClient.Tracker().Add(agentPod))
 			})
 
 			when("there is a matching controller manager pod", func() {
 				it.Before(func() {
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 

@@ -18,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/klog/v2"
 )
@@ -145,50 +144,19 @@ func isAgentPodUpToDate(actualAgentPod, expectedAgentPod *corev1.Pod) bool {
 		)
 }
 
-func findAgentPod(
-	controllerManagerPod *corev1.Pod,
-	kubeSystemPodInformer corev1informers.PodInformer,
-	agentPodInformer corev1informers.PodInformer,
-	agentLabels map[string]string,
-) (*corev1.Pod, error) {
-	agentSelector := labels.SelectorFromSet(agentLabels)
-	agentPods, err := agentPodInformer.
-		Lister().
-		List(agentSelector)
-	if err != nil {
-		return nil, fmt.Errorf("informer cannot list agent pods: %w", err)
-	}
-
-	for _, maybeAgentPod := range agentPods {
-		maybeControllerManagerPod, err := findControllerManagerPod(
-			maybeAgentPod,
-			kubeSystemPodInformer,
-		)
-		if err != nil {
-			return nil, err
-		}
-		if maybeControllerManagerPod != nil &&
-			maybeControllerManagerPod.UID == controllerManagerPod.UID {
-			return maybeAgentPod, nil
-		}
-	}
-
-	return nil, nil
-}
-
-func findControllerManagerPod(
+func findControllerManagerPodForSpecificAgentPod(
 	agentPod *corev1.Pod,
 	informer corev1informers.PodInformer,
 ) (*corev1.Pod, error) {
 	name, ok := agentPod.Annotations[controllerManagerNameAnnotationKey]
 	if !ok {
-		klog.InfoS("agent pod missing parent name annotation", "pod", agentPod)
+		klog.InfoS("agent pod missing parent name annotation", "pod", agentPod.Name)
 		return nil, nil
 	}
 
 	uid, ok := agentPod.Annotations[controllerManagerUIDAnnotationKey]
 	if !ok {
-		klog.InfoS("agent pod missing parent uid annotation", "pod", agentPod)
+		klog.InfoS("agent pod missing parent uid annotation", "pod", agentPod.Name)
 		return nil, nil
 	}
 

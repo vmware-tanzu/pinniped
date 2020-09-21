@@ -25,13 +25,13 @@ import (
 )
 
 func TestCreaterControllerFilter(t *testing.T) {
-	runFilterTest(
+	defineSharedKubecertagentFilterSpecs(
 		t,
 		"CreaterControllerFilter",
 		func(
 			agentPodTemplate *corev1.Pod,
 			kubeSystemPodInformer corev1informers.PodInformer,
-			//agentPodInformer corev1informers.PodInformer,
+			agentPodInformer corev1informers.PodInformer,
 			observableWithInformerOption *testutil.ObservableWithInformerOption,
 		) {
 			_ = NewCreaterController(
@@ -40,7 +40,7 @@ func TestCreaterControllerFilter(t *testing.T) {
 				},
 				nil, // k8sClient, shouldn't matter
 				kubeSystemPodInformer,
-				nil, //agentPodInformer,
+				agentPodInformer,
 				observableWithInformerOption.WithInformer,
 			)
 		},

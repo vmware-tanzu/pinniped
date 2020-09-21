@@ -25,12 +25,13 @@ import (
 )
 
 func TestDeleterControllerFilter(t *testing.T) {
-	runFilterTest(
+	defineSharedKubecertagentFilterSpecs(
 		t,
 		"DeleterControllerFilter",
 		func(
 			agentPodTemplate *corev1.Pod,
-			podsInformer corev1informers.PodInformer,
+			kubeSystemPodInformer corev1informers.PodInformer,
+			agentPodInformer corev1informers.PodInformer,
 			observableWithInformerOption *testutil.ObservableWithInformerOption,
 		) {
 			_ = NewDeleterController(
@@ -38,7 +39,8 @@ func TestDeleterControllerFilter(t *testing.T) {
 					Template: agentPodTemplate,
 				},
 				nil, // k8sClient, shouldn't matter
-				podsInformer,
+				kubeSystemPodInformer,
+				agentPodInformer,
 				observableWithInformerOption.WithInformer,
 			)
 		},
@@ -185,6 +187,7 @@ func TestDeleterControllerSync(t *testing.T) {
 			// trigger any logic on this thing.
 			ignorablePod := corev1.Pod{}
 			ignorablePod.Name = "some-ignorable-pod"
+			r.NoError(kubeSystemInformerClient.Tracker().Add(&ignorablePod))
 			r.NoError(agentInformerClient.Tracker().Add(&ignorablePod))
 			r.NoError(kubeAPIClient.Tracker().Add(&ignorablePod))
 		})
@@ -410,11 +413,11 @@ func TestDeleterControllerSync(t *testing.T) {
 				it.Before(func() {
 					updatedAgentPod := agentPod.DeepCopy()
 					updatedAgentPod.Spec.RestartPolicy = corev1.RestartPolicyAlways
-					r.NoError(kubeSystemInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+					r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
 					r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
 				})
 
-				it.Pend("deletes the agent pod", func() {
+				it("deletes the agent pod", func() {
 					startInformersAndController()
 					err := controllerlib.TestSync(t, subject, *syncContext)
 
@@ -435,11 +438,11 @@ func TestDeleterControllerSync(t *testing.T) {
 			when("the agent pod is out of sync via automount service account tokem", func() {
 				it.Before(func() {
 					agentPod.Spec.AutomountServiceAccountToken = boolPtr(true)
-					r.NoError(kubeSystemInformerClient.Tracker().Update(podsGVR, agentPod, agentPod.Namespace))
+					r.NoError(agentInformerClient.Tracker().Update(podsGVR, agentPod, agentPod.Namespace))
 					r.NoError(kubeAPIClient.Tracker().Update(podsGVR, agentPod, agentPod.Namespace))
 				})
 
-				it.Pend("deletes the agent pod", func() {
+				it("deletes the agent pod", func() {
 					startInformersAndController()
 					err := controllerlib.TestSync(t, subject, *syncContext)
 

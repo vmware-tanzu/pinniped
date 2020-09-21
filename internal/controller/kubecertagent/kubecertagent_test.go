@@ -17,18 +17,14 @@ import (
 	"go.pinniped.dev/internal/testutil"
 )
 
-func runFilterTest(
+func defineSharedKubecertagentFilterSpecs(
 	t *testing.T,
 	name string,
-	newFunc func(
-		agentPodTemplate *corev1.Pod,
-		podsInformer corev1informers.PodInformer,
-		observableWithInformerOption *testutil.ObservableWithInformerOption,
-	),
+	newFunc func(agentPodTemplate *corev1.Pod, kubeSystemPodInformer corev1informers.PodInformer, agentPodInformer corev1informers.PodInformer, observableWithInformerOption *testutil.ObservableWithInformerOption),
 ) {
 	spec.Run(t, name, func(t *testing.T, when spec.G, it spec.S) {
 		var r *require.Assertions
-		var subject controllerlib.Filter
+		var kubeSystemPodInformerFilter, agentPodInformerFilter controllerlib.Filter
 
 		whateverPod := &corev1.Pod{}
 
@@ -40,98 +36,104 @@ func runFilterTest(
 				"some-label-key":       "some-label-value",
 				"some-other-label-key": "some-other-label-value",
 			}
-			podsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Pods()
+			kubeSystemPodInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Pods()
+			agentPodInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Pods()
 			observableWithInformerOption := testutil.NewObservableWithInformerOption()
-			newFunc(agentPodTemplate, podsInformer, observableWithInformerOption)
+			newFunc(agentPodTemplate, kubeSystemPodInformer, agentPodInformer, observableWithInformerOption)
 
-			subject = observableWithInformerOption.GetFilterForInformer(podsInformer)
+			kubeSystemPodInformerFilter = observableWithInformerOption.GetFilterForInformer(kubeSystemPodInformer)
+			agentPodInformerFilter = observableWithInformerOption.GetFilterForInformer(agentPodInformer)
 		})
 
-		when("a pod with the proper controller manager labels and phase is added/updated/deleted", func() {
-			it("returns true", func() {
-				pod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							"component": "kube-controller-manager",
+		when("the event is happening in the kube system namespace", func() {
+			when("a pod with the proper controller manager labels and phase is added/updated/deleted", func() {
+				it("returns true", func() {
+					pod := &corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"component": "kube-controller-manager",
+							},
 						},
-					},
-					Status: corev1.PodStatus{
-						Phase: corev1.PodRunning,
-					},
-				}
+						Status: corev1.PodStatus{
+							Phase: corev1.PodRunning,
+						},
+					}
 
-				r.True(subject.Add(pod))
-				r.True(subject.Update(whateverPod, pod))
-				r.True(subject.Update(pod, whateverPod))
-				r.True(subject.Delete(pod))
+					r.True(kubeSystemPodInformerFilter.Add(pod))
+					r.True(kubeSystemPodInformerFilter.Update(whateverPod, pod))
+					r.True(kubeSystemPodInformerFilter.Update(pod, whateverPod))
+					r.True(kubeSystemPodInformerFilter.Delete(pod))
+				})
+			})
+
+			when("a pod without the proper controller manager label is added/updated/deleted", func() {
+				it("returns false", func() {
+					pod := &corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{},
+						Status: corev1.PodStatus{
+							Phase: corev1.PodRunning,
+						},
+					}
+
+					r.False(kubeSystemPodInformerFilter.Add(pod))
+					r.False(kubeSystemPodInformerFilter.Update(whateverPod, pod))
+					r.False(kubeSystemPodInformerFilter.Update(pod, whateverPod))
+					r.False(kubeSystemPodInformerFilter.Delete(pod))
+				})
+			})
+
+			when("a pod without the proper controller manager phase is added/updated/deleted", func() {
+				it("returns false", func() {
+					pod := &corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"component": "kube-controller-manager",
+							},
+						},
+					}
+
+					r.False(kubeSystemPodInformerFilter.Add(pod))
+					r.False(kubeSystemPodInformerFilter.Update(whateverPod, pod))
+					r.False(kubeSystemPodInformerFilter.Update(pod, whateverPod))
+					r.False(kubeSystemPodInformerFilter.Delete(pod))
+				})
 			})
 		})
 
-		when("a pod without the proper controller manager label is added/updated/deleted", func() {
-			it("returns false", func() {
-				pod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{},
-					Status: corev1.PodStatus{
-						Phase: corev1.PodRunning,
-					},
-				}
-
-				r.False(subject.Add(pod))
-				r.False(subject.Update(whateverPod, pod))
-				r.False(subject.Update(pod, whateverPod))
-				r.False(subject.Delete(pod))
-			})
-		})
-
-		when("a pod without the proper controller manager phase is added/updated/deleted", func() {
-			it("returns false", func() {
-				pod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							"component": "kube-controller-manager",
+		when("the change is happening in the agent's namespace", func() {
+			when("a pod with all the agent labels is added/updated/deleted", func() {
+				it("returns true", func() {
+					pod := &corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"some-label-key":       "some-label-value",
+								"some-other-label-key": "some-other-label-value",
+							},
 						},
-					},
-				}
+					}
 
-				r.False(subject.Add(pod))
-				r.False(subject.Update(whateverPod, pod))
-				r.False(subject.Update(pod, whateverPod))
-				r.False(subject.Delete(pod))
+					r.True(agentPodInformerFilter.Add(pod))
+					r.True(agentPodInformerFilter.Update(whateverPod, pod))
+					r.True(agentPodInformerFilter.Update(pod, whateverPod))
+					r.True(agentPodInformerFilter.Delete(pod))
+				})
 			})
-		})
 
-		when("a pod with all the agent labels is added/updated/deleted", func() {
-			it("returns true", func() {
-				pod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							"some-label-key":       "some-label-value",
-							"some-other-label-key": "some-other-label-value",
+			when("a pod missing any of the agent labels is added/updated/deleted", func() {
+				it("returns false", func() {
+					pod := &corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"some-other-label-key": "some-other-label-value",
+							},
 						},
-					},
-				}
+					}
 
-				r.True(subject.Add(pod))
-				r.True(subject.Update(whateverPod, pod))
-				r.True(subject.Update(pod, whateverPod))
-				r.True(subject.Delete(pod))
-			})
-		})
-
-		when("a pod missing one of the agent labels is added/updated/deleted", func() {
-			it("returns false", func() {
-				pod := &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							"some-other-label-key": "some-other-label-value",
-						},
-					},
-				}
-
-				r.False(subject.Add(pod))
-				r.False(subject.Update(whateverPod, pod))
-				r.False(subject.Update(pod, whateverPod))
-				r.False(subject.Delete(pod))
+					r.False(agentPodInformerFilter.Add(pod))
+					r.False(agentPodInformerFilter.Update(whateverPod, pod))
+					r.False(agentPodInformerFilter.Update(pod, whateverPod))
+					r.False(agentPodInformerFilter.Delete(pod))
+				})
 			})
 		})
 	})

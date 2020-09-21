@@ -45,9 +45,14 @@ func NewDeleterController(
 			},
 		},
 		withInformer(
+			kubeSystemPodInformer,
+			pinnipedcontroller.SimpleFilter(isControllerManagerPod),
+			controllerlib.InformerOption{},
+		),
+		withInformer(
 			agentPodInformer,
 			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
-				return isControllerManagerPod(obj) || isAgentPod(obj, agentInfo.Template.Labels)
+				return isAgentPod(obj, agentInfo.Template.Labels)
 			}),
 			controllerlib.InformerOption{},
 		),
@@ -66,7 +71,7 @@ func (c *deleterController) Sync(ctx controllerlib.Context) error {
 	}
 
 	for _, agentPod := range agentPods {
-		controllerManagerPod, err := findControllerManagerPod(agentPod, c.kubeSystemPodInformer)
+		controllerManagerPod, err := findControllerManagerPodForSpecificAgentPod(agentPod, c.kubeSystemPodInformer)
 		if err != nil {
 			return err
 		}

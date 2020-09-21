@@ -21,9 +21,10 @@ import (
 )
 
 type annotaterController struct {
-	agentInfo   *Info
-	k8sClient   kubernetes.Interface
-	podInformer corev1informers.PodInformer
+	agentInfo             *Info
+	k8sClient             kubernetes.Interface
+	kubeSystemPodInformer corev1informers.PodInformer
+	agentPodInformer      corev1informers.PodInformer
 }
 
 // NewAnnotaterController returns a controller that updates agent pods with the path to the kube
@@ -35,22 +36,29 @@ type annotaterController struct {
 func NewAnnotaterController(
 	agentInfo *Info,
 	k8sClient kubernetes.Interface,
-	podInformer corev1informers.PodInformer,
+	kubeSystemPodInformer corev1informers.PodInformer,
+	agentPodInformer corev1informers.PodInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "kube-cert-agent-annotater-controller",
 			Syncer: &annotaterController{
-				agentInfo:   agentInfo,
-				k8sClient:   k8sClient,
-				podInformer: podInformer,
+				agentInfo:             agentInfo,
+				k8sClient:             k8sClient,
+				kubeSystemPodInformer: kubeSystemPodInformer,
+				agentPodInformer:      agentPodInformer,
 			},
 		},
 		withInformer(
-			podInformer,
+			kubeSystemPodInformer,
+			pinnipedcontroller.SimpleFilter(isControllerManagerPod),
+			controllerlib.InformerOption{},
+		),
+		withInformer(
+			agentPodInformer,
 			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
-				return isControllerManagerPod(obj) || isAgentPod(obj, agentInfo.Template.Labels)
+				return isAgentPod(obj, agentInfo.Template.Labels)
 			}),
 			controllerlib.InformerOption{},
 		),
@@ -60,7 +68,7 @@ func NewAnnotaterController(
 // Sync implements controllerlib.Syncer.
 func (c *annotaterController) Sync(ctx controllerlib.Context) error {
 	agentSelector := labels.SelectorFromSet(c.agentInfo.Template.Labels)
-	agentPods, err := c.podInformer.
+	agentPods, err := c.agentPodInformer.
 		Lister().
 		Pods(ControllerManagerNamespace).
 		List(agentSelector)
@@ -69,7 +77,7 @@ func (c *annotaterController) Sync(ctx controllerlib.Context) error {
 	}
 
 	for _, agentPod := range agentPods {
-		controllerManagerPod, err := findControllerManagerPod(agentPod, c.podInformer)
+		controllerManagerPod, err := findControllerManagerPodForSpecificAgentPod(agentPod, c.kubeSystemPodInformer)
 		if err != nil {
 			return err
 		}
@@ -104,7 +112,7 @@ func (c *annotaterController) maybeUpdateAgentPod(
 	keyPathOK bool,
 ) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		agentPod, err := c.podInformer.Lister().Pods(ControllerManagerNamespace).Get(name)
+		agentPod, err := c.agentPodInformer.Lister().Pods(ControllerManagerNamespace).Get(name)
 		if err != nil {
 			return err
 		}

@@ -6,6 +6,7 @@ package kubecertagent
 import (
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
@@ -47,9 +48,7 @@ func NewCreaterController(
 		},
 		withInformer(
 			kubeSystemPodInformer,
-			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
-				return isControllerManagerPod(obj)
-			}),
+			pinnipedcontroller.SimpleFilter(isControllerManagerPod),
 			controllerlib.InformerOption{},
 		),
 		withInformer(
@@ -75,7 +74,7 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 	}
 
 	for _, controllerManagerPod := range controllerManagerPods {
-		agentPod, err := findAgentPod(
+		agentPod, err := findAgentPodForSpecificControllerManagerPod(
 			controllerManagerPod,
 			c.kubeSystemPodInformer,
 			c.agentPodInformer,
@@ -102,9 +101,39 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 			}
 		}
 
-		// The deleter controller handles the case where the expected fields do not match in the agent
-		// pod.
+		// The deleter controller handles the case where the expected fields do not match in the agent pod.
 	}
 
 	return nil
+}
+
+func findAgentPodForSpecificControllerManagerPod(
+	controllerManagerPod *corev1.Pod,
+	kubeSystemPodInformer corev1informers.PodInformer,
+	agentPodInformer corev1informers.PodInformer,
+	agentLabels map[string]string,
+) (*corev1.Pod, error) {
+	agentSelector := labels.SelectorFromSet(agentLabels)
+	agentPods, err := agentPodInformer.
+		Lister().
+		List(agentSelector)
+	if err != nil {
+		return nil, fmt.Errorf("informer cannot list agent pods: %w", err)
+	}
+
+	for _, maybeAgentPod := range agentPods {
+		maybeControllerManagerPod, err := findControllerManagerPodForSpecificAgentPod(
+			maybeAgentPod,
+			kubeSystemPodInformer,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if maybeControllerManagerPod != nil &&
+			maybeControllerManagerPod.UID == controllerManagerPod.UID {
+			return maybeAgentPod, nil
+		}
+	}
+
+	return nil, nil
 }

@@ -60,6 +60,12 @@ func newExchangeCredentialCmd(args []string, stdout, stderr io.Writer) *exchange
 			Requires all of the following environment variables, which are
 			typically set in the kubeconfig:
 			  - PINNIPED_TOKEN: the token to send to Pinniped for exchange
+			  - PINNIPED_NAMESPACE: the namespace of the identity provider to authenticate
+			    against
+			  - PINNIPED_IDP_TYPE: the type of identity provider to authenticate
+			    against (e.g., "webhook")
+			  - PINNIPED_IDP_NAME: the name of the identity provider to authenticate
+			    against
 			  - PINNIPED_CA_BUNDLE: the CA bundle to trust when calling
 				Pinniped's HTTPS endpoint
 			  - PINNIPED_K8S_API_ENDPOINT: the URL for the Pinniped credential

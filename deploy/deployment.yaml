@@ -38,6 +38,13 @@ data:
       servingCertificateSecret: (@= data.values.app_name + "-api-tls-serving-certificate" @)
       credentialIssuerConfig: (@= data.values.app_name + "-config" @)
       apiService: (@= data.values.app_name + "-api" @)
+    kubeCertAgent:
+      namePrefix: (@= data.values.app_name + "-kube-cert-agent-" @)
+      (@ if data.values.image_digest: @)
+      image: (@= data.values.image_repo + "@" + data.values.image_digest @)
+      (@ else: @)
+      image: (@= data.values.image_repo + ":" + data.values.image_tag @)
+      (@ end @)
 ---
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
 apiVersion: v1

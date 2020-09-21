@@ -33,7 +33,7 @@ func accessAsUserTest(
 	clientUnderTest kubernetes.Interface,
 ) func(t *testing.T) {
 	return func(t *testing.T) {
-		addTestClusterUserCanViewEverythingRoleBinding(t, ctx, adminClient, testUsername)
+		addTestClusterUserCanViewEverythingRoleBinding(ctx, t, adminClient, testUsername)
 
 		// Use the client which is authenticated as the test user to list namespaces
 		var listNamespaceResponse *v1.NamespaceList
@@ -56,7 +56,7 @@ func accessAsUserWithKubectlTest(
 	expectedNamespace string,
 ) func(t *testing.T) {
 	return func(t *testing.T) {
-		addTestClusterUserCanViewEverythingRoleBinding(t, ctx, adminClient, testUsername)
+		addTestClusterUserCanViewEverythingRoleBinding(ctx, t, adminClient, testUsername)
 
 		// Use the given kubeconfig with kubectl to list namespaces as the test user
 		var kubectlCommandOutput string
@@ -84,7 +84,7 @@ func accessAsGroupTest(
 	clientUnderTest kubernetes.Interface,
 ) func(t *testing.T) {
 	return func(t *testing.T) {
-		addTestClusterGroupCanViewEverythingRoleBinding(t, ctx, adminClient, testGroup)
+		addTestClusterGroupCanViewEverythingRoleBinding(ctx, t, adminClient, testGroup)
 
 		// Use the client which is authenticated as the test user to list namespaces
 		var listNamespaceResponse *v1.NamespaceList
@@ -107,7 +107,7 @@ func accessAsGroupWithKubectlTest(
 	expectedNamespace string,
 ) func(t *testing.T) {
 	return func(t *testing.T) {
-		addTestClusterGroupCanViewEverythingRoleBinding(t, ctx, adminClient, testGroup)
+		addTestClusterGroupCanViewEverythingRoleBinding(ctx, t, adminClient, testGroup)
 
 		// Use the given kubeconfig with kubectl to list namespaces as the test user
 		var kubectlCommandOutput string
@@ -123,7 +123,7 @@ func accessAsGroupWithKubectlTest(
 	}
 }
 
-func addTestClusterUserCanViewEverythingRoleBinding(t *testing.T, ctx context.Context, adminClient kubernetes.Interface, testUsername string) {
+func addTestClusterUserCanViewEverythingRoleBinding(ctx context.Context, t *testing.T, adminClient kubernetes.Interface, testUsername string) {
 	addTestClusterRoleBinding(ctx, t, adminClient, &rbacv1.ClusterRoleBinding{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
@@ -142,7 +142,7 @@ func addTestClusterUserCanViewEverythingRoleBinding(t *testing.T, ctx context.Co
 	})
 }
 
-func addTestClusterGroupCanViewEverythingRoleBinding(t *testing.T, ctx context.Context, adminClient kubernetes.Interface, testGroup string) {
+func addTestClusterGroupCanViewEverythingRoleBinding(ctx context.Context, t *testing.T, adminClient kubernetes.Interface, testGroup string) {
 	addTestClusterRoleBinding(ctx, t, adminClient, &rbacv1.ClusterRoleBinding{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{

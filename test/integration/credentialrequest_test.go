@@ -12,10 +12,11 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
-	"go.pinniped.dev/test/library"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
+	"go.pinniped.dev/test/library"
 )
 
 func TestSuccessfulCredentialRequest(t *testing.T) {

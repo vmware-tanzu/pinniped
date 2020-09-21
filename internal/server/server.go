@@ -12,7 +12,6 @@ import (
 
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/kubernetes"
@@ -246,8 +245,8 @@ func getClusterCASigner(
 // Create a configuration for the aggregated API server.
 func getAggregatedAPIServerConfig(
 	dynamicCertProvider provider.DynamicTLSServingCertProvider,
-	tokenAuthenticator authenticator.Token,
-	ca credentialrequest.CertIssuer,
+	authenticator credentialrequest.TokenCredentialRequestAuthenticator,
+	issuer credentialrequest.CertIssuer,
 	startControllersPostStartHook func(context.Context),
 ) (*apiserver.Config, error) {
 	recommendedOptions := genericoptions.NewRecommendedOptions(
@@ -275,8 +274,8 @@ func getAggregatedAPIServerConfig(
 	apiServerConfig := &apiserver.Config{
 		GenericConfig: serverConfig,
 		ExtraConfig: apiserver.ExtraConfig{
-			TokenAuthenticator:            tokenAuthenticator,
-			Issuer:                        ca,
+			Authenticator:                 authenticator,
+			Issuer:                        issuer,
 			StartControllersPostStartHook: startControllersPostStartHook,
 		},
 	}

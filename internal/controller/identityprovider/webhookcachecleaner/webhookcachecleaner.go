@@ -59,7 +59,10 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 
 	// Delete any entries from the cache which are no longer in the cluster.
 	for _, key := range c.cache.Keys() {
-		if _, exists := webhooksByKey[key]; !exists {
+		if key.APIGroup != idpv1alpha1.SchemeGroupVersion.Group || key.Kind != "WebhookIdentityProvider" {
+			continue
+		}
+		if _, exists := webhooksByKey[controllerlib.Key{Namespace: key.Namespace, Name: key.Name}]; !exists {
 			c.log.WithValues("idp", klog.KRef(key.Namespace, key.Name)).Info("deleting webhook IDP from cache")
 			c.cache.Delete(key)
 		}

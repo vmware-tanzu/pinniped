@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/pkg/version"
@@ -54,7 +53,7 @@ type Config struct {
 }
 
 type ExtraConfig struct {
-	TokenAuthenticator            authenticator.Token
+	Authenticator                 credentialrequest.TokenCredentialRequestAuthenticator
 	Issuer                        credentialrequest.CertIssuer
 	StartControllersPostStartHook func(ctx context.Context)
 }
@@ -98,7 +97,7 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 	}
 
 	gvr := loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")
-	storage := credentialrequest.NewREST(c.ExtraConfig.TokenAuthenticator, c.ExtraConfig.Issuer)
+	storage := credentialrequest.NewREST(c.ExtraConfig.Authenticator, c.ExtraConfig.Issuer)
 	if err := s.GenericAPIServer.InstallAPIGroup(&genericapiserver.APIGroupInfo{
 		PrioritizedVersions:          []schema.GroupVersion{gvr.GroupVersion()},
 		VersionedResourcesStorageMap: map[string]map[string]rest.Storage{gvr.Version: {gvr.Resource: storage}},

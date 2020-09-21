@@ -51,41 +51,6 @@ func TestCache(t *testing.T) {
 func TestAuthenticateTokenCredentialRequest(t *testing.T) {
 	t.Parallel()
 
-	t.Run("missing IDP selector", func(t *testing.T) {
-		t.Run("no IDPs", func(t *testing.T) {
-			c := New()
-			res, err := c.AuthenticateTokenCredentialRequest(context.Background(), &loginapi.TokenCredentialRequest{})
-			require.EqualError(t, err, "no identity providers are loaded")
-			require.Nil(t, res)
-		})
-
-		t.Run("multiple IDPs", func(t *testing.T) {
-			c := New()
-			c.Store(Key{Name: "idp-one"}, nil)
-			c.Store(Key{Name: "idp-two"}, nil)
-			res, err := c.AuthenticateTokenCredentialRequest(context.Background(), &loginapi.TokenCredentialRequest{})
-			require.EqualError(t, err, "could not uniquely match against an identity provider")
-			require.Nil(t, res)
-		})
-
-		t.Run("single IDP", func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			c := New()
-			mockToken := mocktokenauthenticator.NewMockToken(ctrl)
-			mockToken.EXPECT().AuthenticateToken(gomock.Any(), "test-token").
-				Return(&authenticator.Response{User: &user.DefaultInfo{Name: "test-user"}}, true, nil)
-			c.Store(Key{Name: "idp-one"}, mockToken)
-
-			res, err := c.AuthenticateTokenCredentialRequest(context.Background(), &loginapi.TokenCredentialRequest{
-				Spec: loginapi.TokenCredentialRequestSpec{Token: "test-token"},
-			})
-			require.NoError(t, err)
-			require.Equal(t, "test-user", res.GetName())
-		})
-	})
-
 	validRequest := loginapi.TokenCredentialRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "test-namespace",

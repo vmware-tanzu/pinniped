@@ -18,12 +18,6 @@ import (
 var (
 	// ErrNoSuchIDP is returned by Cache.AuthenticateTokenCredentialRequest() when the requested IDP is not configured.
 	ErrNoSuchIDP = fmt.Errorf("no such identity provider")
-
-	// ErrNoIDPs is returned by Cache.AuthenticateTokenCredentialRequest() when there are no IDPs configured.
-	ErrNoIDPs = fmt.Errorf("no identity providers are loaded")
-
-	// ErrIndeterminateIDP is returned by Cache.AuthenticateTokenCredentialRequest() when the correct IDP cannot be determined.
-	ErrIndeterminateIDP = fmt.Errorf("could not uniquely match against an identity provider")
 )
 
 // Cache implements the authenticator.Token interface by multiplexing across a dynamic set of identity providers
@@ -86,19 +80,6 @@ func (c *Cache) AuthenticateTokenCredentialRequest(ctx context.Context, req *log
 	}
 	if req.Spec.IdentityProvider.APIGroup != nil {
 		key.APIGroup = *req.Spec.IdentityProvider.APIGroup
-	}
-
-	// If the IDP is unspecified (legacy requests), choose the single loaded IDP or fail if there is not exactly
-	// one IDP configured.
-	if key.Name == "" || key.Kind == "" || key.APIGroup == "" {
-		keys := c.Keys()
-		if len(keys) == 0 {
-			return nil, ErrNoIDPs
-		}
-		if len(keys) > 1 {
-			return nil, ErrIndeterminateIDP
-		}
-		key = keys[0]
 	}
 
 	val := c.Get(key)

@@ -30,7 +30,8 @@ func TestCreaterControllerFilter(t *testing.T) {
 		"CreaterControllerFilter",
 		func(
 			agentPodTemplate *corev1.Pod,
-			podsInformer corev1informers.PodInformer,
+			kubeSystemPodInformer corev1informers.PodInformer,
+			//agentPodInformer corev1informers.PodInformer,
 			observableWithInformerOption *testutil.ObservableWithInformerOption,
 		) {
 			_ = NewCreaterController(
@@ -38,7 +39,8 @@ func TestCreaterControllerFilter(t *testing.T) {
 					Template: agentPodTemplate,
 				},
 				nil, // k8sClient, shouldn't matter
-				podsInformer,
+				kubeSystemPodInformer,
+				nil, //agentPodInformer,
 				observableWithInformerOption.WithInformer,
 			)
 		},
@@ -53,15 +55,18 @@ func TestCreaterControllerSync(t *testing.T) {
 
 		var subject controllerlib.Controller
 		var kubeAPIClient *kubernetesfake.Clientset
-		var kubeInformerClient *kubernetesfake.Clientset
-		var kubeInformers kubeinformers.SharedInformerFactory
+		var kubeSystemInformerClient *kubernetesfake.Clientset
+		var kubeSystemInformers kubeinformers.SharedInformerFactory
+		var agentInformerClient *kubernetesfake.Clientset
+		var agentInformers kubeinformers.SharedInformerFactory
 		var timeoutContext context.Context
 		var timeoutContextCancel context.CancelFunc
 		var syncContext *controllerlib.Context
 
 		agentPodTemplate := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "some-agent-name-",
+				Namespace: "some-agent-namespace",
+				Name:      "some-agent-name-",
 				Labels: map[string]string{
 					"some-label-key": "some-label-value",
 				},
@@ -117,17 +122,10 @@ func TestCreaterControllerSync(t *testing.T) {
 		// fnv 32a hash of controller-manager uid
 		controllerManagerPodHash := "fbb0addd"
 		agentPod := agentPodTemplate.DeepCopy()
-		agentPod.Namespace = kubeSystemNamespace
 		agentPod.Name += controllerManagerPodHash
-		agentPod.OwnerReferences = []metav1.OwnerReference{
-			{
-				APIVersion:         "v1",
-				Kind:               "Pod",
-				Name:               controllerManagerPod.Name,
-				UID:                controllerManagerPod.UID,
-				Controller:         boolPtr(true),
-				BlockOwnerDeletion: boolPtr(true),
-			},
+		agentPod.Annotations = map[string]string{
+			"kube-cert-agent.pinniped.dev/controller-manager-name": controllerManagerPod.Name,
+			"kube-cert-agent.pinniped.dev/controller-manager-uid":  string(controllerManagerPod.UID),
 		}
 		agentPod.Spec.Containers[0].VolumeMounts = controllerManagerPod.Spec.Containers[0].VolumeMounts
 		agentPod.Spec.RestartPolicy = corev1.RestartPolicyNever
@@ -151,7 +149,8 @@ func TestCreaterControllerSync(t *testing.T) {
 					Template: agentPodTemplate,
 				},
 				kubeAPIClient,
-				kubeInformers.Core().V1().Pods(),
+				kubeSystemInformers.Core().V1().Pods(),
+				agentInformers.Core().V1().Pods(),
 				controllerlib.WithInformer,
 			)
 
@@ -166,32 +165,39 @@ func TestCreaterControllerSync(t *testing.T) {
 			}
 
 			// Must start informers before calling TestRunSynchronously()
-			kubeInformers.Start(timeoutContext.Done())
+			kubeSystemInformers.Start(timeoutContext.Done())
+			agentInformers.Start(timeoutContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
 		it.Before(func() {
 			r = require.New(t)
 
-			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
-
-			kubeInformerClient = kubernetesfake.NewSimpleClientset()
-			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
 			kubeAPIClient = kubernetesfake.NewSimpleClientset()
+
+			kubeSystemInformerClient = kubernetesfake.NewSimpleClientset()
+			kubeSystemInformers = kubeinformers.NewSharedInformerFactory(kubeSystemInformerClient, 0)
+
+			agentInformerClient = kubernetesfake.NewSimpleClientset()
+			agentInformers = kubeinformers.NewSharedInformerFactory(agentInformerClient, 0)
+
+			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
 
 			// Add a pod into the test that doesn't matter to make sure we don't accidentally trigger any
 			// logic on this thing.
 			ignorablePod := corev1.Pod{}
 			ignorablePod.Name = "some-ignorable-pod"
-			r.NoError(kubeInformerClient.Tracker().Add(&ignorablePod))
+			r.NoError(kubeSystemInformerClient.Tracker().Add(&ignorablePod))
 			r.NoError(kubeAPIClient.Tracker().Add(&ignorablePod))
 
 			// Add another valid agent pod to make sure our logic works for just the pod we care about.
 			otherAgentPod := agentPod.DeepCopy()
 			otherAgentPod.Name = "some-other-agent"
-			otherAgentPod.OwnerReferences[0].Name = "some-other-controller-manager-name"
-			otherAgentPod.OwnerReferences[0].UID = "some-other-controller-manager-uid"
-			r.NoError(kubeInformerClient.Tracker().Add(otherAgentPod))
+			otherAgentPod.Annotations = map[string]string{
+				"kube-cert-agent.pinniped.dev/controller-manager-name": "some-other-controller-manager-name",
+				"kube-cert-agent.pinniped.dev/controller-manager-uid":  "some-other-controller-manager-uid",
+			}
+			r.NoError(agentInformerClient.Tracker().Add(otherAgentPod))
 			r.NoError(kubeAPIClient.Tracker().Add(otherAgentPod))
 		})
 
@@ -201,13 +207,13 @@ func TestCreaterControllerSync(t *testing.T) {
 
 		when("there is a controller manager pod", func() {
 			it.Before(func() {
-				r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+				r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 				r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 			})
 
 			when("there is a matching agent pod", func() {
 				it.Before(func() {
-					r.NoError(kubeInformerClient.Tracker().Add(agentPod))
+					r.NoError(agentInformerClient.Tracker().Add(agentPod))
 					r.NoError(kubeAPIClient.Tracker().Add(agentPod))
 				})
 
@@ -227,8 +233,8 @@ func TestCreaterControllerSync(t *testing.T) {
 				it.Before(func() {
 					nonMatchingAgentPod := agentPod.DeepCopy()
 					nonMatchingAgentPod.Name = "some-agent-name-85da432e"
-					nonMatchingAgentPod.OwnerReferences[0].UID = "some-non-matching-uid"
-					r.NoError(kubeInformerClient.Tracker().Add(nonMatchingAgentPod))
+					nonMatchingAgentPod.Annotations[controllerManagerUIDAnnotationKey] = "some-non-matching-uid"
+					r.NoError(agentInformerClient.Tracker().Add(nonMatchingAgentPod))
 					r.NoError(kubeAPIClient.Tracker().Add(nonMatchingAgentPod))
 				})
 
@@ -241,7 +247,7 @@ func TestCreaterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewCreateAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPod.Namespace,
 								agentPod,
 							),
 						},
@@ -260,7 +266,7 @@ func TestCreaterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewCreateAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPod.Namespace,
 								agentPod,
 							),
 						},

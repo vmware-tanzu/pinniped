@@ -17,9 +17,10 @@ import (
 )
 
 type deleterController struct {
-	agentInfo   *Info
-	k8sClient   kubernetes.Interface
-	podInformer corev1informers.PodInformer
+	agentInfo             *Info
+	k8sClient             kubernetes.Interface
+	kubeSystemPodInformer corev1informers.PodInformer
+	agentPodInformer      corev1informers.PodInformer
 }
 
 // NewDeleterController returns a controller that deletes any kube-cert-agent pods that are out of
@@ -29,20 +30,22 @@ type deleterController struct {
 func NewDeleterController(
 	agentInfo *Info,
 	k8sClient kubernetes.Interface,
-	podInformer corev1informers.PodInformer,
+	kubeSystemPodInformer corev1informers.PodInformer,
+	agentPodInformer corev1informers.PodInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "kube-cert-agent-deleter-controller",
 			Syncer: &deleterController{
-				agentInfo:   agentInfo,
-				k8sClient:   k8sClient,
-				podInformer: podInformer,
+				agentInfo:             agentInfo,
+				k8sClient:             k8sClient,
+				kubeSystemPodInformer: kubeSystemPodInformer,
+				agentPodInformer:      agentPodInformer,
 			},
 		},
 		withInformer(
-			podInformer,
+			agentPodInformer,
 			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
 				return isControllerManagerPod(obj) || isAgentPod(obj, agentInfo.Template.Labels)
 			}),
@@ -54,7 +57,7 @@ func NewDeleterController(
 // Sync implements controllerlib.Syncer.
 func (c *deleterController) Sync(ctx controllerlib.Context) error {
 	agentSelector := labels.SelectorFromSet(c.agentInfo.Template.Labels)
-	agentPods, err := c.podInformer.
+	agentPods, err := c.agentPodInformer.
 		Lister().
 		Pods(ControllerManagerNamespace).
 		List(agentSelector)
@@ -63,7 +66,7 @@ func (c *deleterController) Sync(ctx controllerlib.Context) error {
 	}
 
 	for _, agentPod := range agentPods {
-		controllerManagerPod, err := findControllerManagerPod(agentPod, c.podInformer)
+		controllerManagerPod, err := findControllerManagerPod(agentPod, c.kubeSystemPodInformer)
 		if err != nil {
 			return err
 		}

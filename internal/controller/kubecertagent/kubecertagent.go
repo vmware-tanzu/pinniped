@@ -19,7 +19,6 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/klog/v2"
 )
@@ -27,12 +26,16 @@ import (
 const (
 	// ControllerManagerNamespace is the assumed namespace of the kube-controller-manager pod(s).
 	ControllerManagerNamespace = "kube-system"
+
+	controllerManagerNameAnnotationKey = "kube-cert-agent.pinniped.dev/controller-manager-name"
+	controllerManagerUIDAnnotationKey  = "kube-cert-agent.pinniped.dev/controller-manager-uid"
 )
 
 // Info holds necessary information about the agent pod. It was pulled out into a struct to have a
 // common parameter for each controller.
 type Info struct {
 	// Template is an injection point for pod fields. The required pod fields are as follows.
+	//   .Namespace: serves as the namespace of the agent pods
 	//   .Name: serves as the name prefix for each of the agent pods
 	//   .Labels: serves as a way to filter for agent pods
 	//   .Spec.Containers[0].Image: serves as the container image for the agent pods
@@ -40,11 +43,11 @@ type Info struct {
 	Template *corev1.Pod
 
 	// CertPathAnnotation is the name of the annotation key that will be used when setting the
-	// best-guess path to the kube API's certificate.
+	// best-guess path to the kube API's certificate in the agent pod.
 	CertPathAnnotation string
 
 	// KeyPathAnnotation is the name of the annotation key that will be used when setting the
-	// best-guess path to the kube API's private key.
+	// best-guess path to the kube API's private key in the agent pod.
 	KeyPathAnnotation string
 }
 
@@ -91,18 +94,14 @@ func newAgentPod(
 
 	agentPod.Name = fmt.Sprintf("%s%s", agentPod.Name, hash(controllerManagerPod))
 
-	// controller manager namespace because it is our owner
-	agentPod.Namespace = ControllerManagerNamespace
-	agentPod.OwnerReferences = []metav1.OwnerReference{
-		*metav1.NewControllerRef(
-			controllerManagerPod,
-			schema.GroupVersionKind{
-				Group:   corev1.SchemeGroupVersion.Group,
-				Version: corev1.SchemeGroupVersion.Version,
-				Kind:    "Pod",
-			},
-		),
+	// It would be nice to use the OwnerReferences field here, but the agent pod is most likely in a
+	// different namespace than the kube-controller-manager pod, and therefore that breaks the
+	// OwnerReferences contract (see metav1.OwnerReference doc).
+	if agentPod.Annotations == nil {
+		agentPod.Annotations = make(map[string]string)
 	}
+	agentPod.Annotations[controllerManagerNameAnnotationKey] = controllerManagerPod.Name
+	agentPod.Annotations[controllerManagerUIDAnnotationKey] = string(controllerManagerPod.UID)
 
 	agentPod.Spec.Containers[0].VolumeMounts = controllerManagerPod.Spec.Containers[0].VolumeMounts
 	agentPod.Spec.Volumes = controllerManagerPod.Spec.Volumes
@@ -148,13 +147,13 @@ func isAgentPodUpToDate(actualAgentPod, expectedAgentPod *corev1.Pod) bool {
 
 func findAgentPod(
 	controllerManagerPod *corev1.Pod,
-	informer corev1informers.PodInformer,
+	kubeSystemPodInformer corev1informers.PodInformer,
+	agentPodInformer corev1informers.PodInformer,
 	agentLabels map[string]string,
 ) (*corev1.Pod, error) {
 	agentSelector := labels.SelectorFromSet(agentLabels)
-	agentPods, err := informer.
+	agentPods, err := agentPodInformer.
 		Lister().
-		Pods(ControllerManagerNamespace).
 		List(agentSelector)
 	if err != nil {
 		return nil, fmt.Errorf("informer cannot list agent pods: %w", err)
@@ -163,7 +162,7 @@ func findAgentPod(
 	for _, maybeAgentPod := range agentPods {
 		maybeControllerManagerPod, err := findControllerManagerPod(
 			maybeAgentPod,
-			informer,
+			kubeSystemPodInformer,
 		)
 		if err != nil {
 			return nil, err
@@ -181,22 +180,28 @@ func findControllerManagerPod(
 	agentPod *corev1.Pod,
 	informer corev1informers.PodInformer,
 ) (*corev1.Pod, error) {
-	controller := metav1.GetControllerOf(agentPod)
-	if controller == nil {
-		klog.InfoS("found orphan agent pod", "pod", klog.KObj(agentPod))
+	name, ok := agentPod.Annotations[controllerManagerNameAnnotationKey]
+	if !ok {
+		klog.InfoS("agent pod missing parent name annotation", "pod", agentPod)
+		return nil, nil
+	}
+
+	uid, ok := agentPod.Annotations[controllerManagerUIDAnnotationKey]
+	if !ok {
+		klog.InfoS("agent pod missing parent uid annotation", "pod", agentPod)
 		return nil, nil
 	}
 
 	maybeControllerManagerPod, err := informer.
 		Lister().
 		Pods(ControllerManagerNamespace).
-		Get(controller.Name)
+		Get(name)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return nil, fmt.Errorf("cannot get controller pod: %w", err)
 	} else if notFound ||
 		maybeControllerManagerPod == nil ||
-		maybeControllerManagerPod.UID != controller.UID {
+		string(maybeControllerManagerPod.UID) != uid {
 		return nil, nil
 	}
 

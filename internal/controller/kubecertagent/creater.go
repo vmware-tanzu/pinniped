@@ -17,9 +17,10 @@ import (
 )
 
 type createrController struct {
-	agentInfo   *Info
-	k8sClient   kubernetes.Interface
-	podInformer corev1informers.PodInformer
+	agentInfo             *Info
+	k8sClient             kubernetes.Interface
+	kubeSystemPodInformer corev1informers.PodInformer
+	agentPodInformer      corev1informers.PodInformer
 }
 
 // NewCreaterController returns a controller that creates new kube-cert-agent pods for every known
@@ -29,7 +30,8 @@ type createrController struct {
 func NewCreaterController(
 	agentInfo *Info,
 	k8sClient kubernetes.Interface,
-	podInformer corev1informers.PodInformer,
+	kubeSystemPodInformer corev1informers.PodInformer,
+	agentPodInformer corev1informers.PodInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
@@ -37,15 +39,23 @@ func NewCreaterController(
 			//nolint: misspell
 			Name: "kube-cert-agent-creater-controller",
 			Syncer: &createrController{
-				agentInfo:   agentInfo,
-				k8sClient:   k8sClient,
-				podInformer: podInformer,
+				agentInfo:             agentInfo,
+				k8sClient:             k8sClient,
+				kubeSystemPodInformer: kubeSystemPodInformer,
+				agentPodInformer:      agentPodInformer,
 			},
 		},
 		withInformer(
-			podInformer,
+			kubeSystemPodInformer,
 			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
-				return isControllerManagerPod(obj) || isAgentPod(obj, agentInfo.Template.Labels)
+				return isControllerManagerPod(obj)
+			}),
+			controllerlib.InformerOption{},
+		),
+		withInformer(
+			agentPodInformer,
+			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
+				return isAgentPod(obj, agentInfo.Template.Labels)
 			}),
 			controllerlib.InformerOption{},
 		),
@@ -59,13 +69,18 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("cannot create controller manager selector: %w", err)
 	}
 
-	controllerManagerPods, err := c.podInformer.Lister().List(controllerManagerSelector)
+	controllerManagerPods, err := c.kubeSystemPodInformer.Lister().List(controllerManagerSelector)
 	if err != nil {
 		return fmt.Errorf("informer cannot list controller manager pods: %w", err)
 	}
 
 	for _, controllerManagerPod := range controllerManagerPods {
-		agentPod, err := findAgentPod(controllerManagerPod, c.podInformer, c.agentInfo.Template.Labels)
+		agentPod, err := findAgentPod(
+			controllerManagerPod,
+			c.kubeSystemPodInformer,
+			c.agentPodInformer,
+			c.agentInfo.Template.Labels,
+		)
 		if err != nil {
 			return err
 		}
@@ -80,7 +95,7 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 				klog.KObj(controllerManagerPod),
 			)
 			_, err := c.k8sClient.CoreV1().
-				Pods(ControllerManagerNamespace).
+				Pods(c.agentInfo.Template.Namespace).
 				Create(ctx.Context, agentPod, metav1.CreateOptions{})
 			if err != nil {
 				return fmt.Errorf("cannot create agent pod: %w", err)

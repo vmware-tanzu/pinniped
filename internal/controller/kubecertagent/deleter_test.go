@@ -53,8 +53,10 @@ func TestDeleterControllerSync(t *testing.T) {
 
 		var subject controllerlib.Controller
 		var kubeAPIClient *kubernetesfake.Clientset
-		var kubeInformerClient *kubernetesfake.Clientset
-		var kubeInformers kubeinformers.SharedInformerFactory
+		var kubeSystemInformerClient *kubernetesfake.Clientset
+		var kubeSystemInformers kubeinformers.SharedInformerFactory
+		var agentInformerClient *kubernetesfake.Clientset
+		var agentInformers kubeinformers.SharedInformerFactory
 		var timeoutContext context.Context
 		var timeoutContextCancel context.CancelFunc
 		var syncContext *controllerlib.Context
@@ -125,15 +127,9 @@ func TestDeleterControllerSync(t *testing.T) {
 		agentPod := agentPodTemplate.DeepCopy()
 		agentPod.Namespace = kubeSystemNamespace
 		agentPod.Name += controllerManagerPodHash
-		agentPod.OwnerReferences = []metav1.OwnerReference{
-			{
-				APIVersion:         "v1",
-				Kind:               "Pod",
-				Name:               controllerManagerPod.Name,
-				UID:                controllerManagerPod.UID,
-				Controller:         boolPtr(true),
-				BlockOwnerDeletion: boolPtr(true),
-			},
+		agentPod.Annotations = map[string]string{
+			"kube-cert-agent.pinniped.dev/controller-manager-name": controllerManagerPod.Name,
+			"kube-cert-agent.pinniped.dev/controller-manager-uid":  string(controllerManagerPod.UID),
 		}
 		agentPod.Spec.Containers[0].VolumeMounts = controllerManagerPod.Spec.Containers[0].VolumeMounts
 		agentPod.Spec.RestartPolicy = corev1.RestartPolicyNever
@@ -151,7 +147,8 @@ func TestDeleterControllerSync(t *testing.T) {
 					Template: agentPodTemplate,
 				},
 				kubeAPIClient,
-				kubeInformers.Core().V1().Pods(),
+				kubeSystemInformers.Core().V1().Pods(),
+				agentInformers.Core().V1().Pods(),
 				controllerlib.WithInformer,
 			)
 
@@ -166,7 +163,8 @@ func TestDeleterControllerSync(t *testing.T) {
 			}
 
 			// Must start informers before calling TestRunSynchronously()
-			kubeInformers.Start(timeoutContext.Done())
+			kubeSystemInformers.Start(timeoutContext.Done())
+			agentInformers.Start(timeoutContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
@@ -175,15 +173,19 @@ func TestDeleterControllerSync(t *testing.T) {
 
 			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
 
-			kubeInformerClient = kubernetesfake.NewSimpleClientset()
-			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
 			kubeAPIClient = kubernetesfake.NewSimpleClientset()
+
+			kubeSystemInformerClient = kubernetesfake.NewSimpleClientset()
+			kubeSystemInformers = kubeinformers.NewSharedInformerFactory(kubeSystemInformerClient, 0)
+
+			agentInformerClient = kubernetesfake.NewSimpleClientset()
+			agentInformers = kubeinformers.NewSharedInformerFactory(agentInformerClient, 0)
 
 			// Add an pod into the test that doesn't matter to make sure we don't accidentally
 			// trigger any logic on this thing.
 			ignorablePod := corev1.Pod{}
 			ignorablePod.Name = "some-ignorable-pod"
-			r.NoError(kubeInformerClient.Tracker().Add(&ignorablePod))
+			r.NoError(agentInformerClient.Tracker().Add(&ignorablePod))
 			r.NoError(kubeAPIClient.Tracker().Add(&ignorablePod))
 		})
 
@@ -193,13 +195,13 @@ func TestDeleterControllerSync(t *testing.T) {
 
 		when("there is an agent pod", func() {
 			it.Before(func() {
-				r.NoError(kubeInformerClient.Tracker().Add(agentPod))
+				r.NoError(agentInformerClient.Tracker().Add(agentPod))
 				r.NoError(kubeAPIClient.Tracker().Add(agentPod))
 			})
 
 			when("there is a matching controller manager pod", func() {
 				it.Before(func() {
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -218,7 +220,7 @@ func TestDeleterControllerSync(t *testing.T) {
 			when("there is a non-matching controller manager pod via uid", func() {
 				it.Before(func() {
 					controllerManagerPod.UID = "some-other-controller-manager-uid"
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -243,7 +245,7 @@ func TestDeleterControllerSync(t *testing.T) {
 			when("there is a non-matching controller manager pod via name", func() {
 				it.Before(func() {
 					controllerManagerPod.Name = "some-other-controller-manager-name"
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -272,7 +274,7 @@ func TestDeleterControllerSync(t *testing.T) {
 							Name: "some-other-volume-mount",
 						},
 					}
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -301,7 +303,7 @@ func TestDeleterControllerSync(t *testing.T) {
 							Name: "some-other-volume",
 						},
 					}
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -328,7 +330,7 @@ func TestDeleterControllerSync(t *testing.T) {
 					controllerManagerPod.Spec.NodeSelector = map[string]string{
 						"some-other-node-selector-key": "some-other-node-selector-value",
 					}
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -353,7 +355,7 @@ func TestDeleterControllerSync(t *testing.T) {
 			when("the agent pod is out of sync with the controller manager via node name", func() {
 				it.Before(func() {
 					controllerManagerPod.Spec.NodeName = "some-other-node-name"
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -382,7 +384,7 @@ func TestDeleterControllerSync(t *testing.T) {
 							Key: "some-other-toleration-key",
 						},
 					}
-					r.NoError(kubeInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
@@ -408,7 +410,7 @@ func TestDeleterControllerSync(t *testing.T) {
 				it.Before(func() {
 					updatedAgentPod := agentPod.DeepCopy()
 					updatedAgentPod.Spec.RestartPolicy = corev1.RestartPolicyAlways
-					r.NoError(kubeInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+					r.NoError(kubeSystemInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
 					r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
 				})
 
@@ -433,7 +435,7 @@ func TestDeleterControllerSync(t *testing.T) {
 			when("the agent pod is out of sync via automount service account tokem", func() {
 				it.Before(func() {
 					agentPod.Spec.AutomountServiceAccountToken = boolPtr(true)
-					r.NoError(kubeInformerClient.Tracker().Update(podsGVR, agentPod, agentPod.Namespace))
+					r.NoError(kubeSystemInformerClient.Tracker().Update(podsGVR, agentPod, agentPod.Namespace))
 					r.NoError(kubeAPIClient.Tracker().Update(podsGVR, agentPod, agentPod.Namespace))
 				})
 

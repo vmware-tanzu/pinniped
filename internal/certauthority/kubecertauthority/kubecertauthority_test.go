@@ -102,6 +102,7 @@ func TestCA(t *testing.T) {
 		var neverTicker <-chan time.Time
 		var callbacks *callbackRecorder
 		var logger *testutil.TranscriptLogger
+		var agentInfo AgentInfo
 
 		var requireInitialFailureLogMessage = func(specificErrorMessage string) {
 			r.Len(logger.Transcript(), 1)
@@ -136,18 +137,26 @@ func TestCA(t *testing.T) {
 			fakeCert2PEM = loadFile("./testdata/test2.crt")
 			fakeKey2PEM = loadFile("./testdata/test2.key")
 
+			agentInfo = AgentInfo{
+				Namespace:          "some-agent-namespace",
+				LabelSelector:      "some-label-key=some-label-value",
+				CertPathAnnotation: "some-cert-path-annotation",
+				KeyPathAnnotation:  "some-key-path-annotation",
+			}
 			fakePod = &corev1.Pod{
 				TypeMeta: metav1.TypeMeta{},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "fake-pod",
-					Namespace: "kube-system",
-					Labels:    map[string]string{"component": "kube-controller-manager"},
+					Namespace: agentInfo.Namespace,
+					Labels: map[string]string{
+						"some-label-key": "some-label-value",
+					},
 				},
 				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{Name: "kube-controller-manager"}},
+					Containers: []corev1.Container{{Name: "some-agent-container-name"}},
 				},
 				Status: corev1.PodStatus{
-					Phase: "Running",
+					Phase: corev1.PodRunning,
 				},
 			}
 
@@ -172,7 +181,7 @@ func TestCA(t *testing.T) {
 			klog.SetLogger(nil)
 		})
 
-		when("the kube-controller-manager pod is found with default CLI flag values", func() {
+		when("the agent pod is found with default CLI flag values", func() {
 			it.Before(func() {
 				err := kubeAPIClient.Tracker().Add(fakePod)
 				r.NoError(err)
@@ -182,16 +191,16 @@ func TestCA(t *testing.T) {
 				it("finds the API server's signing key and uses it to issue certificates", func() {
 					fakeTicker := make(chan time.Time)
 
-					subject, shutdownFunc := New(kubeAPIClient, fakeExecutor, fakeTicker, callbacks.OnSuccess, callbacks.OnFailure)
+					subject, shutdownFunc := New(&agentInfo, kubeAPIClient, fakeExecutor, fakeTicker, callbacks.OnSuccess, callbacks.OnFailure)
 					defer shutdownFunc()
 
 					r.Equal(2, fakeExecutor.callCount)
 
-					r.Equal("kube-system", fakeExecutor.calledWithPodNamespace[0])
+					r.Equal(agentInfo.Namespace, fakeExecutor.calledWithPodNamespace[0])
 					r.Equal("fake-pod", fakeExecutor.calledWithPodName[0])
 					r.Equal([]string{"cat", "/etc/kubernetes/ca/ca.pem"}, fakeExecutor.calledWithCommandAndArgs[0])
 
-					r.Equal("kube-system", fakeExecutor.calledWithPodNamespace[1])
+					r.Equal(agentInfo.Namespace, fakeExecutor.calledWithPodNamespace[1])
 					r.Equal("fake-pod", fakeExecutor.calledWithPodName[1])
 					r.Equal([]string{"cat", "/etc/kubernetes/ca/ca.key"}, fakeExecutor.calledWithCommandAndArgs[1])
 
@@ -256,7 +265,7 @@ func TestCA(t *testing.T) {
 				it("logs an error message", func() {
 					fakeTicker := make(chan time.Time)
 
-					subject, shutdownFunc := New(kubeAPIClient, fakeExecutor, fakeTicker, callbacks.OnSuccess, callbacks.OnFailure)
+					subject, shutdownFunc := New(&agentInfo, kubeAPIClient, fakeExecutor, fakeTicker, callbacks.OnSuccess, callbacks.OnFailure)
 					defer shutdownFunc()
 					r.Equal(2, fakeExecutor.callCount)
 					r.Equal(1, callbacks.NumberOfTimesSuccessCalled())
@@ -294,7 +303,7 @@ func TestCA(t *testing.T) {
 				it("logs an error message and fails to issue certs until it can get the API server's keypair", func() {
 					fakeTicker := make(chan time.Time)
 
-					subject, shutdownFunc := New(kubeAPIClient, fakeExecutor, fakeTicker, callbacks.OnSuccess, callbacks.OnFailure)
+					subject, shutdownFunc := New(&agentInfo, kubeAPIClient, fakeExecutor, fakeTicker, callbacks.OnSuccess, callbacks.OnFailure)
 					defer shutdownFunc()
 					r.Equal(1, fakeExecutor.callCount)
 					r.Equal(0, callbacks.NumberOfTimesSuccessCalled())
@@ -334,7 +343,7 @@ func TestCA(t *testing.T) {
 				})
 
 				it("returns a CA who cannot issue certs", func() {
-					subject, shutdownFunc := New(kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
+					subject, shutdownFunc := New(&agentInfo, kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
 					defer shutdownFunc()
 					requireInitialFailureLogMessage("could not load CA: tls: failed to find any PEM data in certificate input")
 					requireNotCapableOfIssuingCerts(subject)
@@ -350,7 +359,7 @@ func TestCA(t *testing.T) {
 				})
 
 				it("returns a CA who cannot issue certs", func() {
-					subject, shutdownFunc := New(kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
+					subject, shutdownFunc := New(&agentInfo, kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
 					defer shutdownFunc()
 					requireInitialFailureLogMessage("some error")
 					requireNotCapableOfIssuingCerts(subject)
@@ -366,7 +375,7 @@ func TestCA(t *testing.T) {
 				})
 
 				it("returns a CA who cannot issue certs", func() {
-					subject, shutdownFunc := New(kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
+					subject, shutdownFunc := New(&agentInfo, kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
 					defer shutdownFunc()
 					requireInitialFailureLogMessage("some error")
 					requireNotCapableOfIssuingCerts(subject)
@@ -377,72 +386,40 @@ func TestCA(t *testing.T) {
 			})
 		})
 
-		when("the kube-controller-manager pod is found with non-default CLI flag values", func() {
+		when("the agent pod is found with non-default CLI flag values", func() {
 			it.Before(func() {
-				fakePod.Spec.Containers[0].Command = []string{
-					"kube-controller-manager",
-					"--cluster-signing-cert-file=/etc/kubernetes/ca/non-default.pem",
-				}
-				fakePod.Spec.Containers[0].Args = []string{
-					"--cluster-signing-key-file=/etc/kubernetes/ca/non-default.key",
-				}
+				fakePod.Annotations = make(map[string]string)
+				fakePod.Annotations[agentInfo.CertPathAnnotation] = "/etc/kubernetes/ca/non-default.pem"
+				fakePod.Annotations[agentInfo.KeyPathAnnotation] = "/etc/kubernetes/ca/non-default.key"
 				err := kubeAPIClient.Tracker().Add(fakePod)
 				r.NoError(err)
 			})
 
 			it("finds the API server's signing key and uses it to issue certificates", func() {
-				_, shutdownFunc := New(kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
+				_, shutdownFunc := New(&agentInfo, kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
 				defer shutdownFunc()
 
 				r.Equal(2, fakeExecutor.callCount)
 
-				r.Equal("kube-system", fakeExecutor.calledWithPodNamespace[0])
+				r.Equal(agentInfo.Namespace, fakeExecutor.calledWithPodNamespace[0])
 				r.Equal("fake-pod", fakeExecutor.calledWithPodName[0])
 				r.Equal([]string{"cat", "/etc/kubernetes/ca/non-default.pem"}, fakeExecutor.calledWithCommandAndArgs[0])
 
-				r.Equal("kube-system", fakeExecutor.calledWithPodNamespace[1])
+				r.Equal(agentInfo.Namespace, fakeExecutor.calledWithPodNamespace[1])
 				r.Equal("fake-pod", fakeExecutor.calledWithPodName[1])
 				r.Equal([]string{"cat", "/etc/kubernetes/ca/non-default.key"}, fakeExecutor.calledWithCommandAndArgs[1])
 			})
 		})
 
-		when("the kube-controller-manager pod is found with non-default CLI flag values separated by spaces", func() {
-			it.Before(func() {
-				fakePod.Spec.Containers[0].Command = []string{
-					"kube-controller-manager",
-					"--cluster-signing-cert-file", "/etc/kubernetes/ca/non-default.pem",
-					"--cluster-signing-key-file", "/etc/kubernetes/ca/non-default.key",
-					"--foo=bar",
-				}
-				err := kubeAPIClient.Tracker().Add(fakePod)
-				r.NoError(err)
-			})
-
-			it("finds the API server's signing key and uses it to issue certificates", func() {
-				_, shutdownFunc := New(kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
-				defer shutdownFunc()
-
-				r.Equal(2, fakeExecutor.callCount)
-
-				r.Equal("kube-system", fakeExecutor.calledWithPodNamespace[0])
-				r.Equal("fake-pod", fakeExecutor.calledWithPodName[0])
-				r.Equal([]string{"cat", "/etc/kubernetes/ca/non-default.pem"}, fakeExecutor.calledWithCommandAndArgs[0])
-
-				r.Equal("kube-system", fakeExecutor.calledWithPodNamespace[1])
-				r.Equal("fake-pod", fakeExecutor.calledWithPodName[1])
-				r.Equal([]string{"cat", "/etc/kubernetes/ca/non-default.key"}, fakeExecutor.calledWithCommandAndArgs[1])
-			})
-		})
-
-		when("the kube-controller-manager pod is not found", func() {
+		when("the agent pod is not found", func() {
 			it("returns an error", func() {
-				subject, shutdownFunc := New(kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
+				subject, shutdownFunc := New(&agentInfo, kubeAPIClient, fakeExecutor, neverTicker, callbacks.OnSuccess, callbacks.OnFailure)
 				defer shutdownFunc()
-				requireInitialFailureLogMessage("did not find kube-controller-manager pod")
+				requireInitialFailureLogMessage("did not find kube-cert-agent pod")
 				requireNotCapableOfIssuingCerts(subject)
 				r.Equal(0, callbacks.NumberOfTimesSuccessCalled())
 				r.Equal(1, callbacks.NumberOfTimesFailureCalled())
-				r.EqualError(callbacks.FailureErrors()[0], "did not find kube-controller-manager pod")
+				r.EqualError(callbacks.FailureErrors()[0], "did not find kube-cert-agent pod")
 			})
 		})
 	}, spec.Sequential(), spec.Report(report.Terminal{}))

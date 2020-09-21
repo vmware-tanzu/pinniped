@@ -5,9 +5,10 @@ package api
 
 // Config contains knobs to setup an instance of Pinniped.
 type Config struct {
-	DiscoveryInfo DiscoveryInfoSpec `json:"discovery"`
-	APIConfig     APIConfigSpec     `json:"api"`
-	NamesConfig   NamesConfigSpec   `json:"names"`
+	DiscoveryInfo       DiscoveryInfoSpec `json:"discovery"`
+	APIConfig           APIConfigSpec     `json:"api"`
+	NamesConfig         NamesConfigSpec   `json:"names"`
+	KubeCertAgentConfig KubeCertAgentSpec `json:"kubeCertAgent"`
 }
 
 // DiscoveryInfoSpec contains configuration knobs specific to
@@ -48,4 +49,16 @@ type ServingCertificateConfigSpec struct {
 	// DurationSeconds. By default, Pinniped begins rotation after 23328000
 	// seconds (about 9 months).
 	RenewBeforeSeconds *int64 `json:"renewBeforeSeconds,omitempty"`
+}
+
+type KubeCertAgentSpec struct {
+	// NamePrefix is the prefix of the name of the kube-cert-agent pods. For example, if this field is
+	// set to "some-prefix-", then the name of the pods will look like "some-prefix-blah". The default
+	// for this value is "pinniped-kube-cert-agent-".
+	NamePrefix *string `json:"namePrefix,omitempty"`
+
+	// Image is the container image that will be used by the kube-cert-agent pod. The container image
+	// should contain at least 2 binaries: /bin/sleep and cat (somewhere on the $PATH). The default
+	// for this value is "debian:latest".
+	Image *string `json:"image"`
 }

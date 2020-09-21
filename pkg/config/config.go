@@ -40,6 +40,7 @@ func FromPath(path string) (*api.Config, error) {
 	}
 
 	maybeSetAPIDefaults(&config.APIConfig)
+	maybeSetKubeCertAgentDefaults(&config.KubeCertAgentConfig)
 
 	if err := validateAPI(&config.APIConfig); err != nil {
 		return nil, fmt.Errorf("validate api: %w", err)
@@ -59,6 +60,16 @@ func maybeSetAPIDefaults(apiConfig *api.APIConfigSpec) {
 
 	if apiConfig.ServingCertificateConfig.RenewBeforeSeconds == nil {
 		apiConfig.ServingCertificateConfig.RenewBeforeSeconds = int64Ptr(about9Months)
+	}
+}
+
+func maybeSetKubeCertAgentDefaults(cfg *api.KubeCertAgentSpec) {
+	if cfg.NamePrefix == nil {
+		cfg.NamePrefix = stringPtr("pinniped-kube-cert-agent-")
+	}
+
+	if cfg.Image == nil {
+		cfg.Image = stringPtr("debian:latest")
 	}
 }
 
@@ -97,4 +108,8 @@ func validateAPI(apiConfig *api.APIConfigSpec) error {
 
 func int64Ptr(i int64) *int64 {
 	return &i
+}
+
+func stringPtr(s string) *string {
+	return &s
 }

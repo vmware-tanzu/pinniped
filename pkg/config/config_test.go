@@ -35,6 +35,10 @@ func TestFromPath(t *testing.T) {
 				  servingCertificateSecret: pinniped-api-tls-serving-certificate
 				  credentialIssuerConfig: pinniped-config
 				  apiService: pinniped-api
+				  kubeCertAgentPrefix: kube-cert-agent-prefix
+				KubeCertAgent:
+				  namePrefix: kube-cert-agent-name-prefix-
+				  image: kube-cert-agent-image
 			`),
 			wantConfig: &api.Config{
 				DiscoveryInfo: api.DiscoveryInfoSpec{
@@ -50,6 +54,10 @@ func TestFromPath(t *testing.T) {
 					ServingCertificateSecret: "pinniped-api-tls-serving-certificate",
 					CredentialIssuerConfig:   "pinniped-config",
 					APIService:               "pinniped-api",
+				},
+				KubeCertAgentConfig: api.KubeCertAgentSpec{
+					NamePrefix: stringPtr("kube-cert-agent-name-prefix-"),
+					Image:      stringPtr("kube-cert-agent-image"),
 				},
 			},
 		},
@@ -76,6 +84,10 @@ func TestFromPath(t *testing.T) {
 					ServingCertificateSecret: "pinniped-api-tls-serving-certificate",
 					CredentialIssuerConfig:   "pinniped-config",
 					APIService:               "pinniped-api",
+				},
+				KubeCertAgentConfig: api.KubeCertAgentSpec{
+					NamePrefix: stringPtr("pinniped-kube-cert-agent-"),
+					Image:      stringPtr("debian:latest"),
 				},
 			},
 		},
@@ -186,8 +198,4 @@ func TestFromPath(t *testing.T) {
 			}
 		})
 	}
-}
-
-func stringPtr(s string) *string {
-	return &s
 }

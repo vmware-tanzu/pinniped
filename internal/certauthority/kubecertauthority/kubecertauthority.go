@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spf13/pflag"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/deprecated/scheme"
@@ -26,8 +25,8 @@ import (
 	"go.pinniped.dev/internal/constable"
 )
 
-// ErrNoKubeControllerManagerPod is returned when no kube-controller-manager pod is found on the cluster.
-const ErrNoKubeControllerManagerPod = constable.Error("did not find kube-controller-manager pod")
+// ErrNoKubeCertAgentPod is returned when no kube-cert-agent pod is found on the cluster.
+const ErrNoKubeCertAgentPod = constable.Error("did not find kube-cert-agent pod")
 const ErrIncapableOfIssuingCertificates = constable.Error("this cluster is not currently capable of issuing certificates")
 
 const k8sAPIServerCACertPEMDefaultPath = "/etc/kubernetes/ca/ca.pem"
@@ -79,7 +78,25 @@ func (s *kubeClientPodCommandExecutor) Exec(podNamespace string, podName string,
 	return stdoutBuf.String(), nil
 }
 
+// AgentInfo is a data object that holds the fields necessary for a CA to communicate with an agent
+// pod.
+type AgentInfo struct {
+	// Namespace is the namespace in which the agent pod is running.
+	Namespace string
+	// LabelSelector is a label selector (e.g., "label-key=label=value") that can be used to filter
+	// the agent pods.
+	LabelSelector string
+	// CertPathAnnotation is the annotation used by the agent pod to indicate the path to the CA cert
+	// inside the pod.
+	CertPathAnnotation string
+	// KeyPathAnnotation is the annotation used by the agent pod to indicate the path to the CA key
+	// inside the pod.
+	KeyPathAnnotation string
+}
+
 type CA struct {
+	agentInfo *AgentInfo
+
 	kubeClient         kubernetes.Interface
 	podCommandExecutor PodCommandExecutor
 
@@ -103,14 +120,18 @@ type FailureCallback func(error)
 // API server's private key in case it failed previously or case the key has changed. It returns
 // a function that can be used to shut down that goroutine. Future attempts made by that goroutine
 // to get the key will also result in success or failure callbacks.
+//
+// The CA will try to read (via cat(1)) the kube API server's private key from an agent pod located
+// via the provided agentInfo.
 func New(
+	agentInfo *AgentInfo,
 	kubeClient kubernetes.Interface,
 	podCommandExecutor PodCommandExecutor,
 	tick <-chan time.Time,
 	onSuccessfulRefresh SuccessCallback,
 	onFailedRefresh FailureCallback,
 ) (*CA, ShutdownFunc) {
-	signer, err := createSignerWithAPIServerSecret(kubeClient, podCommandExecutor)
+	signer, err := createSignerWithAPIServerSecret(agentInfo, kubeClient, podCommandExecutor)
 	if err != nil {
 		klog.Errorf("could not initially fetch the API server's signing key: %s", err)
 		signer = nil
@@ -119,6 +140,7 @@ func New(
 		onSuccessfulRefresh()
 	}
 	result := &CA{
+		agentInfo:           agentInfo,
 		kubeClient:          kubeClient,
 		podCommandExecutor:  podCommandExecutor,
 		shutdown:            make(chan struct{}),
@@ -131,15 +153,19 @@ func New(
 	return result, result.shutdownRefresh
 }
 
-func createSignerWithAPIServerSecret(kubeClient kubernetes.Interface, podCommandExecutor PodCommandExecutor) (signer, error) {
+func createSignerWithAPIServerSecret(
+	agentInfo *AgentInfo,
+	kubeClient kubernetes.Interface,
+	podCommandExecutor PodCommandExecutor,
+) (signer, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	pod, err := findControllerManagerPod(ctx, kubeClient)
+	pod, err := findCertAgentPod(ctx, kubeClient, agentInfo.Namespace, agentInfo.LabelSelector)
 	if err != nil {
 		return nil, err
 	}
-	certPath, keyPath := getKeypairFilePaths(pod)
+	certPath, keyPath := getKeypairFilePaths(pod, agentInfo)
 
 	certPEM, err := podCommandExecutor.Exec(pod.Namespace, pod.Name, "cat", certPath)
 	if err != nil {
@@ -167,7 +193,11 @@ func (c *CA) refreshLoop(tick <-chan time.Time) {
 }
 
 func (c *CA) updateSigner() {
-	newSigner, err := createSignerWithAPIServerSecret(c.kubeClient, c.podCommandExecutor)
+	newSigner, err := createSignerWithAPIServerSecret(
+		c.agentInfo,
+		c.kubeClient,
+		c.podCommandExecutor,
+	)
 	if err != nil {
 		klog.Errorf("could not create signer with API server secret: %s", err)
 		c.onFailedRefresh(err)
@@ -198,36 +228,35 @@ func (c *CA) IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) (
 	return signer.IssuePEM(subject, dnsNames, ttl)
 }
 
-func findControllerManagerPod(ctx context.Context, kubeClient kubernetes.Interface) (*v1.Pod, error) {
-	pods, err := kubeClient.CoreV1().Pods("kube-system").List(ctx, metav1.ListOptions{
-		LabelSelector: "component=kube-controller-manager",
+func findCertAgentPod(ctx context.Context, kubeClient kubernetes.Interface, namespace, labelSelector string) (*v1.Pod, error) {
+	pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: labelSelector,
 		FieldSelector: "status.phase=Running",
 	})
 	if err != nil {
-		return nil, fmt.Errorf("could not check for kube-controller-manager pod: %w", err)
+		return nil, fmt.Errorf("could not check for kube-cert-agent pod: %w", err)
 	}
 	for _, pod := range pods.Items {
 		return &pod, nil
 	}
-	return nil, ErrNoKubeControllerManagerPod
+	return nil, ErrNoKubeCertAgentPod
 }
 
-func getKeypairFilePaths(pod *v1.Pod) (string, string) {
-	certPath := getContainerArgByName(pod, "cluster-signing-cert-file", k8sAPIServerCACertPEMDefaultPath)
-	keyPath := getContainerArgByName(pod, "cluster-signing-key-file", k8sAPIServerCAKeyPEMDefaultPath)
-	return certPath, keyPath
-}
-
-func getContainerArgByName(pod *v1.Pod, name string, defaultValue string) string {
-	for _, container := range pod.Spec.Containers {
-		flagset := pflag.NewFlagSet("", pflag.ContinueOnError)
-		flagset.ParseErrorsWhitelist = pflag.ParseErrorsWhitelist{UnknownFlags: true}
-		var val string
-		flagset.StringVar(&val, name, "", "")
-		_ = flagset.Parse(append(container.Command, container.Args...))
-		if val != "" {
-			return val
-		}
+func getKeypairFilePaths(pod *v1.Pod, agentInfo *AgentInfo) (string, string) {
+	annotations := pod.Annotations
+	if annotations == nil {
+		annotations = make(map[string]string)
 	}
-	return defaultValue
+
+	certPath, ok := annotations[agentInfo.CertPathAnnotation]
+	if !ok {
+		certPath = k8sAPIServerCACertPEMDefaultPath
+	}
+
+	keyPath, ok := annotations[agentInfo.KeyPathAnnotation]
+	if !ok {
+		keyPath = k8sAPIServerCAKeyPEMDefaultPath
+	}
+
+	return certPath, keyPath
 }

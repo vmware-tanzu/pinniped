@@ -37,6 +37,8 @@ type getKubeConfigFlags struct {
 	kubeconfig      string
 	contextOverride string
 	namespace       string
+	idpName         string
+	idpType         string
 }
 
 type getKubeConfigCommand struct {
@@ -90,6 +92,8 @@ func (c *getKubeConfigCommand) Command() *cobra.Command {
 	cmd.Flags().StringVar(&c.flags.kubeconfig, "kubeconfig", c.flags.kubeconfig, "Path to the kubeconfig file")
 	cmd.Flags().StringVar(&c.flags.contextOverride, "kubeconfig-context", c.flags.contextOverride, "Kubeconfig context override")
 	cmd.Flags().StringVar(&c.flags.namespace, "pinniped-namespace", c.flags.namespace, "Namespace in which Pinniped was installed")
+	cmd.Flags().StringVar(&c.flags.idpType, "idp-type", c.flags.idpType, "Identity provider type (e.g., 'webhook')")
+	cmd.Flags().StringVar(&c.flags.idpName, "idp-name", c.flags.idpType, "Identity provider name")
 	return cmd
 }
 
@@ -115,6 +119,14 @@ func (c *getKubeConfigCommand) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	idpType, idpName := c.flags.idpType, c.flags.idpName
+	if idpType == "" || idpName == "" {
+		idpType, idpName, err = getDefaultIDP(clientset, c.flags.namespace)
+		if err != nil {
+			return err
+		}
+	}
+
 	credentialIssuerConfig, err := fetchPinnipedCredentialIssuerConfig(clientset, c.flags.namespace)
 	if err != nil {
 		return err
@@ -134,7 +146,7 @@ func (c *getKubeConfigCommand) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	config := newPinnipedKubeconfig(v1Cluster, fullPathToSelf, c.flags.token, c.flags.namespace)
+	config := newPinnipedKubeconfig(v1Cluster, fullPathToSelf, c.flags.token, c.flags.namespace, idpType, idpName)
 
 	err = writeConfigAsYAML(cmd.OutOrStdout(), config)
 	if err != nil {
@@ -157,6 +169,45 @@ func issueWarningForNonMatchingServerOrCA(v1Cluster v1.Cluster, credentialIssuer
 		}
 	}
 	return nil
+}
+
+type noIDPError struct{ Namespace string }
+
+func (e noIDPError) Error() string {
+	return fmt.Sprintf(`no identity providers were found in namespace %q`, e.Namespace)
+}
+
+type indeterminateIDPError struct{ Namespace string }
+
+func (e indeterminateIDPError) Error() string {
+	return fmt.Sprintf(
+		`multiple identity providers were found in namespace %q, so --pinniped-idp-name/--pinniped-idp-type must be specified`,
+		e.Namespace,
+	)
+}
+
+func getDefaultIDP(clientset pinnipedclientset.Interface, namespace string) (string, string, error) {
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
+	defer cancelFunc()
+
+	webhooks, err := clientset.IDPV1alpha1().WebhookIdentityProviders(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return "", "", err
+	}
+
+	type ref struct{ idpType, idpName string }
+	idps := make([]ref, 0, len(webhooks.Items))
+	for _, webhook := range webhooks.Items {
+		idps = append(idps, ref{idpType: "webhook", idpName: webhook.Name})
+	}
+
+	if len(idps) == 0 {
+		return "", "", noIDPError{namespace}
+	}
+	if len(idps) > 1 {
+		return "", "", indeterminateIDPError{namespace}
+	}
+	return idps[0].idpType, idps[0].idpName, nil
 }
 
 func fetchPinnipedCredentialIssuerConfig(clientset pinnipedclientset.Interface, pinnipedInstallationNamespace string) (*configv1alpha1.CredentialIssuerConfig, error) {
@@ -229,7 +280,7 @@ func copyCurrentClusterFromExistingKubeConfig(currentKubeConfig clientcmdapi.Con
 	return v1Cluster, nil
 }
 
-func newPinnipedKubeconfig(v1Cluster v1.Cluster, fullPathToSelf string, token string, namespace string) v1.Config {
+func newPinnipedKubeconfig(v1Cluster v1.Cluster, fullPathToSelf string, token string, namespace string, idpType string, idpName string) v1.Config {
 	clusterName := "pinniped-cluster"
 	userName := "pinniped-user"
 
@@ -274,6 +325,14 @@ func newPinnipedKubeconfig(v1Cluster v1.Cluster, fullPathToSelf string, token st
 							{
 								Name:  "PINNIPED_TOKEN",
 								Value: token,
+							},
+							{
+								Name:  "PINNIPED_IDP_TYPE",
+								Value: idpType,
+							},
+							{
+								Name:  "PINNIPED_IDP_NAME",
+								Value: idpName,
 							},
 						},
 						APIVersion: clientauthenticationv1beta1.SchemeGroupVersion.String(),

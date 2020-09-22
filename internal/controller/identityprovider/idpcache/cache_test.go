@@ -6,6 +6,7 @@ package idpcache
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -46,6 +47,24 @@ func TestCache(t *testing.T) {
 		cache.Delete(key)
 	}
 	require.Zero(t, len(cache.Keys()))
+
+	// Fill the cache back up with a fixed set of keys, but inserted in shuffled order.
+	keysInExpectedOrder := []Key{
+		{APIGroup: "a", Kind: "a", Namespace: "a", Name: "a"},
+		{APIGroup: "b", Kind: "a", Namespace: "a", Name: "a"},
+		{APIGroup: "b", Kind: "b", Namespace: "a", Name: "a"},
+		{APIGroup: "b", Kind: "b", Namespace: "b", Name: "a"},
+		{APIGroup: "b", Kind: "b", Namespace: "b", Name: "b"},
+	}
+	for tries := 0; tries < 10; tries++ {
+		cache := New()
+		for _, i := range rand.Perm(len(keysInExpectedOrder)) {
+			cache.Store(keysInExpectedOrder[i], nil)
+		}
+
+		// Expect that they come back out in sorted order.
+		require.Equal(t, keysInExpectedOrder, cache.Keys())
+	}
 }
 
 func TestAuthenticateTokenCredentialRequest(t *testing.T) {

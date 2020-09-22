@@ -7,6 +7,7 @@ package idpcache
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 
 	"k8s.io/apiserver/pkg/authentication/authenticator"
@@ -67,6 +68,14 @@ func (c *Cache) Keys() []Key {
 	c.cache.Range(func(key, _ interface{}) bool {
 		result = append(result, key.(Key))
 		return true
+	})
+
+	// Sort the results for consistency.
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].APIGroup < result[j].APIGroup ||
+			result[i].Kind < result[j].Kind ||
+			result[i].Namespace < result[j].Namespace ||
+			result[i].Name < result[j].Name
 	})
 	return result
 }

@@ -56,28 +56,34 @@ func TestCLI(t *testing.T) {
 	defer cleanupFunc()
 
 	// Run pinniped CLI to get kubeconfig.
-	kubeConfig := runPinnipedCLI(t, pinnipedExe, token, namespaceName)
+	kubeConfigYAML := runPinnipedCLI(t, pinnipedExe, token, namespaceName)
 
-	// In addition to the client-go based testing below, also try the kubeconfig
-	// with kubectl once just in case it is somehow different.
-	runKubectlCLI(t, kubeConfig, namespaceName, testUsername)
-
-	// Create Kubernetes client with kubeconfig from pinniped CLI.
-	kubeClient := library.NewClientsetForKubeConfig(t, kubeConfig)
-
-	// Validate that we can auth to the API via our user.
+	adminClient := library.NewClientset(t)
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*3)
 	defer cancelFunc()
 
-	adminClient := library.NewClientset(t)
-
-	t.Run("access as user", accessAsUserTest(ctx, adminClient, testUsername, kubeClient))
+	// In addition to the client-go based testing below, also try the kubeconfig
+	// with kubectl to validate that it works.
+	t.Run(
+		"access as user with kubectl",
+		accessAsUserWithKubectlTest(ctx, adminClient, kubeConfigYAML, testUsername, namespaceName),
+	)
 	for _, group := range expectedTestUserGroups {
 		group := group
 		t.Run(
-			"access as group "+group,
-			accessAsGroupTest(ctx, adminClient, group, kubeClient),
+			"access as group "+group+" with kubectl",
+			accessAsGroupWithKubectlTest(ctx, adminClient, kubeConfigYAML, group, namespaceName),
 		)
+	}
+
+	// Create Kubernetes client with kubeconfig from pinniped CLI.
+	kubeClient := library.NewClientsetForKubeConfig(t, kubeConfigYAML)
+
+	// Validate that we can auth to the API via our user.
+	t.Run("access as user with client-go", accessAsUserTest(ctx, adminClient, testUsername, kubeClient))
+	for _, group := range expectedTestUserGroups {
+		group := group
+		t.Run("access as group "+group+" with client-go", accessAsGroupTest(ctx, adminClient, group, kubeClient))
 	}
 }
 
@@ -112,42 +118,6 @@ func runPinnipedCLI(t *testing.T, pinnipedExe, token, namespaceName string) stri
 		"--pinniped-namespace", namespaceName,
 	).CombinedOutput()
 	require.NoError(t, err, string(output))
-
-	return string(output)
-}
-
-func runKubectlCLI(t *testing.T, kubeConfig, namespaceName, username string) string {
-	t.Helper()
-
-	f, err := ioutil.TempFile("", "pinniped-generated-kubeconfig-*")
-	require.NoError(t, err)
-	defer func() {
-		err := os.Remove(f.Name())
-		require.NoError(t, err)
-	}()
-	_, err = f.WriteString(kubeConfig)
-	require.NoError(t, err)
-	err = f.Close()
-	require.NoError(t, err)
-
-	//nolint: gosec // It's okay that we are passing f.Name() to an exec command here. It was created above.
-	output, err := exec.Command(
-		"kubectl",
-		"get",
-		"pods",
-		"--kubeconfig", f.Name(),
-		"--namespace", namespaceName,
-	).CombinedOutput()
-
-	// Expect an error because this user has no RBAC permission. However, the
-	// error message should state that we had already authenticated as the test user.
-	expectedErrorMessage := `Error from server (Forbidden): pods is forbidden: User "` +
-		username +
-		`" cannot list resource "pods" in API group "" in the namespace "` +
-		namespaceName +
-		`"` + "\n"
-	require.EqualError(t, err, "exit status 1")
-	require.Equal(t, expectedErrorMessage, string(output))
 
 	return string(output)
 }

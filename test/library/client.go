@@ -156,10 +156,12 @@ func CreateTestWebhookIDP(ctx context.Context, t *testing.T) corev1.TypedLocalOb
 
 	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+
 	idp, err := webhooks.Create(createContext, &idpv1alpha1.WebhookIdentityProvider{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-webhook-",
-			Labels:       map[string]string{"pinniped.dev/test": t.Name()},
+			Labels:       map[string]string{"pinniped.dev/test": ""},
+			Annotations:  map[string]string{"pinniped.dev/testName": t.Name()},
 		},
 		Spec: idpv1alpha1.WebhookIdentityProviderSpec{
 			Endpoint: endpoint,

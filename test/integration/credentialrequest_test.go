@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -50,9 +51,14 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 
 	testWebhook := library.CreateTestWebhookIDP(ctx, t)
 
-	response, err := makeRequest(ctx, t, validCredentialRequestSpecWithRealToken(t, testWebhook))
-	require.NoError(t, err)
-
+	var response *loginv1alpha1.TokenCredentialRequest
+	successfulResponse := func() bool {
+		var err error
+		response, err = makeRequest(ctx, t, validCredentialRequestSpecWithRealToken(t, testWebhook))
+		require.NoError(t, err, "the request should never fail at the HTTP level")
+		return response.Status.Credential != nil
+	}
+	assert.Eventually(t, successfulResponse, 10*time.Second, 500*time.Millisecond)
 	require.NotNil(t, response.Status.Credential)
 	require.Empty(t, response.Status.Message)
 	require.Empty(t, response.Spec)

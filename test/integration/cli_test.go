@@ -27,6 +27,12 @@ func TestCLI(t *testing.T) {
 		strings.ReplaceAll(library.GetEnv(t, "PINNIPED_TEST_USER_GROUPS"), " ", ""), ",",
 	)
 
+	// Create a test webhook configuration to use with the CLI.
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelFunc()
+
+	idp := library.CreateTestWebhookIDP(ctx, t)
+
 	// Remove all Pinniped environment variables for the remainder of this test
 	// because some of their names clash with the env vars expected by our
 	// kubectl exec plugin. We would like this test to prove that the exec
@@ -56,14 +62,11 @@ func TestCLI(t *testing.T) {
 	defer cleanupFunc()
 
 	// Run pinniped CLI to get kubeconfig.
-	kubeConfigYAML := runPinnipedCLI(t, pinnipedExe, token, namespaceName)
-
-	adminClient := library.NewClientset(t)
-	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*3)
-	defer cancelFunc()
+	kubeConfigYAML := runPinnipedCLI(t, pinnipedExe, token, namespaceName, "webhook", idp.Name)
 
 	// In addition to the client-go based testing below, also try the kubeconfig
 	// with kubectl to validate that it works.
+	adminClient := library.NewClientset(t)
 	t.Run(
 		"access as user with kubectl",
 		accessAsUserWithKubectlTest(ctx, adminClient, kubeConfigYAML, testUsername, namespaceName),
@@ -108,7 +111,7 @@ func buildPinnipedCLI(t *testing.T) (string, func()) {
 	}
 }
 
-func runPinnipedCLI(t *testing.T, pinnipedExe, token, namespaceName string) string {
+func runPinnipedCLI(t *testing.T, pinnipedExe, token, namespaceName, idpType, idpName string) string {
 	t.Helper()
 
 	output, err := exec.Command(
@@ -116,6 +119,8 @@ func runPinnipedCLI(t *testing.T, pinnipedExe, token, namespaceName string) stri
 		"get-kubeconfig",
 		"--token", token,
 		"--pinniped-namespace", namespaceName,
+		"--idp-type", idpType,
+		"--idp-name", idpName,
 	).CombinedOutput()
 	require.NoError(t, err, string(output))
 

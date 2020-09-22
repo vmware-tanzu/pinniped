@@ -83,11 +83,23 @@
 
    ```bash
     cd /tmp/pinniped/deploy
-    ytt --file . \
-      --data-value "webhook_url=https://local-user-authenticator.local-user-authenticator.svc/authenticate" \
-      --data-value "webhook_ca_bundle=$(cat /tmp/local-user-authenticator-ca-base64-encoded)" \
-      | kapp deploy --yes --app pinniped --diff-changes --file -
+    ytt --file . | kapp deploy --yes --app pinniped --diff-changes --file -
    ```
+
+1. Create a `WebhookIdentityProvider` object to configure Pinniped to authenticate using `local-user-authenticator`
+
+    ```bash
+    cat <<EOF | kubectl create --namespace pinniped -f -
+    apiVersion: idp.pinniped.dev/v1alpha1
+    kind: WebhookIdentityProvider
+    metadata:
+      name: local-user-authenticator
+    spec:
+      endpoint: https://local-user-authenticator.local-user-authenticator.svc/authenticate
+      tls:
+        certificateAuthorityData: $(cat /tmp/local-user-authenticator-ca-base64-encoded)
+    EOF
+    ```
 
 1. Download the latest version of the Pinniped CLI binary for your platform
    from [Pinniped's github Releases page](https://github.com/vmware-tanzu/pinniped/releases/latest).
@@ -99,7 +111,7 @@
    allow you to authenticate as the user that you created above.
 
    ```bash
-   pinniped get-kubeconfig --token "pinny-the-seal:password123" > /tmp/pinniped-kubeconfig
+   pinniped get-kubeconfig --token "pinny-the-seal:password123" --idp-type webhook --idp-name local-user-authenticator > /tmp/pinniped-kubeconfig
    ```
 
    Note that the above command will print a warning to the screen. You can ignore this warning.

@@ -10,9 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
 
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
 	"go.pinniped.dev/internal/client"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/test/library"
@@ -63,6 +61,8 @@ func TestClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	idp := library.CreateTestWebhookIDP(ctx, t)
+
 	// Use an invalid certificate/key to validate that the ServerVersion API fails like we assume.
 	invalidClient := library.NewClientsetWithCertAndKey(t, testCert, testKey)
 	_, err := invalidClient.Discovery().ServerVersion()
@@ -71,11 +71,6 @@ func TestClient(t *testing.T) {
 	// Using the CA bundle and host from the current (admin) kubeconfig, do the token exchange.
 	clientConfig := library.NewClientConfig(t)
 
-	idp := corev1.TypedLocalObjectReference{
-		APIGroup: &idpv1alpha1.SchemeGroupVersion.Group,
-		Kind:     "WebhookIdentityProvider",
-		Name:     "pinniped-webhook",
-	}
 	resp, err := client.ExchangeToken(ctx, namespace, idp, token, string(clientConfig.CAData), clientConfig.Host)
 	require.NoError(t, err)
 	require.NotNil(t, resp.Status.ExpirationTimestamp)

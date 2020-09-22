@@ -3,12 +3,18 @@
 
 package v1alpha1
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 // TokenCredentialRequestSpec is the specification of a TokenCredentialRequest, expected on requests to the Pinniped API.
 type TokenCredentialRequestSpec struct {
 	// Bearer token supplied with the credential request.
 	Token string `json:"token,omitempty"`
+
+	// Reference to an identity provider which can fulfill this credential request.
+	IdentityProvider corev1.TypedLocalObjectReference `json:"identityProvider"`
 }
 
 // TokenCredentialRequestStatus is the status of a TokenCredentialRequest, returned on responses to the Pinniped API.

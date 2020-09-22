@@ -4,17 +4,22 @@
 package library
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 
 	// Import to initialize client auth plugins - the kubeconfig that we use for
@@ -135,4 +140,47 @@ func newAnonymousClientRestConfigWithCertAndKeyAdded(t *testing.T, clientCertifi
 	config.CertData = []byte(clientCertificateData)
 	config.KeyData = []byte(clientKeyData)
 	return config
+}
+
+// CreateTestWebhookIDP creates and returns a test WebhookIdentityProvider in $PINNIPED_NAMESPACE, which will be
+// automatically deleted at the end of the current test's lifetime. It returns a corev1.TypedLocalObjectReference which
+// descibes the test IDP within the test namespace.
+func CreateTestWebhookIDP(ctx context.Context, t *testing.T) corev1.TypedLocalObjectReference {
+	t.Helper()
+
+	namespace := GetEnv(t, "PINNIPED_NAMESPACE")
+	endpoint := GetEnv(t, "PINNIPED_TEST_WEBHOOK_ENDPOINT")
+	caBundle := GetEnv(t, "PINNIPED_TEST_WEBHOOK_CA_BUNDLE")
+	client := NewPinnipedClientset(t)
+	webhooks := client.IDPV1alpha1().WebhookIdentityProviders(namespace)
+
+	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	idp, err := webhooks.Create(createContext, &idpv1alpha1.WebhookIdentityProvider{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "test-webhook-",
+			Labels:       map[string]string{"pinniped.dev/test": t.Name()},
+		},
+		Spec: idpv1alpha1.WebhookIdentityProviderSpec{
+			Endpoint: endpoint,
+			TLS:      &idpv1alpha1.TLSSpec{CertificateAuthorityData: caBundle},
+		},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err, "could not create test WebhookIdentityProvider")
+	t.Logf("created test WebhookIdentityProvider %s/%s", idp.Namespace, idp.Name)
+
+	t.Cleanup(func() {
+		t.Helper()
+		t.Logf("cleaning up test WebhookIdentityProvider %s/%s", idp.Namespace, idp.Name)
+		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		err := webhooks.Delete(deleteCtx, idp.Name, metav1.DeleteOptions{})
+		require.NoErrorf(t, err, "could not cleanup test WebhookIdentityProvider %s/%s", idp.Namespace, idp.Name)
+	})
+
+	return corev1.TypedLocalObjectReference{
+		APIGroup: &idpv1alpha1.SchemeGroupVersion.Group,
+		Kind:     "WebhookIdentityProvider",
+		Name:     idp.Name,
+	}
 }

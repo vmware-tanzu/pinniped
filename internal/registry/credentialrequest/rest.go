@@ -14,7 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
+	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/utils/trace"
 
@@ -35,16 +35,20 @@ type CertIssuer interface {
 	IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) ([]byte, []byte, error)
 }
 
-func NewREST(tokenAuthenticator authenticator.Token, issuer CertIssuer) *REST {
+type TokenCredentialRequestAuthenticator interface {
+	AuthenticateTokenCredentialRequest(ctx context.Context, req *loginapi.TokenCredentialRequest) (user.Info, error)
+}
+
+func NewREST(authenticator TokenCredentialRequestAuthenticator, issuer CertIssuer) *REST {
 	return &REST{
-		tokenAuthenticator: tokenAuthenticator,
-		issuer:             issuer,
+		authenticator: authenticator,
+		issuer:        issuer,
 	}
 }
 
 type REST struct {
-	tokenAuthenticator authenticator.Token
-	issuer             CertIssuer
+	authenticator TokenCredentialRequestAuthenticator
+	issuer        CertIssuer
 }
 
 func (*REST) New() runtime.Object {
@@ -67,35 +71,20 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		return nil, err
 	}
 
-	// The incoming context could have an audience. Since we do not want to handle audiences right now, do not pass it
-	// through directly to the authentication webhook. Instead only propagate cancellation of the parent context.
-	cancelCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go func() {
-		select {
-		case <-ctx.Done():
-			cancel()
-		case <-cancelCtx.Done():
-		}
-	}()
-
-	authResponse, authenticated, err := r.tokenAuthenticator.AuthenticateToken(cancelCtx, credentialRequest.Spec.Token)
+	user, err := r.authenticator.AuthenticateTokenCredentialRequest(ctx, credentialRequest)
 	if err != nil {
 		traceFailureWithError(t, "webhook authentication", err)
 		return failureResponse(), nil
 	}
-	if !authenticated || authResponse == nil || authResponse.User == nil || authResponse.User.GetName() == "" {
-		traceSuccess(t, authResponse, authenticated, false)
+	if user == nil || user.GetName() == "" {
+		traceSuccess(t, user, false)
 		return failureResponse(), nil
 	}
 
-	username := authResponse.User.GetName()
-	groups := authResponse.User.GetGroups()
-
 	certPEM, keyPEM, err := r.issuer.IssuePEM(
 		pkix.Name{
-			CommonName:   username,
-			Organization: groups,
+			CommonName:   user.GetName(),
+			Organization: user.GetGroups(),
 		},
 		[]string{},
 		clientCertificateTTL,
@@ -105,7 +94,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		return failureResponse(), nil
 	}
 
-	traceSuccess(t, authResponse, authenticated, true)
+	traceSuccess(t, user, true)
 
 	return &loginapi.TokenCredentialRequest{
 		Status: loginapi.TokenCredentialRequestStatus{
@@ -121,8 +110,8 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 func validateRequest(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions, t *trace.Trace) (*loginapi.TokenCredentialRequest, error) {
 	credentialRequest, ok := obj.(*loginapi.TokenCredentialRequest)
 	if !ok {
-		traceValidationFailure(t, "not a CredentialRequest")
-		return nil, apierrors.NewBadRequest(fmt.Sprintf("not a CredentialRequest: %#v", obj))
+		traceValidationFailure(t, "not a TokenCredentialRequest")
+		return nil, apierrors.NewBadRequest(fmt.Sprintf("not a TokenCredentialRequest: %#v", obj))
 	}
 
 	if len(credentialRequest.Spec.Token) == 0 {
@@ -157,15 +146,14 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 	return credentialRequest, nil
 }
 
-func traceSuccess(t *trace.Trace, response *authenticator.Response, webhookAuthenticated bool, pinnipedAuthenticated bool) {
+func traceSuccess(t *trace.Trace, userInfo user.Info, authenticated bool) {
 	userID := "<none>"
-	if response != nil && response.User != nil {
-		userID = response.User.GetUID()
+	if userInfo != nil {
+		userID = userInfo.GetUID()
 	}
 	t.Step("success",
 		trace.Field{Key: "userID", Value: userID},
-		trace.Field{Key: "idpAuthenticated", Value: webhookAuthenticated},
-		trace.Field{Key: "pinnipedAuthenticated", Value: pinnipedAuthenticated},
+		trace.Field{Key: "authenticated", Value: authenticated},
 	)
 }
 

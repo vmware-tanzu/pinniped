@@ -672,9 +672,18 @@ func schema_119_apis_login_v1alpha1_TokenCredentialRequestSpec(ref common.Refere
 							Format:      "",
 						},
 					},
+					"identityProvider": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Reference to an identity provider which can fulfill this credential request.",
+							Ref:         ref("k8s.io/api/core/v1.TypedLocalObjectReference"),
+						},
+					},
 				},
+				Required: []string{"identityProvider"},
 			},
 		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.TypedLocalObjectReference"},
 	}
 }
 

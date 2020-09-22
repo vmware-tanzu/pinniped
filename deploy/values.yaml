@@ -21,10 +21,6 @@ image_tag: latest
 #! Optional.
 image_pull_dockerconfigjson: #! e.g. {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}
 
-#! Configure a webhook identity provider.
-webhook_url: #! e.g., https://example.com
-webhook_ca_bundle: #! Must be a base64 encoded PEM certificate. e.g., LS0tLS1CRUdJTiBDRVJUSUZJQ0F...
-
 #! Pinniped will try to guess the right K8s API URL for sharing that information with potential clients.
 #! This settings allows the guess to be overridden.
 #! Optional.

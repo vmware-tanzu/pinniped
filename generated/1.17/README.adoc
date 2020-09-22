@@ -263,6 +263,7 @@ TokenCredentialRequestSpec is the specification of a TokenCredentialRequest, exp
 |===
 | Field | Description
 | *`token`* __string__ | Bearer token supplied with the credential request.
+| *`identityProvider`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#typedlocalobjectreference-v1-core[$$TypedLocalObjectReference$$]__ | Reference to an identity provider which can fulfill this credential request.
 |===
 
 

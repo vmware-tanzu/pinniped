@@ -9,11 +9,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
 	"go.pinniped.dev/internal/client"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/here"
@@ -57,6 +60,12 @@ func newExchangeCredentialCmd(args []string, stdout, stderr io.Writer) *exchange
 			Requires all of the following environment variables, which are
 			typically set in the kubeconfig:
 			  - PINNIPED_TOKEN: the token to send to Pinniped for exchange
+			  - PINNIPED_NAMESPACE: the namespace of the identity provider to authenticate
+			    against
+			  - PINNIPED_IDP_TYPE: the type of identity provider to authenticate
+			    against (e.g., "webhook")
+			  - PINNIPED_IDP_NAME: the name of the identity provider to authenticate
+			    against
 			  - PINNIPED_CA_BUNDLE: the CA bundle to trust when calling
 				Pinniped's HTTPS endpoint
 			  - PINNIPED_K8S_API_ENDPOINT: the URL for the Pinniped credential
@@ -75,9 +84,19 @@ func newExchangeCredentialCmd(args []string, stdout, stderr io.Writer) *exchange
 }
 
 type envGetter func(string) (string, bool)
-type tokenExchanger func(ctx context.Context, namespace, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error)
+type tokenExchanger func(
+	ctx context.Context,
+	namespace string,
+	idp corev1.TypedLocalObjectReference,
+	token string,
+	caBundle string,
+	apiEndpoint string,
+) (*clientauthenticationv1beta1.ExecCredential, error)
 
-const ErrMissingEnvVar = constable.Error("failed to get credential: environment variable not set")
+const (
+	ErrMissingEnvVar  = constable.Error("failed to get credential: environment variable not set")
+	ErrInvalidIDPType = constable.Error("invalid IDP type")
+)
 
 func runExchangeCredential(stdout, _ io.Writer) {
 	err := exchangeCredential(os.LookupEnv, client.ExchangeToken, stdout, 30*time.Second)
@@ -96,6 +115,16 @@ func exchangeCredential(envGetter envGetter, tokenExchanger tokenExchanger, outp
 		return envVarNotSetError("PINNIPED_NAMESPACE")
 	}
 
+	idpType, varExists := envGetter("PINNIPED_IDP_TYPE")
+	if !varExists {
+		return envVarNotSetError("PINNIPED_IDP_TYPE")
+	}
+
+	idpName, varExists := envGetter("PINNIPED_IDP_NAME")
+	if !varExists {
+		return envVarNotSetError("PINNIPED_IDP_NAME")
+	}
+
 	token, varExists := envGetter("PINNIPED_TOKEN")
 	if !varExists {
 		return envVarNotSetError("PINNIPED_TOKEN")
@@ -111,7 +140,16 @@ func exchangeCredential(envGetter envGetter, tokenExchanger tokenExchanger, outp
 		return envVarNotSetError("PINNIPED_K8S_API_ENDPOINT")
 	}
 
-	cred, err := tokenExchanger(ctx, namespace, token, caBundle, apiEndpoint)
+	idp := corev1.TypedLocalObjectReference{Name: idpName}
+	switch strings.ToLower(idpType) {
+	case "webhook":
+		idp.APIGroup = &idpv1alpha1.SchemeGroupVersion.Group
+		idp.Kind = "WebhookIdentityProvider"
+	default:
+		return fmt.Errorf(`%w: %q, supported values are "webhook"`, ErrInvalidIDPType, idpType)
+	}
+
+	cred, err := tokenExchanger(ctx, namespace, idp, token, caBundle, apiEndpoint)
 	if err != nil {
 		return fmt.Errorf("failed to get credential: %w", err)
 	}

@@ -27,51 +27,42 @@ import (
 	"go.pinniped.dev/internal/here"
 )
 
-const (
-	getKubeConfigCmdTokenFlagName             = "token"
-	getKubeConfigCmdKubeconfigFlagName        = "kubeconfig"
-	getKubeConfigCmdKubeconfigContextFlagName = "kubeconfig-context"
-	getKubeConfigCmdPinnipedNamespaceFlagName = "pinniped-namespace"
-)
-
 //nolint: gochecknoinits
 func init() {
-	rootCmd.AddCommand(newGetKubeConfigCmd(os.Args, os.Stdout, os.Stderr).cmd)
+	rootCmd.AddCommand(newGetKubeConfigCommand().Command())
+}
+
+type getKubeConfigFlags struct {
+	token           string
+	kubeconfig      string
+	contextOverride string
+	namespace       string
+	idpName         string
+	idpType         string
 }
 
 type getKubeConfigCommand struct {
-	// runFunc is called by the cobra.Command.Run hook. It is included here for
-	// testability.
-	runFunc func(
-		stdout, stderr io.Writer,
-		token, kubeconfigPathOverride, currentContextOverride, pinnipedInstallationNamespace string,
-	)
-
-	// cmd is the cobra.Command for this CLI command. It is included here for
-	// testability.
-	cmd *cobra.Command
+	flags getKubeConfigFlags
+	// 	Test mocking points
+	getPathToSelf     func() (string, error)
+	kubeClientCreator func(restConfig *rest.Config) (pinnipedclientset.Interface, error)
 }
 
-func newGetKubeConfigCmd(args []string, stdout, stderr io.Writer) *getKubeConfigCommand {
-	c := &getKubeConfigCommand{
-		runFunc: runGetKubeConfig,
-	}
-
-	c.cmd = &cobra.Command{
-		Run: func(cmd *cobra.Command, _ []string) {
-			token := cmd.Flag(getKubeConfigCmdTokenFlagName).Value.String()
-			kubeconfigPathOverride := cmd.Flag(getKubeConfigCmdKubeconfigFlagName).Value.String()
-			currentContextOverride := cmd.Flag(getKubeConfigCmdKubeconfigContextFlagName).Value.String()
-			pinnipedInstallationNamespace := cmd.Flag(getKubeConfigCmdPinnipedNamespaceFlagName).Value.String()
-			c.runFunc(
-				stdout,
-				stderr,
-				token,
-				kubeconfigPathOverride,
-				currentContextOverride,
-				pinnipedInstallationNamespace,
-			)
+func newGetKubeConfigCommand() *getKubeConfigCommand {
+	return &getKubeConfigCommand{
+		flags: getKubeConfigFlags{
+			namespace: "pinniped",
 		},
+		getPathToSelf: os.Executable,
+		kubeClientCreator: func(restConfig *rest.Config) (pinnipedclientset.Interface, error) {
+			return pinnipedclientset.NewForConfig(restConfig)
+		},
+	}
+}
+
+func (c *getKubeConfigCommand) Command() *cobra.Command {
+	cmd := &cobra.Command{
+		RunE:  c.run,
 		Args:  cobra.NoArgs, // do not accept positional arguments for this command
 		Use:   "get-kubeconfig",
 		Short: "Print a kubeconfig for authenticating into a cluster via Pinniped",
@@ -93,94 +84,50 @@ func newGetKubeConfigCmd(args []string, stdout, stderr io.Writer) *getKubeConfig
 				kubectl --kubeconfig $HOME/mycluster-kubeconfig get pods
 		`),
 	}
-
-	c.cmd.SetArgs(args)
-	c.cmd.SetOut(stdout)
-	c.cmd.SetErr(stderr)
-
-	c.cmd.Flags().StringP(
-		getKubeConfigCmdTokenFlagName,
-		"",
-		"",
-		"Credential to include in the resulting kubeconfig output (Required)",
-	)
-	err := c.cmd.MarkFlagRequired(getKubeConfigCmdTokenFlagName)
+	cmd.Flags().StringVar(&c.flags.token, "token", "", "Credential to include in the resulting kubeconfig output (Required)")
+	err := cmd.MarkFlagRequired("token")
 	if err != nil {
 		panic(err)
 	}
-
-	c.cmd.Flags().StringP(
-		getKubeConfigCmdKubeconfigFlagName,
-		"",
-		"",
-		"Path to the kubeconfig file",
-	)
-
-	c.cmd.Flags().StringP(
-		getKubeConfigCmdKubeconfigContextFlagName,
-		"",
-		"",
-		"Kubeconfig context override",
-	)
-
-	c.cmd.Flags().StringP(
-		getKubeConfigCmdPinnipedNamespaceFlagName,
-		"",
-		"pinniped",
-		"Namespace in which Pinniped was installed",
-	)
-
-	return c
+	cmd.Flags().StringVar(&c.flags.kubeconfig, "kubeconfig", c.flags.kubeconfig, "Path to the kubeconfig file")
+	cmd.Flags().StringVar(&c.flags.contextOverride, "kubeconfig-context", c.flags.contextOverride, "Kubeconfig context override")
+	cmd.Flags().StringVar(&c.flags.namespace, "pinniped-namespace", c.flags.namespace, "Namespace in which Pinniped was installed")
+	cmd.Flags().StringVar(&c.flags.idpType, "idp-type", c.flags.idpType, "Identity provider type (e.g., 'webhook')")
+	cmd.Flags().StringVar(&c.flags.idpName, "idp-name", c.flags.idpType, "Identity provider name")
+	return cmd
 }
 
-func runGetKubeConfig(
-	stdout, stderr io.Writer,
-	token, kubeconfigPathOverride, currentContextOverride, pinnipedInstallationNamespace string,
-) {
-	err := getKubeConfig(
-		stdout,
-		stderr,
-		token,
-		kubeconfigPathOverride,
-		currentContextOverride,
-		pinnipedInstallationNamespace,
-		func(restConfig *rest.Config) (pinnipedclientset.Interface, error) {
-			return pinnipedclientset.NewForConfig(restConfig)
-		},
-	)
-
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "error: %s\n", err.Error())
-		os.Exit(1)
-	}
-}
-
-func getKubeConfig(
-	outputWriter io.Writer,
-	warningsWriter io.Writer,
-	token string,
-	kubeconfigPathOverride string,
-	currentContextNameOverride string,
-	pinnipedInstallationNamespace string,
-	kubeClientCreator func(restConfig *rest.Config) (pinnipedclientset.Interface, error),
-) error {
-	if token == "" {
-		return constable.Error("--" + getKubeConfigCmdTokenFlagName + " flag value cannot be empty")
-	}
-
-	fullPathToSelf, err := os.Executable()
+func (c *getKubeConfigCommand) run(cmd *cobra.Command, args []string) error {
+	fullPathToSelf, err := c.getPathToSelf()
 	if err != nil {
 		return fmt.Errorf("could not find path to self: %w", err)
 	}
 
-	clientConfig := newClientConfig(kubeconfigPathOverride, currentContextNameOverride)
+	clientConfig := newClientConfig(c.flags.kubeconfig, c.flags.contextOverride)
 
 	currentKubeConfig, err := clientConfig.RawConfig()
 	if err != nil {
 		return err
 	}
 
-	credentialIssuerConfig, err := fetchPinnipedCredentialIssuerConfig(clientConfig, kubeClientCreator, pinnipedInstallationNamespace)
+	restConfig, err := clientConfig.ClientConfig()
+	if err != nil {
+		return err
+	}
+	clientset, err := c.kubeClientCreator(restConfig)
+	if err != nil {
+		return err
+	}
+
+	idpType, idpName := c.flags.idpType, c.flags.idpName
+	if idpType == "" || idpName == "" {
+		idpType, idpName, err = getDefaultIDP(clientset, c.flags.namespace)
+		if err != nil {
+			return err
+		}
+	}
+
+	credentialIssuerConfig, err := fetchPinnipedCredentialIssuerConfig(clientset, c.flags.namespace)
 	if err != nil {
 		return err
 	}
@@ -189,19 +136,19 @@ func getKubeConfig(
 		return constable.Error(`CredentialIssuerConfig "pinniped-config" was missing KubeConfigInfo`)
 	}
 
-	v1Cluster, err := copyCurrentClusterFromExistingKubeConfig(currentKubeConfig, currentContextNameOverride)
+	v1Cluster, err := copyCurrentClusterFromExistingKubeConfig(currentKubeConfig, c.flags.contextOverride)
 	if err != nil {
 		return err
 	}
 
-	err = issueWarningForNonMatchingServerOrCA(v1Cluster, credentialIssuerConfig, warningsWriter)
+	err = issueWarningForNonMatchingServerOrCA(v1Cluster, credentialIssuerConfig, cmd.ErrOrStderr())
 	if err != nil {
 		return err
 	}
 
-	config := newPinnipedKubeconfig(v1Cluster, fullPathToSelf, token, pinnipedInstallationNamespace)
+	config := newPinnipedKubeconfig(v1Cluster, fullPathToSelf, c.flags.token, c.flags.namespace, idpType, idpName)
 
-	err = writeConfigAsYAML(outputWriter, config)
+	err = writeConfigAsYAML(cmd.OutOrStdout(), config)
 	if err != nil {
 		return err
 	}
@@ -224,16 +171,46 @@ func issueWarningForNonMatchingServerOrCA(v1Cluster v1.Cluster, credentialIssuer
 	return nil
 }
 
-func fetchPinnipedCredentialIssuerConfig(clientConfig clientcmd.ClientConfig, kubeClientCreator func(restConfig *rest.Config) (pinnipedclientset.Interface, error), pinnipedInstallationNamespace string) (*configv1alpha1.CredentialIssuerConfig, error) {
-	restConfig, err := clientConfig.ClientConfig()
+type noIDPError struct{ Namespace string }
+
+func (e noIDPError) Error() string {
+	return fmt.Sprintf(`no identity providers were found in namespace %q`, e.Namespace)
+}
+
+type indeterminateIDPError struct{ Namespace string }
+
+func (e indeterminateIDPError) Error() string {
+	return fmt.Sprintf(
+		`multiple identity providers were found in namespace %q, so --pinniped-idp-name/--pinniped-idp-type must be specified`,
+		e.Namespace,
+	)
+}
+
+func getDefaultIDP(clientset pinnipedclientset.Interface, namespace string) (string, string, error) {
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
+	defer cancelFunc()
+
+	webhooks, err := clientset.IDPV1alpha1().WebhookIdentityProviders(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return nil, err
-	}
-	clientset, err := kubeClientCreator(restConfig)
-	if err != nil {
-		return nil, err
+		return "", "", err
 	}
 
+	type ref struct{ idpType, idpName string }
+	idps := make([]ref, 0, len(webhooks.Items))
+	for _, webhook := range webhooks.Items {
+		idps = append(idps, ref{idpType: "webhook", idpName: webhook.Name})
+	}
+
+	if len(idps) == 0 {
+		return "", "", noIDPError{namespace}
+	}
+	if len(idps) > 1 {
+		return "", "", indeterminateIDPError{namespace}
+	}
+	return idps[0].idpType, idps[0].idpName, nil
+}
+
+func fetchPinnipedCredentialIssuerConfig(clientset pinnipedclientset.Interface, pinnipedInstallationNamespace string) (*configv1alpha1.CredentialIssuerConfig, error) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancelFunc()
 
@@ -303,7 +280,7 @@ func copyCurrentClusterFromExistingKubeConfig(currentKubeConfig clientcmdapi.Con
 	return v1Cluster, nil
 }
 
-func newPinnipedKubeconfig(v1Cluster v1.Cluster, fullPathToSelf string, token string, namespace string) v1.Config {
+func newPinnipedKubeconfig(v1Cluster v1.Cluster, fullPathToSelf string, token string, namespace string, idpType string, idpName string) v1.Config {
 	clusterName := "pinniped-cluster"
 	userName := "pinniped-user"
 
@@ -348,6 +325,14 @@ func newPinnipedKubeconfig(v1Cluster v1.Cluster, fullPathToSelf string, token st
 							{
 								Name:  "PINNIPED_TOKEN",
 								Value: token,
+							},
+							{
+								Name:  "PINNIPED_IDP_TYPE",
+								Value: idpType,
+							},
+							{
+								Name:  "PINNIPED_IDP_NAME",
+								Value: idpName,
 							},
 						},
 						APIVersion: clientauthenticationv1beta1.SchemeGroupVersion.String(),

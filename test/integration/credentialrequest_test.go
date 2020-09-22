@@ -16,9 +16,27 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
 	"go.pinniped.dev/test/library"
 )
+
+func TestUnsuccessfulCredentialRequest(t *testing.T) {
+	library.SkipUnlessIntegration(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	response, err := makeRequest(ctx, t, validCredentialRequestSpecWithRealToken(t, corev1.TypedLocalObjectReference{
+		APIGroup: &idpv1alpha1.SchemeGroupVersion.Group,
+		Kind:     "WebhookIdentityProvider",
+		Name:     "some-webhook-that-does-not-exist",
+	}))
+	require.NoError(t, err)
+	require.Nil(t, response.Status.Credential)
+	require.NotNil(t, response.Status.Message)
+	require.Equal(t, "authentication failed", *response.Status.Message)
+}
 
 func TestSuccessfulCredentialRequest(t *testing.T) {
 	library.SkipUnlessIntegration(t)
@@ -73,7 +91,7 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 	library.SkipUnlessIntegration(t)
 	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
 
-	response, err := makeRequest(context.Background(), t, v1alpha1.TokenCredentialRequestSpec{Token: "not a good token"})
+	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token"})
 
 	require.NoError(t, err)
 
@@ -86,7 +104,7 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T
 	library.SkipUnlessIntegration(t)
 	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
 
-	response, err := makeRequest(context.Background(), t, v1alpha1.TokenCredentialRequestSpec{Token: ""})
+	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{Token: ""})
 
 	require.Error(t, err)
 	statusError, isStatus := err.(*errors.StatusError)
@@ -120,7 +138,7 @@ func TestCredentialRequest_OtherwiseValidRequestWithRealTokenShouldFailWhenTheCl
 	require.Equal(t, stringPtr("authentication failed"), response.Status.Message)
 }
 
-func makeRequest(ctx context.Context, t *testing.T, spec v1alpha1.TokenCredentialRequestSpec) (*v1alpha1.TokenCredentialRequest, error) {
+func makeRequest(ctx context.Context, t *testing.T, spec loginv1alpha1.TokenCredentialRequestSpec) (*loginv1alpha1.TokenCredentialRequest, error) {
 	t.Helper()
 
 	client := library.NewAnonymousPinnipedClientset(t)
@@ -129,15 +147,15 @@ func makeRequest(ctx context.Context, t *testing.T, spec v1alpha1.TokenCredentia
 	defer cancel()
 
 	ns := library.GetEnv(t, "PINNIPED_NAMESPACE")
-	return client.LoginV1alpha1().TokenCredentialRequests(ns).Create(ctx, &v1alpha1.TokenCredentialRequest{
+	return client.LoginV1alpha1().TokenCredentialRequests(ns).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 		TypeMeta:   metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{Namespace: ns},
 		Spec:       spec,
 	}, metav1.CreateOptions{})
 }
 
-func validCredentialRequestSpecWithRealToken(t *testing.T, idp corev1.TypedLocalObjectReference) v1alpha1.TokenCredentialRequestSpec {
-	return v1alpha1.TokenCredentialRequestSpec{
+func validCredentialRequestSpecWithRealToken(t *testing.T, idp corev1.TypedLocalObjectReference) loginv1alpha1.TokenCredentialRequestSpec {
+	return loginv1alpha1.TokenCredentialRequestSpec{
 		Token:            library.GetEnv(t, "PINNIPED_TEST_USER_TOKEN"),
 		IdentityProvider: idp,
 	}

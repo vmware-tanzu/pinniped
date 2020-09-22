@@ -170,6 +170,7 @@ func CreateTestWebhookIDP(ctx context.Context, t *testing.T) corev1.TypedLocalOb
 	t.Logf("created test WebhookIdentityProvider %s/%s", idp.Namespace, idp.Name)
 
 	t.Cleanup(func() {
+		t.Helper()
 		t.Logf("cleaning up test WebhookIdentityProvider %s/%s", idp.Namespace, idp.Name)
 		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

@@ -64,7 +64,7 @@ func (c *deleterController) Sync(ctx controllerlib.Context) error {
 	agentSelector := labels.SelectorFromSet(c.agentInfo.Template.Labels)
 	agentPods, err := c.agentPodInformer.
 		Lister().
-		Pods(ControllerManagerNamespace).
+		Pods(c.agentInfo.Template.Namespace).
 		List(agentSelector)
 	if err != nil {
 		return fmt.Errorf("informer cannot list agent pods: %w", err)
@@ -80,7 +80,7 @@ func (c *deleterController) Sync(ctx controllerlib.Context) error {
 			klog.InfoS("deleting agent pod", "pod", klog.KObj(agentPod))
 			err := c.k8sClient.
 				CoreV1().
-				Pods(ControllerManagerNamespace).
+				Pods(agentPod.Namespace).
 				Delete(ctx.Context, agentPod.Name, metav1.DeleteOptions{})
 			if err != nil {
 				return fmt.Errorf("cannot delete agent pod: %w", err)

@@ -50,6 +50,7 @@ func TestDeleterControllerFilter(t *testing.T) {
 func TestDeleterControllerSync(t *testing.T) {
 	spec.Run(t, "DeleterControllerSync", func(t *testing.T, when spec.G, it spec.S) {
 		const kubeSystemNamespace = "kube-system"
+		const agentPodNamespace = "agent-pod-namespace"
 
 		var r *require.Assertions
 
@@ -65,7 +66,8 @@ func TestDeleterControllerSync(t *testing.T) {
 
 		agentPodTemplate := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "some-agent-name-",
+				Name:      "some-agent-name-",
+				Namespace: agentPodNamespace,
 				Labels: map[string]string{
 					"some-label-key": "some-label-value",
 				},
@@ -127,7 +129,7 @@ func TestDeleterControllerSync(t *testing.T) {
 		// fnv 32a hash of controller-manager uid
 		controllerManagerPodHash := "fbb0addd"
 		agentPod := agentPodTemplate.DeepCopy()
-		agentPod.Namespace = kubeSystemNamespace
+		agentPod.Namespace = agentPodNamespace
 		agentPod.Name += controllerManagerPodHash
 		agentPod.Annotations = map[string]string{
 			"kube-cert-agent.pinniped.dev/controller-manager-name": controllerManagerPod.Name,
@@ -236,7 +238,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewDeleteAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								agentPod.Name,
 							),
 						},
@@ -261,7 +263,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewDeleteAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								agentPod.Name,
 							),
 						},
@@ -290,7 +292,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewDeleteAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								agentPod.Name,
 							),
 						},
@@ -319,7 +321,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewDeleteAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								agentPod.Name,
 							),
 						},
@@ -346,7 +348,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewDeleteAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								agentPod.Name,
 							),
 						},
@@ -371,7 +373,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewDeleteAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								agentPod.Name,
 							),
 						},
@@ -400,7 +402,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewDeleteAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								agentPod.Name,
 							),
 						},
@@ -426,7 +428,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewDeleteAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								agentPod.Name,
 							),
 						},
@@ -451,7 +453,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewDeleteAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								agentPod.Name,
 							),
 						},
@@ -470,7 +472,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewDeleteAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								agentPod.Name,
 							),
 						},

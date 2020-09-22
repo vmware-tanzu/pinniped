@@ -50,6 +50,7 @@ func TestAnnotaterControllerFilter(t *testing.T) {
 func TestAnnotaterControllerSync(t *testing.T) {
 	spec.Run(t, "AnnotaterControllerSync", func(t *testing.T, when spec.G, it spec.S) {
 		const kubeSystemNamespace = "kube-system"
+		const agentPodNamespace = "agent-pod-namespace"
 
 		const (
 			certPath           = "some-cert-path"
@@ -73,7 +74,8 @@ func TestAnnotaterControllerSync(t *testing.T) {
 
 		agentPodTemplate := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "some-agent-name-",
+				Name:      "some-agent-name-",
+				Namespace: agentPodNamespace,
 				Labels: map[string]string{
 					"some-label-key": "some-label-value",
 				},
@@ -134,7 +136,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 		// fnv 32a hash of controller-manager uid
 		controllerManagerPodHash := "fbb0addd"
 		agentPod := agentPodTemplate.DeepCopy()
-		agentPod.Namespace = kubeSystemNamespace
+		agentPod.Namespace = agentPodNamespace
 		agentPod.Name += controllerManagerPodHash
 		agentPod.Annotations = map[string]string{
 			"kube-cert-agent.pinniped.dev/controller-manager-name": controllerManagerPod.Name,
@@ -235,7 +237,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewUpdateAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								updatedAgentPod,
 							),
 						},
@@ -267,7 +269,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewUpdateAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								updatedAgentPod,
 							),
 						},
@@ -318,7 +320,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewUpdateAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								updatedAgentPod,
 							),
 						},
@@ -348,7 +350,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewUpdateAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								updatedAgentPod,
 							),
 						},
@@ -442,7 +444,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewUpdateAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								updatedAgentPod,
 							),
 						},
@@ -476,7 +478,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewUpdateAction(
 								podsGVR,
-								kubeSystemNamespace,
+								agentPodNamespace,
 								updatedAgentPod,
 							),
 						},

@@ -50,6 +50,7 @@ func TestCreaterControllerFilter(t *testing.T) {
 func TestCreaterControllerSync(t *testing.T) {
 	spec.Run(t, "CreaterControllerSync", func(t *testing.T, when spec.G, it spec.S) {
 		const kubeSystemNamespace = "kube-system"
+		const agentPodNamespace = "agent-pod-namespace"
 
 		var r *require.Assertions
 
@@ -65,7 +66,7 @@ func TestCreaterControllerSync(t *testing.T) {
 
 		agentPodTemplate := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "some-agent-namespace",
+				Namespace: agentPodNamespace,
 				Name:      "some-agent-name-",
 				Labels: map[string]string{
 					"some-label-key": "some-label-value",
@@ -123,6 +124,7 @@ func TestCreaterControllerSync(t *testing.T) {
 		controllerManagerPodHash := "fbb0addd"
 		agentPod := agentPodTemplate.DeepCopy()
 		agentPod.Name += controllerManagerPodHash
+		agentPod.Namespace = agentPodNamespace
 		agentPod.Annotations = map[string]string{
 			"kube-cert-agent.pinniped.dev/controller-manager-name": controllerManagerPod.Name,
 			"kube-cert-agent.pinniped.dev/controller-manager-uid":  string(controllerManagerPod.UID),
@@ -247,7 +249,7 @@ func TestCreaterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewCreateAction(
 								podsGVR,
-								agentPod.Namespace,
+								agentPodNamespace,
 								agentPod,
 							),
 						},
@@ -266,7 +268,7 @@ func TestCreaterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							coretesting.NewCreateAction(
 								podsGVR,
-								agentPod.Namespace,
+								agentPodNamespace,
 								agentPod,
 							),
 						},

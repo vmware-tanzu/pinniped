@@ -146,7 +146,7 @@ func isAgentPodUpToDate(actualAgentPod, expectedAgentPod *corev1.Pod) bool {
 
 func findControllerManagerPodForSpecificAgentPod(
 	agentPod *corev1.Pod,
-	informer corev1informers.PodInformer,
+	kubeSystemPodInformer corev1informers.PodInformer,
 ) (*corev1.Pod, error) {
 	name, ok := agentPod.Annotations[controllerManagerNameAnnotationKey]
 	if !ok {
@@ -160,7 +160,7 @@ func findControllerManagerPodForSpecificAgentPod(
 		return nil, nil
 	}
 
-	maybeControllerManagerPod, err := informer.
+	maybeControllerManagerPod, err := kubeSystemPodInformer.
 		Lister().
 		Pods(ControllerManagerNamespace).
 		Get(name)

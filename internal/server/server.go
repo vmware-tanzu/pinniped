@@ -133,6 +133,7 @@ func (a *App) runServer(ctx context.Context) error {
 	// Load the Kubernetes cluster signing CA.
 	kubeCertAgentTemplate, kubeCertAgentLabelSelector := createKubeCertAgentTemplate(
 		&cfg.KubeCertAgentConfig,
+		serverInstallationNamespace,
 	)
 	k8sClusterCA, shutdownCA, err := getClusterCASigner(
 		ctx,
@@ -322,11 +323,12 @@ func getAggregatedAPIServerConfig(
 	return apiServerConfig, nil
 }
 
-func createKubeCertAgentTemplate(cfg *configapi.KubeCertAgentSpec) (*corev1.Pod, string) {
+func createKubeCertAgentTemplate(cfg *configapi.KubeCertAgentSpec, serverInstallationNamespace string) (*corev1.Pod, string) {
 	terminateImmediately := int64(0)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: *cfg.NamePrefix,
+			Name:      *cfg.NamePrefix,
+			Namespace: serverInstallationNamespace, // create the agent pods in the same namespace where Pinniped is installed
 			Labels: map[string]string{
 				kubeCertAgentLabelKey: "",
 			},

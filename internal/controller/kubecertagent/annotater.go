@@ -70,7 +70,7 @@ func (c *annotaterController) Sync(ctx controllerlib.Context) error {
 	agentSelector := labels.SelectorFromSet(c.agentInfo.Template.Labels)
 	agentPods, err := c.agentPodInformer.
 		Lister().
-		Pods(ControllerManagerNamespace).
+		Pods(c.agentInfo.Template.Namespace).
 		List(agentSelector)
 	if err != nil {
 		return fmt.Errorf("informer cannot list agent pods: %w", err)
@@ -91,6 +91,7 @@ func (c *annotaterController) Sync(ctx controllerlib.Context) error {
 		if err := c.maybeUpdateAgentPod(
 			ctx.Context,
 			agentPod.Name,
+			agentPod.Namespace,
 			certPath,
 			certPathOK,
 			keyPath,
@@ -106,13 +107,14 @@ func (c *annotaterController) Sync(ctx controllerlib.Context) error {
 func (c *annotaterController) maybeUpdateAgentPod(
 	ctx context.Context,
 	name string,
+	namespace string,
 	certPath string,
 	certPathOK bool,
 	keyPath string,
 	keyPathOK bool,
 ) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		agentPod, err := c.agentPodInformer.Lister().Pods(ControllerManagerNamespace).Get(name)
+		agentPod, err := c.agentPodInformer.Lister().Pods(namespace).Get(name)
 		if err != nil {
 			return err
 		}
@@ -166,7 +168,7 @@ func (c *annotaterController) reallyUpdateAgentPod(
 	)
 	_, err := c.k8sClient.
 		CoreV1().
-		Pods(ControllerManagerNamespace).
+		Pods(agentPod.Namespace).
 		Update(ctx, updatedAgentPod, metav1.UpdateOptions{})
 	return err
 }

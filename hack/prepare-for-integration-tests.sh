@@ -191,8 +191,6 @@ ytt --file . \
   --data-value "namespace=$namespace" \
   --data-value "image_repo=$registry_repo" \
   --data-value "image_tag=$tag" \
-  --data-value "webhook_url=$webhook_url" \
-  --data-value "webhook_ca_bundle=$webhook_ca_bundle" \
   --data-value "discovery_url=$discovery_url" >"$manifest"
 
 kapp deploy --yes --app "$app_name" --diff-changes --file "$manifest"
@@ -212,6 +210,8 @@ export PINNIPED_APP_NAME=${app_name}
 export PINNIPED_TEST_USER_USERNAME=${test_username}
 export PINNIPED_TEST_USER_GROUPS=${test_groups}
 export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
+export PINNIPED_TEST_WEBHOOK_ENDPOINT=${webhook_url}
+export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}
 
 read -r -d '' PINNIPED_CLUSTER_CAPABILITY_YAML << PINNIPED_CLUSTER_CAPABILITY_YAML_EOF || true
 ${pinniped_cluster_capability_file_content}

@@ -79,6 +79,7 @@ go 1.13
 
 require (
     k8s.io/apimachinery ${KUBE_MODULE_VERSION}
+    k8s.io/api ${KUBE_MODULE_VERSION}
 )
 EOF
 
@@ -93,9 +94,9 @@ go 1.13
 
 require (
     github.com/go-openapi/spec v0.19.9
-	k8s.io/api ${KUBE_MODULE_VERSION}
-	k8s.io/apimachinery ${KUBE_MODULE_VERSION}
-	k8s.io/client-go ${KUBE_MODULE_VERSION}
+    k8s.io/api ${KUBE_MODULE_VERSION}
+    k8s.io/apimachinery ${KUBE_MODULE_VERSION}
+    k8s.io/client-go ${KUBE_MODULE_VERSION}
     k8s.io/apimachinery ${KUBE_MODULE_VERSION}
 )
 

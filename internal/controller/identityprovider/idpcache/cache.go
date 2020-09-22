@@ -7,19 +7,18 @@ package idpcache
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 
 	"k8s.io/apiserver/pkg/authentication/authenticator"
+	"k8s.io/apiserver/pkg/authentication/user"
 
-	"go.pinniped.dev/internal/controllerlib"
+	loginapi "go.pinniped.dev/generated/1.19/apis/login"
 )
 
 var (
-	// ErrNoIDPs is returned by Cache.AuthenticateToken() when there are no IDPs configured.
-	ErrNoIDPs = fmt.Errorf("no identity providers are loaded")
-
-	// ErrIndeterminateIDP is returned by Cache.AuthenticateToken() when the correct IDP cannot be determined.
-	ErrIndeterminateIDP = fmt.Errorf("could not uniquely match against an identity provider")
+	// ErrNoSuchIDP is returned by Cache.AuthenticateTokenCredentialRequest() when the requested IDP is not configured.
+	ErrNoSuchIDP = fmt.Errorf("no such identity provider")
 )
 
 // Cache implements the authenticator.Token interface by multiplexing across a dynamic set of identity providers
@@ -28,48 +27,96 @@ type Cache struct {
 	cache sync.Map
 }
 
+type Key struct {
+	APIGroup  string
+	Kind      string
+	Namespace string
+	Name      string
+}
+
+type Value interface {
+	authenticator.Token
+}
+
 // New returns an empty cache.
 func New() *Cache {
 	return &Cache{}
 }
 
+// Get an identity provider by key.
+func (c *Cache) Get(key Key) Value {
+	res, _ := c.cache.Load(key)
+	if res == nil {
+		return nil
+	}
+	return res.(Value)
+}
+
 // Store an identity provider into the cache.
-func (c *Cache) Store(key controllerlib.Key, value authenticator.Token) {
+func (c *Cache) Store(key Key, value Value) {
 	c.cache.Store(key, value)
 }
 
 // Delete an identity provider from the cache.
-func (c *Cache) Delete(key controllerlib.Key) {
+func (c *Cache) Delete(key Key) {
 	c.cache.Delete(key)
 }
 
 // Keys currently stored in the cache.
-func (c *Cache) Keys() []controllerlib.Key {
-	var result []controllerlib.Key
+func (c *Cache) Keys() []Key {
+	var result []Key
 	c.cache.Range(func(key, _ interface{}) bool {
-		result = append(result, key.(controllerlib.Key))
+		result = append(result, key.(Key))
 		return true
+	})
+
+	// Sort the results for consistency.
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].APIGroup < result[j].APIGroup ||
+			result[i].Kind < result[j].Kind ||
+			result[i].Namespace < result[j].Namespace ||
+			result[i].Name < result[j].Name
 	})
 	return result
 }
 
-// AuthenticateToken validates the provided token against the currently loaded identity providers.
-func (c *Cache) AuthenticateToken(ctx context.Context, token string) (*authenticator.Response, bool, error) {
-	var matchingIDPs []authenticator.Token
-	c.cache.Range(func(key, value interface{}) bool {
-		matchingIDPs = append(matchingIDPs, value.(authenticator.Token))
-		return true
-	})
-
-	// Return an error if there are no known IDPs.
-	if len(matchingIDPs) == 0 {
-		return nil, false, ErrNoIDPs
+func (c *Cache) AuthenticateTokenCredentialRequest(ctx context.Context, req *loginapi.TokenCredentialRequest) (user.Info, error) {
+	// Map the incoming request to a cache key.
+	key := Key{
+		Namespace: req.Namespace,
+		Name:      req.Spec.IdentityProvider.Name,
+		Kind:      req.Spec.IdentityProvider.Kind,
+	}
+	if req.Spec.IdentityProvider.APIGroup != nil {
+		key.APIGroup = *req.Spec.IdentityProvider.APIGroup
 	}
 
-	// For now, allow there to be only exactly one IDP (until we specify a good mechanism for selecting one).
-	if len(matchingIDPs) != 1 {
-		return nil, false, ErrIndeterminateIDP
+	val := c.Get(key)
+	if val == nil {
+		return nil, ErrNoSuchIDP
 	}
 
-	return matchingIDPs[0].AuthenticateToken(ctx, token)
+	// The incoming context could have an audience. Since we do not want to handle audiences right now, do not pass it
+	// through directly to the authentication webhook.
+	ctx = valuelessContext{ctx}
+
+	// Call the selected IDP.
+	resp, authenticated, err := val.AuthenticateToken(ctx, req.Spec.Token)
+	if err != nil {
+		return nil, err
+	}
+	if !authenticated {
+		return nil, nil
+	}
+
+	// Return the user.Info from the response (if it is non-nil).
+	var respUser user.Info
+	if resp != nil {
+		respUser = resp.User
+	}
+	return respUser, nil
 }
+
+type valuelessContext struct{ context.Context }
+
+func (valuelessContext) Value(interface{}) interface{} { return nil }

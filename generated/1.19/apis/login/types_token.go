@@ -3,11 +3,17 @@
 
 package login
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 type TokenCredentialRequestSpec struct {
 	// Bearer token supplied with the credential request.
 	Token string
+
+	// Reference to an identity provider which can fulfill this credential request.
+	IdentityProvider corev1.TypedLocalObjectReference
 }
 
 type TokenCredentialRequestStatus struct {

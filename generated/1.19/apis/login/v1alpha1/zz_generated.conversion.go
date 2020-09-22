@@ -157,6 +157,7 @@ func Convert_login_TokenCredentialRequestList_To_v1alpha1_TokenCredentialRequest
 
 func autoConvert_v1alpha1_TokenCredentialRequestSpec_To_login_TokenCredentialRequestSpec(in *TokenCredentialRequestSpec, out *login.TokenCredentialRequestSpec, s conversion.Scope) error {
 	out.Token = in.Token
+	out.IdentityProvider = in.IdentityProvider
 	return nil
 }
 
@@ -167,6 +168,7 @@ func Convert_v1alpha1_TokenCredentialRequestSpec_To_login_TokenCredentialRequest
 
 func autoConvert_login_TokenCredentialRequestSpec_To_v1alpha1_TokenCredentialRequestSpec(in *login.TokenCredentialRequestSpec, out *TokenCredentialRequestSpec, s conversion.Scope) error {
 	out.Token = in.Token
+	out.IdentityProvider = in.IdentityProvider
 	return nil
 }
 

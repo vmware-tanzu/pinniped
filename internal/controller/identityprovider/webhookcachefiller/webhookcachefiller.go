@@ -68,7 +68,12 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("failed to build webhook config: %w", err)
 	}
 
-	c.cache.Store(ctx.Key, webhookAuthenticator)
+	c.cache.Store(idpcache.Key{
+		APIGroup:  idpv1alpha1.GroupName,
+		Kind:      "WebhookIdentityProvider",
+		Namespace: ctx.Key.Namespace,
+		Name:      ctx.Key.Name,
+	}, webhookAuthenticator)
 	c.log.WithValues("idp", klog.KObj(obj), "endpoint", obj.Spec.Endpoint).Info("added new webhook IDP")
 	return nil
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
 
 	idpv1alpha "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
@@ -24,22 +23,36 @@ import (
 func TestController(t *testing.T) {
 	t.Parallel()
 
-	testKey1 := controllerlib.Key{Namespace: "test-namespace", Name: "test-name-one"}
-	testKey2 := controllerlib.Key{Namespace: "test-namespace", Name: "test-name-two"}
+	testKey1 := idpcache.Key{
+		APIGroup:  "idp.pinniped.dev",
+		Kind:      "WebhookIdentityProvider",
+		Namespace: "test-namespace",
+		Name:      "test-name-one",
+	}
+	testKey2 := idpcache.Key{
+		APIGroup:  "idp.pinniped.dev",
+		Kind:      "WebhookIdentityProvider",
+		Namespace: "test-namespace",
+		Name:      "test-name-two",
+	}
+	testKeyNonwebhook := idpcache.Key{
+		APIGroup:  "idp.pinniped.dev",
+		Kind:      "SomeOtherIdentityProvider",
+		Namespace: "test-namespace",
+		Name:      "test-name-one",
+	}
 
 	tests := []struct {
 		name          string
-		syncKey       controllerlib.Key
 		webhookIDPs   []runtime.Object
-		initialCache  map[controllerlib.Key]authenticator.Token
+		initialCache  map[idpcache.Key]idpcache.Value
 		wantErr       string
 		wantLogs      []string
-		wantCacheKeys []controllerlib.Key
+		wantCacheKeys []idpcache.Key
 	}{
 		{
 			name:         "no change",
-			syncKey:      testKey1,
-			initialCache: map[controllerlib.Key]authenticator.Token{testKey1: nil},
+			initialCache: map[idpcache.Key]idpcache.Value{testKey1: nil},
 			webhookIDPs: []runtime.Object{
 				&idpv1alpha.WebhookIdentityProvider{
 					ObjectMeta: metav1.ObjectMeta{
@@ -48,11 +61,10 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantCacheKeys: []controllerlib.Key{testKey1},
+			wantCacheKeys: []idpcache.Key{testKey1},
 		},
 		{
 			name:         "IDPs not yet added",
-			syncKey:      testKey1,
 			initialCache: nil,
 			webhookIDPs: []runtime.Object{
 				&idpv1alpha.WebhookIdentityProvider{
@@ -68,14 +80,14 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantCacheKeys: []controllerlib.Key{},
+			wantCacheKeys: []idpcache.Key{},
 		},
 		{
-			name:    "successful cleanup",
-			syncKey: testKey1,
-			initialCache: map[controllerlib.Key]authenticator.Token{
-				testKey1: nil,
-				testKey2: nil,
+			name: "successful cleanup",
+			initialCache: map[idpcache.Key]idpcache.Value{
+				testKey1:          nil,
+				testKey2:          nil,
+				testKeyNonwebhook: nil,
 			},
 			webhookIDPs: []runtime.Object{
 				&idpv1alpha.WebhookIdentityProvider{
@@ -88,7 +100,7 @@ func TestController(t *testing.T) {
 			wantLogs: []string{
 				`webhookcachecleaner-controller "level"=0 "msg"="deleting webhook IDP from cache" "idp"={"name":"test-name-two","namespace":"test-namespace"}`,
 			},
-			wantCacheKeys: []controllerlib.Key{testKey1},
+			wantCacheKeys: []idpcache.Key{testKey1, testKeyNonwebhook},
 		},
 	}
 	for _, tt := range tests {
@@ -112,7 +124,13 @@ func TestController(t *testing.T) {
 			informers.Start(ctx.Done())
 			controllerlib.TestRunSynchronously(t, controller)
 
-			syncCtx := controllerlib.Context{Context: ctx, Key: tt.syncKey}
+			syncCtx := controllerlib.Context{
+				Context: ctx,
+				Key: controllerlib.Key{
+					Namespace: "test-namespace",
+					Name:      "test-name-one",
+				},
+			}
 
 			if err := controllerlib.TestSync(t, controller, syncCtx); tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)

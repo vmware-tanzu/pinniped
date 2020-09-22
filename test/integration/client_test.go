@@ -61,6 +61,8 @@ func TestClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	idp := library.CreateTestWebhookIDP(ctx, t)
+
 	// Use an invalid certificate/key to validate that the ServerVersion API fails like we assume.
 	invalidClient := library.NewClientsetWithCertAndKey(t, testCert, testKey)
 	_, err := invalidClient.Discovery().ServerVersion()
@@ -68,7 +70,8 @@ func TestClient(t *testing.T) {
 
 	// Using the CA bundle and host from the current (admin) kubeconfig, do the token exchange.
 	clientConfig := library.NewClientConfig(t)
-	resp, err := client.ExchangeToken(ctx, namespace, token, string(clientConfig.CAData), clientConfig.Host)
+
+	resp, err := client.ExchangeToken(ctx, namespace, idp, token, string(clientConfig.CAData), clientConfig.Host)
 	require.NoError(t, err)
 	require.NotNil(t, resp.Status.ExpirationTimestamp)
 	require.InDelta(t, time.Until(resp.Status.ExpirationTimestamp.Time), 1*time.Hour, float64(3*time.Minute))

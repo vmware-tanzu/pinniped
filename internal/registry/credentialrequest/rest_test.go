@@ -17,45 +17,21 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 
 	loginapi "go.pinniped.dev/generated/1.19/apis/login"
-	"go.pinniped.dev/internal/mocks/mockcertissuer"
+	"go.pinniped.dev/internal/mocks/credentialrequestmocks"
 	"go.pinniped.dev/internal/testutil"
 )
 
-type contextKey struct{}
-
-type FakeToken struct {
-	calledWithToken                       string
-	calledWithContext                     context.Context
-	timeout                               time.Duration
-	reachedTimeout                        bool
-	cancelled                             bool
-	webhookStartedRunningNotificationChan chan bool
-	returnResponse                        *authenticator.Response
-	returnUnauthenticated                 bool
-	returnErr                             error
-}
-
-func (f *FakeToken) AuthenticateToken(ctx context.Context, token string) (*authenticator.Response, bool, error) {
-	f.calledWithToken = token
-	f.calledWithContext = ctx
-	if f.webhookStartedRunningNotificationChan != nil {
-		f.webhookStartedRunningNotificationChan <- true
-	}
-	afterCh := time.After(f.timeout)
-	select {
-	case <-afterCh:
-		f.reachedTimeout = true
-	case <-ctx.Done():
-		f.cancelled = true
-	}
-	return f.returnResponse, !f.returnUnauthenticated, f.returnErr
+func TestNew(t *testing.T) {
+	r := NewREST(nil, nil)
+	require.NotNil(t, r)
+	require.True(t, r.NamespaceScoped())
+	require.IsType(t, &loginapi.TokenCredentialRequest{}, r.New())
 }
 
 func TestCreate(t *testing.T) {
@@ -77,18 +53,17 @@ func TestCreate(t *testing.T) {
 		})
 
 		it("CreateSucceedsWhenGivenATokenAndTheWebhookAuthenticatesTheToken", func() {
-			webhook := FakeToken{
-				returnResponse: &authenticator.Response{
-					User: &user.DefaultInfo{
-						Name:   "test-user",
-						UID:    "test-user-uid",
-						Groups: []string{"test-group-1", "test-group-2"},
-					},
-				},
-				returnUnauthenticated: false,
-			}
+			req := validCredentialRequest()
 
-			issuer := mockcertissuer.NewMockCertIssuer(ctrl)
+			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
+				Return(&user.DefaultInfo{
+					Name:   "test-user",
+					UID:    "test-user-uid",
+					Groups: []string{"test-group-1", "test-group-2"},
+				}, nil)
+
+			issuer := credentialrequestmocks.NewMockCertIssuer(ctrl)
 			issuer.EXPECT().IssuePEM(
 				pkix.Name{
 					CommonName:   "test-user",
@@ -97,10 +72,9 @@ func TestCreate(t *testing.T) {
 				1*time.Hour,
 			).Return([]byte("test-cert"), []byte("test-key"), nil)
 
-			storage := NewREST(&webhook, issuer)
-			requestToken := "a token"
+			storage := NewREST(requestAuthenticator, issuer)
 
-			response, err := callCreate(context.Background(), storage, validCredentialRequestWithToken(requestToken))
+			response, err := callCreate(context.Background(), storage, req)
 
 			r.NoError(err)
 			r.IsType(&loginapi.TokenCredentialRequest{}, response)
@@ -119,203 +93,89 @@ func TestCreate(t *testing.T) {
 					},
 				},
 			})
-			r.Equal(requestToken, webhook.calledWithToken)
-			requireOneLogStatement(r, logger, `"success" userID:test-user-uid,idpAuthenticated:true`)
-		})
-
-		it("CreateSucceedsWhenGivenANewLoginAPITokenAndTheWebhookAuthenticatesTheToken", func() {
-			webhook := FakeToken{
-				returnResponse: &authenticator.Response{
-					User: &user.DefaultInfo{
-						Name:   "test-user",
-						UID:    "test-user-uid",
-						Groups: []string{"test-group-1", "test-group-2"},
-					},
-				},
-				returnUnauthenticated: false,
-			}
-
-			issuer := mockcertissuer.NewMockCertIssuer(ctrl)
-			issuer.EXPECT().IssuePEM(
-				pkix.Name{
-					CommonName:   "test-user",
-					Organization: []string{"test-group-1", "test-group-2"}},
-				[]string{},
-				1*time.Hour,
-			).Return([]byte("test-cert"), []byte("test-key"), nil)
-
-			storage := NewREST(&webhook, issuer)
-			requestToken := "a token"
-
-			response, err := callCreate(context.Background(), storage, &loginapi.TokenCredentialRequest{
-				TypeMeta: metav1.TypeMeta{},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "request name",
-				},
-				Spec: loginapi.TokenCredentialRequestSpec{
-					Token: requestToken,
-				},
-			})
-
-			r.NoError(err)
-			r.IsType(&loginapi.TokenCredentialRequest{}, response)
-
-			expires := response.(*loginapi.TokenCredentialRequest).Status.Credential.ExpirationTimestamp
-			r.NotNil(expires)
-			r.InDelta(time.Now().Add(1*time.Hour).Unix(), expires.Unix(), 5)
-			response.(*loginapi.TokenCredentialRequest).Status.Credential.ExpirationTimestamp = metav1.Time{}
-
-			r.Equal(response, &loginapi.TokenCredentialRequest{
-				Status: loginapi.TokenCredentialRequestStatus{
-					Credential: &loginapi.ClusterCredential{
-						ExpirationTimestamp:   metav1.Time{},
-						ClientCertificateData: "test-cert",
-						ClientKeyData:         "test-key",
-					},
-				},
-			})
-			r.Equal(requestToken, webhook.calledWithToken)
-			requireOneLogStatement(r, logger, `"success" userID:test-user-uid,idpAuthenticated:true`)
+			requireOneLogStatement(r, logger, `"success" userID:test-user-uid,authenticated:true`)
 		})
 
 		it("CreateFailsWithValidTokenWhenCertIssuerFails", func() {
-			webhook := FakeToken{
-				returnResponse: &authenticator.Response{
-					User: &user.DefaultInfo{
-						Name:   "test-user",
-						Groups: []string{"test-group-1", "test-group-2"},
-					},
-				},
-				returnUnauthenticated: false,
-			}
+			req := validCredentialRequest()
 
-			issuer := mockcertissuer.NewMockCertIssuer(ctrl)
+			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
+				Return(&user.DefaultInfo{
+					Name:   "test-user",
+					Groups: []string{"test-group-1", "test-group-2"},
+				}, nil)
+
+			issuer := credentialrequestmocks.NewMockCertIssuer(ctrl)
 			issuer.EXPECT().
 				IssuePEM(gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(nil, nil, fmt.Errorf("some certificate authority error"))
 
-			storage := NewREST(&webhook, issuer)
-			requestToken := "a token"
+			storage := NewREST(requestAuthenticator, issuer)
 
-			response, err := callCreate(context.Background(), storage, validCredentialRequestWithToken(requestToken))
+			response, err := callCreate(context.Background(), storage, req)
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			r.Equal(requestToken, webhook.calledWithToken)
 			requireOneLogStatement(r, logger, `"failure" failureType:cert issuer,msg:some certificate authority error`)
 		})
 
-		it("CreateSucceedsWithAnUnauthenticatedStatusWhenGivenATokenAndTheWebhookReturnsUnauthenticatedWithUserId", func() {
-			webhook := FakeToken{
-				returnResponse: &authenticator.Response{
-					User: &user.DefaultInfo{UID: "test-user-uid"},
-				},
-				returnUnauthenticated: true,
-			}
-			storage := NewREST(&webhook, nil)
-			requestToken := "a token"
+		it("CreateSucceedsWithAnUnauthenticatedStatusWhenGivenATokenAndTheWebhookReturnsNilUser", func() {
+			req := validCredentialRequest()
 
-			response, err := callCreate(context.Background(), storage, validCredentialRequestWithToken(requestToken))
+			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).Return(nil, nil)
+
+			storage := NewREST(requestAuthenticator, nil)
+
+			response, err := callCreate(context.Background(), storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			r.Equal(requestToken, webhook.calledWithToken)
-			requireOneLogStatement(r, logger, `"success" userID:test-user-uid,idpAuthenticated:false,pinnipedAuthenticated:false`)
-		})
-
-		it("CreateSucceedsWithAnUnauthenticatedStatusWhenGivenATokenAndTheWebhookReturnsUnauthenticatedWithNilUser", func() {
-			webhook := FakeToken{
-				returnResponse:        &authenticator.Response{User: nil},
-				returnUnauthenticated: true,
-			}
-			storage := NewREST(&webhook, nil)
-			requestToken := "a token"
-
-			response, err := callCreate(context.Background(), storage, validCredentialRequestWithToken(requestToken))
-
-			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			r.Equal(requestToken, webhook.calledWithToken)
-			requireOneLogStatement(r, logger, `"success" userID:<none>,idpAuthenticated:false,pinnipedAuthenticated:false`)
+			requireOneLogStatement(r, logger, `"success" userID:<none>,authenticated:false`)
 		})
 
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookFails", func() {
-			webhook := FakeToken{
-				returnErr: errors.New("some webhook error"),
-			}
-			storage := NewREST(&webhook, nil)
+			req := validCredentialRequest()
 
-			response, err := callCreate(context.Background(), storage, validCredentialRequest())
+			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
+				Return(nil, errors.New("some webhook error"))
+
+			storage := NewREST(requestAuthenticator, nil)
+
+			response, err := callCreate(context.Background(), storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 			requireOneLogStatement(r, logger, `"failure" failureType:webhook authentication,msg:some webhook error`)
 		})
 
-		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsNilResponseWithAuthenticatedFalse", func() {
-			webhook := FakeToken{
-				returnResponse:        nil,
-				returnUnauthenticated: false,
-			}
-			storage := NewREST(&webhook, nil)
-
-			response, err := callCreate(context.Background(), storage, validCredentialRequest())
-
-			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			requireOneLogStatement(r, logger, `"success" userID:<none>,idpAuthenticated:true,pinnipedAuthenticated:false`)
-		})
-
-		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookDoesNotReturnAnyUserInfo", func() {
-			webhook := FakeToken{
-				returnResponse:        &authenticator.Response{},
-				returnUnauthenticated: false,
-			}
-			storage := NewREST(&webhook, nil)
-
-			response, err := callCreate(context.Background(), storage, validCredentialRequest())
-
-			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			requireOneLogStatement(r, logger, `"success" userID:<none>,idpAuthenticated:true,pinnipedAuthenticated:false`)
-		})
-
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsAnEmptyUsername", func() {
-			webhook := FakeToken{
-				returnResponse: &authenticator.Response{
-					User: &user.DefaultInfo{
-						Name: "",
-					},
-				},
-			}
-			storage := NewREST(&webhook, nil)
+			req := validCredentialRequest()
 
-			response, err := callCreate(context.Background(), storage, validCredentialRequest())
+			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
+				Return(&user.DefaultInfo{Name: ""}, nil)
+
+			storage := NewREST(requestAuthenticator, nil)
+
+			response, err := callCreate(context.Background(), storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			requireOneLogStatement(r, logger, `"success" userID:,idpAuthenticated:true,pinnipedAuthenticated:false`)
-		})
-
-		it("CreateDoesNotPassAdditionalContextInfoToTheWebhook", func() {
-			webhook := FakeToken{
-				returnResponse: webhookSuccessResponse(),
-			}
-			storage := NewREST(&webhook, successfulIssuer(ctrl))
-			ctx := context.WithValue(context.Background(), contextKey{}, "context-value")
-
-			_, err := callCreate(ctx, storage, validCredentialRequest())
-
-			r.NoError(err)
-			r.Nil(webhook.calledWithContext.Value("context-key"))
+			requireOneLogStatement(r, logger, `"success" userID:,authenticated:false`)
 		})
 
 		it("CreateFailsWhenGivenTheWrongInputType", func() {
 			notACredentialRequest := runtime.Unknown{}
-			response, err := NewREST(&FakeToken{}, nil).Create(
+			response, err := NewREST(nil, nil).Create(
 				genericapirequest.NewContext(),
 				&notACredentialRequest,
 				rest.ValidateAllObjectFunc,
 				&metav1.CreateOptions{})
 
-			requireAPIError(t, response, err, apierrors.IsBadRequest, "not a CredentialRequest")
-			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:not a CredentialRequest`)
+			requireAPIError(t, response, err, apierrors.IsBadRequest, "not a TokenCredentialRequest")
+			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:not a TokenCredentialRequest`)
 		})
 
 		it("CreateFailsWhenTokenValueIsEmptyInRequest", func() {
-			storage := NewREST(&FakeToken{}, nil)
+			storage := NewREST(nil, nil)
 			response, err := callCreate(context.Background(), storage, credentialRequest(loginapi.TokenCredentialRequestSpec{
 				Token: "",
 			}))
@@ -326,7 +186,7 @@ func TestCreate(t *testing.T) {
 		})
 
 		it("CreateFailsWhenValidationFails", func() {
-			storage := NewREST(&FakeToken{}, nil)
+			storage := NewREST(nil, nil)
 			response, err := storage.Create(
 				context.Background(),
 				validCredentialRequest(),
@@ -340,14 +200,16 @@ func TestCreate(t *testing.T) {
 		})
 
 		it("CreateDoesNotAllowValidationFunctionToMutateRequest", func() {
-			webhook := FakeToken{
-				returnResponse: webhookSuccessResponse(),
-			}
-			storage := NewREST(&webhook, successfulIssuer(ctrl))
-			requestToken := "a token"
+			req := validCredentialRequest()
+
+			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req.DeepCopy()).
+				Return(&user.DefaultInfo{Name: "test-user"}, nil)
+
+			storage := NewREST(requestAuthenticator, successfulIssuer(ctrl))
 			response, err := storage.Create(
 				context.Background(),
-				validCredentialRequestWithToken(requestToken),
+				req,
 				func(ctx context.Context, obj runtime.Object) error {
 					credentialRequest, _ := obj.(*loginapi.TokenCredentialRequest)
 					credentialRequest.Spec.Token = "foobaz"
@@ -356,20 +218,21 @@ func TestCreate(t *testing.T) {
 				&metav1.CreateOptions{})
 			r.NoError(err)
 			r.NotEmpty(response)
-			r.Equal(requestToken, webhook.calledWithToken) // i.e. not called with foobaz
 		})
 
 		it("CreateDoesNotAllowValidationFunctionToSeeTheActualRequestToken", func() {
-			webhook := FakeToken{
-				returnResponse: webhookSuccessResponse(),
-			}
+			req := validCredentialRequest()
 
-			storage := NewREST(&webhook, successfulIssuer(ctrl))
+			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req.DeepCopy()).
+				Return(&user.DefaultInfo{Name: "test-user"}, nil)
+
+			storage := NewREST(requestAuthenticator, successfulIssuer(ctrl))
 			validationFunctionWasCalled := false
 			var validationFunctionSawTokenValue string
 			response, err := storage.Create(
 				context.Background(),
-				validCredentialRequest(),
+				req,
 				func(ctx context.Context, obj runtime.Object) error {
 					credentialRequest, _ := obj.(*loginapi.TokenCredentialRequest)
 					validationFunctionWasCalled = true
@@ -384,7 +247,7 @@ func TestCreate(t *testing.T) {
 		})
 
 		it("CreateFailsWhenRequestOptionsDryRunIsNotEmpty", func() {
-			response, err := NewREST(&FakeToken{}, nil).Create(
+			response, err := NewREST(nil, nil).Create(
 				genericapirequest.NewContext(),
 				validCredentialRequest(),
 				rest.ValidateAllObjectFunc,
@@ -395,60 +258,6 @@ func TestCreate(t *testing.T) {
 			requireAPIError(t, response, err, apierrors.IsInvalid,
 				`.pinniped.dev "request name" is invalid: dryRun: Unsupported value: []string{"some dry run flag"}`)
 			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:dryRun not supported`)
-		})
-
-		it("CreateCancelsTheWebhookInvocationWhenTheCallToCreateIsCancelledItself", func() {
-			webhookStartedRunningNotificationChan := make(chan bool)
-			webhook := FakeToken{
-				timeout:                               time.Second * 2,
-				webhookStartedRunningNotificationChan: webhookStartedRunningNotificationChan,
-				returnResponse:                        webhookSuccessResponse(),
-			}
-			storage := NewREST(&webhook, successfulIssuer(ctrl))
-			ctx, cancel := context.WithCancel(context.Background())
-
-			c := make(chan bool)
-			go func() {
-				_, err := callCreate(ctx, storage, validCredentialRequest())
-				c <- true
-				r.NoError(err)
-			}()
-
-			r.False(webhook.cancelled)
-			r.False(webhook.reachedTimeout)
-			<-webhookStartedRunningNotificationChan // wait long enough to make sure that the webhook has started
-			cancel()                                // cancel the context that was passed to storage.Create() above
-			<-c                                     // wait for the above call to storage.Create() to be finished
-			r.True(webhook.cancelled)
-			r.False(webhook.reachedTimeout)
-			r.Equal(context.Canceled, webhook.calledWithContext.Err()) // the inner context is cancelled
-		})
-
-		it("CreateAllowsTheWebhookInvocationToFinishWhenTheCallToCreateIsNotCancelledItself", func() {
-			webhookStartedRunningNotificationChan := make(chan bool)
-			webhook := FakeToken{
-				timeout:                               0,
-				webhookStartedRunningNotificationChan: webhookStartedRunningNotificationChan,
-				returnResponse:                        webhookSuccessResponse(),
-			}
-			storage := NewREST(&webhook, successfulIssuer(ctrl))
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			c := make(chan bool)
-			go func() {
-				_, err := callCreate(ctx, storage, validCredentialRequest())
-				c <- true
-				r.NoError(err)
-			}()
-
-			r.False(webhook.cancelled)
-			r.False(webhook.reachedTimeout)
-			<-webhookStartedRunningNotificationChan // wait long enough to make sure that the webhook has started
-			<-c                                     // wait for the above call to storage.Create() to be finished
-			r.False(webhook.cancelled)
-			r.True(webhook.reachedTimeout)
-			r.Equal(context.Canceled, webhook.calledWithContext.Err()) // the inner context is cancelled (in this case by the "defer")
 		})
 	}, spec.Sequential())
 }
@@ -488,15 +297,6 @@ func credentialRequest(spec loginapi.TokenCredentialRequestSpec) *loginapi.Token
 	}
 }
 
-func webhookSuccessResponse() *authenticator.Response {
-	return &authenticator.Response{User: &user.DefaultInfo{
-		Name:   "some-user",
-		UID:    "",
-		Groups: []string{},
-		Extra:  nil,
-	}}
-}
-
 func requireAPIError(t *testing.T, response runtime.Object, err error, expectedErrorTypeChecker func(err error) bool, expectedErrorMessage string) {
 	t.Helper()
 	require.Nil(t, response)
@@ -518,7 +318,7 @@ func requireSuccessfulResponseWithAuthenticationFailureMessage(t *testing.T, err
 }
 
 func successfulIssuer(ctrl *gomock.Controller) CertIssuer {
-	issuer := mockcertissuer.NewMockCertIssuer(ctrl)
+	issuer := credentialrequestmocks.NewMockCertIssuer(ctrl)
 	issuer.EXPECT().
 		IssuePEM(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return([]byte("test-cert"), []byte("test-key"), nil)

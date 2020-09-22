@@ -58,6 +58,15 @@ Also check to see if any open issues are labeled with
 ["good first issue"](https://github.com/vmware-tanzu/pinniped/labels/good%20first%20issue)
 or ["help wanted"](https://github.com/vmware-tanzu/pinniped/labels/help%20wanted).
 
+## CLA
+
+We welcome contributions from everyone but we can only accept them if you sign
+our Contributor License Agreement (CLA). If you would like to contribute and you
+have not signed it, our CLA-bot will walk you through the process when you open
+a Pull Request. For questions about the CLA process, see the
+[FAQ](https://cla.vmware.com/faq) or submit a question through the GitHub issue
+tracker.
+
 ## Building
 
 The [Dockerfile](../Dockerfile) at the root of the repo can be used to build and

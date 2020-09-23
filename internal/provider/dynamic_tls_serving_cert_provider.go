@@ -20,7 +20,7 @@ type dynamicTLSServingCertProvider struct {
 	mutex   sync.RWMutex
 }
 
-// TODO rename this type to DynamicCertProvider, since we are now going to use it for other types of certs too
+// TODO rename this type to DynamicCertProvider, since we are now going to use it for other types of certs too.
 func NewDynamicTLSServingCertProvider() DynamicTLSServingCertProvider {
 	return &dynamicTLSServingCertProvider{}
 }

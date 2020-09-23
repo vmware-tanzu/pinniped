@@ -37,7 +37,7 @@ import (
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/provider"
+	"go.pinniped.dev/internal/dynamiccert"
 )
 
 const (
@@ -53,12 +53,12 @@ const (
 )
 
 type webhook struct {
-	certProvider   provider.DynamicTLSServingCertProvider
+	certProvider   dynamiccert.Provider
 	secretInformer corev1informers.SecretInformer
 }
 
 func newWebhook(
-	certProvider provider.DynamicTLSServingCertProvider,
+	certProvider dynamiccert.Provider,
 	secretInformer corev1informers.SecretInformer,
 ) *webhook {
 	return &webhook{
@@ -295,7 +295,7 @@ func newK8sClient() (kubernetes.Interface, error) {
 
 func startControllers(
 	ctx context.Context,
-	dynamicCertProvider provider.DynamicTLSServingCertProvider,
+	dynamicCertProvider dynamiccert.Provider,
 	kubeClient kubernetes.Interface,
 	kubeInformers kubeinformers.SharedInformerFactory,
 ) {
@@ -339,7 +339,7 @@ func startControllers(
 func startWebhook(
 	ctx context.Context,
 	l net.Listener,
-	dynamicCertProvider provider.DynamicTLSServingCertProvider,
+	dynamicCertProvider dynamiccert.Provider,
 	secretInformer corev1informers.SecretInformer,
 ) error {
 	return newWebhook(dynamicCertProvider, secretInformer).start(ctx, l)
@@ -366,7 +366,7 @@ func run() error {
 		kubeinformers.WithNamespace(namespace),
 	)
 
-	dynamicCertProvider := provider.NewDynamicTLSServingCertProvider()
+	dynamicCertProvider := dynamiccert.New()
 
 	startControllers(ctx, dynamicCertProvider, kubeClient, kubeInformers)
 	klog.InfoS("controllers are ready")

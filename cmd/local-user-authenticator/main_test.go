@@ -33,7 +33,7 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
 	"go.pinniped.dev/internal/certauthority"
-	"go.pinniped.dev/internal/provider"
+	"go.pinniped.dev/internal/dynamiccert"
 )
 
 func TestWebhook(t *testing.T) {
@@ -459,10 +459,10 @@ func createSecretInformer(t *testing.T, kubeClient kubernetes.Interface) corev1i
 	return secretInformer
 }
 
-// newClientProvider returns a provider.DynamicTLSServingCertProvider configured
+// newClientProvider returns a dynamiccert.Provider configured
 // with valid serving cert, the CA bundle that can be used to verify the serving
 // cert, and the server name that can be used to verify the TLS peer.
-func newCertProvider(t *testing.T) (provider.DynamicTLSServingCertProvider, []byte, string) {
+func newCertProvider(t *testing.T) (dynamiccert.Provider, []byte, string) {
 	t.Helper()
 
 	serverName := "local-user-authenticator"
@@ -476,7 +476,7 @@ func newCertProvider(t *testing.T) (provider.DynamicTLSServingCertProvider, []by
 	certPEM, keyPEM, err := certauthority.ToPEM(cert)
 	require.NoError(t, err)
 
-	certProvider := provider.NewDynamicTLSServingCertProvider()
+	certProvider := dynamiccert.New()
 	certProvider.Set(certPEM, keyPEM)
 
 	return certProvider, ca.Bundle(), serverName

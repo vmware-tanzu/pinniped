@@ -29,8 +29,8 @@ import (
 	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controllermanager"
 	"go.pinniped.dev/internal/downward"
+	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/here"
-	"go.pinniped.dev/internal/provider"
 	"go.pinniped.dev/internal/registry/credentialrequest"
 	"go.pinniped.dev/pkg/config"
 	configapi "go.pinniped.dev/pkg/config/api"
@@ -154,7 +154,7 @@ func (a *App) runServer(ctx context.Context) error {
 	// is stored in a k8s Secret. Therefore it also effectively acting as
 	// an in-memory cache of what is stored in the k8s Secret, helping to
 	// keep incoming requests fast.
-	dynamicCertProvider := provider.NewDynamicTLSServingCertProvider()
+	dynamicCertProvider := dynamiccert.New()
 
 	// Prepare to start the controllers, but defer actually starting them until the
 	// post start hook of the aggregated API server.
@@ -164,7 +164,7 @@ func (a *App) runServer(ctx context.Context) error {
 			NamesConfig:                 &cfg.NamesConfig,
 			DiscoveryURLOverride:        cfg.DiscoveryInfo.URL,
 			DynamicCertProvider:         dynamicCertProvider,
-			//KubeAPISigningCertProvider:      nil, // TODO pass this as a NewDynamicTLSServingCertProvider(), so it can be passed into the new controller
+			//KubeAPISigningCertProvider:      nil, // TODO pass this as a dynamiccert.New(), so it can be passed into the new controller
 			ServingCertDuration:             time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds) * time.Second,
 			ServingCertRenewBefore:          time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds) * time.Second,
 			IDPCache:                        idpCache,
@@ -181,7 +181,7 @@ func (a *App) runServer(ctx context.Context) error {
 	aggregatedAPIServerConfig, err := getAggregatedAPIServerConfig(
 		dynamicCertProvider,
 		idpCache,
-		k8sClusterCA, // TODO pass the same instance of DynamicTLSServingCertProvider as above, but wrapped into a new type that implements credentialrequest.CertIssuer, which should return ErrIncapableOfIssuingCertificates until the certs are available
+		k8sClusterCA, // TODO pass the same instance of dynamiccert.Provider as above, but wrapped into a new type that implements credentialrequest.CertIssuer, which should return ErrIncapableOfIssuingCertificates until the certs are available
 		startControllersFunc,
 	)
 	if err != nil {
@@ -286,7 +286,7 @@ func getClusterCASigner(
 
 // Create a configuration for the aggregated API server.
 func getAggregatedAPIServerConfig(
-	dynamicCertProvider provider.DynamicTLSServingCertProvider,
+	dynamicCertProvider dynamiccert.Provider,
 	authenticator credentialrequest.TokenCredentialRequestAuthenticator,
 	issuer credentialrequest.CertIssuer,
 	startControllersPostStartHook func(context.Context),

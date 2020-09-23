@@ -19,14 +19,14 @@ import (
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/provider"
+	"go.pinniped.dev/internal/dynamiccert"
 )
 
 type execerController struct {
 	agentInfo                           *Info
 	credentialIssuerConfigNamespaceName string
 	credentialIssuerConfigResourceName  string
-	dynamicCertProvider                 provider.DynamicTLSServingCertProvider
+	dynamicCertProvider                 dynamiccert.Provider
 	podCommandExecutor                  kubecertauthority.PodCommandExecutor
 	clock                               clock.Clock
 	pinnipedAPIClient                   pinnipedclientset.Interface
@@ -37,7 +37,7 @@ func NewExecerController(
 	agentInfo *Info,
 	credentialIssuerConfigNamespaceName string,
 	credentialIssuerConfigResourceName string,
-	dynamicCertProvider provider.DynamicTLSServingCertProvider,
+	dynamicCertProvider dynamiccert.Provider,
 	podCommandExecutor kubecertauthority.PodCommandExecutor,
 	pinnipedAPIClient pinnipedclientset.Interface,
 	clock clock.Clock,

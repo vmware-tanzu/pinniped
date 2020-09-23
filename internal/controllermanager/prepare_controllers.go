@@ -28,7 +28,7 @@ import (
 	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controller/kubecertagent"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/provider"
+	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/pkg/config/api"
 )
 
@@ -53,7 +53,7 @@ type Config struct {
 	DiscoveryURLOverride *string
 
 	// DynamicCertProvider provides a setter and a getter to the Pinniped API's serving cert.
-	DynamicCertProvider provider.DynamicTLSServingCertProvider
+	DynamicCertProvider dynamiccert.Provider
 
 	// ServingCertDuration is the validity period, in seconds, of the API serving certificate.
 	ServingCertDuration time.Duration

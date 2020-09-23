@@ -24,7 +24,7 @@ import (
 	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/provider"
+	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/testutil"
 )
 
@@ -161,7 +161,7 @@ func TestManagerControllerSync(t *testing.T) {
 		var agentPodInformerClient *kubernetesfake.Clientset
 		var fakeExecutor *fakePodExecutor
 		var agentPodTemplate *corev1.Pod
-		var dynamicCertProvider provider.DynamicTLSServingCertProvider
+		var dynamicCertProvider dynamiccert.Provider
 		var fakeCertPEM, fakeKeyPEM string
 		var credentialIssuerConfigGVR schema.GroupVersionResource
 		var frozenNow time.Time
@@ -241,7 +241,7 @@ func TestManagerControllerSync(t *testing.T) {
 			agentPodInformer = kubeinformers.NewSharedInformerFactory(agentPodInformerClient, 0)
 			fakeExecutor = &fakePodExecutor{r: r}
 			frozenNow = time.Date(2020, time.September, 23, 7, 42, 0, 0, time.Local)
-			dynamicCertProvider = provider.NewDynamicTLSServingCertProvider()
+			dynamicCertProvider = dynamiccert.New()
 			dynamicCertProvider.Set([]byte(defaultDynamicCertProviderCert), []byte(defaultDynamicCertProviderKey))
 
 			loadFile := func(filename string) string {

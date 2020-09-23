@@ -43,7 +43,7 @@ func TestInformerFilters(t *testing.T) {
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			configMapInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().ConfigMaps()
 			credentialIssuerConfigInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().CredentialIssuerConfigs()
-			_ = NewPublisherController(
+			_ = NewKubeConfigInfoPublisherController(
 				installedInNamespace,
 				credentialIssuerConfigResourceName,
 				nil,
@@ -206,7 +206,7 @@ func TestSync(t *testing.T) {
 		// nested Before's can keep adding things to the informer caches.
 		var startInformersAndController = func() {
 			// Set this at the last second to allow for injection of server override.
-			subject = NewPublisherController(
+			subject = NewKubeConfigInfoPublisherController(
 				installedInNamespace,
 				credentialIssuerConfigResourceName,
 				serverOverride,

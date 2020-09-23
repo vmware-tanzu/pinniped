@@ -93,7 +93,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 	controllerManager := controllerlib.
 		NewManager().
 		WithController(
-			issuerconfig.NewPublisherController(
+			issuerconfig.NewKubeConfigInfoPublisherController(
 				c.ServerInstallationNamespace,
 				c.NamesConfig.CredentialIssuerConfig,
 				c.DiscoveryURLOverride,

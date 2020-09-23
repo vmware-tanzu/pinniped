@@ -25,7 +25,7 @@ const (
 	clusterInfoConfigMapKey = "kubeconfig"
 )
 
-type publisherController struct {
+type kubeConigInfoPublisherController struct {
 	credentialIssuerConfigNamespaceName string
 	credentialIssuerConfigResourceName  string
 	serverOverride                      *string
@@ -34,8 +34,10 @@ type publisherController struct {
 	credentialIssuerConfigInformer      configv1alpha1informers.CredentialIssuerConfigInformer
 }
 
-// TODO rename this NewKubeConfigInfoPublisherController, along with the private type and the source/test files.
-func NewPublisherController(
+// NewKubeConfigInfoPublisherController returns a controller that syncs the
+// configv1alpha1.CredentialIssuerConfig.Status.KubeConfigInfo field with the cluster-info ConfigMap
+// in the kube-public namespace.
+func NewKubeConfigInfoPublisherController(
 	credentialIssuerConfigNamespaceName string,
 	credentialIssuerConfigResourceName string,
 	serverOverride *string,
@@ -47,7 +49,7 @@ func NewPublisherController(
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "publisher-controller",
-			Syncer: &publisherController{
+			Syncer: &kubeConigInfoPublisherController{
 				credentialIssuerConfigResourceName:  credentialIssuerConfigResourceName,
 				credentialIssuerConfigNamespaceName: credentialIssuerConfigNamespaceName,
 				serverOverride:                      serverOverride,
@@ -69,7 +71,7 @@ func NewPublisherController(
 	)
 }
 
-func (c *publisherController) Sync(ctx controllerlib.Context) error {
+func (c *kubeConigInfoPublisherController) Sync(ctx controllerlib.Context) error {
 	configMap, err := c.configMapInformer.
 		Lister().
 		ConfigMaps(ClusterInfoNamespace).

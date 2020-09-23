@@ -226,7 +226,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				kubecertagent.NewPodCommandExecutor(kubeConfig, k8sClient),
 				pinnipedClient,
 				clock.RealClock{},
-				informers.kubeSystemNamespaceK8s.Core().V1().Pods(),
+				informers.installationNamespaceK8s.Core().V1().Pods(),
 				controllerlib.WithInformer,
 			),
 			singletonWorker,

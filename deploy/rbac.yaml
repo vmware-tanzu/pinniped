@@ -47,10 +47,14 @@ rules:
   - apiGroups: [""]
     resources: [secrets]
     verbs: [create, get, list, patch, update, watch, delete]
-    #! We need to be able to CRUD pods in our namespace so we can reconcile the kube-cert-agent pods.
+  #! We need to be able to CRUD pods in our namespace so we can reconcile the kube-cert-agent pods.
   - apiGroups: [""]
     resources: [pods]
     verbs: [create, get, list, patch, update, watch, delete]
+  #! We need to be able to exec into pods in our namespace so we can grab the API server's private key
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create]
   - apiGroups: [config.pinniped.dev, idp.pinniped.dev]
     resources: ["*"]
     verbs: [create, get, list, update, watch]

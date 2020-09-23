@@ -61,6 +61,7 @@ func TestKubeCertAgent(t *testing.T) {
 				"original agent pod len != current agent pod len: %s",
 				diff.ObjectDiff(originalAgentPods.Items, currentAgentPods.Items),
 			)
+			return false
 		}
 
 		sortPods(currentAgentPods)

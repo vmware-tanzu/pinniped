@@ -78,6 +78,7 @@ func TestCredentialIssuerConfig(t *testing.T) {
 		// Mutate the existing object. Don't delete it because that would mess up its `Status.Strategies` array,
 		// since the reconciling controller is not currently responsible for that field.
 		updatedServerValue := "https://junk"
+		// TODO maybe mutate the kube-info configmap's CA value instead, because that's the object that we care to check that the controller is watching
 		existingConfig.Status.KubeConfigInfo.Server = updatedServerValue
 		updatedConfig, err := client.
 			ConfigV1alpha1().

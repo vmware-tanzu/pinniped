@@ -86,6 +86,7 @@ func (c *annotaterController) Sync(ctx controllerlib.Context) error {
 			continue
 		}
 
+		// TODO if the paths cannot be found, then still add the annotations anyway using the defaults k8sAPIServerCAKeyPEMDefaultPath and k8sAPIServerCACertPEMDefaultPath
 		certPath, certPathOK := getContainerArgByName(controllerManagerPod, "cluster-signing-cert-file")
 		keyPath, keyPathOK := getContainerArgByName(controllerManagerPod, "cluster-signing-key-file")
 		if err := c.maybeUpdateAgentPod(
@@ -97,6 +98,7 @@ func (c *annotaterController) Sync(ctx controllerlib.Context) error {
 			keyPath,
 			keyPathOK,
 		); err != nil {
+			// TODO Failed, so update the CIC status?
 			return fmt.Errorf("cannot update agent pod: %w", err)
 		}
 	}

@@ -73,6 +73,8 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("informer cannot list controller manager pods: %w", err)
 	}
 
+	// TODO if controllerManagerPods is empty then update the CIC status with an error message saying that they couldn't be found
+
 	for _, controllerManagerPod := range controllerManagerPods {
 		agentPod, err := findAgentPodForSpecificControllerManagerPod(
 			controllerManagerPod,
@@ -97,6 +99,7 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 				Pods(c.agentInfo.Template.Namespace).
 				Create(ctx.Context, agentPod, metav1.CreateOptions{})
 			if err != nil {
+				// TODO if agent pods fail to create then update the CIC status with an error saying that they couldn't create
 				return fmt.Errorf("cannot create agent pod: %w", err)
 			}
 		}

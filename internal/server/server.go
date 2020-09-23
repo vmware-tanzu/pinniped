@@ -134,6 +134,7 @@ func (a *App) runServer(ctx context.Context) error {
 		&cfg.KubeCertAgentConfig,
 		serverInstallationNamespace,
 	)
+	// TODO replace this with our new controller
 	k8sClusterCA, shutdownCA, err := getClusterCASigner(
 		ctx,
 		serverInstallationNamespace,
@@ -159,10 +160,11 @@ func (a *App) runServer(ctx context.Context) error {
 	// post start hook of the aggregated API server.
 	startControllersFunc, err := controllermanager.PrepareControllers(
 		&controllermanager.Config{
-			ServerInstallationNamespace:     serverInstallationNamespace,
-			NamesConfig:                     &cfg.NamesConfig,
-			DiscoveryURLOverride:            cfg.DiscoveryInfo.URL,
-			DynamicCertProvider:             dynamicCertProvider,
+			ServerInstallationNamespace: serverInstallationNamespace,
+			NamesConfig:                 &cfg.NamesConfig,
+			DiscoveryURLOverride:        cfg.DiscoveryInfo.URL,
+			DynamicCertProvider:         dynamicCertProvider,
+			//KubeAPISigningCertProvider:      nil, // TODO pass this as a NewDynamicTLSServingCertProvider(), so it can be passed into the new controller
 			ServingCertDuration:             time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds) * time.Second,
 			ServingCertRenewBefore:          time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds) * time.Second,
 			IDPCache:                        idpCache,
@@ -179,7 +181,7 @@ func (a *App) runServer(ctx context.Context) error {
 	aggregatedAPIServerConfig, err := getAggregatedAPIServerConfig(
 		dynamicCertProvider,
 		idpCache,
-		k8sClusterCA,
+		k8sClusterCA, // TODO pass the same instance of DynamicTLSServingCertProvider as above, but wrapped into a new type that implements credentialrequest.CertIssuer, which should return ErrIncapableOfIssuingCertificates until the certs are available
 		startControllersFunc,
 	)
 	if err != nil {

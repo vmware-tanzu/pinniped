@@ -26,32 +26,34 @@ const (
 )
 
 type publisherController struct {
-	namespace                          string
-	credentialIssuerConfigResourceName string
-	serverOverride                     *string
-	pinnipedClient                     pinnipedclientset.Interface
-	configMapInformer                  corev1informers.ConfigMapInformer
-	credentialIssuerConfigInformer     configv1alpha1informers.CredentialIssuerConfigInformer
+	credentialIssuerConfigNamespaceName string
+	credentialIssuerConfigResourceName  string
+	serverOverride                      *string
+	pinnipedClient                      pinnipedclientset.Interface
+	configMapInformer                   corev1informers.ConfigMapInformer
+	credentialIssuerConfigInformer      configv1alpha1informers.CredentialIssuerConfigInformer
 }
 
-func NewPublisherController(namespace string,
+// TODO rename this NewKubeConfigInfoPublisherController, along with the private type and the source/test files.
+func NewPublisherController(
+	credentialIssuerConfigNamespaceName string,
 	credentialIssuerConfigResourceName string,
 	serverOverride *string,
 	pinnipedClient pinnipedclientset.Interface,
 	configMapInformer corev1informers.ConfigMapInformer,
-	credentialIssuerConfigInformer configv1alpha1informers.CredentialIssuerConfigInformer,
+	credentialIssuerConfigInformer configv1alpha1informers.CredentialIssuerConfigInformer, // TODO don't have this informer here
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "publisher-controller",
 			Syncer: &publisherController{
-				credentialIssuerConfigResourceName: credentialIssuerConfigResourceName,
-				namespace:                          namespace,
-				serverOverride:                     serverOverride,
-				pinnipedClient:                     pinnipedClient,
-				configMapInformer:                  configMapInformer,
-				credentialIssuerConfigInformer:     credentialIssuerConfigInformer,
+				credentialIssuerConfigResourceName:  credentialIssuerConfigResourceName,
+				credentialIssuerConfigNamespaceName: credentialIssuerConfigNamespaceName,
+				serverOverride:                      serverOverride,
+				pinnipedClient:                      pinnipedClient,
+				configMapInformer:                   configMapInformer,
+				credentialIssuerConfigInformer:      credentialIssuerConfigInformer,
 			},
 		},
 		withInformer(
@@ -61,7 +63,7 @@ func NewPublisherController(namespace string,
 		),
 		withInformer(
 			credentialIssuerConfigInformer,
-			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(credentialIssuerConfigResourceName, namespace),
+			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(credentialIssuerConfigResourceName, credentialIssuerConfigNamespaceName),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -110,7 +112,7 @@ func (c *publisherController) Sync(ctx controllerlib.Context) error {
 
 	existingCredentialIssuerConfigFromInformerCache, err := c.credentialIssuerConfigInformer.
 		Lister().
-		CredentialIssuerConfigs(c.namespace).
+		CredentialIssuerConfigs(c.credentialIssuerConfigNamespaceName).
 		Get(c.credentialIssuerConfigResourceName)
 	notFound = k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
@@ -129,7 +131,7 @@ func (c *publisherController) Sync(ctx controllerlib.Context) error {
 		existingCredentialIssuerConfigFromInformerCache,
 		notFound,
 		c.credentialIssuerConfigResourceName,
-		c.namespace,
+		c.credentialIssuerConfigNamespaceName,
 		c.pinnipedClient,
 		updateServerAndCAFunc)
 

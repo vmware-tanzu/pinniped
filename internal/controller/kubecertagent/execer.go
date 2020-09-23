@@ -9,6 +9,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/clock"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/klog/v2"
 
@@ -21,28 +22,13 @@ import (
 	"go.pinniped.dev/internal/provider"
 )
 
-type CurrentTimeProvider interface {
-	Now() metav1.Time
-}
-
-type currentTimeProvider struct{}
-
-// TODO use this as the currentTimeProvider argument when calling NewExecerController() from prepare_controllers.go.
-func NewCurrentTimeProvider() CurrentTimeProvider {
-	return &currentTimeProvider{}
-}
-
-func (f *currentTimeProvider) Now() metav1.Time {
-	return metav1.Now()
-}
-
 type execerController struct {
 	agentInfo                           *Info
 	credentialIssuerConfigNamespaceName string
 	credentialIssuerConfigResourceName  string
 	dynamicCertProvider                 provider.DynamicTLSServingCertProvider
 	podCommandExecutor                  kubecertauthority.PodCommandExecutor
-	currentTimeProvider                 CurrentTimeProvider
+	clock                               clock.Clock
 	pinnipedAPIClient                   pinnipedclientset.Interface
 	agentPodInformer                    corev1informers.PodInformer
 }
@@ -54,7 +40,7 @@ func NewExecerController(
 	dynamicCertProvider provider.DynamicTLSServingCertProvider,
 	podCommandExecutor kubecertauthority.PodCommandExecutor,
 	pinnipedAPIClient pinnipedclientset.Interface,
-	currentTimeProvider CurrentTimeProvider,
+	clock clock.Clock,
 	agentPodInformer corev1informers.PodInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
@@ -67,8 +53,8 @@ func NewExecerController(
 				credentialIssuerConfigResourceName:  credentialIssuerConfigResourceName,
 				dynamicCertProvider:                 dynamicCertProvider,
 				podCommandExecutor:                  podCommandExecutor,
-				currentTimeProvider:                 currentTimeProvider,
 				pinnipedAPIClient:                   pinnipedAPIClient,
+				clock:                               clock,
 				agentPodInformer:                    agentPodInformer,
 			},
 		},
@@ -145,7 +131,7 @@ func (c *execerController) strategySuccess() configv1alpha1.CredentialIssuerConf
 		Status:         configv1alpha1.SuccessStrategyStatus,
 		Reason:         configv1alpha1.FetchedKeyStrategyReason,
 		Message:        "Key was fetched successfully",
-		LastUpdateTime: c.currentTimeProvider.Now(),
+		LastUpdateTime: metav1.NewTime(c.clock.Now()),
 	}
 }
 
@@ -155,7 +141,7 @@ func (c *execerController) strategyError(err error) configv1alpha1.CredentialIss
 		Status:         configv1alpha1.ErrorStrategyStatus,
 		Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
 		Message:        err.Error(),
-		LastUpdateTime: c.currentTimeProvider.Now(),
+		LastUpdateTime: metav1.NewTime(c.clock.Now()),
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/clock"
 	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
@@ -26,18 +27,6 @@ import (
 	"go.pinniped.dev/internal/provider"
 	"go.pinniped.dev/internal/testutil"
 )
-
-type fakeCurrentTimeProvider struct {
-	frozenNow *metav1.Time
-}
-
-func (f *fakeCurrentTimeProvider) Now() metav1.Time {
-	if f.frozenNow == nil {
-		realNow := metav1.Now()
-		f.frozenNow = &realNow
-	}
-	return *f.frozenNow
-}
 
 func TestExecerControllerOptions(t *testing.T) {
 	spec.Run(t, "options", func(t *testing.T, when spec.G, it spec.S) {
@@ -68,10 +57,10 @@ func TestExecerControllerOptions(t *testing.T) {
 				},
 				"credentialIssuerConfigNamespaceName",
 				"credentialIssuerConfigResourceName",
-				nil, // not needed for this test
-				nil, // not needed for this test
-				nil, // not needed for this test
-				&fakeCurrentTimeProvider{},
+				nil, // dynamicCertProvider, not needed for this test
+				nil, // podCommandExecutor, not needed for this test
+				nil, // pinnipedAPIClient, not needed for this test
+				nil, // clock, not needed for this test
 				agentPodsInformer,
 				observableWithInformerOption.WithInformer,
 			)
@@ -174,8 +163,8 @@ func TestManagerControllerSync(t *testing.T) {
 		var agentPodTemplate *corev1.Pod
 		var dynamicCertProvider provider.DynamicTLSServingCertProvider
 		var fakeCertPEM, fakeKeyPEM string
-		var fakeNow *fakeCurrentTimeProvider
 		var credentialIssuerConfigGVR schema.GroupVersionResource
+		var frozenNow time.Time
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
@@ -192,7 +181,7 @@ func TestManagerControllerSync(t *testing.T) {
 				dynamicCertProvider,
 				fakeExecutor,
 				pinnipedAPIClient,
-				fakeNow,
+				clock.NewFakeClock(frozenNow),
 				agentPodInformer.Core().V1().Pods(),
 				controllerlib.WithInformer,
 			)
@@ -251,8 +240,7 @@ func TestManagerControllerSync(t *testing.T) {
 			agentPodInformerClient = kubernetesfake.NewSimpleClientset()
 			agentPodInformer = kubeinformers.NewSharedInformerFactory(agentPodInformerClient, 0)
 			fakeExecutor = &fakePodExecutor{r: r}
-			fakeNow = &fakeCurrentTimeProvider{}
-			fakeNow.Now() // call once to initialize
+			frozenNow = time.Date(2020, time.September, 23, 7, 42, 0, 0, time.Local)
 			dynamicCertProvider = provider.NewDynamicTLSServingCertProvider()
 			dynamicCertProvider.Set([]byte(defaultDynamicCertProviderCert), []byte(defaultDynamicCertProviderKey))
 
@@ -402,7 +390,7 @@ func TestManagerControllerSync(t *testing.T) {
 								Status:         configv1alpha1.SuccessStrategyStatus,
 								Reason:         configv1alpha1.FetchedKeyStrategyReason,
 								Message:        "Key was fetched successfully",
-								LastUpdateTime: fakeNow.Now(),
+								LastUpdateTime: metav1.NewTime(frozenNow),
 							},
 						}
 						expectedGetAction := coretesting.NewGetAction(credentialIssuerConfigGVR, credentialIssuerConfigNamespaceName, credentialIssuerConfigResourceName)
@@ -432,7 +420,7 @@ func TestManagerControllerSync(t *testing.T) {
 										Status:         configv1alpha1.SuccessStrategyStatus,
 										Reason:         configv1alpha1.FetchedKeyStrategyReason,
 										Message:        "Key was fetched successfully",
-										LastUpdateTime: fakeNow.Now(),
+										LastUpdateTime: metav1.NewTime(frozenNow),
 									},
 								},
 							},
@@ -475,7 +463,7 @@ func TestManagerControllerSync(t *testing.T) {
 									Status:         configv1alpha1.ErrorStrategyStatus,
 									Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
 									Message:        podExecErrorMessage,
-									LastUpdateTime: metav1.Now(),
+									LastUpdateTime: metav1.NewTime(frozenNow),
 								},
 							},
 						},
@@ -517,7 +505,7 @@ func TestManagerControllerSync(t *testing.T) {
 									Status:         configv1alpha1.ErrorStrategyStatus,
 									Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
 									Message:        podExecErrorMessage,
-									LastUpdateTime: metav1.Now(),
+									LastUpdateTime: metav1.NewTime(frozenNow),
 								},
 							},
 						},

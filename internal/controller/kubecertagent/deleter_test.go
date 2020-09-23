@@ -126,7 +126,7 @@ func TestDeleterControllerSync(t *testing.T) {
 			Resource: "pods",
 		}
 
-		// fnv 32a hash of controller-manager uid
+		// fnv 32a hash of "some-controller-manager-uid"
 		controllerManagerPodHash := "fbb0addd"
 		agentPod := agentPodTemplate.DeepCopy()
 		agentPod.Namespace = agentPodNamespace
@@ -220,6 +220,275 @@ func TestDeleterControllerSync(t *testing.T) {
 						kubeAPIClient.Actions(),
 					)
 				})
+
+				when("the agent pod is out of sync with the controller manager via volume mounts", func() {
+					it.Before(func() {
+						controllerManagerPod.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
+							{
+								Name: "some-other-volume-mount",
+							},
+						}
+						r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
+						r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
+					})
+
+					it("deletes the agent pod", func() {
+						startInformersAndController()
+						err := controllerlib.TestSync(t, subject, *syncContext)
+
+						r.NoError(err)
+						r.Equal(
+							[]coretesting.Action{
+								coretesting.NewDeleteAction(
+									podsGVR,
+									agentPodNamespace,
+									agentPod.Name,
+								),
+							},
+							kubeAPIClient.Actions(),
+						)
+					})
+				})
+
+				when("the agent pod is out of sync with the controller manager via volumes", func() {
+					it.Before(func() {
+						controllerManagerPod.Spec.Volumes = []corev1.Volume{
+							{
+								Name: "some-other-volume",
+							},
+						}
+						r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
+						r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
+					})
+
+					it("deletes the agent pod", func() {
+						startInformersAndController()
+						err := controllerlib.TestSync(t, subject, *syncContext)
+
+						r.NoError(err)
+						r.Equal(
+							[]coretesting.Action{
+								coretesting.NewDeleteAction(
+									podsGVR,
+									agentPodNamespace,
+									agentPod.Name,
+								),
+							},
+							kubeAPIClient.Actions(),
+						)
+					})
+				})
+
+				when("the agent pod is out of sync with the controller manager via node selector", func() {
+					it.Before(func() {
+						controllerManagerPod.Spec.NodeSelector = map[string]string{
+							"some-other-node-selector-key": "some-other-node-selector-value",
+						}
+						r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
+						r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
+					})
+
+					it("deletes the agent pod", func() {
+						startInformersAndController()
+						err := controllerlib.TestSync(t, subject, *syncContext)
+
+						r.NoError(err)
+						r.Equal(
+							[]coretesting.Action{
+								coretesting.NewDeleteAction(
+									podsGVR,
+									agentPodNamespace,
+									agentPod.Name,
+								),
+							},
+							kubeAPIClient.Actions(),
+						)
+					})
+				})
+
+				when("the agent pod is out of sync with the controller manager via node name", func() {
+					it.Before(func() {
+						controllerManagerPod.Spec.NodeName = "some-other-node-name"
+						r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
+						r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
+					})
+
+					it("deletes the agent pod", func() {
+						startInformersAndController()
+						err := controllerlib.TestSync(t, subject, *syncContext)
+
+						r.NoError(err)
+						r.Equal(
+							[]coretesting.Action{
+								coretesting.NewDeleteAction(
+									podsGVR,
+									agentPodNamespace,
+									agentPod.Name,
+								),
+							},
+							kubeAPIClient.Actions(),
+						)
+					})
+				})
+
+				when("the agent pod is out of sync with the controller manager via tolerations", func() {
+					it.Before(func() {
+						controllerManagerPod.Spec.Tolerations = []corev1.Toleration{
+							{
+								Key: "some-other-toleration-key",
+							},
+						}
+						r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
+						r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
+					})
+
+					it("deletes the agent pod", func() {
+						startInformersAndController()
+						err := controllerlib.TestSync(t, subject, *syncContext)
+
+						r.NoError(err)
+						r.Equal(
+							[]coretesting.Action{
+								coretesting.NewDeleteAction(
+									podsGVR,
+									agentPodNamespace,
+									agentPod.Name,
+								),
+							},
+							kubeAPIClient.Actions(),
+						)
+					})
+				})
+
+				when("the agent pod is out of sync via restart policy", func() {
+					it.Before(func() {
+						updatedAgentPod := agentPod.DeepCopy()
+						updatedAgentPod.Spec.RestartPolicy = corev1.RestartPolicyAlways
+						r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+					})
+
+					it.Focus("deletes the agent pod", func() {
+						startInformersAndController()
+						err := controllerlib.TestSync(t, subject, *syncContext)
+
+						r.NoError(err)
+						r.Equal(
+							[]coretesting.Action{
+								coretesting.NewDeleteAction(
+									podsGVR,
+									agentPodNamespace,
+									agentPod.Name,
+								),
+							},
+							kubeAPIClient.Actions(),
+						)
+					})
+				})
+
+				when("the agent pod is out of sync via automount service account token", func() {
+					it.Before(func() {
+						updatedAgentPod := agentPod.DeepCopy()
+						updatedAgentPod.Spec.AutomountServiceAccountToken = boolPtr(true)
+						r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+					})
+
+					it.Focus("deletes the agent pod", func() {
+						startInformersAndController()
+						err := controllerlib.TestSync(t, subject, *syncContext)
+
+						r.NoError(err)
+						r.Equal(
+							[]coretesting.Action{
+								coretesting.NewDeleteAction(
+									podsGVR,
+									agentPodNamespace,
+									agentPod.Name,
+								),
+							},
+							kubeAPIClient.Actions(),
+						)
+					})
+				})
+
+				when("the agent pod is out of sync with the template via name", func() {
+					it.Before(func() {
+						updatedAgentPod := agentPod.DeepCopy()
+						updatedAgentPod.Spec.Containers[0].Name = "some-new-name"
+						r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+					})
+
+					it("deletes the agent pod", func() {
+						startInformersAndController()
+						err := controllerlib.TestSync(t, subject, *syncContext)
+
+						r.NoError(err)
+						r.Equal(
+							[]coretesting.Action{
+								coretesting.NewDeleteAction(
+									podsGVR,
+									agentPodNamespace,
+									agentPod.Name,
+								),
+							},
+							kubeAPIClient.Actions(),
+						)
+					})
+				})
+
+				when("the agent pod is out of sync with the template via image", func() {
+					it.Before(func() {
+						updatedAgentPod := agentPod.DeepCopy()
+						updatedAgentPod.Spec.Containers[0].Image = "new-image"
+						r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+					})
+
+					it("deletes the agent pod", func() {
+						startInformersAndController()
+						err := controllerlib.TestSync(t, subject, *syncContext)
+
+						r.NoError(err)
+						r.Equal(
+							[]coretesting.Action{
+								coretesting.NewDeleteAction(
+									podsGVR,
+									agentPodNamespace,
+									agentPod.Name,
+								),
+							},
+							kubeAPIClient.Actions(),
+						)
+					})
+				})
+
+				when("the agent pod is out of sync with the template via command", func() {
+					it.Before(func() {
+						updatedAgentPod := agentPod.DeepCopy()
+						updatedAgentPod.Spec.Containers[0].Command = []string{"some", "new", "command"}
+						r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+					})
+
+					it("deletes the agent pod", func() {
+						startInformersAndController()
+						err := controllerlib.TestSync(t, subject, *syncContext)
+
+						r.NoError(err)
+						r.Equal(
+							[]coretesting.Action{
+								coretesting.NewDeleteAction(
+									podsGVR,
+									agentPodNamespace,
+									agentPod.Name,
+								),
+							},
+							kubeAPIClient.Actions(),
+						)
+					})
+				})
 			})
 
 			when("there is a non-matching controller manager pod via uid", func() {
@@ -252,221 +521,6 @@ func TestDeleterControllerSync(t *testing.T) {
 					controllerManagerPod.Name = "some-other-controller-manager-name"
 					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
-				})
-
-				it("deletes the agent pod", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-
-					r.NoError(err)
-					r.Equal(
-						[]coretesting.Action{
-							coretesting.NewDeleteAction(
-								podsGVR,
-								agentPodNamespace,
-								agentPod.Name,
-							),
-						},
-						kubeAPIClient.Actions(),
-					)
-				})
-			})
-
-			when("the agent pod is out of sync with the controller manager via volume mounts", func() {
-				it.Before(func() {
-					controllerManagerPod.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
-						{
-							Name: "some-other-volume-mount",
-						},
-					}
-					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
-					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
-				})
-
-				it("deletes the agent pod", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-
-					r.NoError(err)
-					r.Equal(
-						[]coretesting.Action{
-							coretesting.NewDeleteAction(
-								podsGVR,
-								agentPodNamespace,
-								agentPod.Name,
-							),
-						},
-						kubeAPIClient.Actions(),
-					)
-				})
-			})
-
-			when("the agent pod is out of sync with the controller manager via volumes", func() {
-				it.Before(func() {
-					controllerManagerPod.Spec.Volumes = []corev1.Volume{
-						{
-							Name: "some-other-volume",
-						},
-					}
-					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
-					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
-				})
-
-				it("deletes the agent pod", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-
-					r.NoError(err)
-					r.Equal(
-						[]coretesting.Action{
-							coretesting.NewDeleteAction(
-								podsGVR,
-								agentPodNamespace,
-								agentPod.Name,
-							),
-						},
-						kubeAPIClient.Actions(),
-					)
-				})
-			})
-
-			when("the agent pod is out of sync with the controller manager via node selector", func() {
-				it.Before(func() {
-					controllerManagerPod.Spec.NodeSelector = map[string]string{
-						"some-other-node-selector-key": "some-other-node-selector-value",
-					}
-					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
-					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
-				})
-
-				it("deletes the agent pod", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-
-					r.NoError(err)
-					r.Equal(
-						[]coretesting.Action{
-							coretesting.NewDeleteAction(
-								podsGVR,
-								agentPodNamespace,
-								agentPod.Name,
-							),
-						},
-						kubeAPIClient.Actions(),
-					)
-				})
-			})
-
-			when("the agent pod is out of sync with the controller manager via node name", func() {
-				it.Before(func() {
-					controllerManagerPod.Spec.NodeName = "some-other-node-name"
-					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
-					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
-				})
-
-				it("deletes the agent pod", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-
-					r.NoError(err)
-					r.Equal(
-						[]coretesting.Action{
-							coretesting.NewDeleteAction(
-								podsGVR,
-								agentPodNamespace,
-								agentPod.Name,
-							),
-						},
-						kubeAPIClient.Actions(),
-					)
-				})
-			})
-
-			when("the agent pod is out of sync with the controller manager via tolerations", func() {
-				it.Before(func() {
-					controllerManagerPod.Spec.Tolerations = []corev1.Toleration{
-						{
-							Key: "some-other-toleration-key",
-						},
-					}
-					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
-					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
-				})
-
-				it("deletes the agent pod", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-
-					r.NoError(err)
-					r.Equal(
-						[]coretesting.Action{
-							coretesting.NewDeleteAction(
-								podsGVR,
-								agentPodNamespace,
-								agentPod.Name,
-							),
-						},
-						kubeAPIClient.Actions(),
-					)
-				})
-			})
-
-			when("the agent pod is out of sync via restart policy", func() {
-				it.Before(func() {
-					updatedAgentPod := agentPod.DeepCopy()
-					updatedAgentPod.Spec.RestartPolicy = corev1.RestartPolicyAlways
-					r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
-					r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
-				})
-
-				it("deletes the agent pod", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-
-					r.NoError(err)
-					r.Equal(
-						[]coretesting.Action{
-							coretesting.NewDeleteAction(
-								podsGVR,
-								agentPodNamespace,
-								agentPod.Name,
-							),
-						},
-						kubeAPIClient.Actions(),
-					)
-				})
-			})
-
-			when("the agent pod is out of sync via automount service account tokem", func() {
-				it.Before(func() {
-					agentPod.Spec.AutomountServiceAccountToken = boolPtr(true)
-					r.NoError(agentInformerClient.Tracker().Update(podsGVR, agentPod, agentPod.Namespace))
-					r.NoError(kubeAPIClient.Tracker().Update(podsGVR, agentPod, agentPod.Namespace))
-				})
-
-				it("deletes the agent pod", func() {
-					startInformersAndController()
-					err := controllerlib.TestSync(t, subject, *syncContext)
-
-					r.NoError(err)
-					r.Equal(
-						[]coretesting.Action{
-							coretesting.NewDeleteAction(
-								podsGVR,
-								agentPodNamespace,
-								agentPod.Name,
-							),
-						},
-						kubeAPIClient.Actions(),
-					)
-				})
-			})
-
-			when("the agent pod is out of sync with the template via image", func() {
-				it.Before(func() {
-					agentPod.Spec.Containers[0].Image = "new-image"
-					r.NoError(agentInformerClient.Tracker().Update(podsGVR, agentPod, agentPod.Namespace))
-					r.NoError(kubeAPIClient.Tracker().Update(podsGVR, agentPod, agentPod.Namespace))
 				})
 
 				it("deletes the agent pod", func() {

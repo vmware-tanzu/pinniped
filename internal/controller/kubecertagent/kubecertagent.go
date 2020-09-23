@@ -37,6 +37,7 @@ type Info struct {
 	//   .Namespace: serves as the namespace of the agent pods
 	//   .Name: serves as the name prefix for each of the agent pods
 	//   .Labels: serves as a way to filter for agent pods
+	//   .Spec.Containers[0].Name: serves as the container name the agent pods
 	//   .Spec.Containers[0].Image: serves as the container image for the agent pods
 	//   .Spec.Containers[0].Command: serves as the container command for the agent pods
 	Template *corev1.Pod
@@ -118,6 +119,18 @@ func isAgentPodUpToDate(actualAgentPod, expectedAgentPod *corev1.Pod) bool {
 		actualAgentPod.Spec.Containers[0].VolumeMounts,
 		expectedAgentPod.Spec.Containers[0].VolumeMounts,
 	) &&
+		equality.Semantic.DeepEqual(
+			actualAgentPod.Spec.Containers[0].Name,
+			expectedAgentPod.Spec.Containers[0].Name,
+		) &&
+		equality.Semantic.DeepEqual(
+			actualAgentPod.Spec.Containers[0].Image,
+			expectedAgentPod.Spec.Containers[0].Image,
+		) &&
+		equality.Semantic.DeepEqual(
+			actualAgentPod.Spec.Containers[0].Command,
+			expectedAgentPod.Spec.Containers[0].Command,
+		) &&
 		equality.Semantic.DeepEqual(
 			actualAgentPod.Spec.Volumes,
 			expectedAgentPod.Spec.Volumes,

@@ -239,9 +239,10 @@ func createKubeCertAgentTemplate(cfg *configapi.KubeCertAgentSpec, serverInstall
 			TerminationGracePeriodSeconds: &terminateImmediately,
 			Containers: []corev1.Container{
 				{
-					Name:    "sleeper",
-					Image:   *cfg.Image,
-					Command: []string{"/bin/sleep", "infinity"},
+					Name:            "sleeper",
+					Image:           *cfg.Image,
+					ImagePullPolicy: corev1.PullIfNotPresent,
+					Command:         []string{"/bin/sleep", "infinity"},
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
 							corev1.ResourceMemory: resource.MustParse("16Mi"),

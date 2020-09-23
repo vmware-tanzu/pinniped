@@ -75,6 +75,12 @@ func (v *ValidCert) RequireMatchesPrivateKey(keyPEM string) {
 	require.NoError(v.t, err)
 }
 
+// RequireCommonName asserts that the certificate contains the provided commonName.
+func (v *ValidCert) RequireCommonName(commonName string) {
+	v.t.Helper()
+	require.Equal(v.t, commonName, v.parsed.Subject.CommonName)
+}
+
 // CreateCertificate creates a certificate with the provided time bounds, and
 // returns the PEM representation of the certificate.
 //

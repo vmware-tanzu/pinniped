@@ -52,8 +52,8 @@ type Config struct {
 	// discovery document.
 	DiscoveryURLOverride *string
 
-	// DynamicCertProvider provides a setter and a getter to the Pinniped API's serving cert.
-	DynamicCertProvider dynamiccert.Provider
+	// DynamicServingCertProvider provides a setter and a getter to the Pinniped API's serving cert.
+	DynamicServingCertProvider dynamiccert.Provider
 
 	// ServingCertDuration is the validity period, in seconds, of the API serving certificate.
 	ServingCertDuration time.Duration
@@ -75,6 +75,10 @@ type Config struct {
 	// KubeCertAgentKeyPathAnnotation is the name of the annotation key that will be used when setting
 	// the best-guess path to the kube API's key. See kubecertagent.Info for more details.
 	KubeCertAgentKeyPathAnnotation string
+
+	// KubeCertAgentDynamicSigningCertProvider provides a setter and a getter to the Pinniped API's
+	// signing cert, i.e., the cert that it uses to sign certs for Pinniped clients wishing to login.
+	KubeCertAgentDynamicSigningCertProvider dynamiccert.Provider
 }
 
 // Prepare the controllers and their informers and return a function that will start them when called.
@@ -133,7 +137,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			apicerts.NewCertsObserverController(
 				c.ServerInstallationNamespace,
 				c.NamesConfig.ServingCertificateSecret,
-				c.DynamicCertProvider,
+				c.DynamicServingCertProvider,
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 			),

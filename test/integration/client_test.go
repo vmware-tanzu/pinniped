@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
 	"go.pinniped.dev/internal/client"
 	"go.pinniped.dev/internal/here"
@@ -71,8 +73,13 @@ func TestClient(t *testing.T) {
 	// Using the CA bundle and host from the current (admin) kubeconfig, do the token exchange.
 	clientConfig := library.NewClientConfig(t)
 
-	resp, err := client.ExchangeToken(ctx, namespace, idp, token, string(clientConfig.CAData), clientConfig.Host)
+	var resp *clientauthenticationv1beta1.ExecCredential
+	assert.Eventually(t, func() bool {
+		resp, err = client.ExchangeToken(ctx, namespace, idp, token, string(clientConfig.CAData), clientConfig.Host)
+		return err == nil
+	}, 10*time.Second, 500*time.Millisecond)
 	require.NoError(t, err)
+
 	require.NotNil(t, resp.Status.ExpirationTimestamp)
 	require.InDelta(t, time.Until(resp.Status.ExpirationTimestamp.Time), 1*time.Hour, float64(3*time.Minute))
 

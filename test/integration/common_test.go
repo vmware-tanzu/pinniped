@@ -21,6 +21,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+const (
+	accessRetryInterval = 250 * time.Millisecond
+	accessRetryTimeout  = 10 * time.Second
+)
+
 // accessAsUserTest runs a generic test in which a clientUnderTest operating with username
 // testUsername tries to auth to the kube API (i.e., list namespaces).
 //
@@ -42,7 +47,7 @@ func accessAsUserTest(
 			listNamespaceResponse, err = clientUnderTest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 			return err == nil
 		}
-		assert.Eventually(t, canListNamespaces, 3*time.Second, 250*time.Millisecond)
+		assert.Eventually(t, canListNamespaces, accessRetryTimeout, accessRetryInterval)
 		require.NoError(t, err) // prints out the error and stops the test in case of failure
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	}
@@ -66,7 +71,7 @@ func accessAsUserWithKubectlTest(
 			return err == nil
 		}
 
-		assert.Eventually(t, canListNamespaces, 3*time.Second, 250*time.Millisecond)
+		assert.Eventually(t, canListNamespaces, accessRetryTimeout, accessRetryInterval)
 		require.NoError(t, err) // prints out the error and stops the test in case of failure
 		require.Contains(t, kubectlCommandOutput, expectedNamespace)
 	}
@@ -93,7 +98,7 @@ func accessAsGroupTest(
 			listNamespaceResponse, err = clientUnderTest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 			return err == nil
 		}
-		assert.Eventually(t, canListNamespaces, 3*time.Second, 250*time.Millisecond)
+		assert.Eventually(t, canListNamespaces, accessRetryTimeout, accessRetryInterval)
 		require.NoError(t, err) // prints out the error and stops the test in case of failure
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	}
@@ -117,7 +122,7 @@ func accessAsGroupWithKubectlTest(
 			return err == nil
 		}
 
-		assert.Eventually(t, canListNamespaces, 3*time.Second, 250*time.Millisecond)
+		assert.Eventually(t, canListNamespaces, accessRetryTimeout, accessRetryInterval)
 		require.NoError(t, err) // prints out the error and stops the test in case of failure
 		require.Contains(t, kubectlCommandOutput, expectedNamespace)
 	}

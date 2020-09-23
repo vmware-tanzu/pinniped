@@ -462,6 +462,31 @@ func TestDeleterControllerSync(t *testing.T) {
 				})
 			})
 
+			when("the agent pod is out of sync with the template via image", func() {
+				it.Before(func() {
+					agentPod.Spec.Containers[0].Image = "new-image"
+					r.NoError(agentInformerClient.Tracker().Update(podsGVR, agentPod, agentPod.Namespace))
+					r.NoError(kubeAPIClient.Tracker().Update(podsGVR, agentPod, agentPod.Namespace))
+				})
+
+				it("deletes the agent pod", func() {
+					startInformersAndController()
+					err := controllerlib.TestSync(t, subject, *syncContext)
+
+					r.NoError(err)
+					r.Equal(
+						[]coretesting.Action{
+							coretesting.NewDeleteAction(
+								podsGVR,
+								agentPodNamespace,
+								agentPod.Name,
+							),
+						},
+						kubeAPIClient.Actions(),
+					)
+				})
+			})
+
 			when("there is no matching controller manager pod", func() {
 				it("deletes the agent pod", func() {
 					startInformersAndController()

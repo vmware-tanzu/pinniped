@@ -20,6 +20,13 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 )
 
+// These constants are the default values for the kube-controller-manager flags. If the flags are
+// not properly set on the kube-controller-manager process, then we will fallback to using these.
+const (
+	k8sAPIServerCACertPEMDefaultPath = "/etc/kubernetes/ca/ca.pem"
+	k8sAPIServerCAKeyPEMDefaultPath  = "/etc/kubernetes/ca/ca.key"
+)
+
 type annotaterController struct {
 	agentInfo             *Info
 	k8sClient             kubernetes.Interface
@@ -86,17 +93,22 @@ func (c *annotaterController) Sync(ctx controllerlib.Context) error {
 			continue
 		}
 
-		// TODO if the paths cannot be found, then still add the annotations anyway using the defaults k8sAPIServerCAKeyPEMDefaultPath and k8sAPIServerCACertPEMDefaultPath
-		certPath, certPathOK := getContainerArgByName(controllerManagerPod, "cluster-signing-cert-file")
-		keyPath, keyPathOK := getContainerArgByName(controllerManagerPod, "cluster-signing-key-file")
+		certPath := getContainerArgByName(
+			controllerManagerPod,
+			"cluster-signing-cert-file",
+			k8sAPIServerCACertPEMDefaultPath,
+		)
+		keyPath := getContainerArgByName(
+			controllerManagerPod,
+			"cluster-signing-key-file",
+			k8sAPIServerCAKeyPEMDefaultPath,
+		)
 		if err := c.maybeUpdateAgentPod(
 			ctx.Context,
 			agentPod.Name,
 			agentPod.Namespace,
 			certPath,
-			certPathOK,
 			keyPath,
-			keyPathOK,
 		); err != nil {
 			// TODO Failed, so update the CIC status?
 			return fmt.Errorf("cannot update agent pod: %w", err)
@@ -111,9 +123,7 @@ func (c *annotaterController) maybeUpdateAgentPod(
 	name string,
 	namespace string,
 	certPath string,
-	certPathOK bool,
 	keyPath string,
-	keyPathOK bool,
 ) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		agentPod, err := c.agentPodInformer.Lister().Pods(namespace).Get(name)
@@ -121,15 +131,13 @@ func (c *annotaterController) maybeUpdateAgentPod(
 			return err
 		}
 
-		if (certPathOK && agentPod.Annotations[c.agentInfo.CertPathAnnotation] != certPath) ||
-			(keyPathOK && agentPod.Annotations[c.agentInfo.KeyPathAnnotation] != keyPath) {
+		if agentPod.Annotations[c.agentInfo.CertPathAnnotation] != certPath ||
+			agentPod.Annotations[c.agentInfo.KeyPathAnnotation] != keyPath {
 			if err := c.reallyUpdateAgentPod(
 				ctx,
 				agentPod,
 				certPath,
-				certPathOK,
 				keyPath,
-				keyPathOK,
 			); err != nil {
 				return err
 			}
@@ -143,21 +151,15 @@ func (c *annotaterController) reallyUpdateAgentPod(
 	ctx context.Context,
 	agentPod *corev1.Pod,
 	certPath string,
-	certPathOK bool,
 	keyPath string,
-	keyPathOK bool,
 ) error {
 	// Create a deep copy of the agent pod since it is coming straight from the cache.
 	updatedAgentPod := agentPod.DeepCopy()
 	if updatedAgentPod.Annotations == nil {
 		updatedAgentPod.Annotations = make(map[string]string)
 	}
-	if certPathOK {
-		updatedAgentPod.Annotations[c.agentInfo.CertPathAnnotation] = certPath
-	}
-	if keyPathOK {
-		updatedAgentPod.Annotations[c.agentInfo.KeyPathAnnotation] = keyPath
-	}
+	updatedAgentPod.Annotations[c.agentInfo.CertPathAnnotation] = certPath
+	updatedAgentPod.Annotations[c.agentInfo.KeyPathAnnotation] = keyPath
 
 	klog.InfoS(
 		"updating agent pod annotations",
@@ -175,7 +177,7 @@ func (c *annotaterController) reallyUpdateAgentPod(
 	return err
 }
 
-func getContainerArgByName(pod *corev1.Pod, name string) (string, bool) {
+func getContainerArgByName(pod *corev1.Pod, name, fallbackValue string) string {
 	for _, container := range pod.Spec.Containers {
 		flagset := pflag.NewFlagSet("", pflag.ContinueOnError)
 		flagset.ParseErrorsWhitelist = pflag.ParseErrorsWhitelist{UnknownFlags: true}
@@ -183,8 +185,8 @@ func getContainerArgByName(pod *corev1.Pod, name string) (string, bool) {
 		flagset.StringVar(&val, name, "", "")
 		_ = flagset.Parse(append(container.Command, container.Args...))
 		if val != "" {
-			return val, true
+			return val
 		}
 	}
-	return "", false
+	return fallbackValue
 }

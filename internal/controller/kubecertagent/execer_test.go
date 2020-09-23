@@ -5,6 +5,7 @@ package kubecertagent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/clock"
 	kubeinformers "k8s.io/client-go/informers"
@@ -396,6 +398,24 @@ func TestManagerControllerSync(t *testing.T) {
 						expectedGetAction := coretesting.NewGetAction(credentialIssuerConfigGVR, credentialIssuerConfigNamespaceName, credentialIssuerConfigResourceName)
 						expectedCreateAction := coretesting.NewUpdateAction(credentialIssuerConfigGVR, credentialIssuerConfigNamespaceName, expectedCredentialIssuerConfig)
 						r.Equal([]coretesting.Action{expectedGetAction, expectedCreateAction}, pinnipedAPIClient.Actions())
+					})
+
+					when("updating the CredentialIssuerConfig fails", func() {
+						it.Before(func() {
+							pinnipedAPIClient.PrependReactor(
+								"update",
+								"credentialissuerconfigs",
+								func(_ coretesting.Action) (bool, runtime.Object, error) {
+									return true, nil, errors.New("some update error")
+								},
+							)
+						})
+
+						it("returns an error", func() {
+							startInformersAndController()
+							err := controllerlib.TestSync(t, subject, *syncContext)
+							r.EqualError(err, "could not create or update credentialissuerconfig: some update error")
+						})
 					})
 				})
 

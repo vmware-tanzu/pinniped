@@ -51,6 +51,8 @@ func TestAnnotaterControllerSync(t *testing.T) {
 	spec.Run(t, "AnnotaterControllerSync", func(t *testing.T, when spec.G, it spec.S) {
 		const kubeSystemNamespace = "kube-system"
 		const agentPodNamespace = "agent-pod-namespace"
+		const defaultKubeControllerManagerClusterSigningCertFileFlagValue = "/etc/kubernetes/ca/ca.pem"
+		const defaultKubeControllerManagerClusterSigningKeyFileFlagValue = "/etc/kubernetes/ca/ca.key"
 
 		const (
 			certPath           = "some-cert-path"
@@ -278,6 +280,36 @@ func TestAnnotaterControllerSync(t *testing.T) {
 				})
 			})
 
+			when("there is a controller manager pod with no CLI flags", func() {
+				it.Before(func() {
+					controllerManagerPod.Spec.Containers[0].Command = []string{
+						"kube-controller-manager",
+					}
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
+				})
+
+				it("updates the annotations with the default values", func() {
+					startInformersAndController()
+					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+
+					updatedAgentPod := agentPod.DeepCopy()
+					updatedAgentPod.Annotations[certPathAnnotation] = defaultKubeControllerManagerClusterSigningCertFileFlagValue
+					updatedAgentPod.Annotations[keyPathAnnotation] = defaultKubeControllerManagerClusterSigningKeyFileFlagValue
+
+					r.Equal(
+						[]coretesting.Action{
+							coretesting.NewUpdateAction(
+								podsGVR,
+								agentPodNamespace,
+								updatedAgentPod,
+							),
+						},
+						kubeAPIClient.Actions(),
+					)
+				})
+			})
+
 			when("there is a controller manager pod with unparsable CLI flags", func() {
 				it.Before(func() {
 					controllerManagerPod.Spec.Containers[0].Command = []string{
@@ -289,11 +321,22 @@ func TestAnnotaterControllerSync(t *testing.T) {
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
-				it("does not update any annotations", func() {
+				it("updates the annotations with the default values", func() {
 					startInformersAndController()
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+
+					updatedAgentPod := agentPod.DeepCopy()
+					updatedAgentPod.Annotations[certPathAnnotation] = defaultKubeControllerManagerClusterSigningCertFileFlagValue
+					updatedAgentPod.Annotations[keyPathAnnotation] = defaultKubeControllerManagerClusterSigningKeyFileFlagValue
+
 					r.Equal(
-						[]coretesting.Action{},
+						[]coretesting.Action{
+							coretesting.NewUpdateAction(
+								podsGVR,
+								agentPodNamespace,
+								updatedAgentPod,
+							),
+						},
 						kubeAPIClient.Actions(),
 					)
 				})
@@ -310,12 +353,14 @@ func TestAnnotaterControllerSync(t *testing.T) {
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
-				it("updates the key annotation", func() {
+				it("updates the key annotation with the default cert flag value", func() {
 					startInformersAndController()
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 					updatedAgentPod := agentPod.DeepCopy()
+					updatedAgentPod.Annotations[certPathAnnotation] = defaultKubeControllerManagerClusterSigningCertFileFlagValue
 					updatedAgentPod.Annotations[keyPathAnnotation] = keyPath
+
 					r.Equal(
 						[]coretesting.Action{
 							coretesting.NewUpdateAction(
@@ -329,7 +374,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 				})
 			})
 
-			when("there is a controller manager pod with unparsable keey CLI flag", func() {
+			when("there is a controller manager pod with unparsable key CLI flag", func() {
 				it.Before(func() {
 					controllerManagerPod.Spec.Containers[0].Command = []string{
 						"kube-controller-manager",
@@ -340,12 +385,14 @@ func TestAnnotaterControllerSync(t *testing.T) {
 					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
 				})
 
-				it("updates the cert annotation", func() {
+				it("updates the cert annotation with the default key flag value", func() {
 					startInformersAndController()
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 					updatedAgentPod := agentPod.DeepCopy()
 					updatedAgentPod.Annotations[certPathAnnotation] = certPath
+					updatedAgentPod.Annotations[keyPathAnnotation] = defaultKubeControllerManagerClusterSigningKeyFileFlagValue
+
 					r.Equal(
 						[]coretesting.Action{
 							coretesting.NewUpdateAction(

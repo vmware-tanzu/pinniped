@@ -147,17 +147,17 @@ func (a *App) runServer(ctx context.Context) error {
 	// post start hook of the aggregated API server.
 	startControllersFunc, err := controllermanager.PrepareControllers(
 		&controllermanager.Config{
-			ServerInstallationNamespace:             serverInstallationNamespace,
-			NamesConfig:                             &cfg.NamesConfig,
-			DiscoveryURLOverride:                    cfg.DiscoveryInfo.URL,
-			DynamicServingCertProvider:              dynamicServingCertProvider,
-			ServingCertDuration:                     time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds) * time.Second,
-			ServingCertRenewBefore:                  time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds) * time.Second,
-			IDPCache:                                idpCache,
-			KubeCertAgentTemplate:                   kubeCertAgentTemplate,
-			KubeCertAgentCertPathAnnotation:         kubeCertAgentCertPathAnnotationKey,
-			KubeCertAgentKeyPathAnnotation:          kubeCertAgentKeyPathAnnotationKey,
-			KubeCertAgentDynamicSigningCertProvider: dynamicSigningCertProvider,
+			ServerInstallationNamespace:     serverInstallationNamespace,
+			NamesConfig:                     &cfg.NamesConfig,
+			DiscoveryURLOverride:            cfg.DiscoveryInfo.URL,
+			DynamicServingCertProvider:      dynamicServingCertProvider,
+			DynamicSigningCertProvider:      dynamicSigningCertProvider,
+			ServingCertDuration:             time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds) * time.Second,
+			ServingCertRenewBefore:          time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds) * time.Second,
+			IDPCache:                        idpCache,
+			KubeCertAgentTemplate:           kubeCertAgentTemplate,
+			KubeCertAgentCertPathAnnotation: kubeCertAgentCertPathAnnotationKey,
+			KubeCertAgentKeyPathAnnotation:  kubeCertAgentKeyPathAnnotationKey,
 		},
 	)
 	if err != nil {

@@ -15,7 +15,6 @@ import (
 
 	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
-	"go.pinniped.dev/internal/certauthority/kubecertauthority"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controllerlib"
@@ -27,18 +26,21 @@ type execerController struct {
 	credentialIssuerConfigNamespaceName string
 	credentialIssuerConfigResourceName  string
 	dynamicCertProvider                 dynamiccert.Provider
-	podCommandExecutor                  kubecertauthority.PodCommandExecutor
+	podCommandExecutor                  PodCommandExecutor
 	clock                               clock.Clock
 	pinnipedAPIClient                   pinnipedclientset.Interface
 	agentPodInformer                    corev1informers.PodInformer
 }
 
+// NewExecerController returns a controllerlib.Controller that listens for agent pods with proper
+// cert/key path annotations and execs into them to get the cert/key material. It sets the retrieved
+// key material in a provided dynamicCertProvider.
 func NewExecerController(
 	agentInfo *Info,
 	credentialIssuerConfigNamespaceName string,
 	credentialIssuerConfigResourceName string,
 	dynamicCertProvider dynamiccert.Provider,
-	podCommandExecutor kubecertauthority.PodCommandExecutor,
+	podCommandExecutor PodCommandExecutor,
 	pinnipedAPIClient pinnipedclientset.Interface,
 	clock clock.Clock,
 	agentPodInformer corev1informers.PodInformer,
@@ -108,7 +110,9 @@ func (c *execerController) Sync(ctx controllerlib.Context) error {
 	c.dynamicCertProvider.Set([]byte(certPEM), []byte(keyPEM))
 
 	err = c.createOrUpdateCredentialIssuerConfig(ctx, c.strategySuccess())
-	_ = err // TODO return this error? (needs test)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

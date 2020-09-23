@@ -12,8 +12,10 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/clock"
 	k8sinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/klog/v2/klogr"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
@@ -54,6 +56,9 @@ type Config struct {
 
 	// DynamicServingCertProvider provides a setter and a getter to the Pinniped API's serving cert.
 	DynamicServingCertProvider dynamiccert.Provider
+	// DynamicSigningCertProvider provides a setter and a getter to the Pinniped API's
+	// signing cert, i.e., the cert that it uses to sign certs for Pinniped clients wishing to login.
+	DynamicSigningCertProvider dynamiccert.Provider
 
 	// ServingCertDuration is the validity period, in seconds, of the API serving certificate.
 	ServingCertDuration time.Duration
@@ -75,17 +80,17 @@ type Config struct {
 	// KubeCertAgentKeyPathAnnotation is the name of the annotation key that will be used when setting
 	// the best-guess path to the kube API's key. See kubecertagent.Info for more details.
 	KubeCertAgentKeyPathAnnotation string
-
-	// KubeCertAgentDynamicSigningCertProvider provides a setter and a getter to the Pinniped API's
-	// signing cert, i.e., the cert that it uses to sign certs for Pinniped clients wishing to login.
-	KubeCertAgentDynamicSigningCertProvider dynamiccert.Provider
 }
 
 // Prepare the controllers and their informers and return a function that will start them when called.
 //nolint:funlen // Eh, fair, it is a really long function...but it is wiring the world...so...
 func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 	// Create k8s clients.
-	k8sClient, aggregatorClient, pinnipedClient, err := createClients()
+	kubeConfig, err := createConfig()
+	if err != nil {
+		return nil, fmt.Errorf("could not create config for the controllers: %w", err)
+	}
+	k8sClient, aggregatorClient, pinnipedClient, err := createClients(kubeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("could not create clients for the controllers: %w", err)
 	}
@@ -207,6 +212,24 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
+		).
+		WithController(
+			kubecertagent.NewExecerController(
+				&kubecertagent.Info{
+					Template:           c.KubeCertAgentTemplate,
+					CertPathAnnotation: c.KubeCertAgentCertPathAnnotation,
+					KeyPathAnnotation:  c.KubeCertAgentKeyPathAnnotation,
+				},
+				c.ServerInstallationNamespace,
+				c.NamesConfig.CredentialIssuerConfig,
+				c.DynamicSigningCertProvider,
+				kubecertagent.NewPodCommandExecutor(kubeConfig, k8sClient),
+				pinnipedClient,
+				clock.RealClock{},
+				informers.kubeSystemNamespaceK8s.Core().V1().Pods(),
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
 		)
 
 	// Return a function which starts the informers and controllers.
@@ -216,19 +239,24 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 	}, nil
 }
 
+// Create the rest config that will be used by the clients for the controllers.
+func createConfig() (*rest.Config, error) {
+	// Load the Kubernetes client configuration.
+	kubeConfig, err := restclient.InClusterConfig()
+	if err != nil {
+		return nil, fmt.Errorf("could not load in-cluster configuration: %w", err)
+	}
+
+	return kubeConfig, nil
+}
+
 // Create the k8s clients that will be used by the controllers.
-func createClients() (
+func createClients(kubeConfig *rest.Config) (
 	k8sClient *kubernetes.Clientset,
 	aggregatorClient *aggregatorclient.Clientset,
 	pinnipedClient *pinnipedclientset.Clientset,
 	err error,
 ) {
-	// Load the Kubernetes client configuration.
-	kubeConfig, err := restclient.InClusterConfig()
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("could not load in-cluster configuration: %w", err)
-	}
-
 	// explicitly use protobuf when talking to built-in kube APIs
 	protoKubeConfig := createProtoKubeConfig(kubeConfig)
 

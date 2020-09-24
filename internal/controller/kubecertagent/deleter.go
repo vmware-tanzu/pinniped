@@ -17,7 +17,7 @@ import (
 )
 
 type deleterController struct {
-	agentInfo             *Info
+	agentPodConfig        *AgentPodConfig
 	k8sClient             kubernetes.Interface
 	kubeSystemPodInformer corev1informers.PodInformer
 	agentPodInformer      corev1informers.PodInformer
@@ -28,7 +28,7 @@ type deleterController struct {
 //
 // This controller only uses the Template field of the provided agentInfo.
 func NewDeleterController(
-	agentInfo *Info,
+	agentPodConfig *AgentPodConfig,
 	k8sClient kubernetes.Interface,
 	kubeSystemPodInformer corev1informers.PodInformer,
 	agentPodInformer corev1informers.PodInformer,
@@ -38,7 +38,7 @@ func NewDeleterController(
 		controllerlib.Config{
 			Name: "kube-cert-agent-deleter-controller",
 			Syncer: &deleterController{
-				agentInfo:             agentInfo,
+				agentPodConfig:        agentPodConfig,
 				k8sClient:             k8sClient,
 				kubeSystemPodInformer: kubeSystemPodInformer,
 				agentPodInformer:      agentPodInformer,
@@ -51,9 +51,7 @@ func NewDeleterController(
 		),
 		withInformer(
 			agentPodInformer,
-			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
-				return isAgentPod(obj, agentInfo.Template.Labels)
-			}),
+			pinnipedcontroller.SimpleFilter(isAgentPod),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -61,10 +59,10 @@ func NewDeleterController(
 
 // Sync implements controllerlib.Syncer.
 func (c *deleterController) Sync(ctx controllerlib.Context) error {
-	agentSelector := labels.SelectorFromSet(c.agentInfo.Template.Labels)
+	agentSelector := labels.SelectorFromSet(c.agentPodConfig.Labels())
 	agentPods, err := c.agentPodInformer.
 		Lister().
-		Pods(c.agentInfo.Template.Namespace).
+		Pods(c.agentPodConfig.Namespace).
 		List(agentSelector)
 	if err != nil {
 		return fmt.Errorf("informer cannot list agent pods: %w", err)
@@ -76,7 +74,7 @@ func (c *deleterController) Sync(ctx controllerlib.Context) error {
 			return err
 		}
 		if controllerManagerPod == nil ||
-			!isAgentPodUpToDate(agentPod, newAgentPod(controllerManagerPod, c.agentInfo.Template)) {
+			!isAgentPodUpToDate(agentPod, newAgentPod(controllerManagerPod, c.agentPodConfig.PodTemplate())) {
 			klog.InfoS("deleting agent pod", "pod", klog.KObj(agentPod))
 			err := c.k8sClient.
 				CoreV1().

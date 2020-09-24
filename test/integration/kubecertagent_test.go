@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	kubeCertAgentLabelSelector = "kube-cert-agent.pinniped.dev="
+	kubeCertAgentLabelSelector = "kube-cert-agent.pinniped.dev=true"
 )
 
 func TestKubeCertAgent(t *testing.T) {

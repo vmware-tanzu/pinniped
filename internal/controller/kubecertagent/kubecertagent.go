@@ -14,6 +14,8 @@ import (
 	"fmt"
 	"hash/fnv"
 
+	"k8s.io/apimachinery/pkg/api/resource"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -28,62 +30,77 @@ const (
 
 	controllerManagerNameAnnotationKey = "kube-cert-agent.pinniped.dev/controller-manager-name"
 	controllerManagerUIDAnnotationKey  = "kube-cert-agent.pinniped.dev/controller-manager-uid"
+
+	// agentPodLabelKey is used to identify which pods are created by the kube-cert-agent
+	// controllers.
+	agentPodLabelKey   = "kube-cert-agent.pinniped.dev"
+	agentPodLabelValue = "true"
+
+	// agentPodCertPathAnnotationKey is the annotation that the kube-cert-agent pod will use
+	// to communicate the in-pod path to the kube API's certificate.
+	agentPodCertPathAnnotationKey = "kube-cert-agent.pinniped.dev/cert-path"
+
+	// agentPodKeyPathAnnotationKey is the annotation that the kube-cert-agent pod will use
+	// to communicate the in-pod path to the kube API's key.
+	agentPodKeyPathAnnotationKey = "kube-cert-agent.pinniped.dev/key-path"
 )
 
-// Info holds necessary information about the agent pod. It was pulled out into a struct to have a
-// common parameter for each controller.
-type Info struct {
-	// Template is an injection point for pod fields. The required pod fields are as follows.
-	//   .Namespace: serves as the namespace of the agent pods
-	//   .Name: serves as the name prefix for each of the agent pods
-	//   .Labels: serves as a way to filter for agent pods
-	//   .Spec.Containers[0].Name: serves as the container name the agent pods
-	//   .Spec.Containers[0].Image: serves as the container image for the agent pods
-	//   .Spec.Containers[0].Command: serves as the container command for the agent pods
-	Template *corev1.Pod
+type AgentPodConfig struct {
+	// The namespace in which agent pods will be created.
+	Namespace string
 
-	// CertPathAnnotation is the name of the annotation key that will be used when setting the
-	// best-guess path to the kube API's certificate in the agent pod.
-	CertPathAnnotation string
+	// The container image used for the agent pods.
+	ContainerImage string
 
-	// KeyPathAnnotation is the name of the annotation key that will be used when setting the
-	// best-guess path to the kube API's private key in the agent pod.
-	KeyPathAnnotation string
+	//  The name prefix for each of the agent pods.
+	PodNamePrefix string
 }
 
-func isControllerManagerPod(obj metav1.Object) bool {
-	pod, ok := obj.(*corev1.Pod)
-	if !ok {
-		return false
-	}
+type CredentialIssuerConfigLocationConfig struct {
+	// The namespace in which the CredentialIssuerConfig should be created/updated.
+	Namespace string
 
-	if pod.Labels == nil {
-		return false
-	}
-
-	component, ok := pod.Labels["component"]
-	if !ok || component != "kube-controller-manager" {
-		return false
-	}
-
-	if pod.Status.Phase != corev1.PodRunning {
-		return false
-	}
-
-	return true
+	// The resource name for the CredentialIssuerConfig to be created/updated.
+	Name string
 }
 
-func isAgentPod(obj metav1.Object, agentLabels map[string]string) bool {
-	for agentLabelKey, agentLabelValue := range agentLabels {
-		v, ok := obj.GetLabels()[agentLabelKey]
-		if !ok {
-			return false
-		}
-		if v != agentLabelValue {
-			return false
-		}
+func (c *AgentPodConfig) Labels() map[string]string {
+	return map[string]string{
+		agentPodLabelKey: agentPodLabelValue,
 	}
-	return true
+}
+
+func (c *AgentPodConfig) PodTemplate() *corev1.Pod {
+	terminateImmediately := int64(0)
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      c.PodNamePrefix,
+			Namespace: c.Namespace,
+			Labels:    c.Labels(),
+		},
+		Spec: corev1.PodSpec{
+			TerminationGracePeriodSeconds: &terminateImmediately,
+			Containers: []corev1.Container{
+				{
+					Name:            "sleeper",
+					Image:           c.ContainerImage,
+					ImagePullPolicy: corev1.PullIfNotPresent,
+					Command:         []string{"/bin/sleep", "infinity"},
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("16Mi"),
+							corev1.ResourceCPU:    resource.MustParse("10m"),
+						},
+						Requests: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("16Mi"),
+							corev1.ResourceCPU:    resource.MustParse("10m"),
+						},
+					},
+				},
+			},
+		},
+	}
+	return pod
 }
 
 func newAgentPod(
@@ -155,6 +172,33 @@ func isAgentPodUpToDate(actualAgentPod, expectedAgentPod *corev1.Pod) bool {
 			actualAgentPod.Spec.Tolerations,
 			expectedAgentPod.Spec.Tolerations,
 		)
+}
+
+func isControllerManagerPod(obj metav1.Object) bool {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return false
+	}
+
+	if pod.Labels == nil {
+		return false
+	}
+
+	component, ok := pod.Labels["component"]
+	if !ok || component != "kube-controller-manager" {
+		return false
+	}
+
+	if pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+
+	return true
+}
+
+func isAgentPod(obj metav1.Object) bool {
+	value, foundLabel := obj.GetLabels()[agentPodLabelKey]
+	return foundLabel && value == agentPodLabelValue
 }
 
 func findControllerManagerPodForSpecificAgentPod(

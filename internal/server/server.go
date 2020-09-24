@@ -11,9 +11,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 
@@ -27,22 +24,6 @@ import (
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/registry/credentialrequest"
 	"go.pinniped.dev/pkg/config"
-	configapi "go.pinniped.dev/pkg/config/api"
-)
-
-// These constants are various label/annotation keys used in Pinniped. They are namespaced by
-// a "pinniped.dev" child domain so they don't collide with other keys.
-const (
-	// kubeCertAgentLabelKey is used to identify which pods are created by the kube-cert-agent
-	// controllers.
-	kubeCertAgentLabelKey = "kube-cert-agent.pinniped.dev"
-
-	// kubeCertAgentCertPathAnnotationKey is the annotation that the kube-cert-agent pod will use
-	// to communicate the in-pod path to the kube API's certificate.
-	kubeCertAgentCertPathAnnotationKey = "kube-cert-agent.pinniped.dev/cert-path"
-	// kubeCertAgentKeyPathAnnotationKey is the annotation that the kube-cert-agent pod will use
-	// to communicate the in-pod path to the kube API's key.
-	kubeCertAgentKeyPathAnnotationKey = "kube-cert-agent.pinniped.dev/key-path"
 )
 
 // App is an object that represents the pinniped-server application.
@@ -123,12 +104,6 @@ func (a *App) runServer(ctx context.Context) error {
 	}
 	serverInstallationNamespace := podInfo.Namespace
 
-	// Load the Kubernetes cluster signing CA.
-	kubeCertAgentTemplate := createKubeCertAgentTemplate(
-		&cfg.KubeCertAgentConfig,
-		serverInstallationNamespace,
-	)
-
 	// Initialize the cache of active identity providers.
 	idpCache := idpcache.New()
 
@@ -147,17 +122,15 @@ func (a *App) runServer(ctx context.Context) error {
 	// post start hook of the aggregated API server.
 	startControllersFunc, err := controllermanager.PrepareControllers(
 		&controllermanager.Config{
-			ServerInstallationNamespace:     serverInstallationNamespace,
-			NamesConfig:                     &cfg.NamesConfig,
-			DiscoveryURLOverride:            cfg.DiscoveryInfo.URL,
-			DynamicServingCertProvider:      dynamicServingCertProvider,
-			DynamicSigningCertProvider:      dynamicSigningCertProvider,
-			ServingCertDuration:             time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds) * time.Second,
-			ServingCertRenewBefore:          time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds) * time.Second,
-			IDPCache:                        idpCache,
-			KubeCertAgentTemplate:           kubeCertAgentTemplate,
-			KubeCertAgentCertPathAnnotation: kubeCertAgentCertPathAnnotationKey,
-			KubeCertAgentKeyPathAnnotation:  kubeCertAgentKeyPathAnnotationKey,
+			ServerInstallationNamespace: serverInstallationNamespace,
+			NamesConfig:                 &cfg.NamesConfig,
+			KubeCertAgentConfig:         &cfg.KubeCertAgentConfig,
+			DiscoveryURLOverride:        cfg.DiscoveryInfo.URL,
+			DynamicServingCertProvider:  dynamicServingCertProvider,
+			DynamicSigningCertProvider:  dynamicSigningCertProvider,
+			ServingCertDuration:         time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds) * time.Second,
+			ServingCertRenewBefore:      time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds) * time.Second,
+			IDPCache:                    idpCache,
 		},
 	)
 	if err != nil {
@@ -223,39 +196,4 @@ func getAggregatedAPIServerConfig(
 		},
 	}
 	return apiServerConfig, nil
-}
-
-func createKubeCertAgentTemplate(cfg *configapi.KubeCertAgentSpec, serverInstallationNamespace string) *corev1.Pod {
-	terminateImmediately := int64(0)
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      *cfg.NamePrefix,
-			Namespace: serverInstallationNamespace, // create the agent pods in the same namespace where Pinniped is installed
-			Labels: map[string]string{
-				kubeCertAgentLabelKey: "",
-			},
-		},
-		Spec: corev1.PodSpec{
-			TerminationGracePeriodSeconds: &terminateImmediately,
-			Containers: []corev1.Container{
-				{
-					Name:            "sleeper",
-					Image:           *cfg.Image,
-					ImagePullPolicy: corev1.PullIfNotPresent,
-					Command:         []string{"/bin/sleep", "infinity"},
-					Resources: corev1.ResourceRequirements{
-						Limits: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("16Mi"),
-							corev1.ResourceCPU:    resource.MustParse("10m"),
-						},
-						Requests: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("16Mi"),
-							corev1.ResourceCPU:    resource.MustParse("10m"),
-						},
-					},
-				},
-			},
-		},
-	}
-	return pod
 }

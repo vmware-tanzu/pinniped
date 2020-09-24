@@ -12,9 +12,7 @@ import (
 	"github.com/sclevine/spec/report"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	kubeinformers "k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
@@ -29,15 +27,14 @@ func TestAnnotaterControllerFilter(t *testing.T) {
 		t,
 		"AnnotaterControllerFilter",
 		func(
-			agentPodTemplate *corev1.Pod,
+			agentPodConfig *AgentPodConfig,
+			_ *CredentialIssuerConfigLocationConfig,
 			kubeSystemPodInformer corev1informers.PodInformer,
 			agentPodInformer corev1informers.PodInformer,
 			observableWithInformerOption *testutil.ObservableWithInformerOption,
 		) {
 			_ = NewAnnotaterController(
-				&Info{
-					Template: agentPodTemplate,
-				},
+				agentPodConfig,
 				nil, // k8sClient, shouldn't matter
 				kubeSystemPodInformer,
 				agentPodInformer,
@@ -56,10 +53,10 @@ func TestAnnotaterControllerSync(t *testing.T) {
 
 		const (
 			certPath           = "some-cert-path"
-			certPathAnnotation = "some-cert-path-annotation"
+			certPathAnnotation = "kube-cert-agent.pinniped.dev/cert-path"
 
 			keyPath           = "some-key-path"
-			keyPathAnnotation = "some-key-path-annotation"
+			keyPathAnnotation = "kube-cert-agent.pinniped.dev/key-path"
 		)
 
 		var r *require.Assertions
@@ -73,99 +70,18 @@ func TestAnnotaterControllerSync(t *testing.T) {
 		var timeoutContext context.Context
 		var timeoutContextCancel context.CancelFunc
 		var syncContext *controllerlib.Context
-
-		agentPodTemplate := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "some-agent-name-",
-				Namespace: agentPodNamespace,
-				Labels: map[string]string{
-					"some-label-key": "some-label-value",
-				},
-			},
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{
-					{
-						Image: "some-agent-image",
-					},
-				},
-			},
-		}
-
-		controllerManagerPod := &corev1.Pod{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: corev1.SchemeGroupVersion.String(),
-				Kind:       "Pod",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: kubeSystemNamespace,
-				Name:      "some-controller-manager-name",
-				Labels: map[string]string{
-					"component": "kube-controller-manager",
-				},
-				UID: types.UID("some-controller-manager-uid"),
-			},
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{
-					{
-						Image: "some-controller-manager-image",
-						Command: []string{
-							"kube-controller-manager",
-							"--cluster-signing-cert-file=" + certPath,
-							"--cluster-signing-key-file=" + keyPath,
-						},
-						VolumeMounts: []corev1.VolumeMount{
-							{
-								Name: "some-volume-mount-name",
-							},
-						},
-					},
-				},
-				NodeName: "some-node-name",
-				NodeSelector: map[string]string{
-					"some-node-selector-key": "some-node-selector-value",
-				},
-				Tolerations: []corev1.Toleration{
-					{
-						Key: "some-toleration",
-					},
-				},
-			},
-			Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
-			},
-		}
-
-		// fnv 32a hash of controller-manager uid
-		controllerManagerPodHash := "fbb0addd"
-		agentPod := agentPodTemplate.DeepCopy()
-		agentPod.Namespace = agentPodNamespace
-		agentPod.Name += controllerManagerPodHash
-		agentPod.Annotations = map[string]string{
-			"kube-cert-agent.pinniped.dev/controller-manager-name": controllerManagerPod.Name,
-			"kube-cert-agent.pinniped.dev/controller-manager-uid":  string(controllerManagerPod.UID),
-		}
-		agentPod.Spec.Containers[0].VolumeMounts = controllerManagerPod.Spec.Containers[0].VolumeMounts
-		agentPod.Spec.RestartPolicy = corev1.RestartPolicyNever
-		agentPod.Spec.AutomountServiceAccountToken = boolPtr(false)
-		agentPod.Spec.NodeName = controllerManagerPod.Spec.NodeName
-		agentPod.Spec.NodeSelector = controllerManagerPod.Spec.NodeSelector
-		agentPod.Spec.Tolerations = controllerManagerPod.Spec.Tolerations
-
-		podsGVR := schema.GroupVersionResource{
-			Group:    corev1.SchemeGroupVersion.Group,
-			Version:  corev1.SchemeGroupVersion.Version,
-			Resource: "pods",
-		}
+		var controllerManagerPod, agentPod *corev1.Pod
+		var podsGVR schema.GroupVersionResource
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
 		var startInformersAndController = func() {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewAnnotaterController(
-				&Info{
-					Template:           agentPodTemplate,
-					CertPathAnnotation: certPathAnnotation,
-					KeyPathAnnotation:  keyPathAnnotation,
+				&AgentPodConfig{
+					Namespace:      agentPodNamespace,
+					ContainerImage: "some-agent-image",
+					PodNamePrefix:  "some-agent-name-",
 				},
 				kubeAPIClient,
 				kubeSystemInformers.Core().V1().Pods(),
@@ -201,6 +117,16 @@ func TestAnnotaterControllerSync(t *testing.T) {
 			agentInformers = kubeinformers.NewSharedInformerFactory(agentInformerClient, 0)
 
 			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
+
+			controllerManagerPod, agentPod = exampleControllerManagerAndAgentPods(
+				kubeSystemNamespace, agentPodNamespace, certPath, keyPath,
+			)
+
+			podsGVR = schema.GroupVersionResource{
+				Group:    corev1.SchemeGroupVersion.Group,
+				Version:  corev1.SchemeGroupVersion.Version,
+				Resource: "pods",
+			}
 
 			// Add a pod into the test that doesn't matter to make sure we don't accidentally trigger any
 			// logic on this thing.

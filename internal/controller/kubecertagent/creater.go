@@ -18,10 +18,11 @@ import (
 )
 
 type createrController struct {
-	agentInfo             *Info
-	k8sClient             kubernetes.Interface
-	kubeSystemPodInformer corev1informers.PodInformer
-	agentPodInformer      corev1informers.PodInformer
+	agentPodConfig                       *AgentPodConfig
+	credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig
+	k8sClient                            kubernetes.Interface
+	kubeSystemPodInformer                corev1informers.PodInformer
+	agentPodInformer                     corev1informers.PodInformer
 }
 
 // NewCreaterController returns a controller that creates new kube-cert-agent pods for every known
@@ -29,7 +30,8 @@ type createrController struct {
 //
 // This controller only uses the Template field of the provided agentInfo.
 func NewCreaterController(
-	agentInfo *Info,
+	agentPodConfig *AgentPodConfig,
+	credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig,
 	k8sClient kubernetes.Interface,
 	kubeSystemPodInformer corev1informers.PodInformer,
 	agentPodInformer corev1informers.PodInformer,
@@ -40,10 +42,11 @@ func NewCreaterController(
 			//nolint: misspell
 			Name: "kube-cert-agent-creater-controller",
 			Syncer: &createrController{
-				agentInfo:             agentInfo,
-				k8sClient:             k8sClient,
-				kubeSystemPodInformer: kubeSystemPodInformer,
-				agentPodInformer:      agentPodInformer,
+				agentPodConfig:                       agentPodConfig,
+				credentialIssuerConfigLocationConfig: credentialIssuerConfigLocationConfig,
+				k8sClient:                            k8sClient,
+				kubeSystemPodInformer:                kubeSystemPodInformer,
+				agentPodInformer:                     agentPodInformer,
 			},
 		},
 		withInformer(
@@ -53,9 +56,7 @@ func NewCreaterController(
 		),
 		withInformer(
 			agentPodInformer,
-			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
-				return isAgentPod(obj, agentInfo.Template.Labels)
-			}),
+			pinnipedcontroller.SimpleFilter(isAgentPod),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -80,13 +81,13 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 			controllerManagerPod,
 			c.kubeSystemPodInformer,
 			c.agentPodInformer,
-			c.agentInfo.Template.Labels,
+			c.agentPodConfig.Labels(),
 		)
 		if err != nil {
 			return err
 		}
 		if agentPod == nil {
-			agentPod = newAgentPod(controllerManagerPod, c.agentInfo.Template)
+			agentPod = newAgentPod(controllerManagerPod, c.agentPodConfig.PodTemplate())
 
 			klog.InfoS(
 				"creating agent pod",
@@ -96,7 +97,7 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 				klog.KObj(controllerManagerPod),
 			)
 			_, err := c.k8sClient.CoreV1().
-				Pods(c.agentInfo.Template.Namespace).
+				Pods(c.agentPodConfig.Namespace).
 				Create(ctx.Context, agentPod, metav1.CreateOptions{})
 			if err != nil {
 				// TODO if agent pods fail to create then update the CIC status with an error saying that they couldn't create

@@ -12,9 +12,7 @@ import (
 	"github.com/sclevine/spec/report"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	kubeinformers "k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
@@ -29,15 +27,15 @@ func TestCreaterControllerFilter(t *testing.T) {
 		t,
 		"CreaterControllerFilter",
 		func(
-			agentPodTemplate *corev1.Pod,
+			agentPodConfig *AgentPodConfig,
+			credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig,
 			kubeSystemPodInformer corev1informers.PodInformer,
 			agentPodInformer corev1informers.PodInformer,
 			observableWithInformerOption *testutil.ObservableWithInformerOption,
 		) {
 			_ = NewCreaterController(
-				&Info{
-					Template: agentPodTemplate,
-				},
+				agentPodConfig,
+				credentialIssuerConfigLocationConfig,
 				nil, // k8sClient, shouldn't matter
 				kubeSystemPodInformer,
 				agentPodInformer,
@@ -63,92 +61,22 @@ func TestCreaterControllerSync(t *testing.T) {
 		var timeoutContext context.Context
 		var timeoutContextCancel context.CancelFunc
 		var syncContext *controllerlib.Context
-
-		agentPodTemplate := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: agentPodNamespace,
-				Name:      "some-agent-name-",
-				Labels: map[string]string{
-					"some-label-key": "some-label-value",
-				},
-			},
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{
-					{
-						Image: "some-agent-image",
-					},
-				},
-			},
-		}
-
-		controllerManagerPod := &corev1.Pod{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: corev1.SchemeGroupVersion.String(),
-				Kind:       "Pod",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: kubeSystemNamespace,
-				Name:      "some-controller-manager-name",
-				Labels: map[string]string{
-					"component": "kube-controller-manager",
-				},
-				UID: types.UID("some-controller-manager-uid"),
-			},
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{
-					{
-						Image: "some-controller-manager-image",
-						VolumeMounts: []corev1.VolumeMount{
-							{
-								Name: "some-volume-mount-name",
-							},
-						},
-					},
-				},
-				NodeName: "some-node-name",
-				NodeSelector: map[string]string{
-					"some-node-selector-key": "some-node-selector-value",
-				},
-				Tolerations: []corev1.Toleration{
-					{
-						Key: "some-toleration",
-					},
-				},
-			},
-			Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
-			},
-		}
-
-		// fnv 32a hash of controller-manager uid
-		controllerManagerPodHash := "fbb0addd"
-		agentPod := agentPodTemplate.DeepCopy()
-		agentPod.Name += controllerManagerPodHash
-		agentPod.Namespace = agentPodNamespace
-		agentPod.Annotations = map[string]string{
-			"kube-cert-agent.pinniped.dev/controller-manager-name": controllerManagerPod.Name,
-			"kube-cert-agent.pinniped.dev/controller-manager-uid":  string(controllerManagerPod.UID),
-		}
-		agentPod.Spec.Containers[0].VolumeMounts = controllerManagerPod.Spec.Containers[0].VolumeMounts
-		agentPod.Spec.RestartPolicy = corev1.RestartPolicyNever
-		agentPod.Spec.AutomountServiceAccountToken = boolPtr(false)
-		agentPod.Spec.NodeName = controllerManagerPod.Spec.NodeName
-		agentPod.Spec.NodeSelector = controllerManagerPod.Spec.NodeSelector
-		agentPod.Spec.Tolerations = controllerManagerPod.Spec.Tolerations
-
-		podsGVR := schema.GroupVersionResource{
-			Group:    corev1.SchemeGroupVersion.Group,
-			Version:  corev1.SchemeGroupVersion.Version,
-			Resource: "pods",
-		}
+		var controllerManagerPod, agentPod *corev1.Pod
+		var podsGVR schema.GroupVersionResource
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
 		var startInformersAndController = func() {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewCreaterController(
-				&Info{
-					Template: agentPodTemplate,
+				&AgentPodConfig{
+					Namespace:      agentPodNamespace,
+					ContainerImage: "some-agent-image",
+					PodNamePrefix:  "some-agent-name-",
+				},
+				&CredentialIssuerConfigLocationConfig{
+					Namespace: "not used yet",
+					Name:      "not used yet",
 				},
 				kubeAPIClient,
 				kubeSystemInformers.Core().V1().Pods(),
@@ -184,6 +112,16 @@ func TestCreaterControllerSync(t *testing.T) {
 			agentInformers = kubeinformers.NewSharedInformerFactory(agentInformerClient, 0)
 
 			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
+
+			controllerManagerPod, agentPod = exampleControllerManagerAndAgentPods(
+				kubeSystemNamespace, agentPodNamespace, "ignored for this test", "ignored for this test",
+			)
+
+			podsGVR = schema.GroupVersionResource{
+				Group:    corev1.SchemeGroupVersion.Group,
+				Version:  corev1.SchemeGroupVersion.Version,
+				Resource: "pods",
+			}
 
 			// Add a pod into the test that doesn't matter to make sure we don't accidentally trigger any
 			// logic on this thing.

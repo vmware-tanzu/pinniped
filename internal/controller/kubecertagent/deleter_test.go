@@ -12,9 +12,7 @@ import (
 	"github.com/sclevine/spec/report"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	kubeinformers "k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
@@ -29,15 +27,14 @@ func TestDeleterControllerFilter(t *testing.T) {
 		t,
 		"DeleterControllerFilter",
 		func(
-			agentPodTemplate *corev1.Pod,
+			agentPodConfig *AgentPodConfig,
+			_ *CredentialIssuerConfigLocationConfig,
 			kubeSystemPodInformer corev1informers.PodInformer,
 			agentPodInformer corev1informers.PodInformer,
 			observableWithInformerOption *testutil.ObservableWithInformerOption,
 		) {
 			_ = NewDeleterController(
-				&Info{
-					Template: agentPodTemplate,
-				},
+				agentPodConfig,
 				nil, // k8sClient, shouldn't matter
 				kubeSystemPodInformer,
 				agentPodInformer,
@@ -63,92 +60,18 @@ func TestDeleterControllerSync(t *testing.T) {
 		var timeoutContext context.Context
 		var timeoutContextCancel context.CancelFunc
 		var syncContext *controllerlib.Context
-
-		agentPodTemplate := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "some-agent-name-",
-				Namespace: agentPodNamespace,
-				Labels: map[string]string{
-					"some-label-key": "some-label-value",
-				},
-			},
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{
-					{
-						Image: "some-agent-image",
-					},
-				},
-			},
-		}
-
-		controllerManagerPod := &corev1.Pod{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: corev1.SchemeGroupVersion.String(),
-				Kind:       "Pod",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: kubeSystemNamespace,
-				Name:      "some-controller-manager-name",
-				Labels: map[string]string{
-					"component": "kube-controller-manager",
-				},
-				UID: types.UID("some-controller-manager-uid"),
-			},
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{
-					{
-						Image: "some-controller-manager-image",
-						VolumeMounts: []corev1.VolumeMount{
-							{
-								Name: "some-volume-mount-name",
-							},
-						},
-					},
-				},
-				NodeName: "some-node-name",
-				NodeSelector: map[string]string{
-					"some-node-selector-key": "some-node-selector-value",
-				},
-				Tolerations: []corev1.Toleration{
-					{
-						Key: "some-toleration",
-					},
-				},
-			},
-			Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
-			},
-		}
-
-		podsGVR := schema.GroupVersionResource{
-			Group:    corev1.SchemeGroupVersion.Group,
-			Version:  corev1.SchemeGroupVersion.Version,
-			Resource: "pods",
-		}
-
-		// fnv 32a hash of "some-controller-manager-uid"
-		controllerManagerPodHash := "fbb0addd"
-		agentPod := agentPodTemplate.DeepCopy()
-		agentPod.Namespace = agentPodNamespace
-		agentPod.Name += controllerManagerPodHash
-		agentPod.Annotations = map[string]string{
-			"kube-cert-agent.pinniped.dev/controller-manager-name": controllerManagerPod.Name,
-			"kube-cert-agent.pinniped.dev/controller-manager-uid":  string(controllerManagerPod.UID),
-		}
-		agentPod.Spec.Containers[0].VolumeMounts = controllerManagerPod.Spec.Containers[0].VolumeMounts
-		agentPod.Spec.RestartPolicy = corev1.RestartPolicyNever
-		agentPod.Spec.AutomountServiceAccountToken = boolPtr(false)
-		agentPod.Spec.NodeName = controllerManagerPod.Spec.NodeName
-		agentPod.Spec.NodeSelector = controllerManagerPod.Spec.NodeSelector
-		agentPod.Spec.Tolerations = controllerManagerPod.Spec.Tolerations
+		var controllerManagerPod, agentPod *corev1.Pod
+		var podsGVR schema.GroupVersionResource
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
 		var startInformersAndController = func() {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewDeleterController(
-				&Info{
-					Template: agentPodTemplate,
+				&AgentPodConfig{
+					Namespace:      agentPodNamespace,
+					ContainerImage: "some-agent-image",
+					PodNamePrefix:  "some-agent-name-",
 				},
 				kubeAPIClient,
 				kubeSystemInformers.Core().V1().Pods(),
@@ -184,6 +107,16 @@ func TestDeleterControllerSync(t *testing.T) {
 
 			agentInformerClient = kubernetesfake.NewSimpleClientset()
 			agentInformers = kubeinformers.NewSharedInformerFactory(agentInformerClient, 0)
+
+			controllerManagerPod, agentPod = exampleControllerManagerAndAgentPods(
+				kubeSystemNamespace, agentPodNamespace, "ignored for this test", "ignored for this test",
+			)
+
+			podsGVR = schema.GroupVersionResource{
+				Group:    corev1.SchemeGroupVersion.Group,
+				Version:  corev1.SchemeGroupVersion.Version,
+				Resource: "pods",
+			}
 
 			// Add an pod into the test that doesn't matter to make sure we don't accidentally
 			// trigger any logic on this thing.
@@ -228,8 +161,8 @@ func TestDeleterControllerSync(t *testing.T) {
 								Name: "some-other-volume-mount",
 							},
 						}
-						r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
-						r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
+						r.NoError(kubeSystemInformerClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
+						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
 					})
 
 					it("deletes the agent pod", func() {
@@ -257,8 +190,8 @@ func TestDeleterControllerSync(t *testing.T) {
 								Name: "some-other-volume",
 							},
 						}
-						r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
-						r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
+						r.NoError(kubeSystemInformerClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
+						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
 					})
 
 					it("deletes the agent pod", func() {
@@ -284,8 +217,8 @@ func TestDeleterControllerSync(t *testing.T) {
 						controllerManagerPod.Spec.NodeSelector = map[string]string{
 							"some-other-node-selector-key": "some-other-node-selector-value",
 						}
-						r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
-						r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
+						r.NoError(kubeSystemInformerClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
+						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
 					})
 
 					it("deletes the agent pod", func() {
@@ -309,8 +242,8 @@ func TestDeleterControllerSync(t *testing.T) {
 				when("the agent pod is out of sync with the controller manager via node name", func() {
 					it.Before(func() {
 						controllerManagerPod.Spec.NodeName = "some-other-node-name"
-						r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
-						r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
+						r.NoError(kubeSystemInformerClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
+						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
 					})
 
 					it("deletes the agent pod", func() {
@@ -338,8 +271,8 @@ func TestDeleterControllerSync(t *testing.T) {
 								Key: "some-other-toleration-key",
 							},
 						}
-						r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
-						r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
+						r.NoError(kubeSystemInformerClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
+						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
 					})
 
 					it("deletes the agent pod", func() {
@@ -368,7 +301,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
 					})
 
-					it.Focus("deletes the agent pod", func() {
+					it("deletes the agent pod", func() {
 						startInformersAndController()
 						err := controllerlib.TestSync(t, subject, *syncContext)
 
@@ -394,7 +327,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
 					})
 
-					it.Focus("deletes the agent pod", func() {
+					it("deletes the agent pod", func() {
 						startInformersAndController()
 						err := controllerlib.TestSync(t, subject, *syncContext)
 

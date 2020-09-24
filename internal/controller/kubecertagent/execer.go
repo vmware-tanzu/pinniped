@@ -22,23 +22,19 @@ import (
 )
 
 type execerController struct {
-	agentInfo                           *Info
-	credentialIssuerConfigNamespaceName string
-	credentialIssuerConfigResourceName  string
-	dynamicCertProvider                 dynamiccert.Provider
-	podCommandExecutor                  PodCommandExecutor
-	clock                               clock.Clock
-	pinnipedAPIClient                   pinnipedclientset.Interface
-	agentPodInformer                    corev1informers.PodInformer
+	credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig
+	dynamicCertProvider                  dynamiccert.Provider
+	podCommandExecutor                   PodCommandExecutor
+	clock                                clock.Clock
+	pinnipedAPIClient                    pinnipedclientset.Interface
+	agentPodInformer                     corev1informers.PodInformer
 }
 
 // NewExecerController returns a controllerlib.Controller that listens for agent pods with proper
 // cert/key path annotations and execs into them to get the cert/key material. It sets the retrieved
 // key material in a provided dynamicCertProvider.
 func NewExecerController(
-	agentInfo *Info,
-	credentialIssuerConfigNamespaceName string,
-	credentialIssuerConfigResourceName string,
+	credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig,
 	dynamicCertProvider dynamiccert.Provider,
 	podCommandExecutor PodCommandExecutor,
 	pinnipedAPIClient pinnipedclientset.Interface,
@@ -50,21 +46,17 @@ func NewExecerController(
 		controllerlib.Config{
 			Name: "kube-cert-agent-execer-controller",
 			Syncer: &execerController{
-				agentInfo:                           agentInfo,
-				credentialIssuerConfigNamespaceName: credentialIssuerConfigNamespaceName,
-				credentialIssuerConfigResourceName:  credentialIssuerConfigResourceName,
-				dynamicCertProvider:                 dynamicCertProvider,
-				podCommandExecutor:                  podCommandExecutor,
-				pinnipedAPIClient:                   pinnipedAPIClient,
-				clock:                               clock,
-				agentPodInformer:                    agentPodInformer,
+				credentialIssuerConfigLocationConfig: credentialIssuerConfigLocationConfig,
+				dynamicCertProvider:                  dynamicCertProvider,
+				podCommandExecutor:                   podCommandExecutor,
+				pinnipedAPIClient:                    pinnipedAPIClient,
+				clock:                                clock,
+				agentPodInformer:                     agentPodInformer,
 			},
 		},
 		withInformer(
 			agentPodInformer,
-			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
-				return isAgentPod(obj, agentInfo.Template.Labels)
-			}),
+			pinnipedcontroller.SimpleFilter(isAgentPod),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -120,8 +112,8 @@ func (c *execerController) Sync(ctx controllerlib.Context) error {
 func (c *execerController) createOrUpdateCredentialIssuerConfig(ctx controllerlib.Context, strategyResult configv1alpha1.CredentialIssuerConfigStrategy) error {
 	return issuerconfig.CreateOrUpdateCredentialIssuerConfig(
 		ctx.Context,
-		c.credentialIssuerConfigNamespaceName,
-		c.credentialIssuerConfigResourceName,
+		c.credentialIssuerConfigLocationConfig.Namespace,
+		c.credentialIssuerConfigLocationConfig.Name,
 		c.pinnipedAPIClient,
 		func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
 			configToUpdate.Status.Strategies = []configv1alpha1.CredentialIssuerConfigStrategy{strategyResult}
@@ -155,8 +147,8 @@ func (c *execerController) getKeypairFilePaths(pod *v1.Pod) (string, string) {
 		annotations = make(map[string]string)
 	}
 
-	certPath := annotations[c.agentInfo.CertPathAnnotation]
-	keyPath := annotations[c.agentInfo.KeyPathAnnotation]
+	certPath := annotations[agentPodCertPathAnnotationKey]
+	keyPath := annotations[agentPodKeyPathAnnotationKey]
 
 	return certPath, keyPath
 }

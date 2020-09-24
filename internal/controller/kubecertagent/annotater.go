@@ -28,7 +28,7 @@ const (
 )
 
 type annotaterController struct {
-	agentInfo             *Info
+	agentPodConfig        *AgentPodConfig
 	k8sClient             kubernetes.Interface
 	kubeSystemPodInformer corev1informers.PodInformer
 	agentPodInformer      corev1informers.PodInformer
@@ -41,7 +41,7 @@ type annotaterController struct {
 // agentInfo.CertPathAnnotation and agentInfo.KeyPathAnnotation annotation keys, with the best-guess
 // paths to the kube API's certificate and key.
 func NewAnnotaterController(
-	agentInfo *Info,
+	agentPodConfig *AgentPodConfig,
 	k8sClient kubernetes.Interface,
 	kubeSystemPodInformer corev1informers.PodInformer,
 	agentPodInformer corev1informers.PodInformer,
@@ -51,7 +51,7 @@ func NewAnnotaterController(
 		controllerlib.Config{
 			Name: "kube-cert-agent-annotater-controller",
 			Syncer: &annotaterController{
-				agentInfo:             agentInfo,
+				agentPodConfig:        agentPodConfig,
 				k8sClient:             k8sClient,
 				kubeSystemPodInformer: kubeSystemPodInformer,
 				agentPodInformer:      agentPodInformer,
@@ -64,9 +64,7 @@ func NewAnnotaterController(
 		),
 		withInformer(
 			agentPodInformer,
-			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
-				return isAgentPod(obj, agentInfo.Template.Labels)
-			}),
+			pinnipedcontroller.SimpleFilter(isAgentPod),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -74,10 +72,10 @@ func NewAnnotaterController(
 
 // Sync implements controllerlib.Syncer.
 func (c *annotaterController) Sync(ctx controllerlib.Context) error {
-	agentSelector := labels.SelectorFromSet(c.agentInfo.Template.Labels)
+	agentSelector := labels.SelectorFromSet(c.agentPodConfig.Labels())
 	agentPods, err := c.agentPodInformer.
 		Lister().
-		Pods(c.agentInfo.Template.Namespace).
+		Pods(c.agentPodConfig.Namespace).
 		List(agentSelector)
 	if err != nil {
 		return fmt.Errorf("informer cannot list agent pods: %w", err)
@@ -131,8 +129,8 @@ func (c *annotaterController) maybeUpdateAgentPod(
 			return err
 		}
 
-		if agentPod.Annotations[c.agentInfo.CertPathAnnotation] != certPath ||
-			agentPod.Annotations[c.agentInfo.KeyPathAnnotation] != keyPath {
+		if agentPod.Annotations[agentPodCertPathAnnotationKey] != certPath ||
+			agentPod.Annotations[agentPodKeyPathAnnotationKey] != keyPath {
 			if err := c.reallyUpdateAgentPod(
 				ctx,
 				agentPod,
@@ -158,8 +156,8 @@ func (c *annotaterController) reallyUpdateAgentPod(
 	if updatedAgentPod.Annotations == nil {
 		updatedAgentPod.Annotations = make(map[string]string)
 	}
-	updatedAgentPod.Annotations[c.agentInfo.CertPathAnnotation] = certPath
-	updatedAgentPod.Annotations[c.agentInfo.KeyPathAnnotation] = keyPath
+	updatedAgentPod.Annotations[agentPodCertPathAnnotationKey] = certPath
+	updatedAgentPod.Annotations[agentPodKeyPathAnnotationKey] = keyPath
 
 	klog.InfoS(
 		"updating agent pod annotations",

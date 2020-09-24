@@ -38,27 +38,15 @@ func TestExecerControllerOptions(t *testing.T) {
 
 		whateverPod := &corev1.Pod{}
 
-		agentPodTemplate := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "some-agent-name-ignored",
-				Namespace: "some-namespace-ignored",
-				Labels: map[string]string{
-					"some-label-key": "some-label-value",
-				},
-			},
-			Spec: corev1.PodSpec{},
-		}
-
 		it.Before(func() {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			agentPodsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Pods()
 			_ = NewExecerController(
-				&Info{
-					Template: agentPodTemplate,
+				&CredentialIssuerConfigLocationConfig{
+					Namespace: "ignored by this test",
+					Name:      "ignored by this test",
 				},
-				"credentialIssuerConfigNamespaceName",
-				"credentialIssuerConfigResourceName",
 				nil, // dynamicCertProvider, not needed for this test
 				nil, // podCommandExecutor, not needed for this test
 				nil, // pinnipedAPIClient, not needed for this test
@@ -70,13 +58,12 @@ func TestExecerControllerOptions(t *testing.T) {
 		})
 
 		when("the change is happening in the agent's namespace", func() {
-			when("a pod with all the agent labels is added/updated/deleted", func() {
+			when("a pod with all agent labels is added/updated/deleted", func() {
 				it("returns true", func() {
 					pod := &corev1.Pod{
 						ObjectMeta: metav1.ObjectMeta{
 							Labels: map[string]string{
-								"some-label-key":       "some-label-value",
-								"some-other-label-key": "some-other-label-value",
+								"kube-cert-agent.pinniped.dev": "true",
 							},
 						},
 					}
@@ -88,7 +75,7 @@ func TestExecerControllerOptions(t *testing.T) {
 				})
 			})
 
-			when("a pod missing any of the agent labels is added/updated/deleted", func() {
+			when("a pod missing the agent label is added/updated/deleted", func() {
 				it("returns false", func() {
 					pod := &corev1.Pod{
 						ObjectMeta: metav1.ObjectMeta{
@@ -143,8 +130,8 @@ func TestManagerControllerSync(t *testing.T) {
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const agentPodNamespace = "some-namespace"
 		const agentPodName = "some-agent-pod-name-123"
-		const certPathAnnotationName = "cert-path-annotation-name"
-		const keyPathAnnotationName = "key-path-annotation-name"
+		const certPathAnnotationName = "kube-cert-agent.pinniped.dev/cert-path"
+		const keyPathAnnotationName = "kube-cert-agent.pinniped.dev/key-path"
 		const fakeCertPath = "/some/cert/path"
 		const fakeKeyPath = "/some/key/path"
 		const defaultDynamicCertProviderCert = "initial-cert"
@@ -162,7 +149,6 @@ func TestManagerControllerSync(t *testing.T) {
 		var agentPodInformer kubeinformers.SharedInformerFactory
 		var agentPodInformerClient *kubernetesfake.Clientset
 		var fakeExecutor *fakePodExecutor
-		var agentPodTemplate *corev1.Pod
 		var dynamicCertProvider dynamiccert.Provider
 		var fakeCertPEM, fakeKeyPEM string
 		var credentialIssuerConfigGVR schema.GroupVersionResource
@@ -173,13 +159,10 @@ func TestManagerControllerSync(t *testing.T) {
 		var startInformersAndController = func() {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewExecerController(
-				&Info{
-					Template:           agentPodTemplate,
-					CertPathAnnotation: certPathAnnotationName,
-					KeyPathAnnotation:  keyPathAnnotationName,
+				&CredentialIssuerConfigLocationConfig{
+					Namespace: credentialIssuerConfigNamespaceName,
+					Name:      credentialIssuerConfigResourceName,
 				},
-				credentialIssuerConfigNamespaceName,
-				credentialIssuerConfigResourceName,
 				dynamicCertProvider,
 				fakeExecutor,
 				pinnipedAPIClient,
@@ -253,23 +236,6 @@ func TestManagerControllerSync(t *testing.T) {
 			}
 			fakeCertPEM = loadFile("./testdata/test.crt")
 			fakeKeyPEM = loadFile("./testdata/test.key")
-
-			agentPodTemplate = &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "some-agent-pod-name-",
-					Namespace: agentPodNamespace,
-					Labels: map[string]string{
-						"some-label-key": "some-label-value",
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Image: "some-agent-image",
-						},
-					},
-				},
-			}
 
 			credentialIssuerConfigGVR = schema.GroupVersionResource{
 				Group:    configv1alpha1.GroupName,

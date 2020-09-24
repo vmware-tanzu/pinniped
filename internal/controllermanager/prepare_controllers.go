@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/clock"
 	k8sinformers "k8s.io/client-go/informers"
@@ -50,6 +49,10 @@ type Config struct {
 	// objects should be named.
 	NamesConfig *api.NamesConfigSpec
 
+	// KubeCertAgentConfig comes from the Pinniped config API (see api.Config). It configures how
+	// the kubecertagent package's controllers should manage the agent pods.
+	KubeCertAgentConfig *api.KubeCertAgentSpec
+
 	// DiscoveryURLOverride allows a caller to inject a hardcoded discovery URL into Pinniped
 	// discovery document.
 	DiscoveryURLOverride *string
@@ -69,17 +72,6 @@ type Config struct {
 
 	// IDPCache is a cache of authenticators shared amongst various IDP-related controllers.
 	IDPCache *idpcache.Cache
-
-	// KubeCertAgentTemplate is the template from which the kube-cert-agent controllers will create a
-	// kube-cert-agent pod. See kubecertagent.Info for more details.
-	KubeCertAgentTemplate *corev1.Pod
-	// KubeCertAgentCertPathAnnotation is the name of the annotation key that will be used when
-	// setting the best-guess path to the kube API's certificate. See kubecertagent.Info for more
-	// details.
-	KubeCertAgentCertPathAnnotation string
-	// KubeCertAgentKeyPathAnnotation is the name of the annotation key that will be used when setting
-	// the best-guess path to the kube API's key. See kubecertagent.Info for more details.
-	KubeCertAgentKeyPathAnnotation string
 }
 
 // Prepare the controllers and their informers and return a function that will start them when called.
@@ -98,9 +90,23 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 	// Create informers. Don't forget to make sure they get started in the function returned below.
 	informers := createInformers(c.ServerInstallationNamespace, k8sClient, pinnipedClient)
 
+	// Configuration for the kubecertagent controllers created below.
+	agentPodConfig := &kubecertagent.AgentPodConfig{
+		Namespace:      c.ServerInstallationNamespace,
+		ContainerImage: *c.KubeCertAgentConfig.Image,
+		PodNamePrefix:  *c.KubeCertAgentConfig.NamePrefix,
+	}
+	credentialIssuerConfigLocationConfig := &kubecertagent.CredentialIssuerConfigLocationConfig{
+		Namespace: c.ServerInstallationNamespace,
+		Name:      c.NamesConfig.CredentialIssuerConfig,
+	}
+
 	// Create controller manager.
 	controllerManager := controllerlib.
 		NewManager().
+
+		// KubeConfig info publishing controller is responsible for writing the KubeConfig information to the
+		// CredentialIssuerConfig resource and keeping that information up to date.
 		WithController(
 			issuerconfig.NewKubeConfigInfoPublisherController(
 				c.ServerInstallationNamespace,
@@ -113,6 +119,8 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			),
 			singletonWorker,
 		).
+
+		// API certs controllers are responsible for managing the TLS certificates used to serve Pinniped's API.
 		WithController(
 			apicerts.NewCertsManagerController(
 				c.ServerInstallationNamespace,
@@ -159,6 +167,55 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			),
 			singletonWorker,
 		).
+
+		// Kube cert agent controllers are responsible for finding the cluster's signing keys and keeping them
+		// up to date in memory, as well as reporting status on this cluster integration strategy.
+		WithController(
+			kubecertagent.NewCreaterController(
+				agentPodConfig,
+				credentialIssuerConfigLocationConfig,
+				k8sClient,
+				informers.kubeSystemNamespaceK8s.Core().V1().Pods(),
+				informers.installationNamespaceK8s.Core().V1().Pods(),
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		).
+		WithController(
+			kubecertagent.NewAnnotaterController(
+				agentPodConfig,
+				k8sClient,
+				informers.kubeSystemNamespaceK8s.Core().V1().Pods(),
+				informers.installationNamespaceK8s.Core().V1().Pods(),
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		).
+		WithController(
+			kubecertagent.NewExecerController(
+				credentialIssuerConfigLocationConfig,
+				c.DynamicSigningCertProvider,
+				kubecertagent.NewPodCommandExecutor(kubeConfig, k8sClient),
+				pinnipedClient,
+				clock.RealClock{},
+				informers.installationNamespaceK8s.Core().V1().Pods(),
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		).
+		WithController(
+			kubecertagent.NewDeleterController(
+				agentPodConfig,
+				k8sClient,
+				informers.kubeSystemNamespaceK8s.Core().V1().Pods(),
+				informers.installationNamespaceK8s.Core().V1().Pods(),
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		).
+
+		// The cache filler controllers are responsible for keep an in-memory representation of active
+		// IDPs up to date.
 		WithController(
 			webhookcachefiller.New(
 				c.IDPCache,
@@ -172,62 +229,6 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				c.IDPCache,
 				informers.installationNamespacePinniped.IDP().V1alpha1().WebhookIdentityProviders(),
 				klogr.New(),
-			),
-			singletonWorker,
-		).
-		WithController(
-			kubecertagent.NewCreaterController(
-				&kubecertagent.Info{
-					Template: c.KubeCertAgentTemplate,
-				},
-				k8sClient,
-				informers.kubeSystemNamespaceK8s.Core().V1().Pods(),
-				informers.installationNamespaceK8s.Core().V1().Pods(),
-				controllerlib.WithInformer,
-			),
-			singletonWorker,
-		).
-		WithController(
-			kubecertagent.NewDeleterController(
-				&kubecertagent.Info{
-					Template: c.KubeCertAgentTemplate,
-				},
-				k8sClient,
-				informers.kubeSystemNamespaceK8s.Core().V1().Pods(),
-				informers.installationNamespaceK8s.Core().V1().Pods(),
-				controllerlib.WithInformer,
-			),
-			singletonWorker,
-		).
-		WithController(
-			kubecertagent.NewAnnotaterController(
-				&kubecertagent.Info{
-					Template:           c.KubeCertAgentTemplate,
-					CertPathAnnotation: c.KubeCertAgentCertPathAnnotation,
-					KeyPathAnnotation:  c.KubeCertAgentKeyPathAnnotation,
-				},
-				k8sClient,
-				informers.kubeSystemNamespaceK8s.Core().V1().Pods(),
-				informers.installationNamespaceK8s.Core().V1().Pods(),
-				controllerlib.WithInformer,
-			),
-			singletonWorker,
-		).
-		WithController(
-			kubecertagent.NewExecerController(
-				&kubecertagent.Info{
-					Template:           c.KubeCertAgentTemplate,
-					CertPathAnnotation: c.KubeCertAgentCertPathAnnotation,
-					KeyPathAnnotation:  c.KubeCertAgentKeyPathAnnotation,
-				},
-				c.ServerInstallationNamespace,
-				c.NamesConfig.CredentialIssuerConfig,
-				c.DynamicSigningCertProvider,
-				kubecertagent.NewPodCommandExecutor(kubeConfig, k8sClient),
-				pinnipedClient,
-				clock.RealClock{},
-				informers.installationNamespaceK8s.Core().V1().Pods(),
-				controllerlib.WithInformer,
 			),
 			singletonWorker,
 		)

@@ -1,4 +1,4 @@
-# Pinniped
+<img src="doc/img/pinniped_logo_with_text_on_right.svg" alt="Pinniped Logo" width="100%"/>
 
 ## Overview
 

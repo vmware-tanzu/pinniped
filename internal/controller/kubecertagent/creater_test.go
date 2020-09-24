@@ -48,9 +48,33 @@ func TestCreaterControllerFilter(t *testing.T) {
 				kubeSystemPodInformer,
 				agentPodInformer,
 				observableWithInformerOption.WithInformer,
+				controllerlib.WithInitialEvent,
 			)
 		},
 	)
+}
+
+func TestCreaterControllerInitialEvent(t *testing.T) {
+	kubeSystemInformerClient := kubernetesfake.NewSimpleClientset()
+	kubeSystemInformers := kubeinformers.NewSharedInformerFactory(kubeSystemInformerClient, 0)
+
+	agentInformerClient := kubernetesfake.NewSimpleClientset()
+	agentInformers := kubeinformers.NewSharedInformerFactory(agentInformerClient, 0)
+
+	observableWithInitialEventOption := testutil.NewObservableWithInitialEventOption()
+
+	_ = NewCreaterController(
+		nil, // agentPodConfig, shouldn't matter
+		nil, // credentialIssuerConfigLocationConfig, shouldn't matter
+		nil, // clock, shound't matter
+		nil, // k8sClient, shouldn't matter
+		nil, // pinnipedAPIClient, shouldn't matter
+		kubeSystemInformers.Core().V1().Pods(),
+		agentInformers.Core().V1().Pods(),
+		controllerlib.WithInformer,
+		observableWithInitialEventOption.WithInitialEvent,
+	)
+	require.Equal(t, &controllerlib.Key{}, observableWithInitialEventOption.GetInitialEventKey())
 }
 
 func TestCreaterControllerSync(t *testing.T) {
@@ -98,6 +122,7 @@ func TestCreaterControllerSync(t *testing.T) {
 				kubeSystemInformers.Core().V1().Pods(),
 				agentInformers.Core().V1().Pods(),
 				controllerlib.WithInformer,
+				controllerlib.WithInitialEvent,
 			)
 
 			// Set this at the last second to support calling subject.Name().

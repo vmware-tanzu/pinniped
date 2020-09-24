@@ -6,7 +6,7 @@ package testutil
 import "go.pinniped.dev/internal/controllerlib"
 
 type ObservableWithInitialEventOption struct {
-	key controllerlib.Key
+	key *controllerlib.Key
 }
 
 func NewObservableWithInitialEventOption() *ObservableWithInitialEventOption {
@@ -14,10 +14,11 @@ func NewObservableWithInitialEventOption() *ObservableWithInitialEventOption {
 }
 
 func (i *ObservableWithInitialEventOption) WithInitialEvent(key controllerlib.Key) controllerlib.Option {
-	i.key = key
+	i.key = new(controllerlib.Key)
+	*i.key = key
 	return controllerlib.WithInitialEvent(key)
 }
 
-func (i *ObservableWithInitialEventOption) GetInitialEventKey() controllerlib.Key {
+func (i *ObservableWithInitialEventOption) GetInitialEventKey() *controllerlib.Key {
 	return i.key
 }

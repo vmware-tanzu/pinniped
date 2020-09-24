@@ -44,6 +44,7 @@ func NewCreaterController(
 	kubeSystemPodInformer corev1informers.PodInformer,
 	agentPodInformer corev1informers.PodInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
+	withInitialEvent pinnipedcontroller.WithInitialEventOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
@@ -69,6 +70,10 @@ func NewCreaterController(
 			pinnipedcontroller.SimpleFilter(isAgentPod),
 			controllerlib.InformerOption{},
 		),
+		// Be sure to run once even to make sure the CIC is updated if there are no controller manager
+		// pods. We should be able to pass an empty key since we don't use the key in the sync (we sync
+		// the world).
+		withInitialEvent(controllerlib.Key{}),
 	)
 }
 

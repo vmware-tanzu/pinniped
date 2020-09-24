@@ -103,7 +103,7 @@ func TestManagerControllerOptions(t *testing.T) {
 
 		when("starting up", func() {
 			it("asks for an initial event because the Secret may not exist yet and it needs to run anyway", func() {
-				r.Equal(controllerlib.Key{
+				r.Equal(&controllerlib.Key{
 					Namespace: installedInNamespace,
 					Name:      certsSecretResourceName,
 				}, observableWithInitialEventOption.GetInitialEventKey())

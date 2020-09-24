@@ -292,7 +292,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 								)
 							})
 
-							it.Focus("returns the original pod update error so the controller gets scheduled again", func() {
+							it("returns the original pod update error so the controller gets scheduled again", func() {
 								startInformersAndController()
 								err := controllerlib.TestSync(t, subject, *syncContext)
 								r.EqualError(err, "cannot update agent pod: some update error")

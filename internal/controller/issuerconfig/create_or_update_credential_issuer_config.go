@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/equality"
+
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
@@ -34,56 +35,36 @@ func CreateOrUpdateCredentialIssuerConfig(
 			return fmt.Errorf("get failed: %w", err)
 		}
 
-		return createOrUpdateCredentialIssuerConfig(
-			ctx,
-			existingCredentialIssuerConfig,
-			notFound,
-			credentialIssuerConfigResourceName,
-			credentialIssuerConfigNamespace,
-			pinnipedClient,
-			applyUpdatesToCredentialIssuerConfigFunc)
+		credentialIssuerConfigsClient := pinnipedClient.ConfigV1alpha1().CredentialIssuerConfigs(credentialIssuerConfigNamespace)
+
+		if notFound {
+			// Create it
+			credentialIssuerConfig := minimalValidCredentialIssuerConfig(credentialIssuerConfigResourceName, credentialIssuerConfigNamespace)
+			applyUpdatesToCredentialIssuerConfigFunc(credentialIssuerConfig)
+
+			if _, err := credentialIssuerConfigsClient.Create(ctx, credentialIssuerConfig, metav1.CreateOptions{}); err != nil {
+				return fmt.Errorf("create failed: %w", err)
+			}
+		} else {
+			// Already exists, so check to see if we need to update it
+			credentialIssuerConfig := existingCredentialIssuerConfig.DeepCopy()
+			applyUpdatesToCredentialIssuerConfigFunc(credentialIssuerConfig)
+
+			if equality.Semantic.DeepEqual(existingCredentialIssuerConfig, credentialIssuerConfig) {
+				// Nothing interesting would change as a result of this update, so skip it
+				return nil
+			}
+
+			if _, err := credentialIssuerConfigsClient.Update(ctx, credentialIssuerConfig, metav1.UpdateOptions{}); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 
 	if err != nil {
 		return fmt.Errorf("could not create or update credentialissuerconfig: %w", err)
 	}
-	return nil
-}
-
-func createOrUpdateCredentialIssuerConfig(
-	ctx context.Context,
-	existingCredentialIssuerConfig *configv1alpha1.CredentialIssuerConfig,
-	notFound bool,
-	credentialIssuerConfigName string,
-	credentialIssuerConfigNamespace string,
-	pinnipedClient pinnipedclientset.Interface,
-	applyUpdatesToCredentialIssuerConfigFunc func(configToUpdate *configv1alpha1.CredentialIssuerConfig),
-) error {
-	credentialIssuerConfigsClient := pinnipedClient.ConfigV1alpha1().CredentialIssuerConfigs(credentialIssuerConfigNamespace)
-
-	if notFound {
-		// Create it
-		credentialIssuerConfig := minimalValidCredentialIssuerConfig(credentialIssuerConfigName, credentialIssuerConfigNamespace)
-		applyUpdatesToCredentialIssuerConfigFunc(credentialIssuerConfig)
-
-		if _, err := credentialIssuerConfigsClient.Create(ctx, credentialIssuerConfig, metav1.CreateOptions{}); err != nil {
-			return fmt.Errorf("create failed: %w", err)
-		}
-	} else {
-		// Already exists, so check to see if we need to update it
-		credentialIssuerConfig := existingCredentialIssuerConfig.DeepCopy()
-		applyUpdatesToCredentialIssuerConfigFunc(credentialIssuerConfig)
-
-		if equality.Semantic.DeepEqual(existingCredentialIssuerConfig, credentialIssuerConfig) {
-			// Nothing interesting would change as a result of this update, so skip it
-			return nil
-		}
-
-		if _, err := credentialIssuerConfigsClient.Update(ctx, credentialIssuerConfig, metav1.UpdateOptions{}); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 

@@ -114,7 +114,6 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				c.DiscoveryURLOverride,
 				pinnipedClient,
 				informers.kubePublicNamespaceK8s.Core().V1().ConfigMaps(),
-				informers.installationNamespacePinniped.Config().V1alpha1().CredentialIssuerConfigs(),
 				controllerlib.WithInformer,
 			),
 			singletonWorker,

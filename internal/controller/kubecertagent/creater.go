@@ -97,7 +97,7 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 			*c.credentialIssuerConfigLocationConfig,
 			c.clock,
 			c.pinnipedAPIClient,
-			constable.Error("Controller manager pod(s) could not be found"),
+			constable.Error("did not find kube-controller-manager pod(s)"),
 		)
 	}
 

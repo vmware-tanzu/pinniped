@@ -431,7 +431,7 @@ func TestCreaterControllerSync(t *testing.T) {
 							Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 							Status:         configv1alpha1.ErrorStrategyStatus,
 							Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
-							Message:        "Controller manager pod(s) could not be found",
+							Message:        "did not find kube-controller-manager pod(s)",
 							LastUpdateTime: metav1.NewTime(frozenNow),
 						},
 					}
@@ -509,7 +509,7 @@ func TestCreaterControllerSync(t *testing.T) {
 									Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 									Status:         configv1alpha1.ErrorStrategyStatus,
 									Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
-									Message:        "Controller manager pod(s) could not be found",
+									Message:        "did not find kube-controller-manager pod(s)",
 									LastUpdateTime: metav1.NewTime(frozenNow),
 								},
 							},

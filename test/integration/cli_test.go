@@ -28,7 +28,7 @@ func TestCLI(t *testing.T) {
 	)
 
 	// Create a test webhook configuration to use with the CLI.
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancelFunc()
 
 	idp := library.CreateTestWebhookIDP(ctx, t)

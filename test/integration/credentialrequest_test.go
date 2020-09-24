@@ -46,7 +46,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 	expectedTestUserGroups := strings.Split(
 		strings.ReplaceAll(library.GetEnv(t, "PINNIPED_TEST_USER_GROUPS"), " ", ""), ",",
 	)
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 
 	testWebhook := library.CreateTestWebhookIDP(ctx, t)

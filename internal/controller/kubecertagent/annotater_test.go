@@ -5,6 +5,7 @@ package kubecertagent
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -12,12 +13,17 @@ import (
 	"github.com/sclevine/spec/report"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/clock"
 	kubeinformers "k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
+	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -35,7 +41,10 @@ func TestAnnotaterControllerFilter(t *testing.T) {
 		) {
 			_ = NewAnnotaterController(
 				agentPodConfig,
+				nil, // credentialIssuerConfigLocationConfig, shouldn't matter
+				nil, // clock, shouldn't matter
 				nil, // k8sClient, shouldn't matter
+				nil, // pinnipedClient, shouldn't matter
 				kubeSystemPodInformer,
 				agentPodInformer,
 				observableWithInformerOption.WithInformer,
@@ -50,6 +59,8 @@ func TestAnnotaterControllerSync(t *testing.T) {
 		const agentPodNamespace = "agent-pod-namespace"
 		const defaultKubeControllerManagerClusterSigningCertFileFlagValue = "/etc/kubernetes/ca/ca.pem"
 		const defaultKubeControllerManagerClusterSigningKeyFileFlagValue = "/etc/kubernetes/ca/ca.key"
+		const credentialIssuerConfigNamespaceName = "cic-namespace-name"
+		const credentialIssuerConfigResourceName = "cic-resource-name"
 
 		const (
 			certPath           = "some-cert-path"
@@ -67,11 +78,14 @@ func TestAnnotaterControllerSync(t *testing.T) {
 		var kubeSystemInformers kubeinformers.SharedInformerFactory
 		var agentInformerClient *kubernetesfake.Clientset
 		var agentInformers kubeinformers.SharedInformerFactory
+		var pinnipedAPIClient *pinnipedfake.Clientset
 		var timeoutContext context.Context
 		var timeoutContextCancel context.CancelFunc
 		var syncContext *controllerlib.Context
 		var controllerManagerPod, agentPod *corev1.Pod
 		var podsGVR schema.GroupVersionResource
+		var credentialIssuerConfigGVR schema.GroupVersionResource
+		var frozenNow time.Time
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
@@ -83,7 +97,13 @@ func TestAnnotaterControllerSync(t *testing.T) {
 					ContainerImage: "some-agent-image",
 					PodNamePrefix:  "some-agent-name-",
 				},
+				&CredentialIssuerConfigLocationConfig{
+					Namespace: credentialIssuerConfigNamespaceName,
+					Name:      credentialIssuerConfigResourceName,
+				},
+				clock.NewFakeClock(frozenNow),
 				kubeAPIClient,
+				pinnipedAPIClient,
 				kubeSystemInformers.Core().V1().Pods(),
 				agentInformers.Core().V1().Pods(),
 				controllerlib.WithInformer,
@@ -116,6 +136,8 @@ func TestAnnotaterControllerSync(t *testing.T) {
 			agentInformerClient = kubernetesfake.NewSimpleClientset()
 			agentInformers = kubeinformers.NewSharedInformerFactory(agentInformerClient, 0)
 
+			pinnipedAPIClient = pinnipedfake.NewSimpleClientset()
+
 			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
 
 			controllerManagerPod, agentPod = exampleControllerManagerAndAgentPods(
@@ -127,6 +149,14 @@ func TestAnnotaterControllerSync(t *testing.T) {
 				Version:  corev1.SchemeGroupVersion.Version,
 				Resource: "pods",
 			}
+
+			credentialIssuerConfigGVR = schema.GroupVersionResource{
+				Group:    configv1alpha1.GroupName,
+				Version:  configv1alpha1.SchemeGroupVersion.Version,
+				Resource: "credentialissuerconfigs",
+			}
+
+			frozenNow = time.Date(2020, time.September, 23, 7, 42, 0, 0, time.Local)
 
 			// Add a pod into the test that doesn't matter to make sure we don't accidentally trigger any
 			// logic on this thing.
@@ -163,6 +193,11 @@ func TestAnnotaterControllerSync(t *testing.T) {
 
 					r.Equal(
 						[]coretesting.Action{
+							coretesting.NewGetAction(
+								podsGVR,
+								agentPodNamespace,
+								updatedAgentPod.Name,
+							),
 							coretesting.NewUpdateAction(
 								podsGVR,
 								agentPodNamespace,
@@ -171,6 +206,144 @@ func TestAnnotaterControllerSync(t *testing.T) {
 						},
 						kubeAPIClient.Actions(),
 					)
+				})
+
+				when("updating the agent pod fails", func() {
+					it.Before(func() {
+						kubeAPIClient.PrependReactor(
+							"update",
+							"pods",
+							func(_ coretesting.Action) (bool, runtime.Object, error) {
+								return true, nil, errors.New("some update error")
+							},
+						)
+					})
+
+					it("returns the error", func() {
+						startInformersAndController()
+						err := controllerlib.TestSync(t, subject, *syncContext)
+						r.EqualError(err, "cannot update agent pod: some update error")
+					})
+
+					when("there is already a CredentialIssuerConfig", func() {
+						var initialCredentialIssuerConfig *configv1alpha1.CredentialIssuerConfig
+
+						it.Before(func() {
+							initialCredentialIssuerConfig = &configv1alpha1.CredentialIssuerConfig{
+								TypeMeta: metav1.TypeMeta{},
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      credentialIssuerConfigResourceName,
+									Namespace: credentialIssuerConfigNamespaceName,
+								},
+								Status: configv1alpha1.CredentialIssuerConfigStatus{
+									Strategies: []configv1alpha1.CredentialIssuerConfigStrategy{},
+									KubeConfigInfo: &configv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+										Server:                   "some-server",
+										CertificateAuthorityData: "some-ca-value",
+									},
+								},
+							}
+							r.NoError(pinnipedAPIClient.Tracker().Add(initialCredentialIssuerConfig))
+						})
+
+						it("updates the CredentialIssuerConfig status with the error", func() {
+							startInformersAndController()
+							err := controllerlib.TestSync(t, subject, *syncContext)
+
+							expectedCredentialIssuerConfig := initialCredentialIssuerConfig.DeepCopy()
+							expectedCredentialIssuerConfig.Status.Strategies = []configv1alpha1.CredentialIssuerConfigStrategy{
+								{
+									Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+									Status:         configv1alpha1.ErrorStrategyStatus,
+									Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+									Message:        "cannot update agent pod: some update error",
+									LastUpdateTime: metav1.NewTime(frozenNow),
+								},
+							}
+							expectedGetAction := coretesting.NewGetAction(
+								credentialIssuerConfigGVR,
+								credentialIssuerConfigNamespaceName,
+								credentialIssuerConfigResourceName,
+							)
+							expectedUpdateAction := coretesting.NewUpdateAction(
+								credentialIssuerConfigGVR,
+								credentialIssuerConfigNamespaceName,
+								expectedCredentialIssuerConfig,
+							)
+
+							r.EqualError(err, "cannot update agent pod: some update error")
+							r.Equal(
+								[]coretesting.Action{
+									expectedGetAction,
+									expectedUpdateAction,
+								},
+								pinnipedAPIClient.Actions(),
+							)
+						})
+
+						when("updating the CredentialIssuerConfig fails", func() {
+							it.Before(func() {
+								pinnipedAPIClient.PrependReactor(
+									"update",
+									"credentialissuerconfigs",
+									func(_ coretesting.Action) (bool, runtime.Object, error) {
+										return true, nil, errors.New("some update error")
+									},
+								)
+							})
+
+							it.Focus("returns the original pod update error so the controller gets scheduled again", func() {
+								startInformersAndController()
+								err := controllerlib.TestSync(t, subject, *syncContext)
+								r.EqualError(err, "cannot update agent pod: some update error")
+							})
+						})
+					})
+
+					when("there is not already a CredentialIssuerConfig", func() {
+						it("creates the CredentialIssuerConfig status with the error", func() {
+							startInformersAndController()
+							err := controllerlib.TestSync(t, subject, *syncContext)
+
+							expectedCredentialIssuerConfig := &configv1alpha1.CredentialIssuerConfig{
+								TypeMeta: metav1.TypeMeta{},
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      credentialIssuerConfigResourceName,
+									Namespace: credentialIssuerConfigNamespaceName,
+								},
+								Status: configv1alpha1.CredentialIssuerConfigStatus{
+									Strategies: []configv1alpha1.CredentialIssuerConfigStrategy{
+										{
+											Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+											Status:         configv1alpha1.ErrorStrategyStatus,
+											Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+											Message:        "cannot update agent pod: some update error",
+											LastUpdateTime: metav1.NewTime(frozenNow),
+										},
+									},
+								},
+							}
+							expectedGetAction := coretesting.NewGetAction(
+								credentialIssuerConfigGVR,
+								credentialIssuerConfigNamespaceName,
+								credentialIssuerConfigResourceName,
+							)
+							expectedCreateAction := coretesting.NewCreateAction(
+								credentialIssuerConfigGVR,
+								credentialIssuerConfigNamespaceName,
+								expectedCredentialIssuerConfig,
+							)
+
+							r.EqualError(err, "cannot update agent pod: some update error")
+							r.Equal(
+								[]coretesting.Action{
+									expectedGetAction,
+									expectedCreateAction,
+								},
+								pinnipedAPIClient.Actions(),
+							)
+						})
+					})
 				})
 			})
 
@@ -195,6 +368,11 @@ func TestAnnotaterControllerSync(t *testing.T) {
 
 					r.Equal(
 						[]coretesting.Action{
+							coretesting.NewGetAction(
+								podsGVR,
+								agentPodNamespace,
+								updatedAgentPod.Name,
+							),
 							coretesting.NewUpdateAction(
 								podsGVR,
 								agentPodNamespace,
@@ -225,6 +403,11 @@ func TestAnnotaterControllerSync(t *testing.T) {
 
 					r.Equal(
 						[]coretesting.Action{
+							coretesting.NewGetAction(
+								podsGVR,
+								agentPodNamespace,
+								updatedAgentPod.Name,
+							),
 							coretesting.NewUpdateAction(
 								podsGVR,
 								agentPodNamespace,
@@ -257,6 +440,11 @@ func TestAnnotaterControllerSync(t *testing.T) {
 
 					r.Equal(
 						[]coretesting.Action{
+							coretesting.NewGetAction(
+								podsGVR,
+								agentPodNamespace,
+								updatedAgentPod.Name,
+							),
 							coretesting.NewUpdateAction(
 								podsGVR,
 								agentPodNamespace,
@@ -289,6 +477,11 @@ func TestAnnotaterControllerSync(t *testing.T) {
 
 					r.Equal(
 						[]coretesting.Action{
+							coretesting.NewGetAction(
+								podsGVR,
+								agentPodNamespace,
+								updatedAgentPod.Name,
+							),
 							coretesting.NewUpdateAction(
 								podsGVR,
 								agentPodNamespace,
@@ -321,6 +514,11 @@ func TestAnnotaterControllerSync(t *testing.T) {
 
 					r.Equal(
 						[]coretesting.Action{
+							coretesting.NewGetAction(
+								podsGVR,
+								agentPodNamespace,
+								updatedAgentPod.Name,
+							),
 							coretesting.NewUpdateAction(
 								podsGVR,
 								agentPodNamespace,
@@ -415,6 +613,11 @@ func TestAnnotaterControllerSync(t *testing.T) {
 					updatedAgentPod.Annotations[certPathAnnotation] = certPath
 					r.Equal(
 						[]coretesting.Action{
+							coretesting.NewGetAction(
+								podsGVR,
+								agentPodNamespace,
+								updatedAgentPod.Name,
+							),
 							coretesting.NewUpdateAction(
 								podsGVR,
 								agentPodNamespace,
@@ -449,6 +652,11 @@ func TestAnnotaterControllerSync(t *testing.T) {
 					updatedAgentPod.Annotations[keyPathAnnotation] = keyPath
 					r.Equal(
 						[]coretesting.Action{
+							coretesting.NewGetAction(
+								podsGVR,
+								agentPodNamespace,
+								updatedAgentPod.Name,
+							),
 							coretesting.NewUpdateAction(
 								podsGVR,
 								agentPodNamespace,

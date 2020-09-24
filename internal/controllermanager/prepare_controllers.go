@@ -174,7 +174,9 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			kubecertagent.NewCreaterController(
 				agentPodConfig,
 				credentialIssuerConfigLocationConfig,
+				clock.RealClock{},
 				k8sClient,
+				pinnipedClient,
 				informers.kubeSystemNamespaceK8s.Core().V1().Pods(),
 				informers.installationNamespaceK8s.Core().V1().Pods(),
 				controllerlib.WithInformer,
@@ -184,7 +186,10 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		WithController(
 			kubecertagent.NewAnnotaterController(
 				agentPodConfig,
+				credentialIssuerConfigLocationConfig,
+				clock.RealClock{},
 				k8sClient,
+				pinnipedClient,
 				informers.kubeSystemNamespaceK8s.Core().V1().Pods(),
 				informers.installationNamespaceK8s.Core().V1().Pods(),
 				controllerlib.WithInformer,

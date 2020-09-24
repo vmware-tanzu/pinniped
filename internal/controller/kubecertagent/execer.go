@@ -8,15 +8,12 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/clock"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/klog/v2"
 
-	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
-	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/dynamiccert"
 )
@@ -87,58 +84,44 @@ func (c *execerController) Sync(ctx controllerlib.Context) error {
 
 	certPEM, err := c.podCommandExecutor.Exec(agentPod.Namespace, agentPod.Name, "cat", certPath)
 	if err != nil {
-		strategyResultUpdateErr := c.createOrUpdateCredentialIssuerConfig(ctx, c.strategyError(err))
+		strategyResultUpdateErr := createOrUpdateCredentialIssuerConfig(
+			ctx.Context,
+			*c.credentialIssuerConfigLocationConfig,
+			c.clock,
+			c.pinnipedAPIClient,
+			err,
+		)
 		klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuerConfig with strategy success")
 		return err
 	}
 
 	keyPEM, err := c.podCommandExecutor.Exec(agentPod.Namespace, agentPod.Name, "cat", keyPath)
 	if err != nil {
-		strategyResultUpdateErr := c.createOrUpdateCredentialIssuerConfig(ctx, c.strategyError(err))
+		strategyResultUpdateErr := createOrUpdateCredentialIssuerConfig(
+			ctx.Context,
+			*c.credentialIssuerConfigLocationConfig,
+			c.clock,
+			c.pinnipedAPIClient,
+			err,
+		)
 		klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuerConfig with strategy success")
 		return err
 	}
 
 	c.dynamicCertProvider.Set([]byte(certPEM), []byte(keyPEM))
 
-	err = c.createOrUpdateCredentialIssuerConfig(ctx, c.strategySuccess())
+	err = createOrUpdateCredentialIssuerConfig(
+		ctx.Context,
+		*c.credentialIssuerConfigLocationConfig,
+		c.clock,
+		c.pinnipedAPIClient,
+		nil, // nil error = success! yay!
+	)
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func (c *execerController) createOrUpdateCredentialIssuerConfig(ctx controllerlib.Context, strategyResult configv1alpha1.CredentialIssuerConfigStrategy) error {
-	return issuerconfig.CreateOrUpdateCredentialIssuerConfig(
-		ctx.Context,
-		c.credentialIssuerConfigLocationConfig.Namespace,
-		c.credentialIssuerConfigLocationConfig.Name,
-		c.pinnipedAPIClient,
-		func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
-			configToUpdate.Status.Strategies = []configv1alpha1.CredentialIssuerConfigStrategy{strategyResult}
-		},
-	)
-}
-
-func (c *execerController) strategySuccess() configv1alpha1.CredentialIssuerConfigStrategy {
-	return configv1alpha1.CredentialIssuerConfigStrategy{
-		Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-		Status:         configv1alpha1.SuccessStrategyStatus,
-		Reason:         configv1alpha1.FetchedKeyStrategyReason,
-		Message:        "Key was fetched successfully",
-		LastUpdateTime: metav1.NewTime(c.clock.Now()),
-	}
-}
-
-func (c *execerController) strategyError(err error) configv1alpha1.CredentialIssuerConfigStrategy {
-	return configv1alpha1.CredentialIssuerConfigStrategy{
-		Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-		Status:         configv1alpha1.ErrorStrategyStatus,
-		Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
-		Message:        err.Error(),
-		LastUpdateTime: metav1.NewTime(c.clock.Now()),
-	}
 }
 
 func (c *execerController) getKeypairFilePaths(pod *v1.Pod) (string, string) {

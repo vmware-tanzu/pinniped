@@ -10,18 +10,23 @@
 package kubecertagent
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"hash/fnv"
 
-	"k8s.io/apimachinery/pkg/api/resource"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/clock"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/klog/v2"
+
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	"go.pinniped.dev/internal/controller/issuerconfig"
 )
 
 const (
@@ -231,6 +236,52 @@ func findControllerManagerPodForSpecificAgentPod(
 	}
 
 	return maybeControllerManagerPod, nil
+}
+
+func createOrUpdateCredentialIssuerConfig(
+	ctx context.Context,
+	cicConfig CredentialIssuerConfigLocationConfig,
+	clock clock.Clock,
+	pinnipedAPIClient pinnipedclientset.Interface,
+	err error,
+) error {
+	return issuerconfig.CreateOrUpdateCredentialIssuerConfig(
+		ctx,
+		cicConfig.Namespace,
+		cicConfig.Name,
+		pinnipedAPIClient,
+		func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
+			var strategyResult configv1alpha1.CredentialIssuerConfigStrategy
+			if err == nil {
+				strategyResult = strategySuccess(clock)
+			} else {
+				strategyResult = strategyError(clock, err)
+			}
+			configToUpdate.Status.Strategies = []configv1alpha1.CredentialIssuerConfigStrategy{
+				strategyResult,
+			}
+		},
+	)
+}
+
+func strategySuccess(clock clock.Clock) configv1alpha1.CredentialIssuerConfigStrategy {
+	return configv1alpha1.CredentialIssuerConfigStrategy{
+		Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+		Status:         configv1alpha1.SuccessStrategyStatus,
+		Reason:         configv1alpha1.FetchedKeyStrategyReason,
+		Message:        "Key was fetched successfully",
+		LastUpdateTime: metav1.NewTime(clock.Now()),
+	}
+}
+
+func strategyError(clock clock.Clock, err error) configv1alpha1.CredentialIssuerConfigStrategy {
+	return configv1alpha1.CredentialIssuerConfigStrategy{
+		Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+		Status:         configv1alpha1.ErrorStrategyStatus,
+		Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+		Message:        err.Error(),
+		LastUpdateTime: metav1.NewTime(clock.Now()),
+	}
 }
 
 func boolPtr(b bool) *bool { return &b }

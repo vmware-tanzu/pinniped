@@ -11,11 +11,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/clock"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
 )
@@ -28,21 +30,29 @@ const (
 )
 
 type annotaterController struct {
-	agentPodConfig        *AgentPodConfig
-	k8sClient             kubernetes.Interface
-	kubeSystemPodInformer corev1informers.PodInformer
-	agentPodInformer      corev1informers.PodInformer
+	agentPodConfig                       *AgentPodConfig
+	credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig
+	clock                                clock.Clock
+	k8sClient                            kubernetes.Interface
+	pinnipedAPIClient                    pinnipedclientset.Interface
+	kubeSystemPodInformer                corev1informers.PodInformer
+	agentPodInformer                     corev1informers.PodInformer
 }
 
 // NewAnnotaterController returns a controller that updates agent pods with the path to the kube
 // API's certificate and key.
 //
-// This controller will add annotations to agent pods, using the provided
-// agentInfo.CertPathAnnotation and agentInfo.KeyPathAnnotation annotation keys, with the best-guess
-// paths to the kube API's certificate and key.
+// This controller will add annotations to agent pods with the best-guess paths to the kube API's
+// certificate and key.
+//
+// It also is tasked with updating the CredentialIssuerConfig, located via the provided
+// credentialIssuerConfigLocationConfig, with any errors that it encounters.
 func NewAnnotaterController(
 	agentPodConfig *AgentPodConfig,
+	credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig,
+	clock clock.Clock,
 	k8sClient kubernetes.Interface,
+	pinnipedAPIClient pinnipedclientset.Interface,
 	kubeSystemPodInformer corev1informers.PodInformer,
 	agentPodInformer corev1informers.PodInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
@@ -51,10 +61,13 @@ func NewAnnotaterController(
 		controllerlib.Config{
 			Name: "kube-cert-agent-annotater-controller",
 			Syncer: &annotaterController{
-				agentPodConfig:        agentPodConfig,
-				k8sClient:             k8sClient,
-				kubeSystemPodInformer: kubeSystemPodInformer,
-				agentPodInformer:      agentPodInformer,
+				agentPodConfig:                       agentPodConfig,
+				credentialIssuerConfigLocationConfig: credentialIssuerConfigLocationConfig,
+				clock:                                clock,
+				k8sClient:                            k8sClient,
+				pinnipedAPIClient:                    pinnipedAPIClient,
+				kubeSystemPodInformer:                kubeSystemPodInformer,
+				agentPodInformer:                     agentPodInformer,
 			},
 		},
 		withInformer(
@@ -108,8 +121,21 @@ func (c *annotaterController) Sync(ctx controllerlib.Context) error {
 			certPath,
 			keyPath,
 		); err != nil {
-			// TODO Failed, so update the CIC status?
-			return fmt.Errorf("cannot update agent pod: %w", err)
+			err = fmt.Errorf("cannot update agent pod: %w", err)
+			strategyResultUpdateErr := createOrUpdateCredentialIssuerConfig(
+				ctx.Context,
+				*c.credentialIssuerConfigLocationConfig,
+				c.clock,
+				c.pinnipedAPIClient,
+				err,
+			)
+			if strategyResultUpdateErr != nil {
+				// If the CIC update fails, then we probably want to try again. This controller will get
+				// called again because of the pod create failure, so just try the CIC update again then.
+				klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuerConfig")
+			}
+
+			return err
 		}
 	}
 
@@ -124,7 +150,7 @@ func (c *annotaterController) maybeUpdateAgentPod(
 	keyPath string,
 ) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		agentPod, err := c.agentPodInformer.Lister().Pods(namespace).Get(name)
+		agentPod, err := c.k8sClient.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}

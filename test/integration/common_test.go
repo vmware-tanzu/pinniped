@@ -169,9 +169,8 @@ func addTestClusterGroupCanViewEverythingRoleBinding(ctx context.Context, t *tes
 func addTestClusterRoleBinding(ctx context.Context, t *testing.T, adminClient kubernetes.Interface, binding *rbacv1.ClusterRoleBinding) {
 	_, err := adminClient.RbacV1().ClusterRoleBindings().Get(ctx, binding.Name, metav1.GetOptions{})
 	if err != nil {
-		// "404 not found" errors are acceptable, but others would be unexpected
 		statusError, isStatus := err.(*errors.StatusError)
-		require.True(t, isStatus)
+		require.True(t, isStatus, "Only StatusNotFound error would be acceptable, but error was: ", err.Error())
 		require.Equal(t, http.StatusNotFound, int(statusError.Status().Code))
 
 		_, err = adminClient.RbacV1().ClusterRoleBindings().Create(ctx, binding, metav1.CreateOptions{})

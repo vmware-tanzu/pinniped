@@ -14,7 +14,6 @@ import (
 
 	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
-	configv1alpha1informers "go.pinniped.dev/generated/1.19/client/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
 )
@@ -25,33 +24,34 @@ const (
 	clusterInfoConfigMapKey = "kubeconfig"
 )
 
-type publisherController struct {
-	namespace                          string
-	credentialIssuerConfigResourceName string
-	serverOverride                     *string
-	pinnipedClient                     pinnipedclientset.Interface
-	configMapInformer                  corev1informers.ConfigMapInformer
-	credentialIssuerConfigInformer     configv1alpha1informers.CredentialIssuerConfigInformer
+type kubeConigInfoPublisherController struct {
+	credentialIssuerConfigNamespaceName string
+	credentialIssuerConfigResourceName  string
+	serverOverride                      *string
+	pinnipedClient                      pinnipedclientset.Interface
+	configMapInformer                   corev1informers.ConfigMapInformer
 }
 
-func NewPublisherController(namespace string,
+// NewKubeConfigInfoPublisherController returns a controller that syncs the
+// configv1alpha1.CredentialIssuerConfig.Status.KubeConfigInfo field with the cluster-info ConfigMap
+// in the kube-public namespace.
+func NewKubeConfigInfoPublisherController(
+	credentialIssuerConfigNamespaceName string,
 	credentialIssuerConfigResourceName string,
 	serverOverride *string,
 	pinnipedClient pinnipedclientset.Interface,
 	configMapInformer corev1informers.ConfigMapInformer,
-	credentialIssuerConfigInformer configv1alpha1informers.CredentialIssuerConfigInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "publisher-controller",
-			Syncer: &publisherController{
-				credentialIssuerConfigResourceName: credentialIssuerConfigResourceName,
-				namespace:                          namespace,
-				serverOverride:                     serverOverride,
-				pinnipedClient:                     pinnipedClient,
-				configMapInformer:                  configMapInformer,
-				credentialIssuerConfigInformer:     credentialIssuerConfigInformer,
+			Syncer: &kubeConigInfoPublisherController{
+				credentialIssuerConfigResourceName:  credentialIssuerConfigResourceName,
+				credentialIssuerConfigNamespaceName: credentialIssuerConfigNamespaceName,
+				serverOverride:                      serverOverride,
+				pinnipedClient:                      pinnipedClient,
+				configMapInformer:                   configMapInformer,
 			},
 		},
 		withInformer(
@@ -59,15 +59,10 @@ func NewPublisherController(namespace string,
 			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(clusterInfoName, ClusterInfoNamespace),
 			controllerlib.InformerOption{},
 		),
-		withInformer(
-			credentialIssuerConfigInformer,
-			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(credentialIssuerConfigResourceName, namespace),
-			controllerlib.InformerOption{},
-		),
 	)
 }
 
-func (c *publisherController) Sync(ctx controllerlib.Context) error {
+func (c *kubeConigInfoPublisherController) Sync(ctx controllerlib.Context) error {
 	configMap, err := c.configMapInformer.
 		Lister().
 		ConfigMaps(ClusterInfoNamespace).
@@ -108,15 +103,6 @@ func (c *publisherController) Sync(ctx controllerlib.Context) error {
 		server = *c.serverOverride
 	}
 
-	existingCredentialIssuerConfigFromInformerCache, err := c.credentialIssuerConfigInformer.
-		Lister().
-		CredentialIssuerConfigs(c.namespace).
-		Get(c.credentialIssuerConfigResourceName)
-	notFound = k8serrors.IsNotFound(err)
-	if err != nil && !notFound {
-		return fmt.Errorf("could not get credentialissuerconfig: %w", err)
-	}
-
 	updateServerAndCAFunc := func(c *configv1alpha1.CredentialIssuerConfig) {
 		c.Status.KubeConfigInfo = &configv1alpha1.CredentialIssuerConfigKubeConfigInfo{
 			Server:                   server,
@@ -124,17 +110,11 @@ func (c *publisherController) Sync(ctx controllerlib.Context) error {
 		}
 	}
 
-	err = createOrUpdateCredentialIssuerConfig(
+	return CreateOrUpdateCredentialIssuerConfig(
 		ctx.Context,
-		existingCredentialIssuerConfigFromInformerCache,
-		notFound,
+		c.credentialIssuerConfigNamespaceName,
 		c.credentialIssuerConfigResourceName,
-		c.namespace,
 		c.pinnipedClient,
-		updateServerAndCAFunc)
-
-	if err != nil {
-		return fmt.Errorf("could not create or update credentialissuerconfig: %w", err)
-	}
-	return nil
+		updateServerAndCAFunc,
+	)
 }

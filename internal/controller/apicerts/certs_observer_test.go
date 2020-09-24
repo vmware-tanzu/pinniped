@@ -17,7 +17,7 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/provider"
+	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/testutil"
 )
 
@@ -107,7 +107,7 @@ func TestObserverControllerSync(t *testing.T) {
 		var timeoutContext context.Context
 		var timeoutContextCancel context.CancelFunc
 		var syncContext *controllerlib.Context
-		var dynamicCertProvider provider.DynamicTLSServingCertProvider
+		var dynamicCertProvider dynamiccert.Provider
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
@@ -143,7 +143,7 @@ func TestObserverControllerSync(t *testing.T) {
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
-			dynamicCertProvider = provider.NewDynamicTLSServingCertProvider()
+			dynamicCertProvider = dynamiccert.New()
 		})
 
 		it.After(func() {

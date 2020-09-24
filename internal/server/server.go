@@ -11,24 +11,17 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
-	"k8s.io/client-go/kubernetes"
-	restclient "k8s.io/client-go/rest"
-	"k8s.io/klog/v2"
 
-	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 	"go.pinniped.dev/internal/apiserver"
-	"go.pinniped.dev/internal/certauthority/kubecertauthority"
+	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
 	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
-	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controllermanager"
 	"go.pinniped.dev/internal/downward"
+	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/here"
-	"go.pinniped.dev/internal/provider"
 	"go.pinniped.dev/internal/registry/credentialrequest"
 	"go.pinniped.dev/pkg/config"
 )
@@ -111,13 +104,6 @@ func (a *App) runServer(ctx context.Context) error {
 	}
 	serverInstallationNamespace := podInfo.Namespace
 
-	// Load the Kubernetes cluster signing CA.
-	k8sClusterCA, shutdownCA, err := getClusterCASigner(ctx, serverInstallationNamespace, cfg.NamesConfig.CredentialIssuerConfig)
-	if err != nil {
-		return err
-	}
-	defer shutdownCA()
-
 	// Initialize the cache of active identity providers.
 	idpCache := idpcache.New()
 
@@ -126,18 +112,26 @@ func (a *App) runServer(ctx context.Context) error {
 	// is stored in a k8s Secret. Therefore it also effectively acting as
 	// an in-memory cache of what is stored in the k8s Secret, helping to
 	// keep incoming requests fast.
-	dynamicCertProvider := provider.NewDynamicTLSServingCertProvider()
+	dynamicServingCertProvider := dynamiccert.New()
+
+	// This cert provider will be used to provide a signing key to the
+	// cert issuer used to issue certs to Pinniped clients wishing to login.
+	dynamicSigningCertProvider := dynamiccert.New()
 
 	// Prepare to start the controllers, but defer actually starting them until the
 	// post start hook of the aggregated API server.
 	startControllersFunc, err := controllermanager.PrepareControllers(
-		serverInstallationNamespace,
-		cfg.NamesConfig,
-		cfg.DiscoveryInfo.URL,
-		dynamicCertProvider,
-		time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds)*time.Second,
-		time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds)*time.Second,
-		idpCache,
+		&controllermanager.Config{
+			ServerInstallationNamespace: serverInstallationNamespace,
+			NamesConfig:                 &cfg.NamesConfig,
+			KubeCertAgentConfig:         &cfg.KubeCertAgentConfig,
+			DiscoveryURLOverride:        cfg.DiscoveryInfo.URL,
+			DynamicServingCertProvider:  dynamicServingCertProvider,
+			DynamicSigningCertProvider:  dynamicSigningCertProvider,
+			ServingCertDuration:         time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds) * time.Second,
+			ServingCertRenewBefore:      time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds) * time.Second,
+			IDPCache:                    idpCache,
+		},
 	)
 	if err != nil {
 		return fmt.Errorf("could not prepare controllers: %w", err)
@@ -145,9 +139,9 @@ func (a *App) runServer(ctx context.Context) error {
 
 	// Get the aggregated API server config.
 	aggregatedAPIServerConfig, err := getAggregatedAPIServerConfig(
-		dynamicCertProvider,
+		dynamicServingCertProvider,
 		idpCache,
-		k8sClusterCA,
+		dynamiccertauthority.New(dynamicSigningCertProvider),
 		startControllersFunc,
 	)
 	if err != nil {
@@ -164,87 +158,9 @@ func (a *App) runServer(ctx context.Context) error {
 	return server.GenericAPIServer.PrepareRun().Run(ctx.Done())
 }
 
-func getClusterCASigner(
-	ctx context.Context, serverInstallationNamespace string,
-	credentialIssuerConfigResourceName string,
-) (credentialrequest.CertIssuer, kubecertauthority.ShutdownFunc, error) {
-	// Load the Kubernetes client configuration.
-	kubeConfig, err := restclient.InClusterConfig()
-	if err != nil {
-		return nil, nil, fmt.Errorf("could not load in-cluster configuration: %w", err)
-	}
-
-	// Connect to the core Kubernetes API.
-	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
-	if err != nil {
-		return nil, nil, fmt.Errorf("could not initialize Kubernetes client: %w", err)
-	}
-
-	// Connect to the pinniped API.
-	pinnipedClient, err := pinnipedclientset.NewForConfig(kubeConfig)
-	if err != nil {
-		return nil, nil, fmt.Errorf("could not initialize pinniped client: %w", err)
-	}
-
-	// Make a clock tick that triggers a periodic refresh.
-	ticker := time.NewTicker(5 * time.Minute)
-
-	// Make a CA which uses the Kubernetes cluster API server's signing certs.
-	k8sClusterCA, shutdownCA := kubecertauthority.New(
-		kubeClient,
-		kubecertauthority.NewPodCommandExecutor(kubeConfig, kubeClient),
-		ticker.C,
-		func() { // success callback
-			err = issuerconfig.CreateOrUpdateCredentialIssuerConfig(
-				ctx,
-				serverInstallationNamespace,
-				credentialIssuerConfigResourceName,
-				pinnipedClient,
-				func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
-					configToUpdate.Status.Strategies = []configv1alpha1.CredentialIssuerConfigStrategy{
-						{
-							Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-							Status:         configv1alpha1.SuccessStrategyStatus,
-							Reason:         configv1alpha1.FetchedKeyStrategyReason,
-							Message:        "Key was fetched successfully",
-							LastUpdateTime: metav1.Now(),
-						},
-					}
-				},
-			)
-			if err != nil {
-				klog.Errorf("error performing create or update on CredentialIssuerConfig to add strategy success: %s", err.Error())
-			}
-		},
-		func(err error) { // error callback
-			if updateErr := issuerconfig.CreateOrUpdateCredentialIssuerConfig(
-				ctx,
-				serverInstallationNamespace,
-				credentialIssuerConfigResourceName,
-				pinnipedClient,
-				func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
-					configToUpdate.Status.Strategies = []configv1alpha1.CredentialIssuerConfigStrategy{
-						{
-							Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-							Status:         configv1alpha1.ErrorStrategyStatus,
-							Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
-							Message:        err.Error(),
-							LastUpdateTime: metav1.Now(),
-						},
-					}
-				},
-			); updateErr != nil {
-				klog.Errorf("error performing create or update on CredentialIssuerConfig to add strategy error: %s", updateErr.Error())
-			}
-		},
-	)
-
-	return k8sClusterCA, func() { shutdownCA(); ticker.Stop() }, nil
-}
-
 // Create a configuration for the aggregated API server.
 func getAggregatedAPIServerConfig(
-	dynamicCertProvider provider.DynamicTLSServingCertProvider,
+	dynamicCertProvider dynamiccert.Provider,
 	authenticator credentialrequest.TokenCredentialRequestAuthenticator,
 	issuer credentialrequest.CertIssuer,
 	startControllersPostStartHook func(context.Context),

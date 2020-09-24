@@ -12,20 +12,20 @@ import (
 
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/provider"
+	"go.pinniped.dev/internal/dynamiccert"
 )
 
 type certsObserverController struct {
 	namespace               string
 	certsSecretResourceName string
-	dynamicCertProvider     provider.DynamicTLSServingCertProvider
+	dynamicCertProvider     dynamiccert.Provider
 	secretInformer          corev1informers.SecretInformer
 }
 
 func NewCertsObserverController(
 	namespace string,
 	certsSecretResourceName string,
-	dynamicCertProvider provider.DynamicTLSServingCertProvider,
+	dynamicCertProvider dynamiccert.Provider,
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {

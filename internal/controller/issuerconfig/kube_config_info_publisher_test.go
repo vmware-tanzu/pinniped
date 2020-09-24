@@ -22,7 +22,6 @@ import (
 
 	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
@@ -36,24 +35,20 @@ func TestInformerFilters(t *testing.T) {
 		var r *require.Assertions
 		var observableWithInformerOption *testutil.ObservableWithInformerOption
 		var configMapInformerFilter controllerlib.Filter
-		var credentialIssuerConfigInformerFilter controllerlib.Filter
 
 		it.Before(func() {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			configMapInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().ConfigMaps()
-			credentialIssuerConfigInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().CredentialIssuerConfigs()
-			_ = NewPublisherController(
+			_ = NewKubeConfigInfoPublisherController(
 				installedInNamespace,
 				credentialIssuerConfigResourceName,
 				nil,
 				nil,
 				configMapInformer,
-				credentialIssuerConfigInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
 			)
 			configMapInformerFilter = observableWithInformerOption.GetFilterForInformer(configMapInformer)
-			credentialIssuerConfigInformerFilter = observableWithInformerOption.GetFilterForInformer(credentialIssuerConfigInformer)
 		})
 
 		when("watching ConfigMap objects", func() {
@@ -103,62 +98,6 @@ func TestInformerFilters(t *testing.T) {
 				})
 			})
 		})
-
-		when("watching CredentialIssuerConfig objects", func() {
-			var subject controllerlib.Filter
-			var target, wrongNamespace, wrongName, unrelated *configv1alpha1.CredentialIssuerConfig
-
-			it.Before(func() {
-				subject = credentialIssuerConfigInformerFilter
-				target = &configv1alpha1.CredentialIssuerConfig{
-					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerConfigResourceName, Namespace: installedInNamespace},
-				}
-				wrongNamespace = &configv1alpha1.CredentialIssuerConfig{
-					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerConfigResourceName, Namespace: "wrong-namespace"},
-				}
-				wrongName = &configv1alpha1.CredentialIssuerConfig{
-					ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: installedInNamespace},
-				}
-				unrelated = &configv1alpha1.CredentialIssuerConfig{
-					ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: "wrong-namespace"},
-				}
-			})
-
-			when("the target CredentialIssuerConfig changes", func() {
-				it("returns true to trigger the sync method", func() {
-					r.True(subject.Add(target))
-					r.True(subject.Update(target, unrelated))
-					r.True(subject.Update(unrelated, target))
-					r.True(subject.Delete(target))
-				})
-			})
-
-			when("a CredentialIssuerConfig from another namespace changes", func() {
-				it("returns false to avoid triggering the sync method", func() {
-					r.False(subject.Add(wrongNamespace))
-					r.False(subject.Update(wrongNamespace, unrelated))
-					r.False(subject.Update(unrelated, wrongNamespace))
-					r.False(subject.Delete(wrongNamespace))
-				})
-			})
-
-			when("a CredentialIssuerConfig with a different name changes", func() {
-				it("returns false to avoid triggering the sync method", func() {
-					r.False(subject.Add(wrongName))
-					r.False(subject.Update(wrongName, unrelated))
-					r.False(subject.Update(unrelated, wrongName))
-					r.False(subject.Delete(wrongName))
-				})
-			})
-
-			when("a CredentialIssuerConfig with a different name and a different namespace changes", func() {
-				it("returns false to avoid triggering the sync method", func() {
-					r.False(subject.Add(unrelated))
-					r.False(subject.Update(unrelated, unrelated))
-					r.False(subject.Delete(unrelated))
-				})
-			})
-		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))
 }
 
@@ -172,9 +111,7 @@ func TestSync(t *testing.T) {
 		var subject controllerlib.Controller
 		var serverOverride *string
 		var kubeInformerClient *kubernetesfake.Clientset
-		var pinnipedInformerClient *pinnipedfake.Clientset
 		var kubeInformers kubeinformers.SharedInformerFactory
-		var pinnipedInformers pinnipedinformers.SharedInformerFactory
 		var pinnipedAPIClient *pinnipedfake.Clientset
 		var timeoutContext context.Context
 		var timeoutContextCancel context.CancelFunc
@@ -206,13 +143,12 @@ func TestSync(t *testing.T) {
 		// nested Before's can keep adding things to the informer caches.
 		var startInformersAndController = func() {
 			// Set this at the last second to allow for injection of server override.
-			subject = NewPublisherController(
+			subject = NewKubeConfigInfoPublisherController(
 				installedInNamespace,
 				credentialIssuerConfigResourceName,
 				serverOverride,
 				pinnipedAPIClient,
 				kubeInformers.Core().V1().ConfigMaps(),
-				pinnipedInformers.Config().V1alpha1().CredentialIssuerConfigs(),
 				controllerlib.WithInformer,
 			)
 
@@ -228,7 +164,6 @@ func TestSync(t *testing.T) {
 
 			// Must start informers before calling TestRunSynchronously()
 			kubeInformers.Start(timeoutContext.Done())
-			pinnipedInformers.Start(timeoutContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
@@ -240,8 +175,6 @@ func TestSync(t *testing.T) {
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
 			pinnipedAPIClient = pinnipedfake.NewSimpleClientset()
-			pinnipedInformerClient = pinnipedfake.NewSimpleClientset()
-			pinnipedInformers = pinnipedinformers.NewSharedInformerFactory(pinnipedInformerClient, 0)
 		})
 
 		it.After(func() {
@@ -288,6 +221,7 @@ func TestSync(t *testing.T) {
 
 						r.Equal(
 							[]coretesting.Action{
+								coretesting.NewGetAction(expectedCredentialIssuerConfigGVR, installedInNamespace, expectedCredentialIssuerConfig.Name),
 								coretesting.NewCreateAction(
 									expectedCredentialIssuerConfigGVR,
 									installedInNamespace,
@@ -334,6 +268,7 @@ func TestSync(t *testing.T) {
 
 							r.Equal(
 								[]coretesting.Action{
+									coretesting.NewGetAction(expectedCredentialIssuerConfigGVR, installedInNamespace, expectedCredentialIssuerConfig.Name),
 									coretesting.NewCreateAction(
 										expectedCredentialIssuerConfigGVR,
 										installedInNamespace,
@@ -348,13 +283,16 @@ func TestSync(t *testing.T) {
 
 				when("the CredentialIssuerConfig already exists", func() {
 					when("the CredentialIssuerConfig is already up to date according to the data in the ConfigMap", func() {
+						var credentialIssuerConfigGVR schema.GroupVersionResource
+						var credentialIssuerConfig *configv1alpha1.CredentialIssuerConfig
+
 						it.Before(func() {
-							_, expectedCredentialIssuerConfig := expectedCredentialIssuerConfig(
+							credentialIssuerConfigGVR, credentialIssuerConfig = expectedCredentialIssuerConfig(
 								installedInNamespace,
 								kubeServerURL,
 								caData,
 							)
-							err := pinnipedInformerClient.Tracker().Add(expectedCredentialIssuerConfig)
+							err := pinnipedAPIClient.Tracker().Add(credentialIssuerConfig)
 							r.NoError(err)
 						})
 
@@ -363,7 +301,12 @@ func TestSync(t *testing.T) {
 							err := controllerlib.TestSync(t, subject, *syncContext)
 							r.NoError(err)
 
-							r.Empty(pinnipedAPIClient.Actions())
+							r.Equal(
+								[]coretesting.Action{
+									coretesting.NewGetAction(credentialIssuerConfigGVR, installedInNamespace, credentialIssuerConfig.Name),
+								},
+								pinnipedAPIClient.Actions(),
+							)
 						})
 					})
 
@@ -375,7 +318,6 @@ func TestSync(t *testing.T) {
 								caData,
 							)
 							expectedCredentialIssuerConfig.Status.KubeConfigInfo.Server = "https://some-other-server"
-							r.NoError(pinnipedInformerClient.Tracker().Add(expectedCredentialIssuerConfig))
 							r.NoError(pinnipedAPIClient.Tracker().Add(expectedCredentialIssuerConfig))
 						})
 
@@ -390,6 +332,7 @@ func TestSync(t *testing.T) {
 								caData,
 							)
 							expectedActions := []coretesting.Action{
+								coretesting.NewGetAction(expectedCredentialIssuerConfigGVR, installedInNamespace, expectedCredentialIssuerConfig.Name),
 								coretesting.NewUpdateAction(
 									expectedCredentialIssuerConfigGVR,
 									installedInNamespace,

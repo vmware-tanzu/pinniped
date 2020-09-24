@@ -47,6 +47,14 @@ rules:
   - apiGroups: [""]
     resources: [secrets]
     verbs: [create, get, list, patch, update, watch, delete]
+  #! We need to be able to CRUD pods in our namespace so we can reconcile the kube-cert-agent pods.
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [create, get, list, patch, update, watch, delete]
+  #! We need to be able to exec into pods in our namespace so we can grab the API server's private key
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create]
   - apiGroups: [config.pinniped.dev, idp.pinniped.dev]
     resources: ["*"]
     verbs: [create, get, list, update, watch]
@@ -65,25 +73,22 @@ roleRef:
   name: #@ data.values.app_name + "-aggregated-api-server"
   apiGroup: rbac.authorization.k8s.io
 
-#! Give permission to list pods and pod exec in the kube-system namespace so we can find the API server's private key
+#! Give permission to read pods in the kube-system namespace so we can find the API server's private key
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: #@ data.values.app_name + "-kube-system-pod-exec"
+  name: #@ data.values.app_name + "-kube-system-pod-read"
   namespace: kube-system
 rules:
   - apiGroups: [""]
     resources: [pods]
-    verbs: [get, list]
-  - apiGroups: [""]
-    resources: [pods/exec]
-    verbs: [create]
+    verbs: [get, list, watch]
 ---
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: #@ data.values.app_name + "-kube-system-pod-exec"
+  name: #@ data.values.app_name + "-kube-system-pod-read"
   namespace: kube-system
 subjects:
   - kind: ServiceAccount
@@ -91,7 +96,7 @@ subjects:
     namespace: #@ data.values.namespace
 roleRef:
   kind: Role
-  name: #@ data.values.app_name + "-kube-system-pod-exec"
+  name: #@ data.values.app_name + "-kube-system-pod-read"
   apiGroup: rbac.authorization.k8s.io
 
 #! Allow both authenticated and unauthenticated TokenCredentialRequests (i.e. allow all requests)

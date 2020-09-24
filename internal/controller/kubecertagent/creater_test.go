@@ -83,9 +83,10 @@ func TestCreaterControllerSync(t *testing.T) {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewCreaterController(
 				&AgentPodConfig{
-					Namespace:      agentPodNamespace,
-					ContainerImage: "some-agent-image",
-					PodNamePrefix:  "some-agent-name-",
+					Namespace:                 agentPodNamespace,
+					ContainerImage:            "some-agent-image",
+					PodNamePrefix:             "some-agent-name-",
+					ContainerImagePullSecrets: []string{"some-image-pull-secret"},
 				},
 				&CredentialIssuerConfigLocationConfig{
 					Namespace: credentialIssuerConfigNamespaceName,

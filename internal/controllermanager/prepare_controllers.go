@@ -92,9 +92,10 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 
 	// Configuration for the kubecertagent controllers created below.
 	agentPodConfig := &kubecertagent.AgentPodConfig{
-		Namespace:      c.ServerInstallationNamespace,
-		ContainerImage: *c.KubeCertAgentConfig.Image,
-		PodNamePrefix:  *c.KubeCertAgentConfig.NamePrefix,
+		Namespace:                 c.ServerInstallationNamespace,
+		ContainerImage:            *c.KubeCertAgentConfig.Image,
+		PodNamePrefix:             *c.KubeCertAgentConfig.NamePrefix,
+		ContainerImagePullSecrets: c.KubeCertAgentConfig.ImagePullSecrets,
 	}
 	credentialIssuerConfigLocationConfig := &kubecertagent.CredentialIssuerConfigLocationConfig{
 		Namespace: c.ServerInstallationNamespace,

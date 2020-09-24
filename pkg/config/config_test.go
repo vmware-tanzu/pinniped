@@ -39,6 +39,7 @@ func TestFromPath(t *testing.T) {
 				KubeCertAgent:
 				  namePrefix: kube-cert-agent-name-prefix-
 				  image: kube-cert-agent-image
+				  imagePullSecrets: [kube-cert-agent-image-pull-secret]
 			`),
 			wantConfig: &api.Config{
 				DiscoveryInfo: api.DiscoveryInfoSpec{
@@ -56,8 +57,9 @@ func TestFromPath(t *testing.T) {
 					APIService:               "pinniped-api",
 				},
 				KubeCertAgentConfig: api.KubeCertAgentSpec{
-					NamePrefix: stringPtr("kube-cert-agent-name-prefix-"),
-					Image:      stringPtr("kube-cert-agent-image"),
+					NamePrefix:       stringPtr("kube-cert-agent-name-prefix-"),
+					Image:            stringPtr("kube-cert-agent-image"),
+					ImagePullSecrets: []string{"kube-cert-agent-image-pull-secret"},
 				},
 			},
 		},

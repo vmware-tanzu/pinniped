@@ -61,4 +61,8 @@ type KubeCertAgentSpec struct {
 	// should contain at least 2 binaries: /bin/sleep and cat (somewhere on the $PATH). The default
 	// for this value is "debian:latest".
 	Image *string `json:"image"`
+
+	// ImagePullSecrets is a list of names of Kubernetes Secret objects that will be used as
+	// ImagePullSecrets on the kube-cert-agent pods.
+	ImagePullSecrets []string
 }

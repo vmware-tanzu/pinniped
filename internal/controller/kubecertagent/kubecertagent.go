@@ -63,6 +63,10 @@ type AgentPodConfig struct {
 
 	//  The name prefix for each of the agent pods.
 	PodNamePrefix string
+
+	// ContainerImagePullSecrets is a list of names of Kubernetes Secret objects that will be used as
+	// ImagePullSecrets on the kube-cert-agent pods.
+	ContainerImagePullSecrets []string
 }
 
 type CredentialIssuerConfigLocationConfig struct {
@@ -81,6 +85,17 @@ func (c *AgentPodConfig) Labels() map[string]string {
 
 func (c *AgentPodConfig) PodTemplate() *corev1.Pod {
 	terminateImmediately := int64(0)
+
+	imagePullSecrets := []corev1.LocalObjectReference{}
+	for _, imagePullSecret := range c.ContainerImagePullSecrets {
+		imagePullSecrets = append(
+			imagePullSecrets,
+			corev1.LocalObjectReference{
+				Name: imagePullSecret,
+			},
+		)
+	}
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      c.PodNamePrefix,
@@ -89,6 +104,7 @@ func (c *AgentPodConfig) PodTemplate() *corev1.Pod {
 		},
 		Spec: corev1.PodSpec{
 			TerminationGracePeriodSeconds: &terminateImmediately,
+			ImagePullSecrets:              imagePullSecrets,
 			Containers: []corev1.Container{
 				{
 					Name:            "sleeper",

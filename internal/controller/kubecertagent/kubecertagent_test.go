@@ -87,6 +87,11 @@ func exampleControllerManagerAndAgentPods(
 		},
 		Spec: corev1.PodSpec{
 			TerminationGracePeriodSeconds: &zero,
+			ImagePullSecrets: []corev1.LocalObjectReference{
+				{
+					Name: "some-image-pull-secret",
+				},
+			},
 			Containers: []corev1.Container{
 				{
 					Name:            "sleeper",

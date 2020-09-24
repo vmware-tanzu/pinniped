@@ -45,6 +45,10 @@ data:
       (@ else: @)
       image: (@= data.values.image_repo + ":" + data.values.image_tag @)
       (@ end @)
+      (@ if data.values.image_pull_dockerconfigjson: @)
+      imagePullSecrets:
+        - image-pull-secret
+      (@ end @)
 ---
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
 apiVersion: v1

@@ -25,9 +25,7 @@ const (
 )
 
 func TestKubeCertAgent(t *testing.T) {
-	library.SkipUnlessIntegration(t)
-	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
-	namespaceName := library.GetEnv(t, "PINNIPED_NAMESPACE")
+	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
@@ -39,7 +37,7 @@ func TestKubeCertAgent(t *testing.T) {
 	// We can pretty safely assert there should be more than 1, since there should be a
 	// kube-cert-agent pod per kube-controller-manager pod, and there should probably be at least
 	// 1 kube-controller-manager for this to be a working kube API.
-	originalAgentPods, err := kubeClient.CoreV1().Pods(namespaceName).List(ctx, metav1.ListOptions{
+	originalAgentPods, err := kubeClient.CoreV1().Pods(env.Namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: kubeCertAgentLabelSelector,
 	})
 	require.NoError(t, err)
@@ -48,7 +46,7 @@ func TestKubeCertAgent(t *testing.T) {
 
 	agentPodsReconciled := func() bool {
 		var currentAgentPods *corev1.PodList
-		currentAgentPods, err = kubeClient.CoreV1().Pods(namespaceName).List(ctx, metav1.ListOptions{
+		currentAgentPods, err = kubeClient.CoreV1().Pods(env.Namespace).List(ctx, metav1.ListOptions{
 			LabelSelector: kubeCertAgentLabelSelector,
 		})
 
@@ -92,7 +90,7 @@ func TestKubeCertAgent(t *testing.T) {
 			updatedAgentPod.Spec.Tolerations,
 			corev1.Toleration{Key: "fake-toleration"},
 		)
-		_, err = kubeClient.CoreV1().Pods(namespaceName).Update(ctx, updatedAgentPod, metav1.UpdateOptions{})
+		_, err = kubeClient.CoreV1().Pods(env.Namespace).Update(ctx, updatedAgentPod, metav1.UpdateOptions{})
 		require.NoError(t, err)
 
 		// Make sure the original pods come back.
@@ -104,7 +102,7 @@ func TestKubeCertAgent(t *testing.T) {
 		// Delete the first pod. The controller should see it, and flip it back.
 		err = kubeClient.
 			CoreV1().
-			Pods(namespaceName).
+			Pods(env.Namespace).
 			Delete(ctx, originalAgentPods.Items[0].Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
 

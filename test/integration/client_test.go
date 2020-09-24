@@ -55,10 +55,7 @@ var (
 var maskKey = func(s string) string { return strings.ReplaceAll(s, "TESTING KEY", "PRIVATE KEY") }
 
 func TestClient(t *testing.T) {
-	library.SkipUnlessIntegration(t)
-	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
-	token := library.GetEnv(t, "PINNIPED_TEST_USER_TOKEN")
-	namespace := library.GetEnv(t, "PINNIPED_NAMESPACE")
+	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -75,7 +72,7 @@ func TestClient(t *testing.T) {
 
 	var resp *clientauthenticationv1beta1.ExecCredential
 	assert.Eventually(t, func() bool {
-		resp, err = client.ExchangeToken(ctx, namespace, idp, token, string(clientConfig.CAData), clientConfig.Host)
+		resp, err = client.ExchangeToken(ctx, env.Namespace, idp, env.TestUser.Token, string(clientConfig.CAData), clientConfig.Host)
 		return err == nil
 	}, 10*time.Second, 500*time.Millisecond)
 	require.NoError(t, err)

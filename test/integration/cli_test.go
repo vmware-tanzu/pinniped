@@ -18,14 +18,7 @@ import (
 )
 
 func TestCLI(t *testing.T) {
-	library.SkipUnlessIntegration(t)
-	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
-	token := library.GetEnv(t, "PINNIPED_TEST_USER_TOKEN")
-	namespaceName := library.GetEnv(t, "PINNIPED_NAMESPACE")
-	testUsername := library.GetEnv(t, "PINNIPED_TEST_USER_USERNAME")
-	expectedTestUserGroups := strings.Split(
-		strings.ReplaceAll(library.GetEnv(t, "PINNIPED_TEST_USER_GROUPS"), " ", ""), ",",
-	)
+	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
 	// Create a test webhook configuration to use with the CLI.
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 4*time.Minute)
@@ -62,20 +55,20 @@ func TestCLI(t *testing.T) {
 	defer cleanupFunc()
 
 	// Run pinniped CLI to get kubeconfig.
-	kubeConfigYAML := runPinnipedCLI(t, pinnipedExe, token, namespaceName, "webhook", idp.Name)
+	kubeConfigYAML := runPinnipedCLI(t, pinnipedExe, env.TestUser.Token, env.Namespace, "webhook", idp.Name)
 
 	// In addition to the client-go based testing below, also try the kubeconfig
 	// with kubectl to validate that it works.
 	adminClient := library.NewClientset(t)
 	t.Run(
 		"access as user with kubectl",
-		accessAsUserWithKubectlTest(ctx, adminClient, kubeConfigYAML, testUsername, namespaceName),
+		accessAsUserWithKubectlTest(ctx, adminClient, kubeConfigYAML, env.TestUser.ExpectedUsername, env.Namespace),
 	)
-	for _, group := range expectedTestUserGroups {
+	for _, group := range env.TestUser.ExpectedGroups {
 		group := group
 		t.Run(
 			"access as group "+group+" with kubectl",
-			accessAsGroupWithKubectlTest(ctx, adminClient, kubeConfigYAML, group, namespaceName),
+			accessAsGroupWithKubectlTest(ctx, adminClient, kubeConfigYAML, group, env.Namespace),
 		)
 	}
 
@@ -83,8 +76,8 @@ func TestCLI(t *testing.T) {
 	kubeClient := library.NewClientsetForKubeConfig(t, kubeConfigYAML)
 
 	// Validate that we can auth to the API via our user.
-	t.Run("access as user with client-go", accessAsUserTest(ctx, adminClient, testUsername, kubeClient))
-	for _, group := range expectedTestUserGroups {
+	t.Run("access as user with client-go", accessAsUserTest(ctx, adminClient, env.TestUser.ExpectedUsername, kubeClient))
+	for _, group := range env.TestUser.ExpectedGroups {
 		group := group
 		t.Run("access as group "+group+" with client-go", accessAsGroupTest(ctx, adminClient, group, kubeClient))
 	}

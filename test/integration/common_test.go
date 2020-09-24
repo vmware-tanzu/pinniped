@@ -129,6 +129,8 @@ func accessAsGroupWithKubectlTest(
 }
 
 func addTestClusterUserCanViewEverythingRoleBinding(ctx context.Context, t *testing.T, adminClient kubernetes.Interface, testUsername string) {
+	t.Helper()
+
 	addTestClusterRoleBinding(ctx, t, adminClient, &rbacv1.ClusterRoleBinding{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
@@ -148,6 +150,8 @@ func addTestClusterUserCanViewEverythingRoleBinding(ctx context.Context, t *test
 }
 
 func addTestClusterGroupCanViewEverythingRoleBinding(ctx context.Context, t *testing.T, adminClient kubernetes.Interface, testGroup string) {
+	t.Helper()
+
 	addTestClusterRoleBinding(ctx, t, adminClient, &rbacv1.ClusterRoleBinding{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
@@ -167,6 +171,8 @@ func addTestClusterGroupCanViewEverythingRoleBinding(ctx context.Context, t *tes
 }
 
 func addTestClusterRoleBinding(ctx context.Context, t *testing.T, adminClient kubernetes.Interface, binding *rbacv1.ClusterRoleBinding) {
+	t.Helper()
+
 	_, err := adminClient.RbacV1().ClusterRoleBindings().Get(ctx, binding.Name, metav1.GetOptions{})
 	if err != nil {
 		statusError, isStatus := err.(*errors.StatusError)
@@ -186,6 +192,8 @@ func addTestClusterRoleBinding(ctx context.Context, t *testing.T, adminClient ku
 }
 
 func runKubectlGetNamespaces(t *testing.T, kubeConfigYAML string) (string, error) {
+	t.Helper()
+
 	f := writeStringToTempFile(t, "pinniped-generated-kubeconfig-*", kubeConfigYAML)
 
 	//nolint: gosec // It's okay that we are passing f.Name() to an exec command here. It was created above.

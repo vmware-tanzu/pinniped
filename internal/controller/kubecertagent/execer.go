@@ -30,6 +30,9 @@ type execerController struct {
 // NewExecerController returns a controllerlib.Controller that listens for agent pods with proper
 // cert/key path annotations and execs into them to get the cert/key material. It sets the retrieved
 // key material in a provided dynamicCertProvider.
+//
+// It also is tasked with updating the CredentialIssuerConfig, located via the provided
+// credentialIssuerConfigLocationConfig, with any errors that it encounters.
 func NewExecerController(
 	credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig,
 	dynamicCertProvider dynamiccert.Provider,

@@ -33,8 +33,12 @@ const (
 	// ControllerManagerNamespace is the assumed namespace of the kube-controller-manager pod(s).
 	ControllerManagerNamespace = "kube-system"
 
+	// controllerManagerNameAnnotationKey is used to store an agent pod's parent's name, i.e., the
+	// name of the controller manager pod with which it is supposed to be in sync.
 	controllerManagerNameAnnotationKey = "kube-cert-agent.pinniped.dev/controller-manager-name"
-	controllerManagerUIDAnnotationKey  = "kube-cert-agent.pinniped.dev/controller-manager-uid"
+	// controllerManagerUIDAnnotationKey is used to store an agent pod's parent's UID, i.e., the UID
+	// of the controller manager pod with which it is supposed to be in sync.
+	controllerManagerUIDAnnotationKey = "kube-cert-agent.pinniped.dev/controller-manager-uid"
 
 	// agentPodLabelKey is used to identify which pods are created by the kube-cert-agent
 	// controllers.

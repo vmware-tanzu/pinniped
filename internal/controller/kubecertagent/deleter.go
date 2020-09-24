@@ -25,8 +25,6 @@ type deleterController struct {
 
 // NewDeleterController returns a controller that deletes any kube-cert-agent pods that are out of
 // sync with the known kube-controller-manager pods.
-//
-// This controller only uses the Template field of the provided agentInfo.
 func NewDeleterController(
 	agentPodConfig *AgentPodConfig,
 	k8sClient kubernetes.Interface,

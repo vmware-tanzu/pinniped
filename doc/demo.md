@@ -131,6 +131,13 @@ for a more specific example of installing onto a local kind cluster, including t
    pinniped get-kubeconfig --token "pinny-the-seal:password123" --idp-type webhook --idp-name local-user-authenticator > /tmp/pinniped-kubeconfig
    ```
 
+   If you are using MacOS, you may get an error dialog that says
+   `“pinniped” cannot be opened because the developer cannot be verified`. Cancel this dialog, open System Preferences,
+   click on Security & Privacy, and click the Allow Anyway button next to the Pinniped message.
+   Run the above command again and another dialog will appear saying
+   `macOS cannot verify the developer of “pinniped”. Are you sure you want to open it?`.
+   Click Open to allow the command to proceed.
+
    Note that the above command will print a warning to the screen. You can ignore this warning.
    Pinniped tries to auto-discover the URL for the Kubernetes API server, but it is not able
    to do so on kind clusters. The warning is just letting you know that the Pinniped CLI decided

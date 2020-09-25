@@ -13,16 +13,21 @@ Kubernetes cluster.
 Pinniped supports various IDP types and implements different integration strategies
 for various Kubernetes distributions to make authentication possible.
 
+## Supported Kubernetes Cluster Types
+
+Pinniped supports the following types of Kubernetes clusters:
+
+- Clusters where the Kube Controller Manager pod is accessible from Pinniped's pods.
+
+Support for other types of Kubernetes distributions is coming soon.
+
 ## External Identity Provider Integrations
 
 Pinniped will consume identity from one or more external identity providers
 (IDPs). Administrators will configure external IDPs via Kubernetes custom
 resources allowing Pinniped to be managed using GitOps and standard Kubernetes tools.
 
-### Supported External Identity Provider Types
-
-The currently supported external IDP types are outlined here. More will be added
-in the future.
+Pinniped supports the following external IDP types.
 
 1. Any webhook which implements the
    [Kubernetes TokenReview API](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#webhook-token-authentication).
@@ -33,6 +38,8 @@ in the future.
    sample implementation in Golang. See the `ServeHTTP` method of
    [cmd/local-user-authenticator/main.go](../cmd/local-user-authenticator/main.go).
 
+More IDP types are coming soon.
+
 ## Cluster Integration Strategies
 
 Pinniped will issue a cluster credential by leveraging cluster-specific
@@ -41,10 +48,7 @@ cluster-specific flows depending on the type of cluster. In the longer term,
 Pinniped hopes to contribute and leverage upstream Kubernetes extension points that
 cleanly enable this integration.
 
-### Supported Cluster Integration Strategies
-
-The currently supported cluster integration strategies are outlined here. More
-will be added in the future.
+Pinniped supports the following cluster integration strategies.
 
 1. Pinniped hosts a credential exchange API endpoint via a Kubernetes aggregated API server.
 This API returns a new cluster-specific credential using the cluster's signing keypair to
@@ -52,14 +56,20 @@ issue short-lived cluster certificates. (In the future, when the Kubernetes CSR 
 provides a way to issue short-lived certificates, then the Pinniped credential exchange API
 will use that instead of using the cluster's signing keypair.)
 
+More cluster integration strategies are coming soon, which will allow Pinniped to
+support more Kubernetes cluster types.
+
 ## `kubectl` Integration
 
 With any of the above IDPs and integration strategies, `kubectl` commands receive the
 cluster-specific credential via a
 [Kubernetes client-go credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins).
 Users may use the Pinniped CLI as the credential plugin, or they may use any proprietary CLI
-built with the [Pinniped Go client library](generated).
+built with the [Pinniped Go client library](../generated).
 
 ## Example Cluster Authentication Sequence Diagram
+
+This diagram demonstrates using `kubectl get pods` with the Pinniped CLI configured as the credential plugin,
+and with a webhook IDP configured as the identity provider for the Pinniped server.
 
 ![example-cluster-authentication-sequence-diagram](img/pinniped.svg)

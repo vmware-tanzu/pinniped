@@ -1,34 +1,45 @@
-# Deploying `local-user-authenticator`
+# Deploying local-user-authenticator
 
-## What is `local-user-authenticator`?
+## What is local-user-authenticator?
 
-The `local-user-authenticator` app is an identity provider used for integration testing and demos.
+The local-user-authenticator app is an identity provider used for integration testing and demos.
 If you would like to demo Pinniped, but you don't have a compatible identity provider handy,
-you can use Pinniped's `local-user-authenticator` identity provider. Note that this is not recommended for
+you can use Pinniped's local-user-authenticator identity provider. Note that this is not recommended for
 production use.
 
-The `local-user-authenticator` is a Kubernetes Deployment which runs a webhook server that implements the Kubernetes
+The local-user-authenticator is a Kubernetes Deployment which runs a webhook server that implements the Kubernetes
 [Webhook Token Authentication interface](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#webhook-token-authentication).
 
 User accounts can be created and edited dynamically using `kubectl` commands (see below).
 
-## Tools
+## Installing the Latest Version with Default Options
 
-This example deployment uses `ytt` and `kapp` from [Carvel](https://carvel.dev/) to template the YAML files
-and to deploy the app.
-Either [install `ytt` and `kapp`](https://carvel.dev/) or use the [container image from Dockerhub](https://hub.docker.com/r/k14s/image/tags).
+```bash
+kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/$(curl https://api.github.com/repos/vmware-tanzu/pinniped/releases/latest -s | jq .name -r)/install-local-user-authenticator.yaml
+```
 
-As well, this demo requires a tool capable of generating a `bcrypt` hash in order to interact with
-the webhook. The example below uses `htpasswd`, which is installed on most macOS systems, and can be
-installed on some Linux systems via the `apache2-utils` package (e.g., `apt-get install
-apache2-utils`).
+## Installing an Older Version with Default Options
 
-## Procedure
+Choose your preferred [release](https://github.com/vmware-tanzu/pinniped/releases) version number
+and use it to replace the version number in the URL below.
 
-1. The configuration options are in [values.yml](values.yaml). Fill in the values in that file, or override those values
-   using `ytt` command-line options in the command below.
+```bash
+# Replace v0.2.0 with your preferred version in the URL below
+kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/v0.2.0/install-local-user-authenticator.yaml
+```
+
+## Installing with Custom Options
+
+Creating your own deployment YAML file requires `ytt` from [Carvel](https://carvel.dev/) to template the YAML files
+in the [deploy-local-user-authenticator](../deploy-local-user-authenticator) directory.
+Either [install `ytt`](https://get-ytt.io/) or use the [container image from Dockerhub](https://hub.docker.com/r/k14s/image/tags).
+
+1. `git clone` this repo and `git checkout` the release version tag of the release that you would like to deploy.
+1. The configuration options are in [deploy-local-user-authenticator/values.yml](values.yaml).
+   Fill in the values in that file, or override those values using additional `ytt` command-line options in
+   the command below. Use the release version tag as the `image_tag` value.
 2. In a terminal, cd to this `deploy-local-user-authenticator` directory
-3. To generate the final YAML files, run: `ytt --file .`
+3. To generate the final YAML files, run `ytt --file .`
 4. Deploy the generated YAML using your preferred deployment tool, such as `kubectl` or [`kapp`](https://get-kapp.io/).
    For example: `ytt --file . | kapp deploy --yes --app local-user-authenticator --diff-changes --file -`
 
@@ -37,7 +48,7 @@ apache2-utils`).
 ### Create Users
 
 Use `kubectl` to create, edit, and delete user accounts by creating a `Secret` for each user account in the same
-namespace where `local-user-authenticator` is deployed.  The name of the `Secret` resource is the username.
+namespace where local-user-authenticator is deployed.  The name of the `Secret` resource is the username.
 Store the user's group membership and `bcrypt` encrypted password as the contents of the `Secret`.
 For example, to create a user named `ryan` with the password `password123`
 who belongs to the groups `group1` and `group2`, use:
@@ -49,9 +60,13 @@ kubectl create secret generic ryan \
   --from-literal=passwordHash=$(htpasswd -nbBC 10 x password123 | sed -e "s/^x://")
 ```
 
-### Get the `local-user-authenticator` App's Auto-Generated Certificate Authority Bundle
+Note that the above command requires a tool capable of generating a `bcrypt` hash. It uses `htpasswd`,
+which is installed on most macOS systems, and can be
+installed on some Linux systems via the `apache2-utils` package (e.g., `apt-get install apache2-utils`).
 
-Fetch the auto-generated CA bundle for the `local-user-authenticator`'s HTTP TLS endpoint.
+### Get the local-user-authenticator App's Auto-Generated Certificate Authority Bundle
+
+Fetch the auto-generated CA bundle for the local-user-authenticator's HTTP TLS endpoint.
 
 ```bash
 kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator \
@@ -60,13 +75,17 @@ kubectl get secret local-user-authenticator-tls-serving-certificate --namespace 
   | tee /tmp/local-user-authenticator-ca
 ```
 
-### Configuring Pinniped to Use `local-user-authenticator` as an Identity Provider
+### Configuring Pinniped to Use local-user-authenticator as an Identity Provider
 
-When installing Pinniped on the same cluster, configure `local-user-authenticator` as an Identity Provider for Pinniped
+When installing Pinniped on the same cluster, configure local-user-authenticator as an Identity Provider for Pinniped
 using the webhook URL `https://local-user-authenticator.local-user-authenticator.svc/authenticate`
-along with the CA bundle fetched by the above command.
+along with the CA bundle fetched by the above command. See [doc/demo.md](../doc/demo.md) for an example.
 
-### Optional: Manually Test the Webhook Endpoint
+## Optional: Manually Testing the Webhook Endpoint After Installing
+
+The following steps demonstrate the API of the local-user-authenticator app. Typically, a user would not need to
+interact with this API directly. Pinniped will automatically integrate with this API if the local-user-authenticator
+is configured as an identity provider for Pinniped.
 
   1. Start a pod from which you can curl the endpoint from inside the cluster.
 

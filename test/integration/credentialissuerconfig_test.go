@@ -17,9 +17,7 @@ import (
 )
 
 func TestCredentialIssuerConfig(t *testing.T) {
-	library.SkipUnlessIntegration(t)
-	namespaceName := library.GetEnv(t, "PINNIPED_NAMESPACE")
-
+	env := library.IntegrationEnv(t)
 	config := library.NewClientConfig(t)
 	client := library.NewPinnipedClientset(t)
 
@@ -29,7 +27,7 @@ func TestCredentialIssuerConfig(t *testing.T) {
 	t.Run("test successful CredentialIssuerConfig", func(t *testing.T) {
 		actualConfigList, err := client.
 			ConfigV1alpha1().
-			CredentialIssuerConfigs(namespaceName).
+			CredentialIssuerConfigs(env.Namespace).
 			List(ctx, metav1.ListOptions{})
 		require.NoError(t, err)
 
@@ -43,7 +41,7 @@ func TestCredentialIssuerConfig(t *testing.T) {
 		actualStatusStrategy := actualStatusStrategies[0]
 		require.Equal(t, configv1alpha1.KubeClusterSigningCertificateStrategyType, actualStatusStrategy.Type)
 
-		if library.ClusterHasCapability(t, library.ClusterSigningKeyIsAvailable) {
+		if env.HasCapability(library.ClusterSigningKeyIsAvailable) {
 			require.Equal(t, configv1alpha1.SuccessStrategyStatus, actualStatusStrategy.Status)
 			require.Equal(t, configv1alpha1.FetchedKeyStrategyReason, actualStatusStrategy.Reason)
 			require.Equal(t, "Key was fetched successfully", actualStatusStrategy.Message)

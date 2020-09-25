@@ -28,7 +28,7 @@ credential for a short-lived, cluster-specific credential. Pinniped supports var
 IDP types and implements different integration strategies for various Kubernetes
 distributions to make authentication possible.
 
-To learn more, see [architecture.md](doc/architecture.md).
+To learn more, see [doc/architecture.md](doc/architecture.md).
 
 <img src="doc/img/pinniped_architecture.svg" alt="Pinniped Architecture Sketch" width="300px"/>
 
@@ -36,19 +36,9 @@ To learn more, see [architecture.md](doc/architecture.md).
 
 Care to kick the tires? It's easy to [install and try Pinniped](doc/demo.md).
 
-## Installation
-
-Currently, Pinniped supports self-hosted clusters where the Kube Controller Manager pod
-is accessible from Pinniped's pods.
-Support for other types of Kubernetes distributions is coming soon.
-
-To try Pinniped, see [deploy/README.md](deploy/README.md).
-
 ## Contributions
 
-Contributions are welcome. Before contributing, please see
-the [Code of Conduct](doc/code_of_conduct.md) and
-[the contributing guide](doc/contributing.md).
+Contributions are welcome. Before contributing, please see the [contributing guide](doc/contributing.md).
 
 ## Reporting Security Vulnerabilities
 
@@ -56,6 +46,6 @@ Please follow the procedure described in [SECURITY.md](SECURITY.md).
 
 ## License
 
-Pinniped is open source and licensed under Apache License Version 2.0. See [LICENSE](LICENSE) file.
+Pinniped is open source and licensed under Apache License Version 2.0. See [LICENSE](LICENSE).
 
 Copyright 2020 the Pinniped contributors. All Rights Reserved.

@@ -147,12 +147,10 @@ func newAnonymousClientRestConfigWithCertAndKeyAdded(t *testing.T, clientCertifi
 // descibes the test IDP within the test namespace.
 func CreateTestWebhookIDP(ctx context.Context, t *testing.T) corev1.TypedLocalObjectReference {
 	t.Helper()
+	testEnv := IntegrationEnv(t)
 
-	namespace := GetEnv(t, "PINNIPED_NAMESPACE")
-	endpoint := GetEnv(t, "PINNIPED_TEST_WEBHOOK_ENDPOINT")
-	caBundle := GetEnv(t, "PINNIPED_TEST_WEBHOOK_CA_BUNDLE")
 	client := NewPinnipedClientset(t)
-	webhooks := client.IDPV1alpha1().WebhookIdentityProviders(namespace)
+	webhooks := client.IDPV1alpha1().WebhookIdentityProviders(testEnv.Namespace)
 
 	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -163,10 +161,7 @@ func CreateTestWebhookIDP(ctx context.Context, t *testing.T) corev1.TypedLocalOb
 			Labels:       map[string]string{"pinniped.dev/test": ""},
 			Annotations:  map[string]string{"pinniped.dev/testName": t.Name()},
 		},
-		Spec: idpv1alpha1.WebhookIdentityProviderSpec{
-			Endpoint: endpoint,
-			TLS:      &idpv1alpha1.TLSSpec{CertificateAuthorityData: caBundle},
-		},
+		Spec: testEnv.TestWebhook,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test WebhookIdentityProvider")
 	t.Logf("created test WebhookIdentityProvider %s/%s", idp.Namespace, idp.Name)

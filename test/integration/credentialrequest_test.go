@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/pem"
-	"strings"
 	"testing"
 	"time"
 
@@ -40,12 +39,8 @@ func TestUnsuccessfulCredentialRequest(t *testing.T) {
 }
 
 func TestSuccessfulCredentialRequest(t *testing.T) {
-	library.SkipUnlessIntegration(t)
-	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
-	testUsername := library.GetEnv(t, "PINNIPED_TEST_USER_USERNAME")
-	expectedTestUserGroups := strings.Split(
-		strings.ReplaceAll(library.GetEnv(t, "PINNIPED_TEST_USER_GROUPS"), " ", ""), ",",
-	)
+	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 
@@ -64,8 +59,8 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 	require.Empty(t, response.Spec)
 	require.Empty(t, response.Status.Credential.Token)
 	require.NotEmpty(t, response.Status.Credential.ClientCertificateData)
-	require.Equal(t, testUsername, getCommonName(t, response.Status.Credential.ClientCertificateData))
-	require.ElementsMatch(t, expectedTestUserGroups, getOrganizations(t, response.Status.Credential.ClientCertificateData))
+	require.Equal(t, env.TestUser.ExpectedUsername, getCommonName(t, response.Status.Credential.ClientCertificateData))
+	require.ElementsMatch(t, env.TestUser.ExpectedGroups, getOrganizations(t, response.Status.Credential.ClientCertificateData))
 	require.NotEmpty(t, response.Status.Credential.ClientKeyData)
 	require.NotNil(t, response.Status.Credential.ExpirationTimestamp)
 	require.InDelta(t, time.Until(response.Status.Credential.ExpirationTimestamp.Time), 1*time.Hour, float64(3*time.Minute))
@@ -82,9 +77,9 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 
 	t.Run(
 		"access as user",
-		accessAsUserTest(ctx, adminClient, testUsername, clientWithCertFromCredentialRequest),
+		accessAsUserTest(ctx, adminClient, env.TestUser.ExpectedUsername, clientWithCertFromCredentialRequest),
 	)
-	for _, group := range expectedTestUserGroups {
+	for _, group := range env.TestUser.ExpectedGroups {
 		group := group
 		t.Run(
 			"access as group "+group,
@@ -94,8 +89,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 }
 
 func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
-	library.SkipUnlessIntegration(t)
-	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
+	library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
 	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token"})
 
@@ -107,8 +101,7 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 }
 
 func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
-	library.SkipUnlessIntegration(t)
-	library.SkipUnlessClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
+	library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
 	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{Token: ""})
 
@@ -127,8 +120,7 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T
 }
 
 func TestCredentialRequest_OtherwiseValidRequestWithRealTokenShouldFailWhenTheClusterIsNotCapable(t *testing.T) {
-	library.SkipUnlessIntegration(t)
-	library.SkipWhenClusterHasCapability(t, library.ClusterSigningKeyIsAvailable)
+	library.IntegrationEnv(t).WithoutCapability(library.ClusterSigningKeyIsAvailable)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -146,23 +138,23 @@ func TestCredentialRequest_OtherwiseValidRequestWithRealTokenShouldFailWhenTheCl
 
 func makeRequest(ctx context.Context, t *testing.T, spec loginv1alpha1.TokenCredentialRequestSpec) (*loginv1alpha1.TokenCredentialRequest, error) {
 	t.Helper()
+	env := library.IntegrationEnv(t)
 
 	client := library.NewAnonymousPinnipedClientset(t)
 
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	ns := library.GetEnv(t, "PINNIPED_NAMESPACE")
-	return client.LoginV1alpha1().TokenCredentialRequests(ns).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
+	return client.LoginV1alpha1().TokenCredentialRequests(env.Namespace).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 		TypeMeta:   metav1.TypeMeta{},
-		ObjectMeta: metav1.ObjectMeta{Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Namespace: env.Namespace},
 		Spec:       spec,
 	}, metav1.CreateOptions{})
 }
 
 func validCredentialRequestSpecWithRealToken(t *testing.T, idp corev1.TypedLocalObjectReference) loginv1alpha1.TokenCredentialRequestSpec {
 	return loginv1alpha1.TokenCredentialRequestSpec{
-		Token:            library.GetEnv(t, "PINNIPED_TEST_USER_TOKEN"),
+		Token:            library.IntegrationEnv(t).TestUser.Token,
 		IdentityProvider: idp,
 	}
 }

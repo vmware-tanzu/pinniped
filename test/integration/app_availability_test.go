@@ -17,16 +17,13 @@ import (
 )
 
 func TestGetDeployment(t *testing.T) {
-	library.SkipUnlessIntegration(t)
-	namespaceName := library.GetEnv(t, "PINNIPED_NAMESPACE")
-	deploymentName := library.GetEnv(t, "PINNIPED_APP_NAME")
-
+	env := library.IntegrationEnv(t)
 	client := library.NewClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	appDeployment, err := client.AppsV1().Deployments(namespaceName).Get(ctx, deploymentName, metav1.GetOptions{})
+	appDeployment, err := client.AppsV1().Deployments(env.Namespace).Get(ctx, env.AppName, metav1.GetOptions{})
 	require.NoError(t, err)
 
 	cond := getDeploymentCondition(appDeployment.Status, appsv1.DeploymentAvailable)

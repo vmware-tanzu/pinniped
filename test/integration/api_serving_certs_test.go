@@ -19,7 +19,7 @@ import (
 )
 
 func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
-	library.SkipUnlessIntegration(t)
+	env := library.IntegrationEnv(t)
 
 	const defaultServingCertResourceName = "pinniped-api-tls-serving-certificate"
 
@@ -74,8 +74,6 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			namespaceName := library.GetEnv(t, "PINNIPED_NAMESPACE")
-
 			kubeClient := library.NewClientset(t)
 			aggregatedClient := library.NewAggregatedClientset(t)
 			pinnipedClient := library.NewPinnipedClientset(t)
@@ -85,7 +83,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			const apiServiceName = "v1alpha1.login.pinniped.dev"
 
 			// Get the initial auto-generated version of the Secret.
-			secret, err := kubeClient.CoreV1().Secrets(namespaceName).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})
+			secret, err := kubeClient.CoreV1().Secrets(env.Namespace).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})
 			require.NoError(t, err)
 			initialCACert := secret.Data["caCertificate"]
 			initialPrivateKey := secret.Data["tlsPrivateKey"]
@@ -100,11 +98,11 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			require.Equal(t, initialCACert, apiService.Spec.CABundle)
 
 			// Force rotation to happen.
-			require.NoError(t, test.forceRotation(ctx, kubeClient, namespaceName))
+			require.NoError(t, test.forceRotation(ctx, kubeClient, env.Namespace))
 
 			// Expect that the Secret comes back right away with newly minted certs.
 			secretIsRegenerated := func() bool {
-				secret, err = kubeClient.CoreV1().Secrets(namespaceName).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})
+				secret, err = kubeClient.CoreV1().Secrets(env.Namespace).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})
 				return err == nil
 			}
 			assert.Eventually(t, secretIsRegenerated, 10*time.Second, 250*time.Millisecond)
@@ -135,7 +133,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			// pod has rotated their cert, but not the other ones sitting behind the service.
 			aggregatedAPIWorking := func() bool {
 				for i := 0; i < 10; i++ {
-					_, err = pinnipedClient.LoginV1alpha1().TokenCredentialRequests(namespaceName).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
+					_, err = pinnipedClient.LoginV1alpha1().TokenCredentialRequests(env.Namespace).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 						TypeMeta:   metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{},
 						Spec:       loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token"},

@@ -13,12 +13,17 @@ import (
 
 type IDPV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	OpenIDConnectIdentityProvidersGetter
 	WebhookIdentityProvidersGetter
 }
 
 // IDPV1alpha1Client is used to interact with features provided by the idp.pinniped.dev group.
 type IDPV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *IDPV1alpha1Client) OpenIDConnectIdentityProviders(namespace string) OpenIDConnectIdentityProviderInterface {
+	return newOpenIDConnectIdentityProviders(c, namespace)
 }
 
 func (c *IDPV1alpha1Client) WebhookIdentityProviders(namespace string) WebhookIdentityProviderInterface {

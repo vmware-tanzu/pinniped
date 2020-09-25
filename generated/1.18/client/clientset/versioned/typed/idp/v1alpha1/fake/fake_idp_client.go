@@ -15,6 +15,10 @@ type FakeIDPV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeIDPV1alpha1) OpenIDConnectIdentityProviders(namespace string) v1alpha1.OpenIDConnectIdentityProviderInterface {
+	return &FakeOpenIDConnectIdentityProviders{c, namespace}
+}
+
 func (c *FakeIDPV1alpha1) WebhookIdentityProviders(namespace string) v1alpha1.WebhookIdentityProviderInterface {
 	return &FakeWebhookIdentityProviders{c, namespace}
 }

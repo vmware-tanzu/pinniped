@@ -23,6 +23,13 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"go.pinniped.dev/generated/1.17/apis/config/v1alpha1.CredentialIssuerConfigStatus":         schema_117_apis_config_v1alpha1_CredentialIssuerConfigStatus(ref),
 		"go.pinniped.dev/generated/1.17/apis/config/v1alpha1.CredentialIssuerConfigStrategy":       schema_117_apis_config_v1alpha1_CredentialIssuerConfigStrategy(ref),
 		"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.Condition":                               schema_117_apis_idp_v1alpha1_Condition(ref),
+		"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectAuthorizationConfig":        schema_117_apis_idp_v1alpha1_OpenIDConnectAuthorizationConfig(ref),
+		"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectClaims":                     schema_117_apis_idp_v1alpha1_OpenIDConnectClaims(ref),
+		"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectClient":                     schema_117_apis_idp_v1alpha1_OpenIDConnectClient(ref),
+		"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectIdentityProvider":           schema_117_apis_idp_v1alpha1_OpenIDConnectIdentityProvider(ref),
+		"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectIdentityProviderList":       schema_117_apis_idp_v1alpha1_OpenIDConnectIdentityProviderList(ref),
+		"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectIdentityProviderSpec":       schema_117_apis_idp_v1alpha1_OpenIDConnectIdentityProviderSpec(ref),
+		"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectIdentityProviderStatus":     schema_117_apis_idp_v1alpha1_OpenIDConnectIdentityProviderStatus(ref),
 		"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.TLSSpec":                                 schema_117_apis_idp_v1alpha1_TLSSpec(ref),
 		"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.WebhookIdentityProvider":                 schema_117_apis_idp_v1alpha1_WebhookIdentityProvider(ref),
 		"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.WebhookIdentityProviderList":             schema_117_apis_idp_v1alpha1_WebhookIdentityProviderList(ref),
@@ -340,6 +347,263 @@ func schema_117_apis_idp_v1alpha1_Condition(ref common.ReferenceCallback) common
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_117_apis_idp_v1alpha1_OpenIDConnectAuthorizationConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "OpenIDConnectAuthorizationConfig provides information about how to form the OAuth2 authorization request parameters.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"redirectURI": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RedirectURI is the URI of the redirect endpoint that will be used in the OAuth2 authorization request flow with an OIDC identity provider.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"scopes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Scopes are the scopes that will be requested as part of the authorization request flow with an OIDC identity provider.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"redirectURI", "scopes"},
+			},
+		},
+	}
+}
+
+func schema_117_apis_idp_v1alpha1_OpenIDConnectClaims(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "OpenIDConnectClaims provides a mapping from upstream claims into identities.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"groups": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Groups provides the name of the token claim that will be used to ascertain the groups to which an identity belongs.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"username": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Username provides the name of the token claim that will be used to ascertain an identity's username.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"groups", "username"},
+			},
+		},
+	}
+}
+
+func schema_117_apis_idp_v1alpha1_OpenIDConnectClient(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "OpenIDConnectClient contains information about an OIDC client (e.g., client ID and client secret).",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"secretName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SecretName contains the name of a namespace-local Secret object that provides the clientID and clientSecret for an OIDC client. If only the SecretName is specified in an OpenIDConnectClient struct, then it is expected that the Secret is of type \"secrets.pinniped.dev/oidc\" with keys \"clientID\" and \"clientSecret\".",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"secretName"},
+			},
+		},
+	}
+}
+
+func schema_117_apis_idp_v1alpha1_OpenIDConnectIdentityProvider(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "OpenIDConnectIdentityProvider describes the configuration of a Pinniped OIDC identity provider.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Spec for configuring the identity provider.",
+							Ref:         ref("go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectIdentityProviderSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Status of the identity provider.",
+							Ref:         ref("go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectIdentityProviderStatus"),
+						},
+					},
+				},
+				Required: []string{"spec"},
+			},
+		},
+		Dependencies: []string{
+			"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectIdentityProviderSpec", "go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectIdentityProviderStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_117_apis_idp_v1alpha1_OpenIDConnectIdentityProviderList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "List of OpenIDConnectIdentityProvider objects.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectIdentityProvider"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectIdentityProvider", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_117_apis_idp_v1alpha1_OpenIDConnectIdentityProviderSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Spec for configuring an OIDC identity provider.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"issuer": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Issuer is the issuer URL of this OIDC identity provider, i.e., where to fetch /.well-known/openid-configuration.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"authorizationConfig": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AuthorizationConfig holds information about how to form the OAuth2 authorization request parameters to be used with this OIDC identity provider.",
+							Ref:         ref("go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectAuthorizationConfig"),
+						},
+					},
+					"claims": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Claims provides the names of token claims that will be used when inspecting an identity from this OIDC identity provider.",
+							Ref:         ref("go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectClaims"),
+						},
+					},
+					"client": {
+						SchemaProps: spec.SchemaProps{
+							Description: "OpenIDConnectClient contains OIDC client information to be used used with this OIDC identity provider.",
+							Ref:         ref("go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectClient"),
+						},
+					},
+				},
+				Required: []string{"issuer", "authorizationConfig", "claims", "client"},
+			},
+		},
+		Dependencies: []string{
+			"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectAuthorizationConfig", "go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectClaims", "go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.OpenIDConnectClient"},
+	}
+}
+
+func schema_117_apis_idp_v1alpha1_OpenIDConnectIdentityProviderStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Status of an OIDC identity provider.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type":       "map",
+								"x-kubernetes-patch-merge-key": "type",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Represents the observations of an identity provider's current state.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.Condition"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.Condition"},
 	}
 }
 

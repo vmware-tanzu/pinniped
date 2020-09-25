@@ -5,6 +5,14 @@
 
 package v1alpha1
 
+// OpenIDConnectIdentityProviderListerExpansion allows custom methods to be added to
+// OpenIDConnectIdentityProviderLister.
+type OpenIDConnectIdentityProviderListerExpansion interface{}
+
+// OpenIDConnectIdentityProviderNamespaceListerExpansion allows custom methods to be added to
+// OpenIDConnectIdentityProviderNamespaceLister.
+type OpenIDConnectIdentityProviderNamespaceListerExpansion interface{}
+
 // WebhookIdentityProviderListerExpansion allows custom methods to be added to
 // WebhookIdentityProviderLister.
 type WebhookIdentityProviderListerExpansion interface{}

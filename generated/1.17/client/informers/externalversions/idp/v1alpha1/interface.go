@@ -11,6 +11,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// OpenIDConnectIdentityProviders returns a OpenIDConnectIdentityProviderInformer.
+	OpenIDConnectIdentityProviders() OpenIDConnectIdentityProviderInformer
 	// WebhookIdentityProviders returns a WebhookIdentityProviderInformer.
 	WebhookIdentityProviders() WebhookIdentityProviderInformer
 }
@@ -24,6 +26,11 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// OpenIDConnectIdentityProviders returns a OpenIDConnectIdentityProviderInformer.
+func (v *version) OpenIDConnectIdentityProviders() OpenIDConnectIdentityProviderInformer {
+	return &openIDConnectIdentityProviderInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // WebhookIdentityProviders returns a WebhookIdentityProviderInformer.

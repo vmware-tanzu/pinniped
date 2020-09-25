@@ -22,7 +22,7 @@ type OpenIDConnectIdentityProviderStatus struct {
 type OpenIDConnectAuthorizationConfig struct {
 	// RedirectURI is the URI of the redirect endpoint that will be used in the OAuth2 authorization
 	// request flow with an OIDC identity provider.
-	// +kubebuilder:validation:Pattern=`^https?://`
+	// +kubebuilder:validation:Pattern=`^https://`
 	RedirectURI string `json:"redirectURI"`
 
 	// Scopes are the scopes that will be requested as part of the authorization request flow with

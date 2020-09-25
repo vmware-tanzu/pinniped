@@ -38,7 +38,7 @@ func TestOIDC(t *testing.T) {
 		Spec: idpv1alpha1.OpenIDConnectIdentityProviderSpec{
 			Issuer: "https://some-issuer",
 			AuthorizationConfig: idpv1alpha1.OpenIDConnectAuthorizationConfig{
-				RedirectURI: "http://localhost:12345",
+				RedirectURI: "https://some-redirect-uri:12345",
 				Scopes: []string{
 					"tuna",
 					"fish",

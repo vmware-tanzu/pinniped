@@ -140,7 +140,7 @@ func TestGetAPIResourceList(t *testing.T) {
 				for i := range actualResourceList.APIResources {
 					actualResourceList.APIResources[i].StorageVersionHash = ""
 				}
-				require.EqualValues(t, expectedResources, actualResourceList.APIResources, "unexpected API resources")
+				require.ElementsMatch(t, expectedResources, actualResourceList.APIResources, "unexpected API resources")
 			}
 		})
 	}

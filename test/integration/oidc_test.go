@@ -19,7 +19,7 @@ func TestOIDC(t *testing.T) {
 	// Right now, we simply validate that we can create an OIDC provider CR. As we move forward with
 	// OIDC support, we will most likely remove this test in favor of one that actually tests real
 	// functionality.
-	namespace := library.GetEnv(t, "PINNIPED_NAMESPACE")
+	env := library.IntegrationEnv(t)
 	client := library.NewPinnipedClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -57,13 +57,13 @@ func TestOIDC(t *testing.T) {
 	var err error
 	oidcProvider, err = client.
 		IDPV1alpha1().
-		OpenIDConnectIdentityProviders(namespace).
+		OpenIDConnectIdentityProviders(env.Namespace).
 		Create(ctx, oidcProvider, metav1.CreateOptions{})
 	require.NoError(t, err)
 
 	err = client.
 		IDPV1alpha1().
-		OpenIDConnectIdentityProviders(namespace).
+		OpenIDConnectIdentityProviders(env.Namespace).
 		Delete(ctx, oidcProvider.Name, metav1.DeleteOptions{})
 	require.NoError(t, err)
 }

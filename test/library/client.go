@@ -16,7 +16,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
@@ -98,38 +97,10 @@ func newClientsetWithConfig(t *testing.T, config *rest.Config) kubernetes.Interf
 }
 
 // Returns a rest.Config without any user authentication info.
-// Ensures that we are not accidentally picking up any authentication info from the kube config file.
-// E.g. If your kube config were pointing at an Azure cluster, it would have both certs and a token,
-// and we don't want our tests to accidentally pick up that token.
 func newAnonymousClientRestConfig(t *testing.T) *rest.Config {
 	t.Helper()
 
-	realConfig := NewClientConfig(t)
-
-	out, err := ioutil.TempFile("", "pinniped-anonymous-kubeconfig-test-*")
-	require.NoError(t, err)
-	defer os.Remove(out.Name())
-
-	anonConfig := clientcmdapi.NewConfig()
-	anonConfig.Clusters["anonymous-cluster"] = &clientcmdapi.Cluster{
-		Server:                   realConfig.Host,
-		CertificateAuthorityData: realConfig.CAData,
-	}
-	anonConfig.Contexts["anonymous"] = &clientcmdapi.Context{
-		Cluster: "anonymous-cluster",
-	}
-	anonConfig.CurrentContext = "anonymous"
-
-	data, err := clientcmd.Write(*anonConfig)
-	require.NoError(t, err)
-
-	_, err = out.Write(data)
-	require.NoError(t, err)
-
-	restConfig, err := clientcmd.BuildConfigFromFlags("", out.Name())
-	require.NoError(t, err)
-
-	return restConfig
+	return rest.AnonymousClientConfig(NewClientConfig(t))
 }
 
 // Starting with an anonymous client config, add a cert and key to use for authentication in the API server.

@@ -36,6 +36,10 @@ To learn more, see [doc/architecture.md](doc/architecture.md).
 
 Care to kick the tires? It's easy to [install and try Pinniped](doc/demo.md).
 
+## Discussion
+
+Got a question, comment, or idea? Please don't hesitate to reach out via the GitHub [Discussions](https://github.com/vmware-tanzu/pinniped/discussions) tab at the top of this page.
+
 ## Contributions
 
 Contributions are welcome. Before contributing, please see the [contributing guide](doc/contributing.md).

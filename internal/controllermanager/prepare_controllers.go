@@ -8,10 +8,13 @@ package controllermanager
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"sort"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/apimachinery/pkg/util/errors"
 	k8sinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -76,7 +79,7 @@ type Config struct {
 
 // Prepare the controllers and their informers and return a function that will start them when called.
 //nolint:funlen // Eh, fair, it is a really long function...but it is wiring the world...so...
-func PrepareControllers(c *Config) (func(ctx context.Context), error) {
+func PrepareControllers(c *Config) (func(ctx context.Context) error, error) {
 	// Create k8s clients.
 	kubeConfig, err := createConfig()
 	if err != nil {
@@ -240,9 +243,14 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		)
 
 	// Return a function which starts the informers and controllers.
-	return func(ctx context.Context) {
-		informers.startAndWaitForSync(ctx)
+	return func(ctx context.Context) error {
+		if err := informers.startAndWaitForSync(ctx); err != nil {
+			return err
+		}
+
 		go controllerManager.Start(ctx)
+
+		return nil
 	}, nil
 }
 
@@ -328,16 +336,56 @@ func createInformers(
 	}
 }
 
-func (i *informers) startAndWaitForSync(ctx context.Context) {
+func (i *informers) startAndWaitForSync(ctx context.Context) error {
 	i.kubePublicNamespaceK8s.Start(ctx.Done())
 	i.kubeSystemNamespaceK8s.Start(ctx.Done())
 	i.installationNamespaceK8s.Start(ctx.Done())
 	i.installationNamespacePinniped.Start(ctx.Done())
 
-	i.kubePublicNamespaceK8s.WaitForCacheSync(ctx.Done())
-	i.kubeSystemNamespaceK8s.WaitForCacheSync(ctx.Done())
-	i.installationNamespaceK8s.WaitForCacheSync(ctx.Done())
-	i.installationNamespacePinniped.WaitForCacheSync(ctx.Done())
+	return waitForSync(
+		i.kubePublicNamespaceK8s,
+		i.kubeSystemNamespaceK8s,
+		i.installationNamespaceK8s,
+		i.installationNamespacePinniped,
+	)
+}
+
+type cacheSyncWaiter interface {
+	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
+}
+
+func waitForSync(cacheSyncWaiters ...cacheSyncWaiter) error {
+	// prevent us from blocking forever due to a broken informer
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	var errs []error
+
+	for _, waiter := range cacheSyncWaiters {
+		informerTypeStarted := waiter.WaitForCacheSync(ctx.Done())
+
+		if len(informerTypeStarted) == 0 {
+			//nolint: goerr113
+			errs = append(errs, fmt.Errorf("no informers synced for %T", waiter))
+			continue
+		}
+
+		var notStarted []string
+		for informerType, started := range informerTypeStarted {
+			if started {
+				continue
+			}
+			notStarted = append(notStarted, informerType.String())
+		}
+
+		if len(notStarted) > 0 {
+			sort.Strings(notStarted)
+			//nolint: goerr113
+			errs = append(errs, fmt.Errorf("%d informers from %T failed to sync: %v", len(notStarted), waiter, notStarted))
+		}
+	}
+
+	return errors.NewAggregate(errs)
 }
 
 // Returns a copy of the input config with the ContentConfig set to use protobuf.

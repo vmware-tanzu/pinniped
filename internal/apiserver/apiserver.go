@@ -55,7 +55,7 @@ type Config struct {
 type ExtraConfig struct {
 	Authenticator                 credentialrequest.TokenCredentialRequestAuthenticator
 	Issuer                        credentialrequest.CertIssuer
-	StartControllersPostStartHook func(ctx context.Context)
+	StartControllersPostStartHook func(ctx context.Context) error
 }
 
 type PinnipedServer struct {
@@ -118,9 +118,8 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 				<-postStartContext.StopCh
 				cancel()
 			}()
-			c.ExtraConfig.StartControllersPostStartHook(ctx)
 
-			return nil
+			return c.ExtraConfig.StartControllersPostStartHook(ctx)
 		},
 	)
 

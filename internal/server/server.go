@@ -163,7 +163,7 @@ func getAggregatedAPIServerConfig(
 	dynamicCertProvider dynamiccert.Provider,
 	authenticator credentialrequest.TokenCredentialRequestAuthenticator,
 	issuer credentialrequest.CertIssuer,
-	startControllersPostStartHook func(context.Context),
+	startControllersPostStartHook func(context.Context) error,
 ) (*apiserver.Config, error) {
 	recommendedOptions := genericoptions.NewRecommendedOptions(
 		defaultEtcdPathPrefix,

@@ -2,8 +2,8 @@
 
 Contributions to Pinniped are welcome. Here are some things to help you get started.
 
-1. Please see the [Code of Conduct](code_of_conduct.md).
-1. Learn about the [scope](scope.md) of the project.
+1. Please see the [Code of Conduct](./CODE_OF_CONDUCT.md).
+1. Learn about the [scope](doc/scope.md) of the project.
 1. Coming soon: details about how to legally contribute to the project, including CLA/DCO details.
 1. See below for how to [file a bug report](#bugs).
 1. See below for how to [suggest a feature](#features).
@@ -13,7 +13,7 @@ Contributions to Pinniped are welcome. Here are some things to help you get star
 ## Meeting with the Maintainers
 
 The maintainers aspire to hold a video conference every other week with the Pinniped community.
-Any community member may request to add topics to the agenda by contacting a [maintainer](../MAINTAINERS.md)
+Any community member may request to add topics to the agenda by contacting a [maintainer](MAINTAINERS.md)
 in advance, or by attending and raising the topic during time remaining after the agenda is covered.
 Typical agenda items include topics regarding the roadmap, feature requests, bug reports, pull requests, etc.
 A [public document](https://docs.google.com/document/d/1qYA35wZV-6bxcH5375vOnIGkNBo7e4OROgsV4Sj8WjQ)
@@ -69,7 +69,7 @@ tracker.
 
 ## Building
 
-The [Dockerfile](../Dockerfile) at the root of the repo can be used to build and
+The [Dockerfile](Dockerfile) at the root of the repo can be used to build and
 package the code. After making a change to the code, rebuild the docker image with the following command.
 
 ```bash
@@ -103,7 +103,7 @@ The `./hack/prepare-for-integration-tests.sh` script will create a local
 ### Observing Tests on the Continuous Integration Environment
 
 CI will not be triggered on a pull request until the pull request is reviewed and
-approved for CI by a project [maintainer](../MAINTAINERS.md). Once CI is triggered,
+approved for CI by a project [maintainer](MAINTAINERS.md). Once CI is triggered,
 the progress and results will appear on the Github page for that
 [pull request](https://github.com/vmware-tanzu/pinniped/pulls) as checks. Links
 will appear to view the details of each check.
@@ -129,4 +129,4 @@ pre-commit installed at .git/hooks/pre-commit
 
 Regular contributors who are active in the Pinniped community and who have contributed at least several
 significant pull requests may be considered for promotion to become a maintainer upon request. Please
-contact an existing [maintainer](../MAINTAINERS.md) if you would like to be considered.
+contact an existing [maintainer](MAINTAINERS.md) if you would like to be considered.

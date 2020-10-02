@@ -43,12 +43,12 @@ func NewDeleterController(
 		},
 		withInformer(
 			kubeSystemPodInformer,
-			pinnipedcontroller.SimpleFilter(isControllerManagerPod),
+			pinnipedcontroller.SimpleFilterWithSingletonQueue(isControllerManagerPod),
 			controllerlib.InformerOption{},
 		),
 		withInformer(
 			agentPodInformer,
-			pinnipedcontroller.SimpleFilter(isAgentPod),
+			pinnipedcontroller.SimpleFilterWithSingletonQueue(isAgentPod),
 			controllerlib.InformerOption{},
 		),
 	)

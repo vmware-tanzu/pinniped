@@ -110,7 +110,7 @@ func NewJWKSWriterController(
 		// We want to be notified when anything happens to an OPC.
 		withInformer(
 			opcInformer,
-			pinnipedcontroller.MatchAnythingFilter(),
+			pinnipedcontroller.MatchAnythingFilter(nil), // nil parent func is fine because each event is distinct
 			controllerlib.InformerOption{},
 		),
 	)

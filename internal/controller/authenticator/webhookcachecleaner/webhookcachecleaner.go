@@ -31,7 +31,7 @@ func New(cache *authncache.Cache, webhooks authinformers.WebhookAuthenticatorInf
 		},
 		controllerlib.WithInformer(
 			webhooks,
-			pinnipedcontroller.MatchAnythingFilter(),
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
 	)

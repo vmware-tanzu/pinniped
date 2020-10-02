@@ -49,12 +49,12 @@ func NewJWKSObserverController(
 		},
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.MatchAnythingFilter(),
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
 		withInformer(
 			oidcProviderInformer,
-			pinnipedcontroller.MatchAnythingFilter(),
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
 	)

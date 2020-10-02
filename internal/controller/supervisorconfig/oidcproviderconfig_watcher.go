@@ -60,7 +60,7 @@ func NewOIDCProviderWatcherController(
 		},
 		withInformer(
 			opcInformer,
-			pinnipedcontroller.MatchAnythingFilter(),
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
 	)

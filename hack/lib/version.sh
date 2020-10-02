@@ -38,9 +38,10 @@ kube::version::get_version_vars() {
       fi
     fi
 
-    # If KUBE_GIT_VERSION is supplied and is not a valid Semantic Version, then refuse to build.
+    # If KUBE_GIT_VERSION is supplied
     if [[ -n "${KUBE_GIT_VERSION:-""}" ]]; then
 
+      # If KUBE_GIT_VERSION is not a valid Semantic Version, then refuse to build.
       if ! [[ "${KUBE_GIT_VERSION}" =~ ^v([0-9]+)\.([0-9]+)(\.[0-9]+)?(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
         echo "KUBE_GIT_VERSION should be a valid Semantic Version starting with a \"v\". Current value: ${KUBE_GIT_VERSION}"
         echo "Please see more details here: https://semver.org"
@@ -50,13 +51,6 @@ kube::version::get_version_vars() {
       if [[ "${KUBE_GIT_VERSION}" =~ ^v([0-9]+)\.([0-9]+)(\.[0-9]+)?([-].*)?([+].*)?$ ]]; then
         KUBE_GIT_MAJOR=${BASH_REMATCH[1]}
         KUBE_GIT_MINOR=${BASH_REMATCH[2]}
-      fi
-
-      if [[ "${KUBE_GIT_TREE_STATE}" == "dirty" ]]; then
-        # git describe --dirty only considers changes to existing files, but
-        # that is problematic since new untracked .go files affect the build,
-        # so use our idea of "dirty" from git status instead.
-        KUBE_GIT_VERSION+="-dirty"
       fi
 
     else

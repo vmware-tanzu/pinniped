@@ -1,3 +1,4 @@
+<!--
 Thank you for submitting a pull request for Pinniped!
 
 Before submitting, please see the guidelines in CONTRIBUTING.md in this repo.
@@ -11,18 +12,30 @@ Reminder: Did you remember to run all the linter, unit tests, and integration te
 described in CONTRIBUTING.md on your branch before submitting this PR?
 
 Below is a template to help you describe your PR.
+-->
 
--- Please delete this line and all lines above this line before submitting the PR. Thanks! --
+<!--
+Provide a summary of your change. Feel free to use paragraphs or a bulleted list, for example:
 
-**Summary of the changes included in this PR**
+- Improves performance by 10,000%.
+- Fixes all bugs.
+- Boils the oceans.
 
-**Issue(s) addressed by this PR**
-- Fixes #
+-->
 
-**Things to consider while reviewing this PR**
+<!--
+Does this PR fix one or more reported issues?
+If yes, use `Fixes #<issue number>` to automatically close the fixed issue(s) when the PR is merged.
+-->
 
-**Suggested release note for the first release which contains this PR**
+**Release note**:
 
-```
-release-note here
+<!--
+Does this PR introduce a user-facing change?
+
+If no, just write "NONE" in the release-note block below.
+If yes, a release note is required. Enter your extended release note in the block below.
+-->
+```release-note
+
 ```

@@ -118,14 +118,42 @@ is configured as an identity provider for Pinniped.
       Note that the value of `authenticated` is `true` to indicate a successful authentication.
 
       ```json
-      {"apiVersion":"authentication.k8s.io/v1beta1","kind":"TokenReview","status":{"authenticated":true,"user":{"username":"ryan","uid":"19c433ec-8f58-44ca-9ef0-2d1081ccb876","groups":["group1","group2"]}}}
+      {
+        "kind": "TokenReview",
+        "apiVersion": "authentication.k8s.io/v1beta1",
+        "metadata": {
+          "creationTimestamp": null
+        },
+        "spec": {},
+        "status": {
+          "authenticated": true,
+          "user": {
+            "username": "ryan",
+            "uid": "19c433ec-8f58-44ca-9ef0-2d1081ccb876",
+            "groups": [
+              "group1",
+              "group2"
+            ]
+          }
+        }
+      }
       ```
 
       Trying the above `curl` command again with the wrong username or password in the body of the request
       should result in a JSON response which indicates that the authentication failed.
 
       ```json
-      {"apiVersion":"authentication.k8s.io/v1beta1","kind":"TokenReview","status":{"authenticated":false}}
+      {
+        "kind": "TokenReview",
+        "apiVersion": "authentication.k8s.io/v1beta1",
+        "metadata": {
+          "creationTimestamp": null
+        },
+        "spec": {},
+        "status": {
+          "user": {}
+        }
+      }
       ```
 
   1. Remove the curl pod.

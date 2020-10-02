@@ -15,7 +15,7 @@ User accounts can be created and edited dynamically using `kubectl` commands (se
 ## Installing the Latest Version with Default Options
 
 ```bash
-kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/$(curl https://api.github.com/repos/vmware-tanzu/pinniped/releases/latest -s | jq .name -r)/install-local-user-authenticator.yaml
+kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/latest/download/install-local-user-authenticator.yaml
 ```
 
 ## Installing an Older Version with Default Options

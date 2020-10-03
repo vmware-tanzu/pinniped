@@ -68,7 +68,7 @@ for a more specific example of installing onto a local kind cluster, including t
 1. Deploy the `local-user-authenticator` app.
 
     ```bash
-    kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/${pinniped_version}/install-local-user-authenticator.yaml
+    kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/$pinniped_version/install-local-user-authenticator.yaml
     ```
 
    The `install-local-user-authenticator.yaml` file includes the default deployment options.
@@ -96,7 +96,7 @@ for a more specific example of installing onto a local kind cluster, including t
 1. Deploy Pinniped.
 
    ```bash
-    kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/${pinniped_version}/install-pinniped.yaml
+    kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/$pinniped_version/install-pinniped.yaml
    ```
 
    The `install-pinniped.yaml` file includes the default deployment options.

@@ -15,7 +15,7 @@ User accounts can be created and edited dynamically using `kubectl` commands (se
 ## Installing the Latest Version with Default Options
 
 ```bash
-kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/$(curl https://api.github.com/repos/vmware-tanzu/pinniped/releases/latest -s | jq .name -r)/install-local-user-authenticator.yaml
+kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/latest/download/install-local-user-authenticator.yaml
 ```
 
 ## Installing an Older Version with Default Options
@@ -50,11 +50,11 @@ Either [install `ytt`](https://get-ytt.io/) or use the [container image from Doc
 Use `kubectl` to create, edit, and delete user accounts by creating a `Secret` for each user account in the same
 namespace where local-user-authenticator is deployed.  The name of the `Secret` resource is the username.
 Store the user's group membership and `bcrypt` encrypted password as the contents of the `Secret`.
-For example, to create a user named `ryan` with the password `password123`
+For example, to create a user named `pinny-the-seal` with the password `password123`
 who belongs to the groups `group1` and `group2`, use:
 
 ```bash
-kubectl create secret generic ryan \
+kubectl create secret generic pinny-the-seal \
   --namespace local-user-authenticator \
   --from-literal=groups=group1,group2 \
   --from-literal=passwordHash=$(htpasswd -nbBC 10 x password123 | sed -e "s/^x://")
@@ -109,7 +109,7 @@ is configured as an identity provider for Pinniped.
         "apiVersion": "authentication.k8s.io/v1beta1",
         "kind": "TokenReview",
         "spec": {
-          "token": "ryan:password123"
+          "token": "pinny-the-seal:password123"
         }
       }'
       ```
@@ -118,14 +118,42 @@ is configured as an identity provider for Pinniped.
       Note that the value of `authenticated` is `true` to indicate a successful authentication.
 
       ```json
-      {"apiVersion":"authentication.k8s.io/v1beta1","kind":"TokenReview","status":{"authenticated":true,"user":{"username":"ryan","uid":"19c433ec-8f58-44ca-9ef0-2d1081ccb876","groups":["group1","group2"]}}}
+      {
+        "kind": "TokenReview",
+        "apiVersion": "authentication.k8s.io/v1beta1",
+        "metadata": {
+          "creationTimestamp": null
+        },
+        "spec": {},
+        "status": {
+          "authenticated": true,
+          "user": {
+            "username": "pinny-the-seal",
+            "uid": "19c433ec-8f58-44ca-9ef0-2d1081ccb876",
+            "groups": [
+              "group1",
+              "group2"
+            ]
+          }
+        }
+      }
       ```
 
       Trying the above `curl` command again with the wrong username or password in the body of the request
       should result in a JSON response which indicates that the authentication failed.
 
       ```json
-      {"apiVersion":"authentication.k8s.io/v1beta1","kind":"TokenReview","status":{"authenticated":false}}
+      {
+        "kind": "TokenReview",
+        "apiVersion": "authentication.k8s.io/v1beta1",
+        "metadata": {
+          "creationTimestamp": null
+        },
+        "spec": {},
+        "status": {
+          "user": {}
+        }
+      }
       ```
 
   1. Remove the curl pod.

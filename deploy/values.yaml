@@ -15,6 +15,11 @@ image_repo: docker.io/getpinniped/pinniped-server
 image_digest: #! e.g. sha256:f3c4fdfd3ef865d4b97a1fd295d94acc3f0c654c46b6f27ffad5cf80216903c8
 image_tag: latest
 
+#! Optionally specify a different image for the "kube-cert-agent" pod which is scheduled
+#! on the control plane. This image needs only to include `sleep` and `cat` binaries.
+#! By default, the same image specified for image_repo/image_digest/image_tag will be re-used.
+kube_cert_agent_image:
+
 #! Specifies a secret to be used when pulling the above container image.
 #! Can be used when the above image_repo is a private registry.
 #! Typically the value would be the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username="USERNAME" --docker-password="PASSWORD" --dry-run=client -o json | jq -r '.data[".dockerconfigjson"]'

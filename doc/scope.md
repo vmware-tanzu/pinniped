@@ -29,4 +29,4 @@ The following items are out of scope for the Pinniped project.
 More details coming soon!
 
 For more details on proposing features and bugs, check out our
-[contributing](contributing.md) doc.
+[contributing](../CONTRIBUTING.md) doc.

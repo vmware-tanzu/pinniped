@@ -42,7 +42,7 @@ Got a question, comment, or idea? Please don't hesitate to reach out via the Git
 
 ## Contributions
 
-Contributions are welcome. Before contributing, please see the [contributing guide](doc/contributing.md).
+Contributions are welcome. Before contributing, please see the [contributing guide](CONTRIBUTING.md).
 
 ## Reporting Security Vulnerabilities
 

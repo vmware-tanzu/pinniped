@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/oauth2"
 
-	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc/pkce"
 	"go.pinniped.dev/internal/oidc/state"
 )
@@ -27,13 +26,12 @@ func init() {
 
 type oidcLoginParams struct {
 	// These parameters capture CLI flags.
-	issuer        string
-	clientID      string
-	listenPort    uint16
-	scopes        []string
-	skipBrowser   bool
-	usePKCE       bool
-	debugAuthCode bool
+	issuer      string
+	clientID    string
+	listenPort  uint16
+	scopes      []string
+	skipBrowser bool
+	usePKCE     bool
 
 	// These parameters capture dependencies that we want to mock during testing.
 	generateState func() (state.State, error)
@@ -56,11 +54,6 @@ func (o *oidcLoginParams) cmd() *cobra.Command {
 	cmd.Flags().BoolVar(&o.skipBrowser, "skip-browser", false, "Skip opening the browser (just print the URL).")
 	cmd.Flags().BoolVar(&o.usePKCE, "use-pkce", true, "Use Proof Key for Code Exchange (RFC 7636) during login.")
 	mustMarkRequired(&cmd, "issuer", "client-id")
-
-	// TODO: temporary
-	cmd.Flags().BoolVar(&o.debugAuthCode, "debug-auth-code-exchange", true, "Debug the authorization code exchange (temporary).")
-	_ = cmd.Flags().MarkHidden("debug-auth-code-exchange")
-
 	return &cmd
 }
 
@@ -105,21 +98,6 @@ func (o *oidcLoginParams) runE(cmd *cobra.Command, args []string) error {
 	authorizeURL := cfg.AuthCodeURL(stateParam.String(), authCodeOptions...)
 	if err := openURL(authorizeURL); err != nil {
 		return fmt.Errorf("could not open browser (run again with --skip-browser?): %w", err)
-	}
-
-	// TODO: this temporary so we can complete the auth code exchange manually
-
-	if o.debugAuthCode {
-		cmd.PrintErr(here.Docf(`
-			DEBUG INFO:
-				Token URL: %s
-					State: %s
-				     PKCE: %s
-			`,
-			cfg.Endpoint.TokenURL,
-			stateParam,
-			pkceCode.Verifier(),
-		))
 	}
 
 	return nil

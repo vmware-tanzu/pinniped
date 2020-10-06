@@ -44,6 +44,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=config.pinniped.dev, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("credentialissuerconfigs"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().CredentialIssuerConfigs().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("oidcproviderconfigs"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().OIDCProviderConfigs().Informer()}, nil
 
 		// Group=idp.pinniped.dev, Version=v1alpha1
 	case idpv1alpha1.SchemeGroupVersion.WithResource("webhookidentityproviders"):

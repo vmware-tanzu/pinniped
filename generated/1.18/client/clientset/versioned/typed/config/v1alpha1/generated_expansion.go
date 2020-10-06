@@ -6,3 +6,5 @@
 package v1alpha1
 
 type CredentialIssuerConfigExpansion interface{}
+
+type OIDCProviderConfigExpansion interface{}

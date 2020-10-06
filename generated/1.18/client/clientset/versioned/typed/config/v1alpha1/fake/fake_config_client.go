@@ -19,6 +19,10 @@ func (c *FakeConfigV1alpha1) CredentialIssuerConfigs(namespace string) v1alpha1.
 	return &FakeCredentialIssuerConfigs{c, namespace}
 }
 
+func (c *FakeConfigV1alpha1) OIDCProviderConfigs(namespace string) v1alpha1.OIDCProviderConfigInterface {
+	return &FakeOIDCProviderConfigs{c, namespace}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeConfigV1alpha1) RESTClient() rest.Interface {

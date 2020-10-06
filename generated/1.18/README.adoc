@@ -95,6 +95,45 @@ Status of a credential issuer.
 |===
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-oidcproviderconfig"]
+==== OIDCProviderConfig 
+
+OIDCProviderConfig describes the configuration of an OIDC provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-oidcproviderconfiglist[$$OIDCProviderConfigList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-oidcproviderconfigspec[$$OIDCProviderConfigSpec$$]__ | Spec of the OIDC provider.
+|===
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-oidcproviderconfigspec"]
+==== OIDCProviderConfigSpec 
+
+OIDCProviderConfigSpec is a struct that describes an OIDC Provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-config-v1alpha1-oidcproviderconfig[$$OIDCProviderConfig$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`issuer`* __string__ | Issuer is the OIDC Provider's issuer, per the OIDC Discovery Metadata document, as well as the identifier that it will use for the iss claim in issued JWTs. This field will also be used as the base URL for any endpoints used by the OIDC Provider (e.g., if your issuer is https://example.com/foo, then your authorization endpoint will look like https://example.com/foo/some/path/to/auth/endpoint). 
+ See https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.3 for more information.
+|===
+
+
 
 [id="{anchor_prefix}-idp-pinniped-dev-v1alpha1"]
 === idp.pinniped.dev/v1alpha1

@@ -177,16 +177,12 @@ kubectl create secret generic "$test_username" \
 #
 # Deploy the Pinniped Supervisor
 #
-issuer_url=https://todo.what-should-this-be
-
 pushd deploy-supervisor >/dev/null
 
 log_note "Deploying the Pinniped Supervisor app to the cluster..."
 ytt --file . \
   --data-value "image_repo=$registry_repo" \
-  --data-value "image_tag=$tag" \
-  --data-value "issuer_url=$issuer_url" \
-  >"$manifest"
+  --data-value "image_tag=$tag" >"$manifest"
 
 kapp deploy --yes --app "pinniped-supervisor" --diff-changes --file "$manifest"
 

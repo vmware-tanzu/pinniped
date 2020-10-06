@@ -20,9 +20,3 @@ image_tag: latest
 #! Typically the value would be the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username="USERNAME" --docker-password="PASSWORD" --dry-run=client -o json | jq -r '.data[".dockerconfigjson"]'
 #! Optional.
 image_pull_dockerconfigjson: #! e.g. {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}
-
-#! Specifies the base URL used in the endpoint fields (e.g., authorization_endpoint, jwks_url, etc.)
-#! of the OpenID Provider Metadata, as well as the value of the iss JWT claim that will be used by
-#! this OIDC provider. Per the OIDC Discovery spec, this URL must use the HTTPS scheme. See
-#! https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.3.
-issuer_url: #! e.g., https://auth.my-org.com

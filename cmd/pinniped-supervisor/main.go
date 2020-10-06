@@ -25,6 +25,9 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/downward"
+	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/discovery"
+	"go.pinniped.dev/internal/oidc/issuerprovider"
 )
 
 const (
@@ -32,11 +35,11 @@ const (
 	defaultResyncInterval = 3 * time.Minute
 )
 
-type helloWorld struct{}
-
-func (w *helloWorld) start(ctx context.Context, l net.Listener) error {
+func start(ctx context.Context, l net.Listener, discoveryHandler http.Handler) {
+	mux := http.NewServeMux()
+	mux.Handle(oidc.WellKnownURLPath, discoveryHandler)
 	server := http.Server{
-		Handler: w,
+		Handler: mux,
 	}
 
 	errCh := make(chan error)
@@ -55,14 +58,6 @@ func (w *helloWorld) start(ctx context.Context, l net.Listener) error {
 			}
 		}
 	}()
-
-	return nil
-}
-
-func (w *helloWorld) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
-	// TODO this is just a placeholder to allow manually testing that this is reachable; we don't want a hello world endpoint
-	defer req.Body.Close()
-	_, _ = fmt.Fprintf(rsp, "Hello, world!")
 }
 
 func waitForSignal() os.Signal {
@@ -73,6 +68,7 @@ func waitForSignal() os.Signal {
 
 func startControllers(
 	ctx context.Context,
+	issuerProvider *issuerprovider.Provider,
 	kubeClient kubernetes.Interface,
 	kubeInformers kubeinformers.SharedInformerFactory,
 	serverInstallationNamespace string,
@@ -85,6 +81,7 @@ func startControllers(
 			supervisorconfig.NewDynamicConfigWatcherController(
 				serverInstallationNamespace,
 				staticConfig.NamesConfig.DynamicConfigMap,
+				issuerProvider,
 				kubeClient,
 				kubeInformers.Core().V1().ConfigMaps(),
 				controllerlib.WithInformer,
@@ -127,7 +124,8 @@ func run(serverInstallationNamespace string, staticConfig StaticConfig) error {
 		kubeinformers.WithNamespace(serverInstallationNamespace),
 	)
 
-	startControllers(ctx, kubeClient, kubeInformers, serverInstallationNamespace, staticConfig)
+	issuerProvider := issuerprovider.New()
+	startControllers(ctx, issuerProvider, kubeClient, kubeInformers, serverInstallationNamespace, staticConfig)
 
 	//nolint: gosec // Intentionally binding to all network interfaces.
 	l, err := net.Listen("tcp", ":80")
@@ -136,11 +134,7 @@ func run(serverInstallationNamespace string, staticConfig StaticConfig) error {
 	}
 	defer l.Close()
 
-	helloHandler := &helloWorld{}
-	err = helloHandler.start(ctx, l)
-	if err != nil {
-		return fmt.Errorf("cannot start webhook: %w", err)
-	}
+	start(ctx, l, discovery.New(issuerProvider))
 	klog.InfoS("supervisor is ready", "address", l.Addr().String())
 
 	gotSignal := waitForSignal()

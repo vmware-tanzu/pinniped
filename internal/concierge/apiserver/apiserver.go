@@ -87,7 +87,7 @@ func (c *Config) Complete() CompletedConfig {
 
 // New returns a new instance of AdmissionServer from the given config.
 func (c completedConfig) New() (*PinnipedServer, error) {
-	genericServer, err := c.GenericConfig.New("pinniped-server", genericapiserver.NewEmptyDelegate()) // completion is done in Complete, no need for a second time
+	genericServer, err := c.GenericConfig.New("pinniped-concierge", genericapiserver.NewEmptyDelegate()) // completion is done in Complete, no need for a second time
 	if err != nil {
 		return nil, fmt.Errorf("completion error: %w", err)
 	}

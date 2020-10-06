@@ -1,7 +1,7 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package server is the command line entry point for pinniped-server.
+// Package server is the command line entry point for pinniped-concierge.
 package server
 
 import (
@@ -15,8 +15,8 @@ import (
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 
 	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
-	"go.pinniped.dev/internal/apiserver"
 	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
+	"go.pinniped.dev/internal/concierge/apiserver"
 	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
 	"go.pinniped.dev/internal/controllermanager"
 	"go.pinniped.dev/internal/downward"
@@ -26,7 +26,7 @@ import (
 	"go.pinniped.dev/pkg/config"
 )
 
-// App is an object that represents the pinniped-server application.
+// App is an object that represents the pinniped-concierge application.
 type App struct {
 	cmd *cobra.Command
 
@@ -54,9 +54,9 @@ func (a *App) Run() error {
 // Create the server command and save it into the App.
 func (a *App) addServerCommand(ctx context.Context, args []string, stdout, stderr io.Writer) {
 	cmd := &cobra.Command{
-		Use: "pinniped-server",
+		Use: "pinniped-concierge",
 		Long: here.Doc(`
-			pinniped-server provides a generic API for mapping an external
+			pinniped-concierge provides a generic API for mapping an external
 			credential from somewhere to an internal credential to be used for
 			authenticating to the Kubernetes API.`),
 		RunE: func(cmd *cobra.Command, args []string) error { return a.runServer(ctx) },

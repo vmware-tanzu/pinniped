@@ -1,6 +1,7 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-package integration
+
+package library
 
 import (
 	"context"
@@ -11,12 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -31,7 +31,7 @@ const (
 //
 // Use this function if you want to simply validate that a user can auth to the kube API after
 // performing a Pinniped credential exchange.
-func accessAsUserTest(
+func AccessAsUserTest(
 	ctx context.Context,
 	adminClient kubernetes.Interface,
 	testUsername string,
@@ -53,7 +53,7 @@ func accessAsUserTest(
 	}
 }
 
-func accessAsUserWithKubectlTest(
+func AccessAsUserWithKubectlTest(
 	ctx context.Context,
 	adminClient kubernetes.Interface,
 	testKubeConfigYAML string,
@@ -82,7 +82,7 @@ func accessAsUserWithKubectlTest(
 //
 // Use this function if you want to simply validate that a user can auth to the kube API (via
 // a group membership) after performing a Pinniped credential exchange.
-func accessAsGroupTest(
+func AccessAsGroupTest(
 	ctx context.Context,
 	adminClient kubernetes.Interface,
 	testGroup string,
@@ -104,7 +104,7 @@ func accessAsGroupTest(
 	}
 }
 
-func accessAsGroupWithKubectlTest(
+func AccessAsGroupWithKubectlTest(
 	ctx context.Context,
 	adminClient kubernetes.Interface,
 	testKubeConfigYAML string,

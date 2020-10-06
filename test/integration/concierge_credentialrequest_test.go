@@ -77,13 +77,13 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 
 	t.Run(
 		"access as user",
-		accessAsUserTest(ctx, adminClient, env.TestUser.ExpectedUsername, clientWithCertFromCredentialRequest),
+		library.AccessAsUserTest(ctx, adminClient, env.TestUser.ExpectedUsername, clientWithCertFromCredentialRequest),
 	)
 	for _, group := range env.TestUser.ExpectedGroups {
 		group := group
 		t.Run(
 			"access as group "+group,
-			accessAsGroupTest(ctx, adminClient, group, clientWithCertFromCredentialRequest),
+			library.AccessAsGroupTest(ctx, adminClient, group, clientWithCertFromCredentialRequest),
 		)
 	}
 }

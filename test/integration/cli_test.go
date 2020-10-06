@@ -62,13 +62,13 @@ func TestCLI(t *testing.T) {
 	adminClient := library.NewClientset(t)
 	t.Run(
 		"access as user with kubectl",
-		accessAsUserWithKubectlTest(ctx, adminClient, kubeConfigYAML, env.TestUser.ExpectedUsername, env.Namespace),
+		library.AccessAsUserWithKubectlTest(ctx, adminClient, kubeConfigYAML, env.TestUser.ExpectedUsername, env.Namespace),
 	)
 	for _, group := range env.TestUser.ExpectedGroups {
 		group := group
 		t.Run(
 			"access as group "+group+" with kubectl",
-			accessAsGroupWithKubectlTest(ctx, adminClient, kubeConfigYAML, group, env.Namespace),
+			library.AccessAsGroupWithKubectlTest(ctx, adminClient, kubeConfigYAML, group, env.Namespace),
 		)
 	}
 
@@ -76,10 +76,10 @@ func TestCLI(t *testing.T) {
 	kubeClient := library.NewClientsetForKubeConfig(t, kubeConfigYAML)
 
 	// Validate that we can auth to the API via our user.
-	t.Run("access as user with client-go", accessAsUserTest(ctx, adminClient, env.TestUser.ExpectedUsername, kubeClient))
+	t.Run("access as user with client-go", library.AccessAsUserTest(ctx, adminClient, env.TestUser.ExpectedUsername, kubeClient))
 	for _, group := range env.TestUser.ExpectedGroups {
 		group := group
-		t.Run("access as group "+group+" with client-go", accessAsGroupTest(ctx, adminClient, group, kubeClient))
+		t.Run("access as group "+group+" with client-go", library.AccessAsGroupTest(ctx, adminClient, group, kubeClient))
 	}
 }
 

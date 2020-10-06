@@ -15,17 +15,17 @@ import (
 )
 
 const knownGoodUsage = `
-pinniped-server provides a generic API for mapping an external
+pinniped-concierge provides a generic API for mapping an external
 credential from somewhere to an internal credential to be used for
 authenticating to the Kubernetes API.
 
 Usage:
-  pinniped-server [flags]
+  pinniped-concierge [flags]
 
 Flags:
   -c, --config string                  path to configuration file (default "pinniped.yaml")
       --downward-api-path string       path to Downward API volume mount (default "/etc/podinfo")
-  -h, --help                           help for pinniped-server
+  -h, --help                           help for pinniped-concierge
       --log-flush-frequency duration   Maximum number of seconds between log flushes (default 5s)
 `
 
@@ -48,7 +48,7 @@ func TestCommand(t *testing.T) {
 		{
 			name:    "OneArgFails",
 			args:    []string{"tuna"},
-			wantErr: `unknown command "tuna" for "pinniped-server"`,
+			wantErr: `unknown command "tuna" for "pinniped-concierge"`,
 		},
 		{
 			name: "ShortConfigFlagSucceeds",
@@ -64,7 +64,7 @@ func TestCommand(t *testing.T) {
 				"--config", "some/path/to/config.yaml",
 				"tuna",
 			},
-			wantErr: `unknown command "tuna" for "pinniped-server"`,
+			wantErr: `unknown command "tuna" for "pinniped-concierge"`,
 		},
 	}
 	for _, test := range tests {

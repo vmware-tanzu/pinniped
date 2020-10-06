@@ -20,7 +20,7 @@ COPY hack ./hack
 
 # Build the executable binary (CGO_ENABLED=0 means static linking)
 RUN mkdir out \
-  && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(hack/get-ldflags.sh)" -o out ./cmd/pinniped-server/... \
+  && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(hack/get-ldflags.sh)" -o out ./cmd/pinniped-concierge/... \
   && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(hack/get-ldflags.sh)" -o out ./cmd/pinniped-supervisor/... \
   && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o out ./cmd/local-user-authenticator/...
 
@@ -28,7 +28,7 @@ RUN mkdir out \
 FROM debian:10.5-slim
 
 # Copy the binaries from the build-env stage
-COPY --from=build-env /work/out/pinniped-server /usr/local/bin/pinniped-server
+COPY --from=build-env /work/out/pinniped-concierge /usr/local/bin/pinniped-concierge
 COPY --from=build-env /work/out/pinniped-supervisor /usr/local/bin/pinniped-supervisor
 COPY --from=build-env /work/out/local-user-authenticator /usr/local/bin/local-user-authenticator
 
@@ -36,4 +36,4 @@ COPY --from=build-env /work/out/local-user-authenticator /usr/local/bin/local-us
 EXPOSE 443
 
 # Set the entrypoint
-ENTRYPOINT ["/usr/local/bin/pinniped-server"]
+ENTRYPOINT ["/usr/local/bin/pinniped-concierge"]

@@ -85,15 +85,12 @@ func (c *getKubeConfigCommand) Command() *cobra.Command {
 		`),
 	}
 	cmd.Flags().StringVar(&c.flags.token, "token", "", "Credential to include in the resulting kubeconfig output (Required)")
-	err := cmd.MarkFlagRequired("token")
-	if err != nil {
-		panic(err)
-	}
 	cmd.Flags().StringVar(&c.flags.kubeconfig, "kubeconfig", c.flags.kubeconfig, "Path to the kubeconfig file")
 	cmd.Flags().StringVar(&c.flags.contextOverride, "kubeconfig-context", c.flags.contextOverride, "Kubeconfig context override")
 	cmd.Flags().StringVar(&c.flags.namespace, "pinniped-namespace", c.flags.namespace, "Namespace in which Pinniped was installed")
 	cmd.Flags().StringVar(&c.flags.idpType, "idp-type", c.flags.idpType, "Identity provider type (e.g., 'webhook')")
 	cmd.Flags().StringVar(&c.flags.idpName, "idp-name", c.flags.idpType, "Identity provider name")
+	mustMarkRequired(cmd, "token")
 	return cmd
 }
 

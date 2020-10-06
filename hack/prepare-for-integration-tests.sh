@@ -174,15 +174,29 @@ kubectl create secret generic "$test_username" \
   --output yaml |
   kubectl apply -f -
 
+#
+# Deploy the Pinniped Supervisor
+#
+pushd deploy-supervisor >/dev/null
+
+log_note "Deploying the Pinniped Supervisor app to the cluster..."
+ytt --file . \
+  --data-value "image_repo=$registry_repo" \
+  --data-value "image_tag=$tag" >"$manifest"
+
+kapp deploy --yes --app "pinniped-supervisor" --diff-changes --file "$manifest"
+
+popd >/dev/null
+
+#
+# Deploy Pinniped
+#
 app_name="pinniped"
 namespace="integration"
 webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
 webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/Kubernetes master/ {print $NF}')"
 
-#
-# Deploy Pinniped
-#
 pushd deploy >/dev/null
 
 log_note "Deploying the Pinniped app to the cluster..."

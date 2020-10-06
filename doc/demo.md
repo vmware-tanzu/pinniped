@@ -29,6 +29,8 @@ for a more specific example of installing onto a local kind cluster, including t
 1. Generate a kubeconfig using the Pinniped CLI. Run `pinniped get-kubeconfig --help` for more information.
 1. Run `kubectl` commands using the generated kubeconfig. Pinniped will automatically be used for authentication during those commands.
 
+<img src="img/pinniped_demo.gif" alt="Pinniped Installation Demo" width="100%"/>
+
 ### Steps to Deploy the Latest Release on kind Using local-user-authenticator as the Identity Provider
 
 1. Install the tools required for the following steps.

@@ -30,6 +30,29 @@ data:
     names:
       dynamicConfigMap: (@= data.values.app_name + "-dynamic-config" @)
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: #@ data.values.app_name + "-dynamic-config"
+  namespace: #@ data.values.namespace
+  labels:
+    app: #@ data.values.app_name
+data:
+  issuer: #@ data.values.issuer_url
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: #@ data.values.app_name + "-static-config"
+  namespace: #@ data.values.namespace
+  labels:
+    app: #@ data.values.app_name
+data:
+  #@yaml/text-templated-strings
+  pinniped.yaml: |
+    names:
+      dynamicConfigMap: (@= data.values.app_name + "-dynamic-config" @)
+---
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
 apiVersion: v1
 kind: Secret

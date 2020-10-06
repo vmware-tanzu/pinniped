@@ -8,9 +8,9 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"io"
 
-	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 )
 
@@ -18,9 +18,14 @@ import (
 func Generate() (Code, error) { return generate(rand.Reader) }
 
 func generate(rand io.Reader) (Code, error) {
+	// From https://tools.ietf.org/html/rfc7636#section-4.1:
+	//   code_verifier = high-entropy cryptographic random STRING using the
+	//   unreserved characters [A-Z] / [a-z] / [0-9] / "-" / "." / "_" / "~"
+	//   from Section 2.3 of [RFC3986], with a minimum length of 43 characters
+	//   and a maximum length of 128 characters.
 	var buf [32]byte
 	if _, err := io.ReadFull(rand, buf[:]); err != nil {
-		return "", errors.WithMessage(err, "could not generate PKCE code")
+		return "", fmt.Errorf("could not generate PKCE code: %w", err)
 	}
 	return Code(hex.EncodeToString(buf[:])), nil
 }

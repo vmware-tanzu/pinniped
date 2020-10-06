@@ -46,7 +46,6 @@ func TestLoginOIDCCommand(t *testing.T) {
 					  --listen-port uint16   TCP port for localhost listener (authorization code flow only). (default 48095)
 					  --scopes strings       OIDC scopes to request during login. (default [offline_access,openid,email,profile])
 					  --skip-browser         Skip opening the browser (just print the URL).
-					  --use-pkce             Use Proof Key for Code Exchange (RFC 7636) during login. (default true)
 			`),
 		},
 		{
@@ -142,7 +141,6 @@ func TestOIDCLoginRunE(t *testing.T) {
 			params: oidcLoginParams{
 				issuer:        validServer.URL,
 				generateState: func() (state.State, error) { return "test-state", nil },
-				usePKCE:       true,
 				generatePKCE:  func() (pkce.Code, error) { return "", fmt.Errorf("some error generating a PKCE code") },
 			},
 			wantError: "could not generate OIDC PKCE parameter: some error generating a PKCE code",
@@ -152,19 +150,18 @@ func TestOIDCLoginRunE(t *testing.T) {
 			params: oidcLoginParams{
 				issuer:        validServer.URL,
 				generateState: func() (state.State, error) { return "test-state", nil },
-				usePKCE:       true,
 				generatePKCE:  func() (pkce.Code, error) { return "test-pkce", nil },
 				openURL:       func(_ string) error { return fmt.Errorf("some browser open error") },
 			},
 			wantError: "could not open browser (run again with --skip-browser?): some browser open error",
 		},
 		{
-			name: "success without PKCE",
+			name: "success",
 			params: oidcLoginParams{
 				issuer:        validServer.URL,
 				clientID:      "test-client-id",
 				generateState: func() (state.State, error) { return "test-state", nil },
-				usePKCE:       false,
+				generatePKCE:  func() (pkce.Code, error) { return "test-pkce", nil },
 				listenPort:    12345,
 				skipBrowser:   true,
 			},
@@ -172,12 +169,18 @@ func TestOIDCLoginRunE(t *testing.T) {
 				require.Equal(t, validServerURL.Host, actual.Host)
 				require.Equal(t, "/auth", actual.Path)
 				require.Equal(t, "", actual.Fragment)
+
 				require.Equal(t, url.Values{
-					"access_type":   []string{"offline"},
-					"client_id":     []string{"test-client-id"},
-					"redirect_uri":  []string{"http://localhost:12345/callback"},
-					"response_type": []string{"code"},
-					"state":         []string{"test-state"},
+					"access_type":           []string{"offline"},
+					"client_id":             []string{"test-client-id"},
+					"redirect_uri":          []string{"http://localhost:12345/callback"},
+					"response_type":         []string{"code"},
+					"state":                 []string{"test-state"},
+					"code_challenge_method": []string{"S256"},
+					// This is the PKCE challenge which is calculated as base64(sha256("test-pkce")). For example:
+					// $ echo -n test-pkce | shasum -a 256 | cut -d" " -f1 | xxd -r -p | base64 | cut -d"=" -f1
+					// VVaezYqum7reIhoavCHD1n2d+piN3r/mywoYj7fCR7g
+					"code_challenge": []string{"VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g"},
 				}, actual.Query())
 			},
 			wantStderr: "Please log in: <URL>\n",

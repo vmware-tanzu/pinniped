@@ -31,7 +31,6 @@ type oidcLoginParams struct {
 	listenPort  uint16
 	scopes      []string
 	skipBrowser bool
-	usePKCE     bool
 
 	// These parameters capture dependencies that we want to mock during testing.
 	generateState func() (state.State, error)
@@ -52,7 +51,6 @@ func (o *oidcLoginParams) cmd() *cobra.Command {
 	cmd.Flags().Uint16Var(&o.listenPort, "listen-port", 48095, "TCP port for localhost listener (authorization code flow only).")
 	cmd.Flags().StringSliceVar(&o.scopes, "scopes", []string{"offline_access", "openid", "email", "profile"}, "OIDC scopes to request during login.")
 	cmd.Flags().BoolVar(&o.skipBrowser, "skip-browser", false, "Skip opening the browser (just print the URL).")
-	cmd.Flags().BoolVar(&o.usePKCE, "use-pkce", true, "Use Proof Key for Code Exchange (RFC 7636) during login.")
 	mustMarkRequired(&cmd, "issuer", "client-id")
 	return &cmd
 }
@@ -77,14 +75,16 @@ func (o *oidcLoginParams) runE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("could not generate OIDC state parameter: %w", err)
 	}
 
-	var pkceCode pkce.Code
-	if o.usePKCE {
-		pkceCode, err = o.generatePKCE()
-		if err != nil {
-			return fmt.Errorf("could not generate OIDC PKCE parameter: %w", err)
-		}
-		authCodeOptions = append(authCodeOptions, pkceCode.Challenge(), pkceCode.Method())
+	// We can always use PKCE (RFC 7636) because the server should always ignore the parameters if it doesn't
+	// understand them. Per https://tools.ietf.org/html/rfc7636#section-5:
+	//   As the OAuth 2.0 [RFC6749] server responses are unchanged by this specification, client implementations of
+	//   this specification do not need to know if the server has implemented this specification or not and SHOULD
+	//   send the additional parameters as defined in Section 4 to all servers.
+	pkceCode, err := o.generatePKCE()
+	if err != nil {
+		return fmt.Errorf("could not generate OIDC PKCE parameter: %w", err)
 	}
+	authCodeOptions = append(authCodeOptions, pkceCode.Challenge(), pkceCode.Method())
 
 	// If --skip-browser was passed, override the default browser open function with a Printf() call.
 	openURL := o.openURL

@@ -39,7 +39,7 @@ as the identity provider.
 <!-- The following image was uploaded to GitHub's CDN using this awesome trick: https://gist.github.com/vinkla/dca76249ba6b73c5dd66a4e986df4c8d -->
 <p align="center" width="100%">
 <img 
-  src="https://user-images.githubusercontent.com/25013435/95268445-3488f800-07ec-11eb-9f72-bbcc62a4e037.gif"
+  src="https://user-images.githubusercontent.com/25013435/95272990-b2ea9780-07f6-11eb-994d-872e3cb68457.gif"
   alt="Pinniped Installation Demo" 
   width="80%"
   />

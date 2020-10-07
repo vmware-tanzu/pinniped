@@ -15,10 +15,6 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 )
 
-const (
-	issuerConfigMapKey = "issuer"
-)
-
 // IssuerSetter can be notified of a valid issuer with its SetIssuer function. If there is no
 // longer any valid issuer, then nil can be passed to this interface.
 //
@@ -79,7 +75,13 @@ func (c *dynamicConfigWatcherController) Sync(ctx controllerlib.Context) error {
 			"oidcproviderconfig",
 			klog.KRef(ctx.Key.Namespace, ctx.Key.Name),
 		)
-		c.issuerSetter.SetIssuer(nil)
+		if err := c.issuerSetter.SetIssuer(nil); err != nil {
+			klog.InfoS(
+				"dynamicConfigWatcherController Sync failed to set issuer",
+				"err",
+				err,
+			)
+		}
 		return nil
 	}
 

@@ -1,3 +1,6 @@
+// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package issuerprovider
 
 import (
@@ -62,6 +65,7 @@ func TestProvider(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			p := New()
 			err := p.SetIssuer(tt.issuer)

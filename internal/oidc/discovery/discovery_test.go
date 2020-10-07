@@ -93,7 +93,8 @@ func TestDiscovery(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			p := issuerprovider.New()
-			p.SetIssuer(test.issuer)
+			err := p.SetIssuer(test.issuer)
+			require.NoError(t, err)
 
 			handler := New(p)
 			req := httptest.NewRequest(test.method, test.path, nil)

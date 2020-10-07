@@ -9,17 +9,15 @@
 
 1. An identity provider of a type supported by Pinniped as described in [doc/architecture.md](../doc/architecture.md).
 
-   Don't have an identity provider of a type supported by Pinniped handy?
-   Start by installing `local-user-authenticator` on the same cluster where you would like to try Pinniped
+   Don't have an identity provider of a type supported by Pinniped handy? No problem, there is a demo identity provider
+   available. Start by installing local-user-authenticator on the same cluster where you would like to try Pinniped
    by following the directions in [deploy-local-user-authenticator/README.md](../deploy-local-user-authenticator/README.md).
    See below for an example of deploying this on kind.
 
 1. A kubeconfig where the current context points to the cluster and has admin-like
    privileges on that cluster.
 
-## Steps
-
-### Overview
+## Overview
 
 Installing and trying Pinniped on any cluster will consist of the following general steps. See the next section below
 for a more specific example of installing onto a local kind cluster, including the exact commands to use for that case.
@@ -29,7 +27,23 @@ for a more specific example of installing onto a local kind cluster, including t
 1. Generate a kubeconfig using the Pinniped CLI. Run `pinniped get-kubeconfig --help` for more information.
 1. Run `kubectl` commands using the generated kubeconfig. Pinniped will automatically be used for authentication during those commands.
 
-### Steps to Deploy the Latest Release on kind Using local-user-authenticator as the Identity Provider
+## Example of Deploying on kind
+
+[kind](https://kind.sigs.k8s.io) is a tool for creating and managing Kubernetes clusters on your local machine
+which uses Docker containers as the cluster's "nodes". This is a convenient way to try out Pinniped on a local
+non-production cluster.
+
+The following steps will deploy the latest release of Pinniped on kind using the local-user-authenticator component
+as the identity provider.
+
+<!-- The following image was uploaded to GitHub's CDN using this awesome trick: https://gist.github.com/vinkla/dca76249ba6b73c5dd66a4e986df4c8d -->
+<p align="center" width="100%">
+<img 
+  src="https://user-images.githubusercontent.com/25013435/95272990-b2ea9780-07f6-11eb-994d-872e3cb68457.gif"
+  alt="Pinniped Installation Demo" 
+  width="80%"
+  />
+</p>
 
 1. Install the tools required for the following steps.
 
@@ -65,7 +79,8 @@ for a more specific example of installing onto a local kind cluster, including t
    pinniped_version=v0.2.0
    ```
 
-1. Deploy the `local-user-authenticator` app.
+1. Deploy the local-user-authenticator app. This is a demo identity provider. In production, you would use your
+   real identity provider, and therefore would not need to deploy or configure local-user-authenticator.
 
     ```bash
     kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/$pinniped_version/install-local-user-authenticator.yaml
@@ -76,7 +91,7 @@ for a more specific example of installing onto a local kind cluster, including t
    see [deploy-local-user-authenticator/README.md](../deploy-local-user-authenticator/README.md)
    for instructions on how to deploy using `ytt`.
 
-1. Create a test user.
+1. Create a test user named `pinny-the-seal` in the local-user-authenticator identity provider.
 
    ```bash
    kubectl create secret generic pinny-the-seal \
@@ -85,7 +100,7 @@ for a more specific example of installing onto a local kind cluster, including t
      --from-literal=passwordHash=$(htpasswd -nbBC 10 x password123 | sed -e "s/^x://")
    ```
 
-1. Fetch the auto-generated CA bundle for the `local-user-authenticator`'s HTTP TLS endpoint.
+1. Fetch the auto-generated CA bundle for the local-user-authenticator's HTTP TLS endpoint.
 
    ```bash
    kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator \
@@ -103,7 +118,7 @@ for a more specific example of installing onto a local kind cluster, including t
    If you would prefer to customize the available options, please see [deploy/README.md](../deploy/README.md)
    for instructions on how to deploy using `ytt`.
 
-1. Create a `WebhookIdentityProvider` object to configure Pinniped to authenticate using `local-user-authenticator`.
+1. Create a `WebhookIdentityProvider` object to configure Pinniped to authenticate using local-user-authenticator.
 
     ```bash
     cat <<EOF | kubectl create --namespace pinniped -f -
@@ -152,7 +167,7 @@ for a more specific example of installing onto a local kind cluster, including t
 
    Because this user has no RBAC permissions on this cluster, the previous command
    results in the error `Error from server (Forbidden): pods is forbidden: User "pinny-the-seal" cannot list resource "pods" in API group "" in the namespace "pinniped"`.
-   However, this does prove that you are authenticated and acting as the "pinny-the-seal" user.
+   However, this does prove that you are authenticated and acting as the `pinny-the-seal` user.
 
 1. As the admin user, create RBAC rules for the test user to give them permissions to perform actions on the cluster.
    For example, grant the test user permission to view all cluster resources.

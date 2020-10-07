@@ -40,10 +40,14 @@ data:
       apiService: (@= data.values.app_name + "-api" @)
     kubeCertAgent:
       namePrefix: (@= data.values.app_name + "-kube-cert-agent-" @)
+      (@ if data.values.kube_cert_agent_image: @)
+      image: (@= data.values.kube_cert_agent_image @)
+      (@ else: @)
       (@ if data.values.image_digest: @)
       image: (@= data.values.image_repo + "@" + data.values.image_digest @)
       (@ else: @)
       image: (@= data.values.image_repo + ":" + data.values.image_tag @)
+      (@ end @)
       (@ end @)
       (@ if data.values.image_pull_dockerconfigjson: @)
       imagePullSecrets:

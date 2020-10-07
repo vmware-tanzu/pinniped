@@ -259,8 +259,8 @@ export PINNIPED_TEST_USER_GROUPS=${test_groups}
 export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
 export PINNIPED_TEST_WEBHOOK_ENDPOINT=${webhook_url}
 export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}
-export PINNIPED_SUPERVISOR_NAMESPACE=${namespace}
-export PINNIPED_SUPERVISOR_APP_NAME=${app_name}
+export PINNIPED_SUPERVISOR_NAMESPACE=${supervisor_namespace}
+export PINNIPED_SUPERVISOR_APP_NAME=${supervisor_app_name}
 export PINNIPED_TEST_SUPERVISOR_ADDRESS="localhost:12345"
 
 read -r -d '' PINNIPED_CLUSTER_CAPABILITY_YAML << PINNIPED_CLUSTER_CAPABILITY_YAML_EOF || true

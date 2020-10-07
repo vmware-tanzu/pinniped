@@ -40,9 +40,13 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 
 	// When this test has finished, recreate any OIDCProviderConfigs that had existed on the cluster before this test.
 	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
 		for _, config := range originalConfigList.Items {
 			thisConfig := config
-			_, err := client.ConfigV1alpha1().OIDCProviderConfigs(ns).Create(ctx, &thisConfig, metav1.CreateOptions{})
+			thisConfig.ResourceVersion = "" // Get rid of resource version since we can't create an object with one.
+			_, err := client.ConfigV1alpha1().OIDCProviderConfigs(ns).Create(cleanupCtx, &thisConfig, metav1.CreateOptions{})
 			require.NoError(t, err)
 		}
 	})
@@ -64,6 +68,10 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 	// Create a new OIDCProviderConfig with a known issuer.
 	issuer := fmt.Sprintf("http://%s/nested/issuer", env.SupervisorAddress)
 	newOIDCProviderConfig := v1alpha1.OIDCProviderConfig{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "OIDCProviderConfig",
+			APIVersion: v1alpha1.SchemeGroupVersion.String(),
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "nested-issuser-config-from-integration-test",
 			Namespace: ns,
@@ -77,7 +85,10 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 
 	// When this test has finished, clean up the new OIDCProviderConfig.
 	t.Cleanup(func() {
-		err = client.ConfigV1alpha1().OIDCProviderConfigs(ns).Delete(ctx, newOIDCProviderConfig.Name, metav1.DeleteOptions{})
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		err = client.ConfigV1alpha1().OIDCProviderConfigs(ns).Delete(cleanupCtx, newOIDCProviderConfig.Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
 	})
 
@@ -94,9 +105,11 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 	var response *http.Response
 	assert.Eventually(t, func() bool {
 		response, err = httpClient.Do(requestDiscoveryEndpoint) //nolint:bodyclose // the body is closed below after it is read
-		return err == nil
+		return err == nil && response.StatusCode == http.StatusOK
 	}, 10*time.Second, 200*time.Millisecond)
 	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, response.StatusCode)
+
 	responseBody, err := ioutil.ReadAll(response.Body)
 	require.NoError(t, err)
 	err = response.Body.Close()
@@ -116,7 +129,6 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
     }`)
 	expectedJSON := fmt.Sprintf(expectedResultTemplate, issuer, issuer, issuer, issuer)
 
-	require.Equal(t, 200, response.StatusCode)
 	require.Equal(t, "application/json", response.Header.Get("content-type"))
 	require.JSONEq(t, expectedJSON, string(responseBody))
 }

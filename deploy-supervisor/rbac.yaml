@@ -13,8 +13,8 @@ metadata:
   labels:
     app: #@ data.values.app_name
 rules:
-  - apiGroups: [""]
-    resources: [configmaps]
+  - apiGroups: [config.pinniped.dev]
+    resources: [oidcproviderconfigs]
     verbs: [get, list, watch]
 ---
 kind: RoleBinding

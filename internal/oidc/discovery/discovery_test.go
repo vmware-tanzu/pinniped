@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -18,7 +19,7 @@ func TestDiscovery(t *testing.T) {
 	tests := []struct {
 		name string
 
-		issuer string
+		issuer *url.URL
 		method string
 
 		wantStatus      int
@@ -26,16 +27,16 @@ func TestDiscovery(t *testing.T) {
 		wantBody        interface{}
 	}{
 		{
-			name:       "issuer returns nil issuer",
+			name:       "nil issuer",
 			method:     http.MethodGet,
-			wantStatus: http.StatusServiceUnavailable,
+			wantStatus: http.StatusNotFound,
 			wantBody: map[string]string{
 				"error": "OIDC discovery not available (unknown issuer)",
 			},
 		},
 		{
-			name:            "issuer returns non-nil issuer",
-			issuer:          "https://some-issuer.com",
+			name:            "issuer without path",
+			issuer:          must(url.Parse("https://some-issuer.com")),
 			method:          http.MethodGet,
 			wantStatus:      http.StatusOK,
 			wantContentType: "application/json",
@@ -50,8 +51,24 @@ func TestDiscovery(t *testing.T) {
 			},
 		},
 		{
+			name:            "issuer with path",
+			issuer:          must(url.Parse("https://some-issuer.com/some/path")),
+			method:          http.MethodGet,
+			wantStatus:      http.StatusOK,
+			wantContentType: "application/json",
+			wantBody: &Metadata{
+				Issuer:                           "https://some-issuer.com/some/path",
+				AuthorizationEndpoint:            "https://some-issuer.com/some/path/oauth2/v0/auth",
+				TokenEndpoint:                    "https://some-issuer.com/some/path/oauth2/v0/token",
+				JWKSURL:                          "https://some-issuer.com/some/path/oauth2/v0/keys",
+				ResponseTypesSupported:           []string{},
+				SubjectTypesSupported:            []string{},
+				IDTokenSigningAlgValuesSupported: []string{},
+			},
+		},
+		{
 			name:       "bad method",
-			issuer:     "https://some-issuer.com",
+			issuer:     must(url.Parse("https://some-issuer.com")),
 			method:     http.MethodPost,
 			wantStatus: http.StatusMethodNotAllowed,
 			wantBody: map[string]string{
@@ -63,11 +80,7 @@ func TestDiscovery(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			p := issuerprovider.New()
-			if test.issuer != "" {
-				p.SetIssuer(&test.issuer)
-			} else {
-				p.SetIssuer(nil)
-			}
+			p.SetIssuer(test.issuer)
 
 			handler := New(p)
 			req := httptest.NewRequest(test.method, "/this/path/shouldnt/matter", nil)
@@ -87,4 +100,11 @@ func TestDiscovery(t *testing.T) {
 			}
 		})
 	}
+}
+
+func must(u *url.URL, err error) *url.URL {
+	if err != nil {
+		panic(err)
+	}
+	return u
 }

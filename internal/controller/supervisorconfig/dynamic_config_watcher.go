@@ -5,12 +5,12 @@ package supervisorconfig
 
 import (
 	"fmt"
+	"net/url"
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	corev1informers "k8s.io/client-go/informers/core/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
+	configinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
 )
@@ -22,41 +22,36 @@ const (
 // IssuerSetter can be notified of a valid issuer with its SetIssuer function. If there is no
 // longer any valid issuer, then nil can be passed to this interface.
 //
+// If the IssuerSetter doesn't like the provided issuer, it can return an error.
+//
 // Implementations of this type should be thread-safe to support calls from multiple goroutines.
 type IssuerSetter interface {
-	SetIssuer(issuer *string)
+	SetIssuer(issuer *url.URL) error
 }
 
 type dynamicConfigWatcherController struct {
-	configMapName      string
-	configMapNamespace string
-	issuerSetter       IssuerSetter
-	k8sClient          kubernetes.Interface
-	configMapInformer  corev1informers.ConfigMapInformer
+	issuerSetter IssuerSetter
+	opcInformer  configinformers.OIDCProviderConfigInformer
 }
 
+// NewDynamicConfigWatcherController creates a controllerlib.Controller that watches
+// OIDCProviderConfig objects and notifies a callback object of their creation or deletion.
 func NewDynamicConfigWatcherController(
-	serverInstallationNamespace string,
-	configMapName string,
 	issuerObserver IssuerSetter,
-	k8sClient kubernetes.Interface,
-	configMapInformer corev1informers.ConfigMapInformer,
+	opcInformer configinformers.OIDCProviderConfigInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "DynamicConfigWatcherController",
 			Syncer: &dynamicConfigWatcherController{
-				configMapNamespace: serverInstallationNamespace,
-				configMapName:      configMapName,
-				issuerSetter:       issuerObserver,
-				k8sClient:          k8sClient,
-				configMapInformer:  configMapInformer,
+				issuerSetter: issuerObserver,
+				opcInformer:  opcInformer,
 			},
 		},
 		withInformer(
-			configMapInformer,
-			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(configMapName, serverInstallationNamespace),
+			opcInformer,
+			pinnipedcontroller.NoOpFilter(),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -69,44 +64,49 @@ func (c *dynamicConfigWatcherController) Sync(ctx controllerlib.Context) error {
 	// TODO The discovery endpoint would return an error until all missing configuration options are
 	// filled in.
 
-	configMap, err := c.configMapInformer.
+	opc, err := c.opcInformer.
 		Lister().
-		ConfigMaps(c.configMapNamespace).
-		Get(c.configMapName)
+		OIDCProviderConfigs(ctx.Key.Namespace).
+		Get(ctx.Key.Name)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
-		return fmt.Errorf("failed to get %s/%s secret: %w", c.configMapNamespace, c.configMapName, err)
+		return fmt.Errorf("failed to get %s/%s oidcproviderconfig: %w", ctx.Key.Namespace, ctx.Key.Name, err)
 	}
 
 	if notFound {
 		klog.InfoS(
-			"dynamicConfigWatcherController Sync found no configmap",
-			"configmap",
-			klog.KRef(c.configMapNamespace, c.configMapName),
+			"dynamicConfigWatcherController Sync found no oidcproviderconfig",
+			"oidcproviderconfig",
+			klog.KRef(ctx.Key.Namespace, ctx.Key.Name),
 		)
 		c.issuerSetter.SetIssuer(nil)
 		return nil
 	}
 
-	issuer, ok := configMap.Data[issuerConfigMapKey]
-	if !ok {
+	url, err := url.Parse(opc.Spec.Issuer)
+	if err != nil {
 		klog.InfoS(
-			"dynamicConfigWatcherController Sync found no issuer",
-			"configmap",
-			klog.KObj(configMap),
+			"dynamicConfigWatcherController Sync failed to parse issuer",
+			"err",
+			err,
 		)
-		c.issuerSetter.SetIssuer(nil)
 		return nil
 	}
 
 	klog.InfoS(
 		"dynamicConfigWatcherController Sync issuer",
-		"configmap",
-		klog.KObj(configMap),
+		"oidcproviderconfig",
+		klog.KObj(opc),
 		"issuer",
-		issuer,
+		url,
 	)
-	c.issuerSetter.SetIssuer(&issuer)
+	if err := c.issuerSetter.SetIssuer(url); err != nil {
+		klog.InfoS(
+			"dynamicConfigWatcherController Sync failed to set issuer",
+			"err",
+			err,
+		)
+	}
 
 	return nil
 }

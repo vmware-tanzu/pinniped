@@ -6,22 +6,20 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
 
-	kubeinformers "k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/client-go/rest"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/yaml"
 
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
 	"go.pinniped.dev/internal/controller/supervisorconfig"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/downward"
@@ -69,63 +67,57 @@ func waitForSignal() os.Signal {
 func startControllers(
 	ctx context.Context,
 	issuerProvider *issuerprovider.Provider,
-	kubeClient kubernetes.Interface,
-	kubeInformers kubeinformers.SharedInformerFactory,
-	serverInstallationNamespace string,
-	staticConfig StaticConfig,
+	pinnipedInformers pinnipedinformers.SharedInformerFactory,
 ) {
 	// Create controller manager.
 	controllerManager := controllerlib.
 		NewManager().
 		WithController(
 			supervisorconfig.NewDynamicConfigWatcherController(
-				serverInstallationNamespace,
-				staticConfig.NamesConfig.DynamicConfigMap,
 				issuerProvider,
-				kubeClient,
-				kubeInformers.Core().V1().ConfigMaps(),
+				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
 		)
 
-	kubeInformers.Start(ctx.Done())
+	pinnipedInformers.Start(ctx.Done())
 
 	go controllerManager.Start(ctx)
 }
 
-func newK8sClient() (kubernetes.Interface, error) {
+func newPinnipedClient() (pinnipedclientset.Interface, error) {
 	kubeConfig, err := restclient.InClusterConfig()
 	if err != nil {
 		return nil, fmt.Errorf("could not load in-cluster configuration: %w", err)
 	}
 
 	// Connect to the core Kubernetes API.
-	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
+	pinnipedClient, err := pinnipedclientset.NewForConfig(kubeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("could not load in-cluster configuration: %w", err)
 	}
 
-	return kubeClient, nil
+	return pinnipedClient, nil
 }
 
-func run(serverInstallationNamespace string, staticConfig StaticConfig) error {
+func run(serverInstallationNamespace string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	kubeClient, err := newK8sClient()
+	pinnipedClient, err := newPinnipedClient()
 	if err != nil {
 		return fmt.Errorf("cannot create k8s client: %w", err)
 	}
 
-	kubeInformers := kubeinformers.NewSharedInformerFactoryWithOptions(
-		kubeClient,
+	pinnipedInformers := pinnipedinformers.NewSharedInformerFactoryWithOptions(
+		pinnipedClient,
 		defaultResyncInterval,
-		kubeinformers.WithNamespace(serverInstallationNamespace),
+		pinnipedinformers.WithNamespace(serverInstallationNamespace),
 	)
 
 	issuerProvider := issuerprovider.New()
-	startControllers(ctx, issuerProvider, kubeClient, kubeInformers, serverInstallationNamespace, staticConfig)
+	startControllers(ctx, issuerProvider, pinnipedInformers)
 
 	//nolint: gosec // Intentionally binding to all network interfaces.
 	l, err := net.Listen("tcp", ":80")
@@ -143,14 +135,6 @@ func run(serverInstallationNamespace string, staticConfig StaticConfig) error {
 	return nil
 }
 
-type StaticConfig struct {
-	NamesConfig NamesConfigSpec `json:"names"`
-}
-
-type NamesConfigSpec struct {
-	DynamicConfigMap string `json:"dynamicConfigMap"`
-}
-
 func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
@@ -164,17 +148,7 @@ func main() {
 		klog.Fatal(fmt.Errorf("could not read pod metadata: %w", err))
 	}
 
-	// Read static config.
-	data, err := ioutil.ReadFile(os.Args[2])
-	if err != nil {
-		klog.Fatal(fmt.Errorf("read file: %w", err))
-	}
-	var staticConfig StaticConfig
-	if err := yaml.Unmarshal(data, &staticConfig); err != nil {
-		klog.Fatal(fmt.Errorf("decode yaml: %w", err))
-	}
-
-	if err := run(podInfo.Namespace, staticConfig); err != nil {
+	if err := run(podInfo.Namespace); err != nil {
 		klog.Fatal(err)
 	}
 }

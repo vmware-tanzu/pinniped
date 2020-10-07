@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 )
 
 // Metadata holds all fields (that we care about) from the OpenID Provider Metadata section in the
@@ -30,7 +31,7 @@ type Metadata struct {
 //
 // Implementations of this type should be thread-safe to support calls from multiple goroutines.
 type IssuerGetter interface {
-	GetIssuer() *string
+	GetIssuer() *url.URL
 }
 
 // New returns an http.Handler that will use information from the provided IssuerGetter to serve an
@@ -39,22 +40,23 @@ func New(ig IssuerGetter) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
+		issuer := ig.GetIssuer()
+		if issuer == nil {
+			http.Error(w, `{"error": "OIDC discovery not available (unknown issuer)"}`, http.StatusNotFound)
+			return
+		}
+
 		if r.Method != http.MethodGet {
 			http.Error(w, `{"error": "Method not allowed (try GET)"}`, http.StatusMethodNotAllowed)
 			return
 		}
 
-		issuer := ig.GetIssuer()
-		if issuer == nil {
-			http.Error(w, `{"error": "OIDC discovery not available (unknown issuer)"}`, http.StatusServiceUnavailable)
-			return
-		}
-
+		issuerURL := issuer.String()
 		oidcConfig := Metadata{
-			Issuer:                           *issuer,
-			AuthorizationEndpoint:            fmt.Sprintf("%s/oauth2/v0/auth", *issuer),
-			TokenEndpoint:                    fmt.Sprintf("%s/oauth2/v0/token", *issuer),
-			JWKSURL:                          fmt.Sprintf("%s/oauth2/v0/keys", *issuer),
+			Issuer:                           issuerURL,
+			AuthorizationEndpoint:            fmt.Sprintf("%s/oauth2/v0/auth", issuerURL),
+			TokenEndpoint:                    fmt.Sprintf("%s/oauth2/v0/token", issuerURL),
+			JWKSURL:                          fmt.Sprintf("%s/oauth2/v0/keys", issuerURL),
 			ResponseTypesSupported:           []string{},
 			SubjectTypesSupported:            []string{},
 			IDTokenSigningAlgValuesSupported: []string{},

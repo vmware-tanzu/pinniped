@@ -23,7 +23,6 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/downward"
-	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/discovery"
 	"go.pinniped.dev/internal/oidc/issuerprovider"
 )
@@ -34,10 +33,8 @@ const (
 )
 
 func start(ctx context.Context, l net.Listener, discoveryHandler http.Handler) {
-	mux := http.NewServeMux()
-	mux.Handle(oidc.WellKnownURLPath, discoveryHandler)
 	server := http.Server{
-		Handler: mux,
+		Handler: discoveryHandler,
 	}
 
 	errCh := make(chan error)

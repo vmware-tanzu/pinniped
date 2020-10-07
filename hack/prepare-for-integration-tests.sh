@@ -42,6 +42,7 @@ function check_dependency() {
 #
 help=no
 skip_build=no
+clean_kind=no
 
 while (("$#")); do
   case "$1" in
@@ -51,6 +52,10 @@ while (("$#")); do
     ;;
   -s | --skip-build)
     skip_build=yes
+    shift
+    ;;
+  -c | --clean)
+    clean_kind=yes
     shift
     ;;
   -*)
@@ -90,8 +95,13 @@ check_dependency htpasswd "Please install htpasswd. Should be pre-installed on M
 
 # Require kubectl >= 1.18.x
 if [ "$(kubectl version --client=true --short | cut -d '.' -f 2)" -lt 18 ]; then
-  echo "kubectl >= 1.18.x is required, you have $(kubectl version --client=true --short | cut -d ':' -f2)"
+  log_error "kubectl >= 1.18.x is required, you have $(kubectl version --client=true --short | cut -d ':' -f2)"
   exit 1
+fi
+
+if [[ "$clean_kind" == "yes" ]]; then
+  log_note "Deleting running kind clusters to prepare from a clean slate..."
+  kind delete cluster
 fi
 
 #
@@ -100,7 +110,8 @@ fi
 log_note "Checking for running kind clusters..."
 if ! kind get clusters | grep -q -e '^kind$'; then
   log_note "Creating a kind cluster..."
-  kind create cluster
+  # single-node.yaml exposes node port 31234 as localhost:12345
+  kind create cluster --config "$pinniped_path/hack/lib/kind-config/single-node.yaml"
 else
   if ! kubectl cluster-info | grep master | grep -q 127.0.0.1; then
     log_error "Seems like your kubeconfig is not targeting a local cluster."
@@ -177,14 +188,36 @@ kubectl create secret generic "$test_username" \
 #
 # Deploy the Pinniped Supervisor
 #
+supervisor_app_name="pinniped-supervisor"
+supervisor_namespace="pinniped-supervisor"
+
 pushd deploy-supervisor >/dev/null
 
 log_note "Deploying the Pinniped Supervisor app to the cluster..."
 ytt --file . \
+  --data-value "app_name=$supervisor_app_name" \
+  --data-value "namespace=$supervisor_namespace" \
   --data-value "image_repo=$registry_repo" \
   --data-value "image_tag=$tag" >"$manifest"
 
 kapp deploy --yes --app "pinniped-supervisor" --diff-changes --file "$manifest"
+
+log_note "Adding NodePort service to expose the Pinniped Supervisor app on the kind node..."
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${supervisor_app_name}-node-port
+  namespace: $supervisor_namespace
+spec:
+  type: NodePort
+  selector:
+    app: $supervisor_app_name
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 31234
+EOF
 
 popd >/dev/null
 
@@ -226,6 +259,9 @@ export PINNIPED_TEST_USER_GROUPS=${test_groups}
 export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
 export PINNIPED_TEST_WEBHOOK_ENDPOINT=${webhook_url}
 export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}
+export PINNIPED_SUPERVISOR_NAMESPACE=${namespace}
+export PINNIPED_SUPERVISOR_APP_NAME=${app_name}
+export PINNIPED_TEST_SUPERVISOR_ADDRESS="localhost:12345"
 
 read -r -d '' PINNIPED_CLUSTER_CAPABILITY_YAML << PINNIPED_CLUSTER_CAPABILITY_YAML_EOF || true
 ${pinniped_cluster_capability_file_content}
@@ -242,7 +278,7 @@ goland_vars=$(grep -v '^#' /tmp/integration-test-env | grep -E '^export .+=' | s
 log_note
 log_note "🚀 Ready to run integration tests! For example..."
 log_note "    cd $pinniped_path"
-log_note '    source /tmp/integration-test-env && go test -v -count 1 ./test/...'
+log_note '    source /tmp/integration-test-env && go test -v -count 1 ./test/integration'
 log_note
 log_note 'Want to run integration tests in GoLand? Copy/paste this "Environment" value for GoLand run configurations:'
 log_note "    ${goland_vars}PINNIPED_CLUSTER_CAPABILITY_FILE=${kind_capabilities_file}"

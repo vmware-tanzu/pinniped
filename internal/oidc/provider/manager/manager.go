@@ -5,7 +5,6 @@ package manager
 
 import (
 	"net/http"
-	"strings"
 	"sync"
 
 	"k8s.io/klog/v2"
@@ -20,19 +19,15 @@ import (
 // It is thread-safe.
 type Manager struct {
 	mu               sync.RWMutex
-	providerHandlers map[string]*providerHandler // map of issuer name to providerHandler
-	nextHandler      http.Handler                // the next handler in a chain, called when this manager didn't know how to handle a request
+	providers        []*provider.OIDCProvider
+	providerHandlers map[string]http.Handler // map of all routes for all providers
+	nextHandler      http.Handler            // the next handler in a chain, called when this manager didn't know how to handle a request
 }
 
 // NewManager returns an empty Manager.
 // nextHandler will be invoked for any requests that could not be handled by this manager's providers.
 func NewManager(nextHandler http.Handler) *Manager {
-	return &Manager{providerHandlers: make(map[string]*providerHandler), nextHandler: nextHandler}
-}
-
-type providerHandler struct {
-	provider         *provider.OIDCProvider
-	discoveryHandler http.Handler
+	return &Manager{providerHandlers: make(map[string]http.Handler), nextHandler: nextHandler}
 }
 
 // SetProviders adds or updates all the given providerHandlers using each provider's issuer string
@@ -43,69 +38,40 @@ type providerHandler struct {
 //
 // This method assumes that all of the OIDCProvider arguments have already been validated
 // by someone else before they are passed to this method.
-func (c *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	// Add all of the incoming providers.
+func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.providers = oidcProviders
+	m.providerHandlers = make(map[string]http.Handler)
+
 	for _, incomingProvider := range oidcProviders {
-		issuerString := incomingProvider.Issuer()
-		c.providerHandlers[issuerString] = &providerHandler{
-			provider:         incomingProvider,
-			discoveryHandler: discovery.New(issuerString),
-		}
-		klog.InfoS("oidc provider manager added or updated issuer", "issuer", issuerString)
-	}
-	// Remove any providers that we previously handled but no longer exist.
-	for issuerKey := range c.providerHandlers {
-		if !findIssuerInListOfProviders(issuerKey, oidcProviders) {
-			delete(c.providerHandlers, issuerKey)
-			klog.InfoS("oidc provider manager removed issuer", "issuer", issuerKey)
-		}
+		m.providerHandlers[incomingProvider.IssuerHost()+"/"+incomingProvider.IssuerPath()+oidc.WellKnownEndpointPath] = discovery.New(incomingProvider.Issuer())
+		klog.InfoS("oidc provider manager added or updated issuer", "issuer", incomingProvider.Issuer())
 	}
 }
 
 // ServeHTTP implements the http.Handler interface.
-func (c *Manager) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
-	providerHandler := c.findProviderHandlerByIssuer(req.Host, req.URL.Path)
-	if providerHandler != nil {
-		if req.URL.Path == providerHandler.provider.IssuerPath()+oidc.WellKnownEndpointPath {
-			providerHandler.discoveryHandler.ServeHTTP(resp, req)
-			return // handled!
-		}
-		klog.InfoS(
-			"oidc provider manager found issuer but could not handle request",
-			"method", req.Method,
-			"host", req.Host,
-			"path", req.URL.Path,
-		)
-	} else {
-		klog.InfoS(
-			"oidc provider manager could not find issuer to handle request",
-			"method", req.Method,
-			"host", req.Host,
-			"path", req.URL.Path,
-		)
+func (m *Manager) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	requestHandler := m.findHandler(req)
+
+	klog.InfoS(
+		"oidc provider manager examining request",
+		"method", req.Method,
+		"host", req.Host,
+		"path", req.URL.Path,
+		"foundMatchingIssuer", requestHandler != nil,
+	)
+
+	if requestHandler == nil {
+		requestHandler = m.nextHandler // couldn't find an issuer to handle the request
 	}
-	// Didn't know how to handle this request, so send it along the chain for further processing.
-	c.nextHandler.ServeHTTP(resp, req)
+	requestHandler.ServeHTTP(resp, req)
 }
 
-func (c *Manager) findProviderHandlerByIssuer(host, path string) *providerHandler {
-	for _, providerHandler := range c.providerHandlers {
-		// TODO do we need to compare scheme? not sure how to get it from the http.Request object
-		// TODO probably need better logic here? also maybe needs some of the logic from inside ServeMux
-		if host == providerHandler.provider.IssuerHost() && strings.HasPrefix(path, providerHandler.provider.IssuerPath()) {
-			return providerHandler
-		}
-	}
-	return nil
-}
+func (m *Manager) findHandler(req *http.Request) http.Handler {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-func findIssuerInListOfProviders(issuer string, oidcProviders []*provider.OIDCProvider) bool {
-	for _, oidcProvider := range oidcProviders {
-		if oidcProvider.Issuer() == issuer {
-			return true
-		}
-	}
-	return false
+	return m.providerHandlers[req.Host+"/"+req.URL.Path]
 }

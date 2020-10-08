@@ -6,8 +6,9 @@ package discovery
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
+
+	"go.pinniped.dev/internal/oidc"
 )
 
 // Metadata holds all fields (that we care about) from the OpenID Provider Metadata section in the
@@ -50,9 +51,9 @@ func New(issuerURL string) http.Handler {
 
 		oidcConfig := Metadata{
 			Issuer:                            issuerURL,
-			AuthorizationEndpoint:             fmt.Sprintf("%s/oauth2/v0/auth", issuerURL),
-			TokenEndpoint:                     fmt.Sprintf("%s/oauth2/v0/token", issuerURL),
-			JWKSURI:                           fmt.Sprintf("%s/jwks.json", issuerURL),
+			AuthorizationEndpoint:             issuerURL + oidc.AuthorizationEndpointPath,
+			TokenEndpoint:                     issuerURL + oidc.TokenEndpointPath,
+			JWKSURI:                           issuerURL + oidc.JWKSEndpointPath,
 			ResponseTypesSupported:            []string{"code"},
 			SubjectTypesSupported:             []string{"public"},
 			IDTokenSigningAlgValuesSupported:  []string{"RS256"},

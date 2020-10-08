@@ -5,5 +5,8 @@
 package oidc
 
 const (
-	WellKnownURLPath = "/.well-known/openid-configuration"
+	WellKnownEndpointPath     = "/.well-known/openid-configuration"
+	AuthorizationEndpointPath = "/oauth2/authorize"
+	TokenEndpointPath         = "/oauth2/token" //nolint:gosec // ignore lint warning that this is a credential
+	JWKSEndpointPath          = "/jwks.json"
 )

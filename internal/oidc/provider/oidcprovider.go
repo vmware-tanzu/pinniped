@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -12,37 +13,66 @@ import (
 
 // OIDCProvider represents all of the settings and state for an OIDC provider.
 type OIDCProvider struct {
-	Issuer *url.URL
+	issuer     string
+	issuerHost string
+	issuerPath string
 }
 
-// Validate returns an error if there is anything wrong with the provider settings, or
-// returns nil if there is nothing wrong with the settings.
-func (p *OIDCProvider) Validate() error {
-	if p.Issuer == nil {
-		return constable.Error(`provider must have an issuer`)
+func NewOIDCProvider(issuer string) (*OIDCProvider, error) {
+	p := OIDCProvider{issuer: issuer}
+	err := p.validate()
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (p *OIDCProvider) validate() error {
+	if p.issuer == "" {
+		return constable.Error("provider must have an issuer")
 	}
 
-	if p.Issuer.Scheme != "https" && p.removeMeAfterWeNoLongerNeedHTTPIssuerSupport(p.Issuer.Scheme) {
+	issuerURL, err := url.Parse(p.issuer)
+	if err != nil {
+		return fmt.Errorf("could not parse issuer as URL: %w", err)
+	}
+
+	if issuerURL.Scheme != "https" && p.removeMeAfterWeNoLongerNeedHTTPIssuerSupport(issuerURL.Scheme) {
 		return constable.Error(`issuer must have "https" scheme`)
 	}
 
-	if p.Issuer.User != nil {
+	if issuerURL.User != nil {
 		return constable.Error(`issuer must not have username or password`)
 	}
 
-	if strings.HasSuffix(p.Issuer.Path, "/") {
+	if strings.HasSuffix(issuerURL.Path, "/") {
 		return constable.Error(`issuer must not have trailing slash in path`)
 	}
 
-	if p.Issuer.RawQuery != "" {
+	if issuerURL.RawQuery != "" {
 		return constable.Error(`issuer must not have query`)
 	}
 
-	if p.Issuer.Fragment != "" {
+	if issuerURL.Fragment != "" {
 		return constable.Error(`issuer must not have fragment`)
 	}
 
+	p.issuerHost = issuerURL.Host
+	p.issuerPath = issuerURL.Path
+
 	return nil
+}
+
+func (p *OIDCProvider) Issuer() string {
+	return p.issuer
+}
+
+func (p *OIDCProvider) IssuerHost() string {
+	return p.issuerHost
+}
+
+func (p *OIDCProvider) IssuerPath() string {
+	return p.issuerPath
 }
 
 func (p *OIDCProvider) removeMeAfterWeNoLongerNeedHTTPIssuerSupport(scheme string) bool {

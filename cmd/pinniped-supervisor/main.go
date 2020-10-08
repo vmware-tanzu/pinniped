@@ -24,7 +24,7 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/downward"
-	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/manager"
 )
 
 const (
@@ -61,7 +61,7 @@ func waitForSignal() os.Signal {
 
 func startControllers(
 	ctx context.Context,
-	issuerProvider *provider.Manager,
+	issuerProvider *manager.Manager,
 	pinnipedClient pinnipedclientset.Interface,
 	pinnipedInformers pinnipedinformers.SharedInformerFactory,
 ) {
@@ -114,7 +114,7 @@ func run(serverInstallationNamespace string) error {
 		pinnipedinformers.WithNamespace(serverInstallationNamespace),
 	)
 
-	oidProvidersManager := provider.NewManager(http.NotFoundHandler())
+	oidProvidersManager := manager.NewManager(http.NotFoundHandler())
 	startControllers(ctx, oidProvidersManager, pinnipedClient, pinnipedInformers)
 
 	//nolint: gosec // Intentionally binding to all network interfaces.

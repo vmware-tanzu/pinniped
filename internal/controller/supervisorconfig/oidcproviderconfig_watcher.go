@@ -6,8 +6,8 @@ package supervisorconfig
 import (
 	"context"
 	"fmt"
-	"net/url"
-	"strings"
+
+	"go.pinniped.dev/internal/multierror"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -73,10 +73,10 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 
 	issuerCounts := make(map[string]int)
 	for _, opc := range all {
-		issuerCounts[opc.Spec.Issuer] = issuerCounts[opc.Spec.Issuer] + 1
+		issuerCounts[opc.Spec.Issuer]++
 	}
 
-	errs := newMultiError()
+	errs := multierror.New()
 
 	oidcProviders := make([]*provider.OIDCProvider, 0)
 	for _, opc := range all {
@@ -88,36 +88,21 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 				configv1alpha1.DuplicateOIDCProviderStatus,
 				"Duplicate issuer",
 			); err != nil {
-				errs.add(fmt.Errorf("could not update status: %w", err))
+				errs.Add(fmt.Errorf("could not update status: %w", err))
 			}
 			continue
 		}
 
-		issuerURL, err := url.Parse(opc.Spec.Issuer)
+		oidcProvider, err := provider.NewOIDCProvider(opc.Spec.Issuer)
 		if err != nil {
 			if err := c.updateStatus(
 				ctx.Context,
 				opc.Namespace,
 				opc.Name,
 				configv1alpha1.InvalidOIDCProviderStatus,
-				"Invalid issuer URL: "+err.Error(),
+				"Invalid: "+err.Error(),
 			); err != nil {
-				errs.add(fmt.Errorf("could not update status: %w", err))
-			}
-			continue
-		}
-
-		oidcProvider := &provider.OIDCProvider{Issuer: issuerURL}
-		err = oidcProvider.Validate()
-		if err != nil {
-			if err := c.updateStatus(
-				ctx.Context,
-				opc.Namespace,
-				opc.Name,
-				configv1alpha1.InvalidOIDCProviderStatus,
-				"Invalid issuer: "+err.Error(),
-			); err != nil {
-				errs.add(fmt.Errorf("could not update status: %w", err))
+				errs.Add(fmt.Errorf("could not update status: %w", err))
 			}
 			continue
 		}
@@ -130,14 +115,13 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 			configv1alpha1.SuccessOIDCProviderStatus,
 			"Provider successfully created",
 		); err != nil {
-			// errs.add(fmt.Errorf("could not update status: %w", err))
-			return fmt.Errorf("could not update status: %w", err)
+			errs.Add(fmt.Errorf("could not update status: %w", err))
 		}
 	}
 
 	c.providerSetter.SetProviders(oidcProviders...)
 
-	return errs.errOrNil()
+	return errs.ErrOrNil()
 }
 
 func (c *oidcProviderConfigWatcherController) updateStatus(
@@ -170,34 +154,4 @@ func (c *oidcProviderConfigWatcherController) updateStatus(
 		_, err = c.client.ConfigV1alpha1().OIDCProviderConfigs(namespace).Update(ctx, opc, metav1.UpdateOptions{})
 		return err
 	})
-}
-
-type multiError []error
-
-func newMultiError() multiError {
-	return make([]error, 0)
-}
-
-func (m *multiError) add(err error) {
-	*m = append(*m, err)
-}
-
-func (m multiError) len() int {
-	return len(m)
-}
-
-func (m multiError) Error() string {
-	sb := strings.Builder{}
-	fmt.Fprintf(&sb, "%d errors:", m.len())
-	for _, err := range m {
-		fmt.Fprintf(&sb, "\n- %s", err.Error())
-	}
-	return sb.String()
-}
-
-func (m multiError) errOrNil() error {
-	if m.len() > 0 {
-		return m
-	}
-	return nil
 }

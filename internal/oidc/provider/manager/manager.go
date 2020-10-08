@@ -1,11 +1,10 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package provider
+package manager
 
 import (
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 
@@ -13,6 +12,7 @@ import (
 
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/discovery"
+	"go.pinniped.dev/internal/oidc/provider"
 )
 
 // Manager can manage multiple active OIDC providers. It acts as a request router for them.
@@ -24,19 +24,15 @@ type Manager struct {
 	nextHandler      http.Handler                // the next handler in a chain, called when this manager didn't know how to handle a request
 }
 
-// New returns an empty Manager.
+// NewManager returns an empty Manager.
 // nextHandler will be invoked for any requests that could not be handled by this manager's providers.
 func NewManager(nextHandler http.Handler) *Manager {
 	return &Manager{providerHandlers: make(map[string]*providerHandler), nextHandler: nextHandler}
 }
 
 type providerHandler struct {
-	provider         *OIDCProvider
+	provider         *provider.OIDCProvider
 	discoveryHandler http.Handler
-}
-
-func (h *providerHandler) Issuer() *url.URL {
-	return h.provider.Issuer
 }
 
 // SetProviders adds or updates all the given providerHandlers using each provider's issuer string
@@ -47,12 +43,12 @@ func (h *providerHandler) Issuer() *url.URL {
 //
 // This method assumes that all of the OIDCProvider arguments have already been validated
 // by someone else before they are passed to this method.
-func (c *Manager) SetProviders(oidcProviders ...*OIDCProvider) {
+func (c *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	// Add all of the incoming providers.
 	for _, incomingProvider := range oidcProviders {
-		issuerString := incomingProvider.Issuer.String()
+		issuerString := incomingProvider.Issuer()
 		c.providerHandlers[issuerString] = &providerHandler{
 			provider:         incomingProvider,
 			discoveryHandler: discovery.New(issuerString),
@@ -70,9 +66,9 @@ func (c *Manager) SetProviders(oidcProviders ...*OIDCProvider) {
 
 // ServeHTTP implements the http.Handler interface.
 func (c *Manager) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
-	providerHandler := c.findProviderHandlerByIssuerURL(req.Host, req.URL.Path)
+	providerHandler := c.findProviderHandlerByIssuer(req.Host, req.URL.Path)
 	if providerHandler != nil {
-		if req.URL.Path == providerHandler.Issuer().Path+oidc.WellKnownURLPath {
+		if req.URL.Path == providerHandler.provider.IssuerPath()+oidc.WellKnownEndpointPath {
 			providerHandler.discoveryHandler.ServeHTTP(resp, req)
 			return // handled!
 		}
@@ -94,20 +90,20 @@ func (c *Manager) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	c.nextHandler.ServeHTTP(resp, req)
 }
 
-func (c *Manager) findProviderHandlerByIssuerURL(host, path string) *providerHandler {
+func (c *Manager) findProviderHandlerByIssuer(host, path string) *providerHandler {
 	for _, providerHandler := range c.providerHandlers {
-		pi := providerHandler.Issuer()
 		// TODO do we need to compare scheme? not sure how to get it from the http.Request object
-		if host == pi.Host && strings.HasPrefix(path, pi.Path) { // TODO probably need better logic here? also maybe needs some of the logic from inside ServeMux
+		// TODO probably need better logic here? also maybe needs some of the logic from inside ServeMux
+		if host == providerHandler.provider.IssuerHost() && strings.HasPrefix(path, providerHandler.provider.IssuerPath()) {
 			return providerHandler
 		}
 	}
 	return nil
 }
 
-func findIssuerInListOfProviders(issuer string, oidcProviders []*OIDCProvider) bool {
-	for _, provider := range oidcProviders {
-		if provider.Issuer.String() == issuer {
+func findIssuerInListOfProviders(issuer string, oidcProviders []*provider.OIDCProvider) bool {
+	for _, oidcProvider := range oidcProviders {
+		if oidcProvider.Issuer() == issuer {
 			return true
 		}
 	}

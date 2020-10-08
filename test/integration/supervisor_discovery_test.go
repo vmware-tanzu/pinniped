@@ -175,8 +175,8 @@ func requireWellKnownEndpointIsWorking(t *testing.T, issuerName string) {
 	// Check that the response matches our expectations.
 	expectedResultTemplate := here.Doc(`{
       "issuer": "%s",
-      "authorization_endpoint": "%s/oauth2/v0/auth",
-      "token_endpoint": "%s/oauth2/v0/token",
+      "authorization_endpoint": "%s/oauth2/authorize",
+      "token_endpoint": "%s/oauth2/token",
       "token_endpoint_auth_methods_supported": ["client_secret_basic"],
       "token_endpoint_auth_signing_alg_values_supported": ["RS256"],
       "jwks_uri": "%s/jwks.json",

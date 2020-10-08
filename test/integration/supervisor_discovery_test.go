@@ -59,21 +59,43 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 	issuer2 := fmt.Sprintf("http://%s/nested/issuer2", env.SupervisorAddress)
 	issuer3 := fmt.Sprintf("http://%s/issuer3", env.SupervisorAddress)
 	issuer4 := fmt.Sprintf("http://%s/issuer4", env.SupervisorAddress)
+	issuer5 := fmt.Sprintf("http://%s/issuer5", env.SupervisorAddress)
+	badIssuer := fmt.Sprintf("http://%s/badIssuer?cannot-use=queries", env.SupervisorAddress)
 
 	// When OIDCProviderConfig are created in sequence they each cause a discovery endpoint to appear only for as long as the OIDCProviderConfig exists.
-	createdOIDCProviderConfig1 := requireCreatingOIDCProviderConfigCausesWellKnownEndpointToAppear(t, client, ns, issuer1, "from-integration-test1")
-	requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(t, createdOIDCProviderConfig1, client, ns, issuer1)
-	createdOIDCProviderConfig2 := requireCreatingOIDCProviderConfigCausesWellKnownEndpointToAppear(t, client, ns, issuer2, "from-integration-test2")
-	requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(t, createdOIDCProviderConfig2, client, ns, issuer2)
+	config1 := requireCreatingOIDCProviderConfigCausesWellKnownEndpointToAppear(t, client, ns, issuer1, "from-integration-test1")
+	requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(t, config1, client, ns, issuer1)
+	config2 := requireCreatingOIDCProviderConfigCausesWellKnownEndpointToAppear(t, client, ns, issuer2, "from-integration-test2")
+	requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(t, config2, client, ns, issuer2)
 
 	// When multiple OIDCProviderConfigs exist at the same time they each serve a unique discovery endpoint.
-	createdOIDCProviderConfig3 := requireCreatingOIDCProviderConfigCausesWellKnownEndpointToAppear(t, client, ns, issuer3, "from-integration-test3")
-	createdOIDCProviderConfig4 := requireCreatingOIDCProviderConfigCausesWellKnownEndpointToAppear(t, client, ns, issuer4, "from-integration-test4")
+	config3 := requireCreatingOIDCProviderConfigCausesWellKnownEndpointToAppear(t, client, ns, issuer3, "from-integration-test3")
+	config4 := requireCreatingOIDCProviderConfigCausesWellKnownEndpointToAppear(t, client, ns, issuer4, "from-integration-test4")
 	requireWellKnownEndpointIsWorking(t, issuer3) // discovery for issuer3 is still working after issuer4 started working
 
 	// When they are deleted they stop serving discovery endpoints.
-	requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(t, createdOIDCProviderConfig3, client, ns, issuer2)
-	requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(t, createdOIDCProviderConfig4, client, ns, issuer2)
+	requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(t, config3, client, ns, issuer3)
+	requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(t, config4, client, ns, issuer4)
+
+	// When the same issuer is added twice, both issuers are marked as duplicates, and neither provider is serving.
+	config5Duplicate1 := requireCreatingOIDCProviderConfigCausesWellKnownEndpointToAppear(t, client, ns, issuer5, "from-integration-test5")
+	config5Duplicate2 := createOIDCProviderConfig(t, "from-integration-test5-duplicate", client, ns, issuer5)
+	requireStatus(t, client, ns, config5Duplicate1.Name, v1alpha1.DuplicateOIDCProviderStatus)
+	requireStatus(t, client, ns, config5Duplicate2.Name, v1alpha1.DuplicateOIDCProviderStatus)
+	requireDiscoveryEndpointIsNotFound(t, issuer5)
+
+	// If we delete the first duplicate issuer, the second duplicate issuer starts serving.
+	requireDelete(t, client, ns, config5Duplicate1.Name)
+	requireWellKnownEndpointIsWorking(t, issuer5)
+	requireStatus(t, client, ns, config5Duplicate2.Name, v1alpha1.SuccessOIDCProviderStatus)
+
+	// When we finally delete all issuers, the endpoint should be down.
+	requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(t, config5Duplicate2, client, ns, issuer5)
+
+	// When we create a provider with an invalid issuer, the status is set to invalid.
+	badConfig := createOIDCProviderConfig(t, "from-integration-test6", client, ns, badIssuer)
+	requireStatus(t, client, ns, badConfig.Name, v1alpha1.InvalidOIDCProviderStatus)
+	requireDiscoveryEndpointIsNotFound(t, badIssuer)
 }
 
 func requireDiscoveryEndpointIsNotFound(t *testing.T, issuerName string) {
@@ -104,6 +126,7 @@ func requireCreatingOIDCProviderConfigCausesWellKnownEndpointToAppear(t *testing
 	t.Helper()
 	newOIDCProviderConfig := createOIDCProviderConfig(t, oidcProviderConfigName, client, ns, issuerName)
 	requireWellKnownEndpointIsWorking(t, issuerName)
+	requireStatus(t, client, ns, oidcProviderConfigName, v1alpha1.SuccessOIDCProviderStatus)
 	return newOIDCProviderConfig
 }
 
@@ -204,4 +227,28 @@ func createOIDCProviderConfig(t *testing.T, oidcProviderConfigName string, clien
 	})
 
 	return createdOIDCProviderConfig
+}
+
+func requireDelete(t *testing.T, client pinnipedclientset.Interface, ns, name string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err := client.ConfigV1alpha1().OIDCProviderConfigs(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	require.NoError(t, err)
+}
+
+func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string, status v1alpha1.OIDCProviderStatus) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var opc *v1alpha1.OIDCProviderConfig
+	var err error
+	assert.Eventually(t, func() bool {
+		opc, err = client.ConfigV1alpha1().OIDCProviderConfigs(ns).Get(ctx, name, metav1.GetOptions{})
+		return err == nil && opc.Status.Status == status
+	}, 10*time.Second, 200*time.Millisecond)
+	require.NoError(t, err)
+	require.Equalf(t, status, opc.Status.Status, "unexpected status (message = '%s')", opc.Status.Message)
 }

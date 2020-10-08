@@ -35,7 +35,7 @@ spec:
             type: string
           metadata:
             type: object
-          status:
+          spec:
             description: Spec of the OIDC provider.
             properties:
               issuer:
@@ -52,8 +52,23 @@ spec:
             required:
             - issuer
             type: object
+          status:
+            description: Status of the OIDC provider.
+            properties:
+              message:
+                description: Message provides human-readable details about the Status.
+                type: string
+              status:
+                description: Status holds an enum that describes the state of this
+                  OIDCProvider. Note that this Status can represent success or failure.
+                enum:
+                - Success
+                - Duplicate
+                - Invalid
+                type: string
+            type: object
         required:
-        - status
+        - spec
         type: object
     served: true
     storage: true

@@ -5,6 +5,15 @@ package v1alpha1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+// +kubebuilder:validation:Enum=Success;Duplicate;Invalid
+type OIDCProviderStatus string
+
+const (
+	SuccessOIDCProviderStatus = OIDCProviderStatus("Success")
+	DuplicateOIDCProviderStatus = OIDCProviderStatus("Duplicate")
+	InvalidOIDCProviderStatus = OIDCProviderStatus("Invalid")
+)
+
 // OIDCProviderConfigSpec is a struct that describes an OIDC Provider.
 type OIDCProviderConfigSpec struct {
 	// Issuer is the OIDC Provider's issuer, per the OIDC Discovery Metadata document, as well as the
@@ -19,6 +28,18 @@ type OIDCProviderConfigSpec struct {
 	Issuer string `json:"issuer"`
 }
 
+// OIDCProviderConfigStatus is a struct that describes the actual state of an OIDC Provider.
+type OIDCProviderConfigStatus struct {
+	// Status holds an enum that describes the state of this OIDCProvider. Note that this Status can
+	// represent success or failure.
+	// +optional
+	Status OIDCProviderStatus `json:"status,omitempty"`
+
+	// Message provides human-readable details about the Status.
+	// +optional
+	Message string `json:"message,omitempty"`
+}
+
 // OIDCProviderConfig describes the configuration of an OIDC provider.
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -28,7 +49,10 @@ type OIDCProviderConfig struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec of the OIDC provider.
-	Spec OIDCProviderConfigSpec `json:"status"`
+	Spec OIDCProviderConfigSpec `json:"spec"`
+
+	// Status of the OIDC provider.
+	Status OIDCProviderConfigStatus `json:"status,omitempty"`
 }
 
 // List of OIDCProviderConfig objects.

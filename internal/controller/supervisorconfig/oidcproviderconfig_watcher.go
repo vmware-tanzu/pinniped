@@ -4,11 +4,19 @@
 package supervisorconfig
 
 import (
+	"context"
+	"fmt"
 	"net/url"
+	"strings"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 	configinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
@@ -24,13 +32,17 @@ type ProvidersSetter interface {
 
 type oidcProviderConfigWatcherController struct {
 	providerSetter ProvidersSetter
+	clock          clock.Clock
+	client         pinnipedclientset.Interface
 	opcInformer    configinformers.OIDCProviderConfigInformer
 }
 
 // NewOIDCProviderConfigWatcherController creates a controllerlib.Controller that watches
 // OIDCProviderConfig objects and notifies a callback object of the collection of provider configs.
 func NewOIDCProviderConfigWatcherController(
-	issuerObserver ProvidersSetter,
+	providerSetter ProvidersSetter,
+	clock clock.Clock,
+	client pinnipedclientset.Interface,
 	opcInformer configinformers.OIDCProviderConfigInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
@@ -38,7 +50,9 @@ func NewOIDCProviderConfigWatcherController(
 		controllerlib.Config{
 			Name: "OIDCProviderConfigWatcherController",
 			Syncer: &oidcProviderConfigWatcherController{
-				providerSetter: issuerObserver,
+				providerSetter: providerSetter,
+				clock:          clock,
+				client:         client,
 				opcInformer:    opcInformer,
 			},
 		},
@@ -57,35 +71,133 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 		return err
 	}
 
+	issuerCounts := make(map[string]int)
+	for _, opc := range all {
+		issuerCounts[opc.Spec.Issuer] = issuerCounts[opc.Spec.Issuer] + 1
+	}
+
+	errs := newMultiError()
+
 	oidcProviders := make([]*provider.OIDCProvider, 0)
 	for _, opc := range all {
-		issuerURL, err := url.Parse(opc.Spec.Issuer)
-		if err != nil {
-			klog.InfoS(
-				"OIDCProviderConfigWatcherController Sync failed to parse issuer",
-				"err",
-				err,
-			)
+		if issuerCount := issuerCounts[opc.Spec.Issuer]; issuerCount > 1 {
+			if err := c.updateStatus(
+				ctx.Context,
+				opc.Namespace,
+				opc.Name,
+				configv1alpha1.DuplicateOIDCProviderStatus,
+				"Duplicate issuer",
+			); err != nil {
+				errs.add(fmt.Errorf("could not update status: %w", err))
+			}
 			continue
 		}
+
+		issuerURL, err := url.Parse(opc.Spec.Issuer)
+		if err != nil {
+			if err := c.updateStatus(
+				ctx.Context,
+				opc.Namespace,
+				opc.Name,
+				configv1alpha1.InvalidOIDCProviderStatus,
+				"Invalid issuer URL: "+err.Error(),
+			); err != nil {
+				errs.add(fmt.Errorf("could not update status: %w", err))
+			}
+			continue
+		}
+
 		oidcProvider := &provider.OIDCProvider{Issuer: issuerURL}
 		err = oidcProvider.Validate()
 		if err != nil {
-			klog.InfoS(
-				"OIDCProviderConfigWatcherController Sync could failed to validate OIDCProviderConfig",
-				"err",
-				err,
-			)
+			if err := c.updateStatus(
+				ctx.Context,
+				opc.Namespace,
+				opc.Name,
+				configv1alpha1.InvalidOIDCProviderStatus,
+				"Invalid issuer: "+err.Error(),
+			); err != nil {
+				errs.add(fmt.Errorf("could not update status: %w", err))
+			}
 			continue
 		}
+
 		oidcProviders = append(oidcProviders, oidcProvider)
-		klog.InfoS(
-			"OIDCProviderConfigWatcherController Sync accepted OIDCProviderConfig",
-			"issuer",
-			issuerURL,
-		)
+		if err := c.updateStatus(
+			ctx.Context,
+			opc.Namespace,
+			opc.Name,
+			configv1alpha1.SuccessOIDCProviderStatus,
+			"Provider successfully created",
+		); err != nil {
+			// errs.add(fmt.Errorf("could not update status: %w", err))
+			return fmt.Errorf("could not update status: %w", err)
+		}
 	}
 
 	c.providerSetter.SetProviders(oidcProviders...)
+
+	return errs.errOrNil()
+}
+
+func (c *oidcProviderConfigWatcherController) updateStatus(
+	ctx context.Context,
+	namespace, name string,
+	status configv1alpha1.OIDCProviderStatus,
+	message string,
+) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		opc, err := c.client.ConfigV1alpha1().OIDCProviderConfigs(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("get failed: %w", err)
+		}
+
+		if opc.Status.Status == status && opc.Status.Message == message {
+			return nil
+		}
+
+		klog.InfoS(
+			"attempting status update",
+			"openidproviderconfig",
+			klog.KRef(namespace, name),
+			"status",
+			status,
+			"message",
+			message,
+		)
+		opc.Status.Status = status
+		opc.Status.Message = message
+		_, err = c.client.ConfigV1alpha1().OIDCProviderConfigs(namespace).Update(ctx, opc, metav1.UpdateOptions{})
+		return err
+	})
+}
+
+type multiError []error
+
+func newMultiError() multiError {
+	return make([]error, 0)
+}
+
+func (m *multiError) add(err error) {
+	*m = append(*m, err)
+}
+
+func (m multiError) len() int {
+	return len(m)
+}
+
+func (m multiError) Error() string {
+	sb := strings.Builder{}
+	fmt.Fprintf(&sb, "%d errors:", m.len())
+	for _, err := range m {
+		fmt.Fprintf(&sb, "\n- %s", err.Error())
+	}
+	return sb.String()
+}
+
+func (m multiError) errOrNil() error {
+	if m.len() > 0 {
+		return m
+	}
 	return nil
 }

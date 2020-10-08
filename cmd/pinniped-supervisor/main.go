@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/client-go/rest"
 	restclient "k8s.io/client-go/rest"
@@ -61,6 +62,7 @@ func waitForSignal() os.Signal {
 func startControllers(
 	ctx context.Context,
 	issuerProvider *provider.Manager,
+	pinnipedClient pinnipedclientset.Interface,
 	pinnipedInformers pinnipedinformers.SharedInformerFactory,
 ) {
 	// Create controller manager.
@@ -69,6 +71,8 @@ func startControllers(
 		WithController(
 			supervisorconfig.NewOIDCProviderConfigWatcherController(
 				issuerProvider,
+				clock.RealClock{},
+				pinnipedClient,
 				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
 				controllerlib.WithInformer,
 			),
@@ -111,7 +115,7 @@ func run(serverInstallationNamespace string) error {
 	)
 
 	oidProvidersManager := provider.NewManager(http.NotFoundHandler())
-	startControllers(ctx, oidProvidersManager, pinnipedInformers)
+	startControllers(ctx, oidProvidersManager, pinnipedClient, pinnipedInformers)
 
 	//nolint: gosec // Intentionally binding to all network interfaces.
 	l, err := net.Listen("tcp", ":80")

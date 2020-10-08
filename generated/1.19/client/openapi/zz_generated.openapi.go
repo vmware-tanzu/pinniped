@@ -25,6 +25,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfig":                   schema_119_apis_config_v1alpha1_OIDCProviderConfig(ref),
 		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigList":               schema_119_apis_config_v1alpha1_OIDCProviderConfigList(ref),
 		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigSpec":               schema_119_apis_config_v1alpha1_OIDCProviderConfigSpec(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigStatus":             schema_119_apis_config_v1alpha1_OIDCProviderConfigStatus(ref),
 		"go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.Condition":                               schema_119_apis_idp_v1alpha1_Condition(ref),
 		"go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.TLSSpec":                                 schema_119_apis_idp_v1alpha1_TLSSpec(ref),
 		"go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProvider":                 schema_119_apis_idp_v1alpha1_WebhookIdentityProvider(ref),
@@ -316,18 +317,24 @@ func schema_119_apis_config_v1alpha1_OIDCProviderConfig(ref common.ReferenceCall
 							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
 						},
 					},
-					"status": {
+					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Spec of the OIDC provider.",
 							Ref:         ref("go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigSpec"),
 						},
 					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Status of the OIDC provider.",
+							Ref:         ref("go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigStatus"),
+						},
+					},
 				},
-				Required: []string{"status"},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
-			"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigSpec", "go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -393,6 +400,33 @@ func schema_119_apis_config_v1alpha1_OIDCProviderConfigSpec(ref common.Reference
 					},
 				},
 				Required: []string{"issuer"},
+			},
+		},
+	}
+}
+
+func schema_119_apis_config_v1alpha1_OIDCProviderConfigStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "OIDCProviderConfigStatus is a struct that describes the actual state of an OIDC Provider.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Status holds an enum that describes the state of this OIDCProvider. Note that this Status can represent success or failure.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Message provides human-readable details about the Status.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
 			},
 		},
 	}

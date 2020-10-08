@@ -26,6 +26,7 @@ type OIDCProviderConfigsGetter interface {
 type OIDCProviderConfigInterface interface {
 	Create(*v1alpha1.OIDCProviderConfig) (*v1alpha1.OIDCProviderConfig, error)
 	Update(*v1alpha1.OIDCProviderConfig) (*v1alpha1.OIDCProviderConfig, error)
+	UpdateStatus(*v1alpha1.OIDCProviderConfig) (*v1alpha1.OIDCProviderConfig, error)
 	Delete(name string, options *v1.DeleteOptions) error
 	DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error
 	Get(name string, options v1.GetOptions) (*v1alpha1.OIDCProviderConfig, error)
@@ -113,6 +114,22 @@ func (c *oIDCProviderConfigs) Update(oIDCProviderConfig *v1alpha1.OIDCProviderCo
 		Namespace(c.ns).
 		Resource("oidcproviderconfigs").
 		Name(oIDCProviderConfig.Name).
+		Body(oIDCProviderConfig).
+		Do().
+		Into(result)
+	return
+}
+
+// UpdateStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+
+func (c *oIDCProviderConfigs) UpdateStatus(oIDCProviderConfig *v1alpha1.OIDCProviderConfig) (result *v1alpha1.OIDCProviderConfig, err error) {
+	result = &v1alpha1.OIDCProviderConfig{}
+	err = c.client.Put().
+		Namespace(c.ns).
+		Resource("oidcproviderconfigs").
+		Name(oIDCProviderConfig.Name).
+		SubResource("status").
 		Body(oIDCProviderConfig).
 		Do().
 		Into(result)

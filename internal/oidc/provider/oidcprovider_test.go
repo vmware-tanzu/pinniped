@@ -1,7 +1,7 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package issuerprovider
+package provider
 
 import (
 	"net/url"
@@ -10,15 +10,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestProvider(t *testing.T) {
+func TestOIDCProviderValidations(t *testing.T) {
 	tests := []struct {
 		name      string
 		issuer    *url.URL
 		wantError string
 	}{
 		{
-			name:   "nil issuer",
-			issuer: nil,
+			name:      "provider must have an issuer",
+			issuer:    nil,
+			wantError: "provider must have an issuer",
 		},
 		{
 			name:      "no scheme",
@@ -67,14 +68,12 @@ func TestProvider(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			p := New()
-			err := p.SetIssuer(tt.issuer)
+			p := OIDCProvider{Issuer: tt.issuer}
+			err := p.Validate()
 			if tt.wantError != "" {
 				require.EqualError(t, err, tt.wantError)
-				require.Nil(t, p.GetIssuer())
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, tt.issuer, p.GetIssuer())
 			}
 		})
 	}

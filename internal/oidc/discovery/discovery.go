@@ -8,16 +8,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
-
-	"go.pinniped.dev/internal/oidc"
 )
 
 // Metadata holds all fields (that we care about) from the OpenID Provider Metadata section in the
 // OpenID Connect Discovery specification:
 // https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.3.
 type Metadata struct {
-	// vvvRequiredvvv
+	// vvv Required vvv
 
 	Issuer string `json:"issuer"`
 
@@ -29,44 +26,28 @@ type Metadata struct {
 	SubjectTypesSupported            []string `json:"subject_types_supported"`
 	IDTokenSigningAlgValuesSupported []string `json:"id_token_signing_alg_values_supported"`
 
-	// ^^^Required^^^
+	// ^^^ Required ^^^
 
-	// vvvOptionalvvv
+	// vvv Optional vvv
 
 	TokenEndpointAuthMethodsSupported           []string `json:"token_endpoint_auth_methods_supported"`
 	TokenEndpointAuthSigningAlgoValuesSupported []string `json:"token_endpoint_auth_signing_alg_values_supported"`
 	ScopesSupported                             []string `json:"scopes_supported"`
 	ClaimsSupported                             []string `json:"claims_supported"`
 
-	// ^^^Optional^^^
+	// ^^^ Optional ^^^
 }
 
-// IssuerGetter holds onto an issuer which can be retrieved via its GetIssuer function. If there is
-// no valid issuer, then nil will be returned.
-//
-// Implementations of this type should be thread-safe to support calls from multiple goroutines.
-type IssuerGetter interface {
-	GetIssuer() *url.URL
-}
-
-// New returns an http.Handler that will use information from the provided IssuerGetter to serve an
-// OIDC discovery endpoint.
-func New(ig IssuerGetter) http.Handler {
+// New returns an http.Handler that serves an OIDC discovery endpoint.
+func New(issuerURL string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-
-		issuer := ig.GetIssuer()
-		if issuer == nil || r.URL.Path != issuer.Path+oidc.WellKnownURLPath {
-			http.Error(w, `{"error": "OIDC discovery not available (unknown issuer)"}`, http.StatusNotFound)
-			return
-		}
 
 		if r.Method != http.MethodGet {
 			http.Error(w, `{"error": "Method not allowed (try GET)"}`, http.StatusMethodNotAllowed)
 			return
 		}
 
-		issuerURL := issuer.String()
 		oidcConfig := Metadata{
 			Issuer:                            issuerURL,
 			AuthorizationEndpoint:             fmt.Sprintf("%s/oauth2/v0/auth", issuerURL),

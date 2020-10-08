@@ -7,20 +7,18 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/oidc"
-	"go.pinniped.dev/internal/oidc/issuerprovider"
 )
 
 func TestDiscovery(t *testing.T) {
 	tests := []struct {
 		name string
 
-		issuer *url.URL
+		issuer string
 		method string
 		path   string
 
@@ -29,37 +27,8 @@ func TestDiscovery(t *testing.T) {
 		wantBody        interface{}
 	}{
 		{
-			name:       "nil issuer",
-			method:     http.MethodGet,
-			path:       oidc.WellKnownURLPath,
-			wantStatus: http.StatusNotFound,
-			wantBody: map[string]string{
-				"error": "OIDC discovery not available (unknown issuer)",
-			},
-		},
-		{
-			name:       "root path mismatch",
-			issuer:     must(url.Parse("https://some-issuer.com/some/path")),
-			method:     http.MethodGet,
-			path:       "/some/other/path" + oidc.WellKnownURLPath,
-			wantStatus: http.StatusNotFound,
-			wantBody: map[string]string{
-				"error": "OIDC discovery not available (unknown issuer)",
-			},
-		},
-		{
-			name:       "well-known path mismatch",
-			issuer:     must(url.Parse("https://some-issuer.com/some/path")),
-			method:     http.MethodGet,
-			path:       "/some/path/that/is/not/the/well-known/path",
-			wantStatus: http.StatusNotFound,
-			wantBody: map[string]string{
-				"error": "OIDC discovery not available (unknown issuer)",
-			},
-		},
-		{
-			name:            "issuer path matches",
-			issuer:          must(url.Parse("https://some-issuer.com/some/path")),
+			name:            "happy path",
+			issuer:          "https://some-issuer.com/some/path",
 			method:          http.MethodGet,
 			path:            "/some/path" + oidc.WellKnownURLPath,
 			wantStatus:      http.StatusOK,
@@ -80,7 +49,7 @@ func TestDiscovery(t *testing.T) {
 		},
 		{
 			name:       "bad method",
-			issuer:     must(url.Parse("https://some-issuer.com")),
+			issuer:     "https://some-issuer.com",
 			method:     http.MethodPost,
 			path:       oidc.WellKnownURLPath,
 			wantStatus: http.StatusMethodNotAllowed,
@@ -92,11 +61,7 @@ func TestDiscovery(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			p := issuerprovider.New()
-			err := p.SetIssuer(test.issuer)
-			require.NoError(t, err)
-
-			handler := New(p)
+			handler := New(test.issuer)
 			req := httptest.NewRequest(test.method, test.path, nil)
 			rsp := httptest.NewRecorder()
 			handler.ServeHTTP(rsp, req)
@@ -114,11 +79,4 @@ func TestDiscovery(t *testing.T) {
 			}
 		})
 	}
-}
-
-func must(u *url.URL, err error) *url.URL {
-	if err != nil {
-		panic(err)
-	}
-	return u
 }

@@ -23,8 +23,7 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/downward"
-	"go.pinniped.dev/internal/oidc/discovery"
-	"go.pinniped.dev/internal/oidc/issuerprovider"
+	"go.pinniped.dev/internal/oidc/provider"
 )
 
 const (
@@ -32,10 +31,8 @@ const (
 	defaultResyncInterval = 3 * time.Minute
 )
 
-func start(ctx context.Context, l net.Listener, discoveryHandler http.Handler) {
-	server := http.Server{
-		Handler: discoveryHandler,
-	}
+func start(ctx context.Context, l net.Listener, handler http.Handler) {
+	server := http.Server{Handler: handler}
 
 	errCh := make(chan error)
 	go func() {
@@ -63,14 +60,14 @@ func waitForSignal() os.Signal {
 
 func startControllers(
 	ctx context.Context,
-	issuerProvider *issuerprovider.Provider,
+	issuerProvider *provider.Manager,
 	pinnipedInformers pinnipedinformers.SharedInformerFactory,
 ) {
 	// Create controller manager.
 	controllerManager := controllerlib.
 		NewManager().
 		WithController(
-			supervisorconfig.NewDynamicConfigWatcherController(
+			supervisorconfig.NewOIDCProviderConfigWatcherController(
 				issuerProvider,
 				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
 				controllerlib.WithInformer,
@@ -113,8 +110,8 @@ func run(serverInstallationNamespace string) error {
 		pinnipedinformers.WithNamespace(serverInstallationNamespace),
 	)
 
-	issuerProvider := issuerprovider.New()
-	startControllers(ctx, issuerProvider, pinnipedInformers)
+	oidProvidersManager := provider.NewManager(http.NotFoundHandler())
+	startControllers(ctx, oidProvidersManager, pinnipedInformers)
 
 	//nolint: gosec // Intentionally binding to all network interfaces.
 	l, err := net.Listen("tcp", ":80")
@@ -123,7 +120,7 @@ func run(serverInstallationNamespace string) error {
 	}
 	defer l.Close()
 
-	start(ctx, l, discovery.New(issuerProvider))
+	start(ctx, l, oidProvidersManager)
 	klog.InfoS("supervisor is ready", "address", l.Addr().String())
 
 	gotSignal := waitForSignal()

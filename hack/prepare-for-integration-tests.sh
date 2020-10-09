@@ -164,7 +164,7 @@ if ! tilt_mode; then
   #
   # Deploy local-user-authenticator
   #
-  pushd deploy-local-user-authenticator >/dev/null
+  pushd deploy/local-user-authenticator >/dev/null
 
   log_note "Deploying the local-user-authenticator app to the cluster..."
   ytt --file . \
@@ -203,7 +203,7 @@ kubectl create secret generic "$test_username" \
 supervisor_app_name="pinniped-supervisor"
 supervisor_namespace="pinniped-supervisor"
 
-pushd deploy-supervisor >/dev/null
+pushd deploy/supervisor >/dev/null
 
 log_note "Deploying the Pinniped Supervisor app to the cluster..."
 ytt --file . \
@@ -246,7 +246,7 @@ if ! tilt_mode; then
   #
   # Deploy Pinniped
   #
-  pushd deploy >/dev/null
+  pushd deploy/concierge >/dev/null
 
   log_note "Deploying the Pinniped app to the cluster..."
   ytt --file . \

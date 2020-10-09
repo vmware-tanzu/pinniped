@@ -72,7 +72,7 @@ func TestClient(t *testing.T) {
 
 	var resp *clientauthenticationv1beta1.ExecCredential
 	assert.Eventually(t, func() bool {
-		resp, err = client.ExchangeToken(ctx, env.Namespace, idp, env.TestUser.Token, string(clientConfig.CAData), clientConfig.Host)
+		resp, err = client.ExchangeToken(ctx, env.ConciergeNamespace, idp, env.TestUser.Token, string(clientConfig.CAData), clientConfig.Host)
 		return err == nil
 	}, 10*time.Second, 500*time.Millisecond)
 	require.NoError(t, err)

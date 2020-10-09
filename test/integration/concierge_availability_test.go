@@ -23,7 +23,7 @@ func TestGetDeployment(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	appDeployment, err := client.AppsV1().Deployments(env.Namespace).Get(ctx, env.AppName, metav1.GetOptions{})
+	appDeployment, err := client.AppsV1().Deployments(env.ConciergeNamespace).Get(ctx, env.ConciergeAppName, metav1.GetOptions{})
 	require.NoError(t, err)
 
 	cond := getDeploymentCondition(appDeployment.Status, appsv1.DeploymentAvailable)

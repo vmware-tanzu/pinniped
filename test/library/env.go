@@ -25,14 +25,15 @@ const (
 type TestEnv struct {
 	t *testing.T
 
-	Namespace           string                                  `json:"namespace"`
+	ConciergeNamespace  string                                  `json:"conciergeNamespace"`
 	SupervisorNamespace string                                  `json:"supervisorNamespace"`
-	AppName             string                                  `json:"appName"`
+	ConciergeAppName    string                                  `json:"conciergeAppName"`
 	SupervisorAppName   string                                  `json:"supervisorAppName"`
 	Capabilities        map[TestClusterCapability]bool          `json:"capabilities"`
 	TestWebhook         idpv1alpha1.WebhookIdentityProviderSpec `json:"testWebhook"`
 	SupervisorAddress   string                                  `json:"supervisorAddress"`
-	TestUser            struct {
+
+	TestUser struct {
 		Token            string   `json:"token"`
 		ExpectedUsername string   `json:"expectedUsername"`
 		ExpectedGroups   []string `json:"expectedGroups"`
@@ -45,11 +46,11 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 	t.Helper()
 	SkipUnlessIntegration(t)
 
-	capabilitiesDescriptionYAML := os.Getenv("PINNIPED_CLUSTER_CAPABILITY_YAML")
-	capabilitiesDescriptionFile := os.Getenv("PINNIPED_CLUSTER_CAPABILITY_FILE")
+	capabilitiesDescriptionYAML := os.Getenv("PINNIPED_TEST_CLUSTER_CAPABILITY_YAML")
+	capabilitiesDescriptionFile := os.Getenv("PINNIPED_TEST_CLUSTER_CAPABILITY_FILE")
 	require.NotEmptyf(t,
 		capabilitiesDescriptionYAML+capabilitiesDescriptionFile,
-		"must specify either PINNIPED_CLUSTER_CAPABILITY_YAML or PINNIPED_CLUSTER_CAPABILITY_FILE env var for integration tests",
+		"must specify either PINNIPED_TEST_CLUSTER_CAPABILITY_YAML or PINNIPED_TEST_CLUSTER_CAPABILITY_FILE env var for integration tests",
 	)
 	if capabilitiesDescriptionYAML == "" {
 		bytes, err := ioutil.ReadFile(capabilitiesDescriptionFile)
@@ -68,14 +69,14 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 		return value
 	}
 
-	result.Namespace = needEnv("PINNIPED_NAMESPACE")
-	result.AppName = needEnv("PINNIPED_APP_NAME")
+	result.ConciergeNamespace = needEnv("PINNIPED_TEST_CONCIERGE_NAMESPACE")
+	result.ConciergeAppName = needEnv("PINNIPED_TEST_CONCIERGE_APP_NAME")
 	result.TestUser.ExpectedUsername = needEnv("PINNIPED_TEST_USER_USERNAME")
 	result.TestUser.ExpectedGroups = strings.Split(strings.ReplaceAll(needEnv("PINNIPED_TEST_USER_GROUPS"), " ", ""), ",")
 	result.TestUser.Token = needEnv("PINNIPED_TEST_USER_TOKEN")
 	result.TestWebhook.Endpoint = needEnv("PINNIPED_TEST_WEBHOOK_ENDPOINT")
-	result.SupervisorNamespace = needEnv("PINNIPED_SUPERVISOR_NAMESPACE")
-	result.SupervisorAppName = needEnv("PINNIPED_SUPERVISOR_APP_NAME")
+	result.SupervisorNamespace = needEnv("PINNIPED_TEST_SUPERVISOR_NAMESPACE")
+	result.SupervisorAppName = needEnv("PINNIPED_TEST_SUPERVISOR_APP_NAME")
 	result.SupervisorAddress = needEnv("PINNIPED_TEST_SUPERVISOR_ADDRESS")
 	result.TestWebhook.TLS = &idpv1alpha1.TLSSpec{CertificateAuthorityData: needEnv("PINNIPED_TEST_WEBHOOK_CA_BUNDLE")}
 	result.t = t

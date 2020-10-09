@@ -113,7 +113,7 @@ func newAnonymousClientRestConfigWithCertAndKeyAdded(t *testing.T, clientCertifi
 	return config
 }
 
-// CreateTestWebhookIDP creates and returns a test WebhookIdentityProvider in $PINNIPED_NAMESPACE, which will be
+// CreateTestWebhookIDP creates and returns a test WebhookIdentityProvider in $PINNIPED_TEST_CONCIERGE_NAMESPACE, which will be
 // automatically deleted at the end of the current test's lifetime. It returns a corev1.TypedLocalObjectReference which
 // descibes the test IDP within the test namespace.
 func CreateTestWebhookIDP(ctx context.Context, t *testing.T) corev1.TypedLocalObjectReference {
@@ -121,7 +121,7 @@ func CreateTestWebhookIDP(ctx context.Context, t *testing.T) corev1.TypedLocalOb
 	testEnv := IntegrationEnv(t)
 
 	client := NewPinnipedClientset(t)
-	webhooks := client.IDPV1alpha1().WebhookIdentityProviders(testEnv.Namespace)
+	webhooks := client.IDPV1alpha1().WebhookIdentityProviders(testEnv.ConciergeNamespace)
 
 	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()

@@ -269,22 +269,22 @@ pinniped_cluster_capability_file_content=$(cat "$kind_capabilities_file")
 
 cat <<EOF >/tmp/integration-test-env
 # The following env vars should be set before running 'go test -v -count 1 ./test/...'
-export PINNIPED_NAMESPACE=${namespace}
-export PINNIPED_APP_NAME=${app_name}
+export PINNIPED_TEST_CONCIERGE_NAMESPACE=${namespace}
+export PINNIPED_TEST_CONCIERGE_APP_NAME=${app_name}
 export PINNIPED_TEST_USER_USERNAME=${test_username}
 export PINNIPED_TEST_USER_GROUPS=${test_groups}
 export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
 export PINNIPED_TEST_WEBHOOK_ENDPOINT=${webhook_url}
 export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}
-export PINNIPED_SUPERVISOR_NAMESPACE=${supervisor_namespace}
-export PINNIPED_SUPERVISOR_APP_NAME=${supervisor_app_name}
+export PINNIPED_TEST_SUPERVISOR_NAMESPACE=${supervisor_namespace}
+export PINNIPED_TEST_SUPERVISOR_APP_NAME=${supervisor_app_name}
 export PINNIPED_TEST_SUPERVISOR_ADDRESS="localhost:12345"
 
-read -r -d '' PINNIPED_CLUSTER_CAPABILITY_YAML << PINNIPED_CLUSTER_CAPABILITY_YAML_EOF || true
+read -r -d '' PINNIPED_TEST_CLUSTER_CAPABILITY_YAML << PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF || true
 ${pinniped_cluster_capability_file_content}
-PINNIPED_CLUSTER_CAPABILITY_YAML_EOF
+PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF
 
-export PINNIPED_CLUSTER_CAPABILITY_YAML
+export PINNIPED_TEST_CLUSTER_CAPABILITY_YAML
 EOF
 
 #
@@ -298,7 +298,7 @@ log_note "    cd $pinniped_path"
 log_note '    source /tmp/integration-test-env && go test -v -count 1 ./test/integration'
 log_note
 log_note 'Want to run integration tests in GoLand? Copy/paste this "Environment" value for GoLand run configurations:'
-log_note "    ${goland_vars}PINNIPED_CLUSTER_CAPABILITY_FILE=${kind_capabilities_file}"
+log_note "    ${goland_vars}PINNIPED_TEST_CLUSTER_CAPABILITY_FILE=${kind_capabilities_file}"
 log_note
 
 if ! tilt_mode; then

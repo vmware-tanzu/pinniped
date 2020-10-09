@@ -27,7 +27,7 @@ func TestCredentialIssuerConfig(t *testing.T) {
 	t.Run("test successful CredentialIssuerConfig", func(t *testing.T) {
 		actualConfigList, err := client.
 			ConfigV1alpha1().
-			CredentialIssuerConfigs(env.Namespace).
+			CredentialIssuerConfigs(env.ConciergeNamespace).
 			List(ctx, metav1.ListOptions{})
 		require.NoError(t, err)
 

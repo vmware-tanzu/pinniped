@@ -145,9 +145,9 @@ func makeRequest(ctx context.Context, t *testing.T, spec loginv1alpha1.TokenCred
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	return client.LoginV1alpha1().TokenCredentialRequests(env.Namespace).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
+	return client.LoginV1alpha1().TokenCredentialRequests(env.ConciergeNamespace).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 		TypeMeta:   metav1.TypeMeta{},
-		ObjectMeta: metav1.ObjectMeta{Namespace: env.Namespace},
+		ObjectMeta: metav1.ObjectMeta{Namespace: env.ConciergeNamespace},
 		Spec:       spec,
 	}, metav1.CreateOptions{})
 }

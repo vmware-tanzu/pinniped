@@ -109,7 +109,7 @@ docker build .
 1. Create a local Kubernetes cluster using `kind`:
 
    ```bash
-   kind create cluster --image kindest/node:v1.18.8
+   ./hack/kind-up.sh
    ```
 
 1. Install Pinniped and supporting dependencies using `tilt`:
@@ -123,11 +123,11 @@ docker build .
 1. Run the Pinniped integration tests:
 
    ```bash
-   source ./hack/lib/tilt/integration-test.env && go test -v -count 1 ./test/integration
+   source /tmp/integration-test-env && go test -v -count 1 ./test/integration
    ```
 
 To uninstall the test environment, run `./hack/tilt-down.sh`.
-To destroy the local Kubernetes cluster, run `kind delete cluster`.
+To destroy the local Kubernetes cluster, run `./hack/kind-down.sh`.
 
 ### Observing Tests on the Continuous Integration Environment
 

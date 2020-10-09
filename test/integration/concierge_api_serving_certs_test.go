@@ -20,8 +20,7 @@ import (
 
 func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 	env := library.IntegrationEnv(t)
-
-	const defaultServingCertResourceName = "pinniped-api-tls-serving-certificate"
+	defaultServingCertResourceName := env.ConciergeAppName + "-api-tls-serving-certificate"
 
 	tests := []struct {
 		name          string

@@ -110,17 +110,17 @@ fi
 if ! tilt_mode; then
   if [[ "$clean_kind" == "yes" ]]; then
     log_note "Deleting running kind clusters to prepare from a clean slate..."
-    kind delete cluster
+    kind delete cluster --name pinniped
   fi
 
   #
   # Setup kind and build the app
   #
   log_note "Checking for running kind clusters..."
-  if ! kind get clusters | grep -q -e '^kind$'; then
+  if ! kind get clusters | grep -q -e '^pinniped$'; then
     log_note "Creating a kind cluster..."
     # single-node.yaml exposes node port 31234 as localhost:12345
-    kind create cluster --config "$pinniped_path/hack/lib/kind-config/single-node.yaml"
+    kind create cluster --config "$pinniped_path/hack/lib/kind-config/single-node.yaml" --name pinniped
   else
     if ! kubectl cluster-info | grep master | grep -q 127.0.0.1; then
       log_error "Seems like your kubeconfig is not targeting a local cluster."
@@ -157,7 +157,7 @@ if ! tilt_mode; then
 
   # Load it into the cluster
   log_note "Loading the app's container image into the kind cluster..."
-  kind load docker-image "$registry_repo_tag"
+  kind load docker-image "$registry_repo_tag" --name pinniped
 
   manifest=/tmp/manifest.yaml
 
@@ -177,7 +177,6 @@ if ! tilt_mode; then
   popd >/dev/null
 
 fi
-
 
 test_username="test-username"
 test_groups="test-group-0,test-group-1"
@@ -203,18 +202,19 @@ kubectl create secret generic "$test_username" \
 supervisor_app_name="pinniped-supervisor"
 supervisor_namespace="pinniped-supervisor"
 
-pushd deploy/supervisor >/dev/null
+if ! tilt_mode; then
+  pushd deploy/supervisor >/dev/null
 
-log_note "Deploying the Pinniped Supervisor app to the cluster..."
-ytt --file . \
-  --data-value "app_name=$supervisor_app_name" \
-  --data-value "namespace=$supervisor_namespace" \
-  --data-value "image_repo=$registry_repo" \
-  --data-value "image_tag=$tag" >"$manifest"
+  log_note "Deploying the Pinniped Supervisor app to the cluster..."
+  ytt --file . \
+    --data-value "app_name=$supervisor_app_name" \
+    --data-value "namespace=$supervisor_namespace" \
+    --data-value "image_repo=$registry_repo" \
+    --data-value "image_tag=$tag" >"$manifest"
 
-kapp deploy --yes --app "pinniped-supervisor" --diff-changes --file "$manifest"
+  kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
 
-log_note "Adding NodePort service to expose the Pinniped Supervisor app on the kind node..."
+  log_note "Adding NodePort service to expose the Pinniped Supervisor app on the kind node..."
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Service
@@ -231,32 +231,30 @@ spec:
       nodePort: 31234
 EOF
 
-popd >/dev/null
+  popd >/dev/null
+fi
 
 #
 # Deploy Pinniped
 #
-app_name="pinniped"
-namespace="integration"
+concierge_app_name="pinniped-concierge"
+concierge_namespace="integration"
 webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
 webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/Kubernetes master/ {print $NF}')"
 
 if ! tilt_mode; then
-  #
-  # Deploy Pinniped
-  #
   pushd deploy/concierge >/dev/null
 
   log_note "Deploying the Pinniped app to the cluster..."
   ytt --file . \
-    --data-value "app_name=$app_name" \
-    --data-value "namespace=$namespace" \
+    --data-value "app_name=$concierge_app_name" \
+    --data-value "namespace=$concierge_namespace" \
     --data-value "image_repo=$registry_repo" \
     --data-value "image_tag=$tag" \
     --data-value "discovery_url=$discovery_url" >"$manifest"
 
-  kapp deploy --yes --app "$app_name" --diff-changes --file "$manifest"
+  kapp deploy --yes --app "$concierge_app_name" --diff-changes --file "$manifest"
 
   popd >/dev/null
 fi
@@ -269,8 +267,8 @@ pinniped_cluster_capability_file_content=$(cat "$kind_capabilities_file")
 
 cat <<EOF >/tmp/integration-test-env
 # The following env vars should be set before running 'go test -v -count 1 ./test/...'
-export PINNIPED_TEST_CONCIERGE_NAMESPACE=${namespace}
-export PINNIPED_TEST_CONCIERGE_APP_NAME=${app_name}
+export PINNIPED_TEST_CONCIERGE_NAMESPACE=${concierge_namespace}
+export PINNIPED_TEST_CONCIERGE_APP_NAME=${concierge_app_name}
 export PINNIPED_TEST_USER_USERNAME=${test_username}
 export PINNIPED_TEST_USER_GROUPS=${test_groups}
 export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
@@ -304,6 +302,7 @@ log_note
 if ! tilt_mode; then
   log_note "You can rerun this script to redeploy local production code changes while you are working."
   log_note
-  log_note "To delete the deployments, run 'kapp delete -a local-user-authenticator -y && kapp delete -a pinniped -y'."
-  log_note "When you're finished, use 'kind delete cluster' to tear down the cluster."
+  log_note "To delete the deployments, run:"
+  log_note "  kapp delete -a local-user-authenticator -y && kapp delete -a $concierge_app_name -y &&  kapp delete -a $supervisor_app_name -y"
+  log_note "When you're finished, use 'kind delete cluster --name pinniped' to tear down the cluster."
 fi

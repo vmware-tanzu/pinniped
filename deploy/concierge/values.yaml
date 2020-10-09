@@ -4,8 +4,8 @@
 #@data/values
 ---
 
-app_name: pinniped
-namespace: pinniped
+app_name: pinniped-concierge
+namespace: pinniped-concierge
 
 #! Specify how many replicas of the Pinniped server to run.
 replicas: 2

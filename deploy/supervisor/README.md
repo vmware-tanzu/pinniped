@@ -38,4 +38,73 @@ Either [install `ytt`](https://get-ytt.io/) or use the [container image from Doc
 
 ## Configuring After Installing
 
-TODO: Provide some instructions here.
+### Exposing the Supervisor App as a Service
+
+Create a Service to make the app available outside of the cluster. If you installed using `ytt` then you can use
+the related `service_*_port` options from [deploy/supervisor/values.yml](values.yaml) to create a Service, instead
+of creating them manually as shown below.
+
+#### Using a LoadBalancer Service
+
+Using a LoadBalancer Service is probably the easiest way to expose the Supervisor app, if your cluster supports
+LoadBalancer Services. For example:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: pinniped-supervisor-loadbalancer
+  namespace: pinniped-supervisor
+  labels:
+    app: pinniped-supervisor
+spec:
+  type: LoadBalancer
+  selector:
+    app: pinniped-supervisor
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+```
+
+#### Using a NodePort Service
+
+A NodePort Service exposes the app as a port on the nodes of the cluster.
+This is convenient for use with kind clusters, because kind can
+[expose node ports as localhost ports on the host machine](https://kind.sigs.k8s.io/docs/user/configuration/#extra-port-mappings).
+
+For example:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: pinniped-supervisor-nodeport
+  namespace: pinniped-supervisor
+  labels:
+    app: pinniped-supervisor
+spec:
+  type: NodePort
+  selector:
+    app: pinniped-supervisor
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+    nodePort: 31234
+```
+
+### Configuring the Supervisor to Act as an OIDC Provider
+
+The Supervisor can be configured as an OIDC provider by creating `OIDCProviderConfig` resources
+in the same namespace where the Supervisor app was installed. For example:
+
+```yaml
+apiVersion: config.pinniped.dev/v1alpha1
+kind: OIDCProviderConfig
+metadata:
+  name: my-provider
+  namespace: pinniped-supervisor
+spec:
+  issuer: https://my-issuer.eaxmple.com
+```

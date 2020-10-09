@@ -30,7 +30,7 @@ type OIDCProviderConfigSpec struct {
 
 // OIDCProviderConfigStatus is a struct that describes the actual state of an OIDC Provider.
 type OIDCProviderConfigStatus struct {
-	// Status holds an enum that describes the state of this OIDCProvider. Note that this Status can
+	// Status holds an enum that describes the state of this OIDC Provider. Note that this Status can
 	// represent success or failure.
 	// +optional
 	Status OIDCProviderStatus `json:"status,omitempty"`
@@ -38,6 +38,12 @@ type OIDCProviderConfigStatus struct {
 	// Message provides human-readable details about the Status.
 	// +optional
 	Message string `json:"message,omitempty"`
+
+  // LastUpdateTime holds the time at which the Status was last updated. It is a pointer to get
+  // around some undesirable behavior with respect to the empty metav1.Time value (see
+  // https://github.com/kubernetes/kubernetes/issues/86811).
+  // +optional
+  LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 }
 
 // OIDCProviderConfig describes the configuration of an OIDC provider.

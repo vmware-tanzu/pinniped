@@ -414,7 +414,7 @@ func schema_119_apis_config_v1alpha1_OIDCProviderConfigStatus(ref common.Referen
 				Properties: map[string]spec.Schema{
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Status holds an enum that describes the state of this OIDCProvider. Note that this Status can represent success or failure.",
+							Description: "Status holds an enum that describes the state of this OIDC Provider. Note that this Status can represent success or failure.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -426,9 +426,17 @@ func schema_119_apis_config_v1alpha1_OIDCProviderConfigStatus(ref common.Referen
 							Format:      "",
 						},
 					},
+					"lastUpdateTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LastUpdateTime holds the time at which the Status was last updated. It is a pointer to get around some undesirable behavior with respect to the empty metav1.Time value (see https://github.com/kubernetes/kubernetes/issues/86811).",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
 				},
 			},
 		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
 	}
 }
 

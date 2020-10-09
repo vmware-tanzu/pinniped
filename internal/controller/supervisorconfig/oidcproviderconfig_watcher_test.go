@@ -208,9 +208,11 @@ func TestSync(t *testing.T) {
 
 				oidcProviderConfig1.Status.Status = v1alpha1.SuccessOIDCProviderStatus
 				oidcProviderConfig1.Status.Message = "Provider successfully created"
+				oidcProviderConfig1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 				oidcProviderConfig2.Status.Status = v1alpha1.SuccessOIDCProviderStatus
 				oidcProviderConfig2.Status.Message = "Provider successfully created"
+				oidcProviderConfig2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 				expectedActions := []coretesting.Action{
 					coretesting.NewGetAction(
@@ -241,6 +243,7 @@ func TestSync(t *testing.T) {
 				it.Before(func() {
 					oidcProviderConfig1.Status.Status = v1alpha1.SuccessOIDCProviderStatus
 					oidcProviderConfig1.Status.Message = "Provider successfully created"
+					oidcProviderConfig1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 					r.NoError(pinnipedAPIClient.Tracker().Update(oidcProviderConfigGVR, oidcProviderConfig1, oidcProviderConfig1.Namespace))
 					r.NoError(opcInformerClient.Tracker().Update(oidcProviderConfigGVR, oidcProviderConfig1, oidcProviderConfig1.Namespace))
@@ -253,6 +256,7 @@ func TestSync(t *testing.T) {
 
 					oidcProviderConfig2.Status.Status = v1alpha1.SuccessOIDCProviderStatus
 					oidcProviderConfig2.Status.Message = "Provider successfully created"
+					oidcProviderConfig2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 					expectedActions := []coretesting.Action{
 						coretesting.NewGetAction(
@@ -338,9 +342,11 @@ func TestSync(t *testing.T) {
 
 					oidcProviderConfig1.Status.Status = v1alpha1.SuccessOIDCProviderStatus
 					oidcProviderConfig1.Status.Message = "Provider successfully created"
+					oidcProviderConfig1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 					oidcProviderConfig2.Status.Status = v1alpha1.SuccessOIDCProviderStatus
 					oidcProviderConfig2.Status.Message = "Provider successfully created"
+					oidcProviderConfig2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 					expectedActions := []coretesting.Action{
 						coretesting.NewGetAction(
@@ -406,6 +412,7 @@ func TestSync(t *testing.T) {
 
 					oidcProviderConfig.Status.Status = v1alpha1.SuccessOIDCProviderStatus
 					oidcProviderConfig.Status.Message = "Provider successfully created"
+					oidcProviderConfig.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 					expectedActions := []coretesting.Action{
 						coretesting.NewGetAction(
@@ -451,6 +458,7 @@ func TestSync(t *testing.T) {
 
 					oidcProviderConfig.Status.Status = v1alpha1.SuccessOIDCProviderStatus
 					oidcProviderConfig.Status.Message = "Provider successfully created"
+					oidcProviderConfig.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 					expectedActions := []coretesting.Action{
 						coretesting.NewGetAction(
@@ -486,6 +494,7 @@ func TestSync(t *testing.T) {
 
 					oidcProviderConfig.Status.Status = v1alpha1.SuccessOIDCProviderStatus
 					oidcProviderConfig.Status.Message = "Provider successfully created"
+					oidcProviderConfig.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 					expectedActions := []coretesting.Action{
 						coretesting.NewGetAction(
@@ -545,9 +554,11 @@ func TestSync(t *testing.T) {
 
 				validOIDCProviderConfig.Status.Status = v1alpha1.SuccessOIDCProviderStatus
 				validOIDCProviderConfig.Status.Message = "Provider successfully created"
+				validOIDCProviderConfig.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 				invalidOIDCProviderConfig.Status.Status = v1alpha1.InvalidOIDCProviderStatus
 				invalidOIDCProviderConfig.Status.Message = "Invalid: issuer must not have query"
+				invalidOIDCProviderConfig.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 				expectedActions := []coretesting.Action{
 					coretesting.NewGetAction(
@@ -615,9 +626,11 @@ func TestSync(t *testing.T) {
 
 					validOIDCProviderConfig.Status.Status = v1alpha1.SuccessOIDCProviderStatus
 					validOIDCProviderConfig.Status.Message = "Provider successfully created"
+					validOIDCProviderConfig.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 					invalidOIDCProviderConfig.Status.Status = v1alpha1.InvalidOIDCProviderStatus
 					invalidOIDCProviderConfig.Status.Message = "Invalid: issuer must not have query"
+					invalidOIDCProviderConfig.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 					expectedActions := []coretesting.Action{
 						coretesting.NewGetAction(
@@ -699,12 +712,15 @@ func TestSync(t *testing.T) {
 
 				oidcProviderConfig.Status.Status = v1alpha1.SuccessOIDCProviderStatus
 				oidcProviderConfig.Status.Message = "Provider successfully created"
+				oidcProviderConfig.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 				oidcProviderConfigDuplicate1.Status.Status = v1alpha1.DuplicateOIDCProviderStatus
 				oidcProviderConfigDuplicate1.Status.Message = "Duplicate issuer: https://issuer-duplicate.com"
+				oidcProviderConfigDuplicate1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 				oidcProviderConfigDuplicate2.Status.Status = v1alpha1.DuplicateOIDCProviderStatus
 				oidcProviderConfigDuplicate2.Status.Message = "Duplicate issuer: https://issuer-duplicate.com"
+				oidcProviderConfigDuplicate2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 				expectedActions := []coretesting.Action{
 					coretesting.NewGetAction(
@@ -764,6 +780,7 @@ func TestSync(t *testing.T) {
 
 					oidcProviderConfig.Status.Status = v1alpha1.SuccessOIDCProviderStatus
 					oidcProviderConfig.Status.Message = "Provider successfully created"
+					oidcProviderConfig.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 					expectedActions := []coretesting.Action{
 						coretesting.NewGetAction(

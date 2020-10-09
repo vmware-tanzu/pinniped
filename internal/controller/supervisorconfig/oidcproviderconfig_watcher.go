@@ -152,7 +152,10 @@ func (c *oidcProviderConfigWatcherController) updateStatus(
 		)
 		opc.Status.Status = status
 		opc.Status.Message = message
+		opc.Status.LastUpdateTime = timePtr(metav1.NewTime(c.clock.Now()))
 		_, err = c.client.ConfigV1alpha1().OIDCProviderConfigs(namespace).Update(ctx, opc, metav1.UpdateOptions{})
 		return err
 	})
 }
+
+func timePtr(t metav1.Time) *metav1.Time { return &t }

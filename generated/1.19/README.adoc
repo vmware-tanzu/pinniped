@@ -148,8 +148,9 @@ OIDCProviderConfigStatus is a struct that describes the actual state of an OIDC 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`status`* __OIDCProviderStatus__ | Status holds an enum that describes the state of this OIDCProvider. Note that this Status can represent success or failure.
+| *`status`* __OIDCProviderStatus__ | Status holds an enum that describes the state of this OIDC Provider. Note that this Status can represent success or failure.
 | *`message`* __string__ | Message provides human-readable details about the Status.
+| *`lastUpdateTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#time-v1-meta[$$Time$$]__ | LastUpdateTime holds the time at which the Status was last updated. It is a pointer to get around some undesirable behavior with respect to the empty metav1.Time value (see https://github.com/kubernetes/kubernetes/issues/86811).
 |===
 
 

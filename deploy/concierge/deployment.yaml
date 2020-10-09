@@ -164,7 +164,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  #! If name is changed, must also change names.apiService in the ConfigMap above
+  #! If name is changed, must also change names.apiService in the ConfigMap above and spec.service.name in the APIService below.
   name: #@ data.values.app_name + "-api"
   namespace: #@ data.values.namespace
   labels:
@@ -191,6 +191,6 @@ spec:
   versionPriority: 10
   #! caBundle: Do not include this key here. Starts out null, will be updated/owned by the golang code.
   service:
-    name: pinniped-api
+    name: #@ data.values.app_name + "-api"
     namespace: #@ data.values.namespace
     port: 443

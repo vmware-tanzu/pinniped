@@ -1,0 +1,59 @@
+#@ load("@ytt:data", "data")
+
+#@ if data.values.service_nodeport_port:
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: #@ data.values.app_name + "-nodeport"
+  namespace: #@ data.values.namespace
+  labels:
+    app: #@ data.values.app_name
+spec:
+  type: NodePort
+  selector:
+    app: #@ data.values.app_name
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      nodePort: #@ data.values.service_nodeport_port
+#@ end
+
+#@ if data.values.service_clusterip_port:
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: #@ data.values.app_name + "-clusterip"
+  namespace: #@ data.values.namespace
+  labels:
+    app: #@ data.values.app_name
+spec:
+  type: ClusterIP
+  selector:
+    app: #@ data.values.app_name
+  ports:
+    - protocol: TCP
+      port: #@ data.values.service_clusterip_port
+      targetPort: 80
+#@ end
+
+#@ if data.values.service_loadbalancer_port:
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: #@ data.values.app_name + "-loadbalancer"
+  namespace: #@ data.values.namespace
+  labels:
+    app: #@ data.values.app_name
+spec:
+  type: LoadBalancer
+  selector:
+    app: #@ data.values.app_name
+  ports:
+    - protocol: TCP
+      port: #@ data.values.service_loadbalancer_port
+      targetPort: 80
+#@ end

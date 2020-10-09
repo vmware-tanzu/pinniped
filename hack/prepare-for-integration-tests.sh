@@ -200,7 +200,7 @@ kubectl create secret generic "$test_username" \
 # Deploy the Pinniped Supervisor
 #
 supervisor_app_name="pinniped-supervisor"
-supervisor_namespace="pinniped-supervisor"
+supervisor_namespace="supervisor"
 
 if ! tilt_mode; then
   pushd deploy/supervisor >/dev/null
@@ -210,26 +210,10 @@ if ! tilt_mode; then
     --data-value "app_name=$supervisor_app_name" \
     --data-value "namespace=$supervisor_namespace" \
     --data-value "image_repo=$registry_repo" \
+    --data-value-yaml 'service_nodeport_port=31234' \
     --data-value "image_tag=$tag" >"$manifest"
 
   kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
-
-  log_note "Adding NodePort service to expose the Pinniped Supervisor app on the kind node..."
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Service
-metadata:
-  name: ${supervisor_app_name}-node-port
-  namespace: $supervisor_namespace
-spec:
-  type: NodePort
-  selector:
-    app: $supervisor_app_name
-  ports:
-    - port: 80
-      targetPort: 80
-      nodePort: 31234
-EOF
 
   popd >/dev/null
 fi
@@ -238,7 +222,7 @@ fi
 # Deploy Pinniped
 #
 concierge_app_name="pinniped-concierge"
-concierge_namespace="integration"
+concierge_namespace="concierge"
 webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
 webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/Kubernetes master/ {print $NF}')"

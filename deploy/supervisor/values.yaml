@@ -20,3 +20,10 @@ image_tag: latest
 #! Typically the value would be the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username="USERNAME" --docker-password="PASSWORD" --dry-run=client -o json | jq -r '.data[".dockerconfigjson"]'
 #! Optional.
 image_pull_dockerconfigjson: #! e.g. {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}
+
+#! Specify how to expose the Supervisor app as a Service.
+#! Typically you would set a value for only one of the following.
+#! Setting any of these values means that a Service of that type will be created.
+service_nodeport_port: #! e.g. 31234
+service_loadbalancer_port: #! e.g. 443
+service_clusterip_port: #! e.g. 443

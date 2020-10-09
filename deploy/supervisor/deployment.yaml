@@ -76,8 +76,8 @@ spec:
           command: #! override the default entrypoint
             - /usr/local/bin/pinniped-supervisor
           args:
-            - /etc/podinfo #! TODO proper flag parsing instead of positional
-            - /etc/config/pinniped.yaml #! TODO proper flag parsing instead of positional
+            - /etc/podinfo
+            - /etc/config/pinniped.yaml
           resources:
             requests:
               memory: "128Mi"
@@ -86,24 +86,6 @@ spec:
               mountPath: /etc/config
             - name: podinfo
               mountPath: /etc/podinfo
-#!          livenessProbe:
-#!            httpGet:
-#!              path: /healthz
-#!              port: 443
-#!              scheme: HTTPS
-#!            initialDelaySeconds: 2
-#!            timeoutSeconds: 15
-#!            periodSeconds: 10
-#!            failureThreshold: 5
-#!          readinessProbe:
-#!            httpGet:
-#!              path: /healthz
-#!              port: 443
-#!              scheme: HTTPS
-#!            initialDelaySeconds: 2
-#!            timeoutSeconds: 3
-#!            periodSeconds: 10
-#!            failureThreshold: 3
       volumes:
         - name: config-volume
           configMap:
@@ -128,19 +110,3 @@ spec:
                   matchLabels:
                     app: #@ data.values.app_name
                 topologyKey: kubernetes.io/hostname
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: #@ data.values.app_name
-  namespace: #@ data.values.namespace
-  labels:
-    app: #@ data.values.app_name
-spec:
-  type: ClusterIP
-  selector:
-    app: #@ data.values.app_name
-  ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 80

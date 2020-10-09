@@ -8,15 +8,18 @@ os.putenv('GOARCH', 'amd64')
 os.putenv('CGO_ENABLED', '0')
 os.putenv('KUBE_GIT_VERSION', 'v0.0.0')
 
+#####################################################################################################
 # Compile all of our ./cmd/... binaries.
+#
+
 local_resource(
   'compile',
   'cd ../../../ && mkdir -p ./hack/lib/tilt/build && go build -v -ldflags "$(hack/get-ldflags.sh)" -o ./hack/lib/tilt/build ./cmd/...',
   deps=['../../../cmd', '../../../internal', '../../../pkg', '../../../generated'],
 )
 
-#
-# local-user-authenticator app
+#####################################################################################################
+# Local-user-authenticator app
 #
 
 # Build a container image for local-user-authenticator, with live-update enabled.
@@ -37,17 +40,18 @@ k8s_yaml(local([
 
 # Collect all the deployed local-user-authenticator resources under a "local-user-auth" resource tab.
 k8s_resource(
-    workload='local-user-authenticator',
-    new_name='local-user-auth',
+    workload='local-user-authenticator', # this is the deployment name
+    new_name='local-user-auth', # this is the name that will appear in the tilt UI
     objects=[
+        # these are the objects that would otherwise appear in the "uncategorized" tab in the tilt UI
         'local-user-authenticator:namespace',
         'local-user-authenticator:serviceaccount',
         'local-user-authenticator:role',
-        'local-user-authenticator:rolebinding'
+        'local-user-authenticator:rolebinding',
     ],
 )
 
-#
+#####################################################################################################
 # Supervisor app
 #
 
@@ -63,19 +67,23 @@ docker_build_with_restart('image/supervisor', '.',
 k8s_yaml(local([
     'ytt',
     '--file', '../../../deploy/supervisor',
+    '--data-value', 'app_name=pinniped-supervisor',
+    '--data-value', 'namespace=supervisor',
     '--data-value', 'image_repo=image/supervisor',
     '--data-value', 'image_tag=tilt-dev',
-    '--data-value-yaml', 'replicas=1'
+    '--data-value-yaml', 'replicas=1',
+    '--data-value-yaml', 'service_nodeport_port=31234',
 ]))
 
 # Collect all the deployed supervisor resources under a "supervisor" resource tab.
 k8s_resource(
-    workload='pinniped-supervisor',
-    new_name='supervisor',
+    workload='pinniped-supervisor', # this is the deployment name
+    new_name='supervisor', # this is the name that will appear in the tilt UI
     objects=[
+        # these are the objects that would otherwise appear in the "uncategorized" tab in the tilt UI
         'oidcproviderconfigs.config.pinniped.dev:customresourcedefinition',
         'pinniped-supervisor-static-config:configmap',
-        'pinniped-supervisor:namespace',
+        'supervisor:namespace',
         'pinniped-supervisor:role',
         'pinniped-supervisor:rolebinding',
         'pinniped-supervisor:serviceaccount',
@@ -90,9 +98,7 @@ docker_build_with_restart('image/concierge', '.',
     only=['./build/pinniped-concierge'],
 )
 
-k8s_yaml('nodeport.yaml')
-
-#
+#####################################################################################################
 # Concierge app
 #
 
@@ -101,20 +107,21 @@ k8s_yaml(local([
     'sh', '-c',
     'ytt --file ../../../deploy/concierge ' +
     '--data-value app_name=pinniped-concierge ' +
-    '--data-value namespace=integration ' +
+    '--data-value namespace=concierge ' +
     '--data-value image_repo=image/concierge ' +
     '--data-value image_tag=tilt-dev ' +
     '--data-value kube_cert_agent_image=debian:10.5-slim ' +
     '--data-value discovery_url=$(TERM=dumb kubectl cluster-info | awk \'/Kubernetes master/ {print $NF}\') ' +
-    '--data-value-yaml replicas=1'
+    '--data-value-yaml replicas=1',
 ]))
 
 # Collect all the deployed local-user-authenticator resources under a "concierge" resource tab.
 k8s_resource(
-    workload='pinniped-concierge',
-    new_name='concierge',
+    workload='pinniped-concierge', # this is the deployment name
+    new_name='concierge', # this is the name that will appear in the tilt UI
     objects=[
-        'integration:namespace',
+        # these are the objects that would otherwise appear in the "uncategorized" tab in the tilt UI
+        'concierge:namespace',
         'pinniped-concierge-aggregated-api-server:clusterrole',
         'pinniped-concierge-aggregated-api-server:clusterrolebinding',
         'pinniped-concierge-aggregated-api-server:role',
@@ -135,7 +142,7 @@ k8s_resource(
     ],
 )
 
-#
+#####################################################################################################
 # Finish setting up cluster and creating integration test env file
 #
 

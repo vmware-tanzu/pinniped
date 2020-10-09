@@ -17,6 +17,14 @@ import (
 	"strings"
 )
 
+// formatFunc is a function used to format the string representing of a MultiError. It is used in the
+// Error() function.
+//
+// It is marked out here to indicate how we could potentially extend MultiError in the future to
+// support more styles of converting from a list of error's to a string.
+//nolint: gochecknoglobals
+var formatFunc func(errs MultiError, sb *strings.Builder) = defaultFormat
+
 // MultiError holds a list of error's, that could potentially be empty.
 //
 // Use New() to create a MultiError.
@@ -35,10 +43,7 @@ func (m *MultiError) Add(err error) {
 // Error implements the error.Error() interface method.
 func (m MultiError) Error() string {
 	sb := strings.Builder{}
-	_, _ = fmt.Fprintf(&sb, "%d error(s):", len(m))
-	for _, err := range m {
-		_, _ = fmt.Fprintf(&sb, "\n- %s", err.Error())
-	}
+	formatFunc(m, &sb)
 	return sb.String()
 }
 
@@ -48,4 +53,11 @@ func (m MultiError) ErrOrNil() error {
 		return m
 	}
 	return nil
+}
+
+func defaultFormat(errs MultiError, sb *strings.Builder) {
+	_, _ = fmt.Fprintf(sb, "%d error(s):", len(errs))
+	for _, err := range errs {
+		_, _ = fmt.Fprintf(sb, "\n- %s", err.Error())
+	}
 }

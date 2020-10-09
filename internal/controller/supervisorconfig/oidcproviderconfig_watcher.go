@@ -86,7 +86,7 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 				opc.Namespace,
 				opc.Name,
 				configv1alpha1.DuplicateOIDCProviderStatus,
-				"Duplicate issuer",
+				"Duplicate issuer: "+opc.Spec.Issuer,
 			); err != nil {
 				errs.Add(fmt.Errorf("could not update status: %w", err))
 			}
@@ -107,7 +107,6 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 			continue
 		}
 
-		oidcProviders = append(oidcProviders, oidcProvider)
 		if err := c.updateStatus(
 			ctx.Context,
 			opc.Namespace,
@@ -116,7 +115,9 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 			"Provider successfully created",
 		); err != nil {
 			errs.Add(fmt.Errorf("could not update status: %w", err))
+			continue
 		}
+		oidcProviders = append(oidcProviders, oidcProvider)
 	}
 
 	c.providerSetter.SetProviders(oidcProviders...)

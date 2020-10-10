@@ -119,7 +119,7 @@ if ! tilt_mode; then
   log_note "Checking for running kind clusters..."
   if ! kind get clusters | grep -q -e '^pinniped$'; then
     log_note "Creating a kind cluster..."
-    # single-node.yaml exposes node port 31234 as localhost:12345
+    # single-node.yaml exposes node port 31234 as 127.0.0.1:12345
     kind create cluster --config "$pinniped_path/hack/lib/kind-config/single-node.yaml" --name pinniped
   else
     if ! kubectl cluster-info | grep master | grep -q 127.0.0.1; then
@@ -210,8 +210,8 @@ if ! tilt_mode; then
     --data-value "app_name=$supervisor_app_name" \
     --data-value "namespace=$supervisor_namespace" \
     --data-value "image_repo=$registry_repo" \
-    --data-value-yaml 'service_nodeport_port=31234' \
-    --data-value "image_tag=$tag" >"$manifest"
+    --data-value "image_tag=$tag" \
+    --data-value-yaml 'service_nodeport_port=31234' >"$manifest"
 
   kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
 
@@ -250,7 +250,7 @@ kind_capabilities_file="$pinniped_path/test/cluster_capabilities/kind.yaml"
 pinniped_cluster_capability_file_content=$(cat "$kind_capabilities_file")
 
 cat <<EOF >/tmp/integration-test-env
-# The following env vars should be set before running 'go test -v -count 1 ./test/...'
+# The following env vars should be set before running 'go test -v -count 1 ./test/integration'
 export PINNIPED_TEST_CONCIERGE_NAMESPACE=${concierge_namespace}
 export PINNIPED_TEST_CONCIERGE_APP_NAME=${concierge_app_name}
 export PINNIPED_TEST_USER_USERNAME=${test_username}
@@ -260,7 +260,7 @@ export PINNIPED_TEST_WEBHOOK_ENDPOINT=${webhook_url}
 export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}
 export PINNIPED_TEST_SUPERVISOR_NAMESPACE=${supervisor_namespace}
 export PINNIPED_TEST_SUPERVISOR_APP_NAME=${supervisor_app_name}
-export PINNIPED_TEST_SUPERVISOR_ADDRESS="localhost:12345"
+export PINNIPED_TEST_SUPERVISOR_ADDRESS="127.0.0.1:12345"
 
 read -r -d '' PINNIPED_TEST_CLUSTER_CAPABILITY_YAML << PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF || true
 ${pinniped_cluster_capability_file_content}

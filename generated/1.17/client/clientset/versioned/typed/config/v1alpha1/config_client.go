@@ -14,6 +14,7 @@ import (
 type ConfigV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	CredentialIssuerConfigsGetter
+	OIDCProviderConfigsGetter
 }
 
 // ConfigV1alpha1Client is used to interact with features provided by the config.pinniped.dev group.
@@ -23,6 +24,10 @@ type ConfigV1alpha1Client struct {
 
 func (c *ConfigV1alpha1Client) CredentialIssuerConfigs(namespace string) CredentialIssuerConfigInterface {
 	return newCredentialIssuerConfigs(c, namespace)
+}
+
+func (c *ConfigV1alpha1Client) OIDCProviderConfigs(namespace string) OIDCProviderConfigInterface {
+	return newOIDCProviderConfigs(c, namespace)
 }
 
 // NewForConfig creates a new ConfigV1alpha1Client for the given config.

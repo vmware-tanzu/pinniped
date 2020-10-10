@@ -8,12 +8,19 @@ os.putenv('GOARCH', 'amd64')
 os.putenv('CGO_ENABLED', '0')
 os.putenv('KUBE_GIT_VERSION', 'v0.0.0')
 
+#####################################################################################################
 # Compile all of our ./cmd/... binaries.
+#
+
 local_resource(
   'compile',
   'cd ../../../ && mkdir -p ./hack/lib/tilt/build && go build -v -ldflags "$(hack/get-ldflags.sh)" -o ./hack/lib/tilt/build ./cmd/...',
   deps=['../../../cmd', '../../../internal', '../../../pkg', '../../../generated'],
 )
+
+#####################################################################################################
+# Local-user-authenticator app
+#
 
 # Build a container image for local-user-authenticator, with live-update enabled.
 docker_build_with_restart('image/local-user-auth', '.',
@@ -26,16 +33,17 @@ docker_build_with_restart('image/local-user-auth', '.',
 # Render the local-user-authenticator installation manifest using ytt.
 k8s_yaml(local([
     'ytt',
-    '--file', '../../../deploy-local-user-authenticator',
+    '--file', '../../../deploy/local-user-authenticator',
     '--data-value', 'image_repo=image/local-user-auth',
     '--data-value', 'image_tag=tilt-dev',
 ]))
 
 # Collect all the deployed local-user-authenticator resources under a "local-user-auth" resource tab.
 k8s_resource(
-    workload='local-user-authenticator',
-    new_name='local-user-auth',
+    workload='local-user-authenticator', # this is the deployment name
+    new_name='local-user-auth', # this is the name that will appear in the tilt UI
     objects=[
+        # these are the objects that would otherwise appear in the "uncategorized" tab in the tilt UI
         'local-user-authenticator:namespace',
         'local-user-authenticator:serviceaccount',
         'local-user-authenticator:role',
@@ -43,55 +51,105 @@ k8s_resource(
     ],
 )
 
-# Build a container image for the Pinniped server, with live-update enabled.
-docker_build_with_restart('image/pinniped', '.',
-    dockerfile='pinniped.Dockerfile',
-    entrypoint=['/usr/local/bin/pinniped-server'],
-    live_update=[sync('./build/pinniped-server', '/usr/local/bin/pinniped-server')],
-    only=['./build/pinniped-server'],
+#####################################################################################################
+# Supervisor app
+#
+
+# Build a container image for supervisor, with live-update enabled.
+docker_build_with_restart('image/supervisor', '.',
+    dockerfile='supervisor.Dockerfile',
+    entrypoint=['/usr/local/bin/pinniped-supervisor'],
+    live_update=[sync('./build/pinniped-supervisor', '/usr/local/bin/pinniped-supervisor')],
+    only=['./build/pinniped-supervisor'],
 )
 
-# Render the Pinniped server installation manifest using ytt.
+# Render the supervisor installation manifest using ytt.
+k8s_yaml(local([
+    'ytt',
+    '--file', '../../../deploy/supervisor',
+    '--data-value', 'app_name=pinniped-supervisor',
+    '--data-value', 'namespace=supervisor',
+    '--data-value', 'image_repo=image/supervisor',
+    '--data-value', 'image_tag=tilt-dev',
+    '--data-value-yaml', 'replicas=1',
+    '--data-value-yaml', 'service_nodeport_port=31234',
+]))
+
+# Collect all the deployed supervisor resources under a "supervisor" resource tab.
+k8s_resource(
+    workload='pinniped-supervisor', # this is the deployment name
+    new_name='supervisor', # this is the name that will appear in the tilt UI
+    objects=[
+        # these are the objects that would otherwise appear in the "uncategorized" tab in the tilt UI
+        'oidcproviderconfigs.config.pinniped.dev:customresourcedefinition',
+        'pinniped-supervisor-static-config:configmap',
+        'supervisor:namespace',
+        'pinniped-supervisor:role',
+        'pinniped-supervisor:rolebinding',
+        'pinniped-supervisor:serviceaccount',
+    ],
+)
+
+# Build a container image for the Concierge server, with live-update enabled.
+docker_build_with_restart('image/concierge', '.',
+    dockerfile='concierge.Dockerfile',
+    entrypoint=['/usr/local/bin/pinniped-concierge'],
+    live_update=[sync('./build/pinniped-concierge', '/usr/local/bin/pinniped-concierge')],
+    only=['./build/pinniped-concierge'],
+)
+
+#####################################################################################################
+# Concierge app
+#
+
+# Render the Concierge server installation manifest using ytt.
 k8s_yaml(local([
     'sh', '-c',
-    'ytt --file ../../../deploy ' +
-    '--data-value namespace=integration ' +
-    '--data-value image_repo=image/pinniped ' +
+    'ytt --file ../../../deploy/concierge ' +
+    '--data-value app_name=pinniped-concierge ' +
+    '--data-value namespace=concierge ' +
+    '--data-value image_repo=image/concierge ' +
     '--data-value image_tag=tilt-dev ' +
     '--data-value kube_cert_agent_image=debian:10.5-slim ' +
     '--data-value discovery_url=$(TERM=dumb kubectl cluster-info | awk \'/Kubernetes master/ {print $NF}\') ' +
-    '--data-value-yaml replicas=1'
+    '--data-value-yaml replicas=1',
 ]))
 
-# Collect all the deployed local-user-authenticator resources under a "deploy/pinniped" resource tab.
+# Collect all the deployed local-user-authenticator resources under a "concierge" resource tab.
 k8s_resource(
-    workload='pinniped',
+    workload='pinniped-concierge', # this is the deployment name
+    new_name='concierge', # this is the name that will appear in the tilt UI
     objects=[
-        'integration:namespace',
+        # these are the objects that would otherwise appear in the "uncategorized" tab in the tilt UI
+        'concierge:namespace',
+        'pinniped-concierge-aggregated-api-server:clusterrole',
+        'pinniped-concierge-aggregated-api-server:clusterrolebinding',
+        'pinniped-concierge-aggregated-api-server:role',
+        'pinniped-concierge-aggregated-api-server:rolebinding',
+        'pinniped-concierge-cluster-info-lister-watcher:role',
+        'pinniped-concierge-cluster-info-lister-watcher:rolebinding',
+        'pinniped-concierge-config:configmap',
+        'pinniped-concierge-create-token-credential-requests:clusterrole',
+        'pinniped-concierge-create-token-credential-requests:clusterrolebinding',
+        'pinniped-concierge-extension-apiserver-authentication-reader:rolebinding',
+        'pinniped-concierge-kube-system-pod-read:role',
+        'pinniped-concierge-kube-system-pod-read:rolebinding',
+        'pinniped-concierge:clusterrolebinding',
+        'pinniped-concierge:serviceaccount',
         'credentialissuerconfigs.config.pinniped.dev:customresourcedefinition',
         'webhookidentityproviders.idp.pinniped.dev:customresourcedefinition',
-        'pinniped:serviceaccount',
-        'pinniped-aggregated-api-server:role',
-        'pinniped-kube-system-pod-read:role',
-        'pinniped-cluster-info-lister-watcher:role',
-        'pinniped-aggregated-api-server:clusterrole',
-        'pinniped-create-token-credential-requests:clusterrole',
-        'pinniped-aggregated-api-server:rolebinding',
-        'pinniped-kube-system-pod-read:rolebinding',
-        'pinniped-extension-apiserver-authentication-reader:rolebinding',
-        'pinniped-cluster-info-lister-watcher:rolebinding',
-        'pinniped-aggregated-api-server:clusterrolebinding',
-        'pinniped-create-token-credential-requests:clusterrolebinding',
-        'pinniped:clusterrolebinding',
-        'pinniped-config:configmap',
         'v1alpha1.login.pinniped.dev:apiservice',
     ],
 )
+
+#####################################################################################################
+# Finish setting up cluster and creating integration test env file
+#
 
 # Collect environment variables needed to run our integration test suite.
 local_resource(
   'test-env',
   'TILT_MODE=yes ../../prepare-for-integration-tests.sh',
-  resource_deps=['local-user-auth', 'pinniped'],
+  resource_deps=['local-user-auth', 'concierge', 'supervisor'],
   deps=['../../prepare-for-integration-tests.sh'],
 )

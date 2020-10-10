@@ -50,6 +50,7 @@ function check_dependency() {
 #
 help=no
 skip_build=no
+clean_kind=no
 
 while (("$#")); do
   case "$1" in
@@ -59,6 +60,10 @@ while (("$#")); do
     ;;
   -s | --skip-build)
     skip_build=yes
+    shift
+    ;;
+  -c | --clean)
+    clean_kind=yes
     shift
     ;;
   -*)
@@ -98,18 +103,24 @@ check_dependency htpasswd "Please install htpasswd. Should be pre-installed on M
 
 # Require kubectl >= 1.18.x
 if [ "$(kubectl version --client=true --short | cut -d '.' -f 2)" -lt 18 ]; then
-  echo "kubectl >= 1.18.x is required, you have $(kubectl version --client=true --short | cut -d ':' -f2)"
+  log_error "kubectl >= 1.18.x is required, you have $(kubectl version --client=true --short | cut -d ':' -f2)"
   exit 1
 fi
 
 if ! tilt_mode; then
+  if [[ "$clean_kind" == "yes" ]]; then
+    log_note "Deleting running kind clusters to prepare from a clean slate..."
+    kind delete cluster --name pinniped
+  fi
+
   #
   # Setup kind and build the app
   #
   log_note "Checking for running kind clusters..."
-  if ! kind get clusters | grep -q -e '^kind$'; then
+  if ! kind get clusters | grep -q -e '^pinniped$'; then
     log_note "Creating a kind cluster..."
-    kind create cluster
+    # single-node.yaml exposes node port 31234 as 127.0.0.1:12345
+    kind create cluster --config "$pinniped_path/hack/lib/kind-config/single-node.yaml" --name pinniped
   else
     if ! kubectl cluster-info | grep master | grep -q 127.0.0.1; then
       log_error "Seems like your kubeconfig is not targeting a local cluster."
@@ -146,14 +157,14 @@ if ! tilt_mode; then
 
   # Load it into the cluster
   log_note "Loading the app's container image into the kind cluster..."
-  kind load docker-image "$registry_repo_tag"
+  kind load docker-image "$registry_repo_tag" --name pinniped
 
   manifest=/tmp/manifest.yaml
 
   #
   # Deploy local-user-authenticator
   #
-  pushd deploy-local-user-authenticator >/dev/null
+  pushd deploy/local-user-authenticator >/dev/null
 
   log_note "Deploying the local-user-authenticator app to the cluster..."
   ytt --file . \
@@ -166,7 +177,6 @@ if ! tilt_mode; then
   popd >/dev/null
 
 fi
-
 
 test_username="test-username"
 test_groups="test-group-0,test-group-1"
@@ -186,27 +196,49 @@ kubectl create secret generic "$test_username" \
   --output yaml |
   kubectl apply -f -
 
-app_name="pinniped"
-namespace="integration"
+#
+# Deploy the Pinniped Supervisor
+#
+supervisor_app_name="pinniped-supervisor"
+supervisor_namespace="supervisor"
+
+if ! tilt_mode; then
+  pushd deploy/supervisor >/dev/null
+
+  log_note "Deploying the Pinniped Supervisor app to the cluster..."
+  ytt --file . \
+    --data-value "app_name=$supervisor_app_name" \
+    --data-value "namespace=$supervisor_namespace" \
+    --data-value "image_repo=$registry_repo" \
+    --data-value "image_tag=$tag" \
+    --data-value-yaml 'service_nodeport_port=31234' >"$manifest"
+
+  kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
+
+  popd >/dev/null
+fi
+
+#
+# Deploy Pinniped
+#
+concierge_app_name="pinniped-concierge"
+concierge_namespace="concierge"
 webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
 webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/Kubernetes master/ {print $NF}')"
 
 if ! tilt_mode; then
-  #
-  # Deploy Pinniped
-  #
-  pushd deploy >/dev/null
+  pushd deploy/concierge >/dev/null
 
   log_note "Deploying the Pinniped app to the cluster..."
   ytt --file . \
-    --data-value "app_name=$app_name" \
-    --data-value "namespace=$namespace" \
+    --data-value "app_name=$concierge_app_name" \
+    --data-value "namespace=$concierge_namespace" \
     --data-value "image_repo=$registry_repo" \
     --data-value "image_tag=$tag" \
     --data-value "discovery_url=$discovery_url" >"$manifest"
 
-  kapp deploy --yes --app "$app_name" --diff-changes --file "$manifest"
+  kapp deploy --yes --app "$concierge_app_name" --diff-changes --file "$manifest"
 
   popd >/dev/null
 fi
@@ -218,20 +250,23 @@ kind_capabilities_file="$pinniped_path/test/cluster_capabilities/kind.yaml"
 pinniped_cluster_capability_file_content=$(cat "$kind_capabilities_file")
 
 cat <<EOF >/tmp/integration-test-env
-# The following env vars should be set before running 'go test -v -count 1 ./test/...'
-export PINNIPED_NAMESPACE=${namespace}
-export PINNIPED_APP_NAME=${app_name}
+# The following env vars should be set before running 'go test -v -count 1 ./test/integration'
+export PINNIPED_TEST_CONCIERGE_NAMESPACE=${concierge_namespace}
+export PINNIPED_TEST_CONCIERGE_APP_NAME=${concierge_app_name}
 export PINNIPED_TEST_USER_USERNAME=${test_username}
 export PINNIPED_TEST_USER_GROUPS=${test_groups}
 export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
 export PINNIPED_TEST_WEBHOOK_ENDPOINT=${webhook_url}
 export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}
+export PINNIPED_TEST_SUPERVISOR_NAMESPACE=${supervisor_namespace}
+export PINNIPED_TEST_SUPERVISOR_APP_NAME=${supervisor_app_name}
+export PINNIPED_TEST_SUPERVISOR_ADDRESS="127.0.0.1:12345"
 
-read -r -d '' PINNIPED_CLUSTER_CAPABILITY_YAML << PINNIPED_CLUSTER_CAPABILITY_YAML_EOF || true
+read -r -d '' PINNIPED_TEST_CLUSTER_CAPABILITY_YAML << PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF || true
 ${pinniped_cluster_capability_file_content}
-PINNIPED_CLUSTER_CAPABILITY_YAML_EOF
+PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF
 
-export PINNIPED_CLUSTER_CAPABILITY_YAML
+export PINNIPED_TEST_CLUSTER_CAPABILITY_YAML
 EOF
 
 #
@@ -242,15 +277,16 @@ goland_vars=$(grep -v '^#' /tmp/integration-test-env | grep -E '^export .+=' | s
 log_note
 log_note "🚀 Ready to run integration tests! For example..."
 log_note "    cd $pinniped_path"
-log_note '    source /tmp/integration-test-env && go test -v -count 1 ./test/...'
+log_note '    source /tmp/integration-test-env && go test -v -count 1 ./test/integration'
 log_note
 log_note 'Want to run integration tests in GoLand? Copy/paste this "Environment" value for GoLand run configurations:'
-log_note "    ${goland_vars}PINNIPED_CLUSTER_CAPABILITY_FILE=${kind_capabilities_file}"
+log_note "    ${goland_vars}PINNIPED_TEST_CLUSTER_CAPABILITY_FILE=${kind_capabilities_file}"
 log_note
 
 if ! tilt_mode; then
   log_note "You can rerun this script to redeploy local production code changes while you are working."
   log_note
-  log_note "To delete the deployments, run 'kapp delete -a local-user-authenticator -y && kapp delete -a pinniped -y'."
-  log_note "When you're finished, use 'kind delete cluster' to tear down the cluster."
+  log_note "To delete the deployments, run:"
+  log_note "  kapp delete -a local-user-authenticator -y && kapp delete -a $concierge_app_name -y &&  kapp delete -a $supervisor_app_name -y"
+  log_note "When you're finished, use 'kind delete cluster --name pinniped' to tear down the cluster."
 fi

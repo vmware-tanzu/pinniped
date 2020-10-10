@@ -12,3 +12,11 @@ type CredentialIssuerConfigListerExpansion interface{}
 // CredentialIssuerConfigNamespaceListerExpansion allows custom methods to be added to
 // CredentialIssuerConfigNamespaceLister.
 type CredentialIssuerConfigNamespaceListerExpansion interface{}
+
+// OIDCProviderConfigListerExpansion allows custom methods to be added to
+// OIDCProviderConfigLister.
+type OIDCProviderConfigListerExpansion interface{}
+
+// OIDCProviderConfigNamespaceListerExpansion allows custom methods to be added to
+// OIDCProviderConfigNamespaceLister.
+type OIDCProviderConfigNamespaceListerExpansion interface{}

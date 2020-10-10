@@ -22,6 +22,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"go.pinniped.dev/generated/1.17/apis/config/v1alpha1.CredentialIssuerConfigList":           schema_117_apis_config_v1alpha1_CredentialIssuerConfigList(ref),
 		"go.pinniped.dev/generated/1.17/apis/config/v1alpha1.CredentialIssuerConfigStatus":         schema_117_apis_config_v1alpha1_CredentialIssuerConfigStatus(ref),
 		"go.pinniped.dev/generated/1.17/apis/config/v1alpha1.CredentialIssuerConfigStrategy":       schema_117_apis_config_v1alpha1_CredentialIssuerConfigStrategy(ref),
+		"go.pinniped.dev/generated/1.17/apis/config/v1alpha1.OIDCProviderConfig":                   schema_117_apis_config_v1alpha1_OIDCProviderConfig(ref),
+		"go.pinniped.dev/generated/1.17/apis/config/v1alpha1.OIDCProviderConfigList":               schema_117_apis_config_v1alpha1_OIDCProviderConfigList(ref),
+		"go.pinniped.dev/generated/1.17/apis/config/v1alpha1.OIDCProviderConfigSpec":               schema_117_apis_config_v1alpha1_OIDCProviderConfigSpec(ref),
+		"go.pinniped.dev/generated/1.17/apis/config/v1alpha1.OIDCProviderConfigStatus":             schema_117_apis_config_v1alpha1_OIDCProviderConfigStatus(ref),
 		"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.Condition":                               schema_117_apis_idp_v1alpha1_Condition(ref),
 		"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.TLSSpec":                                 schema_117_apis_idp_v1alpha1_TLSSpec(ref),
 		"go.pinniped.dev/generated/1.17/apis/idp/v1alpha1.WebhookIdentityProvider":                 schema_117_apis_idp_v1alpha1_WebhookIdentityProvider(ref),
@@ -279,6 +283,155 @@ func schema_117_apis_config_v1alpha1_CredentialIssuerConfigStrategy(ref common.R
 					},
 				},
 				Required: []string{"type", "status", "reason", "message", "lastUpdateTime"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_117_apis_config_v1alpha1_OIDCProviderConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "OIDCProviderConfig describes the configuration of an OIDC provider.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Spec of the OIDC provider.",
+							Ref:         ref("go.pinniped.dev/generated/1.17/apis/config/v1alpha1.OIDCProviderConfigSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Status of the OIDC provider.",
+							Ref:         ref("go.pinniped.dev/generated/1.17/apis/config/v1alpha1.OIDCProviderConfigStatus"),
+						},
+					},
+				},
+				Required: []string{"spec"},
+			},
+		},
+		Dependencies: []string{
+			"go.pinniped.dev/generated/1.17/apis/config/v1alpha1.OIDCProviderConfigSpec", "go.pinniped.dev/generated/1.17/apis/config/v1alpha1.OIDCProviderConfigStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_117_apis_config_v1alpha1_OIDCProviderConfigList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("go.pinniped.dev/generated/1.17/apis/config/v1alpha1.OIDCProviderConfig"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"go.pinniped.dev/generated/1.17/apis/config/v1alpha1.OIDCProviderConfig", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_117_apis_config_v1alpha1_OIDCProviderConfigSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "OIDCProviderConfigSpec is a struct that describes an OIDC Provider.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"issuer": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Issuer is the OIDC Provider's issuer, per the OIDC Discovery Metadata document, as well as the identifier that it will use for the iss claim in issued JWTs. This field will also be used as the base URL for any endpoints used by the OIDC Provider (e.g., if your issuer is https://example.com/foo, then your authorization endpoint will look like https://example.com/foo/some/path/to/auth/endpoint).\n\nSee https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.3 for more information.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"issuer"},
+			},
+		},
+	}
+}
+
+func schema_117_apis_config_v1alpha1_OIDCProviderConfigStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "OIDCProviderConfigStatus is a struct that describes the actual state of an OIDC Provider.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Status holds an enum that describes the state of this OIDC Provider. Note that this Status can represent success or failure.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Message provides human-readable details about the Status.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"lastUpdateTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LastUpdateTime holds the time at which the Status was last updated. It is a pointer to get around some undesirable behavior with respect to the empty metav1.Time value (see https://github.com/kubernetes/kubernetes/issues/86811).",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+				},
 			},
 		},
 		Dependencies: []string{

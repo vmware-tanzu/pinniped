@@ -5,5 +5,7 @@
 
 set -euo pipefail
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+
 cd "${ROOT}"
-exec tilt up -f ./hack/lib/tilt/Tiltfile --stream
+
+exec tilt up -f ./hack/lib/tilt/Tiltfile

@@ -13,6 +13,8 @@ import (
 type Interface interface {
 	// CredentialIssuerConfigs returns a CredentialIssuerConfigInformer.
 	CredentialIssuerConfigs() CredentialIssuerConfigInformer
+	// OIDCProviderConfigs returns a OIDCProviderConfigInformer.
+	OIDCProviderConfigs() OIDCProviderConfigInformer
 }
 
 type version struct {
@@ -29,4 +31,9 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // CredentialIssuerConfigs returns a CredentialIssuerConfigInformer.
 func (v *version) CredentialIssuerConfigs() CredentialIssuerConfigInformer {
 	return &credentialIssuerConfigInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// OIDCProviderConfigs returns a OIDCProviderConfigInformer.
+func (v *version) OIDCProviderConfigs() OIDCProviderConfigInformer {
+	return &oIDCProviderConfigInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

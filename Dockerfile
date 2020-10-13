@@ -25,7 +25,7 @@ RUN mkdir out \
   && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o out ./cmd/local-user-authenticator/...
 
 # Use a runtime image based on Debian slim
-FROM debian:10.5-slim
+FROM debian:10.6-slim
 
 # Copy the binaries from the build-env stage
 COPY --from=build-env /work/out/pinniped-concierge /usr/local/bin/pinniped-concierge

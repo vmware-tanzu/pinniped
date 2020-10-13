@@ -6,6 +6,7 @@ package library
 import (
 	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -18,7 +19,8 @@ import (
 type Capability string
 
 const (
-	ClusterSigningKeyIsAvailable = Capability("clusterSigningKeyIsAvailable")
+	ClusterSigningKeyIsAvailable    Capability = "clusterSigningKeyIsAvailable"
+	ExternalOIDCProviderIsAvailable Capability = "externalOIDCProviderIsAvailable"
 )
 
 // TestEnv captures all the external parameters consumed by our integration tests.
@@ -38,9 +40,17 @@ type TestEnv struct {
 		ExpectedUsername string   `json:"expectedUsername"`
 		ExpectedGroups   []string `json:"expectedGroups"`
 	} `json:"testUser"`
+
+	OIDCUpstream struct {
+		Issuer        string `json:"issuer"`
+		ClientID      string `json:"clientID"`
+		LocalhostPort int    `json:"localhostPort"`
+		Username      string `json:"username"`
+		Password      string `json:"password"`
+	} `json:"oidcUpstream"`
 }
 
-// IntegrationEnv gets the integration test environment from a Kubernetes Secret in the test cluster. This
+// IntegrationEnv gets the integration test environment from OS environment variables. This
 // method also implies SkipUnlessIntegration().
 func IntegrationEnv(t *testing.T) *TestEnv {
 	t.Helper()
@@ -79,6 +89,17 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 	result.SupervisorAppName = needEnv("PINNIPED_TEST_SUPERVISOR_APP_NAME")
 	result.SupervisorAddress = needEnv("PINNIPED_TEST_SUPERVISOR_ADDRESS")
 	result.TestWebhook.TLS = &idpv1alpha1.TLSSpec{CertificateAuthorityData: needEnv("PINNIPED_TEST_WEBHOOK_CA_BUNDLE")}
+
+	result.OIDCUpstream.Issuer = os.Getenv("PINNIPED_TEST_CLI_OIDC_ISSUER")
+	result.OIDCUpstream.ClientID = os.Getenv("PINNIPED_TEST_CLI_OIDC_CLIENT_ID")
+	result.OIDCUpstream.LocalhostPort, _ = strconv.Atoi(os.Getenv("PINNIPED_TEST_CLI_OIDC_LOCALHOST_PORT"))
+	result.OIDCUpstream.Username = os.Getenv("PINNIPED_TEST_CLI_OIDC_USERNAME")
+	result.OIDCUpstream.Password = os.Getenv("PINNIPED_TEST_CLI_OIDC_PASSWORD")
+
+	result.Capabilities[ExternalOIDCProviderIsAvailable] = !(result.OIDCUpstream.Issuer == "" ||
+		result.OIDCUpstream.ClientID == "" ||
+		result.OIDCUpstream.Username == "" ||
+		result.OIDCUpstream.Password == "")
 	result.t = t
 	return &result
 }

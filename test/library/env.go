@@ -15,10 +15,10 @@ import (
 	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
 )
 
-type TestClusterCapability string
+type Capability string
 
 const (
-	ClusterSigningKeyIsAvailable = TestClusterCapability("clusterSigningKeyIsAvailable")
+	ClusterSigningKeyIsAvailable = Capability("clusterSigningKeyIsAvailable")
 )
 
 // TestEnv captures all the external parameters consumed by our integration tests.
@@ -29,7 +29,7 @@ type TestEnv struct {
 	SupervisorNamespace string                                  `json:"supervisorNamespace"`
 	ConciergeAppName    string                                  `json:"conciergeAppName"`
 	SupervisorAppName   string                                  `json:"supervisorAppName"`
-	Capabilities        map[TestClusterCapability]bool          `json:"capabilities"`
+	Capabilities        map[Capability]bool                     `json:"capabilities"`
 	TestWebhook         idpv1alpha1.WebhookIdentityProviderSpec `json:"testWebhook"`
 	SupervisorAddress   string                                  `json:"supervisorAddress"`
 
@@ -83,25 +83,25 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 	return &result
 }
 
-func (e *TestEnv) HasCapability(cap TestClusterCapability) bool {
+func (e *TestEnv) HasCapability(cap Capability) bool {
 	e.t.Helper()
 	isCapable, capabilityWasDescribed := e.Capabilities[cap]
-	require.True(e.t, capabilityWasDescribed, `the cluster's "%s" capability was not described`, cap)
+	require.Truef(e.t, capabilityWasDescribed, "the %q capability of the test environment was not described", cap)
 	return isCapable
 }
 
-func (e *TestEnv) WithCapability(cap TestClusterCapability) *TestEnv {
+func (e *TestEnv) WithCapability(cap Capability) *TestEnv {
 	e.t.Helper()
 	if !e.HasCapability(cap) {
-		e.t.Skipf(`skipping integration test because cluster lacks the "%s" capability`, cap)
+		e.t.Skipf("skipping integration test because test environment lacks the %q capability", cap)
 	}
 	return e
 }
 
-func (e *TestEnv) WithoutCapability(cap TestClusterCapability) *TestEnv {
+func (e *TestEnv) WithoutCapability(cap Capability) *TestEnv {
 	e.t.Helper()
 	if e.HasCapability(cap) {
-		e.t.Skipf(`skipping integration test because cluster has the "%s" capability`, cap)
+		e.t.Skipf("skipping integration test because test environment has the %q capability", cap)
 	}
 	return e
 }

@@ -1,0 +1,17 @@
+#! Copyright 2020 the Pinniped contributors. All Rights Reserved.
+#! SPDX-License-Identifier: Apache-2.0
+
+#@data/values
+---
+ports:
+  #! Port on which the Pinniped CLI is listening for a callback (`--listen-port` flag value)
+  #! Used in the Dex configuration to form the valid redirect URIs for our test client.
+  cli: 48095
+
+  #! Kubernetes NodePort that should be forwarded to the Dex service.
+  #! Used to create a Service of type: NodePort
+  node: 31235
+
+  #! External port where Dex ends up exposed on localhost during tests. This value comes from our
+  #! Kind configuration which maps 127.0.0.1:12346 to port 31235 on the Kind worker node.
+  local: 12346

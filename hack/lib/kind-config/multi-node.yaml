@@ -4,4 +4,12 @@ nodes:
   - role: control-plane
   - role: worker
   - role: worker
-    extraPortMappings: [{containerPort: 31234, hostPort: 12345, protocol: TCP}]
+    extraPortMappings:
+      - protocol: TCP
+        containerPort: 31234
+        hostPort: 12345
+        listenAddress: 127.0.0.1
+      - protocol: TCP
+        containerPort: 31235
+        hostPort: 12346
+        listenAddress: 127.0.0.1

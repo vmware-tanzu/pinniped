@@ -19,6 +19,23 @@ local_resource(
 )
 
 #####################################################################################################
+# Dex
+#
+
+# Render the Dex installation manifest using ytt.
+k8s_yaml(local(['ytt','--file', '../../../test/deploy/dex']))
+
+# Collect all the deployed Dex resources under a "dex" resource tab.
+k8s_resource(
+    workload='dex', # this is the deployment name
+    objects=[
+        # these are the objects that would otherwise appear in the "uncategorized" tab in the tilt UI
+        'dex:namespace',
+        'dex-config:configmap',
+   ],
+)
+
+#####################################################################################################
 # Local-user-authenticator app
 #
 

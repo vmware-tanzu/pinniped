@@ -19,8 +19,7 @@ import (
 type Capability string
 
 const (
-	ClusterSigningKeyIsAvailable    Capability = "clusterSigningKeyIsAvailable"
-	ExternalOIDCProviderIsAvailable Capability = "externalOIDCProviderIsAvailable"
+	ClusterSigningKeyIsAvailable Capability = "clusterSigningKeyIsAvailable"
 )
 
 // TestEnv captures all the external parameters consumed by our integration tests.
@@ -90,16 +89,11 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 	result.SupervisorAddress = needEnv("PINNIPED_TEST_SUPERVISOR_ADDRESS")
 	result.TestWebhook.TLS = &idpv1alpha1.TLSSpec{CertificateAuthorityData: needEnv("PINNIPED_TEST_WEBHOOK_CA_BUNDLE")}
 
-	result.OIDCUpstream.Issuer = os.Getenv("PINNIPED_TEST_CLI_OIDC_ISSUER")
-	result.OIDCUpstream.ClientID = os.Getenv("PINNIPED_TEST_CLI_OIDC_CLIENT_ID")
-	result.OIDCUpstream.LocalhostPort, _ = strconv.Atoi(os.Getenv("PINNIPED_TEST_CLI_OIDC_LOCALHOST_PORT"))
-	result.OIDCUpstream.Username = os.Getenv("PINNIPED_TEST_CLI_OIDC_USERNAME")
-	result.OIDCUpstream.Password = os.Getenv("PINNIPED_TEST_CLI_OIDC_PASSWORD")
-
-	result.Capabilities[ExternalOIDCProviderIsAvailable] = !(result.OIDCUpstream.Issuer == "" ||
-		result.OIDCUpstream.ClientID == "" ||
-		result.OIDCUpstream.Username == "" ||
-		result.OIDCUpstream.Password == "")
+	result.OIDCUpstream.Issuer = needEnv("PINNIPED_TEST_CLI_OIDC_ISSUER")
+	result.OIDCUpstream.ClientID = needEnv("PINNIPED_TEST_CLI_OIDC_CLIENT_ID")
+	result.OIDCUpstream.LocalhostPort, _ = strconv.Atoi(needEnv("PINNIPED_TEST_CLI_OIDC_LOCALHOST_PORT"))
+	result.OIDCUpstream.Username = needEnv("PINNIPED_TEST_CLI_OIDC_USERNAME")
+	result.OIDCUpstream.Password = needEnv("PINNIPED_TEST_CLI_OIDC_PASSWORD")
 	result.t = t
 	return &result
 }

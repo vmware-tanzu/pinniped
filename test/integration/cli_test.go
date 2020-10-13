@@ -102,19 +102,58 @@ func runPinnipedCLIGetKubeconfig(t *testing.T, pinnipedExe, token, namespaceName
 	return string(output)
 }
 
-func TestCLILoginOIDC(t *testing.T) {
-	var (
-		oktaURLPattern  = regexp.MustCompile(`\Ahttps://.+.okta.com/.+\z`)
-		localURLPattern = regexp.MustCompile(`\Ahttp://127.0.0.1.+\z`)
-	)
+type loginProviderPatterns struct {
+	Name                string
+	IssuerPattern       *regexp.Regexp
+	LoginPagePattern    *regexp.Regexp
+	UsernameSelector    string
+	PasswordSelector    string
+	LoginButtonSelector string
+}
 
-	env := library.IntegrationEnv(t).WithCapability(library.ExternalOIDCProviderIsAvailable)
+func getLoginProvider(t *testing.T) *loginProviderPatterns {
+	t.Helper()
+	issuer := library.IntegrationEnv(t).OIDCUpstream.Issuer
+	for _, p := range []loginProviderPatterns{
+		{
+			Name:                "Okta",
+			IssuerPattern:       regexp.MustCompile(`\Ahttps://.+\.okta\.com/.+\z`),
+			LoginPagePattern:    regexp.MustCompile(`\Ahttps://.+\.okta\.com/.+\z`),
+			UsernameSelector:    "input#okta-signin-username",
+			PasswordSelector:    "input#okta-signin-password",
+			LoginButtonSelector: "input#okta-signin-submit",
+		},
+		{
+			Name:                "Dex",
+			IssuerPattern:       regexp.MustCompile(`\Ahttp://127\.0\.0\.1.+/dex.*\z`),
+			LoginPagePattern:    regexp.MustCompile(`\Ahttp://127\.0\.0\.1.+/dex/auth/local.+\z`),
+			UsernameSelector:    "input#login",
+			PasswordSelector:    "input#password",
+			LoginButtonSelector: "button#submit-login",
+		},
+	} {
+		if p.IssuerPattern.MatchString(issuer) {
+			return &p
+		}
+	}
+	require.Failf(t, "could not find login provider for issuer %q", issuer)
+	return nil
+}
+
+func TestCLILoginOIDC(t *testing.T) {
+	env := library.IntegrationEnv(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	// Find the login CSS selectors for the test issuer, or fail fast.
+	loginProvider := getLoginProvider(t)
 
 	// Build pinniped CLI.
 	t.Logf("building CLI binary")
 	pinnipedExe := buildPinnipedCLI(t)
 
-	cmd := exec.Command(pinnipedExe, "alpha", "login", "oidc",
+	cmd := exec.CommandContext(ctx, pinnipedExe, "alpha", "login", "oidc",
 		"--issuer", env.OIDCUpstream.Issuer,
 		"--client-id", env.OIDCUpstream.ClientID,
 		"--listen-port", strconv.Itoa(env.OIDCUpstream.LocalhostPort),
@@ -123,7 +162,7 @@ func TestCLILoginOIDC(t *testing.T) {
 
 	// Create a WaitGroup that will wait for all child goroutines to finish, so they can assert errors.
 	var wg sync.WaitGroup
-	defer wg.Wait()
+	t.Cleanup(wg.Wait)
 
 	// Start a background goroutine to read stderr from the CLI and parse out the login URL.
 	loginURLChan := make(chan string)
@@ -131,6 +170,7 @@ func TestCLILoginOIDC(t *testing.T) {
 	require.NoError(t, err)
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		r := bufio.NewReader(stderr)
 		line, err := r.ReadString('\n')
 		require.NoError(t, err)
@@ -138,9 +178,9 @@ func TestCLILoginOIDC(t *testing.T) {
 		require.Truef(t, strings.HasPrefix(line, prompt), "expected %q to have prefix %q", line, prompt)
 		loginURLChan <- strings.TrimPrefix(line, prompt)
 		_, err = io.Copy(ioutil.Discard, r)
+
 		t.Logf("stderr stream closed")
 		require.NoError(t, err)
-		wg.Done()
 	}()
 
 	// Start a background goroutine to read stdout from the CLI and parse out an ExecCredential.
@@ -149,6 +189,7 @@ func TestCLILoginOIDC(t *testing.T) {
 	require.NoError(t, err)
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		r := bufio.NewReader(stdout)
 
 		var out clientauthenticationv1beta1.ExecCredential
@@ -158,18 +199,15 @@ func TestCLILoginOIDC(t *testing.T) {
 		_, err = io.Copy(ioutil.Discard, r)
 		t.Logf("stdout stream closed")
 		require.NoError(t, err)
-		wg.Done()
 	}()
 
 	t.Logf("starting CLI subprocess")
 	require.NoError(t, cmd.Start())
-	wg.Add(1)
-	defer func() {
+	t.Cleanup(func() {
 		err := cmd.Wait()
 		t.Logf("CLI subprocess exited")
 		require.NoError(t, err)
-		wg.Done()
-	}()
+	})
 
 	// Start the browser driver.
 	t.Logf("opening browser driver")
@@ -193,26 +231,23 @@ func TestCLILoginOIDC(t *testing.T) {
 	t.Logf("navigating to login page")
 	require.NoError(t, page.Navigate(loginURL))
 
-	// Expect to be redirected to the Okta login page.
-	t.Logf("waiting for redirect to Okta login page")
-	waitForURL(t, page, oktaURLPattern)
+	// Expect to be redirected to the login page.
+	t.Logf("waiting for redirect to %s login page", loginProvider.Name)
+	waitForURL(t, page, loginProvider.LoginPagePattern)
 
 	// Wait for the login page to be rendered.
-	waitForVisibleElements(t, page,
-		"input#okta-signin-username",
-		"input#okta-signin-password",
-		"input#okta-signin-submit",
-	)
+	waitForVisibleElements(t, page, loginProvider.UsernameSelector, loginProvider.PasswordSelector, loginProvider.LoginButtonSelector)
 
 	// Fill in the username and password and click "submit".
-	t.Logf("logging into Okta")
-	require.NoError(t, page.First("input#okta-signin-username").Fill(env.OIDCUpstream.Username))
-	require.NoError(t, page.First("input#okta-signin-password").Fill(env.OIDCUpstream.Password))
-	require.NoError(t, page.First("input#okta-signin-submit").Click())
+	t.Logf("logging into %s", loginProvider.Name)
+	require.NoError(t, page.First(loginProvider.UsernameSelector).Fill(env.OIDCUpstream.Username))
+	require.NoError(t, page.First(loginProvider.PasswordSelector).Fill(env.OIDCUpstream.Password))
+	require.NoError(t, page.First(loginProvider.LoginButtonSelector).Click())
 
 	// Wait for the login to happen and us be redirected back to a localhost callback.
 	t.Logf("waiting for redirect to localhost callback")
-	waitForURL(t, page, localURLPattern)
+	callbackURLPattern := regexp.MustCompile(`\Ahttp://127.0.0.1:` + strconv.Itoa(env.OIDCUpstream.LocalhostPort) + `/.+\z`)
+	waitForURL(t, page, callbackURLPattern)
 
 	// Wait for the "pre" element that gets rendered for a `text/plain` page, and
 	// assert that it contains the success message.
@@ -221,7 +256,6 @@ func TestCLILoginOIDC(t *testing.T) {
 	msg, err := page.First("pre").Text()
 	require.NoError(t, err)
 	require.Equal(t, "you have been logged in and may now close this tab", msg)
-	require.NoError(t, page.CloseWindow())
 
 	// Expect the CLI to output an ExecCredential in JSON format.
 	t.Logf("waiting for CLI to output ExecCredential JSON")
@@ -267,7 +301,7 @@ func waitForVisibleElements(t *testing.T, page *agouti.Page, selectors ...string
 			}
 			return true
 		},
-		30*time.Second,
+		10*time.Second,
 		100*time.Millisecond,
 	)
 }
@@ -276,5 +310,5 @@ func waitForURL(t *testing.T, page *agouti.Page, pat *regexp.Regexp) {
 	require.Eventually(t, func() bool {
 		url, err := page.URL()
 		return err == nil && pat.MatchString(url)
-	}, 30*time.Second, 100*time.Millisecond)
+	}, 10*time.Second, 100*time.Millisecond)
 }

@@ -16,7 +16,7 @@ import (
 	"go.pinniped.dev/test/library"
 )
 
-func TestCLI(t *testing.T) {
+func TestCLIGetKubeconfig(t *testing.T) {
 	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
 	// Create a test webhook configuration to use with the CLI.
@@ -30,7 +30,7 @@ func TestCLI(t *testing.T) {
 	defer cleanupFunc()
 
 	// Run pinniped CLI to get kubeconfig.
-	kubeConfigYAML := runPinnipedCLI(t, pinnipedExe, env.TestUser.Token, env.ConciergeNamespace, "webhook", idp.Name)
+	kubeConfigYAML := runPinnipedCLIGetKubeconfig(t, pinnipedExe, env.TestUser.Token, env.ConciergeNamespace, "webhook", idp.Name)
 
 	// In addition to the client-go based testing below, also try the kubeconfig
 	// with kubectl to validate that it works.
@@ -79,7 +79,7 @@ func buildPinnipedCLI(t *testing.T) (string, func()) {
 	}
 }
 
-func runPinnipedCLI(t *testing.T, pinnipedExe, token, namespaceName, idpType, idpName string) string {
+func runPinnipedCLIGetKubeconfig(t *testing.T, pinnipedExe, token, namespaceName, idpType, idpName string) string {
 	t.Helper()
 
 	output, err := exec.Command(

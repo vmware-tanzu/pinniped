@@ -119,7 +119,7 @@ if ! tilt_mode; then
   log_note "Checking for running kind clusters..."
   if ! kind get clusters | grep -q -e '^pinniped$'; then
     log_note "Creating a kind cluster..."
-    # single-node.yaml exposes node port 31234 as 127.0.0.1:12345
+    # single-node.yaml exposes node port 31234 as 127.0.0.1:12345 and port 31235 as 127.0.0.1:12346
     kind create cluster --config "$pinniped_path/hack/lib/kind-config/single-node.yaml" --name pinniped
   else
     if ! kubectl cluster-info | grep master | grep -q 127.0.0.1; then
@@ -176,6 +176,17 @@ if ! tilt_mode; then
 
   popd >/dev/null
 
+  #
+  # Deploy dex
+  #
+  pushd test/deploy/dex >/dev/null
+
+  log_note "Deploying Dex to the cluster..."
+  ytt --file . >"$manifest"
+  kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
+  kapp deploy --yes --app dex --diff-changes --file "$manifest"
+
+  popd >/dev/null
 fi
 
 test_username="test-username"
@@ -261,6 +272,11 @@ export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}
 export PINNIPED_TEST_SUPERVISOR_NAMESPACE=${supervisor_namespace}
 export PINNIPED_TEST_SUPERVISOR_APP_NAME=${supervisor_app_name}
 export PINNIPED_TEST_SUPERVISOR_ADDRESS="127.0.0.1:12345"
+export PINNIPED_TEST_CLI_OIDC_ISSUER=http://127.0.0.1:12346/dex
+export PINNIPED_TEST_CLI_OIDC_CLIENT_ID=pinniped-cli
+export PINNIPED_TEST_CLI_OIDC_LOCALHOST_PORT=48095
+export PINNIPED_TEST_CLI_OIDC_USERNAME=pinny@example.com
+export PINNIPED_TEST_CLI_OIDC_PASSWORD=password
 
 read -r -d '' PINNIPED_TEST_CLUSTER_CAPABILITY_YAML << PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF || true
 ${pinniped_cluster_capability_file_content}

@@ -4,123 +4,75 @@
 package cmd
 
 import (
-	"fmt"
+	"encoding/json"
 
-	"github.com/coreos/go-oidc"
-	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
-	"golang.org/x/oauth2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
-	"go.pinniped.dev/internal/here"
-	"go.pinniped.dev/internal/oidc/pkce"
-	"go.pinniped.dev/internal/oidc/state"
+	"go.pinniped.dev/internal/oidcclient/login"
 )
 
 //nolint: gochecknoinits
 func init() {
-	loginCmd.AddCommand((&oidcLoginParams{
-		generateState: state.Generate,
-		generatePKCE:  pkce.Generate,
-		openURL:       browser.OpenURL,
-	}).cmd())
+	loginCmd.AddCommand(oidcLoginCommand(login.Run))
 }
 
-type oidcLoginParams struct {
-	// These parameters capture CLI flags.
-	issuer        string
-	clientID      string
-	listenPort    uint16
-	scopes        []string
-	skipBrowser   bool
-	usePKCE       bool
-	debugAuthCode bool
-
-	// These parameters capture dependencies that we want to mock during testing.
-	generateState func() (state.State, error)
-	generatePKCE  func() (pkce.Code, error)
-	openURL       func(string) error
-}
-
-func (o *oidcLoginParams) cmd() *cobra.Command {
-	cmd := cobra.Command{
-		Args:         cobra.NoArgs,
-		Use:          "oidc --issuer ISSUER --client-id CLIENT_ID",
-		Short:        "Login using an OpenID Connect provider",
-		RunE:         o.runE,
-		SilenceUsage: true,
-	}
-	cmd.Flags().StringVar(&o.issuer, "issuer", "", "OpenID Connect issuer URL.")
-	cmd.Flags().StringVar(&o.clientID, "client-id", "", "OpenID Connect client ID.")
-	cmd.Flags().Uint16Var(&o.listenPort, "listen-port", 48095, "TCP port for localhost listener (authorization code flow only).")
-	cmd.Flags().StringSliceVar(&o.scopes, "scopes", []string{"offline_access", "openid", "email", "profile"}, "OIDC scopes to request during login.")
-	cmd.Flags().BoolVar(&o.skipBrowser, "skip-browser", false, "Skip opening the browser (just print the URL).")
-	cmd.Flags().BoolVar(&o.usePKCE, "use-pkce", true, "Use Proof Key for Code Exchange (RFC 7636) during login.")
+func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...login.Option) (*login.Token, error)) *cobra.Command {
+	var (
+		cmd = cobra.Command{
+			Args:         cobra.NoArgs,
+			Use:          "oidc --issuer ISSUER --client-id CLIENT_ID",
+			Short:        "Login using an OpenID Connect provider",
+			SilenceUsage: true,
+		}
+		issuer      string
+		clientID    string
+		listenPort  uint16
+		scopes      []string
+		skipBrowser bool
+	)
+	cmd.Flags().StringVar(&issuer, "issuer", "", "OpenID Connect issuer URL.")
+	cmd.Flags().StringVar(&clientID, "client-id", "", "OpenID Connect client ID.")
+	cmd.Flags().Uint16Var(&listenPort, "listen-port", 0, "TCP port for localhost listener (authorization code flow only).")
+	cmd.Flags().StringSliceVar(&scopes, "scopes", []string{"offline_access", "openid", "email", "profile"}, "OIDC scopes to request during login.")
+	cmd.Flags().BoolVar(&skipBrowser, "skip-browser", false, "Skip opening the browser (just print the URL).")
 	mustMarkRequired(&cmd, "issuer", "client-id")
 
-	// TODO: temporary
-	cmd.Flags().BoolVar(&o.debugAuthCode, "debug-auth-code-exchange", true, "Debug the authorization code exchange (temporary).")
-	_ = cmd.Flags().MarkHidden("debug-auth-code-exchange")
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		opts := []login.Option{
+			login.WithContext(cmd.Context()),
+			login.WithScopes(scopes),
+		}
 
-	return &cmd
-}
+		if listenPort != 0 {
+			opts = append(opts, login.WithListenPort(listenPort))
+		}
 
-func (o *oidcLoginParams) runE(cmd *cobra.Command, args []string) error {
-	metadata, err := oidc.NewProvider(cmd.Context(), o.issuer)
-	if err != nil {
-		return fmt.Errorf("could not perform OIDC discovery for %q: %w", o.issuer, err)
-	}
+		// --skip-browser replaces the default "browser open" function with one that prints to stderr.
+		if skipBrowser {
+			opts = append(opts, login.WithBrowserOpen(func(url string) error {
+				cmd.PrintErr("Please log in: ", url, "\n")
+				return nil
+			}))
+		}
 
-	cfg := oauth2.Config{
-		ClientID:    o.clientID,
-		Endpoint:    metadata.Endpoint(),
-		RedirectURL: fmt.Sprintf("http://localhost:%d/callback", o.listenPort),
-		Scopes:      o.scopes,
-	}
-
-	authCodeOptions := []oauth2.AuthCodeOption{oauth2.AccessTypeOffline}
-
-	stateParam, err := o.generateState()
-	if err != nil {
-		return fmt.Errorf("could not generate OIDC state parameter: %w", err)
-	}
-
-	var pkceCode pkce.Code
-	if o.usePKCE {
-		pkceCode, err = o.generatePKCE()
+		tok, err := loginFunc(issuer, clientID, opts...)
 		if err != nil {
-			return fmt.Errorf("could not generate OIDC PKCE parameter: %w", err)
+			return err
 		}
-		authCodeOptions = append(authCodeOptions, pkceCode.Challenge(), pkceCode.Method())
+
+		// Convert the token out to Kubernetes ExecCredential JSON format for output.
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(&clientauthenticationv1beta1.ExecCredential{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ExecCredential",
+				APIVersion: "client.authentication.k8s.io/v1beta1",
+			},
+			Status: &clientauthenticationv1beta1.ExecCredentialStatus{
+				ExpirationTimestamp: &metav1.Time{Time: tok.IDTokenExpiry},
+				Token:               tok.IDToken,
+			},
+		})
 	}
-
-	// If --skip-browser was passed, override the default browser open function with a Printf() call.
-	openURL := o.openURL
-	if o.skipBrowser {
-		openURL = func(s string) error {
-			cmd.PrintErr("Please log in: ", s, "\n")
-			return nil
-		}
-	}
-
-	authorizeURL := cfg.AuthCodeURL(stateParam.String(), authCodeOptions...)
-	if err := openURL(authorizeURL); err != nil {
-		return fmt.Errorf("could not open browser (run again with --skip-browser?): %w", err)
-	}
-
-	// TODO: this temporary so we can complete the auth code exchange manually
-
-	if o.debugAuthCode {
-		cmd.PrintErr(here.Docf(`
-			DEBUG INFO:
-				Token URL: %s
-					State: %s
-				     PKCE: %s
-			`,
-			cfg.Endpoint.TokenURL,
-			stateParam,
-			pkceCode.Verifier(),
-		))
-	}
-
-	return nil
+	return &cmd
 }

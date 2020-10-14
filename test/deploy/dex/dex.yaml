@@ -1,0 +1,102 @@
+#! Copyright 2020 the Pinniped contributors. All Rights Reserved.
+#! SPDX-License-Identifier: Apache-2.0
+
+#@ load("@ytt:data", "data")
+#@ load("@ytt:sha256", "sha256")
+#@ load("@ytt:yaml", "yaml")
+
+#@ def dexConfig():
+issuer: #@ "http://127.0.0.1:" + str(data.values.ports.local) + "/dex"
+storage:
+  type: sqlite3
+  config:
+    file: ":memory:"
+web:
+  http: 0.0.0.0:5556
+oauth2:
+  skipApprovalScreen: true
+staticClients:
+- id: pinniped-cli
+  name: 'Pinniped CLI'
+  #! we can't have "public: true" until https://github.com/dexidp/dex/pull/1822 lands in Dex.
+  redirectURIs:
+  - #@ "http://127.0.0.1:" + str(data.values.ports.cli) + "/callback"
+  - #@ "http://[::1]:" + str(data.values.ports.cli) + "/callback"
+enablePasswordDB: true
+staticPasswords:
+- username: "pinny"
+  email: "pinny@example.com"
+  hash: "$2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W" #! bcrypt("password")
+  userID: "061d23d1-fe1e-4777-9ae9-59cd12abeaaa"
+#@ end
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dex
+  labels:
+    name: dex
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dex-config
+  namespace: dex
+  labels:
+    app: dex
+data:
+  config.yaml: #@ yaml.encode(dexConfig())
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dex
+  namespace: dex
+  labels:
+    app: dex
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dex
+  template:
+    metadata:
+      labels:
+        app: dex
+      annotations:
+        dexConfigHash: #@ sha256.sum(yaml.encode(dexConfig()))
+    spec:
+      containers:
+        - name: dex
+          image: quay.io/dexidp/dex:v2.10.0
+          imagePullPolicy: IfNotPresent
+          command:
+          - /usr/local/bin/dex
+          - serve
+          - /etc/dex/cfg/config.yaml
+          ports:
+          - name: http
+            containerPort: 5556
+          volumeMounts:
+          - name: config
+            mountPath: /etc/dex/cfg
+      volumes:
+      - name: config
+        configMap:
+          name: dex-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dex
+  namespace: dex
+  labels:
+    app: dex
+spec:
+  type: NodePort
+  selector:
+    app: dex
+  ports:
+    - port: 5556
+      nodePort: #@ data.values.ports.node

@@ -9,6 +9,7 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"fmt"
+	"io"
 
 	"gopkg.in/square/go-jose.v2"
 	corev1 "k8s.io/api/core/v1"
@@ -33,15 +34,23 @@ const (
 	//
 	// Note! The value for this key will contain private key material!
 	activeJWKKey = "activeJWK"
-	// validJWKSKey points to the current JWKS used to verify tokens.
+	// jwksKey points to the current JWKS used to verify tokens.
 	//
 	// Note! The value for this key will contain only public key material!
-	validJWKSKey = "validJWKS"
+	jwksKey = "jwks"
 )
 
 const (
 	opcKind = "OIDCProviderConfig"
 )
+
+// generateKey is stubbed out for the purpose of testing. The default behavior is to generate an RSA key.
+//nolint:gochecknoglobals
+var generateKey func(r io.Reader, bits int) (interface{}, error) = generateRSAKey
+
+func generateRSAKey(r io.Reader, bits int) (interface{}, error) {
+	return rsa.GenerateKey(r, bits)
+}
 
 // jwkController holds the field necessary for the JWKS controller to communicate with OPC's and
 // secrets, both via a cache and via the API.
@@ -86,15 +95,11 @@ func NewJWKSController(
 					}
 					return controllerlib.Key{}
 				},
-				AddFunc: func(obj metav1.Object) bool {
-					return false
-				},
+				AddFunc: isOPCControllee,
 				UpdateFunc: func(oldObj, newObj metav1.Object) bool {
 					return isOPCControllee(oldObj) || isOPCControllee(newObj)
 				},
-				DeleteFunc: func(obj metav1.Object) bool {
-					return isOPCControllee(obj)
-				},
+				DeleteFunc: isOPCControllee,
 			},
 			controllerlib.InformerOption{},
 		),
@@ -131,28 +136,26 @@ func (c *jwksController) Sync(ctx controllerlib.Context) error {
 		return nil
 	}
 
-	var secret *corev1.Secret
-	if opc.Status.JWKSSecret.Name != "" {
-		// This OPC says it has a secret associated with it. Let's try to get it from the cache.
-		secret, err = c.secretInformer.Lister().Secrets(opc.Namespace).Get(opc.Status.JWKSSecret.Name)
-		if err != nil && !k8serrors.IsNotFound(err) {
-			return fmt.Errorf("cannot get secret: %w", err)
-		}
+	secretNeedsUpdate, err := c.secretNeedsUpdate(opc)
+	if err != nil {
+		return fmt.Errorf("cannot determine secret status: %w", err)
+	}
+	if !secretNeedsUpdate {
+		// Secret is up to date - we are good to go.
+		return nil
 	}
 
-	if secret == nil {
-		// If the OPC does not have a secret associated with it, or that secret does not exist, we will
-		// generate a new secret (i.e., a JWKS).
-		secret, err = c.generateSecret(opc)
-		if err != nil {
-			return fmt.Errorf("cannot wire secret: %w", err)
-		}
+	// If the OPC does not have a secret associated with it, that secret does not exist, or the secret
+	// is invalid, we will generate a new secret (i.e., a JWKS).
+	secret, err := c.generateSecret(opc)
+	if err != nil {
+		return fmt.Errorf("cannot generate secret: %w", err)
 	}
 
-	// Ensure that the secret exists and looks like it should.
 	if err := c.createOrUpdateSecret(ctx.Context, secret); err != nil {
 		return fmt.Errorf("cannot create or update secret: %w", err)
 	}
+
 	klog.InfoS("created/updated secret", "secret", klog.KObj(secret))
 
 	// Ensure that the OPC points to the secret.
@@ -166,6 +169,31 @@ func (c *jwksController) Sync(ctx controllerlib.Context) error {
 	return nil
 }
 
+func (c *jwksController) secretNeedsUpdate(opc *configv1alpha1.OIDCProviderConfig) (bool, error) {
+	if opc.Status.JWKSSecret.Name == "" {
+		// If the OPC says it doesn't have a secret associated with it, then let's create one.
+		return true, nil
+	}
+
+	// This OPC says it has a secret associated with it. Let's try to get it from the cache.
+	secret, err := c.secretInformer.Lister().Secrets(opc.Namespace).Get(opc.Status.JWKSSecret.Name)
+	notFound := k8serrors.IsNotFound(err)
+	if err != nil && !notFound {
+		return false, fmt.Errorf("cannot get secret: %w", err)
+	}
+	if notFound {
+		// If we can't find the secret, let's assume we need to create it.
+		return true, nil
+	}
+
+	if !isValid(secret) {
+		// If this secret is invalid, we need to generate a new one.
+		return true, nil
+	}
+
+	return false, nil
+}
+
 func (c *jwksController) generateSecret(opc *configv1alpha1.OIDCProviderConfig) (*corev1.Secret, error) {
 	// Note! This is where we could potentially add more handling of OPC spec fields which tell us how
 	// this OIDC provider should sign and verify ID tokens (e.g., hardcoded token secret, gRPC
@@ -173,13 +201,13 @@ func (c *jwksController) generateSecret(opc *configv1alpha1.OIDCProviderConfig) 
 	//
 	// For now, we just generate an new RSA keypair and put that in the secret.
 
-	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	key, err := generateKey(rand.Reader, 4096)
 	if err != nil {
 		return nil, fmt.Errorf("cannot generate key: %w", err)
 	}
 
 	jwk := jose.JSONWebKey{
-		Key:       privateKey,
+		Key:       key,
 		KeyID:     "some-key",
 		Algorithm: "RS256",
 		Use:       "sig",
@@ -190,7 +218,7 @@ func (c *jwksController) generateSecret(opc *configv1alpha1.OIDCProviderConfig) 
 	}
 
 	jwks := jose.JSONWebKeySet{
-		Keys: []jose.JSONWebKey{jwk},
+		Keys: []jose.JSONWebKey{jwk.Public()},
 	}
 	jwksData, err := json.Marshal(jwks)
 	if err != nil {
@@ -212,7 +240,7 @@ func (c *jwksController) generateSecret(opc *configv1alpha1.OIDCProviderConfig) 
 		},
 		Data: map[string][]byte{
 			activeJWKKey: jwkData,
-			validJWKSKey: jwksData,
+			jwksKey:      jwksData,
 		},
 	}
 
@@ -260,9 +288,8 @@ func (c *jwksController) updateOPC(
 	opcClient := c.pinnipedClient.ConfigV1alpha1().OIDCProviderConfigs(newOPC.Namespace)
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		oldOPC, err := opcClient.Get(ctx, newOPC.Name, metav1.GetOptions{})
-		notFound := k8serrors.IsNotFound(err)
-		if err != nil && !notFound {
-			return fmt.Errorf("cannot get secret: %w", err)
+		if err != nil {
+			return fmt.Errorf("cannot get opc: %w", err)
 		}
 
 		if newOPC.Status.JWKSSecret.Name == oldOPC.Status.JWKSSecret.Name {
@@ -279,7 +306,9 @@ func (c *jwksController) updateOPC(
 // isOPCControlle returns whether the provided obj is controlled by an OPC.
 func isOPCControllee(obj metav1.Object) bool {
 	controller := metav1.GetControllerOf(obj)
-	return controller != nil && controller.Kind == opcKind
+	return controller != nil &&
+		controller.APIVersion == configv1alpha1.SchemeGroupVersion.String() &&
+		controller.Kind == opcKind
 }
 
 // isValid returns whether the provided secret contains a valid active JWK and verification JWKS.
@@ -296,12 +325,17 @@ func isValid(secret *corev1.Secret) bool {
 		return false
 	}
 
+	if activeJWK.IsPublic() {
+		klog.InfoS("active jwk is public", "keyid", activeJWK.KeyID)
+		return false
+	}
+
 	if !activeJWK.Valid() {
 		klog.InfoS("active jwk is not valid", "keyid", activeJWK.KeyID)
 		return false
 	}
 
-	jwksData, ok := secret.Data[validJWKSKey]
+	jwksData, ok := secret.Data[jwksKey]
 	if !ok {
 		klog.InfoS("secret does not contain valid jwks")
 	}
@@ -314,6 +348,10 @@ func isValid(secret *corev1.Secret) bool {
 
 	foundActiveJWK := false
 	for _, validJWK := range validJWKS.Keys {
+		if !validJWK.IsPublic() {
+			klog.InfoS("jwks key is not public", "keyid", validJWK.KeyID)
+			return false
+		}
 		if !validJWK.Valid() {
 			klog.InfoS("jwks key is not valid", "keyid", validJWK.KeyID)
 			return false

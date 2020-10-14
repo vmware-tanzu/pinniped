@@ -106,5 +106,5 @@ metadata:
   name: my-provider
   namespace: pinniped-supervisor
 spec:
-  issuer: https://my-issuer.eaxmple.com
+  issuer: https://my-issuer.example.com
 ```

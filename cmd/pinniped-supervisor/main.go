@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/clock"
+	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/client-go/rest"
 	restclient "k8s.io/client-go/rest"
@@ -62,7 +64,9 @@ func waitForSignal() os.Signal {
 func startControllers(
 	ctx context.Context,
 	issuerProvider *manager.Manager,
+	kubeClient kubernetes.Interface,
 	pinnipedClient pinnipedclientset.Interface,
+	kubeInformers kubeinformers.SharedInformerFactory,
 	pinnipedInformers pinnipedinformers.SharedInformerFactory,
 ) {
 	// Create controller manager.
@@ -77,36 +81,59 @@ func startControllers(
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
+		).
+		WithController(
+			supervisorconfig.NewJWKSController(
+				kubeClient,
+				pinnipedClient,
+				kubeInformers.Core().V1().Secrets(),
+				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
 		)
 
+	kubeInformers.Start(ctx.Done())
 	pinnipedInformers.Start(ctx.Done())
 
 	go controllerManager.Start(ctx)
 }
 
-func newPinnipedClient() (pinnipedclientset.Interface, error) {
+func newClients() (kubernetes.Interface, pinnipedclientset.Interface, error) {
 	kubeConfig, err := restclient.InClusterConfig()
 	if err != nil {
-		return nil, fmt.Errorf("could not load in-cluster configuration: %w", err)
+		return nil, nil, fmt.Errorf("could not load in-cluster configuration: %w", err)
 	}
 
 	// Connect to the core Kubernetes API.
-	pinnipedClient, err := pinnipedclientset.NewForConfig(kubeConfig)
+	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
 	if err != nil {
-		return nil, fmt.Errorf("could not load in-cluster configuration: %w", err)
+		return nil, nil, fmt.Errorf("could not create kube client: %w", err)
 	}
 
-	return pinnipedClient, nil
+	// Connect to the Pinniped API.
+	pinnipedClient, err := pinnipedclientset.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not create pinniped client: %w", err)
+	}
+
+	return kubeClient, pinnipedClient, nil
 }
 
 func run(serverInstallationNamespace string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pinnipedClient, err := newPinnipedClient()
+	kubeClient, pinnipedClient, err := newClients()
 	if err != nil {
 		return fmt.Errorf("cannot create k8s client: %w", err)
 	}
+
+	kubeInformers := kubeinformers.NewSharedInformerFactoryWithOptions(
+		kubeClient,
+		defaultResyncInterval,
+		kubeinformers.WithNamespace(serverInstallationNamespace),
+	)
 
 	pinnipedInformers := pinnipedinformers.NewSharedInformerFactoryWithOptions(
 		pinnipedClient,
@@ -115,7 +142,7 @@ func run(serverInstallationNamespace string) error {
 	)
 
 	oidProvidersManager := manager.NewManager(http.NotFoundHandler())
-	startControllers(ctx, oidProvidersManager, pinnipedClient, pinnipedInformers)
+	startControllers(ctx, oidProvidersManager, kubeClient, pinnipedClient, kubeInformers, pinnipedInformers)
 
 	//nolint: gosec // Intentionally binding to all network interfaces.
 	l, err := net.Listen("tcp", ":80")

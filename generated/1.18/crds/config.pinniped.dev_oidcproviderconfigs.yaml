@@ -55,6 +55,17 @@ spec:
           status:
             description: Status of the OIDC provider.
             properties:
+              jwksSecret:
+                description: JWKSSecret holds the name of the secret in which this
+                  OIDC Provider's signing/verification keys are stored. If it is empty,
+                  then the signing/verification keys are either unknown or they don't
+                  exist.
+                properties:
+                  name:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      TODO: Add other useful fields. apiVersion, kind, uid?'
+                    type: string
+                type: object
               lastUpdateTime:
                 description: LastUpdateTime holds the time at which the Status was
                   last updated. It is a pointer to get around some undesirable behavior

@@ -431,11 +431,17 @@ func schema_117_apis_config_v1alpha1_OIDCProviderConfigStatus(ref common.Referen
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
+					"jwksSecret": {
+						SchemaProps: spec.SchemaProps{
+							Description: "JWKSSecret holds the name of the secret in which this OIDC Provider's signing/verification keys are stored. If it is empty, then the signing/verification keys are either unknown or they don't exist.",
+							Ref:         ref("k8s.io/api/core/v1.LocalObjectReference"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			"k8s.io/api/core/v1.LocalObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
 	}
 }
 

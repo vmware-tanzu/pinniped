@@ -4,8 +4,11 @@ package integration
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -14,12 +17,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/sclevine/agouti"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 	"gopkg.in/square/go-jose.v2"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
@@ -153,60 +156,70 @@ func TestCLILoginOIDC(t *testing.T) {
 	t.Logf("building CLI binary")
 	pinnipedExe := buildPinnipedCLI(t)
 
+	// Start the CLI running the "alpha login oidc [...]" command with stdout/stderr connected to pipes.
+	t.Logf("starting CLI subprocess")
 	cmd := exec.CommandContext(ctx, pinnipedExe, "alpha", "login", "oidc",
 		"--issuer", env.OIDCUpstream.Issuer,
 		"--client-id", env.OIDCUpstream.ClientID,
 		"--listen-port", strconv.Itoa(env.OIDCUpstream.LocalhostPort),
 		"--skip-browser",
 	)
-
-	// Create a WaitGroup that will wait for all child goroutines to finish, so they can assert errors.
-	var wg sync.WaitGroup
-	t.Cleanup(wg.Wait)
-
-	// Start a background goroutine to read stderr from the CLI and parse out the login URL.
-	loginURLChan := make(chan string)
 	stderr, err := cmd.StderrPipe()
 	require.NoError(t, err)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		r := bufio.NewReader(stderr)
-		line, err := r.ReadString('\n')
-		require.NoError(t, err)
-		const prompt = "Please log in: "
-		require.Truef(t, strings.HasPrefix(line, prompt), "expected %q to have prefix %q", line, prompt)
-		loginURLChan <- strings.TrimPrefix(line, prompt)
-		_, err = io.Copy(ioutil.Discard, r)
-
-		t.Logf("stderr stream closed")
-		require.NoError(t, err)
-	}()
-
-	// Start a background goroutine to read stdout from the CLI and parse out an ExecCredential.
-	credOutputChan := make(chan clientauthenticationv1beta1.ExecCredential)
 	stdout, err := cmd.StdoutPipe()
 	require.NoError(t, err)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		r := bufio.NewReader(stdout)
-
-		var out clientauthenticationv1beta1.ExecCredential
-		require.NoError(t, json.NewDecoder(r).Decode(&out))
-		credOutputChan <- out
-
-		_, err = io.Copy(ioutil.Discard, r)
-		t.Logf("stdout stream closed")
-		require.NoError(t, err)
-	}()
-
-	t.Logf("starting CLI subprocess")
 	require.NoError(t, cmd.Start())
 	t.Cleanup(func() {
 		err := cmd.Wait()
-		t.Logf("CLI subprocess exited")
-		require.NoError(t, err)
+		t.Logf("CLI subprocess exited with code %d", cmd.ProcessState.ExitCode())
+		require.NoErrorf(t, err, "CLI process did not exit cleanly")
+	})
+
+	// Start a background goroutine to read stderr from the CLI and parse out the login URL.
+	loginURLChan := make(chan string)
+	spawnTestGoroutine(t, func() (err error) {
+		defer func() {
+			closeErr := stderr.Close()
+			if closeErr == nil || errors.Is(closeErr, os.ErrClosed) {
+				return
+			}
+			if err == nil {
+				err = fmt.Errorf("stderr stream closed with error: %w", closeErr)
+			}
+		}()
+
+		reader := bufio.NewReader(stderr)
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("could not read login URL line from stderr: %w", err)
+		}
+		const prompt = "Please log in: "
+		if !strings.HasPrefix(line, prompt) {
+			return fmt.Errorf("expected %q to have prefix %q", line, prompt)
+		}
+		loginURLChan <- strings.TrimPrefix(line, prompt)
+		return readAndExpectEmpty(reader)
+	})
+
+	// Start a background goroutine to read stdout from the CLI and parse out an ExecCredential.
+	credOutputChan := make(chan clientauthenticationv1beta1.ExecCredential)
+	spawnTestGoroutine(t, func() (err error) {
+		defer func() {
+			closeErr := stderr.Close()
+			if closeErr == nil || errors.Is(closeErr, os.ErrClosed) {
+				return
+			}
+			if err == nil {
+				err = fmt.Errorf("stdout stream closed with error: %w", closeErr)
+			}
+		}()
+		reader := bufio.NewReader(stdout)
+		var out clientauthenticationv1beta1.ExecCredential
+		if err := json.NewDecoder(reader).Decode(&out); err != nil {
+			return fmt.Errorf("could not read ExecCredential from stdout: %w", err)
+		}
+		credOutputChan <- out
+		return readAndExpectEmpty(reader)
 	})
 
 	// Start the browser driver.
@@ -311,4 +324,25 @@ func waitForURL(t *testing.T, page *agouti.Page, pat *regexp.Regexp) {
 		url, err := page.URL()
 		return err == nil && pat.MatchString(url)
 	}, 10*time.Second, 100*time.Millisecond)
+}
+
+func readAndExpectEmpty(r io.Reader) (err error) {
+	var remainder bytes.Buffer
+	_, err = io.Copy(&remainder, r)
+	if err != nil {
+		return err
+	}
+	if r := remainder.String(); r != "" {
+		return fmt.Errorf("expected remainder to be empty, but got %q", r)
+	}
+	return nil
+}
+
+func spawnTestGoroutine(t *testing.T, f func() error) {
+	t.Helper()
+	var eg errgroup.Group
+	t.Cleanup(func() {
+		require.NoError(t, eg.Wait(), "background goroutine failed")
+	})
+	eg.Go(f)
 }

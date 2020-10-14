@@ -1,0 +1,17 @@
+#! Copyright 2020 the Pinniped contributors. All Rights Reserved.
+#! SPDX-License-Identifier: Apache-2.0
+
+#@ load("@ytt:overlay", "overlay")
+#@ load("helpers.lib.yaml", "labels")
+
+#@overlay/match by=overlay.subset({"kind": "CustomResourceDefinition", "metadata":{"name":"credentialissuerconfigs.config.pinniped.dev"}}), expects=1
+---
+metadata:
+  #@overlay/match missing_ok=True
+  labels: #@ labels()
+
+#@overlay/match by=overlay.subset({"kind": "CustomResourceDefinition", "metadata":{"name":"webhookidentityproviders.idp.pinniped.dev"}}), expects=1
+---
+metadata:
+  #@overlay/match missing_ok=True
+  labels: #@ labels()

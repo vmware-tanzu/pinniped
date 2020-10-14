@@ -2,42 +2,43 @@
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
+#@ load("helpers.lib.yaml", "defaultLabel", "labels", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix")
 
+#@ if not data.values.into_namespace:
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: #@ data.values.namespace
-  labels:
-    name: #@ data.values.namespace
+  labels: #@ labels()
+#@ end
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: #@ data.values.app_name
-  namespace: #@ data.values.namespace
+  name: #@ defaultResourceName()
+  namespace: #@ namespace()
+  labels: #@ labels()
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: #@ data.values.app_name + "-static-config"
-  namespace: #@ data.values.namespace
-  labels:
-    app: #@ data.values.app_name
+  name: #@ defaultResourceNameWithSuffix("static-config")
+  namespace: #@ namespace()
+  labels: #@ labels()
 data:
   #@yaml/text-templated-strings
   pinniped.yaml: |
     names:
-      dynamicConfigMap: (@= data.values.app_name + "-dynamic-config" @)
+      dynamicConfigMap: (@= defaultResourceNameWithSuffix("dynamic-config") @)
 ---
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
 apiVersion: v1
 kind: Secret
 metadata:
   name: image-pull-secret
-  namespace: #@ data.values.namespace
-  labels:
-    app: #@ data.values.app_name
+  namespace: #@ namespace()
+  labels: #@ labels()
 type: kubernetes.io/dockerconfigjson
 data:
   .dockerconfigjson: #@ data.values.image_pull_dockerconfigjson
@@ -46,27 +47,24 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: #@ data.values.app_name
-  namespace: #@ data.values.namespace
-  labels:
-    app: #@ data.values.app_name
+  name: #@ defaultResourceName()
+  namespace: #@ namespace()
+  labels: #@ labels()
 spec:
   replicas: #@ data.values.replicas
   selector:
-    matchLabels:
-      app: #@ data.values.app_name
+    matchLabels: #@ defaultLabel()
   template:
     metadata:
-      labels:
-        app: #@ data.values.app_name
+      labels: #@ defaultLabel()
     spec:
-      serviceAccountName: #@ data.values.app_name
+      serviceAccountName: #@ defaultResourceName()
       #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
       imagePullSecrets:
         - name: image-pull-secret
       #@ end
       containers:
-        - name: pinniped-supervisor
+        - name: #@ defaultResourceName()
           #@ if data.values.image_digest:
           image:  #@ data.values.image_repo + "@" + data.values.image_digest
           #@ else:
@@ -89,7 +87,7 @@ spec:
       volumes:
         - name: config-volume
           configMap:
-            name: #@ data.values.app_name + "-static-config"
+            name: #@ defaultResourceNameWithSuffix("static-config")
         - name: podinfo
           downwardAPI:
             items:
@@ -107,6 +105,5 @@ spec:
             - weight: 50
               podAffinityTerm:
                 labelSelector:
-                  matchLabels:
-                    app: #@ data.values.app_name
+                  matchLabels: #@ defaultLabel()
                 topologyKey: kubernetes.io/hostname

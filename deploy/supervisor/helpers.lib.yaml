@@ -1,0 +1,30 @@
+#! Copyright 2020 the Pinniped contributors. All Rights Reserved.
+#! SPDX-License-Identifier: Apache-2.0
+
+#@ load("@ytt:data", "data")
+#@ load("@ytt:template", "template")
+
+#@ def defaultResourceName():
+#@   return data.values.app_name
+#@ end
+
+#@ def defaultResourceNameWithSuffix(suffix):
+#@   return data.values.app_name + "-" + suffix
+#@ end
+
+#@ def namespace():
+#@   if data.values.into_namespace:
+#@     return data.values.into_namespace
+#@   else:
+#@     return data.values.namespace
+#@   end
+#@ end
+
+#@ def defaultLabel():
+app: #@ data.values.app_name
+#@ end
+
+#@ def labels():
+_: #@ template.replace(defaultLabel())
+_: #@ template.replace(data.values.custom_labels)
+#@ end

@@ -2,28 +2,30 @@
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
+#@ load("helpers.lib.yaml", "defaultLabel", "labels", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix")
 
+#@ if not data.values.into_namespace:
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: #@ data.values.namespace
-  labels:
-    name: #@ data.values.namespace
+  labels: #@ labels()
+#@ end
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: #@ data.values.app_name
-  namespace: #@ data.values.namespace
+  name: #@ defaultResourceName()
+  namespace: #@ namespace()
+  labels: #@ labels()
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: #@ data.values.app_name + "-config"
-  namespace: #@ data.values.namespace
-  labels:
-    app: #@ data.values.app_name
+  name: #@ defaultResourceNameWithSuffix("config")
+  namespace: #@ namespace()
+  labels: #@ labels()
 data:
   #! If names.apiService is changed in this ConfigMap, must also change name of the ClusterIP Service resource below.
   #@yaml/text-templated-strings
@@ -35,11 +37,11 @@ data:
         durationSeconds: (@= str(data.values.api_serving_certificate_duration_seconds) @)
         renewBeforeSeconds: (@= str(data.values.api_serving_certificate_renew_before_seconds) @)
     names:
-      servingCertificateSecret: (@= data.values.app_name + "-api-tls-serving-certificate" @)
-      credentialIssuerConfig: (@= data.values.app_name + "-config" @)
-      apiService: (@= data.values.app_name + "-api" @)
+      servingCertificateSecret: (@= defaultResourceNameWithSuffix("api-tls-serving-certificate") @)
+      credentialIssuerConfig: (@= defaultResourceNameWithSuffix("config") @)
+      apiService: (@= defaultResourceNameWithSuffix("api") @)
     kubeCertAgent:
-      namePrefix: (@= data.values.app_name + "-kube-cert-agent-" @)
+      namePrefix: (@= defaultResourceNameWithSuffix("kube-cert-agent-") @)
       (@ if data.values.kube_cert_agent_image: @)
       image: (@= data.values.kube_cert_agent_image @)
       (@ else: @)
@@ -59,9 +61,8 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: image-pull-secret
-  namespace: #@ data.values.namespace
-  labels:
-    app: #@ data.values.app_name
+  namespace: #@ namespace()
+  labels: #@ labels()
 type: kubernetes.io/dockerconfigjson
 data:
   .dockerconfigjson: #@ data.values.image_pull_dockerconfigjson
@@ -70,29 +71,26 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: #@ data.values.app_name
-  namespace: #@ data.values.namespace
-  labels:
-    app: #@ data.values.app_name
+  name: #@ defaultResourceName()
+  namespace: #@ namespace()
+  labels: #@ labels()
 spec:
   replicas: #@ data.values.replicas
   selector:
-    matchLabels:
-      app: #@ data.values.app_name
+    matchLabels: #@ defaultLabel()
   template:
     metadata:
-      labels:
-        app: #@ data.values.app_name
+      labels: #@ defaultLabel()
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ""
     spec:
-      serviceAccountName: #@ data.values.app_name
+      serviceAccountName: #@ defaultResourceName()
       #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
       imagePullSecrets:
         - name: image-pull-secret
       #@ end
       containers:
-        - name: pinniped
+        - name: #@ defaultResourceName()
           #@ if data.values.image_digest:
           image:  #@ data.values.image_repo + "@" + data.values.image_digest
           #@ else:
@@ -131,7 +129,7 @@ spec:
       volumes:
         - name: config-volume
           configMap:
-            name: #@ data.values.app_name + "-config"
+            name: #@ defaultResourceNameWithSuffix("config")
         - name: podinfo
           downwardAPI:
             items:
@@ -157,22 +155,19 @@ spec:
             - weight: 50
               podAffinityTerm:
                 labelSelector:
-                  matchLabels:
-                    app: #@ data.values.app_name
+                  matchLabels: #@ defaultLabel()
                 topologyKey: kubernetes.io/hostname
 ---
 apiVersion: v1
 kind: Service
 metadata:
   #! If name is changed, must also change names.apiService in the ConfigMap above and spec.service.name in the APIService below.
-  name: #@ data.values.app_name + "-api"
-  namespace: #@ data.values.namespace
-  labels:
-    app: #@ data.values.app_name
+  name: #@ defaultResourceNameWithSuffix("api")
+  namespace: #@ namespace()
+  labels: #@ labels()
 spec:
   type: ClusterIP
-  selector:
-    app: #@ data.values.app_name
+  selector: #@ defaultLabel()
   ports:
     - protocol: TCP
       port: 443
@@ -182,8 +177,7 @@ apiVersion: apiregistration.k8s.io/v1
 kind: APIService
 metadata:
   name: v1alpha1.login.pinniped.dev
-  labels:
-    app: #@ data.values.app_name
+  labels: #@ labels()
 spec:
   version: v1alpha1
   group: login.pinniped.dev
@@ -191,6 +185,6 @@ spec:
   versionPriority: 10
   #! caBundle: Do not include this key here. Starts out null, will be updated/owned by the golang code.
   service:
-    name: #@ data.values.app_name + "-api"
-    namespace: #@ data.values.namespace
+    name: #@ defaultResourceNameWithSuffix("api")
+    namespace: #@ namespace()
     port: 443

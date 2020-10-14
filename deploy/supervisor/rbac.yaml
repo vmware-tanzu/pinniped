@@ -2,16 +2,16 @@
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
+#@ load("helpers.lib.yaml", "labels", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix")
 
 #! Give permission to various objects within the app's own namespace
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: #@ data.values.app_name
-  namespace: #@ data.values.namespace
-  labels:
-    app: #@ data.values.app_name
+  name: #@ defaultResourceName()
+  namespace: #@ namespace()
+  labels: #@ labels()
 rules:
   - apiGroups: [config.pinniped.dev]
     resources: [oidcproviderconfigs]
@@ -20,15 +20,14 @@ rules:
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: #@ data.values.app_name
-  namespace: #@ data.values.namespace
-  labels:
-    app: #@ data.values.app_name
+  name: #@ defaultResourceName()
+  namespace: #@ namespace()
+  labels: #@ labels()
 subjects:
   - kind: ServiceAccount
-    name: #@ data.values.app_name
-    namespace: #@ data.values.namespace
+    name: #@ defaultResourceName()
+    namespace: #@ namespace()
 roleRef:
   kind: Role
-  name: #@ data.values.app_name
+  name: #@ defaultResourceName()
   apiGroup: rbac.authorization.k8s.io

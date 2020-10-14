@@ -6,6 +6,7 @@ package library
 import (
 	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -15,10 +16,10 @@ import (
 	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
 )
 
-type TestClusterCapability string
+type Capability string
 
 const (
-	ClusterSigningKeyIsAvailable = TestClusterCapability("clusterSigningKeyIsAvailable")
+	ClusterSigningKeyIsAvailable Capability = "clusterSigningKeyIsAvailable"
 )
 
 // TestEnv captures all the external parameters consumed by our integration tests.
@@ -29,7 +30,7 @@ type TestEnv struct {
 	SupervisorNamespace string                                  `json:"supervisorNamespace"`
 	ConciergeAppName    string                                  `json:"conciergeAppName"`
 	SupervisorAppName   string                                  `json:"supervisorAppName"`
-	Capabilities        map[TestClusterCapability]bool          `json:"capabilities"`
+	Capabilities        map[Capability]bool                     `json:"capabilities"`
 	TestWebhook         idpv1alpha1.WebhookIdentityProviderSpec `json:"testWebhook"`
 	SupervisorAddress   string                                  `json:"supervisorAddress"`
 
@@ -38,9 +39,17 @@ type TestEnv struct {
 		ExpectedUsername string   `json:"expectedUsername"`
 		ExpectedGroups   []string `json:"expectedGroups"`
 	} `json:"testUser"`
+
+	OIDCUpstream struct {
+		Issuer        string `json:"issuer"`
+		ClientID      string `json:"clientID"`
+		LocalhostPort int    `json:"localhostPort"`
+		Username      string `json:"username"`
+		Password      string `json:"password"`
+	} `json:"oidcUpstream"`
 }
 
-// IntegrationEnv gets the integration test environment from a Kubernetes Secret in the test cluster. This
+// IntegrationEnv gets the integration test environment from OS environment variables. This
 // method also implies SkipUnlessIntegration().
 func IntegrationEnv(t *testing.T) *TestEnv {
 	t.Helper()
@@ -79,29 +88,35 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 	result.SupervisorAppName = needEnv("PINNIPED_TEST_SUPERVISOR_APP_NAME")
 	result.SupervisorAddress = needEnv("PINNIPED_TEST_SUPERVISOR_ADDRESS")
 	result.TestWebhook.TLS = &idpv1alpha1.TLSSpec{CertificateAuthorityData: needEnv("PINNIPED_TEST_WEBHOOK_CA_BUNDLE")}
+
+	result.OIDCUpstream.Issuer = needEnv("PINNIPED_TEST_CLI_OIDC_ISSUER")
+	result.OIDCUpstream.ClientID = needEnv("PINNIPED_TEST_CLI_OIDC_CLIENT_ID")
+	result.OIDCUpstream.LocalhostPort, _ = strconv.Atoi(needEnv("PINNIPED_TEST_CLI_OIDC_LOCALHOST_PORT"))
+	result.OIDCUpstream.Username = needEnv("PINNIPED_TEST_CLI_OIDC_USERNAME")
+	result.OIDCUpstream.Password = needEnv("PINNIPED_TEST_CLI_OIDC_PASSWORD")
 	result.t = t
 	return &result
 }
 
-func (e *TestEnv) HasCapability(cap TestClusterCapability) bool {
+func (e *TestEnv) HasCapability(cap Capability) bool {
 	e.t.Helper()
 	isCapable, capabilityWasDescribed := e.Capabilities[cap]
-	require.True(e.t, capabilityWasDescribed, `the cluster's "%s" capability was not described`, cap)
+	require.Truef(e.t, capabilityWasDescribed, "the %q capability of the test environment was not described", cap)
 	return isCapable
 }
 
-func (e *TestEnv) WithCapability(cap TestClusterCapability) *TestEnv {
+func (e *TestEnv) WithCapability(cap Capability) *TestEnv {
 	e.t.Helper()
 	if !e.HasCapability(cap) {
-		e.t.Skipf(`skipping integration test because cluster lacks the "%s" capability`, cap)
+		e.t.Skipf("skipping integration test because test environment lacks the %q capability", cap)
 	}
 	return e
 }
 
-func (e *TestEnv) WithoutCapability(cap TestClusterCapability) *TestEnv {
+func (e *TestEnv) WithoutCapability(cap Capability) *TestEnv {
 	e.t.Helper()
 	if e.HasCapability(cap) {
-		e.t.Skipf(`skipping integration test because cluster has the "%s" capability`, cap)
+		e.t.Skipf("skipping integration test because test environment has the %q capability", cap)
 	}
 	return e
 }

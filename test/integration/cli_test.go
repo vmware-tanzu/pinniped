@@ -152,6 +152,22 @@ func TestCLILoginOIDC(t *testing.T) {
 	// Find the login CSS selectors for the test issuer, or fail fast.
 	loginProvider := getLoginProvider(t)
 
+	// Start the browser driver.
+	t.Logf("opening browser driver")
+	agoutiDriver := agouti.ChromeDriver(
+		agouti.ChromeOptions("args", []string{
+			"--no-sandbox",
+			"--headless", // Comment out this line to see the tests happen in a visible browser window.
+		}),
+		// Uncomment this to see stdout/stderr from chromedriver.
+		// agouti.Debug,
+	)
+	require.NoError(t, agoutiDriver.Start())
+	t.Cleanup(func() { require.NoError(t, agoutiDriver.Stop()) })
+	page, err := agoutiDriver.NewPage(agouti.Browser("chrome"))
+	require.NoError(t, err)
+	require.NoError(t, page.Reset())
+
 	// Build pinniped CLI.
 	t.Logf("building CLI binary")
 	pinnipedExe := buildPinnipedCLI(t)
@@ -221,17 +237,6 @@ func TestCLILoginOIDC(t *testing.T) {
 		credOutputChan <- out
 		return readAndExpectEmpty(reader)
 	})
-
-	// Start the browser driver.
-	t.Logf("opening browser driver")
-	agoutiDriver := agouti.ChromeDriver(
-		// Comment out this line to see the tests happen in a visible browser window.
-		agouti.ChromeOptions("args", []string{"--headless"}),
-	)
-	require.NoError(t, agoutiDriver.Start())
-	t.Cleanup(func() { require.NoError(t, agoutiDriver.Stop()) })
-	page, err := agoutiDriver.NewPage(agouti.Browser("chrome"))
-	require.NoError(t, err)
 
 	// Wait for the CLI to print out the login URL and open the browser to it.
 	t.Logf("waiting for CLI to output login URL")

@@ -1,9 +1,9 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package config contains functionality to load/store api.Config's from/to
+// Package concierge contains functionality to load/store Config's from/to
 // some source.
-package config
+package concierge
 
 import (
 	"fmt"
@@ -13,7 +13,6 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"go.pinniped.dev/internal/constable"
-	"go.pinniped.dev/pkg/config/api"
 )
 
 const (
@@ -21,20 +20,20 @@ const (
 	about9Months = 60 * 60 * 24 * 30 * 9
 )
 
-// FromPath loads an api.Config from a provided local file path, inserts any
-// defaults (from the api.Config documentation), and verifies that the config is
-// valid (per the api.Config documentation).
+// FromPath loads an Config from a provided local file path, inserts any
+// defaults (from the Config documentation), and verifies that the config is
+// valid (per the Config documentation).
 //
-// Note! The api.Config file should contain base64-encoded WebhookCABundle data.
+// Note! The Config file should contain base64-encoded WebhookCABundle data.
 // This function will decode that base64-encoded data to PEM bytes to be stored
-// in the api.Config.
-func FromPath(path string) (*api.Config, error) {
+// in the Config.
+func FromPath(path string) (*Config, error) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)
 	}
 
-	var config api.Config
+	var config Config
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("decode yaml: %w", err)
 	}
@@ -57,7 +56,7 @@ func FromPath(path string) (*api.Config, error) {
 	return &config, nil
 }
 
-func maybeSetAPIDefaults(apiConfig *api.APIConfigSpec) {
+func maybeSetAPIDefaults(apiConfig *APIConfigSpec) {
 	if apiConfig.ServingCertificateConfig.DurationSeconds == nil {
 		apiConfig.ServingCertificateConfig.DurationSeconds = int64Ptr(aboutAYear)
 	}
@@ -67,7 +66,7 @@ func maybeSetAPIDefaults(apiConfig *api.APIConfigSpec) {
 	}
 }
 
-func maybeSetKubeCertAgentDefaults(cfg *api.KubeCertAgentSpec) {
+func maybeSetKubeCertAgentDefaults(cfg *KubeCertAgentSpec) {
 	if cfg.NamePrefix == nil {
 		cfg.NamePrefix = stringPtr("pinniped-kube-cert-agent-")
 	}
@@ -77,7 +76,7 @@ func maybeSetKubeCertAgentDefaults(cfg *api.KubeCertAgentSpec) {
 	}
 }
 
-func validateNames(names *api.NamesConfigSpec) error {
+func validateNames(names *NamesConfigSpec) error {
 	missingNames := []string{}
 	if names == nil {
 		missingNames = append(missingNames, "servingCertificateSecret", "credentialIssuerConfig", "apiService")
@@ -98,7 +97,7 @@ func validateNames(names *api.NamesConfigSpec) error {
 	return nil
 }
 
-func validateAPI(apiConfig *api.APIConfigSpec) error {
+func validateAPI(apiConfig *APIConfigSpec) error {
 	if *apiConfig.ServingCertificateConfig.DurationSeconds < *apiConfig.ServingCertificateConfig.RenewBeforeSeconds {
 		return constable.Error("durationSeconds cannot be smaller than renewBeforeSeconds")
 	}

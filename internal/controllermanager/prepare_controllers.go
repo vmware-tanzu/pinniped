@@ -22,6 +22,7 @@ import (
 	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
+	"go.pinniped.dev/internal/config/concierge"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
 	"go.pinniped.dev/internal/controller/identityprovider/webhookcachecleaner"
@@ -30,7 +31,6 @@ import (
 	"go.pinniped.dev/internal/controller/kubecertagent"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/dynamiccert"
-	"go.pinniped.dev/pkg/config/api"
 )
 
 const (
@@ -47,11 +47,11 @@ type Config struct {
 
 	// NamesConfig comes from the Pinniped config API (see api.Config). It specifies how Kubernetes
 	// objects should be named.
-	NamesConfig *api.NamesConfigSpec
+	NamesConfig *concierge.NamesConfigSpec
 
 	// KubeCertAgentConfig comes from the Pinniped config API (see api.Config). It configures how
 	// the kubecertagent package's controllers should manage the agent pods.
-	KubeCertAgentConfig *api.KubeCertAgentSpec
+	KubeCertAgentConfig *concierge.KubeCertAgentSpec
 
 	// DiscoveryURLOverride allows a caller to inject a hardcoded discovery URL into Pinniped
 	// discovery document.

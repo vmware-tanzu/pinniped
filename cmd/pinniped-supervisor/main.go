@@ -23,6 +23,7 @@ import (
 
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
+	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/controller/supervisorconfig"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/downward"
@@ -63,6 +64,7 @@ func waitForSignal() os.Signal {
 
 func startControllers(
 	ctx context.Context,
+	cfg *supervisor.Config,
 	issuerProvider *manager.Manager,
 	kubeClient kubernetes.Interface,
 	pinnipedClient pinnipedclientset.Interface,
@@ -84,6 +86,7 @@ func startControllers(
 		).
 		WithController(
 			supervisorconfig.NewJWKSController(
+				cfg.Labels,
 				kubeClient,
 				pinnipedClient,
 				kubeInformers.Core().V1().Secrets(),
@@ -120,7 +123,7 @@ func newClients() (kubernetes.Interface, pinnipedclientset.Interface, error) {
 	return kubeClient, pinnipedClient, nil
 }
 
-func run(serverInstallationNamespace string) error {
+func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -142,7 +145,7 @@ func run(serverInstallationNamespace string) error {
 	)
 
 	oidProvidersManager := manager.NewManager(http.NotFoundHandler())
-	startControllers(ctx, oidProvidersManager, kubeClient, pinnipedClient, kubeInformers, pinnipedInformers)
+	startControllers(ctx, cfg, oidProvidersManager, kubeClient, pinnipedClient, kubeInformers, pinnipedInformers)
 
 	//nolint: gosec // Intentionally binding to all network interfaces.
 	l, err := net.Listen("tcp", ":80")
@@ -173,7 +176,13 @@ func main() {
 		klog.Fatal(fmt.Errorf("could not read pod metadata: %w", err))
 	}
 
-	if err := run(podInfo.Namespace); err != nil {
+	// Read the server config file.
+	cfg, err := supervisor.FromPath(os.Args[2])
+	if err != nil {
+		klog.Fatal(fmt.Errorf("could not load config: %w", err))
+	}
+
+	if err := run(podInfo.Namespace, cfg); err != nil {
 		klog.Fatal(err)
 	}
 }

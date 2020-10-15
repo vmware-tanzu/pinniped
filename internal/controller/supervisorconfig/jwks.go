@@ -56,15 +56,17 @@ func generateECKey(r io.Reader) (interface{}, error) {
 // jwkController holds the fields necessary for the JWKS controller to communicate with OPC's and
 // secrets, both via a cache and via the API.
 type jwksController struct {
-	pinnipedClient pinnipedclientset.Interface
-	kubeClient     kubernetes.Interface
-	opcInformer    configinformers.OIDCProviderConfigInformer
-	secretInformer corev1informers.SecretInformer
+	jwksSecretLabels map[string]string
+	pinnipedClient   pinnipedclientset.Interface
+	kubeClient       kubernetes.Interface
+	opcInformer      configinformers.OIDCProviderConfigInformer
+	secretInformer   corev1informers.SecretInformer
 }
 
 // NewJWKSController returns a controllerlib.Controller that ensures an OPC has a corresponding
 // Secret that contains a valid active JWK and JWKS.
 func NewJWKSController(
+	jwksSecretLabels map[string]string,
 	kubeClient kubernetes.Interface,
 	pinnipedClient pinnipedclientset.Interface,
 	secretInformer corev1informers.SecretInformer,
@@ -75,10 +77,11 @@ func NewJWKSController(
 		controllerlib.Config{
 			Name: "JWKSController",
 			Syncer: &jwksController{
-				kubeClient:     kubeClient,
-				pinnipedClient: pinnipedClient,
-				secretInformer: secretInformer,
-				opcInformer:    opcInformer,
+				jwksSecretLabels: jwksSecretLabels,
+				kubeClient:       kubeClient,
+				pinnipedClient:   pinnipedClient,
+				secretInformer:   secretInformer,
+				opcInformer:      opcInformer,
 			},
 		},
 		// We want to be notified when a OPC's secret gets updated or deleted. When this happens, we
@@ -234,6 +237,7 @@ func (c *jwksController) generateSecret(opc *configv1alpha1.OIDCProviderConfig) 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      opc.Name + "-jwks",
 			Namespace: opc.Namespace,
+			Labels:    c.jwksSecretLabels,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(opc, schema.GroupVersionKind{
 					Group:   configv1alpha1.SchemeGroupVersion.Group,
@@ -241,7 +245,6 @@ func (c *jwksController) generateSecret(opc *configv1alpha1.OIDCProviderConfig) 
 					Kind:    opcKind,
 				}),
 			},
-			// TODO: custom labels.
 		},
 		Data: map[string][]byte{
 			activeJWKKey: jwkData,

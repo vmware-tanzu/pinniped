@@ -17,13 +17,13 @@ import (
 	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
 	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
 	"go.pinniped.dev/internal/concierge/apiserver"
+	"go.pinniped.dev/internal/config/concierge"
 	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
 	"go.pinniped.dev/internal/controllermanager"
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/registry/credentialrequest"
-	"go.pinniped.dev/pkg/config"
 )
 
 // App is an object that represents the pinniped-concierge application.
@@ -92,7 +92,7 @@ func addCommandlineFlagsToCommand(cmd *cobra.Command, app *App) {
 // Boot the aggregated API server, which will in turn boot the controllers.
 func (a *App) runServer(ctx context.Context) error {
 	// Read the server config file.
-	cfg, err := config.FromPath(a.configPath)
+	cfg, err := concierge.FromPath(a.configPath)
 	if err != nil {
 		return fmt.Errorf("could not load config: %w", err)
 	}

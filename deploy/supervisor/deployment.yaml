@@ -30,8 +30,6 @@ metadata:
 data:
   #@yaml/text-templated-strings
   pinniped.yaml: |
-    names:
-      dynamicConfigMap: (@= defaultResourceNameWithSuffix("dynamic-config") @)
     labels: (@= json.encode(labels()).rstrip() @)
 ---
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":

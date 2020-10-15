@@ -49,6 +49,12 @@ func TestSupervisorOIDCKeys(t *testing.T) {
 		Get(ctx, updatedOPC.Status.JWKSSecret.Name, metav1.GetOptions{})
 	require.NoError(t, err)
 
+	// Ensure that the secret was labelled.
+	for k, v := range env.SupervisorCustomLabels {
+		require.Equalf(t, v, secret.Labels[k], "expected secret to have label `%s: %s`", k, v)
+	}
+	require.Equal(t, env.SupervisorAppName, secret.Labels["app"])
+
 	// Ensure the secret has an active key.
 	jwkData, ok := secret.Data["activeJWK"]
 	require.True(t, ok, "secret is missing active jwk")

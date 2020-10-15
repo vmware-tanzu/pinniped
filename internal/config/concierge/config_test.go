@@ -1,7 +1,7 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package config
+package concierge
 
 import (
 	"io/ioutil"
@@ -11,14 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/here"
-	"go.pinniped.dev/pkg/config/api"
 )
 
 func TestFromPath(t *testing.T) {
 	tests := []struct {
 		name       string
 		yaml       string
-		wantConfig *api.Config
+		wantConfig *Config
 		wantError  string
 	}{
 		{
@@ -44,17 +43,17 @@ func TestFromPath(t *testing.T) {
 				  image: kube-cert-agent-image
 				  imagePullSecrets: [kube-cert-agent-image-pull-secret]
 			`),
-			wantConfig: &api.Config{
-				DiscoveryInfo: api.DiscoveryInfoSpec{
+			wantConfig: &Config{
+				DiscoveryInfo: DiscoveryInfoSpec{
 					URL: stringPtr("https://some.discovery/url"),
 				},
-				APIConfig: api.APIConfigSpec{
-					ServingCertificateConfig: api.ServingCertificateConfigSpec{
+				APIConfig: APIConfigSpec{
+					ServingCertificateConfig: ServingCertificateConfigSpec{
 						DurationSeconds:    int64Ptr(3600),
 						RenewBeforeSeconds: int64Ptr(2400),
 					},
 				},
-				NamesConfig: api.NamesConfigSpec{
+				NamesConfig: NamesConfigSpec{
 					ServingCertificateSecret: "pinniped-concierge-api-tls-serving-certificate",
 					CredentialIssuerConfig:   "pinniped-config",
 					APIService:               "pinniped-api",
@@ -63,7 +62,7 @@ func TestFromPath(t *testing.T) {
 					"myLabelKey1": "myLabelValue1",
 					"myLabelKey2": "myLabelValue2",
 				},
-				KubeCertAgentConfig: api.KubeCertAgentSpec{
+				KubeCertAgentConfig: KubeCertAgentSpec{
 					NamePrefix:       stringPtr("kube-cert-agent-name-prefix-"),
 					Image:            stringPtr("kube-cert-agent-image"),
 					ImagePullSecrets: []string{"kube-cert-agent-image-pull-secret"},
@@ -79,23 +78,23 @@ func TestFromPath(t *testing.T) {
 				  credentialIssuerConfig: pinniped-config
 				  apiService: pinniped-api
 			`),
-			wantConfig: &api.Config{
-				DiscoveryInfo: api.DiscoveryInfoSpec{
+			wantConfig: &Config{
+				DiscoveryInfo: DiscoveryInfoSpec{
 					URL: nil,
 				},
-				APIConfig: api.APIConfigSpec{
-					ServingCertificateConfig: api.ServingCertificateConfigSpec{
+				APIConfig: APIConfigSpec{
+					ServingCertificateConfig: ServingCertificateConfigSpec{
 						DurationSeconds:    int64Ptr(60 * 60 * 24 * 365),    // about a year
 						RenewBeforeSeconds: int64Ptr(60 * 60 * 24 * 30 * 9), // about 9 months
 					},
 				},
-				NamesConfig: api.NamesConfigSpec{
+				NamesConfig: NamesConfigSpec{
 					ServingCertificateSecret: "pinniped-concierge-api-tls-serving-certificate",
 					CredentialIssuerConfig:   "pinniped-config",
 					APIService:               "pinniped-api",
 				},
 				Labels: map[string]string{},
-				KubeCertAgentConfig: api.KubeCertAgentSpec{
+				KubeCertAgentConfig: KubeCertAgentSpec{
 					NamePrefix: stringPtr("pinniped-kube-cert-agent-"),
 					Image:      stringPtr("debian:latest"),
 				},

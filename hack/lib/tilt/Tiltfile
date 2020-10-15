@@ -92,7 +92,7 @@ k8s_yaml(local([
     '--data-value', 'namespace=supervisor',
     '--data-value', 'image_repo=image/supervisor',
     '--data-value', 'image_tag=tilt-dev',
-    '--data-value-yaml', 'replicas=2',
+    '--data-value-yaml', 'replicas=1',
     '--data-value-yaml', 'service_nodeport_port=31234',
 ]))
 # Tell tilt to watch all of those files for changes.

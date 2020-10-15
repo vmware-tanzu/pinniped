@@ -1,7 +1,7 @@
 # Copyright 2020 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.15.2 as build-env
+FROM golang:1.15.3 as build-env
 
 WORKDIR /work
 # Get dependencies first so they can be cached as a layer

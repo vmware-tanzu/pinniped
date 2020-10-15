@@ -20,7 +20,7 @@ function tilt_mode() {
 function log_note() {
   GREEN='\033[0;32m'
   NC='\033[0m'
-  if [[ $COLORTERM =~ ^(truecolor|24bit)$ ]]; then
+  if [[ ${COLORTERM:-unknown} =~ ^(truecolor|24bit)$ ]]; then
     echo -e "${GREEN}$*${NC}"
   else
     echo "$*"
@@ -30,7 +30,7 @@ function log_note() {
 function log_error() {
   RED='\033[0;31m'
   NC='\033[0m'
-  if [[ $COLORTERM =~ ^(truecolor|24bit)$ ]]; then
+  if [[ ${COLORTERM:-unknown} =~ ^(truecolor|24bit)$ ]]; then
     echo -e "🙁${RED} Error: $* ${NC}"
   else
     echo ":( Error: $*"

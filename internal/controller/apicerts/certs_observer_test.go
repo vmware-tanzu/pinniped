@@ -5,6 +5,7 @@ package apicerts
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -167,7 +168,8 @@ func TestObserverControllerSync(t *testing.T) {
 			it("sets the dynamicCertProvider's cert and key to nil", func() {
 				startInformersAndController()
 				err := controllerlib.TestSync(t, subject, *syncContext)
-				r.NoError(err)
+				r.EqualError(err, "certsObserverController missing pre-requirements, secret some-namespace/some-resource-name does not exist: synthetic requeue request")
+				r.True(errors.Is(err, controllerlib.ErrSyntheticRequeue))
 
 				actualCertChain, actualKey := dynamicCertProvider.CurrentCertKeyContent()
 				r.Nil(actualCertChain)

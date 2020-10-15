@@ -71,16 +71,17 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 	}
 	if notFound {
 		klog.Info("certsExpirerController Sync found that the secret does not exist yet or was deleted")
-		return nil
+		//nolint: goerr113
+		return fmt.Errorf("certsExpirerController missing pre-requirements, secret %s/%s does not exist: %w",
+			c.namespace, c.certsSecretResourceName, controllerlib.ErrSyntheticRequeue)
 	}
 
 	notBefore, notAfter, err := getCertBounds(secret)
 	if err != nil {
-		// If we can't read the cert, then really all we can do is log something,
-		// since if we returned an error then the controller lib would just call us
-		// again and again, which would probably yield the same results.
-		klog.Warningf("certsExpirerController Sync found that the secret is malformed: %s", err.Error())
-		return nil
+		// If we can't read the cert, then we are wedged and need to complain loudly.
+		// The controller lib code will retry indefinitely, but will back off exponentially.
+		//nolint: goerr113
+		return fmt.Errorf("certsExpirerController Sync found that the secret is malformed: %w", err)
 	}
 
 	certAge := time.Since(notBefore)

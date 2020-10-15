@@ -127,11 +127,13 @@ func TestExpirerControllerSync(t *testing.T) {
 		{
 			name:       "secret does not exist",
 			wantDelete: false,
+			wantError:  "certsExpirerController missing pre-requirements, secret some-namespace/some-resource-name does not exist: synthetic requeue request",
 		},
 		{
 			name:           "secret missing key",
 			fillSecretData: func(t *testing.T, m map[string][]byte) {},
 			wantDelete:     false,
+			wantError:      "certsExpirerController Sync found that the secret is malformed: failed to find certificate",
 		},
 		{
 			name:        "lifetime below threshold",
@@ -209,6 +211,7 @@ func TestExpirerControllerSync(t *testing.T) {
 				require.NoError(t, err)
 			},
 			wantDelete: false,
+			wantError:  "certsExpirerController Sync found that the secret is malformed: failed to decode certificate PEM",
 		},
 	}
 	for _, test := range tests {

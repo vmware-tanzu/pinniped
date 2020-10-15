@@ -58,7 +58,9 @@ func (c *certsObserverController) Sync(_ controllerlib.Context) error {
 		klog.Info("certsObserverController Sync found that the secret does not exist yet or was deleted")
 		// The secret does not exist yet or was deleted.
 		c.dynamicCertProvider.Set(nil, nil)
-		return nil
+		//nolint: goerr113
+		return fmt.Errorf("certsObserverController missing pre-requirements, secret %s/%s does not exist: %w",
+			c.namespace, c.certsSecretResourceName, controllerlib.ErrSyntheticRequeue)
 	}
 
 	// Mutate the in-memory cert provider to update with the latest cert values.

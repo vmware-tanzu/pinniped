@@ -173,7 +173,8 @@ func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 			it("does not need to make any API calls with its API client", func() {
 				startInformersAndController()
 				err := controllerlib.TestSync(t, subject, *syncContext)
-				r.NoError(err)
+				r.EqualError(err, "apiServiceUpdaterController missing pre-requirements, secret some-namespace/some-resource-name does not exist: synthetic requeue request")
+				r.True(errors.Is(err, controllerlib.ErrSyntheticRequeue))
 				r.Empty(aggregatorAPIClient.Actions())
 			})
 		})

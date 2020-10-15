@@ -60,7 +60,9 @@ func (c *apiServiceUpdaterController) Sync(ctx controllerlib.Context) error {
 	if notFound {
 		// The secret does not exist yet, so nothing to do.
 		klog.Info("apiServiceUpdaterController Sync found that the secret does not exist yet or was deleted")
-		return nil
+		//nolint: goerr113
+		return fmt.Errorf("apiServiceUpdaterController missing pre-requirements, secret %s/%s does not exist: %w",
+			c.namespace, c.certsSecretResourceName, controllerlib.ErrSyntheticRequeue)
 	}
 
 	// Update the APIService to give it the new CA bundle.

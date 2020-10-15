@@ -216,6 +216,7 @@ func (in *OIDCProviderConfigStatus) DeepCopyInto(out *OIDCProviderConfigStatus) 
 		in, out := &in.LastUpdateTime, &out.LastUpdateTime
 		*out = (*in).DeepCopy()
 	}
+	out.JWKSSecret = in.JWKSSecret
 	return
 }
 

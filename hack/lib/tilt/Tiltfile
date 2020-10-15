@@ -94,6 +94,7 @@ k8s_yaml(local([
     '--data-value', 'image_tag=tilt-dev',
     '--data-value-yaml', 'replicas=1',
     '--data-value-yaml', 'service_nodeport_port=31234',
+    '--data-value-yaml', 'custom_labels={mySupervisorCustomLabelName: mySupervisorCustomLabelValue}',
 ]))
 # Tell tilt to watch all of those files for changes.
 watch_file('../../../deploy/supervisor')
@@ -135,7 +136,8 @@ k8s_yaml(local([
     '--data-value image_tag=tilt-dev ' +
     '--data-value kube_cert_agent_image=debian:10.5-slim ' +
     '--data-value discovery_url=$(TERM=dumb kubectl cluster-info | awk \'/Kubernetes master/ {print $NF}\') ' +
-    '--data-value-yaml replicas=1',
+    '--data-value-yaml replicas=1 ' +
+    '--data-value-yaml "custom_labels={myConciergeCustomLabelName: myConciergeCustomLabelValue}"'
 ]))
 # Tell tilt to watch all of those files for changes.
 watch_file('../../../deploy/concierge')

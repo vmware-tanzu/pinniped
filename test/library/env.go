@@ -26,13 +26,15 @@ const (
 type TestEnv struct {
 	t *testing.T
 
-	ConciergeNamespace  string                                  `json:"conciergeNamespace"`
-	SupervisorNamespace string                                  `json:"supervisorNamespace"`
-	ConciergeAppName    string                                  `json:"conciergeAppName"`
-	SupervisorAppName   string                                  `json:"supervisorAppName"`
-	Capabilities        map[Capability]bool                     `json:"capabilities"`
-	TestWebhook         idpv1alpha1.WebhookIdentityProviderSpec `json:"testWebhook"`
-	SupervisorAddress   string                                  `json:"supervisorAddress"`
+	ConciergeNamespace     string                                  `json:"conciergeNamespace"`
+	SupervisorNamespace    string                                  `json:"supervisorNamespace"`
+	ConciergeAppName       string                                  `json:"conciergeAppName"`
+	SupervisorAppName      string                                  `json:"supervisorAppName"`
+	SupervisorCustomLabels map[string]string                       `json:"supervisorCustomLabels"`
+	ConciergeCustomLabels  map[string]string                       `json:"conciergeCustomLabels"`
+	Capabilities           map[Capability]bool                     `json:"capabilities"`
+	TestWebhook            idpv1alpha1.WebhookIdentityProviderSpec `json:"testWebhook"`
+	SupervisorAddress      string                                  `json:"supervisorAddress"`
 
 	TestUser struct {
 		Token            string   `json:"token"`
@@ -88,6 +90,19 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 	result.SupervisorAppName = needEnv("PINNIPED_TEST_SUPERVISOR_APP_NAME")
 	result.SupervisorAddress = needEnv("PINNIPED_TEST_SUPERVISOR_ADDRESS")
 	result.TestWebhook.TLS = &idpv1alpha1.TLSSpec{CertificateAuthorityData: needEnv("PINNIPED_TEST_WEBHOOK_CA_BUNDLE")}
+
+	conciergeCustomLabelsYAML := needEnv("PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS")
+	var conciergeCustomLabels map[string]string
+	err = yaml.Unmarshal([]byte(conciergeCustomLabelsYAML), &conciergeCustomLabels)
+	require.NoErrorf(t, err, "PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS must be a YAML map of string to string")
+	result.ConciergeCustomLabels = conciergeCustomLabels
+	require.NotEmpty(t, result.ConciergeCustomLabels, "PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS cannot be empty")
+	supervisorCustomLabelsYAML := needEnv("PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS")
+	var supervisorCustomLabels map[string]string
+	err = yaml.Unmarshal([]byte(supervisorCustomLabelsYAML), &supervisorCustomLabels)
+	require.NoErrorf(t, err, "PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS must be a YAML map of string to string")
+	result.SupervisorCustomLabels = supervisorCustomLabels
+	require.NotEmpty(t, result.SupervisorCustomLabels, "PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS cannot be empty")
 
 	result.OIDCUpstream.Issuer = needEnv("PINNIPED_TEST_CLI_OIDC_ISSUER")
 	result.OIDCUpstream.ClientID = needEnv("PINNIPED_TEST_CLI_OIDC_CLIENT_ID")

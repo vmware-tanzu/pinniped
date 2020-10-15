@@ -5,7 +5,21 @@
 ---
 
 app_name: pinniped-concierge
+
+#! Creates a new namespace statically in yaml with the given name and installs the app into that namespace.
 namespace: pinniped-concierge
+#! If specified, assumes that a namespace of the given name already exists and installs the app into that namespace.
+#! If both `namespace` and `into_namespace` are specified, then only `into_namespace` is used.
+into_namespace: #! e.g. my-preexisting-namespace
+
+#! All resources created statically by yaml at install-time and all resources created dynamically
+#! by controllers at runtime will be labelled with `app: $app_name` and also with the labels
+#! specified here. The value of `custom_labels` must be a map of string keys to string values.
+#! The app can be uninstalled either by:
+#! 1. Deleting the static install-time yaml resources including the static namespace, which will cascade and also delete
+#!    resources that were dynamically created by controllers at runtime
+#! 2. Or, deleting all resources by label, which does not assume that there was a static install-time yaml namespace.
+custom_labels: {} #! e.g. {myCustomLabelName: myCustomLabelValue, otherCustomLabelName: otherCustomLabelValue}
 
 #! Specify how many replicas of the Pinniped server to run.
 replicas: 2
@@ -20,7 +34,7 @@ image_tag: latest
 #! By default, the same image specified for image_repo/image_digest/image_tag will be re-used.
 kube_cert_agent_image:
 
-#! Specifies a secret to be used when pulling the above container image.
+#! Specifies a secret to be used when pulling the above `image_repo` container image.
 #! Can be used when the above image_repo is a private registry.
 #! Typically the value would be the output of: kubectl create secret docker-registry x --docker-server=https://example.io --docker-username="USERNAME" --docker-password="PASSWORD" --dry-run=client -o json | jq -r '.data[".dockerconfigjson"]'
 #! Optional.

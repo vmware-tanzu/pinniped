@@ -90,6 +90,10 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			require.NotEmpty(t, initialCACert)
 			require.NotEmpty(t, initialPrivateKey)
 			require.NotEmpty(t, initialCertChain)
+			for k, v := range env.ConciergeCustomLabels {
+				require.Equalf(t, v, secret.Labels[k], "expected secret to have label %s: %s", k, v)
+			}
+			require.Equal(t, env.ConciergeAppName, secret.Labels["app"])
 
 			// Check that the APIService has the same CA.
 			apiService, err := aggregatedClient.ApiregistrationV1().APIServices().Get(ctx, apiServiceName, metav1.GetOptions{})
@@ -115,6 +119,10 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			require.NotEqual(t, initialCACert, regeneratedCACert)
 			require.NotEqual(t, initialPrivateKey, regeneratedPrivateKey)
 			require.NotEqual(t, initialCertChain, regeneratedCertChain)
+			for k, v := range env.ConciergeCustomLabels {
+				require.Equalf(t, v, secret.Labels[k], "expected secret to have label `%s: %s`", k, v)
+			}
+			require.Equal(t, env.ConciergeAppName, secret.Labels["app"])
 
 			// Expect that the APIService was also updated with the new CA.
 			aggregatedAPIUpdated := func() bool {

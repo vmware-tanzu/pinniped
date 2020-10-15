@@ -42,6 +42,7 @@ func TestManagerControllerOptions(t *testing.T) {
 			_ = NewCertsManagerController(
 				installedInNamespace,
 				certsSecretResourceName,
+				make(map[string]string),
 				nil,
 				secretsInformer,
 				observableWithInformerOption.WithInformer,
@@ -135,6 +136,10 @@ func TestManagerControllerSync(t *testing.T) {
 			subject = NewCertsManagerController(
 				installedInNamespace,
 				certsSecretResourceName,
+				map[string]string{
+					"myLabelKey1": "myLabelValue1",
+					"myLabelKey2": "myLabelValue2",
+				},
 				kubeAPIClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
@@ -198,6 +203,10 @@ func TestManagerControllerSync(t *testing.T) {
 				actualSecret := actualAction.GetObject().(*corev1.Secret)
 				r.Equal(certsSecretResourceName, actualSecret.Name)
 				r.Equal(installedInNamespace, actualSecret.Namespace)
+				r.Equal(map[string]string{
+					"myLabelKey1": "myLabelValue1",
+					"myLabelKey2": "myLabelValue2",
+				}, actualSecret.Labels)
 				actualCACert := actualSecret.StringData["caCertificate"]
 				actualPrivateKey := actualSecret.StringData["tlsPrivateKey"]
 				actualCertChain := actualSecret.StringData["tlsCertificateChain"]

@@ -27,6 +27,7 @@ const (
 type kubeConigInfoPublisherController struct {
 	credentialIssuerConfigNamespaceName string
 	credentialIssuerConfigResourceName  string
+	credentialIssuerConfigLabels        map[string]string
 	serverOverride                      *string
 	pinnipedClient                      pinnipedclientset.Interface
 	configMapInformer                   corev1informers.ConfigMapInformer
@@ -38,6 +39,7 @@ type kubeConigInfoPublisherController struct {
 func NewKubeConfigInfoPublisherController(
 	credentialIssuerConfigNamespaceName string,
 	credentialIssuerConfigResourceName string,
+	credentialIssuerConfigLabels map[string]string,
 	serverOverride *string,
 	pinnipedClient pinnipedclientset.Interface,
 	configMapInformer corev1informers.ConfigMapInformer,
@@ -49,6 +51,7 @@ func NewKubeConfigInfoPublisherController(
 			Syncer: &kubeConigInfoPublisherController{
 				credentialIssuerConfigResourceName:  credentialIssuerConfigResourceName,
 				credentialIssuerConfigNamespaceName: credentialIssuerConfigNamespaceName,
+				credentialIssuerConfigLabels:        credentialIssuerConfigLabels,
 				serverOverride:                      serverOverride,
 				pinnipedClient:                      pinnipedClient,
 				configMapInformer:                   configMapInformer,
@@ -114,6 +117,7 @@ func (c *kubeConigInfoPublisherController) Sync(ctx controllerlib.Context) error
 		ctx.Context,
 		c.credentialIssuerConfigNamespaceName,
 		c.credentialIssuerConfigResourceName,
+		c.credentialIssuerConfigLabels,
 		c.pinnipedClient,
 		updateServerAndCAFunc,
 	)

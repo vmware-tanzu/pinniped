@@ -43,6 +43,7 @@ func TestInformerFilters(t *testing.T) {
 			_ = NewKubeConfigInfoPublisherController(
 				installedInNamespace,
 				credentialIssuerConfigResourceName,
+				map[string]string{},
 				nil,
 				nil,
 				configMapInformer,
@@ -127,6 +128,10 @@ func TestSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      credentialIssuerConfigResourceName,
 					Namespace: expectedNamespace,
+					Labels: map[string]string{
+						"myLabelKey1": "myLabelValue1",
+						"myLabelKey2": "myLabelValue2",
+					},
 				},
 				Status: configv1alpha1.CredentialIssuerConfigStatus{
 					Strategies: []configv1alpha1.CredentialIssuerConfigStrategy{},
@@ -146,6 +151,10 @@ func TestSync(t *testing.T) {
 			subject = NewKubeConfigInfoPublisherController(
 				installedInNamespace,
 				credentialIssuerConfigResourceName,
+				map[string]string{
+					"myLabelKey1": "myLabelValue1",
+					"myLabelKey2": "myLabelValue2",
+				},
 				serverOverride,
 				pinnipedAPIClient,
 				kubeInformers.Core().V1().ConfigMaps(),

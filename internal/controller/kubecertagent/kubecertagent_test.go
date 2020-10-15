@@ -79,6 +79,8 @@ func exampleControllerManagerAndAgentPods(
 			Namespace: agentPodNamespace,
 			Labels: map[string]string{
 				"kube-cert-agent.pinniped.dev": "true",
+				"myLabelKey1":                  "myLabelValue1",
+				"myLabelKey2":                  "myLabelValue2",
 			},
 			Annotations: map[string]string{
 				"kube-cert-agent.pinniped.dev/controller-manager-name": controllerManagerPod.Name,

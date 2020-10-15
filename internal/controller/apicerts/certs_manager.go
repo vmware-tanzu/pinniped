@@ -29,6 +29,7 @@ const (
 type certsManagerController struct {
 	namespace               string
 	certsSecretResourceName string
+	certsSecretLabels       map[string]string
 	k8sClient               kubernetes.Interface
 	secretInformer          corev1informers.SecretInformer
 
@@ -43,6 +44,7 @@ type certsManagerController struct {
 func NewCertsManagerController(
 	namespace string,
 	certsSecretResourceName string,
+	certsSecretLabels map[string]string,
 	k8sClient kubernetes.Interface,
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
@@ -57,6 +59,7 @@ func NewCertsManagerController(
 			Syncer: &certsManagerController{
 				namespace:                             namespace,
 				certsSecretResourceName:               certsSecretResourceName,
+				certsSecretLabels:                     certsSecretLabels,
 				k8sClient:                             k8sClient,
 				secretInformer:                        secretInformer,
 				certDuration:                          certDuration,
@@ -116,6 +119,7 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      c.certsSecretResourceName,
 			Namespace: c.namespace,
+			Labels:    c.certsSecretLabels,
 		},
 		StringData: map[string]string{
 			caCertificateSecretKey:       string(aggregatedAPIServerCA.Bundle()),

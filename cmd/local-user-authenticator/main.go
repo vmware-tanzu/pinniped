@@ -310,6 +310,9 @@ func startControllers(
 			apicerts.NewCertsManagerController(
 				namespace,
 				certsSecretResourceName,
+				map[string]string{
+					"app": "local-user-authenticator",
+				},
 				kubeClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,

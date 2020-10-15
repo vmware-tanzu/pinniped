@@ -44,6 +44,14 @@ func TestKubeCertAgent(t *testing.T) {
 	require.NotEmpty(t, originalAgentPods.Items)
 	sortPods(originalAgentPods)
 
+	for _, agentPod := range originalAgentPods.Items {
+		// All agent pods should contain all custom labels
+		for k, v := range env.ConciergeCustomLabels {
+			require.Equalf(t, v, agentPod.Labels[k], "expected agent pod to have label `%s: %s`", k, v)
+		}
+		require.Equal(t, env.ConciergeAppName, agentPod.Labels["app"])
+	}
+
 	agentPodsReconciled := func() bool {
 		var currentAgentPods *corev1.PodList
 		currentAgentPods, err = kubeClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{

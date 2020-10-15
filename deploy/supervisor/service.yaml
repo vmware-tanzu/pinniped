@@ -1,14 +1,17 @@
+#! Copyright 2020 the Pinniped contributors. All Rights Reserved.
+#! SPDX-License-Identifier: Apache-2.0
+
 #@ load("@ytt:data", "data")
+#@ load("helpers.lib.yaml", "defaultLabel", "labels", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix")
 
 #@ if data.values.service_nodeport_port:
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: #@ data.values.app_name + "-nodeport"
-  namespace: #@ data.values.namespace
-  labels:
-    app: #@ data.values.app_name
+  name: #@ defaultResourceNameWithSuffix("nodeport")
+  namespace: #@ namespace()
+  labels: #@ labels()
 spec:
   type: NodePort
   selector:
@@ -25,14 +28,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: #@ data.values.app_name + "-clusterip"
-  namespace: #@ data.values.namespace
-  labels:
-    app: #@ data.values.app_name
+  name: #@ defaultResourceNameWithSuffix("clusterip")
+  namespace: #@ namespace()
+  labels: #@ labels()
 spec:
   type: ClusterIP
-  selector:
-    app: #@ data.values.app_name
+  selector: #@ defaultLabel()
   ports:
     - protocol: TCP
       port: #@ data.values.service_clusterip_port
@@ -44,14 +45,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: #@ data.values.app_name + "-loadbalancer"
-  namespace: #@ data.values.namespace
-  labels:
-    app: #@ data.values.app_name
+  name: #@ defaultResourceNameWithSuffix("loadbalancer")
+  namespace: #@ namespace()
+  labels: #@ labels()
 spec:
   type: LoadBalancer
-  selector:
-    app: #@ data.values.app_name
+  selector: #@ defaultLabel()
   ports:
     - protocol: TCP
       port: #@ data.values.service_loadbalancer_port

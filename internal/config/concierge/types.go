@@ -1,19 +1,20 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package api
+package concierge
 
-// Config contains knobs to setup an instance of Pinniped.
+// Config contains knobs to setup an instance of the Pinniped Concierge.
 type Config struct {
 	DiscoveryInfo       DiscoveryInfoSpec `json:"discovery"`
 	APIConfig           APIConfigSpec     `json:"api"`
 	NamesConfig         NamesConfigSpec   `json:"names"`
 	KubeCertAgentConfig KubeCertAgentSpec `json:"kubeCertAgent"`
+	Labels              map[string]string `json:"labels"`
 }
 
 // DiscoveryInfoSpec contains configuration knobs specific to
 // pinniped's publishing of discovery information. These values can be
-// viewed as overrides, i.e., if these are set, then pinniped will
+// viewed as overrides, i.e., if these are set, then Pinniped will
 // publish these values in its discovery document instead of the ones it finds.
 type DiscoveryInfoSpec struct {
 	// URL contains the URL at which pinniped can be contacted.
@@ -26,7 +27,7 @@ type APIConfigSpec struct {
 	ServingCertificateConfig ServingCertificateConfigSpec `json:"servingCertificate"`
 }
 
-// NamesConfigSpec configures the names of some Kubernetes resources for Pinniped.
+// NamesConfigSpec configures the names of some Kubernetes resources for the Concierge.
 type NamesConfigSpec struct {
 	ServingCertificateSecret string `json:"servingCertificateSecret"`
 	CredentialIssuerConfig   string `json:"credentialIssuerConfig"`

@@ -151,6 +151,7 @@ func TestJWKSControllerFilterSecret(t *testing.T) {
 			).Config().V1alpha1().OIDCProviderConfigs()
 			withInformer := testutil.NewObservableWithInformerOption()
 			_ = NewJWKSController(
+				nil, // labels, not needed
 				nil, // kubeClient, not needed
 				nil, // pinnipedClient, not needed
 				secretInformer,
@@ -204,6 +205,7 @@ func TestJWKSControllerFilterOPC(t *testing.T) {
 			).Config().V1alpha1().OIDCProviderConfigs()
 			withInformer := testutil.NewObservableWithInformerOption()
 			_ = NewJWKSController(
+				nil, // labels, not needed
 				nil, // kubeClient, not needed
 				nil, // pinnipedClient, not needed
 				secretInformer,
@@ -264,6 +266,10 @@ func TestJWKSControllerSync(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      goodOPCWithStatus.Status.JWKSSecret.Name,
 				Namespace: namespace,
+				Labels: map[string]string{
+					"myLabelKey1": "myLabelValue1",
+					"myLabelKey2": "myLabelValue2",
+				},
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						APIVersion:         opcGVR.GroupVersion().String(),
@@ -648,6 +654,10 @@ func TestJWKSControllerSync(t *testing.T) {
 			)
 
 			c := NewJWKSController(
+				map[string]string{
+					"myLabelKey1": "myLabelValue1",
+					"myLabelKey2": "myLabelValue2",
+				},
 				kubeAPIClient,
 				pinnipedAPIClient,
 				kubeInformers.Core().V1().Secrets(),

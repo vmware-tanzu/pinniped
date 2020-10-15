@@ -23,6 +23,7 @@ import (
 type createrController struct {
 	agentPodConfig                       *AgentPodConfig
 	credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig
+	credentialIssuerConfigLabels         map[string]string
 	clock                                clock.Clock
 	k8sClient                            kubernetes.Interface
 	pinnipedAPIClient                    pinnipedclientset.Interface
@@ -38,6 +39,7 @@ type createrController struct {
 func NewCreaterController(
 	agentPodConfig *AgentPodConfig,
 	credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig,
+	credentialIssuerConfigLabels map[string]string,
 	clock clock.Clock,
 	k8sClient kubernetes.Interface,
 	pinnipedAPIClient pinnipedclientset.Interface,
@@ -53,6 +55,7 @@ func NewCreaterController(
 			Syncer: &createrController{
 				agentPodConfig:                       agentPodConfig,
 				credentialIssuerConfigLocationConfig: credentialIssuerConfigLocationConfig,
+				credentialIssuerConfigLabels:         credentialIssuerConfigLabels,
 				clock:                                clock,
 				k8sClient:                            k8sClient,
 				pinnipedAPIClient:                    pinnipedAPIClient,
@@ -95,6 +98,7 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 		return createOrUpdateCredentialIssuerConfig(
 			ctx.Context,
 			*c.credentialIssuerConfigLocationConfig,
+			c.credentialIssuerConfigLabels,
 			c.clock,
 			c.pinnipedAPIClient,
 			constable.Error("did not find kube-controller-manager pod(s)"),
@@ -129,6 +133,7 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 				strategyResultUpdateErr := createOrUpdateCredentialIssuerConfig(
 					ctx.Context,
 					*c.credentialIssuerConfigLocationConfig,
+					c.credentialIssuerConfigLabels,
 					c.clock,
 					c.pinnipedAPIClient,
 					err,

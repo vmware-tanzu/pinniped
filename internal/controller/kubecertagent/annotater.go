@@ -122,13 +122,7 @@ func (c *annotaterController) Sync(ctx controllerlib.Context) error {
 			keyPath,
 		); err != nil {
 			err = fmt.Errorf("cannot update agent pod: %w", err)
-			strategyResultUpdateErr := createOrUpdateCredentialIssuerConfig(
-				ctx.Context,
-				*c.credentialIssuerConfigLocationConfig,
-				c.clock,
-				c.pinnipedAPIClient,
-				err,
-			)
+			strategyResultUpdateErr := createOrUpdateCredentialIssuerConfig(ctx.Context, *c.credentialIssuerConfigLocationConfig, nil, c.clock, c.pinnipedAPIClient, err)
 			if strategyResultUpdateErr != nil {
 				// If the CIC update fails, then we probably want to try again. This controller will get
 				// called again because of the pod create failure, so just try the CIC update again then.

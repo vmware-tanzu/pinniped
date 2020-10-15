@@ -12,9 +12,9 @@ import (
 type OIDCProviderStatus string
 
 const (
-	SuccessOIDCProviderStatus = OIDCProviderStatus("Success")
+	SuccessOIDCProviderStatus   = OIDCProviderStatus("Success")
 	DuplicateOIDCProviderStatus = OIDCProviderStatus("Duplicate")
-	InvalidOIDCProviderStatus = OIDCProviderStatus("Invalid")
+	InvalidOIDCProviderStatus   = OIDCProviderStatus("Invalid")
 )
 
 // OIDCProviderConfigSpec is a struct that describes an OIDC Provider.
@@ -48,9 +48,9 @@ type OIDCProviderConfigStatus struct {
 	// +optional
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 
-  // JWKSSecret holds the name of the secret in which this OIDC Provider's signing/verification keys
-  // are stored. If it is empty, then the signing/verification keys are either unknown or they don't
-  // exist.
+	// JWKSSecret holds the name of the secret in which this OIDC Provider's signing/verification keys
+	// are stored. If it is empty, then the signing/verification keys are either unknown or they don't
+	// exist.
 	// +optional
 	JWKSSecret corev1.LocalObjectReference `json:"jwksSecret,omitempty"`
 }

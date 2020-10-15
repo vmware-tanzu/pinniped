@@ -2,6 +2,7 @@
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
+#@ load("@ytt:json", "json")
 #@ load("helpers.lib.yaml", "defaultLabel", "labels", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix")
 
 #@ if not data.values.into_namespace:
@@ -40,6 +41,7 @@ data:
       servingCertificateSecret: (@= defaultResourceNameWithSuffix("api-tls-serving-certificate") @)
       credentialIssuerConfig: (@= defaultResourceNameWithSuffix("config") @)
       apiService: (@= defaultResourceNameWithSuffix("api") @)
+    labels: (@= json.encode(labels()).rstrip() @)
     kubeCertAgent:
       namePrefix: (@= defaultResourceNameWithSuffix("kube-cert-agent-") @)
       (@ if data.values.kube_cert_agent_image: @)

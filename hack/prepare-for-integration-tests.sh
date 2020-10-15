@@ -212,6 +212,7 @@ kubectl create secret generic "$test_username" \
 #
 supervisor_app_name="pinniped-supervisor"
 supervisor_namespace="supervisor"
+supervisor_custom_labels="{mySupervisorCustomLabelName: mySupervisorCustomLabelValue}"
 
 if ! tilt_mode; then
   pushd deploy/supervisor >/dev/null
@@ -222,6 +223,7 @@ if ! tilt_mode; then
     --data-value "namespace=$supervisor_namespace" \
     --data-value "image_repo=$registry_repo" \
     --data-value "image_tag=$tag" \
+    --data-value-yaml "custom_labels=$supervisor_custom_labels" \
     --data-value-yaml 'service_nodeport_port=31234' >"$manifest"
 
   kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
@@ -230,21 +232,23 @@ if ! tilt_mode; then
 fi
 
 #
-# Deploy Pinniped
+# Deploy the Pinniped Concierge
 #
 concierge_app_name="pinniped-concierge"
 concierge_namespace="concierge"
 webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
 webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/Kubernetes master/ {print $NF}')"
+concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
 
 if ! tilt_mode; then
   pushd deploy/concierge >/dev/null
 
-  log_note "Deploying the Pinniped app to the cluster..."
+  log_note "Deploying the Pinniped Concierge app to the cluster..."
   ytt --file . \
     --data-value "app_name=$concierge_app_name" \
     --data-value "namespace=$concierge_namespace" \
+    --data-value-yaml "custom_labels=$concierge_custom_labels" \
     --data-value "image_repo=$registry_repo" \
     --data-value "image_tag=$tag" \
     --data-value "discovery_url=$discovery_url" >"$manifest"
@@ -264,6 +268,7 @@ cat <<EOF >/tmp/integration-test-env
 # The following env vars should be set before running 'go test -v -count 1 ./test/integration'
 export PINNIPED_TEST_CONCIERGE_NAMESPACE=${concierge_namespace}
 export PINNIPED_TEST_CONCIERGE_APP_NAME=${concierge_app_name}
+export PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS='${concierge_custom_labels}'
 export PINNIPED_TEST_USER_USERNAME=${test_username}
 export PINNIPED_TEST_USER_GROUPS=${test_groups}
 export PINNIPED_TEST_USER_TOKEN=${test_username}:${test_password}
@@ -271,6 +276,7 @@ export PINNIPED_TEST_WEBHOOK_ENDPOINT=${webhook_url}
 export PINNIPED_TEST_WEBHOOK_CA_BUNDLE=${webhook_ca_bundle}
 export PINNIPED_TEST_SUPERVISOR_NAMESPACE=${supervisor_namespace}
 export PINNIPED_TEST_SUPERVISOR_APP_NAME=${supervisor_app_name}
+export PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS='${supervisor_custom_labels}'
 export PINNIPED_TEST_SUPERVISOR_ADDRESS="127.0.0.1:12345"
 export PINNIPED_TEST_CLI_OIDC_ISSUER=http://127.0.0.1:12346/dex
 export PINNIPED_TEST_CLI_OIDC_CLIENT_ID=pinniped-cli

@@ -42,7 +42,8 @@ func TestCreaterControllerFilter(t *testing.T) {
 			_ = NewCreaterController(
 				agentPodConfig,
 				credentialIssuerConfigLocationConfig,
-				nil, // clock, shound't matter
+				map[string]string{},
+				nil, // clock, shouldn't matter
 				nil, // k8sClient, shouldn't matter
 				nil, // pinnipedAPIClient, shouldn't matter
 				kubeSystemPodInformer,
@@ -66,7 +67,8 @@ func TestCreaterControllerInitialEvent(t *testing.T) {
 	_ = NewCreaterController(
 		nil, // agentPodConfig, shouldn't matter
 		nil, // credentialIssuerConfigLocationConfig, shouldn't matter
-		nil, // clock, shound't matter
+		map[string]string{},
+		nil, // clock, shouldn't matter
 		nil, // k8sClient, shouldn't matter
 		nil, // pinnipedAPIClient, shouldn't matter
 		kubeSystemInformers.Core().V1().Pods(),
@@ -111,10 +113,18 @@ func TestCreaterControllerSync(t *testing.T) {
 					ContainerImage:            "some-agent-image",
 					PodNamePrefix:             "some-agent-name-",
 					ContainerImagePullSecrets: []string{"some-image-pull-secret"},
+					AdditionalLabels: map[string]string{
+						"myLabelKey1": "myLabelValue1",
+						"myLabelKey2": "myLabelValue2",
+					},
 				},
 				&CredentialIssuerConfigLocationConfig{
 					Namespace: credentialIssuerConfigNamespaceName,
 					Name:      credentialIssuerConfigResourceName,
+				},
+				map[string]string{
+					"myLabelKey1": "myLabelValue1",
+					"myLabelKey2": "myLabelValue2",
 				},
 				clock.NewFakeClock(frozenNow),
 				kubeAPIClient,
@@ -361,6 +371,10 @@ func TestCreaterControllerSync(t *testing.T) {
 								ObjectMeta: metav1.ObjectMeta{
 									Name:      credentialIssuerConfigResourceName,
 									Namespace: credentialIssuerConfigNamespaceName,
+									Labels: map[string]string{
+										"myLabelKey1": "myLabelValue1",
+										"myLabelKey2": "myLabelValue2",
+									},
 								},
 								Status: configv1alpha1.CredentialIssuerConfigStatus{
 									Strategies: []configv1alpha1.CredentialIssuerConfigStrategy{
@@ -502,6 +516,10 @@ func TestCreaterControllerSync(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      credentialIssuerConfigResourceName,
 							Namespace: credentialIssuerConfigNamespaceName,
+							Labels: map[string]string{
+								"myLabelKey1": "myLabelValue1",
+								"myLabelKey2": "myLabelValue2",
+							},
 						},
 						Status: configv1alpha1.CredentialIssuerConfigStatus{
 							Strategies: []configv1alpha1.CredentialIssuerConfigStrategy{

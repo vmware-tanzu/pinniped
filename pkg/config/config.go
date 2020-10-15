@@ -50,6 +50,10 @@ func FromPath(path string) (*api.Config, error) {
 		return nil, fmt.Errorf("validate names: %w", err)
 	}
 
+	if config.Labels == nil {
+		config.Labels = make(map[string]string)
+	}
+
 	return &config, nil
 }
 

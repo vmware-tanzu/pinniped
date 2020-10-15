@@ -36,6 +36,9 @@ func TestFromPath(t *testing.T) {
 				  credentialIssuerConfig: pinniped-config
 				  apiService: pinniped-api
 				  kubeCertAgentPrefix: kube-cert-agent-prefix
+				labels:
+				  myLabelKey1: myLabelValue1
+				  myLabelKey2: myLabelValue2
 				KubeCertAgent:
 				  namePrefix: kube-cert-agent-name-prefix-
 				  image: kube-cert-agent-image
@@ -55,6 +58,10 @@ func TestFromPath(t *testing.T) {
 					ServingCertificateSecret: "pinniped-concierge-api-tls-serving-certificate",
 					CredentialIssuerConfig:   "pinniped-config",
 					APIService:               "pinniped-api",
+				},
+				Labels: map[string]string{
+					"myLabelKey1": "myLabelValue1",
+					"myLabelKey2": "myLabelValue2",
 				},
 				KubeCertAgentConfig: api.KubeCertAgentSpec{
 					NamePrefix:       stringPtr("kube-cert-agent-name-prefix-"),
@@ -87,6 +94,7 @@ func TestFromPath(t *testing.T) {
 					CredentialIssuerConfig:   "pinniped-config",
 					APIService:               "pinniped-api",
 				},
+				Labels: map[string]string{},
 				KubeCertAgentConfig: api.KubeCertAgentSpec{
 					NamePrefix: stringPtr("pinniped-kube-cert-agent-"),
 					Image:      stringPtr("debian:latest"),

@@ -124,6 +124,7 @@ func (a *App) runServer(ctx context.Context) error {
 		&controllermanager.Config{
 			ServerInstallationNamespace: serverInstallationNamespace,
 			NamesConfig:                 &cfg.NamesConfig,
+			Labels:                      cfg.Labels,
 			KubeCertAgentConfig:         &cfg.KubeCertAgentConfig,
 			DiscoveryURLOverride:        cfg.DiscoveryInfo.URL,
 			DynamicServingCertProvider:  dynamicServingCertProvider,

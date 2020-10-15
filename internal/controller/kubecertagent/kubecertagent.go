@@ -61,12 +61,15 @@ type AgentPodConfig struct {
 	// The container image used for the agent pods.
 	ContainerImage string
 
-	//  The name prefix for each of the agent pods.
+	// The name prefix for each of the agent pods.
 	PodNamePrefix string
 
 	// ContainerImagePullSecrets is a list of names of Kubernetes Secret objects that will be used as
 	// ImagePullSecrets on the kube-cert-agent pods.
 	ContainerImagePullSecrets []string
+
+	// Additional labels that should be added to every agent pod during creation.
+	AdditionalLabels map[string]string
 }
 
 type CredentialIssuerConfigLocationConfig struct {
@@ -78,9 +81,13 @@ type CredentialIssuerConfigLocationConfig struct {
 }
 
 func (c *AgentPodConfig) Labels() map[string]string {
-	return map[string]string{
+	labels := map[string]string{
 		agentPodLabelKey: agentPodLabelValue,
 	}
+	for k, v := range c.AdditionalLabels {
+		labels[k] = v
+	}
+	return labels
 }
 
 func (c *AgentPodConfig) PodTemplate() *corev1.Pod {
@@ -258,9 +265,9 @@ func findControllerManagerPodForSpecificAgentPod(
 	return maybeControllerManagerPod, nil
 }
 
-func createOrUpdateCredentialIssuerConfig(
-	ctx context.Context,
+func createOrUpdateCredentialIssuerConfig(ctx context.Context,
 	cicConfig CredentialIssuerConfigLocationConfig,
+	credentialIssuerConfigLabels map[string]string,
 	clock clock.Clock,
 	pinnipedAPIClient pinnipedclientset.Interface,
 	err error,
@@ -269,6 +276,7 @@ func createOrUpdateCredentialIssuerConfig(
 		ctx,
 		cicConfig.Namespace,
 		cicConfig.Name,
+		credentialIssuerConfigLabels,
 		pinnipedAPIClient,
 		func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
 			var strategyResult configv1alpha1.CredentialIssuerConfigStrategy

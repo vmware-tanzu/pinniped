@@ -9,6 +9,7 @@ type Config struct {
 	APIConfig           APIConfigSpec     `json:"api"`
 	NamesConfig         NamesConfigSpec   `json:"names"`
 	KubeCertAgentConfig KubeCertAgentSpec `json:"kubeCertAgent"`
+	Labels              map[string]string `json:"labels"`
 }
 
 // DiscoveryInfoSpec contains configuration knobs specific to

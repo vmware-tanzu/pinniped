@@ -14,7 +14,8 @@ into_namespace: #! e.g. my-preexisting-namespace
 
 #! All resources created statically by yaml at install-time and all resources created dynamically
 #! by controllers at runtime will be labelled with `app: $app_name` and also with the labels
-#! specified here. The app can be uninstalled either by:
+#! specified here. The value of `custom_labels` must be a map of string keys to string values.
+#! The app can be uninstalled either by:
 #! 1. Deleting the static install-time yaml resources including the static namespace, which will cascade and also delete
 #!    resources that were dynamically created by controllers at runtime
 #! 2. Or, deleting all resources by label, which does not assume that there was a static install-time yaml namespace.

@@ -21,6 +21,7 @@ func CreateOrUpdateCredentialIssuerConfig(
 	ctx context.Context,
 	credentialIssuerConfigNamespace string,
 	credentialIssuerConfigResourceName string,
+	credentialIssuerConfigLabels map[string]string,
 	pinnipedClient pinnipedclientset.Interface,
 	applyUpdatesToCredentialIssuerConfigFunc func(configToUpdate *configv1alpha1.CredentialIssuerConfig),
 ) error {
@@ -39,7 +40,9 @@ func CreateOrUpdateCredentialIssuerConfig(
 
 		if notFound {
 			// Create it
-			credentialIssuerConfig := minimalValidCredentialIssuerConfig(credentialIssuerConfigResourceName, credentialIssuerConfigNamespace)
+			credentialIssuerConfig := minimalValidCredentialIssuerConfig(
+				credentialIssuerConfigResourceName, credentialIssuerConfigNamespace, credentialIssuerConfigLabels,
+			)
 			applyUpdatesToCredentialIssuerConfigFunc(credentialIssuerConfig)
 
 			if _, err := credentialIssuerConfigsClient.Create(ctx, credentialIssuerConfig, metav1.CreateOptions{}); err != nil {
@@ -71,12 +74,14 @@ func CreateOrUpdateCredentialIssuerConfig(
 func minimalValidCredentialIssuerConfig(
 	credentialIssuerConfigName string,
 	credentialIssuerConfigNamespace string,
+	credentialIssuerConfigLabels map[string]string,
 ) *configv1alpha1.CredentialIssuerConfig {
 	return &configv1alpha1.CredentialIssuerConfig{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      credentialIssuerConfigName,
 			Namespace: credentialIssuerConfigNamespace,
+			Labels:    credentialIssuerConfigLabels,
 		},
 		Status: configv1alpha1.CredentialIssuerConfigStatus{
 			Strategies:     []configv1alpha1.CredentialIssuerConfigStrategy{},

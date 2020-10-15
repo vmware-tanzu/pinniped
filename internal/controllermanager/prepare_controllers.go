@@ -72,6 +72,9 @@ type Config struct {
 
 	// IDPCache is a cache of authenticators shared amongst various IDP-related controllers.
 	IDPCache *idpcache.Cache
+
+	// Labels are labels that should be added to any resources created by the controllers.
+	Labels map[string]string
 }
 
 // Prepare the controllers and their informers and return a function that will start them when called.
@@ -96,6 +99,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		ContainerImage:            *c.KubeCertAgentConfig.Image,
 		PodNamePrefix:             *c.KubeCertAgentConfig.NamePrefix,
 		ContainerImagePullSecrets: c.KubeCertAgentConfig.ImagePullSecrets,
+		AdditionalLabels:          c.Labels,
 	}
 	credentialIssuerConfigLocationConfig := &kubecertagent.CredentialIssuerConfigLocationConfig{
 		Namespace: c.ServerInstallationNamespace,
@@ -112,6 +116,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			issuerconfig.NewKubeConfigInfoPublisherController(
 				c.ServerInstallationNamespace,
 				c.NamesConfig.CredentialIssuerConfig,
+				c.Labels,
 				c.DiscoveryURLOverride,
 				pinnipedClient,
 				informers.kubePublicNamespaceK8s.Core().V1().ConfigMaps(),
@@ -125,6 +130,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			apicerts.NewCertsManagerController(
 				c.ServerInstallationNamespace,
 				c.NamesConfig.ServingCertificateSecret,
+				c.Labels,
 				k8sClient,
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
 				controllerlib.WithInformer,
@@ -174,6 +180,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			kubecertagent.NewCreaterController(
 				agentPodConfig,
 				credentialIssuerConfigLocationConfig,
+				c.Labels,
 				clock.RealClock{},
 				k8sClient,
 				pinnipedClient,

@@ -33,7 +33,13 @@ func TestCredentialIssuerConfig(t *testing.T) {
 
 		require.Len(t, actualConfigList.Items, 1)
 
+		actualConfig := actualConfigList.Items[0]
 		actualStatusKubeConfigInfo := actualConfigList.Items[0].Status.KubeConfigInfo
+
+		for k, v := range env.ConciergeCustomLabels {
+			require.Equalf(t, v, actualConfig.Labels[k], "expected cic to have label `%s: %s`", k, v)
+		}
+		require.Equal(t, env.ConciergeAppName, actualConfig.Labels["app"])
 
 		// Verify the cluster strategy status based on what's expected of the test cluster's ability to share signing keys.
 		actualStatusStrategies := actualConfigList.Items[0].Status.Strategies

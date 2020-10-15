@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -201,7 +200,7 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T) *configv1alpha1.O
 func randomIssuer() (string, error) {
 	var buf [8]byte
 	if _, err := io.ReadFull(rand.Reader, buf[:]); err != nil {
-		return "", errors.WithMessage(err, "could not generate random state")
+		return "", fmt.Errorf("could not generate random state: %w", err)
 	}
 	return fmt.Sprintf("http://test-issuer-%s.pinniped.dev", hex.EncodeToString(buf[:])), nil
 }

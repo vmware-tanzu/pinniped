@@ -3,15 +3,18 @@
 
 package v1alpha1
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 // +kubebuilder:validation:Enum=Success;Duplicate;Invalid
 type OIDCProviderStatus string
 
 const (
-	SuccessOIDCProviderStatus = OIDCProviderStatus("Success")
+	SuccessOIDCProviderStatus   = OIDCProviderStatus("Success")
 	DuplicateOIDCProviderStatus = OIDCProviderStatus("Duplicate")
-	InvalidOIDCProviderStatus = OIDCProviderStatus("Invalid")
+	InvalidOIDCProviderStatus   = OIDCProviderStatus("Invalid")
 )
 
 // OIDCProviderConfigSpec is a struct that describes an OIDC Provider.
@@ -39,11 +42,17 @@ type OIDCProviderConfigStatus struct {
 	// +optional
 	Message string `json:"message,omitempty"`
 
-  // LastUpdateTime holds the time at which the Status was last updated. It is a pointer to get
-  // around some undesirable behavior with respect to the empty metav1.Time value (see
-  // https://github.com/kubernetes/kubernetes/issues/86811).
-  // +optional
-  LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	// LastUpdateTime holds the time at which the Status was last updated. It is a pointer to get
+	// around some undesirable behavior with respect to the empty metav1.Time value (see
+	// https://github.com/kubernetes/kubernetes/issues/86811).
+	// +optional
+	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+
+	// JWKSSecret holds the name of the secret in which this OIDC Provider's signing/verification keys
+	// are stored. If it is empty, then the signing/verification keys are either unknown or they don't
+	// exist.
+	// +optional
+	JWKSSecret corev1.LocalObjectReference `json:"jwksSecret,omitempty"`
 }
 
 // OIDCProviderConfig describes the configuration of an OIDC provider.

@@ -13,6 +13,9 @@ metadata:
   labels:
     app: #@ data.values.app_name
 rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create, get, list, patch, update, watch, delete]
   - apiGroups: [config.pinniped.dev]
     resources: [oidcproviderconfigs]
     verbs: [update, get, list, watch]

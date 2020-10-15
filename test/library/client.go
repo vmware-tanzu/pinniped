@@ -5,6 +5,10 @@ package library
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -12,12 +16,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 
@@ -151,4 +157,61 @@ func CreateTestWebhookIDP(ctx context.Context, t *testing.T) corev1.TypedLocalOb
 		Kind:     "WebhookIdentityProvider",
 		Name:     idp.Name,
 	}
+}
+
+// CreateTestOIDCProvider creates and returns a test OIDCProviderConfig in
+// $PINNIPED_TEST_SUPERVISOR_NAMESPACE, which will be automatically deleted at the end of the
+// current test's lifetime. It generates a random, valid, issuer for the OIDCProviderConfig.
+//
+// If the provided issuer is not the empty string, then it will be used for the
+// OIDCProviderConfig.Spec.Issuer field. Else, a random issuer will be generated.
+func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer string) *configv1alpha1.OIDCProviderConfig {
+	t.Helper()
+	testEnv := IntegrationEnv(t)
+
+	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	if issuer == "" {
+		var err error
+		issuer, err = randomIssuer()
+		require.NoError(t, err)
+	}
+
+	opcs := NewPinnipedClientset(t).ConfigV1alpha1().OIDCProviderConfigs(testEnv.SupervisorNamespace)
+	opc, err := opcs.Create(createContext, &configv1alpha1.OIDCProviderConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "test-oidc-provider-",
+			Labels:       map[string]string{"pinniped.dev/test": ""},
+			Annotations:  map[string]string{"pinniped.dev/testName": t.Name()},
+		},
+		Spec: configv1alpha1.OIDCProviderConfigSpec{
+			Issuer: issuer,
+		},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err, "could not create test OIDCProviderConfig")
+	t.Logf("created test OIDCProviderConfig %s/%s", opc.Namespace, opc.Name)
+
+	t.Cleanup(func() {
+		t.Helper()
+		t.Logf("cleaning up test OIDCProviderConfig %s/%s", opc.Namespace, opc.Name)
+		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		err := opcs.Delete(deleteCtx, opc.Name, metav1.DeleteOptions{})
+		notFound := k8serrors.IsNotFound(err)
+		// It's okay if it is not found, because it might have been deleted by another part of this test.
+		if !notFound {
+			require.NoErrorf(t, err, "could not cleanup test OIDCProviderConfig %s/%s", opc.Namespace, opc.Name)
+		}
+	})
+
+	return opc
+}
+
+func randomIssuer() (string, error) {
+	var buf [8]byte
+	if _, err := io.ReadFull(rand.Reader, buf[:]); err != nil {
+		return "", fmt.Errorf("could not generate random state: %w", err)
+	}
+	return fmt.Sprintf("http://test-issuer-%s.pinniped.dev", hex.EncodeToString(buf[:])), nil
 }

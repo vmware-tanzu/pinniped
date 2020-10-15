@@ -15,32 +15,21 @@ It is recommended that you include screenshots and logs to help everyone achieve
 
 -->
 
-**What is the problem that you wish to solve?**
+**Is your feature request related to a problem? Please describe.**
+A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
 
-> Please provide a clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+**Describe the solution you'd like**
+A clear and concise description of what you want to happen.
 
-**What is the best solution to the above problem?**
+**Describe alternatives you've considered**
+A clear and concise description of any alternative solutions or features you've considered.
 
-> Please provide a clear and concise description of what the solution is.
+**Are you considering submitting a PR for this feature?**
 
-**What are the alternative solutions that you have considered?**
+- **How will this project improvement be tested?**
+- **How does this change the current architecture?**
+- **How will this change be backwards compatible?**
+- **How will this feature be documented?**
 
-> Please provide a clear and concise description of any alternative solutions or features you've considered.
-
-**How will this project improvement be tested?**
-
-> Please include your thoughts on how this improvement can be thoroughly tested.
-
-**In what environment do you hope to see this improvement?**
-- Pinniped server version:
-- Pinniped client version:
-- Pinniped container image (if using a public container image):
-- Pinniped configuration (what IDP(s) are you using? what downstream credential minting mechanisms are you using?):
-- Kubernetes version (use `kubectl version`):
-- Kubernetes installer & version (e.g., `kubeadm version`:
-- Cloud provider or hardware configuration:
-- OS (e.g: `cat /etc/os-release`):
-- Kernel (e.g. `uname -a`):
-- Others:
-
-**What else is there to know about this improvement?**
+**Additional context**
+Add any other context or screenshots about the feature request here.

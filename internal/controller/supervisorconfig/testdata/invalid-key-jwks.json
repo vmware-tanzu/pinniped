@@ -2,11 +2,12 @@
   "keys": [
     {
       "use": "sig",
-      "kty": "RSA",
-      "kid": "some-key",
-      "alg": "RS256",
-      "n": "0",
-      "e": "AQAB"
+      "kty": "EC",
+      "kid": "pinniped-supervisor-key",
+      "crv": "P-256",
+      "alg": "ES256",
+      "x": "awmmj6CIMhSoJyfsqH7sekbTeY72GGPLEy16tPWVz2U",
+      "y": "0"
     }
   ]
 }

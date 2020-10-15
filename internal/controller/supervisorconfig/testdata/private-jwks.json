@@ -2,17 +2,13 @@
   "keys": [
     {
       "use": "sig",
-      "kty": "RSA",
-      "kid": "some-key",
-      "alg": "RS256",
-      "n": "z6UWJvYJtVxXpvITGDdq9I2ln73zu7gH4RB4q7t5bKFPYAEo2XshthG21-L82rmxUQ23-1XTkBSBK5iZl3Q_liHt1MLjZrpjuRc0CKMDcrExAMX6duicFVlhkIakIeupp-PrlvLSp9ZNXuQ3z1eSKK51d2svHRSqJXdHBa-c2GXuEuX572CnV2oGO06L8f1Tt0yLT3HxzHMRbwntID9Rg2KJj0f5lBin2Kd4wJejHgBj8hnAdxe6nnDsFYqgUQu3Qao9edgwiX9EftzGlo9B_Q0g3vGyFNVf0MM4LX3OSre4yVlphZOW3YeLIeBq_4KmgutD0AZHzCF18KUjJgOv9w",
-      "e": "AQAB",
-      "d": "yIaLQBD3CzgkRcsdeZN7LLTmL8BHcw-kPEul3WLtPmUBvJsiEfUBd0zgINjKi4gsnzP6azRVXZ0PqURzf3n6NkiJ36Bd70UtLQAldfnHSKmpwy9uVAsLQOrSd7ovI7rsWoCXcW0K1p70lSEcbJYLRlJEipDuLM1aC1iHNAyGEcuQr4vlKaaWJ0lwQv0dxeEYsOTvMUvewOy1T8gREdSOQYJ5PgcF6solq04gCYmGv2paEersPFcfEarA5h8FHKlqGRTGwg3ltJMA1NaRPs0teYR2nKdLUk8nc012F7qfpN8iDx6H6f8tJn_QchgbLo8_s5uB6KC2zmdceCLRiP-VQQ",
-      "p": "53FGQ4Kc-bJeZfRejxgg1avgi0i7THXpb2_-E2hgUpzFEza2e3TOQ1-N44sotDVjv7bylZwuLsdV7ug9jIVWzr4qldEOlpvGOh_QjqrEl12lwA-9EFNp3UrMwclGUvLwm5QjFRE74iEQR0b0ljetvupNE-FncNWhxlOnQEDXVjE",
-      "q": "5a1kYSkozQiPHEycYpuflRWRY_twrWywhO2Gwzqq583qBUYInUjhNS6_dzrAA_6rDSuPXux4OjxdkLbVziLfHhLo_f1fCTm0-UlQIasxfn-WTFRpZsAjzaaiL5n0OegvSDAKXbT9zuAfH5r6RjhsSXqG-s5jbk810rVmwUh2Vqc",
-      "dp": "bhRnaga-qNjYoz-GliLQwzA73aObSjOu8szemNaFMeXUql3Uj4Wv8UWKlBaFJqlaJz5ZxSUCpkczLS2S0Lo-3ph-YsGLYcD3mH-3T5QTazckdeRGdXRnHtTL7MPRyfQ40paz1PpcdCJrvqsV_DjBT9PbE0CbVYSWrGDvZNUyVpE",
-      "dq": "4jjKASVQSbtfcklHU5zjLy3COc-EaVz_9L4cGZlkktNv6GfVvk31fLOh5OcaEBU8F8nK-n1B4mJo6kwcBWC1kOKhWOLCQ8zyIwQCCFeddXJn8KDH_GvOGBZD80zZkFvQjnK7ExddUvHP1gqI7rdOeYVVBB5bM2CTrAn-vuwHm0s",
-      "qi": "brSwOeUadJ9wnqNN_cdCKyDb8ed37h7Cd509hkiby7JiD7VqBfFWmYqtIdX-jEfms6OSlCiUKAeTHryKAV7Wb6yHNgT78iOCfgGIIz2mmV8KNdAzdkkMlGu5Uuwi0EW8ww25Xw0c5zIneVZmg-0ydFUUa5GEHrQ3Du7MMAHlQCo"
+      "kty": "EC",
+      "kid": "pinniped-supervisor-key",
+      "crv": "P-256",
+      "alg": "ES256",
+      "x": "awmmj6CIMhSoJyfsqH7sekbTeY72GGPLEy16tPWVz2U",
+      "y": "FcMh06uXLaq9b2MOixlLVidUkycO1u7IHOkrTi7N0aw",
+      "d": "1HY8B25gE7rgJoNPi8ugyefzLhRflVMV04DvBRAXSf8"
     }
   ]
 }

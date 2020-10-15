@@ -5,8 +5,9 @@ package supervisorconfig
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -44,12 +45,12 @@ const (
 	opcKind = "OIDCProviderConfig"
 )
 
-// generateKey is stubbed out for the purpose of testing. The default behavior is to generate an RSA key.
+// generateKey is stubbed out for the purpose of testing. The default behavior is to generate an EC key.
 //nolint:gochecknoglobals
-var generateKey func(r io.Reader, bits int) (interface{}, error) = generateRSAKey
+var generateKey func(r io.Reader) (interface{}, error) = generateECKey
 
-func generateRSAKey(r io.Reader, bits int) (interface{}, error) {
-	return rsa.GenerateKey(r, bits)
+func generateECKey(r io.Reader) (interface{}, error) {
+	return ecdsa.GenerateKey(elliptic.P256(), r)
 }
 
 // jwkController holds the fields necessary for the JWKS controller to communicate with OPC's and
@@ -205,15 +206,15 @@ func (c *jwksController) generateSecret(opc *configv1alpha1.OIDCProviderConfig) 
 	//
 	// For now, we just generate an new RSA keypair and put that in the secret.
 
-	key, err := generateKey(rand.Reader, 4096)
+	key, err := generateKey(rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("cannot generate key: %w", err)
 	}
 
 	jwk := jose.JSONWebKey{
 		Key:       key,
-		KeyID:     "some-key",
-		Algorithm: "RS256",
+		KeyID:     "pinniped-supervisor-key",
+		Algorithm: "ES256",
 		Use:       "sig",
 	}
 	jwkData, err := json.Marshal(jwk)

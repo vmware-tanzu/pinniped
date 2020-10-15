@@ -227,11 +227,11 @@ func TestJWKSControllerSync(t *testing.T) {
 
 	const namespace = "tuna-namespace"
 
-	goodRSAKeyPEM, err := ioutil.ReadFile("testdata/good-rsa-key.pem")
+	goodKeyPEM, err := ioutil.ReadFile("testdata/good-ec-key.pem")
 	require.NoError(t, err)
-	block, _ := pem.Decode(goodRSAKeyPEM)
-	require.NotNil(t, block, "expected block to be non-nil...is goodRSAKeyPEM a valid PEM?")
-	goodRSAKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	block, _ := pem.Decode(goodKeyPEM)
+	require.NotNil(t, block, "expected block to be non-nil...is goodKeyPEM a valid PEM?")
+	goodKey, err := x509.ParseECPrivateKey(block.Bytes)
 	require.NoError(t, err)
 
 	opcGVR := schema.GroupVersionResource{
@@ -610,9 +610,9 @@ func TestJWKSControllerSync(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// We shouldn't run this test in parallel since it messes with a global function (generateKey).
 			generateKeyCount := 0
-			generateKey = func(_ io.Reader, _ int) (interface{}, error) {
+			generateKey = func(_ io.Reader) (interface{}, error) {
 				generateKeyCount++
-				return goodRSAKey, test.generateKeyErr
+				return goodKey, test.generateKeyErr
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)

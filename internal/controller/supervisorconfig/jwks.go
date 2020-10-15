@@ -142,6 +142,11 @@ func (c *jwksController) Sync(ctx controllerlib.Context) error {
 	}
 	if !secretNeedsUpdate {
 		// Secret is up to date - we are good to go.
+		klog.InfoS(
+			"secret is up to date",
+			"oidcproviderconfig",
+			klog.KRef(ctx.Key.Namespace, ctx.Key.Name),
+		)
 		return nil
 	}
 

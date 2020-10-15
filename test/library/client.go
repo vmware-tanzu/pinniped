@@ -16,6 +16,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -161,15 +162,21 @@ func CreateTestWebhookIDP(ctx context.Context, t *testing.T) corev1.TypedLocalOb
 // CreateTestOIDCProvider creates and returns a test OIDCProviderConfig in
 // $PINNIPED_TEST_SUPERVISOR_NAMESPACE, which will be automatically deleted at the end of the
 // current test's lifetime. It generates a random, valid, issuer for the OIDCProviderConfig.
-func CreateTestOIDCProvider(ctx context.Context, t *testing.T) *configv1alpha1.OIDCProviderConfig {
+//
+// If the provided issuer is not the empty string, then it will be used for the
+// OIDCProviderConfig.Spec.Issuer field. Else, a random issuer will be generated.
+func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer string) *configv1alpha1.OIDCProviderConfig {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
 	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	issuer, err := randomIssuer()
-	require.NoError(t, err)
+	if issuer == "" {
+		var err error
+		issuer, err = randomIssuer()
+		require.NoError(t, err)
+	}
 
 	opcs := NewPinnipedClientset(t).ConfigV1alpha1().OIDCProviderConfigs(testEnv.SupervisorNamespace)
 	opc, err := opcs.Create(createContext, &configv1alpha1.OIDCProviderConfig{
@@ -191,7 +198,11 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T) *configv1alpha1.O
 		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		err := opcs.Delete(deleteCtx, opc.Name, metav1.DeleteOptions{})
-		require.NoErrorf(t, err, "could not cleanup test OIDCProviderConfig %s/%s", opc.Namespace, opc.Name)
+		notFound := k8serrors.IsNotFound(err)
+		// It's okay if it is not found, because it might have been deleted by another part of this test.
+		if !notFound {
+			require.NoErrorf(t, err, "could not cleanup test OIDCProviderConfig %s/%s", opc.Namespace, opc.Name)
+		}
 	})
 
 	return opc

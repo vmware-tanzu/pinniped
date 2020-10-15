@@ -14,7 +14,6 @@ RUN go mod download
 COPY generated ./generated
 COPY cmd ./cmd
 COPY internal ./internal
-COPY pkg ./pkg
 COPY tools ./tools
 COPY hack ./hack
 

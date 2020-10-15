@@ -52,7 +52,7 @@ func generateRSAKey(r io.Reader, bits int) (interface{}, error) {
 	return rsa.GenerateKey(r, bits)
 }
 
-// jwkController holds the field necessary for the JWKS controller to communicate with OPC's and
+// jwkController holds the fields necessary for the JWKS controller to communicate with OPC's and
 // secrets, both via a cache and via the API.
 type jwksController struct {
 	pinnipedClient pinnipedclientset.Interface
@@ -160,7 +160,6 @@ func (c *jwksController) Sync(ctx controllerlib.Context) error {
 	if err := c.createOrUpdateSecret(ctx.Context, secret); err != nil {
 		return fmt.Errorf("cannot create or update secret: %w", err)
 	}
-
 	klog.InfoS("created/updated secret", "secret", klog.KObj(secret))
 
 	// Ensure that the OPC points to the secret.

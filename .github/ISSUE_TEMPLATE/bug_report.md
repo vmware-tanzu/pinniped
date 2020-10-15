@@ -33,7 +33,7 @@ It is recommended that you include screenshots and logs to help everyone achieve
 - Pinniped container image (if using a public container image):
 - Pinniped configuration (what IDP(s) are you using? what downstream credential minting mechanisms are you using?):
 - Kubernetes version (use `kubectl version`):
-- Kubernetes installer & version (e.g., `kubeadm version`:
+- Kubernetes installer & version (e.g., `kubeadm version`):
 - Cloud provider or hardware configuration:
 - OS (e.g: `cat /etc/os-release`):
 - Kernel (e.g. `uname -a`):

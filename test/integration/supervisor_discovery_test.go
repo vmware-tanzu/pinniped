@@ -13,7 +13,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
@@ -195,43 +194,6 @@ func requireWellKnownEndpointIsWorking(t *testing.T, issuerName string) {
 
 	require.Equal(t, "application/json", response.Header.Get("content-type"))
 	require.JSONEq(t, expectedJSON, string(responseBody))
-}
-
-func createOIDCProviderConfig(t *testing.T, oidcProviderConfigName string, client pinnipedclientset.Interface, ns string, issuerName string) *v1alpha1.OIDCProviderConfig {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	newOIDCProviderConfig := v1alpha1.OIDCProviderConfig{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "OIDCProviderConfig",
-			APIVersion: v1alpha1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      oidcProviderConfigName,
-			Namespace: ns,
-		},
-		Spec: v1alpha1.OIDCProviderConfigSpec{
-			Issuer: issuerName,
-		},
-	}
-	createdOIDCProviderConfig, err := client.ConfigV1alpha1().OIDCProviderConfigs(ns).Create(ctx, &newOIDCProviderConfig, metav1.CreateOptions{})
-	require.NoError(t, err)
-
-	// When this test has finished, be sure to clean up the new OIDCProviderConfig.
-	t.Cleanup(func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-
-		err = client.ConfigV1alpha1().OIDCProviderConfigs(ns).Delete(cleanupCtx, newOIDCProviderConfig.Name, metav1.DeleteOptions{})
-		notFound := k8serrors.IsNotFound(err)
-		// It's okay if it is not found, because it might have been deleted by another part of this test.
-		if !notFound {
-			require.NoError(t, err)
-		}
-	})
-
-	return createdOIDCProviderConfig
 }
 
 func requireDelete(t *testing.T, client pinnipedclientset.Interface, ns, name string) {

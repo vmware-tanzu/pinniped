@@ -11,6 +11,7 @@ import (
 
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/discovery"
+	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
 )
 
@@ -18,16 +19,22 @@ import (
 //
 // It is thread-safe.
 type Manager struct {
-	mu               sync.RWMutex
-	providers        []*provider.OIDCProvider
-	providerHandlers map[string]http.Handler // map of all routes for all providers
-	nextHandler      http.Handler            // the next handler in a chain, called when this manager didn't know how to handle a request
+	mu                  sync.RWMutex
+	providers           []*provider.OIDCProvider
+	providerHandlers    map[string]http.Handler  // map of all routes for all providers
+	nextHandler         http.Handler             // the next handler in a chain, called when this manager didn't know how to handle a request
+	dynamicJWKSProvider jwks.DynamicJWKSProvider // in-memory cache of per-issuer JWKS data
 }
 
 // NewManager returns an empty Manager.
 // nextHandler will be invoked for any requests that could not be handled by this manager's providers.
-func NewManager(nextHandler http.Handler) *Manager {
-	return &Manager{providerHandlers: make(map[string]http.Handler), nextHandler: nextHandler}
+// dynamicJWKSProvider will be used as an in-memory cache for per-issuer JWKS data.
+func NewManager(nextHandler http.Handler, dynamicJWKSProvider jwks.DynamicJWKSProvider) *Manager {
+	return &Manager{
+		providerHandlers:    make(map[string]http.Handler),
+		nextHandler:         nextHandler,
+		dynamicJWKSProvider: dynamicJWKSProvider,
+	}
 }
 
 // SetProviders adds or updates all the given providerHandlers using each provider's issuer string
@@ -46,7 +53,12 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 	m.providerHandlers = make(map[string]http.Handler)
 
 	for _, incomingProvider := range oidcProviders {
-		m.providerHandlers[incomingProvider.IssuerHost()+"/"+incomingProvider.IssuerPath()+oidc.WellKnownEndpointPath] = discovery.New(incomingProvider.Issuer())
+		wellKnownURL := incomingProvider.IssuerHost() + "/" + incomingProvider.IssuerPath() + oidc.WellKnownEndpointPath
+		m.providerHandlers[wellKnownURL] = discovery.NewHandler(incomingProvider.Issuer())
+
+		jwksURL := incomingProvider.IssuerHost() + "/" + incomingProvider.IssuerPath() + oidc.JWKSEndpointPath
+		m.providerHandlers[jwksURL] = jwks.NewHandler(incomingProvider.Issuer(), m.dynamicJWKSProvider)
+
 		klog.InfoS("oidc provider manager added or updated issuer", "issuer", incomingProvider.Issuer())
 	}
 }

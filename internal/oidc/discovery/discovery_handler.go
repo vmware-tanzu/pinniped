@@ -39,13 +39,13 @@ type Metadata struct {
 	// ^^^ Optional ^^^
 }
 
-// New returns an http.Handler that serves an OIDC discovery endpoint.
-func New(issuerURL string) http.Handler {
+// NewHandler returns an http.Handler that serves an OIDC discovery endpoint.
+func NewHandler(issuerURL string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		if r.Method != http.MethodGet {
-			http.Error(w, `{"error": "Method not allowed (try GET)"}`, http.StatusMethodNotAllowed)
+			http.Error(w, `Method not allowed (try GET)`, http.StatusMethodNotAllowed)
 			return
 		}
 

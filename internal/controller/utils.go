@@ -15,8 +15,8 @@ func NameAndNamespaceExactMatchFilterFactory(name, namespace string) controllerl
 	})
 }
 
-// NoOpFilter returns a controllerlib.Filter that allows all objects.
-func NoOpFilter() controllerlib.Filter {
+// MatchAnythingFilter returns a controllerlib.Filter that allows all objects.
+func MatchAnythingFilter() controllerlib.Filter {
 	return SimpleFilter(func(object metav1.Object) bool { return true })
 }
 

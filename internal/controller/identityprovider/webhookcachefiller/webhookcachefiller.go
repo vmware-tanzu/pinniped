@@ -40,7 +40,7 @@ func New(cache *idpcache.Cache, webhookIDPs idpinformers.WebhookIdentityProvider
 		},
 		controllerlib.WithInformer(
 			webhookIDPs,
-			pinnipedcontroller.NoOpFilter(),
+			pinnipedcontroller.MatchAnythingFilter(),
 			controllerlib.InformerOption{},
 		),
 	)

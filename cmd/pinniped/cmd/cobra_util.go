@@ -13,3 +13,12 @@ func mustMarkRequired(cmd *cobra.Command, flags ...string) {
 		}
 	}
 }
+
+// mustMarkHidden marks the given flags as hidden on the provided cobra.Command. If any of the names are wrong, it panics.
+func mustMarkHidden(cmd *cobra.Command, flags ...string) {
+	for _, flag := range flags {
+		if err := cmd.Flags().MarkHidden(flag); err != nil {
+			panic(err)
+		}
+	}
+}

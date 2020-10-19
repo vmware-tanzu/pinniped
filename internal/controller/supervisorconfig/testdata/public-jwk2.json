@@ -1,0 +1,9 @@
+{
+  "use": "sig",
+  "kty": "EC",
+  "kid": "pinniped-supervisor-key2",
+  "crv": "P-256",
+  "alg": "ES256",
+  "x"   : "SVqB4JcUD6lsfvqMr-OKUNUphdNn64Eay60978ZlL74",
+  "y"   : "lf0u0pMj4lGAzZix5u4Cm5CMQIgMNpkwy163wtKYVKI"
+}

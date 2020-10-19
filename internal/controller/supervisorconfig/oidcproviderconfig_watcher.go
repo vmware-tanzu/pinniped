@@ -58,7 +58,7 @@ func NewOIDCProviderConfigWatcherController(
 		},
 		withInformer(
 			opcInformer,
-			pinnipedcontroller.NoOpFilter(),
+			pinnipedcontroller.MatchAnythingFilter(),
 			controllerlib.InformerOption{},
 		),
 	)

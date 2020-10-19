@@ -27,6 +27,7 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/downward"
+	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider/manager"
 )
 
@@ -65,7 +66,8 @@ func waitForSignal() os.Signal {
 func startControllers(
 	ctx context.Context,
 	cfg *supervisor.Config,
-	issuerProvider *manager.Manager,
+	issuerManager *manager.Manager,
+	dynamicJWKSProvider jwks.DynamicJWKSProvider,
 	kubeClient kubernetes.Interface,
 	pinnipedClient pinnipedclientset.Interface,
 	kubeInformers kubeinformers.SharedInformerFactory,
@@ -76,7 +78,7 @@ func startControllers(
 		NewManager().
 		WithController(
 			supervisorconfig.NewOIDCProviderConfigWatcherController(
-				issuerProvider,
+				issuerManager,
 				clock.RealClock{},
 				pinnipedClient,
 				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
@@ -85,10 +87,19 @@ func startControllers(
 			singletonWorker,
 		).
 		WithController(
-			supervisorconfig.NewJWKSController(
+			supervisorconfig.NewJWKSWriterController(
 				cfg.Labels,
 				kubeClient,
 				pinnipedClient,
+				kubeInformers.Core().V1().Secrets(),
+				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		).
+		WithController(
+			supervisorconfig.NewJWKSObserverController(
+				dynamicJWKSProvider,
 				kubeInformers.Core().V1().Secrets(),
 				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
 				controllerlib.WithInformer,
@@ -144,8 +155,9 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 		pinnipedinformers.WithNamespace(serverInstallationNamespace),
 	)
 
-	oidProvidersManager := manager.NewManager(http.NotFoundHandler())
-	startControllers(ctx, cfg, oidProvidersManager, kubeClient, pinnipedClient, kubeInformers, pinnipedInformers)
+	dynamicJWKSProvider := jwks.NewDynamicJWKSProvider()
+	oidProvidersManager := manager.NewManager(http.NotFoundHandler(), dynamicJWKSProvider)
+	startControllers(ctx, cfg, oidProvidersManager, dynamicJWKSProvider, kubeClient, pinnipedClient, kubeInformers, pinnipedInformers)
 
 	//nolint: gosec // Intentionally binding to all network interfaces.
 	l, err := net.Listen("tcp", ":80")

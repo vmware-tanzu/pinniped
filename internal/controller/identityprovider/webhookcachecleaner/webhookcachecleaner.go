@@ -31,7 +31,7 @@ func New(cache *idpcache.Cache, webhookIDPs idpinformers.WebhookIdentityProvider
 		},
 		controllerlib.WithInformer(
 			webhookIDPs,
-			pinnipedcontroller.NoOpFilter(),
+			pinnipedcontroller.MatchAnythingFilter(),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -44,7 +44,7 @@ type controller struct {
 }
 
 // Sync implements controllerlib.Syncer.
-func (c *controller) Sync(ctx controllerlib.Context) error {
+func (c *controller) Sync(_ controllerlib.Context) error {
 	webhooks, err := c.webhookIDPs.Lister().List(labels.Everything())
 	if err != nil {
 		return fmt.Errorf("failed to list WebhookIdentityProviders: %w", err)

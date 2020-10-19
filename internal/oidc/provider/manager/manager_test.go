@@ -13,18 +13,29 @@ import (
 
 	"github.com/sclevine/spec"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/square/go-jose.v2"
 
+	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/discovery"
+	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
 )
 
 func TestManager(t *testing.T) {
 	spec.Run(t, "ServeHTTP", func(t *testing.T, when spec.G, it spec.S) {
-		var r *require.Assertions
-		var subject *Manager
-		var nextHandler http.HandlerFunc
-		var fallbackHandlerWasCalled bool
+		var (
+			r                        *require.Assertions
+			subject                  *Manager
+			nextHandler              http.HandlerFunc
+			fallbackHandlerWasCalled bool
+			dynamicJWKSProvider      jwks.DynamicJWKSProvider
+		)
+
+		issuer1 := "https://example.com/some/path"
+		issuer1KeyID := "issuer1-key"
+		issuer2 := "https://example.com/some/path/more/deeply/nested/path" // note that this is a sub-path of the other issuer url
+		issuer2KeyID := "issuer2-key"
 
 		newGetRequest := func(url string) *http.Request {
 			return httptest.NewRequest(http.MethodGet, url, nil)
@@ -35,6 +46,8 @@ func TestManager(t *testing.T) {
 
 			subject.ServeHTTP(recorder, newGetRequest(issuer+oidc.WellKnownEndpointPath+requestURLSuffix))
 
+			r.False(fallbackHandlerWasCalled)
+
 			r.Equal(http.StatusOK, recorder.Code)
 			responseBody, err := ioutil.ReadAll(recorder.Body)
 			r.NoError(err)
@@ -42,7 +55,26 @@ func TestManager(t *testing.T) {
 			err = json.Unmarshal(responseBody, &parsedDiscoveryResult)
 			r.NoError(err)
 
+			// Minimal check to ensure that the right discovery endpoint was called
 			r.Equal(issuer, parsedDiscoveryResult.Issuer)
+		}
+
+		requireJWKSRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedJWKKeyID string) {
+			recorder := httptest.NewRecorder()
+
+			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.JWKSEndpointPath+requestURLSuffix))
+
+			r.False(fallbackHandlerWasCalled)
+
+			r.Equal(http.StatusOK, recorder.Code)
+			responseBody, err := ioutil.ReadAll(recorder.Body)
+			r.NoError(err)
+			parsedJWKSResult := jose.JSONWebKeySet{}
+			err = json.Unmarshal(responseBody, &parsedJWKSResult)
+			r.NoError(err)
+
+			// Minimal check to ensure that the right JWKS endpoint was called
+			r.Equal(expectedJWKKeyID, parsedJWKSResult.Keys[0].KeyID)
 		}
 
 		it.Before(func() {
@@ -50,10 +82,11 @@ func TestManager(t *testing.T) {
 			nextHandler = func(http.ResponseWriter, *http.Request) {
 				fallbackHandlerWasCalled = true
 			}
-			subject = NewManager(nextHandler)
+			dynamicJWKSProvider = jwks.NewDynamicJWKSProvider()
+			subject = NewManager(nextHandler, dynamicJWKSProvider)
 		})
 
-		when("given no providers", func() {
+		when("given no providers via SetProviders()", func() {
 			it("sends all requests to the nextHandler", func() {
 				r.False(fallbackHandlerWasCalled)
 				subject.ServeHTTP(httptest.NewRecorder(), newGetRequest("/anything"))
@@ -61,16 +94,35 @@ func TestManager(t *testing.T) {
 			})
 		})
 
-		when("given some valid providers", func() {
-			issuer1 := "https://example.com/some/path"
-			issuer2 := "https://example.com/some/path/more/deeply/nested/path" // note that this is a sub-path of the other issuer url
+		newTestJWK := func(keyID string) jose.JSONWebKey {
+			testJWKSJSONString := here.Docf(`
+				{
+				  "use": "sig",
+				  "kty": "EC",
+				  "kid": "%s",
+				  "crv": "P-256",
+				  "alg": "ES256",
+				  "x": "awmmj6CIMhSoJyfsqH7sekbTeY72GGPLEy16tPWVz2U",
+				  "y": "FcMh06uXLaq9b2MOixlLVidUkycO1u7IHOkrTi7N0aw"
+				}
+			`, keyID)
+			k := jose.JSONWebKey{}
+			r.NoError(json.Unmarshal([]byte(testJWKSJSONString), &k))
+			return k
+		}
 
+		when("given some valid providers via SetProviders()", func() {
 			it.Before(func() {
 				p1, err := provider.NewOIDCProvider(issuer1)
 				r.NoError(err)
 				p2, err := provider.NewOIDCProvider(issuer2)
 				r.NoError(err)
 				subject.SetProviders(p1, p2)
+
+				dynamicJWKSProvider.SetIssuerToJWKSMap(map[string]*jose.JSONWebKeySet{
+					issuer1: {Keys: []jose.JSONWebKey{newTestJWK(issuer1KeyID)}},
+					issuer2: {Keys: []jose.JSONWebKey{newTestJWK(issuer2KeyID)}},
+				})
 			})
 
 			it("sends all non-matching host requests to the nextHandler", func() {
@@ -96,27 +148,35 @@ func TestManager(t *testing.T) {
 				requireDiscoveryRequestToBeHandled(issuer1, "")
 				requireDiscoveryRequestToBeHandled(issuer2, "")
 				requireDiscoveryRequestToBeHandled(issuer2, "?some=query")
-				r.False(fallbackHandlerWasCalled)
+
+				requireJWKSRequestToBeHandled(issuer1, "", issuer1KeyID)
+				requireJWKSRequestToBeHandled(issuer2, "", issuer2KeyID)
+				requireJWKSRequestToBeHandled(issuer2, "?some=query", issuer2KeyID)
 			})
 		})
 
-		when("given the same valid providers in reverse order", func() {
-			issuer1 := "https://example.com/some/path"
-			issuer2 := "https://example.com/some/path/more/deeply/nested/path"
-
+		when("given the same valid providers as arguments to SetProviders() in reverse order", func() {
 			it.Before(func() {
 				p1, err := provider.NewOIDCProvider(issuer1)
 				r.NoError(err)
 				p2, err := provider.NewOIDCProvider(issuer2)
 				r.NoError(err)
 				subject.SetProviders(p2, p1)
+
+				dynamicJWKSProvider.SetIssuerToJWKSMap(map[string]*jose.JSONWebKeySet{
+					issuer1: {Keys: []jose.JSONWebKey{newTestJWK(issuer1KeyID)}},
+					issuer2: {Keys: []jose.JSONWebKey{newTestJWK(issuer2KeyID)}},
+				})
 			})
 
 			it("still routes matching requests to the appropriate provider", func() {
 				requireDiscoveryRequestToBeHandled(issuer1, "")
 				requireDiscoveryRequestToBeHandled(issuer2, "")
 				requireDiscoveryRequestToBeHandled(issuer2, "?some=query")
-				r.False(fallbackHandlerWasCalled)
+
+				requireJWKSRequestToBeHandled(issuer1, "", issuer1KeyID)
+				requireJWKSRequestToBeHandled(issuer2, "", issuer2KeyID)
+				requireJWKSRequestToBeHandled(issuer2, "?some=query", issuer2KeyID)
 			})
 		})
 	})

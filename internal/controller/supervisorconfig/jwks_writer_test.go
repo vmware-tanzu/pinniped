@@ -30,7 +30,7 @@ import (
 	"go.pinniped.dev/internal/testutil"
 )
 
-func TestJWKSControllerFilterSecret(t *testing.T) {
+func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -150,7 +150,7 @@ func TestJWKSControllerFilterSecret(t *testing.T) {
 				0,
 			).Config().V1alpha1().OIDCProviderConfigs()
 			withInformer := testutil.NewObservableWithInformerOption()
-			_ = NewJWKSController(
+			_ = NewJWKSWriterController(
 				nil, // labels, not needed
 				nil, // kubeClient, not needed
 				nil, // pinnipedClient, not needed
@@ -170,7 +170,7 @@ func TestJWKSControllerFilterSecret(t *testing.T) {
 	}
 }
 
-func TestJWKSControllerFilterOPC(t *testing.T) {
+func TestJWKSWriterControllerFilterOPC(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -204,7 +204,7 @@ func TestJWKSControllerFilterOPC(t *testing.T) {
 				0,
 			).Config().V1alpha1().OIDCProviderConfigs()
 			withInformer := testutil.NewObservableWithInformerOption()
-			_ = NewJWKSController(
+			_ = NewJWKSWriterController(
 				nil, // labels, not needed
 				nil, // kubeClient, not needed
 				nil, // pinnipedClient, not needed
@@ -224,7 +224,7 @@ func TestJWKSControllerFilterOPC(t *testing.T) {
 	}
 }
 
-func TestJWKSControllerSync(t *testing.T) {
+func TestJWKSWriterControllerSync(t *testing.T) {
 	// We shouldn't run this test in parallel since it messes with a global function (generateKey).
 
 	const namespace = "tuna-namespace"
@@ -284,10 +284,10 @@ func TestJWKSControllerSync(t *testing.T) {
 		}
 		s.Data = make(map[string][]byte)
 		if activeJWKPath != "" {
-			s.Data["activeJWK"] = read(t, activeJWKPath)
+			s.Data["activeJWK"] = readJWKJSON(t, activeJWKPath)
 		}
 		if jwksPath != "" {
-			s.Data["jwks"] = read(t, jwksPath)
+			s.Data["jwks"] = readJWKJSON(t, jwksPath)
 		}
 		return &s
 	}
@@ -653,7 +653,7 @@ func TestJWKSControllerSync(t *testing.T) {
 				0,
 			)
 
-			c := NewJWKSController(
+			c := NewJWKSWriterController(
 				map[string]string{
 					"myLabelKey1": "myLabelValue1",
 					"myLabelKey2": "myLabelValue2",
@@ -692,7 +692,7 @@ func TestJWKSControllerSync(t *testing.T) {
 	}
 }
 
-func read(t *testing.T, path string) []byte {
+func readJWKJSON(t *testing.T, path string) []byte {
 	t.Helper()
 
 	data, err := ioutil.ReadFile(path)

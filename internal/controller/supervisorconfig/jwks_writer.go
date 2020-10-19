@@ -55,7 +55,7 @@ func generateECKey(r io.Reader) (interface{}, error) {
 
 // jwkController holds the fields necessary for the JWKS controller to communicate with OPC's and
 // secrets, both via a cache and via the API.
-type jwksController struct {
+type jwksWriterController struct {
 	jwksSecretLabels map[string]string
 	pinnipedClient   pinnipedclientset.Interface
 	kubeClient       kubernetes.Interface
@@ -63,9 +63,9 @@ type jwksController struct {
 	secretInformer   corev1informers.SecretInformer
 }
 
-// NewJWKSController returns a controllerlib.Controller that ensures an OPC has a corresponding
+// NewJWKSWriterController returns a controllerlib.Controller that ensures an OPC has a corresponding
 // Secret that contains a valid active JWK and JWKS.
-func NewJWKSController(
+func NewJWKSWriterController(
 	jwksSecretLabels map[string]string,
 	kubeClient kubernetes.Interface,
 	pinnipedClient pinnipedclientset.Interface,
@@ -76,7 +76,7 @@ func NewJWKSController(
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "JWKSController",
-			Syncer: &jwksController{
+			Syncer: &jwksWriterController{
 				jwksSecretLabels: jwksSecretLabels,
 				kubeClient:       kubeClient,
 				pinnipedClient:   pinnipedClient,
@@ -110,14 +110,14 @@ func NewJWKSController(
 		// We want to be notified when anything happens to an OPC.
 		withInformer(
 			opcInformer,
-			pinnipedcontroller.NoOpFilter(),
+			pinnipedcontroller.MatchAnythingFilter(),
 			controllerlib.InformerOption{},
 		),
 	)
 }
 
 // Sync implements controllerlib.Syncer.
-func (c *jwksController) Sync(ctx controllerlib.Context) error {
+func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
 	opc, err := c.opcInformer.Lister().OIDCProviderConfigs(ctx.Key.Namespace).Get(ctx.Key.Name)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
@@ -177,7 +177,7 @@ func (c *jwksController) Sync(ctx controllerlib.Context) error {
 	return nil
 }
 
-func (c *jwksController) secretNeedsUpdate(opc *configv1alpha1.OIDCProviderConfig) (bool, error) {
+func (c *jwksWriterController) secretNeedsUpdate(opc *configv1alpha1.OIDCProviderConfig) (bool, error) {
 	if opc.Status.JWKSSecret.Name == "" {
 		// If the OPC says it doesn't have a secret associated with it, then let's create one.
 		return true, nil
@@ -202,7 +202,7 @@ func (c *jwksController) secretNeedsUpdate(opc *configv1alpha1.OIDCProviderConfi
 	return false, nil
 }
 
-func (c *jwksController) generateSecret(opc *configv1alpha1.OIDCProviderConfig) (*corev1.Secret, error) {
+func (c *jwksWriterController) generateSecret(opc *configv1alpha1.OIDCProviderConfig) (*corev1.Secret, error) {
 	// Note! This is where we could potentially add more handling of OPC spec fields which tell us how
 	// this OIDC provider should sign and verify ID tokens (e.g., hardcoded token secret, gRPC
 	// connection to KMS, etc).
@@ -255,7 +255,7 @@ func (c *jwksController) generateSecret(opc *configv1alpha1.OIDCProviderConfig) 
 	return &s, nil
 }
 
-func (c *jwksController) createOrUpdateSecret(
+func (c *jwksWriterController) createOrUpdateSecret(
 	ctx context.Context,
 	newSecret *corev1.Secret,
 ) error {
@@ -289,7 +289,7 @@ func (c *jwksController) createOrUpdateSecret(
 	})
 }
 
-func (c *jwksController) updateOPC(
+func (c *jwksWriterController) updateOPC(
 	ctx context.Context,
 	newOPC *configv1alpha1.OIDCProviderConfig,
 ) error {

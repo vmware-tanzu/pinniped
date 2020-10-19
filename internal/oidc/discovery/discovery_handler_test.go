@@ -24,7 +24,8 @@ func TestDiscovery(t *testing.T) {
 
 		wantStatus      int
 		wantContentType string
-		wantBody        interface{}
+		wantBodyJSON    interface{}
+		wantBodyString  string
 	}{
 		{
 			name:            "happy path",
@@ -33,7 +34,7 @@ func TestDiscovery(t *testing.T) {
 			path:            "/some/path" + oidc.WellKnownEndpointPath,
 			wantStatus:      http.StatusOK,
 			wantContentType: "application/json",
-			wantBody: &Metadata{
+			wantBodyJSON: &Metadata{
 				Issuer:                            "https://some-issuer.com/some/path",
 				AuthorizationEndpoint:             "https://some-issuer.com/some/path/oauth2/authorize",
 				TokenEndpoint:                     "https://some-issuer.com/some/path/oauth2/token",
@@ -48,34 +49,35 @@ func TestDiscovery(t *testing.T) {
 			},
 		},
 		{
-			name:       "bad method",
-			issuer:     "https://some-issuer.com",
-			method:     http.MethodPost,
-			path:       oidc.WellKnownEndpointPath,
-			wantStatus: http.StatusMethodNotAllowed,
-			wantBody: map[string]string{
-				"error": "Method not allowed (try GET)",
-			},
+			name:            "bad method",
+			issuer:          "https://some-issuer.com",
+			method:          http.MethodPost,
+			path:            oidc.WellKnownEndpointPath,
+			wantStatus:      http.StatusMethodNotAllowed,
+			wantContentType: "text/plain; charset=utf-8",
+			wantBodyString:  "Method not allowed (try GET)\n",
 		},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			handler := New(test.issuer)
+			handler := NewHandler(test.issuer)
 			req := httptest.NewRequest(test.method, test.path, nil)
 			rsp := httptest.NewRecorder()
 			handler.ServeHTTP(rsp, req)
 
 			require.Equal(t, test.wantStatus, rsp.Code)
 
-			if test.wantContentType != "" {
-				require.Equal(t, test.wantContentType, rsp.Header().Get("Content-Type"))
-			}
+			require.Equal(t, test.wantContentType, rsp.Header().Get("Content-Type"))
 
-			if test.wantBody != nil {
-				wantJSON, err := json.Marshal(test.wantBody)
+			if test.wantBodyJSON != nil {
+				wantJSON, err := json.Marshal(test.wantBodyJSON)
 				require.NoError(t, err)
 				require.JSONEq(t, string(wantJSON), rsp.Body.String())
+			}
+
+			if test.wantBodyString != "" {
+				require.Equal(t, test.wantBodyString, rsp.Body.String())
 			}
 		})
 	}

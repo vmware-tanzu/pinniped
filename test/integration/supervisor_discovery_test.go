@@ -53,73 +53,88 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 		}
 	})
 
-	supervisorScheme := "http"
-	supervisorAddress := env.SupervisorHTTPAddress
+	tests := []struct {
+		Scheme  string
+		Address string
+	}{
+		{Scheme: "http", Address: env.SupervisorHTTPAddress},
+		{Scheme: "https", Address: env.SupervisorHTTPSAddress},
+	}
 
-	// Test that there is no default discovery endpoint available when there are no OIDCProviderConfigs.
-	requireDiscoveryEndpointsAreNotFound(t, supervisorScheme, supervisorAddress, fmt.Sprintf("%s://%s", supervisorScheme, supervisorAddress))
+	for _, test := range tests {
+		supervisorScheme := test.Scheme
+		supervisorAddress := test.Address
 
-	// Define several unique issuer strings.
-	issuer1 := fmt.Sprintf("%s://%s/nested/issuer1", supervisorScheme, supervisorAddress)
-	issuer2 := fmt.Sprintf("%s://%s/nested/issuer2", supervisorScheme, supervisorAddress)
-	issuer3 := fmt.Sprintf("%s://%s/issuer3", supervisorScheme, supervisorAddress)
-	issuer4 := fmt.Sprintf("%s://%s/issuer4", supervisorScheme, supervisorAddress)
-	issuer5 := fmt.Sprintf("%s://%s/issuer5", supervisorScheme, supervisorAddress)
-	issuer6 := fmt.Sprintf("%s://%s/issuer6", supervisorScheme, supervisorAddress)
-	badIssuer := fmt.Sprintf("%s://%s/badIssuer?cannot-use=queries", supervisorScheme, supervisorAddress)
+		if supervisorAddress == "" {
+			// Both cases are not required, so when one is empty skip it.
+			continue
+		}
 
-	// When OIDCProviderConfig are created in sequence they each cause a discovery endpoint to appear only for as long as the OIDCProviderConfig exists.
-	config1, jwks1 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, supervisorScheme, supervisorAddress, issuer1, client)
-	requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config1, client, ns, supervisorScheme, supervisorAddress, issuer1)
-	config2, jwks2 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, supervisorScheme, supervisorAddress, issuer2, client)
-	requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config2, client, ns, supervisorScheme, supervisorAddress, issuer2)
-	// The auto-created JWK's were different from each other.
-	require.NotEqual(t, jwks1.Keys[0]["x"], jwks2.Keys[0]["x"])
-	require.NotEqual(t, jwks1.Keys[0]["y"], jwks2.Keys[0]["y"])
+		// Test that there is no default discovery endpoint available when there are no OIDCProviderConfigs.
+		requireDiscoveryEndpointsAreNotFound(t, supervisorScheme, supervisorAddress, fmt.Sprintf("%s://%s", supervisorScheme, supervisorAddress))
 
-	// When multiple OIDCProviderConfigs exist at the same time they each serve a unique discovery endpoint.
-	config3, jwks3 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, supervisorScheme, supervisorAddress, issuer3, client)
-	config4, jwks4 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, supervisorScheme, supervisorAddress, issuer4, client)
-	requireDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, issuer3) // discovery for issuer3 is still working after issuer4 started working
-	// The auto-created JWK's were different from each other.
-	require.NotEqual(t, jwks3.Keys[0]["x"], jwks4.Keys[0]["x"])
-	require.NotEqual(t, jwks3.Keys[0]["y"], jwks4.Keys[0]["y"])
+		// Define several unique issuer strings.
+		issuer1 := fmt.Sprintf("%s://%s/nested/issuer1", supervisorScheme, supervisorAddress)
+		issuer2 := fmt.Sprintf("%s://%s/nested/issuer2", supervisorScheme, supervisorAddress)
+		issuer3 := fmt.Sprintf("%s://%s/issuer3", supervisorScheme, supervisorAddress)
+		issuer4 := fmt.Sprintf("%s://%s/issuer4", supervisorScheme, supervisorAddress)
+		issuer5 := fmt.Sprintf("%s://%s/issuer5", supervisorScheme, supervisorAddress)
+		issuer6 := fmt.Sprintf("%s://%s/issuer6", supervisorScheme, supervisorAddress)
+		badIssuer := fmt.Sprintf("%s://%s/badIssuer?cannot-use=queries", supervisorScheme, supervisorAddress)
 
-	// Editing a provider to change the issuer name updates the endpoints that are being served.
-	updatedConfig4 := editOIDCProviderConfigIssuerName(t, config4, client, ns, issuer5)
-	requireDiscoveryEndpointsAreNotFound(t, supervisorScheme, supervisorAddress, issuer4)
-	jwks5 := requireDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, issuer5)
-	// The JWK did not change when the issuer name was updated.
-	require.Equal(t, jwks4.Keys[0], jwks5.Keys[0])
+		// When OIDCProviderConfig are created in sequence they each cause a discovery endpoint to appear only for as long as the OIDCProviderConfig exists.
+		config1, jwks1 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, supervisorScheme, supervisorAddress, issuer1, client)
+		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config1, client, ns, supervisorScheme, supervisorAddress, issuer1)
+		config2, jwks2 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, supervisorScheme, supervisorAddress, issuer2, client)
+		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config2, client, ns, supervisorScheme, supervisorAddress, issuer2)
+		// The auto-created JWK's were different from each other.
+		require.NotEqual(t, jwks1.Keys[0]["x"], jwks2.Keys[0]["x"])
+		require.NotEqual(t, jwks1.Keys[0]["y"], jwks2.Keys[0]["y"])
 
-	// When they are deleted they stop serving discovery endpoints.
-	requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config3, client, ns, supervisorScheme, supervisorAddress, issuer3)
-	requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, updatedConfig4, client, ns, supervisorScheme, supervisorAddress, issuer5)
+		// When multiple OIDCProviderConfigs exist at the same time they each serve a unique discovery endpoint.
+		config3, jwks3 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, supervisorScheme, supervisorAddress, issuer3, client)
+		config4, jwks4 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, supervisorScheme, supervisorAddress, issuer4, client)
+		requireDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, issuer3) // discovery for issuer3 is still working after issuer4 started working
+		// The auto-created JWK's were different from each other.
+		require.NotEqual(t, jwks3.Keys[0]["x"], jwks4.Keys[0]["x"])
+		require.NotEqual(t, jwks3.Keys[0]["y"], jwks4.Keys[0]["y"])
 
-	// When the same issuer is added twice, both issuers are marked as duplicates, and neither provider is serving.
-	config6Duplicate1, _ := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, supervisorScheme, supervisorAddress, issuer6, client)
-	config6Duplicate2 := library.CreateTestOIDCProvider(ctx, t, issuer6)
-	requireStatus(t, client, ns, config6Duplicate1.Name, v1alpha1.DuplicateOIDCProviderStatus)
-	requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.DuplicateOIDCProviderStatus)
-	requireDiscoveryEndpointsAreNotFound(t, supervisorScheme, supervisorAddress, issuer6)
+		// Editing a provider to change the issuer name updates the endpoints that are being served.
+		updatedConfig4 := editOIDCProviderConfigIssuerName(t, config4, client, ns, issuer5)
+		requireDiscoveryEndpointsAreNotFound(t, supervisorScheme, supervisorAddress, issuer4)
+		jwks5 := requireDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, issuer5)
+		// The JWK did not change when the issuer name was updated.
+		require.Equal(t, jwks4.Keys[0], jwks5.Keys[0])
 
-	// If we delete the first duplicate issuer, the second duplicate issuer starts serving.
-	requireDelete(t, client, ns, config6Duplicate1.Name)
-	requireWellKnownEndpointIsWorking(t, supervisorScheme, supervisorAddress, issuer6)
-	requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.SuccessOIDCProviderStatus)
+		// When they are deleted they stop serving discovery endpoints.
+		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config3, client, ns, supervisorScheme, supervisorAddress, issuer3)
+		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, updatedConfig4, client, ns, supervisorScheme, supervisorAddress, issuer5)
 
-	// When we finally delete all issuers, the endpoint should be down.
-	requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config6Duplicate2, client, ns, supervisorScheme, supervisorAddress, issuer6)
+		// When the same issuer is added twice, both issuers are marked as duplicates, and neither provider is serving.
+		config6Duplicate1, _ := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, supervisorScheme, supervisorAddress, issuer6, client)
+		config6Duplicate2 := library.CreateTestOIDCProvider(ctx, t, issuer6)
+		requireStatus(t, client, ns, config6Duplicate1.Name, v1alpha1.DuplicateOIDCProviderStatus)
+		requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.DuplicateOIDCProviderStatus)
+		requireDiscoveryEndpointsAreNotFound(t, supervisorScheme, supervisorAddress, issuer6)
 
-	// "Host" headers can be used to send requests to discovery endpoints when the public address is different from the issuer name.
-	issuer7 := fmt.Sprintf("%s://some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com:2684/issuer7", supervisorScheme)
-	config7, _ := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, supervisorScheme, supervisorAddress, issuer7, client)
-	requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config7, client, ns, supervisorScheme, supervisorAddress, issuer7)
+		// If we delete the first duplicate issuer, the second duplicate issuer starts serving.
+		requireDelete(t, client, ns, config6Duplicate1.Name)
+		requireWellKnownEndpointIsWorking(t, supervisorScheme, supervisorAddress, issuer6)
+		requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.SuccessOIDCProviderStatus)
 
-	// When we create a provider with an invalid issuer, the status is set to invalid.
-	badConfig := library.CreateTestOIDCProvider(ctx, t, badIssuer)
-	requireStatus(t, client, ns, badConfig.Name, v1alpha1.InvalidOIDCProviderStatus)
-	requireDiscoveryEndpointsAreNotFound(t, supervisorScheme, supervisorAddress, badIssuer)
+		// When we finally delete all issuers, the endpoint should be down.
+		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config6Duplicate2, client, ns, supervisorScheme, supervisorAddress, issuer6)
+
+		// "Host" headers can be used to send requests to discovery endpoints when the public address is different from the issuer name.
+		issuer7 := fmt.Sprintf("%s://some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com:2684/issuer7", supervisorScheme)
+		config7, _ := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, supervisorScheme, supervisorAddress, issuer7, client)
+		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config7, client, ns, supervisorScheme, supervisorAddress, issuer7)
+
+		// When we create a provider with an invalid issuer, the status is set to invalid.
+		badConfig := library.CreateTestOIDCProvider(ctx, t, badIssuer)
+		requireStatus(t, client, ns, badConfig.Name, v1alpha1.InvalidOIDCProviderStatus)
+		requireDiscoveryEndpointsAreNotFound(t, supervisorScheme, supervisorAddress, badIssuer)
+	}
 }
 
 func jwksURLForIssuer(scheme, host, path string) string {

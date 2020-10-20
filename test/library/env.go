@@ -26,16 +26,17 @@ const (
 type TestEnv struct {
 	t *testing.T
 
-	ConciergeNamespace     string                                  `json:"conciergeNamespace"`
-	SupervisorNamespace    string                                  `json:"supervisorNamespace"`
-	ConciergeAppName       string                                  `json:"conciergeAppName"`
-	SupervisorAppName      string                                  `json:"supervisorAppName"`
-	SupervisorCustomLabels map[string]string                       `json:"supervisorCustomLabels"`
-	ConciergeCustomLabels  map[string]string                       `json:"conciergeCustomLabels"`
-	Capabilities           map[Capability]bool                     `json:"capabilities"`
-	TestWebhook            idpv1alpha1.WebhookIdentityProviderSpec `json:"testWebhook"`
-	SupervisorHTTPAddress  string                                  `json:"supervisorHttpAddress"`
-	SupervisorHTTPSAddress string                                  `json:"supervisorHttpsAddress"`
+	ConciergeNamespace      string                                  `json:"conciergeNamespace"`
+	SupervisorNamespace     string                                  `json:"supervisorNamespace"`
+	ConciergeAppName        string                                  `json:"conciergeAppName"`
+	SupervisorAppName       string                                  `json:"supervisorAppName"`
+	SupervisorCustomLabels  map[string]string                       `json:"supervisorCustomLabels"`
+	ConciergeCustomLabels   map[string]string                       `json:"conciergeCustomLabels"`
+	Capabilities            map[Capability]bool                     `json:"capabilities"`
+	TestWebhook             idpv1alpha1.WebhookIdentityProviderSpec `json:"testWebhook"`
+	SupervisorHTTPAddress   string                                  `json:"supervisorHttpAddress"`
+	SupervisorHTTPSAddress  string                                  `json:"supervisorHttpsAddress"`
+	SupervisorHTTPSCABundle string                                  `json:"supervisorHttpsCABundle"`
 
 	TestUser struct {
 		Token            string   `json:"token"`
@@ -97,6 +98,7 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 		result.SupervisorHTTPAddress+result.SupervisorHTTPSAddress,
 		"must specify either PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS or PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS env var (or both) for integration tests",
 	)
+	result.SupervisorHTTPSCABundle = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_CA_BUNDLE") // optional
 
 	conciergeCustomLabelsYAML := needEnv("PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS")
 	var conciergeCustomLabels map[string]string

@@ -34,7 +34,7 @@ type TestEnv struct {
 	ConciergeCustomLabels  map[string]string                       `json:"conciergeCustomLabels"`
 	Capabilities           map[Capability]bool                     `json:"capabilities"`
 	TestWebhook            idpv1alpha1.WebhookIdentityProviderSpec `json:"testWebhook"`
-	SupervisorAddress      string                                  `json:"supervisorAddress"`
+	SupervisorHTTPAddress  string                                  `json:"supervisorAddress"`
 
 	TestUser struct {
 		Token            string   `json:"token"`
@@ -88,7 +88,7 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 	result.TestWebhook.Endpoint = needEnv("PINNIPED_TEST_WEBHOOK_ENDPOINT")
 	result.SupervisorNamespace = needEnv("PINNIPED_TEST_SUPERVISOR_NAMESPACE")
 	result.SupervisorAppName = needEnv("PINNIPED_TEST_SUPERVISOR_APP_NAME")
-	result.SupervisorAddress = needEnv("PINNIPED_TEST_SUPERVISOR_ADDRESS")
+	result.SupervisorHTTPAddress = needEnv("PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS")
 	result.TestWebhook.TLS = &idpv1alpha1.TLSSpec{CertificateAuthorityData: needEnv("PINNIPED_TEST_WEBHOOK_CA_BUNDLE")}
 
 	conciergeCustomLabelsYAML := needEnv("PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS")

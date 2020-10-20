@@ -134,6 +134,7 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 		badConfig := library.CreateTestOIDCProvider(ctx, t, badIssuer)
 		requireStatus(t, client, ns, badConfig.Name, v1alpha1.InvalidOIDCProviderStatus)
 		requireDiscoveryEndpointsAreNotFound(t, supervisorScheme, supervisorAddress, badIssuer)
+		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, badConfig, client, ns, supervisorScheme, supervisorAddress, badIssuer)
 	}
 }
 

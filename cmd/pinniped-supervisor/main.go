@@ -110,6 +110,10 @@ func startControllers(
 	kubeInformers.Start(ctx.Done())
 	pinnipedInformers.Start(ctx.Done())
 
+	// Wait until the caches are synced before returning.
+	kubeInformers.WaitForCacheSync(ctx.Done())
+	pinnipedInformers.WaitForCacheSync(ctx.Done())
+
 	go controllerManager.Start(ctx)
 }
 
@@ -165,8 +169,20 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 		return fmt.Errorf("cannot create listener: %w", err)
 	}
 	defer l.Close()
-
 	start(ctx, l, oidProvidersManager)
+
+	//nolint: gosec // Intentionally binding to all network interfaces.
+	healthzListener, err := net.Listen("tcp", ":8080")
+	if err != nil {
+		return fmt.Errorf("cannot create healthzListener: %w", err)
+	}
+	defer healthzListener.Close()
+	healthzMux := http.NewServeMux()
+	healthzMux.Handle("/healthz", http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		_, _ = writer.Write([]byte("ok"))
+	}))
+	start(ctx, healthzListener, healthzMux)
+
 	klog.InfoS("supervisor is ready", "address", l.Addr().String())
 
 	gotSignal := waitForSignal()

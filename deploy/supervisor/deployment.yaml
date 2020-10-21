@@ -84,6 +84,24 @@ spec:
               mountPath: /etc/config
             - name: podinfo
               mountPath: /etc/podinfo
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 2
+            timeoutSeconds: 15
+            periodSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 2
+            timeoutSeconds: 3
+            periodSeconds: 10
+            failureThreshold: 3
       volumes:
         - name: config-volume
           configMap:

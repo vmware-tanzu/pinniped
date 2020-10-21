@@ -146,7 +146,7 @@ func getLoginProvider(t *testing.T) *loginProviderPatterns {
 func TestCLILoginOIDC(t *testing.T) {
 	env := library.IntegrationEnv(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// Find the login CSS selectors for the test issuer, or fail fast.
@@ -172,12 +172,16 @@ func TestCLILoginOIDC(t *testing.T) {
 	t.Logf("building CLI binary")
 	pinnipedExe := buildPinnipedCLI(t)
 
+	// Make a temp directory to hold the session cache for this test.
+	sessionCachePath := t.TempDir() + "/sessions.yaml"
+
 	// Start the CLI running the "alpha login oidc [...]" command with stdout/stderr connected to pipes.
 	t.Logf("starting CLI subprocess")
 	cmd := exec.CommandContext(ctx, pinnipedExe, "alpha", "login", "oidc",
 		"--issuer", env.OIDCUpstream.Issuer,
 		"--client-id", env.OIDCUpstream.ClientID,
 		"--listen-port", strconv.Itoa(env.OIDCUpstream.LocalhostPort),
+		"--session-cache", sessionCachePath,
 		"--skip-browser",
 	)
 	stderr, err := cmd.StderrPipe()
@@ -305,6 +309,26 @@ func TestCLILoginOIDC(t *testing.T) {
 	require.Equal(t, env.OIDCUpstream.ClientID, claims["aud"])
 	require.Equal(t, env.OIDCUpstream.Username, claims["email"])
 	require.NotEmpty(t, claims["nonce"])
+
+	// Run the CLI again with the same session cache and login parameters.
+	t.Logf("starting second CLI subprocess to test session caching")
+	secondCtx, secondCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer secondCancel()
+	cmdOutput, err := exec.CommandContext(secondCtx, pinnipedExe, "alpha", "login", "oidc",
+		"--issuer", env.OIDCUpstream.Issuer,
+		"--client-id", env.OIDCUpstream.ClientID,
+		"--listen-port", strconv.Itoa(env.OIDCUpstream.LocalhostPort),
+		"--session-cache", sessionCachePath,
+		"--skip-browser",
+	).CombinedOutput()
+	require.NoError(t, err)
+
+	// Expect the CLI to output the same ExecCredential in JSON format.
+	t.Logf("validating second ExecCredential")
+	var credOutput2 clientauthenticationv1beta1.ExecCredential
+	require.NoErrorf(t, json.Unmarshal(cmdOutput, &credOutput2),
+		"command returned something other than an ExecCredential:\n%s", string(cmdOutput))
+	require.Equal(t, credOutput, credOutput2)
 }
 
 func waitForVisibleElements(t *testing.T, page *agouti.Page, selectors ...string) {

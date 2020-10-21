@@ -5,20 +5,24 @@ package cmd
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
+	"k8s.io/klog/v2/klogr"
 
-	"go.pinniped.dev/internal/oidcclient/login"
+	"go.pinniped.dev/internal/oidcclient"
+	"go.pinniped.dev/internal/oidcclient/filesession"
 )
 
 //nolint: gochecknoinits
 func init() {
-	loginCmd.AddCommand(oidcLoginCommand(login.Run))
+	loginCmd.AddCommand(oidcLoginCommand(oidcclient.Login))
 }
 
-func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...login.Option) (*login.Token, error)) *cobra.Command {
+func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...oidcclient.Option) (*oidcclient.Token, error)) *cobra.Command {
 	var (
 		cmd = cobra.Command{
 			Args:         cobra.NoArgs,
@@ -26,32 +30,51 @@ func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...log
 			Short:        "Login using an OpenID Connect provider",
 			SilenceUsage: true,
 		}
-		issuer      string
-		clientID    string
-		listenPort  uint16
-		scopes      []string
-		skipBrowser bool
+		issuer            string
+		clientID          string
+		listenPort        uint16
+		scopes            []string
+		skipBrowser       bool
+		sessionCachePath  string
+		debugSessionCache bool
 	)
 	cmd.Flags().StringVar(&issuer, "issuer", "", "OpenID Connect issuer URL.")
 	cmd.Flags().StringVar(&clientID, "client-id", "", "OpenID Connect client ID.")
 	cmd.Flags().Uint16Var(&listenPort, "listen-port", 0, "TCP port for localhost listener (authorization code flow only).")
 	cmd.Flags().StringSliceVar(&scopes, "scopes", []string{"offline_access", "openid", "email", "profile"}, "OIDC scopes to request during login.")
 	cmd.Flags().BoolVar(&skipBrowser, "skip-browser", false, "Skip opening the browser (just print the URL).")
+	cmd.Flags().StringVar(&sessionCachePath, "session-cache", filepath.Join(mustGetConfigDir(), "sessions.yaml"), "Path to session cache file.")
+	cmd.Flags().BoolVar(&debugSessionCache, "debug-session-cache", false, "Print debug logs related to the session cache.")
+	mustMarkHidden(&cmd, "debug-session-cache")
 	mustMarkRequired(&cmd, "issuer", "client-id")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
-		opts := []login.Option{
-			login.WithContext(cmd.Context()),
-			login.WithScopes(scopes),
+		// Initialize the session cache.
+		var sessionOptions []filesession.Option
+
+		// If the hidden --debug-session-cache option is passed, log all the errors from the session cache with klog.
+		if debugSessionCache {
+			logger := klogr.New().WithName("session")
+			sessionOptions = append(sessionOptions, filesession.WithErrorReporter(func(err error) {
+				logger.Error(err, "error during session cache operation")
+			}))
+		}
+		sessionCache := filesession.New(sessionCachePath, sessionOptions...)
+
+		// Initialize the login handler.
+		opts := []oidcclient.Option{
+			oidcclient.WithContext(cmd.Context()),
+			oidcclient.WithScopes(scopes),
+			oidcclient.WithSessionCache(sessionCache),
 		}
 
 		if listenPort != 0 {
-			opts = append(opts, login.WithListenPort(listenPort))
+			opts = append(opts, oidcclient.WithListenPort(listenPort))
 		}
 
 		// --skip-browser replaces the default "browser open" function with one that prints to stderr.
 		if skipBrowser {
-			opts = append(opts, login.WithBrowserOpen(func(url string) error {
+			opts = append(opts, oidcclient.WithBrowserOpen(func(url string) error {
 				cmd.PrintErr("Please log in: ", url, "\n")
 				return nil
 			}))
@@ -69,10 +92,27 @@ func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...log
 				APIVersion: "client.authentication.k8s.io/v1beta1",
 			},
 			Status: &clientauthenticationv1beta1.ExecCredentialStatus{
-				ExpirationTimestamp: &metav1.Time{Time: tok.IDTokenExpiry},
-				Token:               tok.IDToken,
+				ExpirationTimestamp: &tok.IDToken.Expiry,
+				Token:               tok.IDToken.Token,
 			},
 		})
 	}
 	return &cmd
+}
+
+// mustGetConfigDir returns a directory that follows the XDG base directory convention:
+//   $XDG_CONFIG_HOME defines the base directory relative to which user specific configuration files should
+//   be stored. If $XDG_CONFIG_HOME is either not set or empty, a default equal to $HOME/.config should be used.
+// [1] https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
+func mustGetConfigDir() string {
+	const xdgAppName = "pinniped"
+
+	if path := os.Getenv("XDG_CONFIG_HOME"); path != "" {
+		return filepath.Join(path, xdgAppName)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		panic(err)
+	}
+	return filepath.Join(home, ".config", xdgAppName)
 }

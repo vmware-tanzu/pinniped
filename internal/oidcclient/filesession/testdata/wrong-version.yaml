@@ -1,0 +1,3 @@
+apiVersion: config.pinniped.dev/v2alpha6
+kind: NotASessionCache
+sessions: []

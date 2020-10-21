@@ -1,0 +1,24 @@
+apiVersion: config.pinniped.dev/v1alpha1
+kind: SessionCache
+sessions:
+  - creationTimestamp: "2020-10-20T18:42:07Z"
+    key:
+      clientID: test-client-id
+      issuer: test-issuer
+      redirect_uri: http://localhost:0/callback
+      scopes:
+        - email
+        - offline_access
+        - openid
+        - profile
+    lastUsedTimestamp: "2020-10-20T18:45:31Z"
+    tokens:
+      access:
+        expiryTimestamp: "2020-10-20T19:46:30Z"
+        token: test-access-token
+        type: Bearer
+      id:
+        expiryTimestamp: "2020-10-20T19:42:07Z"
+        token: test-id-token
+      refresh:
+        token: test-refresh-token

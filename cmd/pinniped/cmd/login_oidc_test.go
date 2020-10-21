@@ -9,13 +9,16 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/here"
-	"go.pinniped.dev/internal/oidcclient/login"
+	"go.pinniped.dev/internal/oidcclient"
 )
 
 func TestLoginOIDCCommand(t *testing.T) {
 	t.Parallel()
+
+	cfgDir := mustGetConfigDir()
 
 	time1 := time.Date(3020, 10, 12, 13, 14, 15, 16, time.UTC)
 
@@ -39,12 +42,13 @@ func TestLoginOIDCCommand(t *testing.T) {
 				  oidc --issuer ISSUER --client-id CLIENT_ID [flags]
 
 				Flags:
-					  --client-id string     OpenID Connect client ID.
-				  -h, --help                 help for oidc
-					  --issuer string        OpenID Connect issuer URL.
-					  --listen-port uint16   TCP port for localhost listener (authorization code flow only).
-					  --scopes strings       OIDC scopes to request during login. (default [offline_access,openid,email,profile])
-					  --skip-browser         Skip opening the browser (just print the URL).
+					  --client-id string       OpenID Connect client ID.
+				  -h, --help                   help for oidc
+					  --issuer string          OpenID Connect issuer URL.
+					  --listen-port uint16     TCP port for localhost listener (authorization code flow only).
+					  --scopes strings         OIDC scopes to request during login. (default [offline_access,openid,email,profile])
+					  --session-cache string   Path to session cache file. (default "` + cfgDir + `/sessions.yaml")
+					  --skip-browser           Skip opening the browser (just print the URL).
 			`),
 		},
 		{
@@ -63,7 +67,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			},
 			wantIssuer:       "test-issuer",
 			wantClientID:     "test-client-id",
-			wantOptionsCount: 2,
+			wantOptionsCount: 3,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 		},
 		{
@@ -73,10 +77,11 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--issuer", "test-issuer",
 				"--skip-browser",
 				"--listen-port", "1234",
+				"--debug-session-cache",
 			},
 			wantIssuer:       "test-issuer",
 			wantClientID:     "test-client-id",
-			wantOptionsCount: 4,
+			wantOptionsCount: 5,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 		},
 	}
@@ -87,13 +92,18 @@ func TestLoginOIDCCommand(t *testing.T) {
 			var (
 				gotIssuer   string
 				gotClientID string
-				gotOptions  []login.Option
+				gotOptions  []oidcclient.Option
 			)
-			cmd := oidcLoginCommand(func(issuer string, clientID string, opts ...login.Option) (*login.Token, error) {
+			cmd := oidcLoginCommand(func(issuer string, clientID string, opts ...oidcclient.Option) (*oidcclient.Token, error) {
 				gotIssuer = issuer
 				gotClientID = clientID
 				gotOptions = opts
-				return &login.Token{IDToken: "test-id-token", IDTokenExpiry: time1}, nil
+				return &oidcclient.Token{
+					IDToken: &oidcclient.IDToken{
+						Token:  "test-id-token",
+						Expiry: metav1.NewTime(time1),
+					},
+				}, nil
 			})
 			require.NotNil(t, cmd)
 

@@ -1,7 +1,7 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package login
+package oidcclient
 
 import (
 	"context"
@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 	"gopkg.in/square/go-jose.v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/mocks/mockkeyset"
@@ -26,18 +27,42 @@ import (
 	"go.pinniped.dev/internal/oidcclient/state"
 )
 
-func TestRun(t *testing.T) {
+// mockSessionCache exists to avoid an import cycle if we generate mocks into another package.
+type mockSessionCache struct {
+	t               *testing.T
+	getReturnsToken *Token
+	sawGetKeys      []SessionCacheKey
+	sawPutKeys      []SessionCacheKey
+	sawPutTokens    []*Token
+}
+
+func (m *mockSessionCache) GetToken(key SessionCacheKey) *Token {
+	m.t.Logf("saw mock session cache GetToken() with client ID %s", key.ClientID)
+	m.sawGetKeys = append(m.sawGetKeys, key)
+	return m.getReturnsToken
+}
+
+func (m *mockSessionCache) PutToken(key SessionCacheKey, token *Token) {
+	m.t.Logf("saw mock session cache PutToken() with client ID %s and ID token %s", key.ClientID, token.IDToken.Token)
+	m.sawPutKeys = append(m.sawPutKeys, key)
+	m.sawPutTokens = append(m.sawPutTokens, token)
+}
+
+func TestLogin(t *testing.T) {
 	time1 := time.Date(3020, 10, 12, 13, 14, 15, 16, time.UTC)
 	testToken := Token{
-		Token: &oauth2.Token{
-			AccessToken:  "test-access-token",
-			RefreshToken: "test-refresh-token",
-			Expiry:       time1.Add(1 * time.Minute),
+		AccessToken: &AccessToken{
+			Token:  "test-access-token",
+			Expiry: metav1.NewTime(time1.Add(1 * time.Minute)),
 		},
-		IDToken:       "test-id-token",
-		IDTokenExpiry: time1.Add(2 * time.Minute),
+		RefreshToken: &RefreshToken{
+			Token: "test-refresh-token",
+		},
+		IDToken: &IDToken{
+			Token:  "test-id-token",
+			Expiry: metav1.NewTime(time1.Add(2 * time.Minute)),
+		},
 	}
-	_ = testToken
 
 	// Start a test server that returns 500 errors
 	errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -113,6 +138,53 @@ func TestRun(t *testing.T) {
 			wantErr: "some error generating PKCE",
 		},
 		{
+			name:     "session cache hit but token expired",
+			issuer:   "test-issuer",
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &Token{
+						IDToken: &IDToken{
+							Token:  "test-id-token",
+							Expiry: metav1.NewTime(time.Now()), // less than Now() + minIDTokenValidity
+						},
+					}}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{{
+							Issuer:      "test-issuer",
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}}, cache.sawGetKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					return WithSessionCache(cache)(h)
+				}
+			},
+			wantErr: `could not perform OIDC discovery for "test-issuer": Get "test-issuer/.well-known/openid-configuration": unsupported protocol scheme ""`,
+		},
+		{
+			name:     "session cache hit with valid token",
+			issuer:   "test-issuer",
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &testToken}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{{
+							Issuer:      "test-issuer",
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}}, cache.sawGetKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					return WithSessionCache(cache)(h)
+				}
+			},
+			wantToken: &testToken,
+		},
+		{
 			name: "discovery failure",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error { return nil }
@@ -183,6 +255,20 @@ func TestRun(t *testing.T) {
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 
+					cache := &mockSessionCache{t: t, getReturnsToken: nil}
+					cacheKey := SessionCacheKey{
+						Issuer:      successServer.URL,
+						ClientID:    "test-client-id",
+						Scopes:      []string{"test-scope"},
+						RedirectURI: "http://localhost:0/callback",
+					}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawPutKeys)
+						require.Equal(t, []*Token{&testToken}, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+
 					h.openURL = func(actualURL string) error {
 						parsedActualURL, err := url.Parse(actualURL)
 						require.NoError(t, err)
@@ -223,7 +309,7 @@ func TestRun(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			tok, err := Run(tt.issuer, tt.clientID,
+			tok, err := Login(tt.issuer, tt.clientID,
 				WithContext(context.Background()),
 				WithListenPort(0),
 				WithScopes([]string{"test-scope"}),
@@ -393,7 +479,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				}
 				require.NoError(t, result.err)
 				require.NotNil(t, result.token)
-				require.Equal(t, result.token.IDToken, tt.returnIDTok)
+				require.Equal(t, result.token.IDToken.Token, tt.returnIDTok)
 			}
 		})
 	}

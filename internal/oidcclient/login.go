@@ -1,8 +1,8 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package login implements a CLI OIDC login flow.
-package login
+// Package oidcclient implements a CLI OIDC login flow.
+package oidcclient
 
 import (
 	"context"
@@ -10,11 +10,13 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/coreos/go-oidc"
 	"github.com/pkg/browser"
 	"golang.org/x/oauth2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
@@ -23,12 +25,20 @@ import (
 	"go.pinniped.dev/internal/oidcclient/state"
 )
 
+const (
+	// minIDTokenValidity is the minimum amount of time that a cached ID token must be still be valid to be considered.
+	// This is non-zero to ensure that most of the time, your ID token won't expire in the middle of a multi-step k8s
+	// API operation.
+	minIDTokenValidity = 10 * time.Minute
+)
+
 type handlerState struct {
 	// Basic parameters.
 	ctx      context.Context
 	issuer   string
 	clientID string
 	scopes   []string
+	cache    SessionCache
 
 	// Parameters of the localhost listener.
 	listenAddr   string
@@ -55,13 +65,7 @@ type callbackResult struct {
 	err   error
 }
 
-type Token struct {
-	*oauth2.Token
-	IDToken       string    `json:"id_token"`
-	IDTokenExpiry time.Time `json:"id_token_expiry"`
-}
-
-// Option is an optional configuration for Run().
+// Option is an optional configuration for Login().
 type Option func(*handlerState) error
 
 // WithContext specifies a specific context.Context under which to perform the login. If this option is not specified,
@@ -105,13 +109,28 @@ func WithBrowserOpen(openURL func(url string) error) Option {
 	}
 }
 
-// Run an OAuth2/OIDC authorization code login using a localhost listener.
-func Run(issuer string, clientID string, opts ...Option) (*Token, error) {
+// WithSessionCache sets the session cache backend for storing and retrieving previously-issued ID tokens and refresh tokens.
+func WithSessionCache(cache SessionCache) Option {
+	return func(h *handlerState) error {
+		h.cache = cache
+		return nil
+	}
+}
+
+// nopCache is a SessionCache that doesn't actually do anything.
+type nopCache struct{}
+
+func (*nopCache) GetToken(SessionCacheKey) *Token  { return nil }
+func (*nopCache) PutToken(SessionCacheKey, *Token) {}
+
+// Login performs an OAuth2/OIDC authorization code login using a localhost listener.
+func Login(issuer string, clientID string, opts ...Option) (*Token, error) {
 	h := handlerState{
 		issuer:       issuer,
 		clientID:     clientID,
 		listenAddr:   "localhost:0",
 		scopes:       []string{"offline_access", "openid", "email", "profile"},
+		cache:        &nopCache{},
 		callbackPath: "/callback",
 		ctx:          context.Background(),
 		callbacks:    make(chan callbackResult),
@@ -146,6 +165,22 @@ func Run(issuer string, clientID string, opts ...Option) (*Token, error) {
 	h.pkce, err = h.generatePKCE()
 	if err != nil {
 		return nil, err
+	}
+
+	// Check the cache for a previous session issued with the same parameters.
+	sort.Strings(h.scopes)
+	cacheKey := SessionCacheKey{
+		Issuer:      h.issuer,
+		ClientID:    h.clientID,
+		Scopes:      h.scopes,
+		RedirectURI: (&url.URL{Scheme: "http", Host: h.listenAddr, Path: h.callbackPath}).String(),
+	}
+
+	// If the ID token is still valid for a bit, return it immediately and skip the rest of the flow.
+	if cached := h.cache.GetToken(cacheKey); cached != nil &&
+		cached.IDToken != nil &&
+		time.Until(cached.IDToken.Expiry.Time) > minIDTokenValidity {
+		return cached, nil
 	}
 
 	// Perform OIDC discovery.
@@ -209,6 +244,7 @@ func Run(issuer string, clientID string, opts ...Option) (*Token, error) {
 		if callback.err != nil {
 			return nil, fmt.Errorf("error handling callback: %w", callback.err)
 		}
+		h.cache.PutToken(cacheKey, callback.token)
 		return callback.token, nil
 	}
 }
@@ -262,9 +298,18 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 	}
 
 	h.callbacks <- callbackResult{token: &Token{
-		Token:         oauth2Tok,
-		IDToken:       idTok,
-		IDTokenExpiry: validated.Expiry,
+		AccessToken: &AccessToken{
+			Token:  oauth2Tok.AccessToken,
+			Type:   oauth2Tok.TokenType,
+			Expiry: metav1.NewTime(oauth2Tok.Expiry),
+		},
+		RefreshToken: &RefreshToken{
+			Token: oauth2Tok.RefreshToken,
+		},
+		IDToken: &IDToken{
+			Token:  idTok,
+			Expiry: metav1.NewTime(validated.Expiry),
+		},
 	}}
 	_, _ = w.Write([]byte("you have been logged in and may now close this tab"))
 	return nil

@@ -9,9 +9,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/here"
-	"go.pinniped.dev/internal/oidcclient/login"
+	"go.pinniped.dev/internal/oidcclient"
 )
 
 func TestLoginOIDCCommand(t *testing.T) {
@@ -87,13 +88,18 @@ func TestLoginOIDCCommand(t *testing.T) {
 			var (
 				gotIssuer   string
 				gotClientID string
-				gotOptions  []login.Option
+				gotOptions  []oidcclient.Option
 			)
-			cmd := oidcLoginCommand(func(issuer string, clientID string, opts ...login.Option) (*login.Token, error) {
+			cmd := oidcLoginCommand(func(issuer string, clientID string, opts ...oidcclient.Option) (*oidcclient.Token, error) {
 				gotIssuer = issuer
 				gotClientID = clientID
 				gotOptions = opts
-				return &login.Token{IDToken: "test-id-token", IDTokenExpiry: time1}, nil
+				return &oidcclient.Token{
+					IDToken: &oidcclient.IDToken{
+						Token:  "test-id-token",
+						Expiry: metav1.NewTime(time1),
+					},
+				}, nil
 			})
 			require.NotNil(t, cmd)
 

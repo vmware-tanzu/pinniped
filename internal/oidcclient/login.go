@@ -1,8 +1,8 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package login implements a CLI OIDC login flow.
-package login
+// Package oidcclient implements a CLI OIDC login flow.
+package oidcclient
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 	"github.com/coreos/go-oidc"
 	"github.com/pkg/browser"
 	"golang.org/x/oauth2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
@@ -55,13 +56,7 @@ type callbackResult struct {
 	err   error
 }
 
-type Token struct {
-	*oauth2.Token
-	IDToken       string    `json:"id_token"`
-	IDTokenExpiry time.Time `json:"id_token_expiry"`
-}
-
-// Option is an optional configuration for Run().
+// Option is an optional configuration for Login().
 type Option func(*handlerState) error
 
 // WithContext specifies a specific context.Context under which to perform the login. If this option is not specified,
@@ -105,8 +100,8 @@ func WithBrowserOpen(openURL func(url string) error) Option {
 	}
 }
 
-// Run an OAuth2/OIDC authorization code login using a localhost listener.
-func Run(issuer string, clientID string, opts ...Option) (*Token, error) {
+// Login performs an OAuth2/OIDC authorization code login using a localhost listener.
+func Login(issuer string, clientID string, opts ...Option) (*Token, error) {
 	h := handlerState{
 		issuer:       issuer,
 		clientID:     clientID,
@@ -262,9 +257,18 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 	}
 
 	h.callbacks <- callbackResult{token: &Token{
-		Token:         oauth2Tok,
-		IDToken:       idTok,
-		IDTokenExpiry: validated.Expiry,
+		AccessToken: &AccessToken{
+			Token:  oauth2Tok.AccessToken,
+			Type:   oauth2Tok.TokenType,
+			Expiry: metav1.NewTime(oauth2Tok.Expiry),
+		},
+		RefreshToken: &RefreshToken{
+			Token: oauth2Tok.RefreshToken,
+		},
+		IDToken: &IDToken{
+			Token:  idTok,
+			Expiry: metav1.NewTime(validated.Expiry),
+		},
 	}}
 	_, _ = w.Write([]byte("you have been logged in and may now close this tab"))
 	return nil

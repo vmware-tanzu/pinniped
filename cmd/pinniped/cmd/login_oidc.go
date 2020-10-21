@@ -10,15 +10,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
-	"go.pinniped.dev/internal/oidcclient/login"
+	"go.pinniped.dev/internal/oidcclient"
 )
 
 //nolint: gochecknoinits
 func init() {
-	loginCmd.AddCommand(oidcLoginCommand(login.Run))
+	loginCmd.AddCommand(oidcLoginCommand(oidcclient.Login))
 }
 
-func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...login.Option) (*login.Token, error)) *cobra.Command {
+func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...oidcclient.Option) (*oidcclient.Token, error)) *cobra.Command {
 	var (
 		cmd = cobra.Command{
 			Args:         cobra.NoArgs,
@@ -40,18 +40,18 @@ func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...log
 	mustMarkRequired(&cmd, "issuer", "client-id")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
-		opts := []login.Option{
-			login.WithContext(cmd.Context()),
-			login.WithScopes(scopes),
+		opts := []oidcclient.Option{
+			oidcclient.WithContext(cmd.Context()),
+			oidcclient.WithScopes(scopes),
 		}
 
 		if listenPort != 0 {
-			opts = append(opts, login.WithListenPort(listenPort))
+			opts = append(opts, oidcclient.WithListenPort(listenPort))
 		}
 
 		// --skip-browser replaces the default "browser open" function with one that prints to stderr.
 		if skipBrowser {
-			opts = append(opts, login.WithBrowserOpen(func(url string) error {
+			opts = append(opts, oidcclient.WithBrowserOpen(func(url string) error {
 				cmd.PrintErr("Please log in: ", url, "\n")
 				return nil
 			}))
@@ -69,8 +69,8 @@ func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...log
 				APIVersion: "client.authentication.k8s.io/v1beta1",
 			},
 			Status: &clientauthenticationv1beta1.ExecCredentialStatus{
-				ExpirationTimestamp: &metav1.Time{Time: tok.IDTokenExpiry},
-				Token:               tok.IDToken,
+				ExpirationTimestamp: &tok.IDToken.Expiry,
+				Token:               tok.IDToken.Token,
 			},
 		})
 	}

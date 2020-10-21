@@ -1,7 +1,7 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package login
+package oidcclient
 
 import (
 	"context"
@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 	"gopkg.in/square/go-jose.v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/mocks/mockkeyset"
@@ -26,18 +27,21 @@ import (
 	"go.pinniped.dev/internal/oidcclient/state"
 )
 
-func TestRun(t *testing.T) {
+func TestLogin(t *testing.T) {
 	time1 := time.Date(3020, 10, 12, 13, 14, 15, 16, time.UTC)
 	testToken := Token{
-		Token: &oauth2.Token{
-			AccessToken:  "test-access-token",
-			RefreshToken: "test-refresh-token",
-			Expiry:       time1.Add(1 * time.Minute),
+		AccessToken: &AccessToken{
+			Token:  "test-access-token",
+			Expiry: metav1.NewTime(time1.Add(1 * time.Minute)),
 		},
-		IDToken:       "test-id-token",
-		IDTokenExpiry: time1.Add(2 * time.Minute),
+		RefreshToken: &RefreshToken{
+			Token: "test-refresh-token",
+		},
+		IDToken: &IDToken{
+			Token:  "test-id-token",
+			Expiry: metav1.NewTime(time1.Add(2 * time.Minute)),
+		},
 	}
-	_ = testToken
 
 	// Start a test server that returns 500 errors
 	errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -223,7 +227,7 @@ func TestRun(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			tok, err := Run(tt.issuer, tt.clientID,
+			tok, err := Login(tt.issuer, tt.clientID,
 				WithContext(context.Background()),
 				WithListenPort(0),
 				WithScopes([]string{"test-scope"}),
@@ -393,7 +397,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				}
 				require.NoError(t, result.err)
 				require.NotNil(t, result.token)
-				require.Equal(t, result.token.IDToken, tt.returnIDTok)
+				require.Equal(t, result.token.IDToken.Token, tt.returnIDTok)
 			}
 		})
 	}

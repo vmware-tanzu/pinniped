@@ -5,10 +5,14 @@ package integration
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,88 +55,119 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 		}
 	})
 
-	// Test that there is no default discovery endpoint available when there are no OIDCProviderConfigs.
-	requireDiscoveryEndpointsAreNotFound(t, fmt.Sprintf("http://%s", env.SupervisorAddress))
+	tests := []struct {
+		Scheme   string
+		Address  string
+		CABundle string
+	}{
+		{Scheme: "http", Address: env.SupervisorHTTPAddress},
+		{Scheme: "https", Address: env.SupervisorHTTPSAddress, CABundle: env.SupervisorHTTPSCABundle},
+	}
 
-	// Define several unique issuer strings.
-	issuer1 := fmt.Sprintf("http://%s/nested/issuer1", env.SupervisorAddress)
-	issuer2 := fmt.Sprintf("http://%s/nested/issuer2", env.SupervisorAddress)
-	issuer3 := fmt.Sprintf("http://%s/issuer3", env.SupervisorAddress)
-	issuer4 := fmt.Sprintf("http://%s/issuer4", env.SupervisorAddress)
-	issuer5 := fmt.Sprintf("http://%s/issuer5", env.SupervisorAddress)
-	issuer6 := fmt.Sprintf("http://%s/issuer6", env.SupervisorAddress)
-	badIssuer := fmt.Sprintf("http://%s/badIssuer?cannot-use=queries", env.SupervisorAddress)
+	for _, test := range tests {
+		scheme := test.Scheme
+		addr := test.Address
+		caBundle := test.CABundle
 
-	// When OIDCProviderConfig are created in sequence they each cause a discovery endpoint to appear only for as long as the OIDCProviderConfig exists.
-	config1, jwks1 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, issuer1, client)
-	requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(t, config1, client, ns, issuer1)
-	config2, jwks2 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, issuer2, client)
-	requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(t, config2, client, ns, issuer2)
-	// The auto-created JWK's were different from each other.
-	require.NotEqual(t, jwks1.Keys[0]["x"], jwks2.Keys[0]["x"])
-	require.NotEqual(t, jwks1.Keys[0]["y"], jwks2.Keys[0]["y"])
+		if addr == "" {
+			// Both cases are not required, so when one is empty skip it.
+			continue
+		}
 
-	// When multiple OIDCProviderConfigs exist at the same time they each serve a unique discovery endpoint.
-	config3, jwks3 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, issuer3, client)
-	config4, jwks4 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, issuer4, client)
-	requireDiscoveryEndpointsAreWorking(t, issuer3) // discovery for issuer3 is still working after issuer4 started working
-	// The auto-created JWK's were different from each other.
-	require.NotEqual(t, jwks3.Keys[0]["x"], jwks4.Keys[0]["x"])
-	require.NotEqual(t, jwks3.Keys[0]["y"], jwks4.Keys[0]["y"])
+		// Test that there is no default discovery endpoint available when there are no OIDCProviderConfigs.
+		requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, fmt.Sprintf("%s://%s", scheme, addr))
 
-	// Editing a provider to change the issuer name updates the endpoints that are being served.
-	updatedConfig4 := editOIDCProviderConfigIssuerName(t, config4, client, ns, issuer5)
-	requireDiscoveryEndpointsAreNotFound(t, issuer4)
-	jwks5 := requireDiscoveryEndpointsAreWorking(t, issuer5)
-	// The JWK did not change when the issuer name was updated.
-	require.Equal(t, jwks4.Keys[0], jwks5.Keys[0])
+		// Define several unique issuer strings.
+		issuer1 := fmt.Sprintf("%s://%s/nested/issuer1", scheme, addr)
+		issuer2 := fmt.Sprintf("%s://%s/nested/issuer2", scheme, addr)
+		issuer3 := fmt.Sprintf("%s://%s/issuer3", scheme, addr)
+		issuer4 := fmt.Sprintf("%s://%s/issuer4", scheme, addr)
+		issuer5 := fmt.Sprintf("%s://%s/issuer5", scheme, addr)
+		issuer6 := fmt.Sprintf("%s://%s/issuer6", scheme, addr)
+		badIssuer := fmt.Sprintf("%s://%s/badIssuer?cannot-use=queries", scheme, addr)
 
-	// When they are deleted they stop serving discovery endpoints.
-	requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(t, config3, client, ns, issuer3)
-	requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(t, updatedConfig4, client, ns, issuer5)
+		// When OIDCProviderConfig are created in sequence they each cause a discovery endpoint to appear only for as long as the OIDCProviderConfig exists.
+		config1, jwks1 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer1, client)
+		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config1, client, ns, scheme, addr, caBundle, issuer1)
+		config2, jwks2 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer2, client)
+		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config2, client, ns, scheme, addr, caBundle, issuer2)
+		// The auto-created JWK's were different from each other.
+		require.NotEqual(t, jwks1.Keys[0]["x"], jwks2.Keys[0]["x"])
+		require.NotEqual(t, jwks1.Keys[0]["y"], jwks2.Keys[0]["y"])
 
-	// When the same issuer is added twice, both issuers are marked as duplicates, and neither provider is serving.
-	config5Duplicate1, _ := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, issuer6, client)
-	config5Duplicate2 := library.CreateTestOIDCProvider(ctx, t, issuer6)
-	requireStatus(t, client, ns, config5Duplicate1.Name, v1alpha1.DuplicateOIDCProviderStatus)
-	requireStatus(t, client, ns, config5Duplicate2.Name, v1alpha1.DuplicateOIDCProviderStatus)
-	requireDiscoveryEndpointsAreNotFound(t, issuer6)
+		// When multiple OIDCProviderConfigs exist at the same time they each serve a unique discovery endpoint.
+		config3, jwks3 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer3, client)
+		config4, jwks4 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer4, client)
+		requireDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer3) // discovery for issuer3 is still working after issuer4 started working
+		// The auto-created JWK's were different from each other.
+		require.NotEqual(t, jwks3.Keys[0]["x"], jwks4.Keys[0]["x"])
+		require.NotEqual(t, jwks3.Keys[0]["y"], jwks4.Keys[0]["y"])
 
-	// If we delete the first duplicate issuer, the second duplicate issuer starts serving.
-	requireDelete(t, client, ns, config5Duplicate1.Name)
-	requireWellKnownEndpointIsWorking(t, issuer6)
-	requireStatus(t, client, ns, config5Duplicate2.Name, v1alpha1.SuccessOIDCProviderStatus)
+		// Editing a provider to change the issuer name updates the endpoints that are being served.
+		updatedConfig4 := editOIDCProviderConfigIssuerName(t, config4, client, ns, issuer5)
+		requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer4)
+		jwks5 := requireDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer5)
+		// The JWK did not change when the issuer name was updated.
+		require.Equal(t, jwks4.Keys[0], jwks5.Keys[0])
 
-	// When we finally delete all issuers, the endpoint should be down.
-	requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(t, config5Duplicate2, client, ns, issuer6)
+		// When they are deleted they stop serving discovery endpoints.
+		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config3, client, ns, scheme, addr, caBundle, issuer3)
+		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, updatedConfig4, client, ns, scheme, addr, caBundle, issuer5)
 
-	// When we create a provider with an invalid issuer, the status is set to invalid.
-	badConfig := library.CreateTestOIDCProvider(ctx, t, badIssuer)
-	requireStatus(t, client, ns, badConfig.Name, v1alpha1.InvalidOIDCProviderStatus)
-	requireDiscoveryEndpointsAreNotFound(t, badIssuer)
+		// When the same issuer is added twice, both issuers are marked as duplicates, and neither provider is serving.
+		config6Duplicate1, _ := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer6, client)
+		config6Duplicate2 := library.CreateTestOIDCProvider(ctx, t, issuer6)
+		requireStatus(t, client, ns, config6Duplicate1.Name, v1alpha1.DuplicateOIDCProviderStatus)
+		requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.DuplicateOIDCProviderStatus)
+		requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer6)
+
+		// If we delete the first duplicate issuer, the second duplicate issuer starts serving.
+		requireDelete(t, client, ns, config6Duplicate1.Name)
+		requireWellKnownEndpointIsWorking(t, scheme, addr, caBundle, issuer6)
+		requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.SuccessOIDCProviderStatus)
+
+		// When we finally delete all issuers, the endpoint should be down.
+		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config6Duplicate2, client, ns, scheme, addr, caBundle, issuer6)
+
+		// "Host" headers can be used to send requests to discovery endpoints when the public address is different from the issuer name.
+		issuer7 := fmt.Sprintf("%s://some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com:2684/issuer7", scheme)
+		config7, _ := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer7, client)
+		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config7, client, ns, scheme, addr, caBundle, issuer7)
+
+		// When we create a provider with an invalid issuer, the status is set to invalid.
+		badConfig := library.CreateTestOIDCProvider(ctx, t, badIssuer)
+		requireStatus(t, client, ns, badConfig.Name, v1alpha1.InvalidOIDCProviderStatus)
+		requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, badIssuer)
+		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, badConfig, client, ns, scheme, addr, caBundle, badIssuer)
+	}
 }
 
-func jwksURLForIssuer(issuerName string) string {
-	return fmt.Sprintf("%s/jwks.json", issuerName)
+func jwksURLForIssuer(scheme, host, path string) string {
+	return fmt.Sprintf("%s://%s/%s/jwks.json", scheme, host, strings.TrimPrefix(path, "/"))
 }
 
-func wellKnownURLForIssuer(issuerName string) string {
-	return fmt.Sprintf("%s/.well-known/openid-configuration", issuerName)
+func wellKnownURLForIssuer(scheme, host, path string) string {
+	return fmt.Sprintf("%s://%s/%s/.well-known/openid-configuration", scheme, host, strings.TrimPrefix(path, "/"))
 }
 
-func requireDiscoveryEndpointsAreNotFound(t *testing.T, issuerName string) {
+func requireDiscoveryEndpointsAreNotFound(t *testing.T, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string) {
 	t.Helper()
-	requireEndpointNotFound(t, wellKnownURLForIssuer(issuerName))
-	requireEndpointNotFound(t, jwksURLForIssuer(issuerName))
+	issuerURL, err := url.Parse(issuerName)
+	require.NoError(t, err)
+	requireEndpointNotFound(t, wellKnownURLForIssuer(supervisorScheme, supervisorAddress, issuerURL.Path), issuerURL.Host, supervisorCABundle)
+	requireEndpointNotFound(t, jwksURLForIssuer(supervisorScheme, supervisorAddress, issuerURL.Path), issuerURL.Host, supervisorCABundle)
 }
 
-func requireEndpointNotFound(t *testing.T, url string) {
+func requireEndpointNotFound(t *testing.T, url, host, caBundle string) {
 	t.Helper()
-	httpClient := &http.Client{}
+	httpClient := newHTTPClient(caBundle)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	requestNonExistentPath, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	require.NoError(t, err)
+
+	requestNonExistentPath.Header.Add("Host", host)
 
 	var response *http.Response
 	assert.Eventually(t, func() bool {
@@ -148,31 +183,29 @@ func requireEndpointNotFound(t *testing.T, url string) {
 func requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(
 	ctx context.Context,
 	t *testing.T,
+	supervisorScheme, supervisorAddress, supervisorCABundle string,
 	issuerName string,
 	client pinnipedclientset.Interface,
 ) (*v1alpha1.OIDCProviderConfig, *ExpectedJWKSResponseFormat) {
 	t.Helper()
-
 	newOIDCProviderConfig := library.CreateTestOIDCProvider(ctx, t, issuerName)
-
-	jwksResult := requireDiscoveryEndpointsAreWorking(t, issuerName)
-
+	jwksResult := requireDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName)
 	requireStatus(t, client, newOIDCProviderConfig.Namespace, newOIDCProviderConfig.Name, v1alpha1.SuccessOIDCProviderStatus)
-
 	return newOIDCProviderConfig, jwksResult
 }
 
-func requireDiscoveryEndpointsAreWorking(t *testing.T, issuerName string) *ExpectedJWKSResponseFormat {
-	requireWellKnownEndpointIsWorking(t, issuerName)
-	jwksResult := requireJWKSEndpointIsWorking(t, issuerName)
+func requireDiscoveryEndpointsAreWorking(t *testing.T, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string) *ExpectedJWKSResponseFormat {
+	requireWellKnownEndpointIsWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName)
+	jwksResult := requireJWKSEndpointIsWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName)
 	return jwksResult
 }
 
-func requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(
+func requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(
 	t *testing.T,
 	existingOIDCProviderConfig *v1alpha1.OIDCProviderConfig,
 	client pinnipedclientset.Interface,
 	ns string,
+	supervisorScheme, supervisorAddress, supervisorCABundle string,
 	issuerName string,
 ) {
 	t.Helper()
@@ -184,13 +217,14 @@ func requireDeletingOIDCProviderConfigCausesWellKnownEndpointToDisappear(
 	require.NoError(t, err)
 
 	// Fetch that same discovery endpoint as before, but now it should not exist anymore. Give it some time for the endpoint to go away.
-	requireDiscoveryEndpointsAreNotFound(t, issuerName)
+	requireDiscoveryEndpointsAreNotFound(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName)
 }
 
-func requireWellKnownEndpointIsWorking(t *testing.T, issuerName string) {
+func requireWellKnownEndpointIsWorking(t *testing.T, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string) {
 	t.Helper()
-
-	response, responseBody := requireSuccessEndpointResponse(t, wellKnownURLForIssuer(issuerName)) //nolint:bodyclose
+	issuerURL, err := url.Parse(issuerName)
+	require.NoError(t, err)
+	response, responseBody := requireSuccessEndpointResponse(t, wellKnownURLForIssuer(supervisorScheme, supervisorAddress, issuerURL.Path), issuerName, supervisorCABundle) //nolint:bodyclose
 
 	// Check that the response matches our expectations.
 	expectedResultTemplate := here.Doc(`{
@@ -216,13 +250,15 @@ type ExpectedJWKSResponseFormat struct {
 	Keys []map[string]string
 }
 
-func requireJWKSEndpointIsWorking(t *testing.T, issuerName string) *ExpectedJWKSResponseFormat {
+func requireJWKSEndpointIsWorking(t *testing.T, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string) *ExpectedJWKSResponseFormat {
 	t.Helper()
 
-	response, responseBody := requireSuccessEndpointResponse(t, jwksURLForIssuer(issuerName)) //nolint:bodyclose
+	issuerURL, err := url.Parse(issuerName)
+	require.NoError(t, err)
+	response, responseBody := requireSuccessEndpointResponse(t, jwksURLForIssuer(supervisorScheme, supervisorAddress, issuerURL.Path), issuerName, supervisorCABundle) //nolint:bodyclose
 
 	var result ExpectedJWKSResponseFormat
-	err := json.Unmarshal([]byte(responseBody), &result)
+	err = json.Unmarshal([]byte(responseBody), &result)
 	require.NoError(t, err)
 
 	require.Len(t, result.Keys, 1)
@@ -241,8 +277,9 @@ func requireJWKSEndpointIsWorking(t *testing.T, issuerName string) *ExpectedJWKS
 	return &result
 }
 
-func requireSuccessEndpointResponse(t *testing.T, wellKnownURL string) (*http.Response, string) {
-	httpClient := &http.Client{}
+func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle string) (*http.Response, string) {
+	t.Helper()
+	httpClient := newHTTPClient(caBundle)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
@@ -250,10 +287,17 @@ func requireSuccessEndpointResponse(t *testing.T, wellKnownURL string) (*http.Re
 	requestDiscoveryEndpoint, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		wellKnownURL,
+		endpointURL,
 		nil,
 	)
 	require.NoError(t, err)
+
+	issuerURL, err := url.Parse(issuer)
+	require.NoError(t, err)
+	// Set the host header on the request to match the issuer's hostname, which could potentially be different
+	// from the public ingress address, e.g. when a load balancer is used, so we want to test here that the host
+	// header is respected by the supervisor server.
+	requestDiscoveryEndpoint.Host = issuerURL.Host
 
 	// Fetch that discovery endpoint. Give it some time for the endpoint to come into existence.
 	var response *http.Response
@@ -314,4 +358,14 @@ func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name st
 	}, 10*time.Second, 200*time.Millisecond)
 	require.NoError(t, err)
 	require.Equalf(t, status, opc.Status.Status, "unexpected status (message = '%s')", opc.Status.Message)
+}
+
+func newHTTPClient(caBundle string) *http.Client {
+	c := &http.Client{}
+	if caBundle != "" { // CA bundle is optional
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM([]byte(caBundle))
+		c.Transport = &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: caCertPool}}
+	}
+	return c
 }

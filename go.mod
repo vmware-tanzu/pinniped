@@ -10,6 +10,7 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/logr v0.2.1
 	github.com/go-logr/stdr v0.2.0
+	github.com/gofrs/flock v0.8.0
 	github.com/golang/mock v1.4.4
 	github.com/golangci/golangci-lint v1.31.0
 	github.com/google/go-cmp v0.5.2

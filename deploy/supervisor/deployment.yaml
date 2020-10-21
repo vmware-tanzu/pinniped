@@ -84,10 +84,13 @@ spec:
               mountPath: /etc/config
             - name: podinfo
               mountPath: /etc/podinfo
+          ports:
+            - containerPort: 80
+              protocol: TCP
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 8080
+              port: 80
               scheme: HTTP
             initialDelaySeconds: 2
             timeoutSeconds: 15
@@ -96,7 +99,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /healthz
-              port: 8080
+              port: 80
               scheme: HTTP
             initialDelaySeconds: 2
             timeoutSeconds: 3

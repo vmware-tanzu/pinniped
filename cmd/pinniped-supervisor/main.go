@@ -159,8 +159,15 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 		pinnipedinformers.WithNamespace(serverInstallationNamespace),
 	)
 
+	// Serve the /healthz endpoint and make all other paths result in 404.
+	healthMux := http.NewServeMux()
+	healthMux.Handle("/healthz", http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		_, _ = writer.Write([]byte("ok"))
+	}))
+
 	dynamicJWKSProvider := jwks.NewDynamicJWKSProvider()
-	oidProvidersManager := manager.NewManager(http.NotFoundHandler(), dynamicJWKSProvider)
+	// OIDC endpoints will be served by the oidProvidersManager, and any non-OIDC paths will fallback to the healthMux.
+	oidProvidersManager := manager.NewManager(healthMux, dynamicJWKSProvider)
 	startControllers(ctx, cfg, oidProvidersManager, dynamicJWKSProvider, kubeClient, pinnipedClient, kubeInformers, pinnipedInformers)
 
 	//nolint: gosec // Intentionally binding to all network interfaces.
@@ -170,18 +177,6 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 	}
 	defer l.Close()
 	start(ctx, l, oidProvidersManager)
-
-	//nolint: gosec // Intentionally binding to all network interfaces.
-	healthzListener, err := net.Listen("tcp", ":8080")
-	if err != nil {
-		return fmt.Errorf("cannot create healthzListener: %w", err)
-	}
-	defer healthzListener.Close()
-	healthzMux := http.NewServeMux()
-	healthzMux.Handle("/healthz", http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		_, _ = writer.Write([]byte("ok"))
-	}))
-	start(ctx, healthzListener, healthzMux)
 
 	klog.InfoS("supervisor is ready", "address", l.Addr().String())
 

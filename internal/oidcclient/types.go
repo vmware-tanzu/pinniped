@@ -47,3 +47,16 @@ type Token struct {
 	// IDToken is an OpenID Connect ID token.
 	IDToken *IDToken `json:"id,omitempty"`
 }
+
+// SessionCacheKey contains the data used to select a valid session cache entry.
+type SessionCacheKey struct {
+	Issuer      string   `json:"issuer"`
+	ClientID    string   `json:"clientID"`
+	Scopes      []string `json:"scopes"`
+	RedirectURI string   `json:"redirect_uri"`
+}
+
+type SessionCache interface {
+	GetToken(SessionCacheKey) *Token
+	PutToken(SessionCacheKey, *Token)
+}

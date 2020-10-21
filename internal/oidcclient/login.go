@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/coreos/go-oidc"
@@ -24,12 +25,20 @@ import (
 	"go.pinniped.dev/internal/oidcclient/state"
 )
 
+const (
+	// minIDTokenValidity is the minimum amount of time that a cached ID token must be still be valid to be considered.
+	// This is non-zero to ensure that most of the time, your ID token won't expire in the middle of a multi-step k8s
+	// API operation.
+	minIDTokenValidity = 10 * time.Minute
+)
+
 type handlerState struct {
 	// Basic parameters.
 	ctx      context.Context
 	issuer   string
 	clientID string
 	scopes   []string
+	cache    SessionCache
 
 	// Parameters of the localhost listener.
 	listenAddr   string
@@ -100,6 +109,20 @@ func WithBrowserOpen(openURL func(url string) error) Option {
 	}
 }
 
+// WithSessionCache sets the session cache backend for storing and retrieving previously-issued ID tokens and refresh tokens.
+func WithSessionCache(cache SessionCache) Option {
+	return func(h *handlerState) error {
+		h.cache = cache
+		return nil
+	}
+}
+
+// nopCache is a SessionCache that doesn't actually do anything.
+type nopCache struct{}
+
+func (*nopCache) GetToken(SessionCacheKey) *Token  { return nil }
+func (*nopCache) PutToken(SessionCacheKey, *Token) {}
+
 // Login performs an OAuth2/OIDC authorization code login using a localhost listener.
 func Login(issuer string, clientID string, opts ...Option) (*Token, error) {
 	h := handlerState{
@@ -107,6 +130,7 @@ func Login(issuer string, clientID string, opts ...Option) (*Token, error) {
 		clientID:     clientID,
 		listenAddr:   "localhost:0",
 		scopes:       []string{"offline_access", "openid", "email", "profile"},
+		cache:        &nopCache{},
 		callbackPath: "/callback",
 		ctx:          context.Background(),
 		callbacks:    make(chan callbackResult),
@@ -141,6 +165,22 @@ func Login(issuer string, clientID string, opts ...Option) (*Token, error) {
 	h.pkce, err = h.generatePKCE()
 	if err != nil {
 		return nil, err
+	}
+
+	// Check the cache for a previous session issued with the same parameters.
+	sort.Strings(h.scopes)
+	cacheKey := SessionCacheKey{
+		Issuer:      h.issuer,
+		ClientID:    h.clientID,
+		Scopes:      h.scopes,
+		RedirectURI: (&url.URL{Scheme: "http", Host: h.listenAddr, Path: h.callbackPath}).String(),
+	}
+
+	// If the ID token is still valid for a bit, return it immediately and skip the rest of the flow.
+	if cached := h.cache.GetToken(cacheKey); cached != nil &&
+		cached.IDToken != nil &&
+		time.Until(cached.IDToken.Expiry.Time) > minIDTokenValidity {
+		return cached, nil
 	}
 
 	// Perform OIDC discovery.
@@ -204,6 +244,7 @@ func Login(issuer string, clientID string, opts ...Option) (*Token, error) {
 		if callback.err != nil {
 			return nil, fmt.Errorf("error handling callback: %w", callback.err)
 		}
+		h.cache.PutToken(cacheKey, callback.token)
 		return callback.token, nil
 	}
 }

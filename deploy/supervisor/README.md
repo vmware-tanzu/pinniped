@@ -40,38 +40,70 @@ Either [install `ytt`](https://get-ytt.io/) or use the [container image from Doc
 
 ### Exposing the Supervisor App as a Service
 
-Create a Service to make the app available outside of the cluster. If you installed using `ytt` then you can use
-the related `service_*_port` options from [deploy/supervisor/values.yml](values.yaml) to create a Service, instead
-of creating them manually as shown below.
+The Supervisor app's endpoints should be exposed as HTTPS endpoints with proper TLS certificates signed by a
+Certificate Authority which will be trusted by your user's web browsers. Because there are
+many ways to expose TLS services from a Kubernetes cluster, the Supervisor app leaves this up to the user.
+The most common ways are:
 
-#### Using a LoadBalancer Service
+1. Define an [`Ingress` resource](https://kubernetes.io/docs/concepts/services-networking/ingress/) with TLS certificates.
+   In this case, the ingress will terminate TLS. Typically, the ingress will then talk plain HTTP to its backend,
+   which would be a NodePort or LoadBalancer Service in front of the HTTP port 80 of the Supervisor pods.
 
-Using a LoadBalancer Service is probably the easiest way to expose the Supervisor app, if your cluster supports
-LoadBalancer Services. For example:
+   The required configuration of the Ingress is specific to your cluster's Ingress Controller, so please refer to the
+   documentation from your Kubernetes provider. If you are using a cluster from a cloud provider, then you'll probably
+   want to start with that provider's documentation. For example, if your cluster is a Google GKE cluster, refer to
+   the [GKE documentation for Ingress](https://cloud.google.com/kubernetes-engine/docs/concepts/ingress).
+   Otherwise, the Kubernetes documentation provides a list of popular
+   [Ingress Controllers](https://kubernetes.io/docs/concepts/services-networking/ingress-controllers/), including
+   [Contour](https://projectcontour.io/) and many others.
+
+1. Or, define a [TCP LoadBalancer Service](https://kubernetes.io/docs/concepts/services-networking/service/#loadbalancer)
+   which is a layer 4 load balancer and does not terminate TLS. In this case, the Supervisor app will need to be
+   configured with TLS certificates and will terminate the TLS connection itself (see the section about
+   OIDCProviderConfig below). The LoadBalancer Service should be configured to use the HTTPS port 443 of
+   the Supervisor pods as its `targetPort`.
+
+   *Warning:* Do not expose the Supervisor's port 80 to the public. It would not be secure for the OIDC protocol
+   to use HTTP, because the user's secret OIDC tokens would be transmitted across the network without encryption.
+
+For either of the above options, if you installed using `ytt` then you can use
+the related `service_*` options from [deploy/supervisor/values.yml](values.yaml) to create a Service.
+If you installed using `install-supervisor.yaml` then you can create
+the Service separately after installing the Supervisor app. There is no `Ingress` included in the `ytt` templates,
+so if you choose to use an Ingress then you'll need to create that separately after installing the Supervisor app.
+
+#### Example: Using a LoadBalancer Service
+
+This is an example of creating a LoadBalancer Service to expose port 443 of the Supervisor app outside the cluster.
 
 ```yaml
 apiVersion: v1
 kind: Service
 metadata:
   name: pinniped-supervisor-loadbalancer
+  # Assuming that this is the namespace where the supervisor was installed. This is the default in install-supervisor.yaml.
   namespace: pinniped-supervisor
-  labels:
-    app: pinniped-supervisor
 spec:
   type: LoadBalancer
   selector:
+    # Assuming that this is how the supervisor pods are labeled. This is the default in install-supervisor.yaml.
     app: pinniped-supervisor
   ports:
   - protocol: TCP
-    port: 80
-    targetPort: 80
+    port: 443
+    targetPort: 443
 ```
 
-#### Using a NodePort Service
+#### Example: Using a NodePort Service
 
 A NodePort Service exposes the app as a port on the nodes of the cluster.
+
 This is convenient for use with kind clusters, because kind can
-[expose node ports as localhost ports on the host machine](https://kind.sigs.k8s.io/docs/user/configuration/#extra-port-mappings).
+[expose node ports as localhost ports on the host machine](https://kind.sigs.k8s.io/docs/user/configuration/#extra-port-mappings)
+without requiring an Ingress, although
+[kind also supports several Ingress Controllers](https://kind.sigs.k8s.io/docs/user/ingress).
+
+A NodePort Service could also be used behind an Ingress which is terminating TLS.
 
 For example:
 
@@ -80,18 +112,18 @@ apiVersion: v1
 kind: Service
 metadata:
   name: pinniped-supervisor-nodeport
+  # Assuming that this is the namespace where the supervisor was installed. This is the default in install-supervisor.yaml.
   namespace: pinniped-supervisor
-  labels:
-    app: pinniped-supervisor
 spec:
   type: NodePort
   selector:
+    # Assuming that this is how the supervisor pods are labeled. This is the default in install-supervisor.yaml.
     app: pinniped-supervisor
   ports:
   - protocol: TCP
     port: 80
     targetPort: 80
-    nodePort: 31234
+    nodePort: 31234 # This is the port that you would forward to the kind host. Or omit this key for a random port.
 ```
 
 ### Configuring the Supervisor to Act as an OIDC Provider
@@ -104,7 +136,19 @@ apiVersion: config.pinniped.dev/v1alpha1
 kind: OIDCProviderConfig
 metadata:
   name: my-provider
+  # Assuming that this is the namespace where the supervisor was installed. This is the default in install-supervisor.yaml.
   namespace: pinniped-supervisor
 spec:
-  issuer: https://my-issuer.example.com
+  # The hostname would typically match the DNS name of the public ingress or load balancer for the cluster.
+  # Any path can be specified, which allows a single hostname to have multiple different issuers. The path is optional.
+  issuer: https://my-issuer.example.com/any/path
 ```
+
+If you are using a LoadBalancer Service to expose the Supervisor app outside your cluster, then you will
+also need to configure the OIDCProviderConfig with TLS certificates, so the app can terminate TLS.
+You can create the certificates however you like, for example you could use [cert-manager](https://cert-manager.io/).
+Keep in mind that your users will load some of these endpoints in their web browsers, so the TLS certificates
+should be signed by a Certificate Authority that will be trusted by those browsers.
+
+If you have terminated TLS outside the app, for example using an Ingress with TLS certificates, then you do not need to
+configure TLS certificates on the OIDCProviderConfig.

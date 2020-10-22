@@ -30,6 +30,10 @@ const (
 	// This is non-zero to ensure that most of the time, your ID token won't expire in the middle of a multi-step k8s
 	// API operation.
 	minIDTokenValidity = 10 * time.Minute
+
+	// 	refreshTimeout is the amount of time allotted for OAuth2 refresh operations. Since these don't involve any
+	// 	user interaction, they should always be roughly as fast as network latency.
+	refreshTimeout = 30 * time.Second
 )
 
 type handlerState struct {
@@ -56,6 +60,7 @@ type handlerState struct {
 	generatePKCE  func() (pkce.Code, error)
 	generateNonce func() (nonce.Nonce, error)
 	openURL       func(string) error
+	oidcDiscover  func(context.Context, string) (discoveryI, error)
 
 	callbacks chan callbackResult
 }
@@ -123,6 +128,11 @@ type nopCache struct{}
 func (*nopCache) GetToken(SessionCacheKey) *Token  { return nil }
 func (*nopCache) PutToken(SessionCacheKey, *Token) {}
 
+type discoveryI interface {
+	Endpoint() oauth2.Endpoint
+	Verifier(*oidc.Config) *oidc.IDTokenVerifier
+}
+
 // Login performs an OAuth2/OIDC authorization code login using a localhost listener.
 func Login(issuer string, clientID string, opts ...Option) (*Token, error) {
 	h := handlerState{
@@ -140,6 +150,9 @@ func Login(issuer string, clientID string, opts ...Option) (*Token, error) {
 		generateNonce: nonce.Generate,
 		generatePKCE:  pkce.Generate,
 		openURL:       browser.OpenURL,
+		oidcDiscover: func(ctx context.Context, iss string) (discoveryI, error) {
+			return oidc.NewProvider(ctx, iss)
+		},
 	}
 	for _, opt := range opts {
 		if err := opt(&h); err != nil {
@@ -177,52 +190,52 @@ func Login(issuer string, clientID string, opts ...Option) (*Token, error) {
 	}
 
 	// If the ID token is still valid for a bit, return it immediately and skip the rest of the flow.
-	if cached := h.cache.GetToken(cacheKey); cached != nil &&
-		cached.IDToken != nil &&
-		time.Until(cached.IDToken.Expiry.Time) > minIDTokenValidity {
+	cached := h.cache.GetToken(cacheKey)
+	if cached != nil && cached.IDToken != nil && time.Until(cached.IDToken.Expiry.Time) > minIDTokenValidity {
 		return cached, nil
 	}
 
 	// Perform OIDC discovery.
-	provider, err := oidc.NewProvider(h.ctx, h.issuer)
+	discovered, err := h.oidcDiscover(h.ctx, h.issuer)
 	if err != nil {
 		return nil, fmt.Errorf("could not perform OIDC discovery for %q: %w", h.issuer, err)
 	}
-	h.idTokenVerifier = provider.Verifier(&oidc.Config{ClientID: h.clientID})
-
-	// Open a TCP listener.
-	listener, err := net.Listen("tcp", h.listenAddr)
-	if err != nil {
-		return nil, fmt.Errorf("could not open callback listener: %w", err)
-	}
+	h.idTokenVerifier = discovered.Verifier(&oidc.Config{ClientID: h.clientID})
 
 	// Build an OAuth2 configuration based on the OIDC discovery data and our callback endpoint.
 	h.oauth2Config = &oauth2.Config{
 		ClientID: h.clientID,
-		Endpoint: provider.Endpoint(),
-		RedirectURL: (&url.URL{
-			Scheme: "http",
-			Host:   listener.Addr().String(),
-			Path:   h.callbackPath,
-		}).String(),
-		Scopes: h.scopes,
+		Endpoint: discovered.Endpoint(),
+		Scopes:   h.scopes,
 	}
 
-	// Start a callback server in a background goroutine.
-	mux := http.NewServeMux()
-	mux.Handle(h.callbackPath, httperr.HandlerFunc(h.handleAuthCodeCallback))
-	srv := http.Server{
-		Handler:     securityheader.Wrap(mux),
-		BaseContext: func(_ net.Listener) context.Context { return h.ctx },
+	// If there was a cached refresh token, attempt to use the refresh flow instead of a fresh login.
+	if cached != nil && cached.RefreshToken != nil && cached.RefreshToken.Token != "" {
+		freshToken, err := h.handleRefresh(ctx, cached.RefreshToken)
+		if err != nil {
+			return nil, err
+		}
+		// If we got a fresh token, we can update the cache and return it. Otherwise we fall through to the full refresh flow.
+		if freshToken != nil {
+			h.cache.PutToken(cacheKey, freshToken)
+			return freshToken, nil
+		}
 	}
-	go func() { _ = srv.Serve(listener) }()
-	defer func() {
-		// Gracefully shut down the server, allowing up to 5 seconds for
-		// clients to receive any in-flight responses.
-		shutdownCtx, cancel := context.WithTimeout(h.ctx, 1*time.Second)
-		_ = srv.Shutdown(shutdownCtx)
-		cancel()
-	}()
+
+	// Open a TCP listener and update the OAuth2 redirect_uri to match (in case we are using an ephemeral port number).
+	listener, err := net.Listen("tcp", h.listenAddr)
+	if err != nil {
+		return nil, fmt.Errorf("could not open callback listener: %w", err)
+	}
+	h.oauth2Config.RedirectURL = (&url.URL{
+		Scheme: "http",
+		Host:   listener.Addr().String(),
+		Path:   h.callbackPath,
+	}).String()
+
+	// Start a callback server in a background goroutine.
+	shutdown := h.serve(listener)
+	defer shutdown()
 
 	// Open the authorize URL in the users browser.
 	authorizeURL := h.oauth2Config.AuthCodeURL(
@@ -247,6 +260,22 @@ func Login(issuer string, clientID string, opts ...Option) (*Token, error) {
 		h.cache.PutToken(cacheKey, callback.token)
 		return callback.token, nil
 	}
+}
+
+func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *RefreshToken) (*Token, error) {
+	ctx, cancel := context.WithTimeout(ctx, refreshTimeout)
+	defer cancel()
+	refreshSource := h.oauth2Config.TokenSource(ctx, &oauth2.Token{RefreshToken: refreshToken.Token})
+
+	refreshed, err := refreshSource.Token()
+	if err != nil {
+		// Ignore errors during refresh, but return nil which will trigger the full login flow.
+		return nil, nil
+	}
+
+	// The spec is not 100% clear about whether an ID token from the refresh flow should include a nonce, and at least
+	// some providers do not include one, so we skip the nonce validation here (but not other validations).
+	return h.validateToken(ctx, refreshed, false)
 }
 
 func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Request) (err error) {
@@ -280,37 +309,64 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 	}
 
 	// Perform required validations on the returned ID token.
-	idTok, hasIDTok := oauth2Tok.Extra("id_token").(string)
-	if !hasIDTok {
-		return httperr.New(http.StatusBadRequest, "received response missing ID token")
-	}
-	validated, err := h.idTokenVerifier.Verify(r.Context(), idTok)
+	token, err := h.validateToken(r.Context(), oauth2Tok, true)
 	if err != nil {
-		return httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
-	}
-	if validated.AccessTokenHash != "" {
-		if err := validated.VerifyAccessToken(oauth2Tok.AccessToken); err != nil {
-			return httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
-		}
-	}
-	if err := h.nonce.Validate(validated); err != nil {
-		return httperr.Wrap(http.StatusBadRequest, "received ID token with invalid nonce", err)
+		return err
 	}
 
-	h.callbacks <- callbackResult{token: &Token{
+	h.callbacks <- callbackResult{token: token}
+	_, _ = w.Write([]byte("you have been logged in and may now close this tab"))
+	return nil
+}
+
+func (h *handlerState) validateToken(ctx context.Context, tok *oauth2.Token, checkNonce bool) (*Token, error) {
+	idTok, hasIDTok := tok.Extra("id_token").(string)
+	if !hasIDTok {
+		return nil, httperr.New(http.StatusBadRequest, "received response missing ID token")
+	}
+	validated, err := h.idTokenVerifier.Verify(ctx, idTok)
+	if err != nil {
+		return nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
+	}
+	if validated.AccessTokenHash != "" {
+		if err := validated.VerifyAccessToken(tok.AccessToken); err != nil {
+			return nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
+		}
+	}
+	if checkNonce {
+		if err := h.nonce.Validate(validated); err != nil {
+			return nil, httperr.Wrap(http.StatusBadRequest, "received ID token with invalid nonce", err)
+		}
+	}
+	return &Token{
 		AccessToken: &AccessToken{
-			Token:  oauth2Tok.AccessToken,
-			Type:   oauth2Tok.TokenType,
-			Expiry: metav1.NewTime(oauth2Tok.Expiry),
+			Token:  tok.AccessToken,
+			Type:   tok.TokenType,
+			Expiry: metav1.NewTime(tok.Expiry),
 		},
 		RefreshToken: &RefreshToken{
-			Token: oauth2Tok.RefreshToken,
+			Token: tok.RefreshToken,
 		},
 		IDToken: &IDToken{
 			Token:  idTok,
 			Expiry: metav1.NewTime(validated.Expiry),
 		},
-	}}
-	_, _ = w.Write([]byte("you have been logged in and may now close this tab"))
-	return nil
+	}, nil
+}
+
+func (h *handlerState) serve(listener net.Listener) func() {
+	mux := http.NewServeMux()
+	mux.Handle(h.callbackPath, httperr.HandlerFunc(h.handleAuthCodeCallback))
+	srv := http.Server{
+		Handler:     securityheader.Wrap(mux),
+		BaseContext: func(_ net.Listener) context.Context { return h.ctx },
+	}
+	go func() { _ = srv.Serve(listener) }()
+	return func() {
+		// Gracefully shut down the server, allowing up to 5 seconds for
+		// clients to receive any in-flight responses.
+		shutdownCtx, cancel := context.WithTimeout(h.ctx, 1*time.Second)
+		_ = srv.Shutdown(shutdownCtx)
+		cancel()
+	}
 }

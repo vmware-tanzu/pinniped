@@ -26,6 +26,8 @@ import (
 	"gopkg.in/square/go-jose.v2"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
+	"go.pinniped.dev/internal/oidcclient"
+	"go.pinniped.dev/internal/oidcclient/filesession"
 	"go.pinniped.dev/test/library"
 )
 
@@ -176,18 +178,12 @@ func TestCLILoginOIDC(t *testing.T) {
 	sessionCachePath := t.TempDir() + "/sessions.yaml"
 
 	// Start the CLI running the "alpha login oidc [...]" command with stdout/stderr connected to pipes.
-	t.Logf("starting CLI subprocess")
-	cmd := exec.CommandContext(ctx, pinnipedExe, "alpha", "login", "oidc",
-		"--issuer", env.OIDCUpstream.Issuer,
-		"--client-id", env.OIDCUpstream.ClientID,
-		"--listen-port", strconv.Itoa(env.OIDCUpstream.LocalhostPort),
-		"--session-cache", sessionCachePath,
-		"--skip-browser",
-	)
+	cmd := oidcLoginCommand(ctx, t, pinnipedExe, sessionCachePath)
 	stderr, err := cmd.StderrPipe()
 	require.NoError(t, err)
 	stdout, err := cmd.StdoutPipe()
 	require.NoError(t, err)
+	t.Logf("starting CLI subprocess")
 	require.NoError(t, cmd.Start())
 	t.Cleanup(func() {
 		err := cmd.Wait()
@@ -312,23 +308,44 @@ func TestCLILoginOIDC(t *testing.T) {
 
 	// Run the CLI again with the same session cache and login parameters.
 	t.Logf("starting second CLI subprocess to test session caching")
-	secondCtx, secondCancel := context.WithTimeout(ctx, 5*time.Second)
-	defer secondCancel()
-	cmdOutput, err := exec.CommandContext(secondCtx, pinnipedExe, "alpha", "login", "oidc",
-		"--issuer", env.OIDCUpstream.Issuer,
-		"--client-id", env.OIDCUpstream.ClientID,
-		"--listen-port", strconv.Itoa(env.OIDCUpstream.LocalhostPort),
-		"--session-cache", sessionCachePath,
-		"--skip-browser",
-	).CombinedOutput()
-	require.NoError(t, err)
+	cmd2Output, err := oidcLoginCommand(ctx, t, pinnipedExe, sessionCachePath).CombinedOutput()
+	require.NoError(t, err, string(cmd2Output))
 
 	// Expect the CLI to output the same ExecCredential in JSON format.
 	t.Logf("validating second ExecCredential")
 	var credOutput2 clientauthenticationv1beta1.ExecCredential
-	require.NoErrorf(t, json.Unmarshal(cmdOutput, &credOutput2),
-		"command returned something other than an ExecCredential:\n%s", string(cmdOutput))
+	require.NoErrorf(t, json.Unmarshal(cmd2Output, &credOutput2),
+		"command returned something other than an ExecCredential:\n%s", string(cmd2Output))
 	require.Equal(t, credOutput, credOutput2)
+
+	// Overwrite the cache entry to remove the access and ID tokens.
+	t.Logf("overwriting cache to remove valid ID token")
+	cache := filesession.New(sessionCachePath)
+	cacheKey := oidcclient.SessionCacheKey{
+		Issuer:      env.OIDCUpstream.Issuer,
+		ClientID:    env.OIDCUpstream.ClientID,
+		Scopes:      []string{"email", "offline_access", "openid", "profile"},
+		RedirectURI: fmt.Sprintf("http://localhost:%d/callback", env.OIDCUpstream.LocalhostPort),
+	}
+	cached := cache.GetToken(cacheKey)
+	require.NotNil(t, cached)
+	require.NotNil(t, cached.RefreshToken)
+	require.NotEmpty(t, cached.RefreshToken.Token)
+	cached.IDToken = nil
+	cached.AccessToken = nil
+	cache.PutToken(cacheKey, cached)
+
+	// Run the CLI a third time with the same session cache and login parameters.
+	t.Logf("starting third CLI subprocess to test refresh flow")
+	cmd3Output, err := oidcLoginCommand(ctx, t, pinnipedExe, sessionCachePath).CombinedOutput()
+	require.NoError(t, err, string(cmd2Output))
+
+	// Expect the CLI to output a new ExecCredential in JSON format (different from the one returned the first two times).
+	t.Logf("validating third ExecCredential")
+	var credOutput3 clientauthenticationv1beta1.ExecCredential
+	require.NoErrorf(t, json.Unmarshal(cmd3Output, &credOutput3),
+		"command returned something other than an ExecCredential:\n%s", string(cmd2Output))
+	require.NotEqual(t, credOutput2.Status.Token, credOutput3.Status.Token)
 }
 
 func waitForVisibleElements(t *testing.T, page *agouti.Page, selectors ...string) {
@@ -374,4 +391,15 @@ func spawnTestGoroutine(t *testing.T, f func() error) {
 		require.NoError(t, eg.Wait(), "background goroutine failed")
 	})
 	eg.Go(f)
+}
+
+func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, sessionCachePath string) *exec.Cmd {
+	env := library.IntegrationEnv(t)
+	return exec.CommandContext(ctx, pinnipedExe, "alpha", "login", "oidc",
+		"--issuer", env.OIDCUpstream.Issuer,
+		"--client-id", env.OIDCUpstream.ClientID,
+		"--listen-port", strconv.Itoa(env.OIDCUpstream.LocalhostPort),
+		"--session-cache", sessionCachePath,
+		"--skip-browser",
+	)
 }

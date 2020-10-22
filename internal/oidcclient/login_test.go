@@ -15,6 +15,7 @@ import (
 
 	"github.com/coreos/go-oidc"
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 	"gopkg.in/square/go-jose.v2"
@@ -49,7 +50,10 @@ func (m *mockSessionCache) PutToken(key SessionCacheKey, token *Token) {
 }
 
 func TestLogin(t *testing.T) {
-	time1 := time.Date(3020, 10, 12, 13, 14, 15, 16, time.UTC)
+	time1 := time.Date(2035, 10, 12, 13, 14, 15, 16, time.UTC)
+	time1Unix := int64(2075807775)
+	require.Equal(t, time1Unix, time1.Add(2*time.Minute).Unix())
+
 	testToken := Token{
 		AccessToken: &AccessToken{
 			Token:  "test-access-token",
@@ -59,7 +63,9 @@ func TestLogin(t *testing.T) {
 			Token: "test-refresh-token",
 		},
 		IDToken: &IDToken{
-			Token:  "test-id-token",
+			// Test JWT generated with https://smallstep.com/docs/cli/crypto/jwt/ (using time1Unix from above):
+			// step crypto keypair key.pub key.priv --kty RSA --no-password --insecure --force && echo '{}' | step crypto jwt sign --key key.priv --aud test-client-id --sub test-user --subtle --kid="test-kid" --jti="test-jti" --exp 2075807775
+			Token:  "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJhdWQiOiJ0ZXN0LWNsaWVudC1pZCIsImV4cCI6MjA3NTgwNzc3NSwiaWF0IjoxNjAzMzk5NTY4LCJpc3MiOiJ0ZXN0LWlzc3VlciIsImp0aSI6InRlc3QtanRpIiwibmJmIjoxNjAzMzk5NTY4LCJzdWIiOiJ0ZXN0LXVzZXIifQ.CdwUWQb6xELeFlC4u84K4rzks7YiDJiXxIo_SaRvCHBijxtil812RBRfPuAyYKJlGwFx1g-JYvkUg69X5NmvmLXkaOdHIKUAT7Nqa7yqd1xOAP9IlFj9qZM3Q7s8gWWW9da-_ryagzN4fyGfNfYeGhzIriSMaVpuBGz1eg6f-6VuuulnoiOpl8A0l50u0MdRjjsxRHuiR2loIhUxoIQQ9xN8w53UiP0R1uz8_uV0_K93RSq37aPjsnCXRLwUUb3azkRVe6B9EUW1ihthQ-KfRaU1iq2rY1m5UqNzf0NqDXCrN5SF-GVxOhKXJTsN4-PABfJBjqxg6dGUGeIa2JhFcA",
 			Expiry: metav1.NewTime(time1.Add(2 * time.Minute)),
 		},
 	}
@@ -70,11 +76,15 @@ func TestLogin(t *testing.T) {
 	}))
 	t.Cleanup(errorServer.Close)
 
-	// Start a test server that returns a real keyset
+	// Start a test server that returns a real keyset and answers refresh requests.
 	providerMux := http.NewServeMux()
 	successServer := httptest.NewServer(providerMux)
 	t.Cleanup(successServer.Close)
 	providerMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "unexpected method", http.StatusMethodNotAllowed)
+			return
+		}
 		w.Header().Set("content-type", "application/json")
 		type providerJSON struct {
 			Issuer   string `json:"issuer"`
@@ -88,6 +98,44 @@ func TestLogin(t *testing.T) {
 			TokenURL: successServer.URL + "/token",
 			JWKSURL:  successServer.URL + "/keys",
 		})
+	})
+	providerMux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "unexpected method", http.StatusMethodNotAllowed)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if r.Form.Get("client_id") != "test-client-id" {
+			http.Error(w, "expected client_id 'test-client-id'", http.StatusBadRequest)
+			return
+		}
+		if r.Form.Get("grant_type") != "refresh_token" {
+			http.Error(w, "expected refresh_token grant type", http.StatusBadRequest)
+			return
+		}
+
+		var response struct {
+			oauth2.Token
+			IDToken   string `json:"id_token,omitempty"`
+			ExpiresIn int64  `json:"expires_in"`
+		}
+		response.AccessToken = testToken.AccessToken.Token
+		response.ExpiresIn = int64(time.Until(testToken.AccessToken.Expiry.Time).Seconds())
+		response.RefreshToken = testToken.RefreshToken.Token
+		response.IDToken = testToken.IDToken.Token
+
+		if r.Form.Get("refresh_token") == "test-refresh-token-returning-invalid-id-token" {
+			response.IDToken = "not a valid JWT"
+		} else if r.Form.Get("refresh_token") != "test-refresh-token" {
+			http.Error(w, "expected refresh_token to be 'test-refresh-token'", http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("content-type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(&response))
 	})
 
 	tests := []struct {
@@ -191,6 +239,106 @@ func TestLogin(t *testing.T) {
 			},
 			issuer:  errorServer.URL,
 			wantErr: fmt.Sprintf("could not perform OIDC discovery for %q: 500 Internal Server Error: some discovery error\n", errorServer.URL),
+		},
+		{
+			name:     "session cache hit with refreshable token",
+			issuer:   successServer.URL,
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &Token{
+						IDToken: &IDToken{
+							Token:  "expired-test-id-token",
+							Expiry: metav1.Now(), // less than Now() + minIDTokenValidity
+						},
+						RefreshToken: &RefreshToken{Token: "test-refresh-token"},
+					}}
+					t.Cleanup(func() {
+						cacheKey := SessionCacheKey{
+							Issuer:      successServer.URL,
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawPutKeys)
+						require.Len(t, cache.sawPutTokens, 1)
+						require.Equal(t, testToken.IDToken.Token, cache.sawPutTokens[0].IDToken.Token)
+					})
+					h.cache = cache
+
+					h.oidcDiscover = func(ctx context.Context, iss string) (discoveryI, error) {
+						provider, err := oidc.NewProvider(ctx, iss)
+						require.NoError(t, err)
+						return &mockDiscovery{provider: provider}, nil
+					}
+					return nil
+				}
+			},
+			wantToken: &testToken,
+		},
+		{
+			name:     "session cache hit but refresh returns invalid token",
+			issuer:   successServer.URL,
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &Token{
+						IDToken: &IDToken{
+							Token:  "expired-test-id-token",
+							Expiry: metav1.Now(), // less than Now() + minIDTokenValidity
+						},
+						RefreshToken: &RefreshToken{Token: "test-refresh-token-returning-invalid-id-token"},
+					}}
+					t.Cleanup(func() {
+						require.Empty(t, cache.sawPutKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					h.cache = cache
+
+					h.oidcDiscover = func(ctx context.Context, iss string) (discoveryI, error) {
+						provider, err := oidc.NewProvider(ctx, iss)
+						require.NoError(t, err)
+						return &mockDiscovery{provider: provider}, nil
+					}
+
+					return nil
+				}
+			},
+			wantErr: "received invalid ID token: oidc: malformed jwt: square/go-jose: compact JWS format must have three parts",
+		},
+		{
+			name:     "session cache hit but refresh fails",
+			issuer:   successServer.URL,
+			clientID: "not-the-test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &Token{
+						IDToken: &IDToken{
+							Token:  "expired-test-id-token",
+							Expiry: metav1.Now(), // less than Now() + minIDTokenValidity
+						},
+						RefreshToken: &RefreshToken{Token: "test-refresh-token"},
+					}}
+					t.Cleanup(func() {
+						require.Empty(t, cache.sawPutKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					h.cache = cache
+
+					h.oidcDiscover = func(ctx context.Context, iss string) (discoveryI, error) {
+						provider, err := oidc.NewProvider(ctx, iss)
+						require.NoError(t, err)
+						return &mockDiscovery{provider: provider}, nil
+					}
+
+					h.listenAddr = "invalid-listen-address"
+
+					return nil
+				}
+			},
+			// Expect this to fall through to the authorization code flow, so it fails here.
+			wantErr: "could not open callback listener: listen tcp: address invalid-listen-address: missing port in address",
 		},
 		{
 			name: "listen failure",
@@ -320,7 +468,30 @@ func TestLogin(t *testing.T) {
 				require.Nil(t, tok)
 				return
 			}
-			require.Equal(t, tt.wantToken, tok)
+			require.NoError(t, err)
+
+			if tt.wantToken == nil {
+				require.Nil(t, tok)
+				return
+			}
+			require.NotNil(t, tok)
+
+			if want := tt.wantToken.AccessToken; want != nil {
+				require.NotNil(t, tok.AccessToken)
+				require.Equal(t, want.Token, tok.AccessToken.Token)
+				require.Equal(t, want.Type, tok.AccessToken.Type)
+				requireTimeInDelta(t, want.Expiry.Time, tok.AccessToken.Expiry.Time, 5*time.Second)
+			} else {
+				assert.Nil(t, tok.AccessToken)
+			}
+			require.Equal(t, tt.wantToken.RefreshToken, tok.RefreshToken)
+			if want := tt.wantToken.IDToken; want != nil {
+				require.NotNil(t, tok.IDToken)
+				require.Equal(t, want.Token, tok.IDToken.Token)
+				requireTimeInDelta(t, want.Expiry.Time, tok.IDToken.Expiry.Time, 5*time.Second)
+			} else {
+				assert.Nil(t, tok.IDToken)
+			}
 		})
 	}
 }
@@ -503,4 +674,23 @@ func mockVerifier() *oidc.IDTokenVerifier {
 		SkipExpiryCheck:   true,
 		SkipClientIDCheck: true,
 	})
+}
+
+type mockDiscovery struct{ provider *oidc.Provider }
+
+func (m *mockDiscovery) Endpoint() oauth2.Endpoint { return m.provider.Endpoint() }
+
+func (m *mockDiscovery) Verifier(config *oidc.Config) *oidc.IDTokenVerifier { return mockVerifier() }
+
+func requireTimeInDelta(t *testing.T, t1 time.Time, t2 time.Time, delta time.Duration) {
+	require.InDeltaf(t,
+		float64(t1.UnixNano()),
+		float64(t2.UnixNano()),
+		float64(delta.Nanoseconds()),
+		"expected %s and %s to be < %s apart, but they are %s apart",
+		t1.Format(time.RFC3339Nano),
+		t2.Format(time.RFC3339Nano),
+		delta.String(),
+		t1.Sub(t2).String(),
+	)
 }

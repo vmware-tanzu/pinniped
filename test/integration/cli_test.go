@@ -208,7 +208,7 @@ func TestCLILoginOIDC(t *testing.T) {
 			}
 		}()
 
-		reader := bufio.NewReader(stderr)
+		reader := bufio.NewReader(library.NewLoggerReader(t, "stderr", stderr))
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("could not read login URL line from stderr: %w", err)
@@ -233,7 +233,7 @@ func TestCLILoginOIDC(t *testing.T) {
 				err = fmt.Errorf("stdout stream closed with error: %w", closeErr)
 			}
 		}()
-		reader := bufio.NewReader(stdout)
+		reader := bufio.NewReader(library.NewLoggerReader(t, "stdout", stdout))
 		var out clientauthenticationv1beta1.ExecCredential
 		if err := json.NewDecoder(reader).Decode(&out); err != nil {
 			return fmt.Errorf("could not read ExecCredential from stdout: %w", err)

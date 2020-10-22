@@ -224,7 +224,8 @@ if ! tilt_mode; then
     --data-value "image_repo=$registry_repo" \
     --data-value "image_tag=$tag" \
     --data-value-yaml "custom_labels=$supervisor_custom_labels" \
-    --data-value-yaml 'service_nodeport_port=31234' >"$manifest"
+    --data-value-yaml 'service_nodeport_port=80' \
+    --data-value-yaml 'service_nodeport_nodeport=31234' >"$manifest"
 
   kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
 

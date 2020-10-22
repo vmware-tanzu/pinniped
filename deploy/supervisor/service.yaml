@@ -18,9 +18,11 @@ spec:
     app: #@ data.values.app_name
   ports:
     - protocol: TCP
-      port: 80
+      port: #@ data.values.service_nodeport_port
       targetPort: 80
-      nodePort: #@ data.values.service_nodeport_port
+      #@ if data.values.service_nodeport_nodeport:
+      nodePort: #@ data.values.service_nodeport_nodeport
+      #@ end
 #@ end
 
 #@ if data.values.service_clusterip_port:

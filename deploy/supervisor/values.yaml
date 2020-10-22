@@ -38,6 +38,7 @@ image_pull_dockerconfigjson: #! e.g. {"auths":{"https://registry.example.com":{"
 #! Specify how to expose the Supervisor app as a Service.
 #! Typically you would set a value for only one of the following.
 #! Setting any of these values means that a Service of that type will be created.
-service_nodeport_port: #! e.g. 31234
-service_loadbalancer_port: #! e.g. 443
-service_clusterip_port: #! e.g. 443
+service_nodeport_port: #! when specified, creates a NodePort Service with this `port` value, e.g. 31234
+service_nodeport_nodeport: #! the `nodePort` value of the NodePort Service, optional when `service_nodeport_port` is specified, e.g. 31234
+service_loadbalancer_port: #! when specified, creates a LoadBalancer Service with this `port` value, e.g. 443
+service_clusterip_port: #! when specified, creates a ClusterIP Service with this `port` value, e.g. 443

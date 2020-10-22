@@ -146,7 +146,7 @@ func getLoginProvider(t *testing.T) *loginProviderPatterns {
 func TestCLILoginOIDC(t *testing.T) {
 	env := library.IntegrationEnv(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	// Find the login CSS selectors for the test issuer, or fail fast.

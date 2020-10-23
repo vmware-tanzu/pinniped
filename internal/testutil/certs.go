@@ -81,15 +81,13 @@ func (v *ValidCert) RequireCommonName(commonName string) {
 	require.Equal(v.t, commonName, v.parsed.Subject.CommonName)
 }
 
-// CreateCertificate creates a certificate with the provided time bounds, and
-// returns the PEM representation of the certificate.
-//
-// There is nothing very special about the certificate that it creates, just
-// that it is a valid certificate that can be used for testing.
-func CreateCertificate(notBefore, notAfter time.Time) ([]byte, error) {
+// CreateCertificate creates a certificate with the provided time bounds, and returns the PEM
+// representation of the certificate and its private key. The returned certificate is capable of
+// signing child certificates.
+func CreateCertificate(notBefore, notAfter time.Time) ([]byte, []byte, error) {
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	template := x509.Certificate{
@@ -97,8 +95,11 @@ func CreateCertificate(notBefore, notAfter time.Time) ([]byte, error) {
 		Subject: pkix.Name{
 			CommonName: "some-common-name",
 		},
-		NotBefore: notBefore,
-		NotAfter:  notAfter,
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
 	}
 	cert, err := x509.CreateCertificate(
 		rand.Reader,
@@ -108,12 +109,20 @@ func CreateCertificate(notBefore, notAfter time.Time) ([]byte, error) {
 		privateKey,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	certPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: cert,
 	})
-	return certPEM, nil
+	privateKeyDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: privateKeyDER,
+	})
+	return certPEM, privateKeyPEM, nil
 }

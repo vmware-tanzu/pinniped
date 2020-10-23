@@ -27,7 +27,7 @@ func New(provider dynamiccert.Provider) *CA {
 }
 
 // IssuePEM issues a new server certificate for the given identity and duration, returning it as a
-//  pair of PEM-formatted byte slices for the certificate and private key.
+// pair of PEM-formatted byte slices for the certificate and private key.
 func (c *CA) IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) ([]byte, []byte, error) {
 	caCrtPEM, caKeyPEM := c.provider.CurrentCertKeyContent()
 	ca, err := certauthority.Load(string(caCrtPEM), string(caKeyPEM))

@@ -5,7 +5,6 @@ package dynamiccertauthority
 
 import (
 	"crypto/x509/pkix"
-	"io/ioutil"
 	"testing"
 	"time"
 
@@ -21,10 +20,22 @@ func TestCAIssuePEM(t *testing.T) {
 	provider := dynamiccert.New()
 	ca := New(provider)
 
+	goodCACrtPEM0, goodCAKeyPEM0, err := testutil.CreateCertificate(
+		time.Now().Add(-time.Hour),
+		time.Now().Add(time.Hour),
+	)
+	require.NoError(t, err)
+
+	goodCACrtPEM1, goodCAKeyPEM1, err := testutil.CreateCertificate(
+		time.Now().Add(-time.Hour),
+		time.Now().Add(time.Hour),
+	)
+	require.NoError(t, err)
+
 	steps := []struct {
-		name                 string
-		caCrtPath, caKeyPath string
-		wantError            string
+		name               string
+		caCrtPEM, caKeyPEM []byte
+		wantError          string
 	}{
 		{
 			name:      "no cert+key",
@@ -32,70 +43,59 @@ func TestCAIssuePEM(t *testing.T) {
 		},
 		{
 			name:      "only cert",
-			caCrtPath: "testdata/ca-0.crt",
+			caCrtPEM:  goodCACrtPEM0,
 			wantError: "could not load CA: tls: failed to find any PEM data in key input",
 		},
 		{
 			name:      "only key",
-			caKeyPath: "testdata/ca-0.key",
+			caKeyPEM:  goodCAKeyPEM0,
 			wantError: "could not load CA: tls: failed to find any PEM data in certificate input",
 		},
 		{
-			name:      "new cert+key",
-			caCrtPath: "testdata/ca-0.crt",
-			caKeyPath: "testdata/ca-0.key",
+			name:     "new cert+key",
+			caCrtPEM: goodCACrtPEM0,
+			caKeyPEM: goodCAKeyPEM0,
 		},
 		{
 			name: "same cert+key",
 		},
 		{
-			name:      "another new cert+key",
-			caCrtPath: "testdata/ca-1.crt",
-			caKeyPath: "testdata/ca-1.key",
+			name:     "another new cert+key",
+			caCrtPEM: goodCACrtPEM1,
+			caKeyPEM: goodCAKeyPEM1,
 		},
 		{
 			name:      "bad cert",
-			caCrtPath: "testdata/ca-bad.crt",
-			caKeyPath: "testdata/ca-0.key",
+			caCrtPEM:  []byte("this is not a cert"),
+			caKeyPEM:  goodCAKeyPEM0,
 			wantError: "could not load CA: tls: failed to find any PEM data in certificate input",
 		},
 		{
 			name:      "bad key",
-			caCrtPath: "testdata/ca-0.crt",
-			caKeyPath: "testdata/ca-bad.key",
+			caCrtPEM:  goodCACrtPEM0,
+			caKeyPEM:  []byte("this is not a key"),
 			wantError: "could not load CA: tls: failed to find any PEM data in key input",
 		},
 		{
 			name:      "mismatch cert+key",
-			caCrtPath: "testdata/ca-0.crt",
-			caKeyPath: "testdata/ca-1.key",
+			caCrtPEM:  goodCACrtPEM0,
+			caKeyPEM:  goodCAKeyPEM1,
 			wantError: "could not load CA: tls: private key does not match public key",
 		},
 		{
-			name:      "good cert+key again",
-			caCrtPath: "testdata/ca-1.crt",
-			caKeyPath: "testdata/ca-1.key",
+			name:     "good cert+key again",
+			caCrtPEM: goodCACrtPEM0,
+			caKeyPEM: goodCAKeyPEM0,
 		},
 	}
 	for _, step := range steps {
 		step := step
 		t.Run(step.name, func(t *testing.T) {
-			var caCrtPEM, caKeyPEM []byte
-			var err error
-			if step.caCrtPath != "" {
-				caCrtPEM, err = ioutil.ReadFile(step.caCrtPath)
-				require.NoError(t, err)
-			}
+			// Can't run these steps in parallel, because each one depends on the previous steps being
+			// run.
 
-			if step.caKeyPath != "" {
-				caKeyPEM, err = ioutil.ReadFile(step.caKeyPath)
-				require.NoError(t, err)
-			}
-
-			if step.caCrtPath != "" || step.caKeyPath != "" {
-				provider.Set(caCrtPEM, caKeyPEM)
-			} else {
-				caCrtPEM, _ = provider.CurrentCertKeyContent()
+			if step.caCrtPEM != nil || step.caKeyPEM != nil {
+				provider.Set(step.caCrtPEM, step.caKeyPEM)
 			}
 
 			crtPEM, keyPEM, err := ca.IssuePEM(
@@ -115,6 +115,7 @@ func TestCAIssuePEM(t *testing.T) {
 				require.NotEmpty(t, crtPEM)
 				require.NotEmpty(t, keyPEM)
 
+				caCrtPEM, _ := provider.CurrentCertKeyContent()
 				crtAssertions := testutil.ValidateCertificate(t, string(caCrtPEM), string(crtPEM))
 				crtAssertions.RequireCommonName("some-common-name")
 				crtAssertions.RequireDNSName("some-dns-name")

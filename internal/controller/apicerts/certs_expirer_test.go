@@ -137,7 +137,7 @@ func TestExpirerControllerSync(t *testing.T) {
 			name:        "lifetime below threshold",
 			renewBefore: 7 * time.Hour,
 			fillSecretData: func(t *testing.T, m map[string][]byte) {
-				certPEM, err := testutil.CreateCertificate(
+				certPEM, _, err := testutil.CreateCertificate(
 					time.Now().Add(-5*time.Hour),
 					time.Now().Add(5*time.Hour),
 				)
@@ -152,7 +152,7 @@ func TestExpirerControllerSync(t *testing.T) {
 			name:        "lifetime above threshold",
 			renewBefore: 3 * time.Hour,
 			fillSecretData: func(t *testing.T, m map[string][]byte) {
-				certPEM, err := testutil.CreateCertificate(
+				certPEM, _, err := testutil.CreateCertificate(
 					time.Now().Add(-5*time.Hour),
 					time.Now().Add(5*time.Hour),
 				)
@@ -167,7 +167,7 @@ func TestExpirerControllerSync(t *testing.T) {
 			name:        "cert expired",
 			renewBefore: 3 * time.Hour,
 			fillSecretData: func(t *testing.T, m map[string][]byte) {
-				certPEM, err := testutil.CreateCertificate(
+				certPEM, _, err := testutil.CreateCertificate(
 					time.Now().Add(-2*time.Hour),
 					time.Now().Add(-1*time.Hour),
 				)
@@ -182,7 +182,7 @@ func TestExpirerControllerSync(t *testing.T) {
 			name:        "delete failure",
 			renewBefore: 3 * time.Hour,
 			fillSecretData: func(t *testing.T, m map[string][]byte) {
-				certPEM, err := testutil.CreateCertificate(
+				certPEM, _, err := testutil.CreateCertificate(
 					time.Now().Add(-5*time.Hour),
 					time.Now().Add(5*time.Hour),
 				)

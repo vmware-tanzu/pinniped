@@ -57,7 +57,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 					return err
 				}
 
-				secret.Data["tlsCertificateChain"], err = createExpiredCertificate()
+				secret.Data["tlsCertificateChain"], _, err = createExpiredCertificate()
 				if err != nil {
 					return err
 				}
@@ -161,7 +161,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 	}
 }
 
-func createExpiredCertificate() ([]byte, error) {
+func createExpiredCertificate() ([]byte, []byte, error) {
 	return testutil.CreateCertificate(
 		time.Now().Add(-24*time.Hour), // notBefore
 		time.Now().Add(-time.Hour),    // notAfter

@@ -66,7 +66,12 @@ The most common ways are:
    *Warning:* Do not expose the Supervisor's port 80 to the public. It would not be secure for the OIDC protocol
    to use HTTP, because the user's secret OIDC tokens would be transmitted across the network without encryption.
 
-For either of the above options, if you installed using `ytt` then you can use
+1. Or, expose the Supervisor app using a Kubernetes service mesh technology, e.g. [Istio](https://istio.io/).
+   Please see the documentation for your service mesh. Generally, the setup would be similar to the description
+   above for defining an ingress, expect the service mesh would probably provide both the ingress with TLS termination
+   and the service.
+
+For either of the first two options mentioned above, if you installed using `ytt` then you can use
 the related `service_*` options from [deploy/supervisor/values.yml](values.yaml) to create a Service.
 If you installed using `install-supervisor.yaml` then you can create
 the Service separately after installing the Supervisor app. There is no `Ingress` included in the `ytt` templates,

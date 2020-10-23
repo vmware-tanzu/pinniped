@@ -395,7 +395,7 @@ func spawnTestGoroutine(t *testing.T, f func() error) {
 
 func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, sessionCachePath string) *exec.Cmd {
 	env := library.IntegrationEnv(t)
-	return exec.CommandContext(ctx, pinnipedExe, "alpha", "login", "oidc",
+	return exec.CommandContext(ctx, pinnipedExe, "login", "oidc",
 		"--issuer", env.OIDCUpstream.Issuer,
 		"--client-id", env.OIDCUpstream.ClientID,
 		"--listen-port", strconv.Itoa(env.OIDCUpstream.LocalhostPort),

@@ -19,6 +19,12 @@ rules:
   - apiGroups: [config.supervisor.pinniped.dev]
     resources: [oidcproviders]
     verbs: [update, get, list, watch]
+  - apiGroups: [idp.supervisor.pinniped.dev]
+    resources: [upstreamoidcproviders]
+    verbs: [get, list, watch]
+  - apiGroups: [idp.supervisor.pinniped.dev]
+    resources: [upstreamoidcproviders/status]
+    verbs: [get, patch, update]
 ---
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

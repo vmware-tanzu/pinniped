@@ -9,3 +9,9 @@
 metadata:
   #@overlay/match missing_ok=True
   labels: #@ labels()
+
+#@overlay/match by=overlay.subset({"kind": "CustomResourceDefinition", "metadata":{"name":"upstreamoidcproviders.idp.supervisor.pinniped.dev"}}), expects=1
+---
+metadata:
+  #@overlay/match missing_ok=True
+  labels: #@ labels()

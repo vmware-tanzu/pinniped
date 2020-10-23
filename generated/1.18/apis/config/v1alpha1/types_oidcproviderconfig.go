@@ -12,9 +12,10 @@ import (
 type OIDCProviderStatus string
 
 const (
-	SuccessOIDCProviderStatus   = OIDCProviderStatus("Success")
-	DuplicateOIDCProviderStatus = OIDCProviderStatus("Duplicate")
-	InvalidOIDCProviderStatus   = OIDCProviderStatus("Invalid")
+	SuccessOIDCProviderStatus                         = OIDCProviderStatus("Success")
+	DuplicateOIDCProviderStatus                       = OIDCProviderStatus("Duplicate")
+	SameIssuerHostMustUseSameSecretOIDCProviderStatus = OIDCProviderStatus("SameIssuerHostMustUseSameSecret")
+	InvalidOIDCProviderStatus                         = OIDCProviderStatus("Invalid")
 )
 
 // OIDCProviderConfigSpec is a struct that describes an OIDC Provider.
@@ -29,6 +30,15 @@ type OIDCProviderConfigSpec struct {
 	// https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.3 for more information.
 	// +kubebuilder:validation:MinLength=1
 	Issuer string `json:"issuer"`
+
+	// SecretName is an optional name of a Secret in the same namespace, of type `kubernetes.io/tls`,
+	// which contains the TLS serving certificate for the HTTPS endpoints served by this OIDC Provider.
+	// SecretName is required if you would like to use the HTTPS endpoints (e.g. when exposing them outside
+	// the cluster using a LoadBalancer Service), and is not required when you would like to use only the
+	// HTTP endpoints (e.g. when terminating TLS at an Ingress). The TLS secret must contain keys named
+	// `tls.crt` and `tls.key` that contain the certificate and private key to use for TLS.
+	// +optional
+	SecretName string `json:"secretName,omitempty"`
 }
 
 // OIDCProviderConfigStatus is a struct that describes the actual state of an OIDC Provider.

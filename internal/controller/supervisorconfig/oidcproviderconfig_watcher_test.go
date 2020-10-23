@@ -6,6 +6,7 @@ package supervisorconfig
 import (
 	"context"
 	"errors"
+	"net/url"
 	"reflect"
 	"sync"
 	"testing"
@@ -667,22 +668,24 @@ func TestSync(t *testing.T) {
 			)
 
 			it.Before(func() {
+				// Hostnames are case-insensitive, so consider them to be duplicates if they only differ by case.
+				// Paths are case-sensitive, so having a path that differs only by case makes a new issuer.
 				oidcProviderConfigDuplicate1 = &v1alpha1.OIDCProviderConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "duplicate1", Namespace: namespace},
-					Spec:       v1alpha1.OIDCProviderConfigSpec{Issuer: "https://issuer-duplicate.com"},
+					Spec:       v1alpha1.OIDCProviderConfigSpec{Issuer: "https://iSSueR-duPlicAte.cOm/a"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(oidcProviderConfigDuplicate1))
 				r.NoError(opcInformerClient.Tracker().Add(oidcProviderConfigDuplicate1))
 				oidcProviderConfigDuplicate2 = &v1alpha1.OIDCProviderConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "duplicate2", Namespace: namespace},
-					Spec:       v1alpha1.OIDCProviderConfigSpec{Issuer: "https://issuer-duplicate.com"},
+					Spec:       v1alpha1.OIDCProviderConfigSpec{Issuer: "https://issuer-duplicate.com/a"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(oidcProviderConfigDuplicate2))
 				r.NoError(opcInformerClient.Tracker().Add(oidcProviderConfigDuplicate2))
 
 				oidcProviderConfig = &v1alpha1.OIDCProviderConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "not-duplicate", Namespace: namespace},
-					Spec:       v1alpha1.OIDCProviderConfigSpec{Issuer: "https://issuer-not-duplicate.com"},
+					Spec:       v1alpha1.OIDCProviderConfigSpec{Issuer: "https://issuer-duplicate.com/A"}, // different path
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(oidcProviderConfig))
 				r.NoError(opcInformerClient.Tracker().Add(oidcProviderConfig))
@@ -715,11 +718,11 @@ func TestSync(t *testing.T) {
 				oidcProviderConfig.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 				oidcProviderConfigDuplicate1.Status.Status = v1alpha1.DuplicateOIDCProviderStatus
-				oidcProviderConfigDuplicate1.Status.Message = "Duplicate issuer: https://issuer-duplicate.com"
+				oidcProviderConfigDuplicate1.Status.Message = "Duplicate issuer: https://iSSueR-duPlicAte.cOm/a"
 				oidcProviderConfigDuplicate1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 				oidcProviderConfigDuplicate2.Status.Status = v1alpha1.DuplicateOIDCProviderStatus
-				oidcProviderConfigDuplicate2.Status.Message = "Duplicate issuer: https://issuer-duplicate.com"
+				oidcProviderConfigDuplicate2.Status.Message = "Duplicate issuer: https://issuer-duplicate.com/a"
 				oidcProviderConfigDuplicate2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 				expectedActions := []coretesting.Action{
@@ -770,10 +773,10 @@ func TestSync(t *testing.T) {
 
 				it("returns the get errors", func() {
 					expectedError := here.Doc(`
-            3 error(s):
-            - could not update status: get failed: some get error
-            - could not update status: get failed: some get error
-            - could not update status: get failed: some get error`)
+						3 error(s):
+						- could not update status: get failed: some get error
+						- could not update status: get failed: some get error
+						- could not update status: get failed: some get error`)
 					startInformersAndController()
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.EqualError(err, expectedError)
@@ -797,6 +800,196 @@ func TestSync(t *testing.T) {
 							oidcProviderConfigGVR,
 							oidcProviderConfig.Namespace,
 							oidcProviderConfig.Name,
+						),
+					}
+					r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
+				})
+			})
+		})
+
+		when("there are OIDCProviderConfigs with the same issuer address using different secretNames", func() {
+			var (
+				oidcProviderConfigSameIssuerAddress1     *v1alpha1.OIDCProviderConfig
+				oidcProviderConfigSameIssuerAddress2     *v1alpha1.OIDCProviderConfig
+				oidcProviderConfigDifferentIssuerAddress *v1alpha1.OIDCProviderConfig
+				oidcProviderConfigWithInvalidIssuerURL   *v1alpha1.OIDCProviderConfig
+			)
+
+			it.Before(func() {
+				oidcProviderConfigSameIssuerAddress1 = &v1alpha1.OIDCProviderConfig{
+					ObjectMeta: metav1.ObjectMeta{Name: "provider1", Namespace: namespace},
+					Spec: v1alpha1.OIDCProviderConfigSpec{
+						Issuer:     "https://iSSueR-duPlicAte-adDress.cOm/path1",
+						SecretName: "secret1",
+					},
+				}
+				r.NoError(pinnipedAPIClient.Tracker().Add(oidcProviderConfigSameIssuerAddress1))
+				r.NoError(opcInformerClient.Tracker().Add(oidcProviderConfigSameIssuerAddress1))
+				oidcProviderConfigSameIssuerAddress2 = &v1alpha1.OIDCProviderConfig{
+					ObjectMeta: metav1.ObjectMeta{Name: "provider2", Namespace: namespace},
+					Spec: v1alpha1.OIDCProviderConfigSpec{
+						Issuer:     "https://issuer-duplicate-address.com/path2",
+						SecretName: "secret2",
+					},
+				}
+				r.NoError(pinnipedAPIClient.Tracker().Add(oidcProviderConfigSameIssuerAddress2))
+				r.NoError(opcInformerClient.Tracker().Add(oidcProviderConfigSameIssuerAddress2))
+
+				oidcProviderConfigDifferentIssuerAddress = &v1alpha1.OIDCProviderConfig{
+					ObjectMeta: metav1.ObjectMeta{Name: "differentIssuerAddressProvider", Namespace: namespace},
+					Spec: v1alpha1.OIDCProviderConfigSpec{
+						Issuer:     "https://issuer-not-duplicate.com",
+						SecretName: "secret1",
+					},
+				}
+				r.NoError(pinnipedAPIClient.Tracker().Add(oidcProviderConfigDifferentIssuerAddress))
+				r.NoError(opcInformerClient.Tracker().Add(oidcProviderConfigDifferentIssuerAddress))
+
+				// Also add one with a URL that cannot be parsed to make sure that the error handling
+				// for the duplicate issuers and secret names are not confused by invalid URLs.
+				invalidIssuerURL := ":/host//path"
+				_, err := url.Parse(invalidIssuerURL) //nolint:staticcheck // Yes, this URL is intentionally invalid.
+				r.Error(err)
+				oidcProviderConfigWithInvalidIssuerURL = &v1alpha1.OIDCProviderConfig{
+					ObjectMeta: metav1.ObjectMeta{Name: "invalidIssuerURLProvider", Namespace: namespace},
+					Spec: v1alpha1.OIDCProviderConfigSpec{
+						Issuer:     invalidIssuerURL,
+						SecretName: "secret1",
+					},
+				}
+				r.NoError(pinnipedAPIClient.Tracker().Add(oidcProviderConfigWithInvalidIssuerURL))
+				r.NoError(opcInformerClient.Tracker().Add(oidcProviderConfigWithInvalidIssuerURL))
+			})
+
+			it("calls the ProvidersSetter with the non-duplicate", func() {
+				startInformersAndController()
+				err := controllerlib.TestSync(t, subject, *syncContext)
+				r.NoError(err)
+
+				nonDuplicateProvider, err := provider.NewOIDCProvider(oidcProviderConfigDifferentIssuerAddress.Spec.Issuer)
+				r.NoError(err)
+
+				r.True(providersSetter.SetProvidersWasCalled)
+				r.Equal(
+					[]*provider.OIDCProvider{
+						nonDuplicateProvider,
+					},
+					providersSetter.OIDCProvidersReceived,
+				)
+			})
+
+			it("updates the statuses", func() {
+				startInformersAndController()
+				err := controllerlib.TestSync(t, subject, *syncContext)
+				r.NoError(err)
+
+				oidcProviderConfigDifferentIssuerAddress.Status.Status = v1alpha1.SuccessOIDCProviderStatus
+				oidcProviderConfigDifferentIssuerAddress.Status.Message = "Provider successfully created"
+				oidcProviderConfigDifferentIssuerAddress.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+
+				oidcProviderConfigSameIssuerAddress1.Status.Status = v1alpha1.SameIssuerHostMustUseSameSecretOIDCProviderStatus
+				oidcProviderConfigSameIssuerAddress1.Status.Message = "Issuers with the same address must use the same secretName: issuer-duplicate-address.com"
+				oidcProviderConfigSameIssuerAddress1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+
+				oidcProviderConfigSameIssuerAddress2.Status.Status = v1alpha1.SameIssuerHostMustUseSameSecretOIDCProviderStatus
+				oidcProviderConfigSameIssuerAddress2.Status.Message = "Issuers with the same address must use the same secretName: issuer-duplicate-address.com"
+				oidcProviderConfigSameIssuerAddress2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+
+				oidcProviderConfigWithInvalidIssuerURL.Status.Status = v1alpha1.InvalidOIDCProviderStatus
+				oidcProviderConfigWithInvalidIssuerURL.Status.Message = `Invalid: could not parse issuer as URL: parse ":/host//path": missing protocol scheme`
+				oidcProviderConfigWithInvalidIssuerURL.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+
+				expectedActions := []coretesting.Action{
+					coretesting.NewGetAction(
+						oidcProviderConfigGVR,
+						oidcProviderConfigSameIssuerAddress1.Namespace,
+						oidcProviderConfigSameIssuerAddress1.Name,
+					),
+					coretesting.NewUpdateAction(
+						oidcProviderConfigGVR,
+						oidcProviderConfigSameIssuerAddress1.Namespace,
+						oidcProviderConfigSameIssuerAddress1,
+					),
+					coretesting.NewGetAction(
+						oidcProviderConfigGVR,
+						oidcProviderConfigSameIssuerAddress2.Namespace,
+						oidcProviderConfigSameIssuerAddress2.Name,
+					),
+					coretesting.NewUpdateAction(
+						oidcProviderConfigGVR,
+						oidcProviderConfigSameIssuerAddress2.Namespace,
+						oidcProviderConfigSameIssuerAddress2,
+					),
+					coretesting.NewGetAction(
+						oidcProviderConfigGVR,
+						oidcProviderConfigDifferentIssuerAddress.Namespace,
+						oidcProviderConfigDifferentIssuerAddress.Name,
+					),
+					coretesting.NewUpdateAction(
+						oidcProviderConfigGVR,
+						oidcProviderConfigDifferentIssuerAddress.Namespace,
+						oidcProviderConfigDifferentIssuerAddress,
+					),
+					coretesting.NewGetAction(
+						oidcProviderConfigGVR,
+						oidcProviderConfigWithInvalidIssuerURL.Namespace,
+						oidcProviderConfigWithInvalidIssuerURL.Name,
+					),
+					coretesting.NewUpdateAction(
+						oidcProviderConfigGVR,
+						oidcProviderConfigWithInvalidIssuerURL.Namespace,
+						oidcProviderConfigWithInvalidIssuerURL,
+					),
+				}
+				r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())
+			})
+
+			when("we cannot talk to the API", func() {
+				it.Before(func() {
+					pinnipedAPIClient.PrependReactor(
+						"get",
+						"oidcproviderconfigs",
+						func(_ coretesting.Action) (bool, runtime.Object, error) {
+							return true, nil, errors.New("some get error")
+						},
+					)
+				})
+
+				it("returns the get errors", func() {
+					expectedError := here.Doc(`
+						4 error(s):
+						- could not update status: get failed: some get error
+						- could not update status: get failed: some get error
+						- could not update status: get failed: some get error
+						- could not update status: get failed: some get error`)
+					startInformersAndController()
+					err := controllerlib.TestSync(t, subject, *syncContext)
+					r.EqualError(err, expectedError)
+
+					oidcProviderConfigDifferentIssuerAddress.Status.Status = v1alpha1.SuccessOIDCProviderStatus
+					oidcProviderConfigDifferentIssuerAddress.Status.Message = "Provider successfully created"
+					oidcProviderConfigDifferentIssuerAddress.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
+
+					expectedActions := []coretesting.Action{
+						coretesting.NewGetAction(
+							oidcProviderConfigGVR,
+							oidcProviderConfigSameIssuerAddress1.Namespace,
+							oidcProviderConfigSameIssuerAddress1.Name,
+						),
+						coretesting.NewGetAction(
+							oidcProviderConfigGVR,
+							oidcProviderConfigSameIssuerAddress2.Namespace,
+							oidcProviderConfigSameIssuerAddress2.Name,
+						),
+						coretesting.NewGetAction(
+							oidcProviderConfigGVR,
+							oidcProviderConfigDifferentIssuerAddress.Namespace,
+							oidcProviderConfigDifferentIssuerAddress.Name,
+						),
+						coretesting.NewGetAction(
+							oidcProviderConfigGVR,
+							oidcProviderConfigWithInvalidIssuerURL.Namespace,
+							oidcProviderConfigWithInvalidIssuerURL.Name,
 						),
 					}
 					r.ElementsMatch(expectedActions, pinnipedAPIClient.Actions())

@@ -33,18 +33,20 @@ func TestManager(t *testing.T) {
 		)
 
 		issuer1 := "https://example.com/some/path"
+		issuer1DifferentCaseHostname := "https://eXamPle.coM/some/path"
 		issuer1KeyID := "issuer1-key"
 		issuer2 := "https://example.com/some/path/more/deeply/nested/path" // note that this is a sub-path of the other issuer url
+		issuer2DifferentCaseHostname := "https://exAmPlE.Com/some/path/more/deeply/nested/path"
 		issuer2KeyID := "issuer2-key"
 
 		newGetRequest := func(url string) *http.Request {
 			return httptest.NewRequest(http.MethodGet, url, nil)
 		}
 
-		requireDiscoveryRequestToBeHandled := func(issuer, requestURLSuffix string) {
+		requireDiscoveryRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedIssuerInResponse string) {
 			recorder := httptest.NewRecorder()
 
-			subject.ServeHTTP(recorder, newGetRequest(issuer+oidc.WellKnownEndpointPath+requestURLSuffix))
+			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.WellKnownEndpointPath+requestURLSuffix))
 
 			r.False(fallbackHandlerWasCalled)
 
@@ -56,7 +58,7 @@ func TestManager(t *testing.T) {
 			r.NoError(err)
 
 			// Minimal check to ensure that the right discovery endpoint was called
-			r.Equal(issuer, parsedDiscoveryResult.Issuer)
+			r.Equal(expectedIssuerInResponse, parsedDiscoveryResult.Issuer)
 		}
 
 		requireJWKSRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedJWKKeyID string) {
@@ -145,13 +147,23 @@ func TestManager(t *testing.T) {
 			})
 
 			it("routes matching requests to the appropriate provider", func() {
-				requireDiscoveryRequestToBeHandled(issuer1, "")
-				requireDiscoveryRequestToBeHandled(issuer2, "")
-				requireDiscoveryRequestToBeHandled(issuer2, "?some=query")
+				requireDiscoveryRequestToBeHandled(issuer1, "", issuer1)
+				requireDiscoveryRequestToBeHandled(issuer2, "", issuer2)
+				requireDiscoveryRequestToBeHandled(issuer2, "?some=query", issuer2)
+
+				// Hostnames are case-insensitive, so test that we can handle that.
+				requireDiscoveryRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1)
+				requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2)
+				requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2)
 
 				requireJWKSRequestToBeHandled(issuer1, "", issuer1KeyID)
 				requireJWKSRequestToBeHandled(issuer2, "", issuer2KeyID)
 				requireJWKSRequestToBeHandled(issuer2, "?some=query", issuer2KeyID)
+
+				// Hostnames are case-insensitive, so test that we can handle that.
+				requireJWKSRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1KeyID)
+				requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2KeyID)
+				requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2KeyID)
 			})
 		})
 
@@ -170,13 +182,23 @@ func TestManager(t *testing.T) {
 			})
 
 			it("still routes matching requests to the appropriate provider", func() {
-				requireDiscoveryRequestToBeHandled(issuer1, "")
-				requireDiscoveryRequestToBeHandled(issuer2, "")
-				requireDiscoveryRequestToBeHandled(issuer2, "?some=query")
+				requireDiscoveryRequestToBeHandled(issuer1, "", issuer1)
+				requireDiscoveryRequestToBeHandled(issuer2, "", issuer2)
+				requireDiscoveryRequestToBeHandled(issuer2, "?some=query", issuer2)
+
+				// Hostnames are case-insensitive, so test that we can handle that.
+				requireDiscoveryRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1)
+				requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2)
+				requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2)
 
 				requireJWKSRequestToBeHandled(issuer1, "", issuer1KeyID)
 				requireJWKSRequestToBeHandled(issuer2, "", issuer2KeyID)
 				requireJWKSRequestToBeHandled(issuer2, "?some=query", issuer2KeyID)
+
+				// Hostnames are case-insensitive, so test that we can handle that.
+				requireJWKSRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1KeyID)
+				requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2KeyID)
+				requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2KeyID)
 			})
 		})
 	})

@@ -398,6 +398,13 @@ func schema_119_apis_config_v1alpha1_OIDCProviderConfigSpec(ref common.Reference
 							Format:      "",
 						},
 					},
+					"secretName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SecretName is an optional name of a Secret in the same namespace, of type `kubernetes.io/tls`, which contains the TLS serving certificate for the HTTPS endpoints served by this OIDC Provider. SecretName is required if you would like to use the HTTPS endpoints (e.g. when exposing them outside the cluster using a LoadBalancer Service), and is not required when you would like to use only the HTTP endpoints (e.g. when terminating TLS at an Ingress). The TLS secret must contain keys named `tls.crt` and `tls.key` that contain the certificate and private key to use for TLS.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"issuer"},
 			},

@@ -17,5 +17,5 @@ var loginCmd = &cobra.Command{
 
 //nolint: gochecknoinits
 func init() {
-	alphaCmd.AddCommand(loginCmd)
+	rootCmd.AddCommand(loginCmd)
 }

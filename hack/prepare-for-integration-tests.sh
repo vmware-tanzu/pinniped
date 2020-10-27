@@ -119,7 +119,7 @@ if ! tilt_mode; then
   log_note "Checking for running kind clusters..."
   if ! kind get clusters | grep -q -e '^pinniped$'; then
     log_note "Creating a kind cluster..."
-    # single-node.yaml exposes node port 31234 as 127.0.0.1:12345 and port 31235 as 127.0.0.1:12346
+    # single-node.yaml exposes node port 31234 as 127.0.0.1:12345, 31243 as 127.0.0.1:12344, and 31235 as 127.0.0.1:12346
     kind create cluster --config "$pinniped_path/hack/lib/kind-config/single-node.yaml" --name pinniped
   else
     if ! kubectl cluster-info | grep master | grep -q 127.0.0.1; then
@@ -224,8 +224,11 @@ if ! tilt_mode; then
     --data-value "image_repo=$registry_repo" \
     --data-value "image_tag=$tag" \
     --data-value-yaml "custom_labels=$supervisor_custom_labels" \
-    --data-value-yaml 'service_nodeport_port=80' \
-    --data-value-yaml 'service_nodeport_nodeport=31234' >"$manifest"
+    --data-value-yaml 'service_http_nodeport_port=80' \
+    --data-value-yaml 'service_http_nodeport_nodeport=31234' \
+    --data-value-yaml 'service_https_nodeport_port=443' \
+    --data-value-yaml 'service_https_nodeport_nodeport=31243' \
+    >"$manifest"
 
   kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
 

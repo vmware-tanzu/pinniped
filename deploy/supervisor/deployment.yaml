@@ -87,6 +87,8 @@ spec:
           ports:
             - containerPort: 80
               protocol: TCP
+            - containerPort: 443
+              protocol: TCP
           livenessProbe:
             httpGet:
               path: /healthz

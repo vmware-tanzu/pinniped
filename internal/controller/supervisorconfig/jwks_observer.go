@@ -40,7 +40,7 @@ func NewJWKSObserverController(
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
-			Name: "certs-observer-controller",
+			Name: "jwks-observer-controller",
 			Syncer: &jwksObserverController{
 				issuerToJWKSSetter:         issuerToJWKSSetter,
 				oidcProviderConfigInformer: oidcProviderConfigInformer,

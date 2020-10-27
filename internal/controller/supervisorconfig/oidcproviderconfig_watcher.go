@@ -81,14 +81,13 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 		return fmt.Sprintf("%s://%s%s", issuerURL.Scheme, strings.ToLower(issuerURL.Host), issuerURL.Path)
 	}
 
-	// Make a map of issuer addresses -> set of unique secret names. This will help us complain when
-	// multiple OIDCProviderConfigs have the same issuer address (host) component but specify
+	// Make a map of issuer hostnames -> set of unique secret names. This will help us complain when
+	// multiple OIDCProviderConfigs have the same issuer hostname (excluding port) but specify
 	// different TLS serving Secrets. Doesn't make sense to have the one address use more than one
-	// TLS cert. Also make a helper function for forming keys into this map.
+	// TLS cert. Ignore ports because SNI information on the incoming requests is not going to include
+	// port numbers. Also make a helper function for forming keys into this map.
 	uniqueSecretNamesPerIssuerAddress := make(map[string]map[string]bool)
-	issuerURLToHostKey := func(issuerURL *url.URL) string {
-		return strings.ToLower(issuerURL.Host)
-	}
+	issuerURLToHostnameKey := lowercaseHostWithoutPort
 
 	for _, opc := range all {
 		issuerURL, err := url.Parse(opc.Spec.Issuer)
@@ -98,10 +97,10 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 
 		issuerCounts[issuerURLToIssuerKey(issuerURL)]++
 
-		setOfSecretNames := uniqueSecretNamesPerIssuerAddress[issuerURLToHostKey(issuerURL)]
+		setOfSecretNames := uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)]
 		if setOfSecretNames == nil {
 			setOfSecretNames = make(map[string]bool)
-			uniqueSecretNamesPerIssuerAddress[issuerURLToHostKey(issuerURL)] = setOfSecretNames
+			uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)] = setOfSecretNames
 		}
 		setOfSecretNames[opc.Spec.SecretName] = true
 	}
@@ -129,13 +128,13 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 		}
 
 		// Skip url parse errors because they will be validated below.
-		if urlParseErr == nil && len(uniqueSecretNamesPerIssuerAddress[issuerURLToHostKey(issuerURL)]) > 1 {
+		if urlParseErr == nil && len(uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)]) > 1 {
 			if err := c.updateStatus(
 				ctx.Context,
 				opc.Namespace,
 				opc.Name,
 				configv1alpha1.SameIssuerHostMustUseSameSecretOIDCProviderStatus,
-				"Issuers with the same address must use the same secretName: "+issuerURLToHostKey(issuerURL),
+				"Issuers with the same DNS hostname (address not including port) must use the same secretName: "+issuerURLToHostnameKey(issuerURL),
 			); err != nil {
 				errs.Add(fmt.Errorf("could not update status: %w", err))
 			}

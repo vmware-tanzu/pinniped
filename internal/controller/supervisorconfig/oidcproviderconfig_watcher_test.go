@@ -807,7 +807,7 @@ func TestSync(t *testing.T) {
 			})
 		})
 
-		when("there are OIDCProviderConfigs with the same issuer address using different secretNames", func() {
+		when("there are OIDCProviderConfigs with the same issuer DNS hostname using different secretNames", func() {
 			var (
 				oidcProviderConfigSameIssuerAddress1     *v1alpha1.OIDCProviderConfig
 				oidcProviderConfigSameIssuerAddress2     *v1alpha1.OIDCProviderConfig
@@ -828,7 +828,9 @@ func TestSync(t *testing.T) {
 				oidcProviderConfigSameIssuerAddress2 = &v1alpha1.OIDCProviderConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "provider2", Namespace: namespace},
 					Spec: v1alpha1.OIDCProviderConfigSpec{
-						Issuer:     "https://issuer-duplicate-address.com/path2",
+						// Validation treats these as the same DNS hostname even though they have different port numbers,
+						// because SNI information on the incoming requests is not going to include port numbers.
+						Issuer:     "https://issuer-duplicate-address.com:1234/path2",
 						SecretName: "secret2",
 					},
 				}
@@ -888,11 +890,11 @@ func TestSync(t *testing.T) {
 				oidcProviderConfigDifferentIssuerAddress.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 				oidcProviderConfigSameIssuerAddress1.Status.Status = v1alpha1.SameIssuerHostMustUseSameSecretOIDCProviderStatus
-				oidcProviderConfigSameIssuerAddress1.Status.Message = "Issuers with the same address must use the same secretName: issuer-duplicate-address.com"
+				oidcProviderConfigSameIssuerAddress1.Status.Message = "Issuers with the same DNS hostname (address not including port) must use the same secretName: issuer-duplicate-address.com"
 				oidcProviderConfigSameIssuerAddress1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 				oidcProviderConfigSameIssuerAddress2.Status.Status = v1alpha1.SameIssuerHostMustUseSameSecretOIDCProviderStatus
-				oidcProviderConfigSameIssuerAddress2.Status.Message = "Issuers with the same address must use the same secretName: issuer-duplicate-address.com"
+				oidcProviderConfigSameIssuerAddress2.Status.Message = "Issuers with the same DNS hostname (address not including port) must use the same secretName: issuer-duplicate-address.com"
 				oidcProviderConfigSameIssuerAddress2.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 				oidcProviderConfigWithInvalidIssuerURL.Status.Status = v1alpha1.InvalidOIDCProviderStatus

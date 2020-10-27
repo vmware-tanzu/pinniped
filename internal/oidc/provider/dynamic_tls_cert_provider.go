@@ -10,11 +10,14 @@ import (
 
 type DynamicTLSCertProvider interface {
 	SetIssuerHostToTLSCertMap(issuerToJWKSMap map[string]*tls.Certificate)
+	SetDefaultTLSCert(certificate *tls.Certificate)
 	GetTLSCert(lowercaseIssuerHostName string) *tls.Certificate
+	GetDefaultTLSCert() *tls.Certificate
 }
 
 type dynamicTLSCertProvider struct {
 	issuerHostToTLSCertMap map[string]*tls.Certificate
+	defaultCert            *tls.Certificate
 	mutex                  sync.RWMutex
 }
 
@@ -30,8 +33,20 @@ func (p *dynamicTLSCertProvider) SetIssuerHostToTLSCertMap(issuerHostToTLSCertMa
 	p.issuerHostToTLSCertMap = issuerHostToTLSCertMap
 }
 
+func (p *dynamicTLSCertProvider) SetDefaultTLSCert(certificate *tls.Certificate) {
+	p.mutex.Lock() // acquire a write lock
+	defer p.mutex.Unlock()
+	p.defaultCert = certificate
+}
+
 func (p *dynamicTLSCertProvider) GetTLSCert(issuerHostName string) *tls.Certificate {
 	p.mutex.RLock() // acquire a read lock
 	defer p.mutex.RUnlock()
 	return p.issuerHostToTLSCertMap[issuerHostName]
+}
+
+func (p *dynamicTLSCertProvider) GetDefaultTLSCert() *tls.Certificate {
+	p.mutex.RLock() // acquire a read lock
+	defer p.mutex.RUnlock()
+	return p.defaultCert
 }

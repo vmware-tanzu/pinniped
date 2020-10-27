@@ -96,14 +96,21 @@ func TestTLSCertObserverControllerInformerFilters(t *testing.T) {
 	}, spec.Parallel(), spec.Report(report.Terminal{}))
 }
 
-type fakeIssuerHostToTLSCertMapSetter struct {
+type fakeIssuerTLSCertSetter struct {
 	setIssuerHostToTLSCertMapWasCalled bool
+	setDefaultTLSCertWasCalled         bool
 	issuerHostToTLSCertMapReceived     map[string]*tls.Certificate
+	setDefaultTLSCertReceived          *tls.Certificate
 }
 
-func (f *fakeIssuerHostToTLSCertMapSetter) SetIssuerHostToTLSCertMap(issuerHostToTLSCertMap map[string]*tls.Certificate) {
+func (f *fakeIssuerTLSCertSetter) SetIssuerHostToTLSCertMap(issuerHostToTLSCertMap map[string]*tls.Certificate) {
 	f.setIssuerHostToTLSCertMapWasCalled = true
 	f.issuerHostToTLSCertMapReceived = issuerHostToTLSCertMap
+}
+
+func (f *fakeIssuerTLSCertSetter) SetDefaultTLSCert(certificate *tls.Certificate) {
+	f.setDefaultTLSCertWasCalled = true
+	f.setDefaultTLSCertReceived = certificate
 }
 
 func TestTLSCertObserverControllerSync(t *testing.T) {
@@ -111,16 +118,16 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 		const installedInNamespace = "some-namespace"
 
 		var (
-			r                         *require.Assertions
-			subject                   controllerlib.Controller
-			pinnipedInformerClient    *pinnipedfake.Clientset
-			kubeInformerClient        *kubernetesfake.Clientset
-			pinnipedInformers         pinnipedinformers.SharedInformerFactory
-			kubeInformers             kubeinformers.SharedInformerFactory
-			timeoutContext            context.Context
-			timeoutContextCancel      context.CancelFunc
-			syncContext               *controllerlib.Context
-			issuerHostToTLSCertSetter *fakeIssuerHostToTLSCertMapSetter
+			r                      *require.Assertions
+			subject                controllerlib.Controller
+			pinnipedInformerClient *pinnipedfake.Clientset
+			kubeInformerClient     *kubernetesfake.Clientset
+			pinnipedInformers      pinnipedinformers.SharedInformerFactory
+			kubeInformers          kubeinformers.SharedInformerFactory
+			timeoutContext         context.Context
+			timeoutContextCancel   context.CancelFunc
+			syncContext            *controllerlib.Context
+			issuerTLSCertSetter    *fakeIssuerTLSCertSetter
 		)
 
 		// Defer starting the informers until the last possible moment so that the
@@ -128,7 +135,7 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 		var startInformersAndController = func() {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewTLSCertObserverController(
-				issuerHostToTLSCertSetter,
+				issuerTLSCertSetter,
 				kubeInformers.Core().V1().Secrets(),
 				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
 				controllerlib.WithInformer,
@@ -165,7 +172,7 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
 			pinnipedInformerClient = pinnipedfake.NewSimpleClientset()
 			pinnipedInformers = pinnipedinformers.NewSharedInformerFactory(pinnipedInformerClient, 0)
-			issuerHostToTLSCertSetter = &fakeIssuerHostToTLSCertMapSetter{}
+			issuerTLSCertSetter = &fakeIssuerTLSCertSetter{}
 
 			unrelatedSecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
@@ -181,13 +188,15 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 		})
 
 		when("there are no OIDCProviderConfigs and no TLS Secrets yet", func() {
-			it("sets the issuerHostToTLSCertSetter's map to be empty", func() {
+			it("sets the issuerTLSCertSetter's map to be empty", func() {
 				startInformersAndController()
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				r.True(issuerHostToTLSCertSetter.setIssuerHostToTLSCertMapWasCalled)
-				r.Empty(issuerHostToTLSCertSetter.issuerHostToTLSCertMapReceived)
+				r.True(issuerTLSCertSetter.setIssuerHostToTLSCertMapWasCalled)
+				r.Empty(issuerTLSCertSetter.issuerHostToTLSCertMapReceived)
+				r.True(issuerTLSCertSetter.setDefaultTLSCertWasCalled)
+				r.Nil(issuerTLSCertSetter.setDefaultTLSCertReceived)
 			})
 		})
 
@@ -293,23 +302,60 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 				r.NoError(kubeInformerClient.Tracker().Add(badTLSSecret))
 			})
 
-			it("updates the issuerHostToTLSCertSetter's map to include only the issuers that had valid certs", func() {
+			it("updates the issuerTLSCertSetter's map to include only the issuers that had valid certs", func() {
 				startInformersAndController()
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
-				r.True(issuerHostToTLSCertSetter.setIssuerHostToTLSCertMapWasCalled)
-				r.Len(issuerHostToTLSCertSetter.issuerHostToTLSCertMapReceived, 2)
+				r.True(issuerTLSCertSetter.setDefaultTLSCertWasCalled)
+				r.Nil(issuerTLSCertSetter.setDefaultTLSCertReceived)
+
+				r.True(issuerTLSCertSetter.setIssuerHostToTLSCertMapWasCalled)
+				r.Len(issuerTLSCertSetter.issuerHostToTLSCertMapReceived, 2)
 
 				// They keys in the map should be lower case and should not include the port numbers, because
 				// TLS SNI says that SNI hostnames must be DNS names (not ports) and must be case insensitive.
 				// See https://tools.ietf.org/html/rfc3546#section-3.1
-				actualCertificate1 := issuerHostToTLSCertSetter.issuerHostToTLSCertMapReceived["www.issuer-with-good-secret1.com"]
+				actualCertificate1 := issuerTLSCertSetter.issuerHostToTLSCertMapReceived["www.issuer-with-good-secret1.com"]
 				r.NotNil(actualCertificate1)
 				// The actual cert should match the one from the test fixture that was put into the secret.
 				r.Equal(expectedCertificate1, *actualCertificate1)
-				actualCertificate2 := issuerHostToTLSCertSetter.issuerHostToTLSCertMapReceived["www.issuer-with-good-secret2.com"]
+				actualCertificate2 := issuerTLSCertSetter.issuerHostToTLSCertMapReceived["www.issuer-with-good-secret2.com"]
 				r.NotNil(actualCertificate2)
 				r.Equal(expectedCertificate2, *actualCertificate2)
+			})
+
+			when("there is also a default TLS cert secret called default-tls-certificate", func() {
+				var (
+					expectedDefaultCertificate tls.Certificate
+				)
+
+				it.Before(func() {
+					var err error
+					testCrt := readTestFile("testdata/test3.crt")
+					r.NotEmpty(testCrt)
+					testKey := readTestFile("testdata/test3.key")
+					r.NotEmpty(testKey)
+					expectedDefaultCertificate, err = tls.X509KeyPair(testCrt, testKey)
+					r.NoError(err)
+					defaultTLSCertSecret := &corev1.Secret{
+						ObjectMeta: metav1.ObjectMeta{Name: "default-tls-certificate", Namespace: installedInNamespace},
+						Data:       map[string][]byte{"tls.crt": testCrt, "tls.key": testKey},
+					}
+					r.NoError(kubeInformerClient.Tracker().Add(defaultTLSCertSecret))
+				})
+
+				it("updates the issuerTLSCertSetter's map as before but also updates the default certificate", func() {
+					startInformersAndController()
+					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+
+					r.True(issuerTLSCertSetter.setDefaultTLSCertWasCalled)
+					actualDefaultCertificate := issuerTLSCertSetter.setDefaultTLSCertReceived
+					r.NotNil(actualDefaultCertificate)
+					r.Equal(expectedDefaultCertificate, *actualDefaultCertificate)
+
+					r.True(issuerTLSCertSetter.setIssuerHostToTLSCertMapWasCalled)
+					r.Len(issuerTLSCertSetter.issuerHostToTLSCertMapReceived, 2)
+				})
 			})
 		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))

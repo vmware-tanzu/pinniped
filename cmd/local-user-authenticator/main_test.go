@@ -106,7 +106,7 @@ func TestWebhook(t *testing.T) {
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 	require.NoError(t, w.start(ctx, l))
 
 	client := newClient(caBundle, serverName)
@@ -412,7 +412,7 @@ func TestWebhook(t *testing.T) {
 				Body:   body,
 			})
 			require.NoError(t, err)
-			defer rsp.Body.Close()
+			defer func() { _ = rsp.Body.Close() }()
 
 			require.Equal(t, test.wantStatus, rsp.StatusCode)
 
@@ -470,7 +470,7 @@ func newCertProvider(t *testing.T) (dynamiccert.Provider, []byte, string) {
 	ca, err := certauthority.New(pkix.Name{CommonName: serverName + " CA"}, time.Hour*24)
 	require.NoError(t, err)
 
-	cert, err := ca.Issue(pkix.Name{CommonName: serverName}, []string{serverName}, time.Hour*24)
+	cert, err := ca.Issue(pkix.Name{CommonName: serverName}, []string{serverName}, nil, time.Hour*24)
 	require.NoError(t, err)
 
 	certPEM, keyPEM, err := certauthority.ToPEM(cert)

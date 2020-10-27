@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net"
 	"time"
 )
 
@@ -136,7 +137,7 @@ func (c *CA) Bundle() []byte {
 }
 
 // Issue a new server certificate for the given identity and duration.
-func (c *CA) Issue(subject pkix.Name, dnsNames []string, ttl time.Duration) (*tls.Certificate, error) {
+func (c *CA) Issue(subject pkix.Name, dnsNames []string, ips []net.IP, ttl time.Duration) (*tls.Certificate, error) {
 	// Choose a random 128 bit serial number.
 	serialNumber, err := randomSerial(c.env.serialRNG)
 	if err != nil {
@@ -171,6 +172,7 @@ func (c *CA) Issue(subject pkix.Name, dnsNames []string, ttl time.Duration) (*tl
 		BasicConstraintsValid: true,
 		IsCA:                  false,
 		DNSNames:              dnsNames,
+		IPAddresses:           ips,
 	}
 	certBytes, err := x509.CreateCertificate(rand.Reader, &template, caCert, &privateKey.PublicKey, c.signer)
 	if err != nil {
@@ -194,7 +196,7 @@ func (c *CA) Issue(subject pkix.Name, dnsNames []string, ttl time.Duration) (*tl
 // IssuePEM issues a new server certificate for the given identity and duration, returning it as a pair of
 //  PEM-formatted byte slices for the certificate and private key.
 func (c *CA) IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) ([]byte, []byte, error) {
-	return toPEM(c.Issue(subject, dnsNames, ttl))
+	return toPEM(c.Issue(subject, dnsNames, nil, ttl))
 }
 
 func toPEM(cert *tls.Certificate, err error) ([]byte, []byte, error) {

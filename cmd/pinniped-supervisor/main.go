@@ -201,7 +201,7 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 	if err != nil {
 		return fmt.Errorf("cannot create listener: %w", err)
 	}
-	defer httpListener.Close()
+	defer func() { _ = httpListener.Close() }()
 	start(ctx, httpListener, oidProvidersManager)
 
 	//nolint: gosec // Intentionally binding to all network interfaces.
@@ -209,14 +209,22 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 		MinVersion: tls.VersionTLS12, // Allow v1.2 because clients like the default `curl` on MacOS don't support 1.3 yet.
 		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			cert := dynamicTLSCertProvider.GetTLSCert(strings.ToLower(info.ServerName))
-			klog.InfoS("GetCertificate called for port 443", "info.ServerName", info.ServerName, "foundCert", cert != nil)
+			defaultCert := dynamicTLSCertProvider.GetDefaultTLSCert()
+			klog.InfoS("GetCertificate called for port 443",
+				"info.ServerName", info.ServerName,
+				"foundSNICert", cert != nil,
+				"foundDefaultCert", defaultCert != nil,
+			)
+			if cert == nil {
+				cert = defaultCert
+			}
 			return cert, nil
 		},
 	})
 	if err != nil {
 		return fmt.Errorf("cannot create listener: %w", err)
 	}
-	defer httpsListener.Close()
+	defer func() { _ = httpsListener.Close() }()
 	start(ctx, httpsListener, oidProvidersManager)
 
 	klog.InfoS("supervisor is ready",

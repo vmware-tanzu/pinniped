@@ -31,6 +31,49 @@ import (
 	"go.pinniped.dev/test/library"
 )
 
+func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
+	env := library.IntegrationEnv(t)
+	pinnipedClient := library.NewPinnipedClientset(t)
+	kubeClient := library.NewClientset(t)
+
+	ns := env.SupervisorNamespace
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	temporarilyRemoveAllOIDCProviderConfigs(ctx, t, ns, pinnipedClient)
+
+	scheme := "https"
+	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 443
+
+	hostAndPortSegments := strings.Split(address, ":")
+	hostname := hostAndPortSegments[0]
+	port := "443"
+	if len(hostAndPortSegments) > 1 {
+		port = hostAndPortSegments[1]
+	}
+	ips, err := net.DefaultResolver.LookupIP(ctx, "ip4", hostname)
+	require.NoError(t, err)
+	ip := ips[0]
+	ipAsString := ip.String()
+	ipWithPort := ipAsString + ":" + port
+
+	issuerUsingIPAddress := fmt.Sprintf("%s://%s/issuer1", scheme, ipWithPort)
+
+	// Create an OIDCProviderConfig without an sniCertificateSecretName.
+	oidcProviderConfig1 := library.CreateTestOIDCProvider(ctx, t, issuerUsingIPAddress, "")
+	requireStatus(t, pinnipedClient, oidcProviderConfig1.Namespace, oidcProviderConfig1.Name, v1alpha1.SuccessOIDCProviderStatus)
+
+	// There is no default TLS cert and the sniCertificateSecretName was not set, so the endpoints should fail with TLS errors.
+	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuerUsingIPAddress)
+
+	// Create a Secret at the special name which represents the default TLS cert.
+	specialNameForDefaultTLSCertSecret := "default-tls-certificate" //nolint:gosec // this is not a hardcoded credential
+	ca := createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", []net.IP{ip}, specialNameForDefaultTLSCertSecret, kubeClient)
+
+	// Now that the Secret exists, we should be able to access the endpoints by IP address using the CA.
+	_ = requireDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(ca.Bundle()), issuerUsingIPAddress, nil)
+}
+
 func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	env := library.IntegrationEnv(t)
 	pinnipedClient := library.NewPinnipedClientset(t)
@@ -57,7 +100,7 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
 
 	// Create the Secret.
-	ca1 := createSNICertificateSecret(ctx, t, ns, hostname1, sniCertificateSecretName1, kubeClient)
+	ca1 := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, sniCertificateSecretName1, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
 	_ = requireDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1.Bundle()), issuer1, nil)
@@ -74,7 +117,7 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
 
 	// Create a Secret at the updated name.
-	ca1update := createSNICertificateSecret(ctx, t, ns, hostname1, sniCertificateSecretName1update, kubeClient)
+	ca1update := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, sniCertificateSecretName1update, kubeClient)
 
 	// Now that the Secret exists at the new name, we should be able to access the endpoints by hostname using the CA.
 	_ = requireDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1update.Bundle()), issuer1, nil)
@@ -90,7 +133,7 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	requireStatus(t, pinnipedClient, oidcProviderConfig2.Namespace, oidcProviderConfig2.Name, v1alpha1.SuccessOIDCProviderStatus)
 
 	// Create the Secret.
-	ca2 := createSNICertificateSecret(ctx, t, ns, hostname2, sniCertificateSecretName2, kubeClient)
+	ca2 := createTLSCertificateSecret(ctx, t, ns, hostname2, nil, sniCertificateSecretName2, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
 	_ = requireDiscoveryEndpointsAreWorking(t, scheme, hostname2+":"+hostnamePort2, string(ca2.Bundle()), issuer2, map[string]string{
@@ -195,13 +238,13 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 	}
 }
 
-func createSNICertificateSecret(ctx context.Context, t *testing.T, ns string, hostname string, sniCertificateSecretName string, kubeClient kubernetes.Interface) *certauthority.CA {
+func createTLSCertificateSecret(ctx context.Context, t *testing.T, ns string, hostname string, ips []net.IP, secretName string, kubeClient kubernetes.Interface) *certauthority.CA {
 	// Create a CA.
 	ca, err := certauthority.New(pkix.Name{CommonName: "Acme Corp"}, 1000*time.Hour)
 	require.NoError(t, err)
 
 	// Using the CA, create a TLS server cert.
-	tlsCert, err := ca.Issue(pkix.Name{CommonName: hostname}, []string{hostname}, 1000*time.Hour)
+	tlsCert, err := ca.Issue(pkix.Name{CommonName: hostname}, []string{hostname}, ips, 1000*time.Hour)
 	require.NoError(t, err)
 
 	// Write the serving cert to the SNI secret.
@@ -210,7 +253,7 @@ func createSNICertificateSecret(ctx context.Context, t *testing.T, ns string, ho
 	secret := corev1.Secret{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      sniCertificateSecretName,
+			Name:      secretName,
 			Namespace: ns,
 		},
 		StringData: map[string]string{
@@ -226,7 +269,7 @@ func createSNICertificateSecret(ctx context.Context, t *testing.T, ns string, ho
 		t.Helper()
 		deleteCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		err := kubeClient.CoreV1().Secrets(ns).Delete(deleteCtx, sniCertificateSecretName, metav1.DeleteOptions{})
+		err := kubeClient.CoreV1().Secrets(ns).Delete(deleteCtx, secretName, metav1.DeleteOptions{})
 		require.NoError(t, err)
 	})
 
@@ -308,7 +351,7 @@ func requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t *testing.T, url 
 		return err != nil && strings.Contains(err.Error(), "tls: unrecognized name")
 	}, 10*time.Second, 200*time.Millisecond)
 	require.Error(t, err)
-	require.EqualError(t, err, `Get "https://localhost:12344/issuer1": remote error: tls: unrecognized name`)
+	require.EqualError(t, err, fmt.Sprintf(`Get "%s": remote error: tls: unrecognized name`, url))
 }
 
 func requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(

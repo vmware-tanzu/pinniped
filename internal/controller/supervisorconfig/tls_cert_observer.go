@@ -18,18 +18,21 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 )
 
+const SecretNameForDefaultTLSCertificate = "default-tls-certificate" //nolint:gosec // this is not a hardcoded credential
+
 type tlsCertObserverController struct {
-	issuerHostToTLSCertMapSetter IssuerHostToTLSCertMapSetter
-	oidcProviderConfigInformer   v1alpha1.OIDCProviderConfigInformer
-	secretInformer               corev1informers.SecretInformer
+	issuerTLSCertSetter        IssuerTLSCertSetter
+	oidcProviderConfigInformer v1alpha1.OIDCProviderConfigInformer
+	secretInformer             corev1informers.SecretInformer
 }
 
-type IssuerHostToTLSCertMapSetter interface {
+type IssuerTLSCertSetter interface {
 	SetIssuerHostToTLSCertMap(issuerHostToTLSCertMap map[string]*tls.Certificate)
+	SetDefaultTLSCert(certificate *tls.Certificate)
 }
 
 func NewTLSCertObserverController(
-	issuerHostToTLSCertMapSetter IssuerHostToTLSCertMapSetter,
+	issuerTLSCertSetter IssuerTLSCertSetter,
 	secretInformer corev1informers.SecretInformer,
 	oidcProviderConfigInformer v1alpha1.OIDCProviderConfigInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
@@ -38,9 +41,9 @@ func NewTLSCertObserverController(
 		controllerlib.Config{
 			Name: "tls-certs-observer-controller",
 			Syncer: &tlsCertObserverController{
-				issuerHostToTLSCertMapSetter: issuerHostToTLSCertMapSetter,
-				oidcProviderConfigInformer:   oidcProviderConfigInformer,
-				secretInformer:               secretInformer,
+				issuerTLSCertSetter:        issuerTLSCertSetter,
+				oidcProviderConfigInformer: oidcProviderConfigInformer,
+				secretInformer:             secretInformer,
 			},
 		},
 		withInformer(
@@ -74,24 +77,39 @@ func (c *tlsCertObserverController) Sync(ctx controllerlib.Context) error {
 			klog.InfoS("tlsCertObserverController Sync found an invalid issuer URL", "namespace", ns, "issuer", provider.Spec.Issuer)
 			continue
 		}
-		tlsSecret, err := c.secretInformer.Lister().Secrets(ns).Get(secretName)
+		certFromSecret, err := c.certFromSecret(ns, secretName)
 		if err != nil {
-			klog.InfoS("tlsCertObserverController Sync could not find TLS cert secret", "namespace", ns, "secretName", secretName)
-			continue
-		}
-		certFromSecret, err := tls.X509KeyPair(tlsSecret.Data["tls.crt"], tlsSecret.Data["tls.key"])
-		if err != nil {
-			klog.InfoS("tlsCertObserverController Sync found a TLS secret with Data in an unexpected format", "namespace", ns, "secretName", secretName)
 			continue
 		}
 		// Lowercase the host part of the URL because hostnames should be treated as case-insensitive.
-		issuerHostToTLSCertMap[lowercaseHostWithoutPort(issuerURL)] = &certFromSecret
+		issuerHostToTLSCertMap[lowercaseHostWithoutPort(issuerURL)] = certFromSecret
 	}
 
 	klog.InfoS("tlsCertObserverController Sync updated the TLS cert cache", "issuerHostCount", len(issuerHostToTLSCertMap))
-	c.issuerHostToTLSCertMapSetter.SetIssuerHostToTLSCertMap(issuerHostToTLSCertMap)
+	c.issuerTLSCertSetter.SetIssuerHostToTLSCertMap(issuerHostToTLSCertMap)
+
+	defaultCert, err := c.certFromSecret(ns, SecretNameForDefaultTLSCertificate)
+	if err != nil {
+		c.issuerTLSCertSetter.SetDefaultTLSCert(nil)
+	} else {
+		c.issuerTLSCertSetter.SetDefaultTLSCert(defaultCert)
+	}
 
 	return nil
+}
+
+func (c *tlsCertObserverController) certFromSecret(ns string, secretName string) (*tls.Certificate, error) {
+	tlsSecret, err := c.secretInformer.Lister().Secrets(ns).Get(secretName)
+	if err != nil {
+		klog.InfoS("tlsCertObserverController Sync could not find TLS cert secret", "namespace", ns, "secretName", secretName)
+		return nil, err
+	}
+	certFromSecret, err := tls.X509KeyPair(tlsSecret.Data["tls.crt"], tlsSecret.Data["tls.key"])
+	if err != nil {
+		klog.InfoS("tlsCertObserverController Sync found a TLS secret with Data in an unexpected format", "namespace", ns, "secretName", secretName)
+		return nil, err
+	}
+	return &certFromSecret, nil
 }
 
 func lowercaseHostWithoutPort(issuerURL *url.URL) string {

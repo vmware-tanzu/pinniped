@@ -103,6 +103,7 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 	aggregatedAPIServerTLSCert, err := aggregatedAPIServerCA.Issue(
 		pkix.Name{CommonName: serviceEndpoint},
 		[]string{serviceEndpoint},
+		nil,
 		c.certDuration,
 	)
 	if err != nil {

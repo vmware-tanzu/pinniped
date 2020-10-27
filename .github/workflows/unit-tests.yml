@@ -23,8 +23,8 @@ jobs:
       run: go build -v ./...
     - name: Test
       run: go test -short -race -v ./...
-  macos-unit-tests:
-    name: macOS Unit Tests
+  windows-unit-tests:
+    name: Windows Unit Tests
     runs-on: windows-latest
     steps:
     - name: Set up Go

@@ -203,21 +203,27 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 						Name:      "no-secret-oidcproviderconfig1",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderConfigSpec{Issuer: "https://no-secret-issuer1.com"}, // no SecretName field
+					Spec: v1alpha1.OIDCProviderConfigSpec{Issuer: "https://no-secret-issuer1.com"}, // no SNICertificateSecretName field
 				}
 				oidcProviderConfigWithoutSecret2 := &v1alpha1.OIDCProviderConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "no-secret-oidcproviderconfig2",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderConfigSpec{Issuer: "https://no-secret-issuer2.com", SecretName: ""},
+					Spec: v1alpha1.OIDCProviderConfigSpec{
+						Issuer:                   "https://no-secret-issuer2.com",
+						SNICertificateSecretName: "",
+					},
 				}
 				oidcProviderConfigWithBadSecret := &v1alpha1.OIDCProviderConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "bad-secret-oidcproviderconfig",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderConfigSpec{Issuer: "https://bad-secret-issuer.com", SecretName: "bad-tls-secret-name"},
+					Spec: v1alpha1.OIDCProviderConfigSpec{
+						Issuer:                   "https://bad-secret-issuer.com",
+						SNICertificateSecretName: "bad-tls-secret-name",
+					},
 				}
 				// Also add one with a URL that cannot be parsed to make sure that the controller is not confused by invalid URLs.
 				invalidIssuerURL := ":/host//path"
@@ -236,7 +242,10 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 						Namespace: installedInNamespace,
 					},
 					// Issuer hostname should be treated in a case-insensitive way and SNI ignores port numbers. Test without a port number.
-					Spec: v1alpha1.OIDCProviderConfigSpec{Issuer: "https://www.iSSuer-wiTh-goOd-secRet1.cOm/path", SecretName: "good-tls-secret-name1"},
+					Spec: v1alpha1.OIDCProviderConfigSpec{
+						Issuer:                   "https://www.iSSuer-wiTh-goOd-secRet1.cOm/path",
+						SNICertificateSecretName: "good-tls-secret-name1",
+					},
 				}
 				oidcProviderConfigWithGoodSecret2 := &v1alpha1.OIDCProviderConfig{
 					ObjectMeta: metav1.ObjectMeta{
@@ -244,7 +253,10 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 						Namespace: installedInNamespace,
 					},
 					// Issuer hostname should be treated in a case-insensitive way and SNI ignores port numbers. Test with a port number.
-					Spec: v1alpha1.OIDCProviderConfigSpec{Issuer: "https://www.issUEr-WIth-gOOd-seCret2.com:1234/path", SecretName: "good-tls-secret-name2"},
+					Spec: v1alpha1.OIDCProviderConfigSpec{
+						Issuer:                   "https://www.issUEr-WIth-gOOd-seCret2.com:1234/path",
+						SNICertificateSecretName: "good-tls-secret-name2",
+					},
 				}
 				testCrt1 := readTestFile("testdata/test.crt")
 				r.NotEmpty(testCrt1)

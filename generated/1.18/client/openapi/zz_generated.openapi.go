@@ -397,9 +397,9 @@ func schema_118_apis_config_v1alpha1_OIDCProviderConfigSpec(ref common.Reference
 							Format:      "",
 						},
 					},
-					"secretName": {
+					"sniCertificateSecretName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "SecretName is an optional name of a Secret in the same namespace, of type `kubernetes.io/tls`, which contains the TLS serving certificate for the HTTPS endpoints served by this OIDC Provider. SecretName is required if you would like to use the HTTPS endpoints (e.g. when exposing them outside the cluster using a LoadBalancer Service), and is not required when you would like to use only the HTTP endpoints (e.g. when terminating TLS at an Ingress). The TLS secret must contain keys named `tls.crt` and `tls.key` that contain the certificate and private key to use for TLS.",
+							Description: "SNICertificateSecretName is an optional name of a Secret in the same namespace, of type `kubernetes.io/tls`, which contains the TLS serving certificate for the HTTPS endpoints served by this OIDC Provider. When provided, the TLS Secret named here must contain keys named `tls.crt` and `tls.key` that contain the certificate and private key to use for TLS.\n\nServer Name Indication (SNI) is an extension to the Transport Layer Security (TLS) supported by all major browsers.\n\nSNICertificateSecretName is required if you would like to use different TLS certificates for issuers of different hostnames. SNI requests do not include port numbers, so all issuers with the same DNS hostname must use the same SNICertificateSecretName value even if they have different port numbers.\n\nSNICertificateSecretName is not required when you would like to use only the HTTP endpoints (e.g. when terminating TLS at an Ingress). It is also not required when you would like all requests to this OIDC Provider's HTTPS endpoints to use the default TLS certificate, which is configured elsewhere.\n\nWhen your Issuer URL's host is an IP address, then this field is ignored. SNI does not work for IP addresses.",
 							Type:        []string{"string"},
 							Format:      "",
 						},

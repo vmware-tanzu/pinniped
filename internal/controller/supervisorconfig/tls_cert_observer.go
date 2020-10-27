@@ -68,7 +68,7 @@ func (c *tlsCertObserverController) Sync(ctx controllerlib.Context) error {
 	issuerHostToTLSCertMap := map[string]*tls.Certificate{}
 
 	for _, provider := range allProviders {
-		secretName := provider.Spec.SecretName
+		secretName := provider.Spec.SNICertificateSecretName
 		issuerURL, err := url.Parse(provider.Spec.Issuer)
 		if err != nil {
 			klog.InfoS("tlsCertObserverController Sync found an invalid issuer URL", "namespace", ns, "issuer", provider.Spec.Issuer)

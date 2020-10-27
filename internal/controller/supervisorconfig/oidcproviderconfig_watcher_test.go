@@ -819,8 +819,8 @@ func TestSync(t *testing.T) {
 				oidcProviderConfigSameIssuerAddress1 = &v1alpha1.OIDCProviderConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "provider1", Namespace: namespace},
 					Spec: v1alpha1.OIDCProviderConfigSpec{
-						Issuer:     "https://iSSueR-duPlicAte-adDress.cOm/path1",
-						SecretName: "secret1",
+						Issuer:                   "https://iSSueR-duPlicAte-adDress.cOm/path1",
+						SNICertificateSecretName: "secret1",
 					},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(oidcProviderConfigSameIssuerAddress1))
@@ -830,8 +830,8 @@ func TestSync(t *testing.T) {
 					Spec: v1alpha1.OIDCProviderConfigSpec{
 						// Validation treats these as the same DNS hostname even though they have different port numbers,
 						// because SNI information on the incoming requests is not going to include port numbers.
-						Issuer:     "https://issuer-duplicate-address.com:1234/path2",
-						SecretName: "secret2",
+						Issuer:                   "https://issuer-duplicate-address.com:1234/path2",
+						SNICertificateSecretName: "secret2",
 					},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(oidcProviderConfigSameIssuerAddress2))
@@ -840,8 +840,8 @@ func TestSync(t *testing.T) {
 				oidcProviderConfigDifferentIssuerAddress = &v1alpha1.OIDCProviderConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "differentIssuerAddressProvider", Namespace: namespace},
 					Spec: v1alpha1.OIDCProviderConfigSpec{
-						Issuer:     "https://issuer-not-duplicate.com",
-						SecretName: "secret1",
+						Issuer:                   "https://issuer-not-duplicate.com",
+						SNICertificateSecretName: "secret1",
 					},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(oidcProviderConfigDifferentIssuerAddress))
@@ -855,8 +855,8 @@ func TestSync(t *testing.T) {
 				oidcProviderConfigWithInvalidIssuerURL = &v1alpha1.OIDCProviderConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "invalidIssuerURLProvider", Namespace: namespace},
 					Spec: v1alpha1.OIDCProviderConfigSpec{
-						Issuer:     invalidIssuerURL,
-						SecretName: "secret1",
+						Issuer:                   invalidIssuerURL,
+						SNICertificateSecretName: "secret1",
 					},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(oidcProviderConfigWithInvalidIssuerURL))

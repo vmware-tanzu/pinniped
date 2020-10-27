@@ -206,10 +206,11 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 
 	//nolint: gosec // Intentionally binding to all network interfaces.
 	httpsListener, err := tls.Listen("tcp", ":443", &tls.Config{
-		MinVersion: tls.VersionTLS13,
+		MinVersion: tls.VersionTLS12, // Allow v1.2 because clients like the default `curl` on MacOS don't support 1.3 yet.
 		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			klog.InfoS("GetCertificate called", "info.ServerName", info.ServerName)
-			return dynamicTLSCertProvider.GetTLSCert(strings.ToLower(info.ServerName)), nil
+			cert := dynamicTLSCertProvider.GetTLSCert(strings.ToLower(info.ServerName))
+			klog.InfoS("GetCertificate called for port 443", "info.ServerName", info.ServerName, "foundCert", cert != nil)
+			return cert, nil
 		},
 	})
 	if err != nil {

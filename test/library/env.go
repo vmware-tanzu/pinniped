@@ -26,17 +26,18 @@ const (
 type TestEnv struct {
 	t *testing.T
 
-	ConciergeNamespace      string                                  `json:"conciergeNamespace"`
-	SupervisorNamespace     string                                  `json:"supervisorNamespace"`
-	ConciergeAppName        string                                  `json:"conciergeAppName"`
-	SupervisorAppName       string                                  `json:"supervisorAppName"`
-	SupervisorCustomLabels  map[string]string                       `json:"supervisorCustomLabels"`
-	ConciergeCustomLabels   map[string]string                       `json:"conciergeCustomLabels"`
-	Capabilities            map[Capability]bool                     `json:"capabilities"`
-	TestWebhook             idpv1alpha1.WebhookIdentityProviderSpec `json:"testWebhook"`
-	SupervisorHTTPAddress   string                                  `json:"supervisorHttpAddress"`
-	SupervisorHTTPSAddress  string                                  `json:"supervisorHttpsAddress"`
-	SupervisorHTTPSCABundle string                                  `json:"supervisorHttpsCABundle"`
+	ConciergeNamespace             string                                  `json:"conciergeNamespace"`
+	SupervisorNamespace            string                                  `json:"supervisorNamespace"`
+	ConciergeAppName               string                                  `json:"conciergeAppName"`
+	SupervisorAppName              string                                  `json:"supervisorAppName"`
+	SupervisorCustomLabels         map[string]string                       `json:"supervisorCustomLabels"`
+	ConciergeCustomLabels          map[string]string                       `json:"conciergeCustomLabels"`
+	Capabilities                   map[Capability]bool                     `json:"capabilities"`
+	TestWebhook                    idpv1alpha1.WebhookIdentityProviderSpec `json:"testWebhook"`
+	SupervisorHTTPAddress          string                                  `json:"supervisorHttpAddress"`
+	SupervisorHTTPSAddress         string                                  `json:"supervisorHttpsAddress"`
+	SupervisorHTTPSIngressAddress  string                                  `json:"supervisorHttpsIngressAddress"`
+	SupervisorHTTPSIngressCABundle string                                  `json:"supervisorHttpsIngressCABundle"`
 
 	TestUser struct {
 		Token            string   `json:"token"`
@@ -75,51 +76,62 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 	err := yaml.Unmarshal([]byte(capabilitiesDescriptionYAML), &result)
 	require.NoErrorf(t, err, "capabilities specification was invalid YAML")
 
-	needEnv := func(key string) string {
-		t.Helper()
-		value := os.Getenv(key)
-		require.NotEmptyf(t, value, "must specify %s env var for integration tests", key)
-		return value
-	}
+	loadEnvVars(t, &result)
 
-	result.ConciergeNamespace = needEnv("PINNIPED_TEST_CONCIERGE_NAMESPACE")
-	result.ConciergeAppName = needEnv("PINNIPED_TEST_CONCIERGE_APP_NAME")
-	result.TestUser.ExpectedUsername = needEnv("PINNIPED_TEST_USER_USERNAME")
-	result.TestUser.ExpectedGroups = strings.Split(strings.ReplaceAll(needEnv("PINNIPED_TEST_USER_GROUPS"), " ", ""), ",")
-	result.TestUser.Token = needEnv("PINNIPED_TEST_USER_TOKEN")
-	result.TestWebhook.Endpoint = needEnv("PINNIPED_TEST_WEBHOOK_ENDPOINT")
-	result.SupervisorNamespace = needEnv("PINNIPED_TEST_SUPERVISOR_NAMESPACE")
-	result.SupervisorAppName = needEnv("PINNIPED_TEST_SUPERVISOR_APP_NAME")
-	result.TestWebhook.TLS = &idpv1alpha1.TLSSpec{CertificateAuthorityData: needEnv("PINNIPED_TEST_WEBHOOK_CA_BUNDLE")}
+	result.t = t
+	return &result
+}
+
+func needEnv(t *testing.T, key string) string {
+	t.Helper()
+	value := os.Getenv(key)
+	require.NotEmptyf(t, value, "must specify %s env var for integration tests", key)
+	return value
+}
+
+func loadEnvVars(t *testing.T, result *TestEnv) {
+	t.Helper()
+
+	result.ConciergeNamespace = needEnv(t, "PINNIPED_TEST_CONCIERGE_NAMESPACE")
+	result.ConciergeAppName = needEnv(t, "PINNIPED_TEST_CONCIERGE_APP_NAME")
+	result.TestUser.ExpectedUsername = needEnv(t, "PINNIPED_TEST_USER_USERNAME")
+	result.TestUser.ExpectedGroups = strings.Split(strings.ReplaceAll(needEnv(t, "PINNIPED_TEST_USER_GROUPS"), " ", ""), ",")
+	result.TestUser.Token = needEnv(t, "PINNIPED_TEST_USER_TOKEN")
+	result.TestWebhook.Endpoint = needEnv(t, "PINNIPED_TEST_WEBHOOK_ENDPOINT")
+	result.SupervisorNamespace = needEnv(t, "PINNIPED_TEST_SUPERVISOR_NAMESPACE")
+	result.SupervisorAppName = needEnv(t, "PINNIPED_TEST_SUPERVISOR_APP_NAME")
+	result.TestWebhook.TLS = &idpv1alpha1.TLSSpec{CertificateAuthorityData: needEnv(t, "PINNIPED_TEST_WEBHOOK_CA_BUNDLE")}
 
 	result.SupervisorHTTPAddress = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS")
-	result.SupervisorHTTPSAddress = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS")
+	result.SupervisorHTTPSIngressAddress = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_ADDRESS")
+	result.SupervisorHTTPSIngressCABundle = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_CA_BUNDLE") // optional
 	require.NotEmptyf(t,
-		result.SupervisorHTTPAddress+result.SupervisorHTTPSAddress,
-		"must specify either PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS or PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS env var (or both) for integration tests",
+		result.SupervisorHTTPAddress+result.SupervisorHTTPSIngressAddress,
+		"must specify either PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS or PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_ADDRESS env var (or both) for integration tests",
 	)
-	result.SupervisorHTTPSCABundle = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_CA_BUNDLE") // optional
+	result.SupervisorHTTPSAddress = needEnv(t, "PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS")
+	require.NotRegexp(t, "^[0-9]", result.SupervisorHTTPSAddress,
+		"PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS must be a hostname with an optional port and cannot be an IP address",
+	)
 
-	conciergeCustomLabelsYAML := needEnv("PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS")
+	conciergeCustomLabelsYAML := needEnv(t, "PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS")
 	var conciergeCustomLabels map[string]string
-	err = yaml.Unmarshal([]byte(conciergeCustomLabelsYAML), &conciergeCustomLabels)
+	err := yaml.Unmarshal([]byte(conciergeCustomLabelsYAML), &conciergeCustomLabels)
 	require.NoErrorf(t, err, "PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS must be a YAML map of string to string")
 	result.ConciergeCustomLabels = conciergeCustomLabels
 	require.NotEmpty(t, result.ConciergeCustomLabels, "PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS cannot be empty")
-	supervisorCustomLabelsYAML := needEnv("PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS")
+	supervisorCustomLabelsYAML := needEnv(t, "PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS")
 	var supervisorCustomLabels map[string]string
 	err = yaml.Unmarshal([]byte(supervisorCustomLabelsYAML), &supervisorCustomLabels)
 	require.NoErrorf(t, err, "PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS must be a YAML map of string to string")
 	result.SupervisorCustomLabels = supervisorCustomLabels
 	require.NotEmpty(t, result.SupervisorCustomLabels, "PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS cannot be empty")
 
-	result.OIDCUpstream.Issuer = needEnv("PINNIPED_TEST_CLI_OIDC_ISSUER")
-	result.OIDCUpstream.ClientID = needEnv("PINNIPED_TEST_CLI_OIDC_CLIENT_ID")
-	result.OIDCUpstream.LocalhostPort, _ = strconv.Atoi(needEnv("PINNIPED_TEST_CLI_OIDC_LOCALHOST_PORT"))
-	result.OIDCUpstream.Username = needEnv("PINNIPED_TEST_CLI_OIDC_USERNAME")
-	result.OIDCUpstream.Password = needEnv("PINNIPED_TEST_CLI_OIDC_PASSWORD")
-	result.t = t
-	return &result
+	result.OIDCUpstream.Issuer = needEnv(t, "PINNIPED_TEST_CLI_OIDC_ISSUER")
+	result.OIDCUpstream.ClientID = needEnv(t, "PINNIPED_TEST_CLI_OIDC_CLIENT_ID")
+	result.OIDCUpstream.LocalhostPort, _ = strconv.Atoi(needEnv(t, "PINNIPED_TEST_CLI_OIDC_LOCALHOST_PORT"))
+	result.OIDCUpstream.Username = needEnv(t, "PINNIPED_TEST_CLI_OIDC_USERNAME")
+	result.OIDCUpstream.Password = needEnv(t, "PINNIPED_TEST_CLI_OIDC_PASSWORD")
 }
 
 func (e *TestEnv) HasCapability(cap Capability) bool {

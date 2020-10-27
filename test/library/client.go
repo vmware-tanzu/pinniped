@@ -165,7 +165,7 @@ func CreateTestWebhookIDP(ctx context.Context, t *testing.T) corev1.TypedLocalOb
 //
 // If the provided issuer is not the empty string, then it will be used for the
 // OIDCProviderConfig.Spec.Issuer field. Else, a random issuer will be generated.
-func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer string) *configv1alpha1.OIDCProviderConfig {
+func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer, sniCertificateSecretName string) *configv1alpha1.OIDCProviderConfig {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
@@ -186,7 +186,8 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer string) *c
 			Annotations:  map[string]string{"pinniped.dev/testName": t.Name()},
 		},
 		Spec: configv1alpha1.OIDCProviderConfigSpec{
-			Issuer: issuer,
+			Issuer:                   issuer,
+			SNICertificateSecretName: sniCertificateSecretName,
 		},
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test OIDCProviderConfig")

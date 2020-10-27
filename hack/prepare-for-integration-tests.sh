@@ -109,18 +109,18 @@ fi
 
 if ! tilt_mode; then
   if [[ "$clean_kind" == "yes" ]]; then
-    log_note "Deleting running kind clusters to prepare from a clean slate..."
-    kind delete cluster --name pinniped
+    log_note "Deleting running kind cluster to prepare from a clean slate..."
+    ./hack/kind-down.sh
   fi
 
   #
   # Setup kind and build the app
   #
-  log_note "Checking for running kind clusters..."
+  log_note "Checking for running kind cluster..."
   if ! kind get clusters | grep -q -e '^pinniped$'; then
     log_note "Creating a kind cluster..."
-    # single-node.yaml exposes node port 31234 as 127.0.0.1:12345, 31243 as 127.0.0.1:12344, and 31235 as 127.0.0.1:12346
-    kind create cluster --config "$pinniped_path/hack/lib/kind-config/single-node.yaml" --name pinniped
+    # Our kind config exposes node port 31234 as 127.0.0.1:12345, 31243 as 127.0.0.1:12344, and 31235 as 127.0.0.1:12346
+    ./hack/kind-up.sh
   else
     if ! kubectl cluster-info | grep master | grep -q 127.0.0.1; then
       log_error "Seems like your kubeconfig is not targeting a local cluster."
@@ -304,7 +304,7 @@ goland_vars=$(grep -v '^#' /tmp/integration-test-env | grep -E '^export .+=' | s
 log_note
 log_note "🚀 Ready to run integration tests! For example..."
 log_note "    cd $pinniped_path"
-log_note '    source /tmp/integration-test-env && go test -v -count 1 ./test/integration'
+log_note '    source /tmp/integration-test-env && go test -v -race -count 1 ./test/integration'
 log_note
 log_note 'Want to run integration tests in GoLand? Copy/paste this "Environment" value for GoLand run configurations:'
 log_note "    ${goland_vars}PINNIPED_TEST_CLUSTER_CAPABILITY_FILE=${kind_capabilities_file}"
@@ -315,5 +315,5 @@ if ! tilt_mode; then
   log_note
   log_note "To delete the deployments, run:"
   log_note "  kapp delete -a local-user-authenticator -y && kapp delete -a $concierge_app_name -y &&  kapp delete -a $supervisor_app_name -y"
-  log_note "When you're finished, use 'kind delete cluster --name pinniped' to tear down the cluster."
+  log_note "When you're finished, use './hack/kind-down.sh' to tear down the cluster."
 fi

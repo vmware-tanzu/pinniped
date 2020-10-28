@@ -113,6 +113,7 @@ func startControllers(
 		WithController(
 			supervisorconfig.NewTLSCertObserverController(
 				dynamicTLSCertProvider,
+				cfg.NamesConfig.DefaultTLSCertificateSecret,
 				kubeInformers.Core().V1().Secrets(),
 				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
 				controllerlib.WithInformer,

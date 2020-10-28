@@ -18,6 +18,7 @@ func TestFromPath(t *testing.T) {
 		name       string
 		yaml       string
 		wantConfig *Config
+		wantError  string
 	}{
 		{
 			name: "Happy",
@@ -26,11 +27,16 @@ func TestFromPath(t *testing.T) {
 				labels:
 				  myLabelKey1: myLabelValue1
 				  myLabelKey2: myLabelValue2
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
 			`),
 			wantConfig: &Config{
 				Labels: map[string]string{
 					"myLabelKey1": "myLabelValue1",
 					"myLabelKey2": "myLabelValue2",
+				},
+				NamesConfig: NamesConfigSpec{
+					DefaultTLSCertificateSecret: "my-secret-name",
 				},
 			},
 		},
@@ -38,10 +44,22 @@ func TestFromPath(t *testing.T) {
 			name: "When only the required fields are present, causes other fields to be defaulted",
 			yaml: here.Doc(`
 				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
 			`),
 			wantConfig: &Config{
 				Labels: map[string]string{},
+				NamesConfig: NamesConfigSpec{
+					DefaultTLSCertificateSecret: "my-secret-name",
+				},
 			},
+		},
+		{
+			name: "Missing defaultTLSCertificateSecret name",
+			yaml: here.Doc(`
+				---
+			`),
+			wantError: "validate names: missing required names: defaultTLSCertificateSecret",
 		},
 	}
 	for _, test := range tests {
@@ -62,8 +80,12 @@ func TestFromPath(t *testing.T) {
 			// Test FromPath()
 			config, err := FromPath(f.Name())
 
-			require.NoError(t, err)
-			require.Equal(t, test.wantConfig, config)
+			if test.wantError != "" {
+				require.EqualError(t, err, test.wantError)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, test.wantConfig, config)
+			}
 		})
 	}
 }

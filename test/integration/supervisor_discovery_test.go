@@ -135,7 +135,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuerUsingIPAddress)
 
 	// Create a Secret at the special name which represents the default TLS cert.
-	specialNameForDefaultTLSCertSecret := "default-tls-certificate" //nolint:gosec // this is not a hardcoded credential
+	specialNameForDefaultTLSCertSecret := "pinniped-supervisor-default-tls-certificate" //nolint:gosec // this is not a hardcoded credential
 	defaultCA := createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", []net.IP{ip}, specialNameForDefaultTLSCertSecret, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by IP address using the CA.

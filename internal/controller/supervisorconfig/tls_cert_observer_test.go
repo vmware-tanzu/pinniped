@@ -42,6 +42,7 @@ func TestTLSCertObserverControllerInformerFilters(t *testing.T) {
 			oidcProviderConfigInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().OIDCProviderConfigs()
 			_ = NewTLSCertObserverController(
 				nil,
+				"", // don't care about the secret name for this test
 				secretsInformer,
 				oidcProviderConfigInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
@@ -115,7 +116,10 @@ func (f *fakeIssuerTLSCertSetter) SetDefaultTLSCert(certificate *tls.Certificate
 
 func TestTLSCertObserverControllerSync(t *testing.T) {
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
-		const installedInNamespace = "some-namespace"
+		const (
+			installedInNamespace = "some-namespace"
+			defaultTLSSecretName = "some-default-secret-name"
+		)
 
 		var (
 			r                      *require.Assertions
@@ -136,6 +140,7 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewTLSCertObserverController(
 				issuerTLSCertSetter,
+				defaultTLSSecretName,
 				kubeInformers.Core().V1().Secrets(),
 				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
 				controllerlib.WithInformer,
@@ -324,7 +329,7 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 				r.Equal(expectedCertificate2, *actualCertificate2)
 			})
 
-			when("there is also a default TLS cert secret called default-tls-certificate", func() {
+			when("there is also a default TLS cert secret with the configured default TLS cert secret name", func() {
 				var (
 					expectedDefaultCertificate tls.Certificate
 				)
@@ -338,7 +343,7 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 					expectedDefaultCertificate, err = tls.X509KeyPair(testCrt, testKey)
 					r.NoError(err)
 					defaultTLSCertSecret := &corev1.Secret{
-						ObjectMeta: metav1.ObjectMeta{Name: "default-tls-certificate", Namespace: installedInNamespace},
+						ObjectMeta: metav1.ObjectMeta{Name: defaultTLSSecretName, Namespace: installedInNamespace},
 						Data:       map[string][]byte{"tls.crt": testCrt, "tls.key": testKey},
 					}
 					r.NoError(kubeInformerClient.Tracker().Add(defaultTLSCertSecret))

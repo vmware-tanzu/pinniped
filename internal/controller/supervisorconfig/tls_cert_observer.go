@@ -18,12 +18,11 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 )
 
-const SecretNameForDefaultTLSCertificate = "default-tls-certificate" //nolint:gosec // this is not a hardcoded credential
-
 type tlsCertObserverController struct {
-	issuerTLSCertSetter        IssuerTLSCertSetter
-	oidcProviderConfigInformer v1alpha1.OIDCProviderConfigInformer
-	secretInformer             corev1informers.SecretInformer
+	issuerTLSCertSetter             IssuerTLSCertSetter
+	defaultTLSCertificateSecretName string
+	oidcProviderConfigInformer      v1alpha1.OIDCProviderConfigInformer
+	secretInformer                  corev1informers.SecretInformer
 }
 
 type IssuerTLSCertSetter interface {
@@ -33,6 +32,7 @@ type IssuerTLSCertSetter interface {
 
 func NewTLSCertObserverController(
 	issuerTLSCertSetter IssuerTLSCertSetter,
+	defaultTLSCertificateSecretName string,
 	secretInformer corev1informers.SecretInformer,
 	oidcProviderConfigInformer v1alpha1.OIDCProviderConfigInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
@@ -41,9 +41,10 @@ func NewTLSCertObserverController(
 		controllerlib.Config{
 			Name: "tls-certs-observer-controller",
 			Syncer: &tlsCertObserverController{
-				issuerTLSCertSetter:        issuerTLSCertSetter,
-				oidcProviderConfigInformer: oidcProviderConfigInformer,
-				secretInformer:             secretInformer,
+				issuerTLSCertSetter:             issuerTLSCertSetter,
+				defaultTLSCertificateSecretName: defaultTLSCertificateSecretName,
+				oidcProviderConfigInformer:      oidcProviderConfigInformer,
+				secretInformer:                  secretInformer,
 			},
 		},
 		withInformer(
@@ -88,7 +89,7 @@ func (c *tlsCertObserverController) Sync(ctx controllerlib.Context) error {
 	klog.InfoS("tlsCertObserverController Sync updated the TLS cert cache", "issuerHostCount", len(issuerHostToTLSCertMap))
 	c.issuerTLSCertSetter.SetIssuerHostToTLSCertMap(issuerHostToTLSCertMap)
 
-	defaultCert, err := c.certFromSecret(ns, SecretNameForDefaultTLSCertificate)
+	defaultCert, err := c.certFromSecret(ns, c.defaultTLSCertificateSecretName)
 	if err != nil {
 		c.issuerTLSCertSetter.SetDefaultTLSCert(nil)
 	} else {

@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -31,6 +33,10 @@ import (
 	"go.pinniped.dev/test/library"
 )
 
+const (
+	specialNameForDefaultTLSCertSecret = "pinniped-supervisor-default-tls-certificate"
+)
+
 func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	env := library.IntegrationEnv(t)
 	pinnipedClient := library.NewPinnipedClientset(t)
@@ -40,7 +46,7 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	temporarilyRemoveAllOIDCProviderConfigs(ctx, t, ns, pinnipedClient)
+	temporarilyRemoveAllOIDCProviderConfigsAndDefaultTLSCertSecret(ctx, t, ns, pinnipedClient, kubeClient)
 
 	scheme := "https"
 	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 443
@@ -107,7 +113,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	temporarilyRemoveAllOIDCProviderConfigs(ctx, t, ns, pinnipedClient)
+	temporarilyRemoveAllOIDCProviderConfigsAndDefaultTLSCertSecret(ctx, t, ns, pinnipedClient, kubeClient)
 
 	scheme := "https"
 	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 443
@@ -135,7 +141,6 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuerUsingIPAddress)
 
 	// Create a Secret at the special name which represents the default TLS cert.
-	specialNameForDefaultTLSCertSecret := "pinniped-supervisor-default-tls-certificate" //nolint:gosec // this is not a hardcoded credential
 	defaultCA := createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", []net.IP{ip}, specialNameForDefaultTLSCertSecret, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by IP address using the CA.
@@ -164,7 +169,7 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	temporarilyRemoveAllOIDCProviderConfigs(ctx, t, ns, client)
+	temporarilyRemoveAllOIDCProviderConfigsAndDefaultTLSCertSecret(ctx, t, ns, client, library.NewClientset(t))
 
 	tests := []struct {
 		Scheme   string
@@ -291,16 +296,24 @@ func createTLSCertificateSecret(ctx context.Context, t *testing.T, ns string, ho
 	return ca
 }
 
-func temporarilyRemoveAllOIDCProviderConfigs(ctx context.Context, t *testing.T, ns string, client pinnipedclientset.Interface) {
+func temporarilyRemoveAllOIDCProviderConfigsAndDefaultTLSCertSecret(ctx context.Context, t *testing.T, ns string, pinnipedClient pinnipedclientset.Interface, kubeClient kubernetes.Interface) {
 	// Temporarily remove any existing OIDCProviderConfigs from the cluster so we can test from a clean slate.
-	originalConfigList, err := client.ConfigV1alpha1().OIDCProviderConfigs(ns).List(ctx, metav1.ListOptions{})
+	originalConfigList, err := pinnipedClient.ConfigV1alpha1().OIDCProviderConfigs(ns).List(ctx, metav1.ListOptions{})
 	require.NoError(t, err)
 	for _, config := range originalConfigList.Items {
-		err := client.ConfigV1alpha1().OIDCProviderConfigs(ns).Delete(ctx, config.Name, metav1.DeleteOptions{})
+		err := pinnipedClient.ConfigV1alpha1().OIDCProviderConfigs(ns).Delete(ctx, config.Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
 	}
 
-	// When this test has finished, recreate any OIDCProviderConfigs that had existed on the cluster before this test.
+	// Also remove the supervisor's default TLS cert
+	originalSecret, err := kubeClient.CoreV1().Secrets(ns).Get(ctx, specialNameForDefaultTLSCertSecret, metav1.GetOptions{})
+	notFound := k8serrors.IsNotFound(err)
+	require.False(t, err != nil && !notFound, "unexpected error when getting %s", specialNameForDefaultTLSCertSecret)
+	err = kubeClient.CoreV1().Secrets(ns).Delete(ctx, specialNameForDefaultTLSCertSecret, metav1.DeleteOptions{})
+	notFound = k8serrors.IsNotFound(err)
+	require.False(t, err != nil && !notFound, "unexpected error when deleting %s", specialNameForDefaultTLSCertSecret)
+
+	// When this test has finished, recreate any OIDCProviderConfigs and default secret that had existed on the cluster before this test.
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
@@ -308,7 +321,13 @@ func temporarilyRemoveAllOIDCProviderConfigs(ctx context.Context, t *testing.T, 
 		for _, config := range originalConfigList.Items {
 			thisConfig := config
 			thisConfig.ResourceVersion = "" // Get rid of resource version since we can't create an object with one.
-			_, err := client.ConfigV1alpha1().OIDCProviderConfigs(ns).Create(cleanupCtx, &thisConfig, metav1.CreateOptions{})
+			_, err := pinnipedClient.ConfigV1alpha1().OIDCProviderConfigs(ns).Create(cleanupCtx, &thisConfig, metav1.CreateOptions{})
+			require.NoError(t, err)
+		}
+
+		if originalSecret != nil {
+			originalSecret.ResourceVersion = "" // Get rid of resource version since we can't create an object with one.
+			_, err = kubeClient.CoreV1().Secrets(ns).Create(cleanupCtx, originalSecret, metav1.CreateOptions{})
 			require.NoError(t, err)
 		}
 	})

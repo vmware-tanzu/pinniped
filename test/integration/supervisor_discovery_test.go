@@ -311,9 +311,12 @@ func temporarilyRemoveAllOIDCProviderConfigsAndDefaultTLSCertSecret(ctx context.
 	originalSecret, err := kubeClient.CoreV1().Secrets(ns).Get(ctx, specialNameForDefaultTLSCertSecret, metav1.GetOptions{})
 	notFound := k8serrors.IsNotFound(err)
 	require.False(t, err != nil && !notFound, "unexpected error when getting %s", specialNameForDefaultTLSCertSecret)
-	err = kubeClient.CoreV1().Secrets(ns).Delete(ctx, specialNameForDefaultTLSCertSecret, metav1.DeleteOptions{})
-	notFound = k8serrors.IsNotFound(err)
-	require.False(t, err != nil && !notFound, "unexpected error when deleting %s", specialNameForDefaultTLSCertSecret)
+	if notFound {
+		originalSecret = nil
+	} else {
+		err = kubeClient.CoreV1().Secrets(ns).Delete(ctx, specialNameForDefaultTLSCertSecret, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	}
 
 	// When this test has finished, recreate any OIDCProviderConfigs and default secret that had existed on the cluster before this test.
 	t.Cleanup(func() {

@@ -339,10 +339,16 @@ func temporarilyRemoveAllOIDCProviderConfigsAndDefaultTLSCertSecret(ctx context.
 }
 
 func jwksURLForIssuer(scheme, host, path string) string {
+	if path == "" {
+		return fmt.Sprintf("%s://%s/jwks.json", scheme, host)
+	}
 	return fmt.Sprintf("%s://%s/%s/jwks.json", scheme, host, strings.TrimPrefix(path, "/"))
 }
 
 func wellKnownURLForIssuer(scheme, host, path string) string {
+	if path == "" {
+		return fmt.Sprintf("%s://%s/.well-known/openid-configuration", scheme, host)
+	}
 	return fmt.Sprintf("%s://%s/%s/.well-known/openid-configuration", scheme, host, strings.TrimPrefix(path, "/"))
 }
 

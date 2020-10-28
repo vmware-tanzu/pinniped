@@ -118,7 +118,8 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 443
 
 	hostAndPortSegments := strings.Split(address, ":")
-	hostname := hostAndPortSegments[0]
+	// hostnames are case-insensitive, so test mis-matching the case of the issuer URL and the request URL
+	hostname := strings.ToLower(hostAndPortSegments[0])
 	port := "443"
 	if len(hostAndPortSegments) > 1 {
 		port = hostAndPortSegments[1]
@@ -154,7 +155,9 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	sniCA := createTLSCertificateSecret(ctx, t, ns, hostname, nil, sniCertificateSecretName, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA from the SNI cert.
-	_ = requireDiscoveryEndpointsAreWorking(t, scheme, address, string(sniCA.Bundle()), issuerUsingHostname, nil)
+	// Hostnames are case-insensitive, so the request should still work even if the case of the hostname is different
+	// from the case of the issuer URL's hostname.
+	_ = requireDiscoveryEndpointsAreWorking(t, scheme, strings.ToUpper(hostname)+":"+port, string(sniCA.Bundle()), issuerUsingHostname, nil)
 
 	// And we can still access the other issuer using the default cert.
 	_ = requireDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)

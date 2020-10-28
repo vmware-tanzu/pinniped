@@ -5,6 +5,7 @@ package filesession
 
 import (
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -47,6 +48,12 @@ var validSession = sessionCache{
 
 func TestReadSessionCache(t *testing.T) {
 	t.Parallel()
+
+	directoryError := "is a directory"
+	if runtime.GOOS == "windows" {
+		directoryError = "The handle is invalid."
+	}
+
 	tests := []struct {
 		name    string
 		path    string
@@ -64,7 +71,7 @@ func TestReadSessionCache(t *testing.T) {
 		{
 			name:    "other file error",
 			path:    "./testdata/",
-			wantErr: "could not read session file: read ./testdata/: is a directory",
+			wantErr: "could not read session file: read ./testdata/: " + directoryError,
 		},
 		{
 			name:    "invalid YAML",

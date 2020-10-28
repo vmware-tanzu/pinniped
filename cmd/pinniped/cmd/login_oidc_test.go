@@ -5,6 +5,8 @@ package cmd
 
 import (
 	"bytes"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,7 +49,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 					  --issuer string          OpenID Connect issuer URL.
 					  --listen-port uint16     TCP port for localhost listener (authorization code flow only).
 					  --scopes strings         OIDC scopes to request during login. (default [offline_access,openid,email,profile])
-					  --session-cache string   Path to session cache file. (default "` + cfgDir + `/sessions.yaml")
+					  --session-cache string   Path to session cache file. (default "` + windowsSafeJoin(cfgDir, "sessions.yaml") + `")
 					  --skip-browser           Skip opening the browser (just print the URL).
 			`),
 		},
@@ -124,4 +126,18 @@ func TestLoginOIDCCommand(t *testing.T) {
 			require.Len(t, gotOptions, tt.wantOptionsCount)
 		})
 	}
+}
+
+// windowsSafeJoin is a function to help us get around a weird double-slash behavior in our help
+// test. It should not affect the behavior of a path using '/' separators.
+//
+// When we create a flag with this help text
+//   C:\some\path\to\file.yaml
+// then it shows up on the command line as this
+//   C:\\some\\path\\to\\file.yaml
+// because (I think) the cobra library is doing some backslash escaping.
+func windowsSafeJoin(s ...string) string {
+	joined := filepath.Join(s...)
+	joined = strings.ReplaceAll(joined, `\`, `\\`)
+	return joined
 }

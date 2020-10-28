@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ import (
 
 func TestNew(t *testing.T) {
 	t.Parallel()
-	tmp := t.TempDir() + "/sessions.yaml"
+	tmp := filepath.Join(t.TempDir(), "sessions.yaml")
 	c := New(tmp)
 	require.NotNil(t, c)
 	require.Equal(t, tmp, c.path)
@@ -30,6 +31,12 @@ func TestNew(t *testing.T) {
 
 func TestGetToken(t *testing.T) {
 	t.Parallel()
+
+	isADirectoryError := "is a directory"
+	if runtime.GOOS == "windows" {
+		isADirectoryError = "The handle is invalid."
+	}
+
 	now := time.Now().Round(1 * time.Second)
 	tests := []struct {
 		name         string
@@ -81,7 +88,7 @@ func TestGetToken(t *testing.T) {
 			},
 			key: oidcclient.SessionCacheKey{},
 			wantErrors: []string{
-				"failed to read cache, resetting: could not read session file: read TEMPFILE: is a directory",
+				"failed to read cache, resetting: could not read session file: read TEMPFILE: " + isADirectoryError,
 				"could not write session cache: open TEMPFILE: is a directory",
 			},
 		},
@@ -186,7 +193,7 @@ func TestGetToken(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			tmp := t.TempDir() + "/sessions.yaml"
+			tmp := filepath.Join(t.TempDir(), "sessions.yaml")
 			if tt.makeTestFile != nil {
 				tt.makeTestFile(t, tmp)
 			}
@@ -213,6 +220,14 @@ func TestGetToken(t *testing.T) {
 
 func TestPutToken(t *testing.T) {
 	t.Parallel()
+
+	notADirectoryError := "not a directory"
+	isADirectoryError := "is a directory"
+	if runtime.GOOS == "windows" {
+		notADirectoryError = "The system cannot find the path specified."
+		isADirectoryError = "The handle is invalid."
+	}
+
 	now := time.Now().Round(1 * time.Second)
 	tests := []struct {
 		name         string
@@ -228,7 +243,7 @@ func TestPutToken(t *testing.T) {
 				require.NoError(t, ioutil.WriteFile(filepath.Dir(tmp), []byte{}, 0600))
 			},
 			wantErrors: []string{
-				"could not create session cache directory: mkdir TEMPDIR: not a directory",
+				"could not create session cache directory: mkdir TEMPDIR: " + notADirectoryError,
 			},
 		},
 		{
@@ -403,7 +418,7 @@ func TestPutToken(t *testing.T) {
 				},
 			},
 			wantErrors: []string{
-				"failed to read cache, resetting: could not read session file: read TEMPFILE: is a directory",
+				"failed to read cache, resetting: could not read session file: read TEMPFILE: " + isADirectoryError,
 				"could not write session cache: open TEMPFILE: is a directory",
 			},
 			wantTestFile: func(t *testing.T, tmp string) {
@@ -417,7 +432,7 @@ func TestPutToken(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			tmp := t.TempDir() + "/sessiondir/sessions.yaml"
+			tmp := filepath.Join(t.TempDir(), "sessiondir", "sessions.yaml")
 			if tt.makeTestFile != nil {
 				tt.makeTestFile(t, tmp)
 			}

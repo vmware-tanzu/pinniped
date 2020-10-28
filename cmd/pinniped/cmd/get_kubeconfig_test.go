@@ -7,13 +7,14 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	coretesting "k8s.io/client-go/testing"
 
@@ -191,6 +192,12 @@ func newCredentialIssuerConfig(name, namespace, server, certificateAuthorityData
 
 func TestRun(t *testing.T) {
 	t.Parallel()
+
+	fileDoesNotExistError := "stat ./testdata/does-not-exist.yaml: no such file or directory"
+	if runtime.GOOS == "windows" {
+		fileDoesNotExistError = "CreateFile ./testdata/does-not-exist.yaml: The system cannot find the file specified."
+	}
+
 	tests := []struct {
 		name       string
 		mocks      func(*getKubeConfigCommand)
@@ -212,7 +219,7 @@ func TestRun(t *testing.T) {
 			mocks: func(cmd *getKubeConfigCommand) {
 				cmd.flags.kubeconfig = "./testdata/does-not-exist.yaml"
 			},
-			wantError: "stat ./testdata/does-not-exist.yaml: no such file or directory",
+			wantError: fileDoesNotExistError,
 		},
 		{
 			name: "fail to get client",
@@ -229,7 +236,7 @@ func TestRun(t *testing.T) {
 				cmd.flags.idpName = ""
 				cmd.flags.idpType = ""
 				clientset := pinnipedfake.NewSimpleClientset()
-				clientset.PrependReactor("*", "*", func(_ coretesting.Action) (bool, runtime.Object, error) {
+				clientset.PrependReactor("*", "*", func(_ coretesting.Action) (bool, k8sruntime.Object, error) {
 					return true, nil, fmt.Errorf("some error getting IDPs")
 				})
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
@@ -267,7 +274,7 @@ func TestRun(t *testing.T) {
 			name: "fail to get CredentialIssuerConfigs",
 			mocks: func(cmd *getKubeConfigCommand) {
 				clientset := pinnipedfake.NewSimpleClientset()
-				clientset.PrependReactor("*", "*", func(_ coretesting.Action) (bool, runtime.Object, error) {
+				clientset.PrependReactor("*", "*", func(_ coretesting.Action) (bool, k8sruntime.Object, error) {
 					return true, nil, fmt.Errorf("some error getting CredentialIssuerConfigs")
 				})
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {

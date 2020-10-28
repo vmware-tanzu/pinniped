@@ -702,6 +702,7 @@ func readJWKJSON(t *testing.T, path string) []byte {
 	// our implementation.
 	data = bytes.ReplaceAll(data, []byte(" "), []byte{})
 	data = bytes.ReplaceAll(data, []byte("\n"), []byte{})
+	data = bytes.ReplaceAll(data, []byte("\r"), []byte{})
 
 	return data
 }

@@ -4,6 +4,8 @@
 package downward
 
 import (
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,6 +13,14 @@ import (
 
 func TestLoad(t *testing.T) {
 	t.Parallel()
+
+	fileDoesNotExistError := "no such file or directory"
+	directoryDoesNotExistError := "no such file or directory"
+	if runtime.GOOS == "windows" {
+		fileDoesNotExistError = "The system cannot find the file specified."
+		directoryDoesNotExistError = "The system cannot find the path specified."
+	}
+
 	tests := []struct {
 		name     string
 		inputDir string
@@ -20,12 +30,12 @@ func TestLoad(t *testing.T) {
 		{
 			name:     "missing directory",
 			inputDir: "./testdata/no-such-directory",
-			wantErr:  "could not load namespace: open testdata/no-such-directory/namespace: no such file or directory",
+			wantErr:  "could not load namespace: open " + filepath.Join("testdata", "no-such-directory", "namespace") + ": " + directoryDoesNotExistError,
 		},
 		{
 			name:     "missing labels file",
 			inputDir: "./testdata/missinglabels",
-			wantErr:  "could not load labels: open testdata/missinglabels/labels: no such file or directory",
+			wantErr:  "could not load labels: open " + filepath.Join("testdata", "missinglabels", "labels") + ": " + fileDoesNotExistError,
 		},
 		{
 			name:     "invalid labels file",

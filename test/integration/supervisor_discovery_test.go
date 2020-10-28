@@ -18,11 +18,10 @@ import (
 	"testing"
 	"time"
 
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -34,7 +33,7 @@ import (
 )
 
 const (
-	specialNameForDefaultTLSCertSecret = "pinniped-supervisor-default-tls-certificate"
+	specialNameForDefaultTLSCertSecret = "pinniped-supervisor-default-tls-certificate" //nolint:gosec // this is not a hardcoded credential
 )
 
 func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
@@ -193,14 +192,14 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 		// Test that there is no default discovery endpoint available when there are no OIDCProviderConfigs.
 		requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, fmt.Sprintf("%s://%s", scheme, addr))
 
-		// Define several unique issuer strings.
-		issuer1 := fmt.Sprintf("%s://%s/nested/issuer1", scheme, addr)
-		issuer2 := fmt.Sprintf("%s://%s/nested/issuer2", scheme, addr)
-		issuer3 := fmt.Sprintf("%s://%s/issuer3", scheme, addr)
-		issuer4 := fmt.Sprintf("%s://%s/issuer4", scheme, addr)
-		issuer5 := fmt.Sprintf("%s://%s/issuer5", scheme, addr)
-		issuer6 := fmt.Sprintf("%s://%s/issuer6", scheme, addr)
-		badIssuer := fmt.Sprintf("%s://%s/badIssuer?cannot-use=queries", scheme, addr)
+		// Define several unique issuer strings. Always use https in the issuer name even when we are accessing the http port.
+		issuer1 := fmt.Sprintf("https://%s/nested/issuer1", addr)
+		issuer2 := fmt.Sprintf("https://%s/nested/issuer2", addr)
+		issuer3 := fmt.Sprintf("https://%s/issuer3", addr)
+		issuer4 := fmt.Sprintf("https://%s/issuer4", addr)
+		issuer5 := fmt.Sprintf("https://%s/issuer5", addr)
+		issuer6 := fmt.Sprintf("https://%s/issuer6", addr)
+		badIssuer := fmt.Sprintf("https://%s/badIssuer?cannot-use=queries", addr)
 
 		// When OIDCProviderConfig are created in sequence they each cause a discovery endpoint to appear only for as long as the OIDCProviderConfig exists.
 		config1, jwks1 := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer1, client)
@@ -246,7 +245,7 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config6Duplicate2, client, ns, scheme, addr, caBundle, issuer6)
 
 		// "Host" headers can be used to send requests to discovery endpoints when the public address is different from the issuer name.
-		issuer7 := fmt.Sprintf("%s://some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com:2684/issuer7", scheme)
+		issuer7 := "https://some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com:2684/issuer7"
 		config7, _ := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer7, client)
 		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config7, client, ns, scheme, addr, caBundle, issuer7)
 

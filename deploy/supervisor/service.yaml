@@ -74,6 +74,9 @@ metadata:
 spec:
   type: LoadBalancer
   selector: #@ defaultLabel()
+  #@ if data.values.service_loadbalancer_ip:
+  loadBalancerIP: #@ data.values.service_loadbalancer_ip
+  #@ end
   ports:
     #@ if data.values.service_http_loadbalancer_port:
     - name: http

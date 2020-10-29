@@ -59,6 +59,11 @@ func TestOIDCProviderValidations(t *testing.T) {
 			issuer: "https://tuna.com/fish/marlin",
 		},
 		{
+			name:      "with http scheme",
+			issuer:    "http://tuna.com",
+			wantError: `issuer must have "https" scheme`,
+		},
+		{
 			name:      "trailing slash in path",
 			issuer:    "https://tuna.com/",
 			wantError: `issuer must not have trailing slash in path`,

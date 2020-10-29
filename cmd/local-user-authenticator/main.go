@@ -109,7 +109,7 @@ func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		return
 	}
-	defer req.Body.Close()
+	defer func() { _ = req.Body.Close() }()
 
 	secret, err := w.secretInformer.Lister().Secrets(namespace).Get(username)
 	notFound := k8serrors.IsNotFound(err)
@@ -379,7 +379,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("cannot create listener: %w", err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 
 	err = startWebhook(ctx, l, dynamicCertProvider, kubeInformers.Core().V1().Secrets())
 	if err != nil {

@@ -8,8 +8,11 @@ package supervisor
 import (
 	"fmt"
 	"io/ioutil"
+	"strings"
 
 	"sigs.k8s.io/yaml"
+
+	"go.pinniped.dev/internal/constable"
 )
 
 // FromPath loads an Config from a provided local file path, inserts any
@@ -30,5 +33,20 @@ func FromPath(path string) (*Config, error) {
 		config.Labels = make(map[string]string)
 	}
 
+	if err := validateNames(&config.NamesConfig); err != nil {
+		return nil, fmt.Errorf("validate names: %w", err)
+	}
+
 	return &config, nil
+}
+
+func validateNames(names *NamesConfigSpec) error {
+	missingNames := []string{}
+	if names.DefaultTLSCertificateSecret == "" {
+		missingNames = append(missingNames, "defaultTLSCertificateSecret")
+	}
+	if len(missingNames) > 0 {
+		return constable.Error("missing required names: " + strings.Join(missingNames, ", "))
+	}
+	return nil
 }

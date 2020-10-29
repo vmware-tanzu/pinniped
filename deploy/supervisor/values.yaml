@@ -35,10 +35,20 @@ image_tag: latest
 #! Optional.
 image_pull_dockerconfigjson: #! e.g. {"auths":{"https://registry.example.com":{"username":"USERNAME","password":"PASSWORD","auth":"BASE64_ENCODED_USERNAME_COLON_PASSWORD"}}}
 
-#! Specify how to expose the Supervisor app as a Service.
-#! Typically you would set a value for only one of the following.
+#! Specify how to expose the Supervisor app's HTTP and/or HTTPS ports as a Service.
+#! Typically you would set a value for only one of the following service types, for either HTTP or HTTPS depending on your needs.
+#! An HTTP service should not be exposed outside the cluster. It would not be secure to serve OIDC endpoints to end users via HTTP.
 #! Setting any of these values means that a Service of that type will be created.
-service_nodeport_port: #! when specified, creates a NodePort Service with this `port` value, e.g. 31234
-service_nodeport_nodeport: #! the `nodePort` value of the NodePort Service, optional when `service_nodeport_port` is specified, e.g. 31234
-service_loadbalancer_port: #! when specified, creates a LoadBalancer Service with this `port` value, e.g. 443
-service_clusterip_port: #! when specified, creates a ClusterIP Service with this `port` value, e.g. 443
+#! Note that all port numbers should be numbers (not strings), i.e. use ytt's `--data-value-yaml` instead of `--data-value`.
+service_http_nodeport_port: #! when specified, creates a NodePort Service with this `port` value, with port 80 as its `targetPort`; e.g. 31234
+service_http_nodeport_nodeport: #! the `nodePort` value of the NodePort Service, optional when `service_http_nodeport_port` is specified; e.g. 31234
+service_http_loadbalancer_port: #! when specified, creates a LoadBalancer Service with this `port` value, with port 80 as its `targetPort`; e.g. 443
+service_http_clusterip_port: #! when specified, creates a ClusterIP Service with this `port` value, with port 80 as its `targetPort`; e.g. 443
+service_https_nodeport_port: #! when specified, creates a NodePort Service with this `port` value, with port 443 as its `targetPort`; e.g. 31243
+service_https_nodeport_nodeport: #! the `nodePort` value of the NodePort Service, optional when `service_http_nodeport_port` is specified; e.g. 31243
+service_https_loadbalancer_port: #! when specified, creates a LoadBalancer Service with this `port` value, with port 443 as its `targetPort`; e.g. 443
+service_https_clusterip_port: #! when specified, creates a ClusterIP Service with this `port` value, with port 443 as its `targetPort`; e.g. 443
+#! The `loadBalancerIP` value of the LoadBalancer Service.
+#! Ignored unless service_http_loadbalancer_port and/or service_https_loadbalancer_port are provided.
+#! Optional.
+service_loadbalancer_ip: #! e.g. 1.2.3.4

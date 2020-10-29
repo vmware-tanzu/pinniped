@@ -5,6 +5,7 @@ package manager
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 
 	"k8s.io/klog/v2"
@@ -53,10 +54,10 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 	m.providerHandlers = make(map[string]http.Handler)
 
 	for _, incomingProvider := range oidcProviders {
-		wellKnownURL := incomingProvider.IssuerHost() + "/" + incomingProvider.IssuerPath() + oidc.WellKnownEndpointPath
+		wellKnownURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.WellKnownEndpointPath
 		m.providerHandlers[wellKnownURL] = discovery.NewHandler(incomingProvider.Issuer())
 
-		jwksURL := incomingProvider.IssuerHost() + "/" + incomingProvider.IssuerPath() + oidc.JWKSEndpointPath
+		jwksURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.JWKSEndpointPath
 		m.providerHandlers[jwksURL] = jwks.NewHandler(incomingProvider.Issuer(), m.dynamicJWKSProvider)
 
 		klog.InfoS("oidc provider manager added or updated issuer", "issuer", incomingProvider.Issuer())
@@ -85,5 +86,5 @@ func (m *Manager) findHandler(req *http.Request) http.Handler {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	return m.providerHandlers[req.Host+"/"+req.URL.Path]
+	return m.providerHandlers[strings.ToLower(req.Host)+"/"+req.URL.Path]
 }

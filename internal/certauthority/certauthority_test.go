@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -282,7 +283,7 @@ func TestIssue(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.ca.Issue(pkix.Name{CommonName: "Test Server"}, []string{"example.com"}, 10*time.Minute)
+			got, err := tt.ca.Issue(pkix.Name{CommonName: "Test Server"}, []string{"example.com"}, []net.IP{net.IPv4(1, 2, 3, 4)}, 10*time.Minute)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				require.Nil(t, got)

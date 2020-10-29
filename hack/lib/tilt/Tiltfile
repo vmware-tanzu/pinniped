@@ -86,7 +86,7 @@ docker_build_with_restart('image/supervisor', '.',
 
 # Render the supervisor installation manifest using ytt.
 #
-# 31234 is the same port number hardcoded in the port forwarding of our kind configuration.
+# 31234 and 31243 are the same port numbers hardcoded in the port forwarding of our kind configuration.
 # Don't think that you can just change this!
 k8s_yaml(local([
     'ytt',
@@ -96,8 +96,10 @@ k8s_yaml(local([
     '--data-value', 'image_repo=image/supervisor',
     '--data-value', 'image_tag=tilt-dev',
     '--data-value-yaml', 'replicas=1',
-    '--data-value-yaml', 'service_nodeport_port=80',
-    '--data-value-yaml', 'service_nodeport_nodeport=31234',
+    '--data-value-yaml', 'service_http_nodeport_port=80',
+    '--data-value-yaml', 'service_http_nodeport_nodeport=31234',
+    '--data-value-yaml', 'service_https_nodeport_port=443',
+    '--data-value-yaml', 'service_https_nodeport_nodeport=31243',
     '--data-value-yaml', 'custom_labels={mySupervisorCustomLabelName: mySupervisorCustomLabelValue}',
 ]))
 # Tell tilt to watch all of those files for changes.

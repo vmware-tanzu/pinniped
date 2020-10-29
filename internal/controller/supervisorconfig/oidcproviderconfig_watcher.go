@@ -6,6 +6,8 @@ package supervisorconfig
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"go.pinniped.dev/internal/multierror"
 
@@ -71,29 +73,75 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 		return err
 	}
 
+	// Make a map of issuer strings -> count of how many times we saw that issuer string.
+	// This will help us complain when there are duplicate issuer strings.
+	// Also make a helper function for forming keys into this map.
 	issuerCounts := make(map[string]int)
+	issuerURLToIssuerKey := func(issuerURL *url.URL) string {
+		return fmt.Sprintf("%s://%s%s", issuerURL.Scheme, strings.ToLower(issuerURL.Host), issuerURL.Path)
+	}
+
+	// Make a map of issuer hostnames -> set of unique secret names. This will help us complain when
+	// multiple OIDCProviderConfigs have the same issuer hostname (excluding port) but specify
+	// different TLS serving Secrets. Doesn't make sense to have the one address use more than one
+	// TLS cert. Ignore ports because SNI information on the incoming requests is not going to include
+	// port numbers. Also make a helper function for forming keys into this map.
+	uniqueSecretNamesPerIssuerAddress := make(map[string]map[string]bool)
+	issuerURLToHostnameKey := lowercaseHostWithoutPort
+
 	for _, opc := range all {
-		issuerCounts[opc.Spec.Issuer]++
+		issuerURL, err := url.Parse(opc.Spec.Issuer)
+		if err != nil {
+			continue // Skip url parse errors because they will be validated again below.
+		}
+
+		issuerCounts[issuerURLToIssuerKey(issuerURL)]++
+
+		setOfSecretNames := uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)]
+		if setOfSecretNames == nil {
+			setOfSecretNames = make(map[string]bool)
+			uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)] = setOfSecretNames
+		}
+		setOfSecretNames[opc.Spec.SNICertificateSecretName] = true
 	}
 
 	errs := multierror.New()
 
 	oidcProviders := make([]*provider.OIDCProvider, 0)
 	for _, opc := range all {
-		if issuerCount := issuerCounts[opc.Spec.Issuer]; issuerCount > 1 {
+		issuerURL, urlParseErr := url.Parse(opc.Spec.Issuer)
+
+		// Skip url parse errors because they will be validated below.
+		if urlParseErr == nil {
+			if issuerCount := issuerCounts[issuerURLToIssuerKey(issuerURL)]; issuerCount > 1 {
+				if err := c.updateStatus(
+					ctx.Context,
+					opc.Namespace,
+					opc.Name,
+					configv1alpha1.DuplicateOIDCProviderStatus,
+					"Duplicate issuer: "+opc.Spec.Issuer,
+				); err != nil {
+					errs.Add(fmt.Errorf("could not update status: %w", err))
+				}
+				continue
+			}
+		}
+
+		// Skip url parse errors because they will be validated below.
+		if urlParseErr == nil && len(uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)]) > 1 {
 			if err := c.updateStatus(
 				ctx.Context,
 				opc.Namespace,
 				opc.Name,
-				configv1alpha1.DuplicateOIDCProviderStatus,
-				"Duplicate issuer: "+opc.Spec.Issuer,
+				configv1alpha1.SameIssuerHostMustUseSameSecretOIDCProviderStatus,
+				"Issuers with the same DNS hostname (address not including port) must use the same secretName: "+issuerURLToHostnameKey(issuerURL),
 			); err != nil {
 				errs.Add(fmt.Errorf("could not update status: %w", err))
 			}
 			continue
 		}
 
-		oidcProvider, err := provider.NewOIDCProvider(opc.Spec.Issuer)
+		oidcProvider, err := provider.NewOIDCProvider(opc.Spec.Issuer) // This validates the Issuer URL.
 		if err != nil {
 			if err := c.updateStatus(
 				ctx.Context,

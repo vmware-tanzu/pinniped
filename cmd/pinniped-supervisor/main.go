@@ -5,11 +5,13 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/clock"
@@ -28,6 +30,7 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/oidc/jwks"
+	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/provider/manager"
 )
 
@@ -68,6 +71,7 @@ func startControllers(
 	cfg *supervisor.Config,
 	issuerManager *manager.Manager,
 	dynamicJWKSProvider jwks.DynamicJWKSProvider,
+	dynamicTLSCertProvider provider.DynamicTLSCertProvider,
 	kubeClient kubernetes.Interface,
 	pinnipedClient pinnipedclientset.Interface,
 	kubeInformers kubeinformers.SharedInformerFactory,
@@ -100,6 +104,16 @@ func startControllers(
 		WithController(
 			supervisorconfig.NewJWKSObserverController(
 				dynamicJWKSProvider,
+				kubeInformers.Core().V1().Secrets(),
+				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		).
+		WithController(
+			supervisorconfig.NewTLSCertObserverController(
+				dynamicTLSCertProvider,
+				cfg.NamesConfig.DefaultTLSCertificateSecret,
 				kubeInformers.Core().V1().Secrets(),
 				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
 				controllerlib.WithInformer,
@@ -166,19 +180,58 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 	}))
 
 	dynamicJWKSProvider := jwks.NewDynamicJWKSProvider()
+	dynamicTLSCertProvider := provider.NewDynamicTLSCertProvider()
+
 	// OIDC endpoints will be served by the oidProvidersManager, and any non-OIDC paths will fallback to the healthMux.
 	oidProvidersManager := manager.NewManager(healthMux, dynamicJWKSProvider)
-	startControllers(ctx, cfg, oidProvidersManager, dynamicJWKSProvider, kubeClient, pinnipedClient, kubeInformers, pinnipedInformers)
+
+	startControllers(
+		ctx,
+		cfg,
+		oidProvidersManager,
+		dynamicJWKSProvider,
+		dynamicTLSCertProvider,
+		kubeClient,
+		pinnipedClient,
+		kubeInformers,
+		pinnipedInformers,
+	)
 
 	//nolint: gosec // Intentionally binding to all network interfaces.
-	l, err := net.Listen("tcp", ":80")
+	httpListener, err := net.Listen("tcp", ":80")
 	if err != nil {
 		return fmt.Errorf("cannot create listener: %w", err)
 	}
-	defer l.Close()
-	start(ctx, l, oidProvidersManager)
+	defer func() { _ = httpListener.Close() }()
+	start(ctx, httpListener, oidProvidersManager)
 
-	klog.InfoS("supervisor is ready", "address", l.Addr().String())
+	//nolint: gosec // Intentionally binding to all network interfaces.
+	httpsListener, err := tls.Listen("tcp", ":443", &tls.Config{
+		MinVersion: tls.VersionTLS12, // Allow v1.2 because clients like the default `curl` on MacOS don't support 1.3 yet.
+		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			cert := dynamicTLSCertProvider.GetTLSCert(strings.ToLower(info.ServerName))
+			defaultCert := dynamicTLSCertProvider.GetDefaultTLSCert()
+			klog.InfoS("GetCertificate called for port 443",
+				"info.ServerName", info.ServerName,
+				"foundSNICert", cert != nil,
+				"foundDefaultCert", defaultCert != nil,
+			)
+			if cert == nil {
+				cert = defaultCert
+			}
+			return cert, nil
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("cannot create listener: %w", err)
+	}
+	defer func() { _ = httpsListener.Close() }()
+	start(ctx, httpsListener, oidProvidersManager)
+
+	klog.InfoS("supervisor is ready",
+		"httpAddress", httpListener.Addr().String(),
+		"httpsAddress", httpsListener.Addr().String(),
+	)
 
 	gotSignal := waitForSignal()
 	klog.InfoS("supervisor exiting", "signal", gotSignal)

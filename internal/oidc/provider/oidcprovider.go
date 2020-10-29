@@ -37,7 +37,7 @@ func (p *OIDCProvider) validate() error {
 		return fmt.Errorf("could not parse issuer as URL: %w", err)
 	}
 
-	if issuerURL.Scheme != "https" && p.removeMeAfterWeNoLongerNeedHTTPIssuerSupport(issuerURL.Scheme) {
+	if issuerURL.Scheme != "https" {
 		return constable.Error(`issuer must have "https" scheme`)
 	}
 
@@ -73,8 +73,4 @@ func (p *OIDCProvider) IssuerHost() string {
 
 func (p *OIDCProvider) IssuerPath() string {
 	return p.issuerPath
-}
-
-func (p *OIDCProvider) removeMeAfterWeNoLongerNeedHTTPIssuerSupport(scheme string) bool {
-	return scheme != "http"
 }

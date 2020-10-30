@@ -11,11 +11,12 @@ package credentialrequestmocks
 import (
 	context "context"
 	pkix "crypto/x509/pkix"
-	gomock "github.com/golang/mock/gomock"
-	login "go.pinniped.dev/generated/1.19/apis/login"
-	user "k8s.io/apiserver/pkg/authentication/user"
 	reflect "reflect"
 	time "time"
+
+	gomock "github.com/golang/mock/gomock"
+	login "go.pinniped.dev/generated/1.19/apis/concierge/login"
+	user "k8s.io/apiserver/pkg/authentication/user"
 )
 
 // MockCertIssuer is a mock of CertIssuer interface

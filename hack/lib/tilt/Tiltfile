@@ -171,7 +171,7 @@ k8s_resource(
         'pinniped-concierge:serviceaccount',
         'credentialissuerconfigs.config.pinniped.dev:customresourcedefinition',
         'webhookidentityproviders.idp.pinniped.dev:customresourcedefinition',
-        'v1alpha1.login.pinniped.dev:apiservice',
+        'v1alpha1.login.concierge.pinniped.dev:apiservice',
     ],
 )
 

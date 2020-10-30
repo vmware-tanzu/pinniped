@@ -178,11 +178,11 @@ spec:
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
 metadata:
-  name: v1alpha1.login.pinniped.dev
+  name: v1alpha1.login.concierge.pinniped.dev
   labels: #@ labels()
 spec:
   version: v1alpha1
-  group: login.pinniped.dev
+  group: login.concierge.pinniped.dev
   groupPriorityMinimum: 2500
   versionPriority: 10
   #! caBundle: Do not include this key here. Starts out null, will be updated/owned by the golang code.

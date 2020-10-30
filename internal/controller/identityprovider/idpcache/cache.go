@@ -13,7 +13,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 
-	loginapi "go.pinniped.dev/generated/1.19/apis/login"
+	loginapi "go.pinniped.dev/generated/1.19/apis/concierge/login"
 )
 
 var (

@@ -22,7 +22,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 
-	loginapi "go.pinniped.dev/generated/1.19/apis/login"
+	loginapi "go.pinniped.dev/generated/1.19/apis/concierge/login"
 	"go.pinniped.dev/internal/mocks/credentialrequestmocks"
 	"go.pinniped.dev/internal/testutil"
 )

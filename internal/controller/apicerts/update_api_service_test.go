@@ -17,11 +17,11 @@ import (
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	aggregatorv1fake "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 
-	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
 )
 
 func TestUpdateAPIService(t *testing.T) {
-	const apiServiceName = "v1alpha1.login.pinniped.dev"
+	const apiServiceName = "v1alpha1.login.concierge.pinniped.dev"
 
 	tests := []struct {
 		name        string

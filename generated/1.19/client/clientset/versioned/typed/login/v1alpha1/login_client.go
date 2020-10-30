@@ -6,7 +6,7 @@
 package v1alpha1
 
 import (
-	v1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
+	v1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/generated/1.19/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
@@ -16,7 +16,7 @@ type LoginV1alpha1Interface interface {
 	TokenCredentialRequestsGetter
 }
 
-// LoginV1alpha1Client is used to interact with features provided by the login.pinniped.dev group.
+// LoginV1alpha1Client is used to interact with features provided by the login.concierge.pinniped.dev group.
 type LoginV1alpha1Client struct {
 	restClient rest.Interface
 }

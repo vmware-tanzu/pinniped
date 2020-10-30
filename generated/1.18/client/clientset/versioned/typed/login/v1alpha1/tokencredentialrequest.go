@@ -9,7 +9,7 @@ import (
 	"context"
 	"time"
 
-	v1alpha1 "go.pinniped.dev/generated/1.18/apis/login/v1alpha1"
+	v1alpha1 "go.pinniped.dev/generated/1.18/apis/concierge/login/v1alpha1"
 	scheme "go.pinniped.dev/generated/1.18/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"

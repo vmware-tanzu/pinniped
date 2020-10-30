@@ -8,7 +8,7 @@ package fake
 import (
 	"context"
 
-	v1alpha1 "go.pinniped.dev/generated/1.18/apis/login/v1alpha1"
+	v1alpha1 "go.pinniped.dev/generated/1.18/apis/concierge/login/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -23,9 +23,9 @@ type FakeTokenCredentialRequests struct {
 	ns   string
 }
 
-var tokencredentialrequestsResource = schema.GroupVersionResource{Group: "login.pinniped.dev", Version: "v1alpha1", Resource: "tokencredentialrequests"}
+var tokencredentialrequestsResource = schema.GroupVersionResource{Group: "login.concierge.pinniped.dev", Version: "v1alpha1", Resource: "tokencredentialrequests"}
 
-var tokencredentialrequestsKind = schema.GroupVersionKind{Group: "login.pinniped.dev", Version: "v1alpha1", Kind: "TokenCredentialRequest"}
+var tokencredentialrequestsKind = schema.GroupVersionKind{Group: "login.concierge.pinniped.dev", Version: "v1alpha1", Kind: "TokenCredentialRequest"}
 
 // Get takes name of the tokenCredentialRequest, and returns the corresponding tokenCredentialRequest object, and an error if there is any.
 func (c *FakeTokenCredentialRequests) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.TokenCredentialRequest, err error) {

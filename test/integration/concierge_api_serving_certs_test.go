@@ -13,7 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/test/library"
 )
@@ -79,7 +79,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
 
-			const apiServiceName = "v1alpha1.login.pinniped.dev"
+			const apiServiceName = "v1alpha1.login.concierge.pinniped.dev"
 
 			// Get the initial auto-generated version of the Secret.
 			secret, err := kubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})

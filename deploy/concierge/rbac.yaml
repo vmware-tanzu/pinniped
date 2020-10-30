@@ -114,7 +114,7 @@ metadata:
   name: #@ defaultResourceNameWithSuffix("create-token-credential-requests")
   labels: #@ labels()
 rules:
-  - apiGroups: [ login.pinniped.dev ]
+  - apiGroups: [ login.concierge.pinniped.dev ]
     resources: [ tokencredentialrequests ]
     verbs: [ create ]
 ---

@@ -17,8 +17,8 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 
+	loginapi "go.pinniped.dev/generated/1.19/apis/concierge/login"
 	idpv1alpha "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
-	loginapi "go.pinniped.dev/generated/1.19/apis/login"
 	"go.pinniped.dev/internal/mocks/mocktokenauthenticator"
 )
 

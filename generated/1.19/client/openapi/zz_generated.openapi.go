@@ -17,78 +17,316 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.ClusterCredential":            schema_apis_concierge_login_v1alpha1_ClusterCredential(ref),
-		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequest":       schema_apis_concierge_login_v1alpha1_TokenCredentialRequest(ref),
-		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequestList":   schema_apis_concierge_login_v1alpha1_TokenCredentialRequestList(ref),
-		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequestSpec":   schema_apis_concierge_login_v1alpha1_TokenCredentialRequestSpec(ref),
-		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequestStatus": schema_apis_concierge_login_v1alpha1_TokenCredentialRequestStatus(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfig":                schema_119_apis_config_v1alpha1_CredentialIssuerConfig(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigKubeConfigInfo":  schema_119_apis_config_v1alpha1_CredentialIssuerConfigKubeConfigInfo(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigList":            schema_119_apis_config_v1alpha1_CredentialIssuerConfigList(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigStatus":          schema_119_apis_config_v1alpha1_CredentialIssuerConfigStatus(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigStrategy":        schema_119_apis_config_v1alpha1_CredentialIssuerConfigStrategy(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfig":                    schema_119_apis_config_v1alpha1_OIDCProviderConfig(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigList":                schema_119_apis_config_v1alpha1_OIDCProviderConfigList(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigSpec":                schema_119_apis_config_v1alpha1_OIDCProviderConfigSpec(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigStatus":              schema_119_apis_config_v1alpha1_OIDCProviderConfigStatus(ref),
-		"go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.Condition":                                schema_119_apis_idp_v1alpha1_Condition(ref),
-		"go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.TLSSpec":                                  schema_119_apis_idp_v1alpha1_TLSSpec(ref),
-		"go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProvider":                  schema_119_apis_idp_v1alpha1_WebhookIdentityProvider(ref),
-		"go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderList":              schema_119_apis_idp_v1alpha1_WebhookIdentityProviderList(ref),
-		"go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderSpec":              schema_119_apis_idp_v1alpha1_WebhookIdentityProviderSpec(ref),
-		"go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderStatus":            schema_119_apis_idp_v1alpha1_WebhookIdentityProviderStatus(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                                             schema_pkg_apis_meta_v1_APIGroup(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroupList":                                         schema_pkg_apis_meta_v1_APIGroupList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":                                          schema_pkg_apis_meta_v1_APIResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResourceList":                                      schema_pkg_apis_meta_v1_APIResourceList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIVersions":                                          schema_pkg_apis_meta_v1_APIVersions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Condition":                                            schema_pkg_apis_meta_v1_Condition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.CreateOptions":                                        schema_pkg_apis_meta_v1_CreateOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.DeleteOptions":                                        schema_pkg_apis_meta_v1_DeleteOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Duration":                                             schema_pkg_apis_meta_v1_Duration(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ExportOptions":                                        schema_pkg_apis_meta_v1_ExportOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.FieldsV1":                                             schema_pkg_apis_meta_v1_FieldsV1(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GetOptions":                                           schema_pkg_apis_meta_v1_GetOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupKind":                                            schema_pkg_apis_meta_v1_GroupKind(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupResource":                                        schema_pkg_apis_meta_v1_GroupResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersion":                                         schema_pkg_apis_meta_v1_GroupVersion(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionForDiscovery":                             schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionKind":                                     schema_pkg_apis_meta_v1_GroupVersionKind(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionResource":                                 schema_pkg_apis_meta_v1_GroupVersionResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.InternalEvent":                                        schema_pkg_apis_meta_v1_InternalEvent(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector":                                        schema_pkg_apis_meta_v1_LabelSelector(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelectorRequirement":                             schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.List":                                                 schema_pkg_apis_meta_v1_List(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta":                                             schema_pkg_apis_meta_v1_ListMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ListOptions":                                          schema_pkg_apis_meta_v1_ListOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry":                                   schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.MicroTime":                                            schema_pkg_apis_meta_v1_MicroTime(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta":                                           schema_pkg_apis_meta_v1_ObjectMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.OwnerReference":                                       schema_pkg_apis_meta_v1_OwnerReference(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadata":                                schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadataList":                            schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Patch":                                                schema_pkg_apis_meta_v1_Patch(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PatchOptions":                                         schema_pkg_apis_meta_v1_PatchOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Preconditions":                                        schema_pkg_apis_meta_v1_Preconditions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.RootPaths":                                            schema_pkg_apis_meta_v1_RootPaths(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ServerAddressByClientCIDR":                            schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Status":                                               schema_pkg_apis_meta_v1_Status(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusCause":                                          schema_pkg_apis_meta_v1_StatusCause(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusDetails":                                        schema_pkg_apis_meta_v1_StatusDetails(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Table":                                                schema_pkg_apis_meta_v1_Table(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableColumnDefinition":                                schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableOptions":                                         schema_pkg_apis_meta_v1_TableOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRow":                                             schema_pkg_apis_meta_v1_TableRow(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRowCondition":                                    schema_pkg_apis_meta_v1_TableRowCondition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Time":                                                 schema_pkg_apis_meta_v1_Time(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Timestamp":                                            schema_pkg_apis_meta_v1_Timestamp(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TypeMeta":                                             schema_pkg_apis_meta_v1_TypeMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.UpdateOptions":                                        schema_pkg_apis_meta_v1_UpdateOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.WatchEvent":                                           schema_pkg_apis_meta_v1_WatchEvent(ref),
-		"k8s.io/apimachinery/pkg/runtime.RawExtension":                                              schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
-		"k8s.io/apimachinery/pkg/runtime.TypeMeta":                                                  schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
-		"k8s.io/apimachinery/pkg/runtime.Unknown":                                                   schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
-		"k8s.io/apimachinery/pkg/version.Info":                                                      schema_k8sio_apimachinery_pkg_version_Info(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.Condition":                  schema_apis_concierge_authentication_v1alpha1_Condition(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.TLSSpec":                    schema_apis_concierge_authentication_v1alpha1_TLSSpec(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticator":       schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticator(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticatorList":   schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticatorList(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticatorSpec":   schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticatorSpec(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticatorStatus": schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticatorStatus(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.ClusterCredential":                   schema_apis_concierge_login_v1alpha1_ClusterCredential(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequest":              schema_apis_concierge_login_v1alpha1_TokenCredentialRequest(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequestList":          schema_apis_concierge_login_v1alpha1_TokenCredentialRequestList(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequestSpec":          schema_apis_concierge_login_v1alpha1_TokenCredentialRequestSpec(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequestStatus":        schema_apis_concierge_login_v1alpha1_TokenCredentialRequestStatus(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfig":                       schema_119_apis_config_v1alpha1_CredentialIssuerConfig(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigKubeConfigInfo":         schema_119_apis_config_v1alpha1_CredentialIssuerConfigKubeConfigInfo(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigList":                   schema_119_apis_config_v1alpha1_CredentialIssuerConfigList(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigStatus":                 schema_119_apis_config_v1alpha1_CredentialIssuerConfigStatus(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigStrategy":               schema_119_apis_config_v1alpha1_CredentialIssuerConfigStrategy(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfig":                           schema_119_apis_config_v1alpha1_OIDCProviderConfig(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigList":                       schema_119_apis_config_v1alpha1_OIDCProviderConfigList(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigSpec":                       schema_119_apis_config_v1alpha1_OIDCProviderConfigSpec(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigStatus":                     schema_119_apis_config_v1alpha1_OIDCProviderConfigStatus(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                                                    schema_pkg_apis_meta_v1_APIGroup(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroupList":                                                schema_pkg_apis_meta_v1_APIGroupList(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":                                                 schema_pkg_apis_meta_v1_APIResource(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResourceList":                                             schema_pkg_apis_meta_v1_APIResourceList(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIVersions":                                                 schema_pkg_apis_meta_v1_APIVersions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Condition":                                                   schema_pkg_apis_meta_v1_Condition(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.CreateOptions":                                               schema_pkg_apis_meta_v1_CreateOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.DeleteOptions":                                               schema_pkg_apis_meta_v1_DeleteOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Duration":                                                    schema_pkg_apis_meta_v1_Duration(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ExportOptions":                                               schema_pkg_apis_meta_v1_ExportOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.FieldsV1":                                                    schema_pkg_apis_meta_v1_FieldsV1(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GetOptions":                                                  schema_pkg_apis_meta_v1_GetOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupKind":                                                   schema_pkg_apis_meta_v1_GroupKind(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupResource":                                               schema_pkg_apis_meta_v1_GroupResource(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersion":                                                schema_pkg_apis_meta_v1_GroupVersion(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionForDiscovery":                                    schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionKind":                                            schema_pkg_apis_meta_v1_GroupVersionKind(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionResource":                                        schema_pkg_apis_meta_v1_GroupVersionResource(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.InternalEvent":                                               schema_pkg_apis_meta_v1_InternalEvent(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector":                                               schema_pkg_apis_meta_v1_LabelSelector(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelectorRequirement":                                    schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.List":                                                        schema_pkg_apis_meta_v1_List(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta":                                                    schema_pkg_apis_meta_v1_ListMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ListOptions":                                                 schema_pkg_apis_meta_v1_ListOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry":                                          schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.MicroTime":                                                   schema_pkg_apis_meta_v1_MicroTime(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta":                                                  schema_pkg_apis_meta_v1_ObjectMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.OwnerReference":                                              schema_pkg_apis_meta_v1_OwnerReference(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadata":                                       schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadataList":                                   schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Patch":                                                       schema_pkg_apis_meta_v1_Patch(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.PatchOptions":                                                schema_pkg_apis_meta_v1_PatchOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Preconditions":                                               schema_pkg_apis_meta_v1_Preconditions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.RootPaths":                                                   schema_pkg_apis_meta_v1_RootPaths(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ServerAddressByClientCIDR":                                   schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Status":                                                      schema_pkg_apis_meta_v1_Status(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusCause":                                                 schema_pkg_apis_meta_v1_StatusCause(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusDetails":                                               schema_pkg_apis_meta_v1_StatusDetails(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Table":                                                       schema_pkg_apis_meta_v1_Table(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableColumnDefinition":                                       schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableOptions":                                                schema_pkg_apis_meta_v1_TableOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRow":                                                    schema_pkg_apis_meta_v1_TableRow(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRowCondition":                                           schema_pkg_apis_meta_v1_TableRowCondition(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Time":                                                        schema_pkg_apis_meta_v1_Time(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Timestamp":                                                   schema_pkg_apis_meta_v1_Timestamp(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TypeMeta":                                                    schema_pkg_apis_meta_v1_TypeMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.UpdateOptions":                                               schema_pkg_apis_meta_v1_UpdateOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.WatchEvent":                                                  schema_pkg_apis_meta_v1_WatchEvent(ref),
+		"k8s.io/apimachinery/pkg/runtime.RawExtension":                                                     schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
+		"k8s.io/apimachinery/pkg/runtime.TypeMeta":                                                         schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
+		"k8s.io/apimachinery/pkg/runtime.Unknown":                                                          schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
+		"k8s.io/apimachinery/pkg/version.Info":                                                             schema_k8sio_apimachinery_pkg_version_Info(ref),
+	}
+}
+
+func schema_apis_concierge_authentication_v1alpha1_Condition(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Condition status of a resource (mirrored from the metav1.Condition type added in Kubernetes 1.19). In a future API version we can switch to using the upstream type. See https://github.com/kubernetes/apimachinery/blob/v0.19.0/pkg/apis/meta/v1/types.go#L1353-L1413.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Description: "type of condition in CamelCase or in foo.example.com/CamelCase.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "status of the condition, one of True, False, Unknown.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"lastTransitionTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"reason": {
+						SchemaProps: spec.SchemaProps{
+							Description: "reason contains a programmatic identifier indicating the reason for the condition's last transition. Producers of specific condition types may define expected values and meanings for this field, and whether the values are considered a guaranteed API. The value should be a CamelCase string. This field may not be empty.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Description: "message is a human readable message indicating details about the transition. This may be an empty string.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"type", "status", "lastTransitionTime", "reason", "message"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_apis_concierge_authentication_v1alpha1_TLSSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Configuration for configuring TLS on various authenticators.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"certificateAuthorityData": {
+						SchemaProps: spec.SchemaProps{
+							Description: "X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticator(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "WebhookAuthenticator describes the configuration of a webhook authenticator.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Spec for configuring the authenticator.",
+							Ref:         ref("go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticatorSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Status of the authenticator.",
+							Ref:         ref("go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticatorStatus"),
+						},
+					},
+				},
+				Required: []string{"spec"},
+			},
+		},
+		Dependencies: []string{
+			"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticatorSpec", "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticatorStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticatorList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "List of WebhookAuthenticator objects.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticator"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticator", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticatorSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Spec for configuring a webhook authenticator.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"endpoint": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Webhook server endpoint URL.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"tls": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TLS configuration.",
+							Ref:         ref("go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.TLSSpec"),
+						},
+					},
+				},
+				Required: []string{"endpoint"},
+			},
+		},
+		Dependencies: []string{
+			"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.TLSSpec"},
+	}
+}
+
+func schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticatorStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Status of a webhook authenticator.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type":       "map",
+								"x-kubernetes-patch-merge-key": "type",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Represents the observations of the authenticator's current state.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.Condition"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.Condition"},
 	}
 }
 
@@ -239,14 +477,14 @@ func schema_apis_concierge_login_v1alpha1_TokenCredentialRequestSpec(ref common.
 							Format:      "",
 						},
 					},
-					"identityProvider": {
+					"authenticator": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Reference to an identity provider which can fulfill this credential request.",
+							Description: "Reference to an authenticator which can validate this credential request.",
 							Ref:         ref("k8s.io/api/core/v1.TypedLocalObjectReference"),
 						},
 					},
 				},
-				Required: []string{"identityProvider"},
+				Required: []string{"authenticator"},
 			},
 		},
 		Dependencies: []string{
@@ -640,244 +878,6 @@ func schema_119_apis_config_v1alpha1_OIDCProviderConfigStatus(ref common.Referen
 		},
 		Dependencies: []string{
 			"k8s.io/api/core/v1.LocalObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
-	}
-}
-
-func schema_119_apis_idp_v1alpha1_Condition(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "Condition status of a resource (mirrored from the metav1.Condition type added in Kubernetes 1.19). In a future API version we can switch to using the upstream type. See https://github.com/kubernetes/apimachinery/blob/v0.19.0/pkg/apis/meta/v1/types.go#L1353-L1413.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"type": {
-						SchemaProps: spec.SchemaProps{
-							Description: "type of condition in CamelCase or in foo.example.com/CamelCase.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"status": {
-						SchemaProps: spec.SchemaProps{
-							Description: "status of the condition, one of True, False, Unknown.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"observedGeneration": {
-						SchemaProps: spec.SchemaProps{
-							Description: "observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance.",
-							Type:        []string{"integer"},
-							Format:      "int64",
-						},
-					},
-					"lastTransitionTime": {
-						SchemaProps: spec.SchemaProps{
-							Description: "lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
-						},
-					},
-					"reason": {
-						SchemaProps: spec.SchemaProps{
-							Description: "reason contains a programmatic identifier indicating the reason for the condition's last transition. Producers of specific condition types may define expected values and meanings for this field, and whether the values are considered a guaranteed API. The value should be a CamelCase string. This field may not be empty.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"message": {
-						SchemaProps: spec.SchemaProps{
-							Description: "message is a human readable message indicating details about the transition. This may be an empty string.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-				},
-				Required: []string{"type", "status", "lastTransitionTime", "reason", "message"},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
-	}
-}
-
-func schema_119_apis_idp_v1alpha1_TLSSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "Configuration for configuring TLS on various identity providers.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"certificateAuthorityData": {
-						SchemaProps: spec.SchemaProps{
-							Description: "X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func schema_119_apis_idp_v1alpha1_WebhookIdentityProvider(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "WebhookIdentityProvider describes the configuration of a Pinniped webhook identity provider.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"kind": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"apiVersion": {
-						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"metadata": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
-						},
-					},
-					"spec": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Spec for configuring the identity provider.",
-							Ref:         ref("go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderSpec"),
-						},
-					},
-					"status": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Status of the identity provider.",
-							Ref:         ref("go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderStatus"),
-						},
-					},
-				},
-				Required: []string{"spec"},
-			},
-		},
-		Dependencies: []string{
-			"go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderSpec", "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProviderStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
-	}
-}
-
-func schema_119_apis_idp_v1alpha1_WebhookIdentityProviderList(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "List of WebhookIdentityProvider objects.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"kind": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"apiVersion": {
-						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"metadata": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
-						},
-					},
-					"items": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProvider"),
-									},
-								},
-							},
-						},
-					},
-				},
-				Required: []string{"items"},
-			},
-		},
-		Dependencies: []string{
-			"go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.WebhookIdentityProvider", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
-	}
-}
-
-func schema_119_apis_idp_v1alpha1_WebhookIdentityProviderSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "Spec for configuring a webhook identity provider.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"endpoint": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Webhook server endpoint URL.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"tls": {
-						SchemaProps: spec.SchemaProps{
-							Description: "TLS configuration.",
-							Ref:         ref("go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.TLSSpec"),
-						},
-					},
-				},
-				Required: []string{"endpoint"},
-			},
-		},
-		Dependencies: []string{
-			"go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.TLSSpec"},
-	}
-}
-
-func schema_119_apis_idp_v1alpha1_WebhookIdentityProviderStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "Status of a webhook identity provider.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"conditions": {
-						VendorExtensible: spec.VendorExtensible{
-							Extensions: spec.Extensions{
-								"x-kubernetes-list-map-keys": []interface{}{
-									"type",
-								},
-								"x-kubernetes-list-type":       "map",
-								"x-kubernetes-patch-merge-key": "type",
-								"x-kubernetes-patch-strategy":  "merge",
-							},
-						},
-						SchemaProps: spec.SchemaProps{
-							Description: "Represents the observations of an identity provider's current state.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.Condition"),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"go.pinniped.dev/generated/1.19/apis/idp/v1alpha1.Condition"},
 	}
 }
 

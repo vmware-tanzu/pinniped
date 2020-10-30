@@ -8,9 +8,9 @@ package externalversions
 import (
 	"fmt"
 
+	v1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
-	v1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -41,15 +41,15 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=config.pinniped.dev, Version=v1alpha1
-	case v1alpha1.SchemeGroupVersion.WithResource("credentialissuerconfigs"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().CredentialIssuerConfigs().Informer()}, nil
-	case v1alpha1.SchemeGroupVersion.WithResource("oidcproviderconfigs"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().OIDCProviderConfigs().Informer()}, nil
+	// Group=authentication.concierge.pinniped.dev, Version=v1alpha1
+	case v1alpha1.SchemeGroupVersion.WithResource("webhookauthenticators"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Authentication().V1alpha1().WebhookAuthenticators().Informer()}, nil
 
-		// Group=idp.pinniped.dev, Version=v1alpha1
-	case idpv1alpha1.SchemeGroupVersion.WithResource("webhookidentityproviders"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.IDP().V1alpha1().WebhookIdentityProviders().Informer()}, nil
+		// Group=config.pinniped.dev, Version=v1alpha1
+	case configv1alpha1.SchemeGroupVersion.WithResource("credentialissuerconfigs"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().CredentialIssuerConfigs().Informer()}, nil
+	case configv1alpha1.SchemeGroupVersion.WithResource("oidcproviderconfigs"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().OIDCProviderConfigs().Informer()}, nil
 
 		// Group=login.concierge.pinniped.dev, Version=v1alpha1
 	case loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests"):

@@ -60,7 +60,7 @@ func TestClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	idp := library.CreateTestWebhookIDP(ctx, t)
+	webhook := library.CreateTestWebhookAuthenticator(ctx, t)
 
 	// Use an invalid certificate/key to validate that the ServerVersion API fails like we assume.
 	invalidClient := library.NewClientsetWithCertAndKey(t, testCert, testKey)
@@ -72,7 +72,7 @@ func TestClient(t *testing.T) {
 
 	var resp *clientauthenticationv1beta1.ExecCredential
 	assert.Eventually(t, func() bool {
-		resp, err = client.ExchangeToken(ctx, env.ConciergeNamespace, idp, env.TestUser.Token, string(clientConfig.CAData), clientConfig.Host)
+		resp, err = client.ExchangeToken(ctx, env.ConciergeNamespace, webhook, env.TestUser.Token, string(clientConfig.CAData), clientConfig.Host)
 		return err == nil
 	}, 10*time.Second, 500*time.Millisecond)
 	require.NoError(t, err)

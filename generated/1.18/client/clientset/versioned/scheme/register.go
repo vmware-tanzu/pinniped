@@ -6,9 +6,9 @@
 package scheme
 
 import (
+	authenticationv1alpha1 "go.pinniped.dev/generated/1.18/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/1.18/apis/concierge/login/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/1.18/apis/config/v1alpha1"
-	idpv1alpha1 "go.pinniped.dev/generated/1.18/apis/idp/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -20,8 +20,8 @@ var Scheme = runtime.NewScheme()
 var Codecs = serializer.NewCodecFactory(Scheme)
 var ParameterCodec = runtime.NewParameterCodec(Scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
+	authenticationv1alpha1.AddToScheme,
 	configv1alpha1.AddToScheme,
-	idpv1alpha1.AddToScheme,
 	loginv1alpha1.AddToScheme,
 }
 

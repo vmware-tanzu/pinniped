@@ -18,7 +18,7 @@ import (
 	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
 	"go.pinniped.dev/internal/concierge/apiserver"
 	"go.pinniped.dev/internal/config/concierge"
-	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
+	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllermanager"
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/dynamiccert"
@@ -104,8 +104,8 @@ func (a *App) runServer(ctx context.Context) error {
 	}
 	serverInstallationNamespace := podInfo.Namespace
 
-	// Initialize the cache of active identity providers.
-	idpCache := idpcache.New()
+	// Initialize the cache of active authenticators.
+	authenticators := authncache.New()
 
 	// This cert provider will provide certs to the API server and will
 	// be mutated by a controller to keep the certs up to date with what
@@ -131,7 +131,7 @@ func (a *App) runServer(ctx context.Context) error {
 			DynamicSigningCertProvider:  dynamicSigningCertProvider,
 			ServingCertDuration:         time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds) * time.Second,
 			ServingCertRenewBefore:      time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds) * time.Second,
-			IDPCache:                    idpCache,
+			AuthenticatorCache:          authenticators,
 		},
 	)
 	if err != nil {
@@ -141,7 +141,7 @@ func (a *App) runServer(ctx context.Context) error {
 	// Get the aggregated API server config.
 	aggregatedAPIServerConfig, err := getAggregatedAPIServerConfig(
 		dynamicServingCertProvider,
-		idpCache,
+		authenticators,
 		dynamiccertauthority.New(dynamicSigningCertProvider),
 		startControllersFunc,
 	)

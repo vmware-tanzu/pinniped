@@ -118,12 +118,12 @@ as the identity provider.
    If you would prefer to customize the available options, please see [deploy/concierge/README.md](../deploy/concierge/README.md)
    for instructions on how to deploy using `ytt`.
 
-1. Create a `WebhookIdentityProvider` object to configure Pinniped to authenticate using local-user-authenticator.
+1. Create a `WebhookAuthenticator` object to configure Pinniped to authenticate using local-user-authenticator.
 
     ```bash
     cat <<EOF | kubectl create --namespace pinniped -f -
-    apiVersion: idp.pinniped.dev/v1alpha1
-    kind: WebhookIdentityProvider
+    apiVersion: authentication.concierge.pinniped.dev/v1alpha1
+    kind: WebhookAuthenticator
     metadata:
       name: local-user-authenticator
     spec:
@@ -143,7 +143,7 @@ as the identity provider.
    allow you to authenticate as the user that you created above.
 
    ```bash
-   pinniped get-kubeconfig --token "pinny-the-seal:password123" --idp-type webhook --idp-name local-user-authenticator > /tmp/pinniped-kubeconfig
+   pinniped get-kubeconfig --token "pinny-the-seal:password123" --authenticator-type webhook --authenticator-name local-user-authenticator > /tmp/pinniped-kubeconfig
    ```
 
    If you are using MacOS, you may get an error dialog that says

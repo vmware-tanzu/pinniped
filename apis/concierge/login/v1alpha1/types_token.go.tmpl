@@ -13,8 +13,8 @@ type TokenCredentialRequestSpec struct {
 	// Bearer token supplied with the credential request.
 	Token string `json:"token,omitempty"`
 
-	// Reference to an identity provider which can fulfill this credential request.
-	IdentityProvider corev1.TypedLocalObjectReference `json:"identityProvider"`
+	// Reference to an authenticator which can validate this credential request.
+	Authenticator corev1.TypedLocalObjectReference `json:"authenticator"`
 }
 
 // TokenCredentialRequestStatus is the status of a TokenCredentialRequest, returned on responses to the Pinniped API.

@@ -24,9 +24,9 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
 	"go.pinniped.dev/internal/config/concierge"
 	"go.pinniped.dev/internal/controller/apicerts"
-	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
-	"go.pinniped.dev/internal/controller/identityprovider/webhookcachecleaner"
-	"go.pinniped.dev/internal/controller/identityprovider/webhookcachefiller"
+	"go.pinniped.dev/internal/controller/authenticator/authncache"
+	"go.pinniped.dev/internal/controller/authenticator/webhookcachecleaner"
+	"go.pinniped.dev/internal/controller/authenticator/webhookcachefiller"
 	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controller/kubecertagent"
 	"go.pinniped.dev/internal/controllerlib"
@@ -70,8 +70,8 @@ type Config struct {
 	// certificate.
 	ServingCertRenewBefore time.Duration
 
-	// IDPCache is a cache of authenticators shared amongst various IDP-related controllers.
-	IDPCache *idpcache.Cache
+	// AuthenticatorCache is a cache of authenticators shared amongst various authenticated-related controllers.
+	AuthenticatorCache *authncache.Cache
 
 	// Labels are labels that should be added to any resources created by the controllers.
 	Labels map[string]string
@@ -227,20 +227,20 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			singletonWorker,
 		).
 
-		// The cache filler controllers are responsible for keep an in-memory representation of active
-		// IDPs up to date.
+		// The cache filler/cleaner controllers are responsible for keep an in-memory representation of active
+		// authenticators up to date.
 		WithController(
 			webhookcachefiller.New(
-				c.IDPCache,
-				informers.installationNamespacePinniped.IDP().V1alpha1().WebhookIdentityProviders(),
+				c.AuthenticatorCache,
+				informers.installationNamespacePinniped.Authentication().V1alpha1().WebhookAuthenticators(),
 				klogr.New(),
 			),
 			singletonWorker,
 		).
 		WithController(
 			webhookcachecleaner.New(
-				c.IDPCache,
-				informers.installationNamespacePinniped.IDP().V1alpha1().WebhookIdentityProviders(),
+				c.AuthenticatorCache,
+				informers.installationNamespacePinniped.Authentication().V1alpha1().WebhookAuthenticators(),
 				klogr.New(),
 			),
 			singletonWorker,

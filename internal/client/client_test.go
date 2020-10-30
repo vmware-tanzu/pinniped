@@ -16,8 +16,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
+	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
 	"go.pinniped.dev/internal/testutil"
 )
 
@@ -25,15 +25,15 @@ func TestExchangeToken(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	testIDP := corev1.TypedLocalObjectReference{
-		APIGroup: &idpv1alpha1.SchemeGroupVersion.Group,
-		Kind:     "WebhookIdentityProvider",
+	testAuthenticator := corev1.TypedLocalObjectReference{
+		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
+		Kind:     "WebhookAuthenticator",
 		Name:     "test-webhook",
 	}
 
 	t.Run("invalid configuration", func(t *testing.T) {
 		t.Parallel()
-		got, err := ExchangeToken(ctx, "test-namespace", testIDP, "", "", "")
+		got, err := ExchangeToken(ctx, "test-namespace", testAuthenticator, "", "", "")
 		require.EqualError(t, err, "could not get API client: invalid configuration: no configuration has been provided, try setting KUBERNETES_MASTER environment variable")
 		require.Nil(t, got)
 	})
@@ -46,7 +46,7 @@ func TestExchangeToken(t *testing.T) {
 			_, _ = w.Write([]byte("some server error"))
 		})
 
-		got, err := ExchangeToken(ctx, "test-namespace", testIDP, "", caBundle, endpoint)
+		got, err := ExchangeToken(ctx, "test-namespace", testAuthenticator, "", caBundle, endpoint)
 		require.EqualError(t, err, `could not login: an error on the server ("some server error") has prevented the request from succeeding (post tokencredentialrequests.login.concierge.pinniped.dev)`)
 		require.Nil(t, got)
 	})
@@ -63,7 +63,7 @@ func TestExchangeToken(t *testing.T) {
 			})
 		})
 
-		got, err := ExchangeToken(ctx, "test-namespace", testIDP, "", caBundle, endpoint)
+		got, err := ExchangeToken(ctx, "test-namespace", testAuthenticator, "", caBundle, endpoint)
 		require.EqualError(t, err, `login failed: some login failure`)
 		require.Nil(t, got)
 	})
@@ -78,7 +78,7 @@ func TestExchangeToken(t *testing.T) {
 			})
 		})
 
-		got, err := ExchangeToken(ctx, "test-namespace", testIDP, "", caBundle, endpoint)
+		got, err := ExchangeToken(ctx, "test-namespace", testAuthenticator, "", caBundle, endpoint)
 		require.EqualError(t, err, `login failed: unknown`)
 		require.Nil(t, got)
 	})
@@ -105,9 +105,9 @@ func TestExchangeToken(t *testing.T) {
 				  },
 				  "spec": {
 					"token": "test-token",
-					"identityProvider": {
-						"apiGroup": "idp.pinniped.dev",
-						"kind": "WebhookIdentityProvider",
+					"authenticator": {
+						"apiGroup": "authentication.concierge.pinniped.dev",
+						"kind": "WebhookAuthenticator",
 						"name": "test-webhook"
 					}
 				  },
@@ -129,7 +129,7 @@ func TestExchangeToken(t *testing.T) {
 			})
 		})
 
-		got, err := ExchangeToken(ctx, "test-namespace", testIDP, "test-token", caBundle, endpoint)
+		got, err := ExchangeToken(ctx, "test-namespace", testAuthenticator, "test-token", caBundle, endpoint)
 		require.NoError(t, err)
 		require.Equal(t, &clientauthenticationv1beta1.ExecCredential{
 			TypeMeta: metav1.TypeMeta{

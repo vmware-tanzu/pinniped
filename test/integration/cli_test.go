@@ -38,13 +38,13 @@ func TestCLIGetKubeconfig(t *testing.T) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancelFunc()
 
-	idp := library.CreateTestWebhookIDP(ctx, t)
+	authenticator := library.CreateTestWebhookAuthenticator(ctx, t)
 
 	// Build pinniped CLI.
 	pinnipedExe := buildPinnipedCLI(t)
 
 	// Run pinniped CLI to get kubeconfig.
-	kubeConfigYAML := runPinnipedCLIGetKubeconfig(t, pinnipedExe, env.TestUser.Token, env.ConciergeNamespace, "webhook", idp.Name)
+	kubeConfigYAML := runPinnipedCLIGetKubeconfig(t, pinnipedExe, env.TestUser.Token, env.ConciergeNamespace, "webhook", authenticator.Name)
 
 	// In addition to the client-go based testing below, also try the kubeconfig
 	// with kubectl to validate that it works.
@@ -91,7 +91,7 @@ func buildPinnipedCLI(t *testing.T) string {
 	return pinnipedExe
 }
 
-func runPinnipedCLIGetKubeconfig(t *testing.T, pinnipedExe, token, namespaceName, idpType, idpName string) string {
+func runPinnipedCLIGetKubeconfig(t *testing.T, pinnipedExe, token, namespaceName, authenticatorType, authenticatorName string) string {
 	t.Helper()
 
 	output, err := exec.Command(
@@ -99,8 +99,8 @@ func runPinnipedCLIGetKubeconfig(t *testing.T, pinnipedExe, token, namespaceName
 		"get-kubeconfig",
 		"--token", token,
 		"--pinniped-namespace", namespaceName,
-		"--idp-type", idpType,
-		"--idp-name", idpName,
+		"--authenticator-type", authenticatorType,
+		"--authenticator-name", authenticatorName,
 	).CombinedOutput()
 	require.NoError(t, err, string(output))
 

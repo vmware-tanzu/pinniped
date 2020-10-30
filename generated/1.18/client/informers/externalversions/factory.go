@@ -11,8 +11,8 @@ import (
 	time "time"
 
 	versioned "go.pinniped.dev/generated/1.18/client/clientset/versioned"
+	authentication "go.pinniped.dev/generated/1.18/client/informers/externalversions/authentication"
 	config "go.pinniped.dev/generated/1.18/client/informers/externalversions/config"
-	idp "go.pinniped.dev/generated/1.18/client/informers/externalversions/idp"
 	internalinterfaces "go.pinniped.dev/generated/1.18/client/informers/externalversions/internalinterfaces"
 	login "go.pinniped.dev/generated/1.18/client/informers/externalversions/login"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -161,17 +161,17 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
+	Authentication() authentication.Interface
 	Config() config.Interface
-	IDP() idp.Interface
 	Login() login.Interface
+}
+
+func (f *sharedInformerFactory) Authentication() authentication.Interface {
+	return authentication.New(f, f.namespace, f.tweakListOptions)
 }
 
 func (f *sharedInformerFactory) Config() config.Interface {
 	return config.New(f, f.namespace, f.tweakListOptions)
-}
-
-func (f *sharedInformerFactory) IDP() idp.Interface {
-	return idp.New(f, f.namespace, f.tweakListOptions)
 }
 
 func (f *sharedInformerFactory) Login() login.Interface {

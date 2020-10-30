@@ -33,12 +33,12 @@ func init() {
 }
 
 type getKubeConfigFlags struct {
-	token           string
-	kubeconfig      string
-	contextOverride string
-	namespace       string
-	idpName         string
-	idpType         string
+	token             string
+	kubeconfig        string
+	contextOverride   string
+	namespace         string
+	authenticatorName string
+	authenticatorType string
 }
 
 type getKubeConfigCommand struct {
@@ -88,8 +88,8 @@ func (c *getKubeConfigCommand) Command() *cobra.Command {
 	cmd.Flags().StringVar(&c.flags.kubeconfig, "kubeconfig", c.flags.kubeconfig, "Path to the kubeconfig file")
 	cmd.Flags().StringVar(&c.flags.contextOverride, "kubeconfig-context", c.flags.contextOverride, "Kubeconfig context override")
 	cmd.Flags().StringVar(&c.flags.namespace, "pinniped-namespace", c.flags.namespace, "Namespace in which Pinniped was installed")
-	cmd.Flags().StringVar(&c.flags.idpType, "idp-type", c.flags.idpType, "Identity provider type (e.g., 'webhook')")
-	cmd.Flags().StringVar(&c.flags.idpName, "idp-name", c.flags.idpType, "Identity provider name")
+	cmd.Flags().StringVar(&c.flags.authenticatorType, "authenticator-type", c.flags.authenticatorType, "Authenticator type (e.g., 'webhook')")
+	cmd.Flags().StringVar(&c.flags.authenticatorName, "authenticator-name", c.flags.authenticatorType, "Authenticator name")
 	mustMarkRequired(cmd, "token")
 	return cmd
 }
@@ -116,9 +116,9 @@ func (c *getKubeConfigCommand) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	idpType, idpName := c.flags.idpType, c.flags.idpName
-	if idpType == "" || idpName == "" {
-		idpType, idpName, err = getDefaultIDP(clientset, c.flags.namespace)
+	authenticatorType, authenticatorName := c.flags.authenticatorType, c.flags.authenticatorName
+	if authenticatorType == "" || authenticatorName == "" {
+		authenticatorType, authenticatorName, err = getDefaultAuthenticator(clientset, c.flags.namespace)
 		if err != nil {
 			return err
 		}
@@ -143,7 +143,7 @@ func (c *getKubeConfigCommand) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	config := newPinnipedKubeconfig(v1Cluster, fullPathToSelf, c.flags.token, c.flags.namespace, idpType, idpName)
+	config := newPinnipedKubeconfig(v1Cluster, fullPathToSelf, c.flags.token, c.flags.namespace, authenticatorType, authenticatorName)
 
 	err = writeConfigAsYAML(cmd.OutOrStdout(), config)
 	if err != nil {
@@ -168,43 +168,43 @@ func issueWarningForNonMatchingServerOrCA(v1Cluster v1.Cluster, credentialIssuer
 	return nil
 }
 
-type noIDPError struct{ Namespace string }
+type noAuthenticatorError struct{ Namespace string }
 
-func (e noIDPError) Error() string {
-	return fmt.Sprintf(`no identity providers were found in namespace %q`, e.Namespace)
+func (e noAuthenticatorError) Error() string {
+	return fmt.Sprintf(`no authenticators were found in namespace %q`, e.Namespace)
 }
 
-type indeterminateIDPError struct{ Namespace string }
+type indeterminateAuthenticatorError struct{ Namespace string }
 
-func (e indeterminateIDPError) Error() string {
+func (e indeterminateAuthenticatorError) Error() string {
 	return fmt.Sprintf(
-		`multiple identity providers were found in namespace %q, so --pinniped-idp-name/--pinniped-idp-type must be specified`,
+		`multiple authenticators were found in namespace %q, so --authenticator-name/--authenticator-type must be specified`,
 		e.Namespace,
 	)
 }
 
-func getDefaultIDP(clientset pinnipedclientset.Interface, namespace string) (string, string, error) {
+func getDefaultAuthenticator(clientset pinnipedclientset.Interface, namespace string) (string, string, error) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancelFunc()
 
-	webhooks, err := clientset.IDPV1alpha1().WebhookIdentityProviders(namespace).List(ctx, metav1.ListOptions{})
+	webhooks, err := clientset.AuthenticationV1alpha1().WebhookAuthenticators(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return "", "", err
 	}
 
-	type ref struct{ idpType, idpName string }
-	idps := make([]ref, 0, len(webhooks.Items))
+	type ref struct{ authenticatorType, authenticatorName string }
+	authenticators := make([]ref, 0, len(webhooks.Items))
 	for _, webhook := range webhooks.Items {
-		idps = append(idps, ref{idpType: "webhook", idpName: webhook.Name})
+		authenticators = append(authenticators, ref{authenticatorType: "webhook", authenticatorName: webhook.Name})
 	}
 
-	if len(idps) == 0 {
-		return "", "", noIDPError{namespace}
+	if len(authenticators) == 0 {
+		return "", "", noAuthenticatorError{namespace}
 	}
-	if len(idps) > 1 {
-		return "", "", indeterminateIDPError{namespace}
+	if len(authenticators) > 1 {
+		return "", "", indeterminateAuthenticatorError{namespace}
 	}
-	return idps[0].idpType, idps[0].idpName, nil
+	return authenticators[0].authenticatorType, authenticators[0].authenticatorName, nil
 }
 
 func fetchPinnipedCredentialIssuerConfig(clientset pinnipedclientset.Interface, pinnipedInstallationNamespace string) (*configv1alpha1.CredentialIssuerConfig, error) {
@@ -277,7 +277,7 @@ func copyCurrentClusterFromExistingKubeConfig(currentKubeConfig clientcmdapi.Con
 	return v1Cluster, nil
 }
 
-func newPinnipedKubeconfig(v1Cluster v1.Cluster, fullPathToSelf string, token string, namespace string, idpType string, idpName string) v1.Config {
+func newPinnipedKubeconfig(v1Cluster v1.Cluster, fullPathToSelf string, token string, namespace string, authenticatorType string, authenticatorName string) v1.Config {
 	clusterName := "pinniped-cluster"
 	userName := "pinniped-user"
 
@@ -324,12 +324,12 @@ func newPinnipedKubeconfig(v1Cluster v1.Cluster, fullPathToSelf string, token st
 								Value: token,
 							},
 							{
-								Name:  "PINNIPED_IDP_TYPE",
-								Value: idpType,
+								Name:  "PINNIPED_AUTHENTICATOR_TYPE",
+								Value: authenticatorType,
 							},
 							{
-								Name:  "PINNIPED_IDP_NAME",
-								Value: idpName,
+								Name:  "PINNIPED_AUTHENTICATOR_NAME",
+								Value: authenticatorName,
 							},
 						},
 						APIVersion: clientauthenticationv1beta1.SchemeGroupVersion.String(),

@@ -1,7 +1,7 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package webhookcachecleaner implements a controller for garbage collectting webhook IDPs from an IDP cache.
+// Package webhookcachecleaner implements a controller for garbage collecting webhook authenticators from an authenticator cache.
 package webhookcachecleaner
 
 import (
@@ -12,25 +12,25 @@ import (
 	"k8s.io/klog/v2"
 
 	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
-	idpinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions/authentication/v1alpha1"
+	authinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions/authentication/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
-	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
+	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
 )
 
 // New instantiates a new controllerlib.Controller which will garbage collect webhooks from the provided Cache.
-func New(cache *idpcache.Cache, webhookIDPs idpinformers.WebhookAuthenticatorInformer, log logr.Logger) controllerlib.Controller {
+func New(cache *authncache.Cache, webhooks authinformers.WebhookAuthenticatorInformer, log logr.Logger) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "webhookcachecleaner-controller",
 			Syncer: &controller{
-				cache:       cache,
-				webhookIDPs: webhookIDPs,
-				log:         log.WithName("webhookcachecleaner-controller"),
+				cache:    cache,
+				webhooks: webhooks,
+				log:      log.WithName("webhookcachecleaner-controller"),
 			},
 		},
 		controllerlib.WithInformer(
-			webhookIDPs,
+			webhooks,
 			pinnipedcontroller.MatchAnythingFilter(),
 			controllerlib.InformerOption{},
 		),
@@ -38,14 +38,14 @@ func New(cache *idpcache.Cache, webhookIDPs idpinformers.WebhookAuthenticatorInf
 }
 
 type controller struct {
-	cache       *idpcache.Cache
-	webhookIDPs idpinformers.WebhookAuthenticatorInformer
-	log         logr.Logger
+	cache    *authncache.Cache
+	webhooks authinformers.WebhookAuthenticatorInformer
+	log      logr.Logger
 }
 
 // Sync implements controllerlib.Syncer.
 func (c *controller) Sync(_ controllerlib.Context) error {
-	webhooks, err := c.webhookIDPs.Lister().List(labels.Everything())
+	webhooks, err := c.webhooks.Lister().List(labels.Everything())
 	if err != nil {
 		return fmt.Errorf("failed to list WebhookAuthenticators: %w", err)
 	}
@@ -63,7 +63,7 @@ func (c *controller) Sync(_ controllerlib.Context) error {
 			continue
 		}
 		if _, exists := webhooksByKey[controllerlib.Key{Namespace: key.Namespace, Name: key.Name}]; !exists {
-			c.log.WithValues("idp", klog.KRef(key.Namespace, key.Name)).Info("deleting webhook IDP from cache")
+			c.log.WithValues("webhook", klog.KRef(key.Namespace, key.Name)).Info("deleting webhook authenticator from cache")
 			c.cache.Delete(key)
 		}
 	}

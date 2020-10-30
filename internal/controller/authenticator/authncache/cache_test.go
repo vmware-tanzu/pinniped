@@ -1,7 +1,7 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package idpcache
+package authncache
 
 import (
 	"context"
@@ -31,13 +31,13 @@ func TestCache(t *testing.T) {
 	cache := New()
 	require.NotNil(t, cache)
 
-	key1 := Key{Namespace: "foo", Name: "idp-one"}
+	key1 := Key{Namespace: "foo", Name: "authenticator-one"}
 	mockToken1 := mocktokenauthenticator.NewMockToken(ctrl)
 	cache.Store(key1, mockToken1)
 	require.Equal(t, mockToken1, cache.Get(key1))
 	require.Equal(t, 1, len(cache.Keys()))
 
-	key2 := Key{Namespace: "foo", Name: "idp-two"}
+	key2 := Key{Namespace: "foo", Name: "authenticator-two"}
 	mockToken2 := mocktokenauthenticator.NewMockToken(ctrl)
 	cache.Store(key2, mockToken2)
 	require.Equal(t, mockToken2, cache.Get(key2))
@@ -101,10 +101,10 @@ func TestAuthenticateTokenCredentialRequest(t *testing.T) {
 		return c
 	}
 
-	t.Run("no such IDP", func(t *testing.T) {
+	t.Run("no such authenticator", func(t *testing.T) {
 		c := New()
 		res, err := c.AuthenticateTokenCredentialRequest(context.Background(), validRequest.DeepCopy())
-		require.EqualError(t, err, "no such identity provider")
+		require.EqualError(t, err, "no such authenticator")
 		require.Nil(t, res)
 	})
 

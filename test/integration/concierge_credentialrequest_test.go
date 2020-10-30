@@ -44,7 +44,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 
-	testWebhook := library.CreateTestWebhookIDP(ctx, t)
+	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
 
 	var response *loginv1alpha1.TokenCredentialRequest
 	successfulResponse := func() bool {
@@ -125,7 +125,7 @@ func TestCredentialRequest_OtherwiseValidRequestWithRealTokenShouldFailWhenTheCl
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	testWebhook := library.CreateTestWebhookIDP(ctx, t)
+	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
 
 	response, err := makeRequest(ctx, t, validCredentialRequestSpecWithRealToken(t, testWebhook))
 
@@ -152,10 +152,10 @@ func makeRequest(ctx context.Context, t *testing.T, spec loginv1alpha1.TokenCred
 	}, metav1.CreateOptions{})
 }
 
-func validCredentialRequestSpecWithRealToken(t *testing.T, idp corev1.TypedLocalObjectReference) loginv1alpha1.TokenCredentialRequestSpec {
+func validCredentialRequestSpecWithRealToken(t *testing.T, authenticator corev1.TypedLocalObjectReference) loginv1alpha1.TokenCredentialRequestSpec {
 	return loginv1alpha1.TokenCredentialRequestSpec{
 		Token:         library.IntegrationEnv(t).TestUser.Token,
-		Authenticator: idp,
+		Authenticator: authenticator,
 	}
 }
 

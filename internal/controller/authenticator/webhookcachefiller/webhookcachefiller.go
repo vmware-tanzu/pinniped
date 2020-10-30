@@ -1,7 +1,7 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package webhookcachefiller implements a controller for filling an idpcache.Cache with each added/updated WebhookAuthenticator.
+// Package webhookcachefiller implements a controller for filling an authncache.Cache with each added/updated WebhookAuthenticator.
 package webhookcachefiller
 
 import (
@@ -21,25 +21,25 @@ import (
 	"k8s.io/klog/v2"
 
 	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
-	idpinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions/authentication/v1alpha1"
+	authinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions/authentication/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
-	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
+	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
 )
 
-// New instantiates a new controllerlib.Controller which will populate the provided idpcache.Cache.
-func New(cache *idpcache.Cache, webhookIDPs idpinformers.WebhookAuthenticatorInformer, log logr.Logger) controllerlib.Controller {
+// New instantiates a new controllerlib.Controller which will populate the provided authncache.Cache.
+func New(cache *authncache.Cache, webhooks authinformers.WebhookAuthenticatorInformer, log logr.Logger) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "webhookcachefiller-controller",
 			Syncer: &controller{
-				cache:       cache,
-				webhookIDPs: webhookIDPs,
-				log:         log.WithName("webhookcachefiller-controller"),
+				cache:    cache,
+				webhooks: webhooks,
+				log:      log.WithName("webhookcachefiller-controller"),
 			},
 		},
 		controllerlib.WithInformer(
-			webhookIDPs,
+			webhooks,
 			pinnipedcontroller.MatchAnythingFilter(),
 			controllerlib.InformerOption{},
 		),
@@ -47,14 +47,14 @@ func New(cache *idpcache.Cache, webhookIDPs idpinformers.WebhookAuthenticatorInf
 }
 
 type controller struct {
-	cache       *idpcache.Cache
-	webhookIDPs idpinformers.WebhookAuthenticatorInformer
-	log         logr.Logger
+	cache    *authncache.Cache
+	webhooks authinformers.WebhookAuthenticatorInformer
+	log      logr.Logger
 }
 
 // Sync implements controllerlib.Syncer.
 func (c *controller) Sync(ctx controllerlib.Context) error {
-	obj, err := c.webhookIDPs.Lister().WebhookAuthenticators(ctx.Key.Namespace).Get(ctx.Key.Name)
+	obj, err := c.webhooks.Lister().WebhookAuthenticators(ctx.Key.Namespace).Get(ctx.Key.Name)
 	if err != nil && errors.IsNotFound(err) {
 		c.log.Info("Sync() found that the WebhookAuthenticator does not exist yet or was deleted")
 		return nil
@@ -68,13 +68,13 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("failed to build webhook config: %w", err)
 	}
 
-	c.cache.Store(idpcache.Key{
+	c.cache.Store(authncache.Key{
 		APIGroup:  auth1alpha1.GroupName,
 		Kind:      "WebhookAuthenticator",
 		Namespace: ctx.Key.Namespace,
 		Name:      ctx.Key.Name,
 	}, webhookAuthenticator)
-	c.log.WithValues("idp", klog.KObj(obj), "endpoint", obj.Spec.Endpoint).Info("added new webhook IDP")
+	c.log.WithValues("webhook", klog.KObj(obj), "endpoint", obj.Spec.Endpoint).Info("added new webhook authenticator")
 	return nil
 }
 

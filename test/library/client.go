@@ -119,10 +119,10 @@ func newAnonymousClientRestConfigWithCertAndKeyAdded(t *testing.T, clientCertifi
 	return config
 }
 
-// CreateTestWebhookIDP creates and returns a test WebhookAuthenticator in $PINNIPED_TEST_CONCIERGE_NAMESPACE, which will be
+// CreateTestWebhookAuthenticator creates and returns a test WebhookAuthenticator in $PINNIPED_TEST_CONCIERGE_NAMESPACE, which will be
 // automatically deleted at the end of the current test's lifetime. It returns a corev1.TypedLocalObjectReference which
-// descibes the test IDP within the test namespace.
-func CreateTestWebhookIDP(ctx context.Context, t *testing.T) corev1.TypedLocalObjectReference {
+// describes the test webhook authenticator within the test namespace.
+func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.TypedLocalObjectReference {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
@@ -132,7 +132,7 @@ func CreateTestWebhookIDP(ctx context.Context, t *testing.T) corev1.TypedLocalOb
 	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	idp, err := webhooks.Create(createContext, &auth1alpha1.WebhookAuthenticator{
+	webhook, err := webhooks.Create(createContext, &auth1alpha1.WebhookAuthenticator{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-webhook-",
 			Labels:       map[string]string{"pinniped.dev/test": ""},
@@ -141,21 +141,21 @@ func CreateTestWebhookIDP(ctx context.Context, t *testing.T) corev1.TypedLocalOb
 		Spec: testEnv.TestWebhook,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test WebhookAuthenticator")
-	t.Logf("created test WebhookAuthenticator %s/%s", idp.Namespace, idp.Name)
+	t.Logf("created test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
 
 	t.Cleanup(func() {
 		t.Helper()
-		t.Logf("cleaning up test WebhookAuthenticator %s/%s", idp.Namespace, idp.Name)
+		t.Logf("cleaning up test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
 		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		err := webhooks.Delete(deleteCtx, idp.Name, metav1.DeleteOptions{})
-		require.NoErrorf(t, err, "could not cleanup test WebhookAuthenticator %s/%s", idp.Namespace, idp.Name)
+		err := webhooks.Delete(deleteCtx, webhook.Name, metav1.DeleteOptions{})
+		require.NoErrorf(t, err, "could not cleanup test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
 	})
 
 	return corev1.TypedLocalObjectReference{
 		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
 		Kind:     "WebhookAuthenticator",
-		Name:     idp.Name,
+		Name:     webhook.Name,
 	}
 }
 

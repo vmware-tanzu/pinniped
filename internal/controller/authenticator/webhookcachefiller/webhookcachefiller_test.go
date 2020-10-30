@@ -22,7 +22,7 @@ import (
 	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
-	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
+	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/testlogger"
@@ -34,7 +34,7 @@ func TestController(t *testing.T) {
 	tests := []struct {
 		name             string
 		syncKey          controllerlib.Key
-		webhookIDPs      []runtime.Object
+		webhooks         []runtime.Object
 		wantErr          string
 		wantLogs         []string
 		wantCacheEntries int
@@ -49,7 +49,7 @@ func TestController(t *testing.T) {
 		{
 			name:    "invalid webhook",
 			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
-			webhookIDPs: []runtime.Object{
+			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "test-namespace",
@@ -65,7 +65,7 @@ func TestController(t *testing.T) {
 		{
 			name:    "valid webhook",
 			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
-			webhookIDPs: []runtime.Object{
+			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "test-namespace",
@@ -78,7 +78,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				`webhookcachefiller-controller "level"=0 "msg"="added new webhook IDP" "endpoint"="https://example.com" "idp"={"name":"test-name","namespace":"test-namespace"}`,
+				`webhookcachefiller-controller "level"=0 "msg"="added new webhook authenticator" "endpoint"="https://example.com" "webhook"={"name":"test-name","namespace":"test-namespace"}`,
 			},
 			wantCacheEntries: 1,
 		},
@@ -88,9 +88,9 @@ func TestController(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			fakeClient := pinnipedfake.NewSimpleClientset(tt.webhookIDPs...)
+			fakeClient := pinnipedfake.NewSimpleClientset(tt.webhooks...)
 			informers := pinnipedinformers.NewSharedInformerFactory(fakeClient, 0)
-			cache := idpcache.New()
+			cache := authncache.New()
 			testLog := testlogger.New(t)
 
 			controller := New(cache, informers.Authentication().V1alpha1().WebhookAuthenticators(), testLog)

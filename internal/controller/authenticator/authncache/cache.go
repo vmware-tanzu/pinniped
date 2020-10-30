@@ -1,8 +1,8 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package idpcache implements a cache of active identity providers.
-package idpcache
+// Package authncache implements a cache of active authenticators.
+package authncache
 
 import (
 	"context"
@@ -17,12 +17,12 @@ import (
 )
 
 var (
-	// ErrNoSuchIDP is returned by Cache.AuthenticateTokenCredentialRequest() when the requested IDP is not configured.
-	ErrNoSuchIDP = fmt.Errorf("no such identity provider")
+	// ErrNoSuchAuthenticator is returned by Cache.AuthenticateTokenCredentialRequest() when the requested authenticator is not configured.
+	ErrNoSuchAuthenticator = fmt.Errorf("no such authenticator")
 )
 
-// Cache implements the authenticator.Token interface by multiplexing across a dynamic set of identity providers
-// loaded from IDP resources.
+// Cache implements the authenticator.Token interface by multiplexing across a dynamic set of authenticators
+// loaded from authenticator resources.
 type Cache struct {
 	cache sync.Map
 }
@@ -43,7 +43,7 @@ func New() *Cache {
 	return &Cache{}
 }
 
-// Get an identity provider by key.
+// Get an authenticator by key.
 func (c *Cache) Get(key Key) Value {
 	res, _ := c.cache.Load(key)
 	if res == nil {
@@ -52,12 +52,12 @@ func (c *Cache) Get(key Key) Value {
 	return res.(Value)
 }
 
-// Store an identity provider into the cache.
+// Store an authenticator into the cache.
 func (c *Cache) Store(key Key, value Value) {
 	c.cache.Store(key, value)
 }
 
-// Delete an identity provider from the cache.
+// Delete an authenticator from the cache.
 func (c *Cache) Delete(key Key) {
 	c.cache.Delete(key)
 }
@@ -93,14 +93,14 @@ func (c *Cache) AuthenticateTokenCredentialRequest(ctx context.Context, req *log
 
 	val := c.Get(key)
 	if val == nil {
-		return nil, ErrNoSuchIDP
+		return nil, ErrNoSuchAuthenticator
 	}
 
 	// The incoming context could have an audience. Since we do not want to handle audiences right now, do not pass it
 	// through directly to the authentication webhook.
 	ctx = valuelessContext{ctx}
 
-	// Call the selected IDP.
+	// Call the selected authenticator.
 	resp, authenticated, err := val.AuthenticateToken(ctx, req.Spec.Token)
 	if err != nil {
 		return nil, err

@@ -30,9 +30,9 @@ var (
 		  get-kubeconfig [flags]
 
 		Flags:
+			  --authenticator-name string   Authenticator name
+			  --authenticator-type string   Authenticator type (e.g., 'webhook')
 		  -h, --help                        help for get-kubeconfig
-			  --idp-name string             Identity provider name
-			  --idp-type string             Identity provider type (e.g., 'webhook')
 			  --kubeconfig string           Path to the kubeconfig file
 			  --kubeconfig-context string   Kubeconfig context override
 			  --pinniped-namespace string   Namespace in which Pinniped was installed (default "pinniped")
@@ -61,9 +61,9 @@ var (
 		  get-kubeconfig [flags]
 
 		Flags:
+			  --authenticator-name string   Authenticator name
+			  --authenticator-type string   Authenticator type (e.g., 'webhook')
 		  -h, --help                        help for get-kubeconfig
-			  --idp-name string             Identity provider name
-			  --idp-type string             Identity provider type (e.g., 'webhook')
 			  --kubeconfig string           Path to the kubeconfig file
 			  --kubeconfig-context string   Kubeconfig context override
 			  --pinniped-namespace string   Namespace in which Pinniped was installed (default "pinniped")
@@ -116,15 +116,15 @@ func TestNewGetKubeConfigCmd(t *testing.T) {
 }
 
 type expectedKubeconfigYAML struct {
-	clusterCAData    string
-	clusterServer    string
-	command          string
-	token            string
-	pinnipedEndpoint string
-	pinnipedCABundle string
-	namespace        string
-	idpType          string
-	idpName          string
+	clusterCAData     string
+	clusterServer     string
+	command           string
+	token             string
+	pinnipedEndpoint  string
+	pinnipedCABundle  string
+	namespace         string
+	authenticatorType string
+	authenticatorName string
 }
 
 func (e expectedKubeconfigYAML) String() string {
@@ -160,14 +160,14 @@ func (e expectedKubeconfigYAML) String() string {
 			    value: %s
 			  - name: PINNIPED_TOKEN
 				value: %s
-			  - name: PINNIPED_IDP_TYPE
+			  - name: PINNIPED_AUTHENTICATOR_TYPE
 				value: %s
-			  - name: PINNIPED_IDP_NAME
+			  - name: PINNIPED_AUTHENTICATOR_NAME
 				value: %s
 			  installHint: |-
 				The Pinniped CLI is required to authenticate to the current cluster.
 				For more information, please visit https://pinniped.dev
-		`, e.clusterCAData, e.clusterServer, e.command, e.pinnipedEndpoint, e.pinnipedCABundle, e.namespace, e.token, e.idpType, e.idpName)
+		`, e.clusterCAData, e.clusterServer, e.command, e.pinnipedEndpoint, e.pinnipedCABundle, e.namespace, e.token, e.authenticatorType, e.authenticatorName)
 }
 
 func newCredentialIssuerConfig(name, namespace, server, certificateAuthorityData string) *configv1alpha1.CredentialIssuerConfig {
@@ -224,36 +224,36 @@ func TestRun(t *testing.T) {
 			wantError: "some error configuring clientset",
 		},
 		{
-			name: "fail to get IDPs",
+			name: "fail to get authenticators",
 			mocks: func(cmd *getKubeConfigCommand) {
-				cmd.flags.idpName = ""
-				cmd.flags.idpType = ""
+				cmd.flags.authenticatorName = ""
+				cmd.flags.authenticatorType = ""
 				clientset := pinnipedfake.NewSimpleClientset()
 				clientset.PrependReactor("*", "*", func(_ coretesting.Action) (bool, runtime.Object, error) {
-					return true, nil, fmt.Errorf("some error getting IDPs")
+					return true, nil, fmt.Errorf("some error getting authenticators")
 				})
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
 					return clientset, nil
 				}
 			},
-			wantError: "some error getting IDPs",
+			wantError: "some error getting authenticators",
 		},
 		{
-			name: "zero IDPs",
+			name: "zero authenticators",
 			mocks: func(cmd *getKubeConfigCommand) {
-				cmd.flags.idpName = ""
-				cmd.flags.idpType = ""
+				cmd.flags.authenticatorName = ""
+				cmd.flags.authenticatorType = ""
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
 					return pinnipedfake.NewSimpleClientset(), nil
 				}
 			},
-			wantError: `no identity providers were found in namespace "test-namespace"`,
+			wantError: `no authenticators were found in namespace "test-namespace"`,
 		},
 		{
-			name: "multiple IDPs",
+			name: "multiple authenticators",
 			mocks: func(cmd *getKubeConfigCommand) {
-				cmd.flags.idpName = ""
-				cmd.flags.idpType = ""
+				cmd.flags.authenticatorName = ""
+				cmd.flags.authenticatorType = ""
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
 					return pinnipedfake.NewSimpleClientset(
 						&authv1alpha.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "webhook-one"}},
@@ -261,7 +261,7 @@ func TestRun(t *testing.T) {
 					), nil
 				}
 			},
-			wantError: `multiple identity providers were found in namespace "test-namespace", so --pinniped-idp-name/--pinniped-idp-type must be specified`,
+			wantError: `multiple authenticators were found in namespace "test-namespace", so --authenticator-name/--authenticator-type must be specified`,
 		},
 		{
 			name: "fail to get CredentialIssuerConfigs",
@@ -330,41 +330,41 @@ func TestRun(t *testing.T) {
 				}
 			},
 			wantStdout: expectedKubeconfigYAML{
-				clusterCAData:    "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
-				clusterServer:    "https://fake-server-url-value",
-				command:          "/path/to/pinniped",
-				token:            "test-token",
-				pinnipedEndpoint: "https://fake-server-url-value",
-				pinnipedCABundle: "fake-certificate-authority-data-value",
-				namespace:        "test-namespace",
-				idpType:          "test-idp-type",
-				idpName:          "test-idp-name",
+				clusterCAData:     "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
+				clusterServer:     "https://fake-server-url-value",
+				command:           "/path/to/pinniped",
+				token:             "test-token",
+				pinnipedEndpoint:  "https://fake-server-url-value",
+				pinnipedCABundle:  "fake-certificate-authority-data-value",
+				namespace:         "test-namespace",
+				authenticatorType: "test-authenticator-type",
+				authenticatorName: "test-authenticator-name",
 			}.String(),
 		},
 		{
-			name: "success using local CA data and discovered IDP",
+			name: "success using local CA data and discovered authenticator",
 			mocks: func(cmd *getKubeConfigCommand) {
-				cmd.flags.idpName = ""
-				cmd.flags.idpType = ""
+				cmd.flags.authenticatorName = ""
+				cmd.flags.authenticatorType = ""
 
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
 					return pinnipedfake.NewSimpleClientset(
-						&authv1alpha.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "discovered-idp"}},
+						&authv1alpha.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "discovered-authenticator"}},
 						newCredentialIssuerConfig("pinniped-config", "test-namespace", "https://example.com", "test-ca"),
 					), nil
 				}
 			},
 			wantStderr: `WARNING: Server and certificate authority did not match between local kubeconfig and Pinniped's CredentialIssuerConfig on the cluster. Using local kubeconfig values.`,
 			wantStdout: expectedKubeconfigYAML{
-				clusterCAData:    "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
-				clusterServer:    "https://fake-server-url-value",
-				command:          "/path/to/pinniped",
-				token:            "test-token",
-				pinnipedEndpoint: "https://fake-server-url-value",
-				pinnipedCABundle: "fake-certificate-authority-data-value",
-				namespace:        "test-namespace",
-				idpType:          "webhook",
-				idpName:          "discovered-idp",
+				clusterCAData:     "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
+				clusterServer:     "https://fake-server-url-value",
+				command:           "/path/to/pinniped",
+				token:             "test-token",
+				pinnipedEndpoint:  "https://fake-server-url-value",
+				pinnipedCABundle:  "fake-certificate-authority-data-value",
+				namespace:         "test-namespace",
+				authenticatorType: "webhook",
+				authenticatorName: "discovered-authenticator",
 			}.String(),
 		},
 	}
@@ -377,8 +377,8 @@ func TestRun(t *testing.T) {
 			c := newGetKubeConfigCommand()
 			c.flags.token = "test-token"
 			c.flags.namespace = "test-namespace"
-			c.flags.idpName = "test-idp-name"
-			c.flags.idpType = "test-idp-type"
+			c.flags.authenticatorName = "test-authenticator-name"
+			c.flags.authenticatorType = "test-authenticator-type"
 			c.getPathToSelf = func() (string, error) { return "/path/to/pinniped", nil }
 			c.flags.kubeconfig = "./testdata/kubeconfig.yaml"
 			tt.mocks(c)

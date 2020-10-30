@@ -143,7 +143,7 @@ as the identity provider.
    allow you to authenticate as the user that you created above.
 
    ```bash
-   pinniped get-kubeconfig --token "pinny-the-seal:password123" --idp-type webhook --idp-name local-user-authenticator > /tmp/pinniped-kubeconfig
+   pinniped get-kubeconfig --token "pinny-the-seal:password123" --authenticator-type webhook --authenticator-name local-user-authenticator > /tmp/pinniped-kubeconfig
    ```
 
    If you are using MacOS, you may get an error dialog that says

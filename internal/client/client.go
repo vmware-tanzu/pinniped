@@ -23,7 +23,7 @@ import (
 var ErrLoginFailed = errors.New("login failed")
 
 // ExchangeToken exchanges an opaque token using the Pinniped TokenCredentialRequest API, returning a client-go ExecCredential valid on the target cluster.
-func ExchangeToken(ctx context.Context, namespace string, idp corev1.TypedLocalObjectReference, token string, caBundle string, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
+func ExchangeToken(ctx context.Context, namespace string, authenticator corev1.TypedLocalObjectReference, token string, caBundle string, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
 	client, err := getClient(apiEndpoint, caBundle)
 	if err != nil {
 		return nil, fmt.Errorf("could not get API client: %w", err)
@@ -35,7 +35,7 @@ func ExchangeToken(ctx context.Context, namespace string, idp corev1.TypedLocalO
 		},
 		Spec: v1alpha1.TokenCredentialRequestSpec{
 			Token:         token,
-			Authenticator: idp,
+			Authenticator: authenticator,
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {

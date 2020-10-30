@@ -476,14 +476,14 @@ func schema_apis_concierge_login_v1alpha1_TokenCredentialRequestSpec(ref common.
 							Format:      "",
 						},
 					},
-					"identityProvider": {
+					"authenticator": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Reference to an identity provider which can fulfill this credential request.",
+							Description: "Reference to an authenticator which can validate this credential request.",
 							Ref:         ref("k8s.io/api/core/v1.TypedLocalObjectReference"),
 						},
 					},
 				},
-				Required: []string{"identityProvider"},
+				Required: []string{"authenticator"},
 			},
 		},
 		Dependencies: []string{

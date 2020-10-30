@@ -154,8 +154,8 @@ func makeRequest(ctx context.Context, t *testing.T, spec loginv1alpha1.TokenCred
 
 func validCredentialRequestSpecWithRealToken(t *testing.T, idp corev1.TypedLocalObjectReference) loginv1alpha1.TokenCredentialRequestSpec {
 	return loginv1alpha1.TokenCredentialRequestSpec{
-		Token:            library.IntegrationEnv(t).TestUser.Token,
-		IdentityProvider: idp,
+		Token:         library.IntegrationEnv(t).TestUser.Token,
+		Authenticator: idp,
 	}
 }
 

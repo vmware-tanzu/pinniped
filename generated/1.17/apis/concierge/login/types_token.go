@@ -12,8 +12,8 @@ type TokenCredentialRequestSpec struct {
 	// Bearer token supplied with the credential request.
 	Token string
 
-	// Reference to an identity provider which can fulfill this credential request.
-	IdentityProvider corev1.TypedLocalObjectReference
+	// Reference to an authenticator which can validate this credential request.
+	Authenticator corev1.TypedLocalObjectReference
 }
 
 type TokenCredentialRequestStatus struct {

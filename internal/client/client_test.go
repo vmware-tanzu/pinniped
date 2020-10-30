@@ -105,7 +105,7 @@ func TestExchangeToken(t *testing.T) {
 				  },
 				  "spec": {
 					"token": "test-token",
-					"identityProvider": {
+					"authenticator": {
 						"apiGroup": "authentication.concierge.pinniped.dev",
 						"kind": "WebhookAuthenticator",
 						"name": "test-webhook"

@@ -75,7 +75,7 @@ func TestAuthenticateTokenCredentialRequest(t *testing.T) {
 			Namespace: "test-namespace",
 		},
 		Spec: loginapi.TokenCredentialRequestSpec{
-			IdentityProvider: corev1.TypedLocalObjectReference{
+			Authenticator: corev1.TypedLocalObjectReference{
 				APIGroup: &authv1alpha.SchemeGroupVersion.Group,
 				Kind:     "WebhookAuthenticator",
 				Name:     "test-name",
@@ -85,10 +85,10 @@ func TestAuthenticateTokenCredentialRequest(t *testing.T) {
 		Status: loginapi.TokenCredentialRequestStatus{},
 	}
 	validRequestKey := Key{
-		APIGroup:  *validRequest.Spec.IdentityProvider.APIGroup,
-		Kind:      validRequest.Spec.IdentityProvider.Kind,
+		APIGroup:  *validRequest.Spec.Authenticator.APIGroup,
+		Kind:      validRequest.Spec.Authenticator.Kind,
 		Namespace: validRequest.Namespace,
-		Name:      validRequest.Spec.IdentityProvider.Name,
+		Name:      validRequest.Spec.Authenticator.Name,
 	}
 
 	mockCache := func(t *testing.T, res *authenticator.Response, authenticated bool, err error) *Cache {

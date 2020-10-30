@@ -34,8 +34,8 @@ func ExchangeToken(ctx context.Context, namespace string, idp corev1.TypedLocalO
 			Namespace: namespace,
 		},
 		Spec: v1alpha1.TokenCredentialRequestSpec{
-			Token:            token,
-			IdentityProvider: idp,
+			Token:         token,
+			Authenticator: idp,
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {

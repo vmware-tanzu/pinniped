@@ -84,11 +84,11 @@ func (c *Cache) AuthenticateTokenCredentialRequest(ctx context.Context, req *log
 	// Map the incoming request to a cache key.
 	key := Key{
 		Namespace: req.Namespace,
-		Name:      req.Spec.IdentityProvider.Name,
-		Kind:      req.Spec.IdentityProvider.Kind,
+		Name:      req.Spec.Authenticator.Name,
+		Kind:      req.Spec.Authenticator.Kind,
 	}
-	if req.Spec.IdentityProvider.APIGroup != nil {
-		key.APIGroup = *req.Spec.IdentityProvider.APIGroup
+	if req.Spec.Authenticator.APIGroup != nil {
+		key.APIGroup = *req.Spec.Authenticator.APIGroup
 	}
 
 	val := c.Get(key)

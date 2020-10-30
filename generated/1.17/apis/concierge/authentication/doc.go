@@ -4,5 +4,5 @@
 // +k8s:deepcopy-gen=package
 // +groupName=authentication.concierge.pinniped.dev
 
-// Package authentication is the internal version of the Pinniped identity provider API.
+// Package authentication is the internal version of the Pinniped concierge authentication API.
 package authentication

@@ -43,19 +43,19 @@ func TestController(t *testing.T) {
 			name:    "not found",
 			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
 			wantLogs: []string{
-				`webhookcachefiller-controller "level"=0 "msg"="Sync() found that the WebhookIdentityProvider does not exist yet or was deleted"`,
+				`webhookcachefiller-controller "level"=0 "msg"="Sync() found that the WebhookAuthenticator does not exist yet or was deleted"`,
 			},
 		},
 		{
 			name:    "invalid webhook",
 			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
 			webhookIDPs: []runtime.Object{
-				&auth1alpha1.WebhookIdentityProvider{
+				&auth1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "test-namespace",
 						Name:      "test-name",
 					},
-					Spec: auth1alpha1.WebhookIdentityProviderSpec{
+					Spec: auth1alpha1.WebhookAuthenticatorSpec{
 						Endpoint: "invalid url",
 					},
 				},
@@ -66,12 +66,12 @@ func TestController(t *testing.T) {
 			name:    "valid webhook",
 			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
 			webhookIDPs: []runtime.Object{
-				&auth1alpha1.WebhookIdentityProvider{
+				&auth1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "test-namespace",
 						Name:      "test-name",
 					},
-					Spec: auth1alpha1.WebhookIdentityProviderSpec{
+					Spec: auth1alpha1.WebhookAuthenticatorSpec{
 						Endpoint: "https://example.com",
 						TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: ""},
 					},
@@ -93,7 +93,7 @@ func TestController(t *testing.T) {
 			cache := idpcache.New()
 			testLog := testlogger.New(t)
 
-			controller := New(cache, informers.Authentication().V1alpha1().WebhookIdentityProviders(), testLog)
+			controller := New(cache, informers.Authentication().V1alpha1().WebhookAuthenticators(), testLog)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
@@ -124,13 +124,13 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 
 	t.Run("marshal failure", func(t *testing.T) {
 		marshalError := func(_ clientcmdapi.Config, _ string) error { return fmt.Errorf("some marshal error") }
-		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookIdentityProviderSpec{}, ioutil.TempFile, marshalError)
+		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{}, ioutil.TempFile, marshalError)
 		require.Nil(t, res)
 		require.EqualError(t, err, "unable to marshal kubeconfig: some marshal error")
 	})
 
 	t.Run("invalid base64", func(t *testing.T) {
-		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookIdentityProviderSpec{
+		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
 			Endpoint: "https://example.com",
 			TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: "invalid-base64"},
 		}, ioutil.TempFile, clientcmd.WriteToFile)
@@ -139,7 +139,7 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 	})
 
 	t.Run("valid config with no TLS spec", func(t *testing.T) {
-		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookIdentityProviderSpec{
+		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
 			Endpoint: "https://example.com",
 		}, ioutil.TempFile, clientcmd.WriteToFile)
 		require.NotNil(t, res)
@@ -154,7 +154,7 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 			_, err = w.Write([]byte(`{}`))
 			require.NoError(t, err)
 		})
-		spec := &auth1alpha1.WebhookIdentityProviderSpec{
+		spec := &auth1alpha1.WebhookAuthenticatorSpec{
 			Endpoint: url,
 			TLS: &auth1alpha1.TLSSpec{
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(caBundle)),

@@ -17,78 +17,78 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.Condition":                     schema_apis_concierge_authentication_v1alpha1_Condition(ref),
-		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.TLSSpec":                       schema_apis_concierge_authentication_v1alpha1_TLSSpec(ref),
-		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookIdentityProvider":       schema_apis_concierge_authentication_v1alpha1_WebhookIdentityProvider(ref),
-		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookIdentityProviderList":   schema_apis_concierge_authentication_v1alpha1_WebhookIdentityProviderList(ref),
-		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookIdentityProviderSpec":   schema_apis_concierge_authentication_v1alpha1_WebhookIdentityProviderSpec(ref),
-		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookIdentityProviderStatus": schema_apis_concierge_authentication_v1alpha1_WebhookIdentityProviderStatus(ref),
-		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.ClusterCredential":                      schema_apis_concierge_login_v1alpha1_ClusterCredential(ref),
-		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequest":                 schema_apis_concierge_login_v1alpha1_TokenCredentialRequest(ref),
-		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequestList":             schema_apis_concierge_login_v1alpha1_TokenCredentialRequestList(ref),
-		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequestSpec":             schema_apis_concierge_login_v1alpha1_TokenCredentialRequestSpec(ref),
-		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequestStatus":           schema_apis_concierge_login_v1alpha1_TokenCredentialRequestStatus(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfig":                          schema_119_apis_config_v1alpha1_CredentialIssuerConfig(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigKubeConfigInfo":            schema_119_apis_config_v1alpha1_CredentialIssuerConfigKubeConfigInfo(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigList":                      schema_119_apis_config_v1alpha1_CredentialIssuerConfigList(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigStatus":                    schema_119_apis_config_v1alpha1_CredentialIssuerConfigStatus(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigStrategy":                  schema_119_apis_config_v1alpha1_CredentialIssuerConfigStrategy(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfig":                              schema_119_apis_config_v1alpha1_OIDCProviderConfig(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigList":                          schema_119_apis_config_v1alpha1_OIDCProviderConfigList(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigSpec":                          schema_119_apis_config_v1alpha1_OIDCProviderConfigSpec(ref),
-		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigStatus":                        schema_119_apis_config_v1alpha1_OIDCProviderConfigStatus(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                                                       schema_pkg_apis_meta_v1_APIGroup(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroupList":                                                   schema_pkg_apis_meta_v1_APIGroupList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":                                                    schema_pkg_apis_meta_v1_APIResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResourceList":                                                schema_pkg_apis_meta_v1_APIResourceList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIVersions":                                                    schema_pkg_apis_meta_v1_APIVersions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Condition":                                                      schema_pkg_apis_meta_v1_Condition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.CreateOptions":                                                  schema_pkg_apis_meta_v1_CreateOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.DeleteOptions":                                                  schema_pkg_apis_meta_v1_DeleteOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Duration":                                                       schema_pkg_apis_meta_v1_Duration(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ExportOptions":                                                  schema_pkg_apis_meta_v1_ExportOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.FieldsV1":                                                       schema_pkg_apis_meta_v1_FieldsV1(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GetOptions":                                                     schema_pkg_apis_meta_v1_GetOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupKind":                                                      schema_pkg_apis_meta_v1_GroupKind(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupResource":                                                  schema_pkg_apis_meta_v1_GroupResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersion":                                                   schema_pkg_apis_meta_v1_GroupVersion(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionForDiscovery":                                       schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionKind":                                               schema_pkg_apis_meta_v1_GroupVersionKind(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionResource":                                           schema_pkg_apis_meta_v1_GroupVersionResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.InternalEvent":                                                  schema_pkg_apis_meta_v1_InternalEvent(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector":                                                  schema_pkg_apis_meta_v1_LabelSelector(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelectorRequirement":                                       schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.List":                                                           schema_pkg_apis_meta_v1_List(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta":                                                       schema_pkg_apis_meta_v1_ListMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ListOptions":                                                    schema_pkg_apis_meta_v1_ListOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry":                                             schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.MicroTime":                                                      schema_pkg_apis_meta_v1_MicroTime(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta":                                                     schema_pkg_apis_meta_v1_ObjectMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.OwnerReference":                                                 schema_pkg_apis_meta_v1_OwnerReference(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadata":                                          schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadataList":                                      schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Patch":                                                          schema_pkg_apis_meta_v1_Patch(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PatchOptions":                                                   schema_pkg_apis_meta_v1_PatchOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Preconditions":                                                  schema_pkg_apis_meta_v1_Preconditions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.RootPaths":                                                      schema_pkg_apis_meta_v1_RootPaths(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ServerAddressByClientCIDR":                                      schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Status":                                                         schema_pkg_apis_meta_v1_Status(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusCause":                                                    schema_pkg_apis_meta_v1_StatusCause(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusDetails":                                                  schema_pkg_apis_meta_v1_StatusDetails(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Table":                                                          schema_pkg_apis_meta_v1_Table(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableColumnDefinition":                                          schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableOptions":                                                   schema_pkg_apis_meta_v1_TableOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRow":                                                       schema_pkg_apis_meta_v1_TableRow(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRowCondition":                                              schema_pkg_apis_meta_v1_TableRowCondition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Time":                                                           schema_pkg_apis_meta_v1_Time(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Timestamp":                                                      schema_pkg_apis_meta_v1_Timestamp(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TypeMeta":                                                       schema_pkg_apis_meta_v1_TypeMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.UpdateOptions":                                                  schema_pkg_apis_meta_v1_UpdateOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.WatchEvent":                                                     schema_pkg_apis_meta_v1_WatchEvent(ref),
-		"k8s.io/apimachinery/pkg/runtime.RawExtension":                                                        schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
-		"k8s.io/apimachinery/pkg/runtime.TypeMeta":                                                            schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
-		"k8s.io/apimachinery/pkg/runtime.Unknown":                                                             schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
-		"k8s.io/apimachinery/pkg/version.Info":                                                                schema_k8sio_apimachinery_pkg_version_Info(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.Condition":                  schema_apis_concierge_authentication_v1alpha1_Condition(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.TLSSpec":                    schema_apis_concierge_authentication_v1alpha1_TLSSpec(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticator":       schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticator(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticatorList":   schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticatorList(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticatorSpec":   schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticatorSpec(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticatorStatus": schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticatorStatus(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.ClusterCredential":                   schema_apis_concierge_login_v1alpha1_ClusterCredential(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequest":              schema_apis_concierge_login_v1alpha1_TokenCredentialRequest(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequestList":          schema_apis_concierge_login_v1alpha1_TokenCredentialRequestList(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequestSpec":          schema_apis_concierge_login_v1alpha1_TokenCredentialRequestSpec(ref),
+		"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1.TokenCredentialRequestStatus":        schema_apis_concierge_login_v1alpha1_TokenCredentialRequestStatus(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfig":                       schema_119_apis_config_v1alpha1_CredentialIssuerConfig(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigKubeConfigInfo":         schema_119_apis_config_v1alpha1_CredentialIssuerConfigKubeConfigInfo(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigList":                   schema_119_apis_config_v1alpha1_CredentialIssuerConfigList(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigStatus":                 schema_119_apis_config_v1alpha1_CredentialIssuerConfigStatus(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.CredentialIssuerConfigStrategy":               schema_119_apis_config_v1alpha1_CredentialIssuerConfigStrategy(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfig":                           schema_119_apis_config_v1alpha1_OIDCProviderConfig(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigList":                       schema_119_apis_config_v1alpha1_OIDCProviderConfigList(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigSpec":                       schema_119_apis_config_v1alpha1_OIDCProviderConfigSpec(ref),
+		"go.pinniped.dev/generated/1.19/apis/config/v1alpha1.OIDCProviderConfigStatus":                     schema_119_apis_config_v1alpha1_OIDCProviderConfigStatus(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                                                    schema_pkg_apis_meta_v1_APIGroup(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroupList":                                                schema_pkg_apis_meta_v1_APIGroupList(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":                                                 schema_pkg_apis_meta_v1_APIResource(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResourceList":                                             schema_pkg_apis_meta_v1_APIResourceList(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIVersions":                                                 schema_pkg_apis_meta_v1_APIVersions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Condition":                                                   schema_pkg_apis_meta_v1_Condition(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.CreateOptions":                                               schema_pkg_apis_meta_v1_CreateOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.DeleteOptions":                                               schema_pkg_apis_meta_v1_DeleteOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Duration":                                                    schema_pkg_apis_meta_v1_Duration(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ExportOptions":                                               schema_pkg_apis_meta_v1_ExportOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.FieldsV1":                                                    schema_pkg_apis_meta_v1_FieldsV1(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GetOptions":                                                  schema_pkg_apis_meta_v1_GetOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupKind":                                                   schema_pkg_apis_meta_v1_GroupKind(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupResource":                                               schema_pkg_apis_meta_v1_GroupResource(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersion":                                                schema_pkg_apis_meta_v1_GroupVersion(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionForDiscovery":                                    schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionKind":                                            schema_pkg_apis_meta_v1_GroupVersionKind(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionResource":                                        schema_pkg_apis_meta_v1_GroupVersionResource(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.InternalEvent":                                               schema_pkg_apis_meta_v1_InternalEvent(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector":                                               schema_pkg_apis_meta_v1_LabelSelector(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelectorRequirement":                                    schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.List":                                                        schema_pkg_apis_meta_v1_List(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta":                                                    schema_pkg_apis_meta_v1_ListMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ListOptions":                                                 schema_pkg_apis_meta_v1_ListOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry":                                          schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.MicroTime":                                                   schema_pkg_apis_meta_v1_MicroTime(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta":                                                  schema_pkg_apis_meta_v1_ObjectMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.OwnerReference":                                              schema_pkg_apis_meta_v1_OwnerReference(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadata":                                       schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadataList":                                   schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Patch":                                                       schema_pkg_apis_meta_v1_Patch(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.PatchOptions":                                                schema_pkg_apis_meta_v1_PatchOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Preconditions":                                               schema_pkg_apis_meta_v1_Preconditions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.RootPaths":                                                   schema_pkg_apis_meta_v1_RootPaths(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ServerAddressByClientCIDR":                                   schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Status":                                                      schema_pkg_apis_meta_v1_Status(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusCause":                                                 schema_pkg_apis_meta_v1_StatusCause(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusDetails":                                               schema_pkg_apis_meta_v1_StatusDetails(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Table":                                                       schema_pkg_apis_meta_v1_Table(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableColumnDefinition":                                       schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableOptions":                                                schema_pkg_apis_meta_v1_TableOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRow":                                                    schema_pkg_apis_meta_v1_TableRow(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRowCondition":                                           schema_pkg_apis_meta_v1_TableRowCondition(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Time":                                                        schema_pkg_apis_meta_v1_Time(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Timestamp":                                                   schema_pkg_apis_meta_v1_Timestamp(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TypeMeta":                                                    schema_pkg_apis_meta_v1_TypeMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.UpdateOptions":                                               schema_pkg_apis_meta_v1_UpdateOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.WatchEvent":                                                  schema_pkg_apis_meta_v1_WatchEvent(ref),
+		"k8s.io/apimachinery/pkg/runtime.RawExtension":                                                     schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
+		"k8s.io/apimachinery/pkg/runtime.TypeMeta":                                                         schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
+		"k8s.io/apimachinery/pkg/runtime.Unknown":                                                          schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
+		"k8s.io/apimachinery/pkg/version.Info":                                                             schema_k8sio_apimachinery_pkg_version_Info(ref),
 	}
 }
 
@@ -153,7 +153,7 @@ func schema_apis_concierge_authentication_v1alpha1_TLSSpec(ref common.ReferenceC
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "Configuration for configuring TLS on various identity providers.",
+				Description: "Configuration for configuring TLS on various authenticators.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"certificateAuthorityData": {
@@ -169,11 +169,11 @@ func schema_apis_concierge_authentication_v1alpha1_TLSSpec(ref common.ReferenceC
 	}
 }
 
-func schema_apis_concierge_authentication_v1alpha1_WebhookIdentityProvider(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticator(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "WebhookIdentityProvider describes the configuration of a Pinniped webhook identity provider.",
+				Description: "WebhookAuthenticator describes the configuration of a webhook authenticator.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
@@ -197,14 +197,14 @@ func schema_apis_concierge_authentication_v1alpha1_WebhookIdentityProvider(ref c
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Spec for configuring the identity provider.",
-							Ref:         ref("go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookIdentityProviderSpec"),
+							Description: "Spec for configuring the authenticator.",
+							Ref:         ref("go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticatorSpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Status of the identity provider.",
-							Ref:         ref("go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookIdentityProviderStatus"),
+							Description: "Status of the authenticator.",
+							Ref:         ref("go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticatorStatus"),
 						},
 					},
 				},
@@ -212,15 +212,15 @@ func schema_apis_concierge_authentication_v1alpha1_WebhookIdentityProvider(ref c
 			},
 		},
 		Dependencies: []string{
-			"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookIdentityProviderSpec", "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookIdentityProviderStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticatorSpec", "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticatorStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
-func schema_apis_concierge_authentication_v1alpha1_WebhookIdentityProviderList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticatorList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "List of WebhookIdentityProvider objects.",
+				Description: "List of WebhookAuthenticator objects.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
@@ -248,7 +248,7 @@ func schema_apis_concierge_authentication_v1alpha1_WebhookIdentityProviderList(r
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookIdentityProvider"),
+										Ref: ref("go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticator"),
 									},
 								},
 							},
@@ -259,15 +259,15 @@ func schema_apis_concierge_authentication_v1alpha1_WebhookIdentityProviderList(r
 			},
 		},
 		Dependencies: []string{
-			"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookIdentityProvider", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			"go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1.WebhookAuthenticator", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
 	}
 }
 
-func schema_apis_concierge_authentication_v1alpha1_WebhookIdentityProviderSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticatorSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "Spec for configuring a webhook identity provider.",
+				Description: "Spec for configuring a webhook authenticator.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"endpoint": {
@@ -292,11 +292,11 @@ func schema_apis_concierge_authentication_v1alpha1_WebhookIdentityProviderSpec(r
 	}
 }
 
-func schema_apis_concierge_authentication_v1alpha1_WebhookIdentityProviderStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_apis_concierge_authentication_v1alpha1_WebhookAuthenticatorStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "Status of a webhook identity provider.",
+				Description: "Status of a webhook authenticator.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"conditions": {
@@ -311,7 +311,7 @@ func schema_apis_concierge_authentication_v1alpha1_WebhookIdentityProviderStatus
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Represents the observations of an identity provider's current state.",
+							Description: "Represents the observations of the authenticator's current state.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{

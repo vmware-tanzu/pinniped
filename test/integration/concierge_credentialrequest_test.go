@@ -29,7 +29,7 @@ func TestUnsuccessfulCredentialRequest(t *testing.T) {
 
 	response, err := makeRequest(ctx, t, validCredentialRequestSpecWithRealToken(t, corev1.TypedLocalObjectReference{
 		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
-		Kind:     "WebhookIdentityProvider",
+		Kind:     "WebhookAuthenticator",
 		Name:     "some-webhook-that-does-not-exist",
 	}))
 	require.NoError(t, err)

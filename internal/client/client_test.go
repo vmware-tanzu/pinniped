@@ -27,7 +27,7 @@ func TestExchangeToken(t *testing.T) {
 
 	testIDP := corev1.TypedLocalObjectReference{
 		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
-		Kind:     "WebhookIdentityProvider",
+		Kind:     "WebhookAuthenticator",
 		Name:     "test-webhook",
 	}
 
@@ -107,7 +107,7 @@ func TestExchangeToken(t *testing.T) {
 					"token": "test-token",
 					"identityProvider": {
 						"apiGroup": "authentication.concierge.pinniped.dev",
-						"kind": "WebhookIdentityProvider",
+						"kind": "WebhookAuthenticator",
 						"name": "test-webhook"
 					}
 				  },

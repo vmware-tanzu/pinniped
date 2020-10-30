@@ -19,7 +19,7 @@ import (
 )
 
 // New instantiates a new controllerlib.Controller which will garbage collect webhooks from the provided Cache.
-func New(cache *idpcache.Cache, webhookIDPs idpinformers.WebhookIdentityProviderInformer, log logr.Logger) controllerlib.Controller {
+func New(cache *idpcache.Cache, webhookIDPs idpinformers.WebhookAuthenticatorInformer, log logr.Logger) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "webhookcachecleaner-controller",
@@ -39,7 +39,7 @@ func New(cache *idpcache.Cache, webhookIDPs idpinformers.WebhookIdentityProvider
 
 type controller struct {
 	cache       *idpcache.Cache
-	webhookIDPs idpinformers.WebhookIdentityProviderInformer
+	webhookIDPs idpinformers.WebhookAuthenticatorInformer
 	log         logr.Logger
 }
 
@@ -47,11 +47,11 @@ type controller struct {
 func (c *controller) Sync(_ controllerlib.Context) error {
 	webhooks, err := c.webhookIDPs.Lister().List(labels.Everything())
 	if err != nil {
-		return fmt.Errorf("failed to list WebhookIdentityProviders: %w", err)
+		return fmt.Errorf("failed to list WebhookAuthenticators: %w", err)
 	}
 
 	// Index the current webhooks by key.
-	webhooksByKey := map[controllerlib.Key]*auth1alpha1.WebhookIdentityProvider{}
+	webhooksByKey := map[controllerlib.Key]*auth1alpha1.WebhookAuthenticator{}
 	for _, webhook := range webhooks {
 		key := controllerlib.Key{Namespace: webhook.Namespace, Name: webhook.Name}
 		webhooksByKey[key] = webhook
@@ -59,7 +59,7 @@ func (c *controller) Sync(_ controllerlib.Context) error {
 
 	// Delete any entries from the cache which are no longer in the cluster.
 	for _, key := range c.cache.Keys() {
-		if key.APIGroup != auth1alpha1.SchemeGroupVersion.Group || key.Kind != "WebhookIdentityProvider" {
+		if key.APIGroup != auth1alpha1.SchemeGroupVersion.Group || key.Kind != "WebhookAuthenticator" {
 			continue
 		}
 		if _, exists := webhooksByKey[controllerlib.Key{Namespace: key.Namespace, Name: key.Name}]; !exists {

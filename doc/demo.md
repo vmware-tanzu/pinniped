@@ -118,12 +118,12 @@ as the identity provider.
    If you would prefer to customize the available options, please see [deploy/concierge/README.md](../deploy/concierge/README.md)
    for instructions on how to deploy using `ytt`.
 
-1. Create a `WebhookIdentityProvider` object to configure Pinniped to authenticate using local-user-authenticator.
+1. Create a `WebhookAuthenticator` object to configure Pinniped to authenticate using local-user-authenticator.
 
     ```bash
     cat <<EOF | kubectl create --namespace pinniped -f -
     apiVersion: authentication.concierge.pinniped.dev/v1alpha1
-    kind: WebhookIdentityProvider
+    kind: WebhookAuthenticator
     metadata:
       name: local-user-authenticator
     spec:

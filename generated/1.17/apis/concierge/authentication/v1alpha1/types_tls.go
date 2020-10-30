@@ -3,7 +3,7 @@
 
 package v1alpha1
 
-// Configuration for configuring TLS on various identity providers.
+// Configuration for configuring TLS on various authenticators.
 type TLSSpec struct {
 	// X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted.
 	// +optional

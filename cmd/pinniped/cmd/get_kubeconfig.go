@@ -187,7 +187,7 @@ func getDefaultIDP(clientset pinnipedclientset.Interface, namespace string) (str
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancelFunc()
 
-	webhooks, err := clientset.AuthenticationV1alpha1().WebhookIdentityProviders(namespace).List(ctx, metav1.ListOptions{})
+	webhooks, err := clientset.AuthenticationV1alpha1().WebhookAuthenticators(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return "", "", err
 	}

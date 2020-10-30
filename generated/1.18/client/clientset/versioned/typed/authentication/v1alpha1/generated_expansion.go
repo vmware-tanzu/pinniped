@@ -5,4 +5,4 @@
 
 package v1alpha1
 
-type WebhookIdentityProviderExpansion interface{}
+type WebhookAuthenticatorExpansion interface{}

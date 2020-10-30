@@ -256,8 +256,8 @@ func TestRun(t *testing.T) {
 				cmd.flags.idpType = ""
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
 					return pinnipedfake.NewSimpleClientset(
-						&authv1alpha.WebhookIdentityProvider{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "webhook-one"}},
-						&authv1alpha.WebhookIdentityProvider{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "webhook-two"}},
+						&authv1alpha.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "webhook-one"}},
+						&authv1alpha.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "webhook-two"}},
 					), nil
 				}
 			},
@@ -349,7 +349,7 @@ func TestRun(t *testing.T) {
 
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
 					return pinnipedfake.NewSimpleClientset(
-						&authv1alpha.WebhookIdentityProvider{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "discovered-idp"}},
+						&authv1alpha.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "discovered-idp"}},
 						newCredentialIssuerConfig("pinniped-config", "test-namespace", "https://example.com", "test-ca"),
 					), nil
 				}

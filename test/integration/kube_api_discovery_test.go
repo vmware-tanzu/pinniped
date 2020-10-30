@@ -106,13 +106,12 @@ func TestGetAPIResourceList(t *testing.T) {
 			resourceByVersion: map[string][]metav1.APIResource{
 				"authentication.concierge.pinniped.dev/v1alpha1": {
 					{
-						Name:         "webhookidentityproviders",
-						SingularName: "webhookidentityprovider",
+						Name:         "webhookauthenticators",
+						SingularName: "webhookauthenticator",
 						Namespaced:   true,
-						Kind:         "WebhookIdentityProvider",
+						Kind:         "WebhookAuthenticator",
 						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
-						ShortNames:   []string{"webhookidp", "webhookidps"},
-						Categories:   []string{"all", "idp", "idps"},
+						Categories:   []string{"all", "authenticator", "authenticators"},
 					},
 				},
 			},

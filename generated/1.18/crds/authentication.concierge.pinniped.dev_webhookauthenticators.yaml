@@ -6,21 +6,18 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.0
   creationTimestamp: null
-  name: webhookidentityproviders.authentication.concierge.pinniped.dev
+  name: webhookauthenticators.authentication.concierge.pinniped.dev
 spec:
   group: authentication.concierge.pinniped.dev
   names:
     categories:
     - all
-    - idp
-    - idps
-    kind: WebhookIdentityProvider
-    listKind: WebhookIdentityProviderList
-    plural: webhookidentityproviders
-    shortNames:
-    - webhookidp
-    - webhookidps
-    singular: webhookidentityprovider
+    - authenticator
+    - authenticators
+    kind: WebhookAuthenticator
+    listKind: WebhookAuthenticatorList
+    plural: webhookauthenticators
+    singular: webhookauthenticator
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
@@ -30,8 +27,8 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: WebhookIdentityProvider describes the configuration of a Pinniped
-          webhook identity provider.
+        description: WebhookAuthenticator describes the configuration of a webhook
+          authenticator.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -46,7 +43,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: Spec for configuring the identity provider.
+            description: Spec for configuring the authenticator.
             properties:
               endpoint:
                 description: Webhook server endpoint URL.
@@ -65,11 +62,11 @@ spec:
             - endpoint
             type: object
           status:
-            description: Status of the identity provider.
+            description: Status of the authenticator.
             properties:
               conditions:
-                description: Represents the observations of an identity provider's
-                  current state.
+                description: Represents the observations of the authenticator's current
+                  state.
                 items:
                   description: Condition status of a resource (mirrored from the metav1.Condition
                     type added in Kubernetes 1.19). In a future API version we can

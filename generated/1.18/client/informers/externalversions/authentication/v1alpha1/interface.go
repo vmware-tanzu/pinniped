@@ -11,8 +11,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// WebhookIdentityProviders returns a WebhookIdentityProviderInformer.
-	WebhookIdentityProviders() WebhookIdentityProviderInformer
+	// WebhookAuthenticators returns a WebhookAuthenticatorInformer.
+	WebhookAuthenticators() WebhookAuthenticatorInformer
 }
 
 type version struct {
@@ -26,7 +26,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// WebhookIdentityProviders returns a WebhookIdentityProviderInformer.
-func (v *version) WebhookIdentityProviders() WebhookIdentityProviderInformer {
-	return &webhookIdentityProviderInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+// WebhookAuthenticators returns a WebhookAuthenticatorInformer.
+func (v *version) WebhookAuthenticators() WebhookAuthenticatorInformer {
+	return &webhookAuthenticatorInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

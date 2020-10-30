@@ -144,7 +144,7 @@ func exchangeCredential(envGetter envGetter, tokenExchanger tokenExchanger, outp
 	switch strings.ToLower(idpType) {
 	case "webhook":
 		idp.APIGroup = &auth1alpha1.SchemeGroupVersion.Group
-		idp.Kind = "WebhookIdentityProvider"
+		idp.Kind = "WebhookAuthenticator"
 	default:
 		return fmt.Errorf(`%w: %q, supported values are "webhook"`, ErrInvalidIDPType, idpType)
 	}

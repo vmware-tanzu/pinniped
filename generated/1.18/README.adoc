@@ -13,7 +13,7 @@
 [id="{anchor_prefix}-authentication-concierge-pinniped-dev-v1alpha1"]
 === authentication.concierge.pinniped.dev/v1alpha1
 
-Package v1alpha1 is the v1alpha1 version of the Pinniped identity provider API.
+Package v1alpha1 is the v1alpha1 version of the Pinniped concierge authentication API.
 
 
 
@@ -24,7 +24,7 @@ Condition status of a resource (mirrored from the metav1.Condition type added in
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookidentityproviderstatus[$$WebhookIdentityProviderStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookauthenticatorstatus[$$WebhookAuthenticatorStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -42,11 +42,11 @@ Condition status of a resource (mirrored from the metav1.Condition type added in
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-tlsspec"]
 ==== TLSSpec 
 
-Configuration for configuring TLS on various identity providers.
+Configuration for configuring TLS on various authenticators.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookidentityproviderspec[$$WebhookIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookauthenticatorspec[$$WebhookAuthenticatorSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -56,14 +56,14 @@ Configuration for configuring TLS on various identity providers.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookidentityprovider"]
-==== WebhookIdentityProvider 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookauthenticator"]
+==== WebhookAuthenticator 
 
-WebhookIdentityProvider describes the configuration of a Pinniped webhook identity provider.
+WebhookAuthenticator describes the configuration of a webhook authenticator.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookidentityproviderlist[$$WebhookIdentityProviderList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookauthenticatorlist[$$WebhookAuthenticatorList$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -71,21 +71,21 @@ WebhookIdentityProvider describes the configuration of a Pinniped webhook identi
 | Field | Description
 | *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookidentityproviderspec[$$WebhookIdentityProviderSpec$$]__ | Spec for configuring the identity provider.
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookidentityproviderstatus[$$WebhookIdentityProviderStatus$$]__ | Status of the identity provider.
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookauthenticatorspec[$$WebhookAuthenticatorSpec$$]__ | Spec for configuring the authenticator.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookauthenticatorstatus[$$WebhookAuthenticatorStatus$$]__ | Status of the authenticator.
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookidentityproviderspec"]
-==== WebhookIdentityProviderSpec 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookauthenticatorspec"]
+==== WebhookAuthenticatorSpec 
 
-Spec for configuring a webhook identity provider.
+Spec for configuring a webhook authenticator.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookidentityprovider[$$WebhookIdentityProvider$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookauthenticator[$$WebhookAuthenticator$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -96,20 +96,20 @@ Spec for configuring a webhook identity provider.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookidentityproviderstatus"]
-==== WebhookIdentityProviderStatus 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookauthenticatorstatus"]
+==== WebhookAuthenticatorStatus 
 
-Status of a webhook identity provider.
+Status of a webhook authenticator.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookidentityprovider[$$WebhookIdentityProvider$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-webhookauthenticator[$$WebhookAuthenticator$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-condition[$$Condition$$]__ | Represents the observations of an identity provider's current state.
+| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-authentication-v1alpha1-condition[$$Condition$$]__ | Represents the observations of the authenticator's current state.
 |===
 
 

@@ -26,18 +26,18 @@ const (
 type TestEnv struct {
 	t *testing.T
 
-	ConciergeNamespace             string                                  `json:"conciergeNamespace"`
-	SupervisorNamespace            string                                  `json:"supervisorNamespace"`
-	ConciergeAppName               string                                  `json:"conciergeAppName"`
-	SupervisorAppName              string                                  `json:"supervisorAppName"`
-	SupervisorCustomLabels         map[string]string                       `json:"supervisorCustomLabels"`
-	ConciergeCustomLabels          map[string]string                       `json:"conciergeCustomLabels"`
-	Capabilities                   map[Capability]bool                     `json:"capabilities"`
-	TestWebhook                    auth1alpha1.WebhookIdentityProviderSpec `json:"testWebhook"`
-	SupervisorHTTPAddress          string                                  `json:"supervisorHttpAddress"`
-	SupervisorHTTPSAddress         string                                  `json:"supervisorHttpsAddress"`
-	SupervisorHTTPSIngressAddress  string                                  `json:"supervisorHttpsIngressAddress"`
-	SupervisorHTTPSIngressCABundle string                                  `json:"supervisorHttpsIngressCABundle"`
+	ConciergeNamespace             string                               `json:"conciergeNamespace"`
+	SupervisorNamespace            string                               `json:"supervisorNamespace"`
+	ConciergeAppName               string                               `json:"conciergeAppName"`
+	SupervisorAppName              string                               `json:"supervisorAppName"`
+	SupervisorCustomLabels         map[string]string                    `json:"supervisorCustomLabels"`
+	ConciergeCustomLabels          map[string]string                    `json:"conciergeCustomLabels"`
+	Capabilities                   map[Capability]bool                  `json:"capabilities"`
+	TestWebhook                    auth1alpha1.WebhookAuthenticatorSpec `json:"testWebhook"`
+	SupervisorHTTPAddress          string                               `json:"supervisorHttpAddress"`
+	SupervisorHTTPSAddress         string                               `json:"supervisorHttpsAddress"`
+	SupervisorHTTPSIngressAddress  string                               `json:"supervisorHttpsIngressAddress"`
+	SupervisorHTTPSIngressCABundle string                               `json:"supervisorHttpsIngressCABundle"`
 
 	TestUser struct {
 		Token            string   `json:"token"`

@@ -13,7 +13,7 @@ import (
 
 type AuthenticationV1alpha1Interface interface {
 	RESTClient() rest.Interface
-	WebhookIdentityProvidersGetter
+	WebhookAuthenticatorsGetter
 }
 
 // AuthenticationV1alpha1Client is used to interact with features provided by the authentication.concierge.pinniped.dev group.
@@ -21,8 +21,8 @@ type AuthenticationV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *AuthenticationV1alpha1Client) WebhookIdentityProviders(namespace string) WebhookIdentityProviderInterface {
-	return newWebhookIdentityProviders(c, namespace)
+func (c *AuthenticationV1alpha1Client) WebhookAuthenticators(namespace string) WebhookAuthenticatorInterface {
+	return newWebhookAuthenticators(c, namespace)
 }
 
 // NewForConfig creates a new AuthenticationV1alpha1Client for the given config.

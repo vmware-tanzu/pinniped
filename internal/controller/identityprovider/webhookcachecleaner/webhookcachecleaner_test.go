@@ -25,13 +25,13 @@ func TestController(t *testing.T) {
 
 	testKey1 := idpcache.Key{
 		APIGroup:  "authentication.concierge.pinniped.dev",
-		Kind:      "WebhookIdentityProvider",
+		Kind:      "WebhookAuthenticator",
 		Namespace: "test-namespace",
 		Name:      "test-name-one",
 	}
 	testKey2 := idpcache.Key{
 		APIGroup:  "authentication.concierge.pinniped.dev",
-		Kind:      "WebhookIdentityProvider",
+		Kind:      "WebhookAuthenticator",
 		Namespace: "test-namespace",
 		Name:      "test-name-two",
 	}
@@ -54,7 +54,7 @@ func TestController(t *testing.T) {
 			name:         "no change",
 			initialCache: map[idpcache.Key]idpcache.Value{testKey1: nil},
 			webhookIDPs: []runtime.Object{
-				&authv1alpha.WebhookIdentityProvider{
+				&authv1alpha.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: testKey1.Namespace,
 						Name:      testKey1.Name,
@@ -67,13 +67,13 @@ func TestController(t *testing.T) {
 			name:         "IDPs not yet added",
 			initialCache: nil,
 			webhookIDPs: []runtime.Object{
-				&authv1alpha.WebhookIdentityProvider{
+				&authv1alpha.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: testKey1.Namespace,
 						Name:      testKey1.Name,
 					},
 				},
-				&authv1alpha.WebhookIdentityProvider{
+				&authv1alpha.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: testKey2.Namespace,
 						Name:      testKey2.Name,
@@ -90,7 +90,7 @@ func TestController(t *testing.T) {
 				testKeyNonwebhook: nil,
 			},
 			webhookIDPs: []runtime.Object{
-				&authv1alpha.WebhookIdentityProvider{
+				&authv1alpha.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: testKey1.Namespace,
 						Name:      testKey1.Name,
@@ -116,7 +116,7 @@ func TestController(t *testing.T) {
 			}
 			testLog := testlogger.New(t)
 
-			controller := New(cache, informers.Authentication().V1alpha1().WebhookIdentityProviders(), testLog)
+			controller := New(cache, informers.Authentication().V1alpha1().WebhookAuthenticators(), testLog)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()

@@ -77,7 +77,7 @@ func TestAuthenticateTokenCredentialRequest(t *testing.T) {
 		Spec: loginapi.TokenCredentialRequestSpec{
 			IdentityProvider: corev1.TypedLocalObjectReference{
 				APIGroup: &authv1alpha.SchemeGroupVersion.Group,
-				Kind:     "WebhookIdentityProvider",
+				Kind:     "WebhookAuthenticator",
 				Name:     "test-name",
 			},
 			Token: "test-token",

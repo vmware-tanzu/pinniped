@@ -15,8 +15,8 @@ type FakeAuthenticationV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeAuthenticationV1alpha1) WebhookIdentityProviders(namespace string) v1alpha1.WebhookIdentityProviderInterface {
-	return &FakeWebhookIdentityProviders{c, namespace}
+func (c *FakeAuthenticationV1alpha1) WebhookAuthenticators(namespace string) v1alpha1.WebhookAuthenticatorInterface {
+	return &FakeWebhookAuthenticators{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

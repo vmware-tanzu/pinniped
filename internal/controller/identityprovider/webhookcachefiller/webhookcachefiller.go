@@ -1,7 +1,7 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package webhookcachefiller implements a controller for filling an idpcache.Cache with each added/updated WebhookIdentityProvider.
+// Package webhookcachefiller implements a controller for filling an idpcache.Cache with each added/updated WebhookAuthenticator.
 package webhookcachefiller
 
 import (
@@ -28,7 +28,7 @@ import (
 )
 
 // New instantiates a new controllerlib.Controller which will populate the provided idpcache.Cache.
-func New(cache *idpcache.Cache, webhookIDPs idpinformers.WebhookIdentityProviderInformer, log logr.Logger) controllerlib.Controller {
+func New(cache *idpcache.Cache, webhookIDPs idpinformers.WebhookAuthenticatorInformer, log logr.Logger) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "webhookcachefiller-controller",
@@ -48,19 +48,19 @@ func New(cache *idpcache.Cache, webhookIDPs idpinformers.WebhookIdentityProvider
 
 type controller struct {
 	cache       *idpcache.Cache
-	webhookIDPs idpinformers.WebhookIdentityProviderInformer
+	webhookIDPs idpinformers.WebhookAuthenticatorInformer
 	log         logr.Logger
 }
 
 // Sync implements controllerlib.Syncer.
 func (c *controller) Sync(ctx controllerlib.Context) error {
-	obj, err := c.webhookIDPs.Lister().WebhookIdentityProviders(ctx.Key.Namespace).Get(ctx.Key.Name)
+	obj, err := c.webhookIDPs.Lister().WebhookAuthenticators(ctx.Key.Namespace).Get(ctx.Key.Name)
 	if err != nil && errors.IsNotFound(err) {
-		c.log.Info("Sync() found that the WebhookIdentityProvider does not exist yet or was deleted")
+		c.log.Info("Sync() found that the WebhookAuthenticator does not exist yet or was deleted")
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("failed to get WebhookIdentityProvider %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
+		return fmt.Errorf("failed to get WebhookAuthenticator %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
 	}
 
 	webhookAuthenticator, err := newWebhookAuthenticator(&obj.Spec, ioutil.TempFile, clientcmd.WriteToFile)
@@ -70,7 +70,7 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 
 	c.cache.Store(idpcache.Key{
 		APIGroup:  auth1alpha1.GroupName,
-		Kind:      "WebhookIdentityProvider",
+		Kind:      "WebhookAuthenticator",
 		Namespace: ctx.Key.Namespace,
 		Name:      ctx.Key.Name,
 	}, webhookAuthenticator)
@@ -81,7 +81,7 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 // newWebhookAuthenticator creates a webhook from the provided API server url and caBundle
 // used to validate TLS connections.
 func newWebhookAuthenticator(
-	spec *auth1alpha1.WebhookIdentityProviderSpec,
+	spec *auth1alpha1.WebhookAuthenticatorSpec,
 	tempfileFunc func(string, string) (*os.File, error),
 	marshalFunc func(clientcmdapi.Config, string) error,
 ) (*webhook.WebhookTokenAuthenticator, error) {

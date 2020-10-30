@@ -5,10 +5,10 @@
 
 package v1alpha1
 
-// WebhookIdentityProviderListerExpansion allows custom methods to be added to
-// WebhookIdentityProviderLister.
-type WebhookIdentityProviderListerExpansion interface{}
+// WebhookAuthenticatorListerExpansion allows custom methods to be added to
+// WebhookAuthenticatorLister.
+type WebhookAuthenticatorListerExpansion interface{}
 
-// WebhookIdentityProviderNamespaceListerExpansion allows custom methods to be added to
-// WebhookIdentityProviderNamespaceLister.
-type WebhookIdentityProviderNamespaceListerExpansion interface{}
+// WebhookAuthenticatorNamespaceListerExpansion allows custom methods to be added to
+// WebhookAuthenticatorNamespaceLister.
+type WebhookAuthenticatorNamespaceListerExpansion interface{}

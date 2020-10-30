@@ -20,8 +20,8 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/klog/v2"
 
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
-	idpinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions/idp/v1alpha1"
+	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
+	idpinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions/authentication/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
 	"go.pinniped.dev/internal/controllerlib"
@@ -69,7 +69,7 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 	}
 
 	c.cache.Store(idpcache.Key{
-		APIGroup:  idpv1alpha1.GroupName,
+		APIGroup:  auth1alpha1.GroupName,
 		Kind:      "WebhookIdentityProvider",
 		Namespace: ctx.Key.Namespace,
 		Name:      ctx.Key.Name,
@@ -81,7 +81,7 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 // newWebhookAuthenticator creates a webhook from the provided API server url and caBundle
 // used to validate TLS connections.
 func newWebhookAuthenticator(
-	spec *idpv1alpha1.WebhookIdentityProviderSpec,
+	spec *auth1alpha1.WebhookIdentityProviderSpec,
 	tempfileFunc func(string, string) (*os.File, error),
 	marshalFunc func(clientcmdapi.Config, string) error,
 ) (*webhook.WebhookTokenAuthenticator, error) {
@@ -122,7 +122,7 @@ func newWebhookAuthenticator(
 	return webhook.New(temp.Name(), version, implicitAuds, customDial)
 }
 
-func getCABundle(spec *idpv1alpha1.TLSSpec) ([]byte, error) {
+func getCABundle(spec *auth1alpha1.TLSSpec) ([]byte, error) {
 	if spec == nil {
 		return nil, nil
 	}

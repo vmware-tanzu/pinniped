@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
 
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
+	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 )
 
 type Capability string
@@ -33,7 +33,7 @@ type TestEnv struct {
 	SupervisorCustomLabels         map[string]string                       `json:"supervisorCustomLabels"`
 	ConciergeCustomLabels          map[string]string                       `json:"conciergeCustomLabels"`
 	Capabilities                   map[Capability]bool                     `json:"capabilities"`
-	TestWebhook                    idpv1alpha1.WebhookIdentityProviderSpec `json:"testWebhook"`
+	TestWebhook                    auth1alpha1.WebhookIdentityProviderSpec `json:"testWebhook"`
 	SupervisorHTTPAddress          string                                  `json:"supervisorHttpAddress"`
 	SupervisorHTTPSAddress         string                                  `json:"supervisorHttpsAddress"`
 	SupervisorHTTPSIngressAddress  string                                  `json:"supervisorHttpsIngressAddress"`
@@ -100,7 +100,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 	result.TestWebhook.Endpoint = needEnv(t, "PINNIPED_TEST_WEBHOOK_ENDPOINT")
 	result.SupervisorNamespace = needEnv(t, "PINNIPED_TEST_SUPERVISOR_NAMESPACE")
 	result.SupervisorAppName = needEnv(t, "PINNIPED_TEST_SUPERVISOR_APP_NAME")
-	result.TestWebhook.TLS = &idpv1alpha1.TLSSpec{CertificateAuthorityData: needEnv(t, "PINNIPED_TEST_WEBHOOK_CA_BUNDLE")}
+	result.TestWebhook.TLS = &auth1alpha1.TLSSpec{CertificateAuthorityData: needEnv(t, "PINNIPED_TEST_WEBHOOK_CA_BUNDLE")}
 
 	result.SupervisorHTTPAddress = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS")
 	result.SupervisorHTTPSIngressAddress = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_ADDRESS")

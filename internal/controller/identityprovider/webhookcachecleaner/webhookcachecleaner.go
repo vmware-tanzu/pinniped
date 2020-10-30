@@ -11,8 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
-	idpinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions/idp/v1alpha1"
+	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
+	idpinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions/authentication/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
 	"go.pinniped.dev/internal/controllerlib"
@@ -51,7 +51,7 @@ func (c *controller) Sync(_ controllerlib.Context) error {
 	}
 
 	// Index the current webhooks by key.
-	webhooksByKey := map[controllerlib.Key]*idpv1alpha1.WebhookIdentityProvider{}
+	webhooksByKey := map[controllerlib.Key]*auth1alpha1.WebhookIdentityProvider{}
 	for _, webhook := range webhooks {
 		key := controllerlib.Key{Namespace: webhook.Namespace, Name: webhook.Name}
 		webhooksByKey[key] = webhook
@@ -59,7 +59,7 @@ func (c *controller) Sync(_ controllerlib.Context) error {
 
 	// Delete any entries from the cache which are no longer in the cluster.
 	for _, key := range c.cache.Keys() {
-		if key.APIGroup != idpv1alpha1.SchemeGroupVersion.Group || key.Kind != "WebhookIdentityProvider" {
+		if key.APIGroup != auth1alpha1.SchemeGroupVersion.Group || key.Kind != "WebhookIdentityProvider" {
 			continue
 		}
 		if _, exists := webhooksByKey[controllerlib.Key{Namespace: key.Namespace, Name: key.Name}]; !exists {

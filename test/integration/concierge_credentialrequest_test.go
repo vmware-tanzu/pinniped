@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
+	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/test/library"
 )
@@ -28,7 +28,7 @@ func TestUnsuccessfulCredentialRequest(t *testing.T) {
 	defer cancel()
 
 	response, err := makeRequest(ctx, t, validCredentialRequestSpecWithRealToken(t, corev1.TypedLocalObjectReference{
-		APIGroup: &idpv1alpha1.SchemeGroupVersion.Group,
+		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
 		Kind:     "WebhookIdentityProvider",
 		Name:     "some-webhook-that-does-not-exist",
 	}))

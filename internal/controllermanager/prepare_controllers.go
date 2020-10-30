@@ -232,7 +232,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		WithController(
 			webhookcachefiller.New(
 				c.IDPCache,
-				informers.installationNamespacePinniped.IDP().V1alpha1().WebhookIdentityProviders(),
+				informers.installationNamespacePinniped.Authentication().V1alpha1().WebhookIdentityProviders(),
 				klogr.New(),
 			),
 			singletonWorker,
@@ -240,7 +240,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		WithController(
 			webhookcachecleaner.New(
 				c.IDPCache,
-				informers.installationNamespacePinniped.IDP().V1alpha1().WebhookIdentityProviders(),
+				informers.installationNamespacePinniped.Authentication().V1alpha1().WebhookIdentityProviders(),
 				klogr.New(),
 			),
 			singletonWorker,

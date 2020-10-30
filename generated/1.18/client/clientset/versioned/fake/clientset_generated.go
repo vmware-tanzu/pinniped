@@ -7,10 +7,10 @@ package fake
 
 import (
 	clientset "go.pinniped.dev/generated/1.18/client/clientset/versioned"
+	authenticationv1alpha1 "go.pinniped.dev/generated/1.18/client/clientset/versioned/typed/authentication/v1alpha1"
+	fakeauthenticationv1alpha1 "go.pinniped.dev/generated/1.18/client/clientset/versioned/typed/authentication/v1alpha1/fake"
 	configv1alpha1 "go.pinniped.dev/generated/1.18/client/clientset/versioned/typed/config/v1alpha1"
 	fakeconfigv1alpha1 "go.pinniped.dev/generated/1.18/client/clientset/versioned/typed/config/v1alpha1/fake"
-	idpv1alpha1 "go.pinniped.dev/generated/1.18/client/clientset/versioned/typed/idp/v1alpha1"
-	fakeidpv1alpha1 "go.pinniped.dev/generated/1.18/client/clientset/versioned/typed/idp/v1alpha1/fake"
 	loginv1alpha1 "go.pinniped.dev/generated/1.18/client/clientset/versioned/typed/login/v1alpha1"
 	fakeloginv1alpha1 "go.pinniped.dev/generated/1.18/client/clientset/versioned/typed/login/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -67,14 +67,14 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 
 var _ clientset.Interface = &Clientset{}
 
+// AuthenticationV1alpha1 retrieves the AuthenticationV1alpha1Client
+func (c *Clientset) AuthenticationV1alpha1() authenticationv1alpha1.AuthenticationV1alpha1Interface {
+	return &fakeauthenticationv1alpha1.FakeAuthenticationV1alpha1{Fake: &c.Fake}
+}
+
 // ConfigV1alpha1 retrieves the ConfigV1alpha1Client
 func (c *Clientset) ConfigV1alpha1() configv1alpha1.ConfigV1alpha1Interface {
 	return &fakeconfigv1alpha1.FakeConfigV1alpha1{Fake: &c.Fake}
-}
-
-// IDPV1alpha1 retrieves the IDPV1alpha1Client
-func (c *Clientset) IDPV1alpha1() idpv1alpha1.IDPV1alpha1Interface {
-	return &fakeidpv1alpha1.FakeIDPV1alpha1{Fake: &c.Fake}
 }
 
 // LoginV1alpha1 retrieves the LoginV1alpha1Client

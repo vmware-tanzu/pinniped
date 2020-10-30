@@ -19,7 +19,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
+	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
 	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
@@ -50,12 +50,12 @@ func TestController(t *testing.T) {
 			name:    "invalid webhook",
 			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
 			webhookIDPs: []runtime.Object{
-				&idpv1alpha1.WebhookIdentityProvider{
+				&auth1alpha1.WebhookIdentityProvider{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "test-namespace",
 						Name:      "test-name",
 					},
-					Spec: idpv1alpha1.WebhookIdentityProviderSpec{
+					Spec: auth1alpha1.WebhookIdentityProviderSpec{
 						Endpoint: "invalid url",
 					},
 				},
@@ -66,14 +66,14 @@ func TestController(t *testing.T) {
 			name:    "valid webhook",
 			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
 			webhookIDPs: []runtime.Object{
-				&idpv1alpha1.WebhookIdentityProvider{
+				&auth1alpha1.WebhookIdentityProvider{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "test-namespace",
 						Name:      "test-name",
 					},
-					Spec: idpv1alpha1.WebhookIdentityProviderSpec{
+					Spec: auth1alpha1.WebhookIdentityProviderSpec{
 						Endpoint: "https://example.com",
-						TLS:      &idpv1alpha1.TLSSpec{CertificateAuthorityData: ""},
+						TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: ""},
 					},
 				},
 			},
@@ -93,7 +93,7 @@ func TestController(t *testing.T) {
 			cache := idpcache.New()
 			testLog := testlogger.New(t)
 
-			controller := New(cache, informers.IDP().V1alpha1().WebhookIdentityProviders(), testLog)
+			controller := New(cache, informers.Authentication().V1alpha1().WebhookIdentityProviders(), testLog)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
@@ -124,22 +124,22 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 
 	t.Run("marshal failure", func(t *testing.T) {
 		marshalError := func(_ clientcmdapi.Config, _ string) error { return fmt.Errorf("some marshal error") }
-		res, err := newWebhookAuthenticator(&idpv1alpha1.WebhookIdentityProviderSpec{}, ioutil.TempFile, marshalError)
+		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookIdentityProviderSpec{}, ioutil.TempFile, marshalError)
 		require.Nil(t, res)
 		require.EqualError(t, err, "unable to marshal kubeconfig: some marshal error")
 	})
 
 	t.Run("invalid base64", func(t *testing.T) {
-		res, err := newWebhookAuthenticator(&idpv1alpha1.WebhookIdentityProviderSpec{
+		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookIdentityProviderSpec{
 			Endpoint: "https://example.com",
-			TLS:      &idpv1alpha1.TLSSpec{CertificateAuthorityData: "invalid-base64"},
+			TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: "invalid-base64"},
 		}, ioutil.TempFile, clientcmd.WriteToFile)
 		require.Nil(t, res)
 		require.EqualError(t, err, "invalid TLS configuration: illegal base64 data at input byte 7")
 	})
 
 	t.Run("valid config with no TLS spec", func(t *testing.T) {
-		res, err := newWebhookAuthenticator(&idpv1alpha1.WebhookIdentityProviderSpec{
+		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookIdentityProviderSpec{
 			Endpoint: "https://example.com",
 		}, ioutil.TempFile, clientcmd.WriteToFile)
 		require.NotNil(t, res)
@@ -154,9 +154,9 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 			_, err = w.Write([]byte(`{}`))
 			require.NoError(t, err)
 		})
-		spec := &idpv1alpha1.WebhookIdentityProviderSpec{
+		spec := &auth1alpha1.WebhookIdentityProviderSpec{
 			Endpoint: url,
-			TLS: &idpv1alpha1.TLSSpec{
+			TLS: &auth1alpha1.TLSSpec{
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(caBundle)),
 			},
 		}

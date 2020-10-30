@@ -170,7 +170,7 @@ k8s_resource(
         'pinniped-concierge:clusterrolebinding',
         'pinniped-concierge:serviceaccount',
         'credentialissuerconfigs.config.pinniped.dev:customresourcedefinition',
-        'webhookidentityproviders.idp.concierge.pinniped.dev:customresourcedefinition',
+        'webhookidentityproviders.authentication.concierge.pinniped.dev:customresourcedefinition',
         'v1alpha1.login.concierge.pinniped.dev:apiservice',
     ],
 )

@@ -59,7 +59,7 @@ rules:
   - apiGroups: [ "" ]
     resources: [ pods/exec ]
     verbs: [ create ]
-  - apiGroups: [ config.pinniped.dev, idp.concierge.pinniped.dev ]
+  - apiGroups: [ config.pinniped.dev, authentication.concierge.pinniped.dev ]
     resources: [ "*" ]
     verbs: [ create, get, list, update, watch ]
 ---

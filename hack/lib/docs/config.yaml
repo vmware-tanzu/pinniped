@@ -4,7 +4,7 @@ processor:
   #  Ignore internal API versions
   ignoreGroupVersions:
     - "config.pinniped.dev/config"
-    - "idp.concierge.pinniped.dev/idp"
+    - "authentication.concierge.pinniped.dev/authentication"
     - "login.concierge.pinniped.dev/login"
   ignoreFields:
     - "TypeMeta$"

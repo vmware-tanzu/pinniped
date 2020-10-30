@@ -91,20 +91,20 @@ func TestGetAPIResourceList(t *testing.T) {
 		},
 		{
 			group: metav1.APIGroup{
-				Name: "idp.concierge.pinniped.dev",
+				Name: "authentication.concierge.pinniped.dev",
 				Versions: []metav1.GroupVersionForDiscovery{
 					{
-						GroupVersion: "idp.concierge.pinniped.dev/v1alpha1",
+						GroupVersion: "authentication.concierge.pinniped.dev/v1alpha1",
 						Version:      "v1alpha1",
 					},
 				},
 				PreferredVersion: metav1.GroupVersionForDiscovery{
-					GroupVersion: "idp.concierge.pinniped.dev/v1alpha1",
+					GroupVersion: "authentication.concierge.pinniped.dev/v1alpha1",
 					Version:      "v1alpha1",
 				},
 			},
 			resourceByVersion: map[string][]metav1.APIResource{
-				"idp.concierge.pinniped.dev/v1alpha1": {
+				"authentication.concierge.pinniped.dev/v1alpha1": {
 					{
 						Name:         "webhookidentityproviders",
 						SingularName: "webhookidentityprovider",

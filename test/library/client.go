@@ -23,7 +23,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
+	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 
@@ -127,12 +127,12 @@ func CreateTestWebhookIDP(ctx context.Context, t *testing.T) corev1.TypedLocalOb
 	testEnv := IntegrationEnv(t)
 
 	client := NewPinnipedClientset(t)
-	webhooks := client.IDPV1alpha1().WebhookIdentityProviders(testEnv.ConciergeNamespace)
+	webhooks := client.AuthenticationV1alpha1().WebhookIdentityProviders(testEnv.ConciergeNamespace)
 
 	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	idp, err := webhooks.Create(createContext, &idpv1alpha1.WebhookIdentityProvider{
+	idp, err := webhooks.Create(createContext, &auth1alpha1.WebhookIdentityProvider{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-webhook-",
 			Labels:       map[string]string{"pinniped.dev/test": ""},
@@ -153,7 +153,7 @@ func CreateTestWebhookIDP(ctx context.Context, t *testing.T) corev1.TypedLocalOb
 	})
 
 	return corev1.TypedLocalObjectReference{
-		APIGroup: &idpv1alpha1.SchemeGroupVersion.Group,
+		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
 		Kind:     "WebhookIdentityProvider",
 		Name:     idp.Name,
 	}

@@ -6,7 +6,7 @@
 package fake
 
 import (
-	idpv1alpha1 "go.pinniped.dev/generated/1.18/apis/concierge/idp/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/1.18/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/1.18/apis/concierge/login/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/1.18/apis/config/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,8 +20,8 @@ var scheme = runtime.NewScheme()
 var codecs = serializer.NewCodecFactory(scheme)
 var parameterCodec = runtime.NewParameterCodec(scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
+	authenticationv1alpha1.AddToScheme,
 	configv1alpha1.AddToScheme,
-	idpv1alpha1.AddToScheme,
 	loginv1alpha1.AddToScheme,
 }
 

@@ -16,7 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
+	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -26,7 +26,7 @@ func TestExchangeToken(t *testing.T) {
 	ctx := context.Background()
 
 	testIDP := corev1.TypedLocalObjectReference{
-		APIGroup: &idpv1alpha1.SchemeGroupVersion.Group,
+		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
 		Kind:     "WebhookIdentityProvider",
 		Name:     "test-webhook",
 	}
@@ -106,7 +106,7 @@ func TestExchangeToken(t *testing.T) {
 				  "spec": {
 					"token": "test-token",
 					"identityProvider": {
-						"apiGroup": "idp.concierge.pinniped.dev",
+						"apiGroup": "authentication.concierge.pinniped.dev",
 						"kind": "WebhookIdentityProvider",
 						"name": "test-webhook"
 					}

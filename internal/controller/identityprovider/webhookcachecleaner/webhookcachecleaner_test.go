@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	idpv1alpha "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
+	authv1alpha "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
 	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
@@ -24,19 +24,19 @@ func TestController(t *testing.T) {
 	t.Parallel()
 
 	testKey1 := idpcache.Key{
-		APIGroup:  "idp.concierge.pinniped.dev",
+		APIGroup:  "authentication.concierge.pinniped.dev",
 		Kind:      "WebhookIdentityProvider",
 		Namespace: "test-namespace",
 		Name:      "test-name-one",
 	}
 	testKey2 := idpcache.Key{
-		APIGroup:  "idp.concierge.pinniped.dev",
+		APIGroup:  "authentication.concierge.pinniped.dev",
 		Kind:      "WebhookIdentityProvider",
 		Namespace: "test-namespace",
 		Name:      "test-name-two",
 	}
 	testKeyNonwebhook := idpcache.Key{
-		APIGroup:  "idp.concierge.pinniped.dev",
+		APIGroup:  "authentication.concierge.pinniped.dev",
 		Kind:      "SomeOtherIdentityProvider",
 		Namespace: "test-namespace",
 		Name:      "test-name-one",
@@ -54,7 +54,7 @@ func TestController(t *testing.T) {
 			name:         "no change",
 			initialCache: map[idpcache.Key]idpcache.Value{testKey1: nil},
 			webhookIDPs: []runtime.Object{
-				&idpv1alpha.WebhookIdentityProvider{
+				&authv1alpha.WebhookIdentityProvider{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: testKey1.Namespace,
 						Name:      testKey1.Name,
@@ -67,13 +67,13 @@ func TestController(t *testing.T) {
 			name:         "IDPs not yet added",
 			initialCache: nil,
 			webhookIDPs: []runtime.Object{
-				&idpv1alpha.WebhookIdentityProvider{
+				&authv1alpha.WebhookIdentityProvider{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: testKey1.Namespace,
 						Name:      testKey1.Name,
 					},
 				},
-				&idpv1alpha.WebhookIdentityProvider{
+				&authv1alpha.WebhookIdentityProvider{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: testKey2.Namespace,
 						Name:      testKey2.Name,
@@ -90,7 +90,7 @@ func TestController(t *testing.T) {
 				testKeyNonwebhook: nil,
 			},
 			webhookIDPs: []runtime.Object{
-				&idpv1alpha.WebhookIdentityProvider{
+				&authv1alpha.WebhookIdentityProvider{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: testKey1.Namespace,
 						Name:      testKey1.Name,
@@ -116,7 +116,7 @@ func TestController(t *testing.T) {
 			}
 			testLog := testlogger.New(t)
 
-			controller := New(cache, informers.IDP().V1alpha1().WebhookIdentityProviders(), testLog)
+			controller := New(cache, informers.Authentication().V1alpha1().WebhookIdentityProviders(), testLog)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()

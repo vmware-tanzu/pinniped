@@ -17,7 +17,7 @@ import (
 	"k8s.io/client-go/rest"
 	coretesting "k8s.io/client-go/testing"
 
-	idpv1alpha "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
+	authv1alpha "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
@@ -256,8 +256,8 @@ func TestRun(t *testing.T) {
 				cmd.flags.idpType = ""
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
 					return pinnipedfake.NewSimpleClientset(
-						&idpv1alpha.WebhookIdentityProvider{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "webhook-one"}},
-						&idpv1alpha.WebhookIdentityProvider{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "webhook-two"}},
+						&authv1alpha.WebhookIdentityProvider{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "webhook-one"}},
+						&authv1alpha.WebhookIdentityProvider{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "webhook-two"}},
 					), nil
 				}
 			},
@@ -349,7 +349,7 @@ func TestRun(t *testing.T) {
 
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
 					return pinnipedfake.NewSimpleClientset(
-						&idpv1alpha.WebhookIdentityProvider{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "discovered-idp"}},
+						&authv1alpha.WebhookIdentityProvider{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "discovered-idp"}},
 						newCredentialIssuerConfig("pinniped-config", "test-namespace", "https://example.com", "test-ca"),
 					), nil
 				}

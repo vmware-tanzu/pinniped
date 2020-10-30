@@ -16,7 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
+	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 	"go.pinniped.dev/internal/client"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/here"
@@ -143,7 +143,7 @@ func exchangeCredential(envGetter envGetter, tokenExchanger tokenExchanger, outp
 	idp := corev1.TypedLocalObjectReference{Name: idpName}
 	switch strings.ToLower(idpType) {
 	case "webhook":
-		idp.APIGroup = &idpv1alpha1.SchemeGroupVersion.Group
+		idp.APIGroup = &auth1alpha1.SchemeGroupVersion.Group
 		idp.Kind = "WebhookIdentityProvider"
 	default:
 		return fmt.Errorf(`%w: %q, supported values are "webhook"`, ErrInvalidIDPType, idpType)

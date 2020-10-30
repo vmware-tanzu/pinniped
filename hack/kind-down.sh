@@ -4,8 +4,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
-ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
+ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 cd "${ROOT}"
 
 kind delete cluster --name pinniped

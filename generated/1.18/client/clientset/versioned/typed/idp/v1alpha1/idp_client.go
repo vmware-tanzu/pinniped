@@ -6,7 +6,7 @@
 package v1alpha1
 
 import (
-	v1alpha1 "go.pinniped.dev/generated/1.18/apis/idp/v1alpha1"
+	v1alpha1 "go.pinniped.dev/generated/1.18/apis/concierge/idp/v1alpha1"
 	"go.pinniped.dev/generated/1.18/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
@@ -16,7 +16,7 @@ type IDPV1alpha1Interface interface {
 	WebhookIdentityProvidersGetter
 }
 
-// IDPV1alpha1Client is used to interact with features provided by the idp.pinniped.dev group.
+// IDPV1alpha1Client is used to interact with features provided by the idp.concierge.pinniped.dev group.
 type IDPV1alpha1Client struct {
 	restClient rest.Interface
 }

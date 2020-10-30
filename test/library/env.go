@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
 
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
 )
 
 type Capability string

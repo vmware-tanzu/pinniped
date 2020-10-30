@@ -23,8 +23,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 
 	// Import to initialize client auth plugins - the kubeconfig that we use for

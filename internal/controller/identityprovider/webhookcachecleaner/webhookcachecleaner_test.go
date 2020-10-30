@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	idpv1alpha "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
+	idpv1alpha "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
 	"go.pinniped.dev/internal/controller/identityprovider/idpcache"
@@ -24,19 +24,19 @@ func TestController(t *testing.T) {
 	t.Parallel()
 
 	testKey1 := idpcache.Key{
-		APIGroup:  "idp.pinniped.dev",
+		APIGroup:  "idp.concierge.pinniped.dev",
 		Kind:      "WebhookIdentityProvider",
 		Namespace: "test-namespace",
 		Name:      "test-name-one",
 	}
 	testKey2 := idpcache.Key{
-		APIGroup:  "idp.pinniped.dev",
+		APIGroup:  "idp.concierge.pinniped.dev",
 		Kind:      "WebhookIdentityProvider",
 		Namespace: "test-namespace",
 		Name:      "test-name-two",
 	}
 	testKeyNonwebhook := idpcache.Key{
-		APIGroup:  "idp.pinniped.dev",
+		APIGroup:  "idp.concierge.pinniped.dev",
 		Kind:      "SomeOtherIdentityProvider",
 		Namespace: "test-namespace",
 		Name:      "test-name-one",

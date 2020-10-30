@@ -6,7 +6,7 @@
 
 .Packages
 - xref:{anchor_prefix}-config-pinniped-dev-v1alpha1[$$config.pinniped.dev/v1alpha1$$]
-- xref:{anchor_prefix}-idp-pinniped-dev-v1alpha1[$$idp.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-idp-concierge-pinniped-dev-v1alpha1[$$idp.concierge.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-login-concierge-pinniped-dev-v1alpha1[$$login.concierge.pinniped.dev/v1alpha1$$]
 
 
@@ -161,21 +161,21 @@ OIDCProviderConfigStatus is a struct that describes the actual state of an OIDC 
 
 
 
-[id="{anchor_prefix}-idp-pinniped-dev-v1alpha1"]
-=== idp.pinniped.dev/v1alpha1
+[id="{anchor_prefix}-idp-concierge-pinniped-dev-v1alpha1"]
+=== idp.concierge.pinniped.dev/v1alpha1
 
 Package v1alpha1 is the v1alpha1 version of the Pinniped identity provider API.
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-idp-v1alpha1-condition"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-idp-v1alpha1-condition"]
 ==== Condition 
 
 Condition status of a resource (mirrored from the metav1.Condition type added in Kubernetes 1.19). In a future API version we can switch to using the upstream type. See https://github.com/kubernetes/apimachinery/blob/v0.19.0/pkg/apis/meta/v1/types.go#L1353-L1413.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-idp-v1alpha1-webhookidentityproviderstatus[$$WebhookIdentityProviderStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-idp-v1alpha1-webhookidentityproviderstatus[$$WebhookIdentityProviderStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -190,14 +190,14 @@ Condition status of a resource (mirrored from the metav1.Condition type added in
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-idp-v1alpha1-tlsspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-idp-v1alpha1-tlsspec"]
 ==== TLSSpec 
 
 Configuration for configuring TLS on various identity providers.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-idp-v1alpha1-webhookidentityproviderspec[$$WebhookIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-idp-v1alpha1-webhookidentityproviderspec[$$WebhookIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -207,14 +207,14 @@ Configuration for configuring TLS on various identity providers.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-idp-v1alpha1-webhookidentityprovider"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-idp-v1alpha1-webhookidentityprovider"]
 ==== WebhookIdentityProvider 
 
 WebhookIdentityProvider describes the configuration of a Pinniped webhook identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-idp-v1alpha1-webhookidentityproviderlist[$$WebhookIdentityProviderList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-idp-v1alpha1-webhookidentityproviderlist[$$WebhookIdentityProviderList$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -222,45 +222,45 @@ WebhookIdentityProvider describes the configuration of a Pinniped webhook identi
 | Field | Description
 | *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-idp-v1alpha1-webhookidentityproviderspec[$$WebhookIdentityProviderSpec$$]__ | Spec for configuring the identity provider.
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-idp-v1alpha1-webhookidentityproviderstatus[$$WebhookIdentityProviderStatus$$]__ | Status of the identity provider.
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-idp-v1alpha1-webhookidentityproviderspec[$$WebhookIdentityProviderSpec$$]__ | Spec for configuring the identity provider.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-idp-v1alpha1-webhookidentityproviderstatus[$$WebhookIdentityProviderStatus$$]__ | Status of the identity provider.
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-idp-v1alpha1-webhookidentityproviderspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-idp-v1alpha1-webhookidentityproviderspec"]
 ==== WebhookIdentityProviderSpec 
 
 Spec for configuring a webhook identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-idp-v1alpha1-webhookidentityprovider[$$WebhookIdentityProvider$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-idp-v1alpha1-webhookidentityprovider[$$WebhookIdentityProvider$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
 | *`endpoint`* __string__ | Webhook server endpoint URL.
-| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration.
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-idp-v1alpha1-webhookidentityproviderstatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-idp-v1alpha1-webhookidentityproviderstatus"]
 ==== WebhookIdentityProviderStatus 
 
 Status of a webhook identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-idp-v1alpha1-webhookidentityprovider[$$WebhookIdentityProvider$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-idp-v1alpha1-webhookidentityprovider[$$WebhookIdentityProvider$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-idp-v1alpha1-condition[$$Condition$$]__ | Represents the observations of an identity provider's current state.
+| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-idp-v1alpha1-condition[$$Condition$$]__ | Represents the observations of an identity provider's current state.
 |===
 
 

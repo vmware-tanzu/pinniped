@@ -6,9 +6,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.0
   creationTimestamp: null
-  name: webhookidentityproviders.idp.pinniped.dev
+  name: webhookidentityproviders.idp.concierge.pinniped.dev
 spec:
-  group: idp.pinniped.dev
+  group: idp.concierge.pinniped.dev
   names:
     categories:
     - all

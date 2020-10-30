@@ -8,9 +8,9 @@ package externalversions
 import (
 	"fmt"
 
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
 	v1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -47,7 +47,7 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	case v1alpha1.SchemeGroupVersion.WithResource("oidcproviderconfigs"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().OIDCProviderConfigs().Informer()}, nil
 
-		// Group=idp.pinniped.dev, Version=v1alpha1
+		// Group=idp.concierge.pinniped.dev, Version=v1alpha1
 	case idpv1alpha1.SchemeGroupVersion.WithResource("webhookidentityproviders"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.IDP().V1alpha1().WebhookIdentityProviders().Informer()}, nil
 

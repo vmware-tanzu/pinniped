@@ -9,7 +9,7 @@ import (
 	"context"
 	time "time"
 
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
 	versioned "go.pinniped.dev/generated/1.19/client/clientset/versioned"
 	internalinterfaces "go.pinniped.dev/generated/1.19/client/informers/externalversions/internalinterfaces"
 	v1alpha1 "go.pinniped.dev/generated/1.19/client/listers/idp/v1alpha1"

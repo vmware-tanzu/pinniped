@@ -122,7 +122,7 @@ as the identity provider.
 
     ```bash
     cat <<EOF | kubectl create --namespace pinniped -f -
-    apiVersion: idp.pinniped.dev/v1alpha1
+    apiVersion: idp.concierge.pinniped.dev/v1alpha1
     kind: WebhookIdentityProvider
     metadata:
       name: local-user-authenticator

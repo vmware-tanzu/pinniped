@@ -19,7 +19,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
 	"go.pinniped.dev/internal/controller/identityprovider/idpcache"

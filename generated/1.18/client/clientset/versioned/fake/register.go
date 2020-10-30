@@ -6,9 +6,9 @@
 package fake
 
 import (
+	idpv1alpha1 "go.pinniped.dev/generated/1.18/apis/concierge/idp/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/1.18/apis/concierge/login/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/1.18/apis/config/v1alpha1"
-	idpv1alpha1 "go.pinniped.dev/generated/1.18/apis/idp/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

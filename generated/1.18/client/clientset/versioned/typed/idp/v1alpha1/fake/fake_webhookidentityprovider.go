@@ -8,7 +8,7 @@ package fake
 import (
 	"context"
 
-	v1alpha1 "go.pinniped.dev/generated/1.18/apis/idp/v1alpha1"
+	v1alpha1 "go.pinniped.dev/generated/1.18/apis/concierge/idp/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -23,9 +23,9 @@ type FakeWebhookIdentityProviders struct {
 	ns   string
 }
 
-var webhookidentityprovidersResource = schema.GroupVersionResource{Group: "idp.pinniped.dev", Version: "v1alpha1", Resource: "webhookidentityproviders"}
+var webhookidentityprovidersResource = schema.GroupVersionResource{Group: "idp.concierge.pinniped.dev", Version: "v1alpha1", Resource: "webhookidentityproviders"}
 
-var webhookidentityprovidersKind = schema.GroupVersionKind{Group: "idp.pinniped.dev", Version: "v1alpha1", Kind: "WebhookIdentityProvider"}
+var webhookidentityprovidersKind = schema.GroupVersionKind{Group: "idp.concierge.pinniped.dev", Version: "v1alpha1", Kind: "WebhookIdentityProvider"}
 
 // Get takes name of the webhookIdentityProvider, and returns the corresponding webhookIdentityProvider object, and an error if there is any.
 func (c *FakeWebhookIdentityProviders) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.WebhookIdentityProvider, err error) {

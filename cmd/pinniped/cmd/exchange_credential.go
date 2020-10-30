@@ -16,7 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/idp/v1alpha1"
 	"go.pinniped.dev/internal/client"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/here"

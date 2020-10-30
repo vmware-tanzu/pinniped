@@ -26,20 +26,20 @@ func TestGetAPIResourceList(t *testing.T) {
 	}{
 		{
 			group: metav1.APIGroup{
-				Name: "login.pinniped.dev",
+				Name: "login.concierge.pinniped.dev",
 				Versions: []metav1.GroupVersionForDiscovery{
 					{
-						GroupVersion: "login.pinniped.dev/v1alpha1",
+						GroupVersion: "login.concierge.pinniped.dev/v1alpha1",
 						Version:      "v1alpha1",
 					},
 				},
 				PreferredVersion: metav1.GroupVersionForDiscovery{
-					GroupVersion: "login.pinniped.dev/v1alpha1",
+					GroupVersion: "login.concierge.pinniped.dev/v1alpha1",
 					Version:      "v1alpha1",
 				},
 			},
 			resourceByVersion: map[string][]metav1.APIResource{
-				"login.pinniped.dev/v1alpha1": {
+				"login.concierge.pinniped.dev/v1alpha1": {
 					{
 						Name:       "tokencredentialrequests",
 						Kind:       "TokenCredentialRequest",

@@ -16,8 +16,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
+	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/idp/v1alpha1"
-	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
 	"go.pinniped.dev/internal/testutil"
 )
 
@@ -47,7 +47,7 @@ func TestExchangeToken(t *testing.T) {
 		})
 
 		got, err := ExchangeToken(ctx, "test-namespace", testIDP, "", caBundle, endpoint)
-		require.EqualError(t, err, `could not login: an error on the server ("some server error") has prevented the request from succeeding (post tokencredentialrequests.login.pinniped.dev)`)
+		require.EqualError(t, err, `could not login: an error on the server ("some server error") has prevented the request from succeeding (post tokencredentialrequests.login.concierge.pinniped.dev)`)
 		require.Nil(t, got)
 	})
 
@@ -58,7 +58,7 @@ func TestExchangeToken(t *testing.T) {
 		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("content-type", "application/json")
 			_ = json.NewEncoder(w).Encode(&loginv1alpha1.TokenCredentialRequest{
-				TypeMeta: metav1.TypeMeta{APIVersion: "login.pinniped.dev/v1alpha1", Kind: "TokenCredentialRequest"},
+				TypeMeta: metav1.TypeMeta{APIVersion: "login.concierge.pinniped.dev/v1alpha1", Kind: "TokenCredentialRequest"},
 				Status:   loginv1alpha1.TokenCredentialRequestStatus{Message: &errorMessage},
 			})
 		})
@@ -74,7 +74,7 @@ func TestExchangeToken(t *testing.T) {
 		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("content-type", "application/json")
 			_ = json.NewEncoder(w).Encode(&loginv1alpha1.TokenCredentialRequest{
-				TypeMeta: metav1.TypeMeta{APIVersion: "login.pinniped.dev/v1alpha1", Kind: "TokenCredentialRequest"},
+				TypeMeta: metav1.TypeMeta{APIVersion: "login.concierge.pinniped.dev/v1alpha1", Kind: "TokenCredentialRequest"},
 			})
 		})
 
@@ -90,7 +90,7 @@ func TestExchangeToken(t *testing.T) {
 		// Start a test server that returns successfully and asserts various properties of the request.
 		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 			require.Equal(t, http.MethodPost, r.Method)
-			require.Equal(t, "/apis/login.pinniped.dev/v1alpha1/namespaces/test-namespace/tokencredentialrequests", r.URL.Path)
+			require.Equal(t, "/apis/login.concierge.pinniped.dev/v1alpha1/namespaces/test-namespace/tokencredentialrequests", r.URL.Path)
 			require.Equal(t, "application/json", r.Header.Get("content-type"))
 
 			body, err := ioutil.ReadAll(r.Body)
@@ -98,7 +98,7 @@ func TestExchangeToken(t *testing.T) {
 			require.JSONEq(t,
 				`{
 				  "kind": "TokenCredentialRequest",
-				  "apiVersion": "login.pinniped.dev/v1alpha1",
+				  "apiVersion": "login.concierge.pinniped.dev/v1alpha1",
 				  "metadata": {
 					"creationTimestamp": null,
 					"namespace": "test-namespace"
@@ -118,7 +118,7 @@ func TestExchangeToken(t *testing.T) {
 
 			w.Header().Set("content-type", "application/json")
 			_ = json.NewEncoder(w).Encode(&loginv1alpha1.TokenCredentialRequest{
-				TypeMeta: metav1.TypeMeta{APIVersion: "login.pinniped.dev/v1alpha1", Kind: "TokenCredentialRequest"},
+				TypeMeta: metav1.TypeMeta{APIVersion: "login.concierge.pinniped.dev/v1alpha1", Kind: "TokenCredentialRequest"},
 				Status: loginv1alpha1.TokenCredentialRequestStatus{
 					Credential: &loginv1alpha1.ClusterCredential{
 						ExpirationTimestamp:   expires,

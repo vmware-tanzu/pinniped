@@ -5,7 +5,7 @@ processor:
   ignoreGroupVersions:
     - "config.pinniped.dev/config"
     - "idp.pinniped.dev/idp"
-    - "login.pinniped.dev/login"
+    - "login.concierge.pinniped.dev/login"
   ignoreFields:
     - "TypeMeta$"
 

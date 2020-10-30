@@ -15,7 +15,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
-	"go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
+	"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/generated/1.19/client/clientset/versioned"
 )
 

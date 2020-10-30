@@ -7,7 +7,7 @@
 .Packages
 - xref:{anchor_prefix}-config-pinniped-dev-v1alpha1[$$config.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-idp-pinniped-dev-v1alpha1[$$idp.pinniped.dev/v1alpha1$$]
-- xref:{anchor_prefix}-login-pinniped-dev-v1alpha1[$$login.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-login-concierge-pinniped-dev-v1alpha1[$$login.concierge.pinniped.dev/v1alpha1$$]
 
 
 [id="{anchor_prefix}-config-pinniped-dev-v1alpha1"]
@@ -265,21 +265,21 @@ Status of a webhook identity provider.
 
 
 
-[id="{anchor_prefix}-login-pinniped-dev-v1alpha1"]
-=== login.pinniped.dev/v1alpha1
+[id="{anchor_prefix}-login-concierge-pinniped-dev-v1alpha1"]
+=== login.concierge.pinniped.dev/v1alpha1
 
 Package v1alpha1 is the v1alpha1 version of the Pinniped login API.
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-clustercredential"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-login-v1alpha1-clustercredential"]
 ==== ClusterCredential 
 
 ClusterCredential is the cluster-specific credential returned on a successful credential request. It contains either a valid bearer token or a valid TLS certificate and corresponding private key for the cluster.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequeststatus[$$TokenCredentialRequestStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-login-v1alpha1-tokencredentialrequeststatus[$$TokenCredentialRequestStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -292,14 +292,14 @@ ClusterCredential is the cluster-specific credential returned on a successful cr
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequest"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-login-v1alpha1-tokencredentialrequest"]
 ==== TokenCredentialRequest 
 
 TokenCredentialRequest submits an IDP-specific credential to Pinniped in exchange for a cluster-specific credential.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequestlist[$$TokenCredentialRequestList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-login-v1alpha1-tokencredentialrequestlist[$$TokenCredentialRequestList$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -307,21 +307,21 @@ TokenCredentialRequest submits an IDP-specific credential to Pinniped in exchang
 | Field | Description
 | *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequestspec[$$TokenCredentialRequestSpec$$]__ | 
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequeststatus[$$TokenCredentialRequestStatus$$]__ | 
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-login-v1alpha1-tokencredentialrequestspec[$$TokenCredentialRequestSpec$$]__ | 
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-login-v1alpha1-tokencredentialrequeststatus[$$TokenCredentialRequestStatus$$]__ | 
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequestspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-login-v1alpha1-tokencredentialrequestspec"]
 ==== TokenCredentialRequestSpec 
 
 TokenCredentialRequestSpec is the specification of a TokenCredentialRequest, expected on requests to the Pinniped API.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequest[$$TokenCredentialRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-login-v1alpha1-tokencredentialrequest[$$TokenCredentialRequest$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -332,20 +332,20 @@ TokenCredentialRequestSpec is the specification of a TokenCredentialRequest, exp
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequeststatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-login-v1alpha1-tokencredentialrequeststatus"]
 ==== TokenCredentialRequestStatus 
 
 TokenCredentialRequestStatus is the status of a TokenCredentialRequest, returned on responses to the Pinniped API.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-tokencredentialrequest[$$TokenCredentialRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-login-v1alpha1-tokencredentialrequest[$$TokenCredentialRequest$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`credential`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-login-v1alpha1-clustercredential[$$ClusterCredential$$]__ | A Credential will be returned for a successful credential request.
+| *`credential`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-login-v1alpha1-clustercredential[$$ClusterCredential$$]__ | A Credential will be returned for a successful credential request.
 | *`message`* __string__ | An error message will be returned for an unsuccessful credential request.
 |===
 

@@ -8,7 +8,7 @@ package v1alpha1
 import (
 	time "time"
 
-	loginv1alpha1 "go.pinniped.dev/generated/1.17/apis/login/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/1.17/apis/concierge/login/v1alpha1"
 	versioned "go.pinniped.dev/generated/1.17/client/clientset/versioned"
 	internalinterfaces "go.pinniped.dev/generated/1.17/client/informers/externalversions/internalinterfaces"
 	v1alpha1 "go.pinniped.dev/generated/1.17/client/listers/login/v1alpha1"

@@ -17,8 +17,8 @@ import (
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/klog/v2"
 
-	loginapi "go.pinniped.dev/generated/1.19/apis/login"
-	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/login/v1alpha1"
+	loginapi "go.pinniped.dev/generated/1.19/apis/concierge/login"
+	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/registry/credentialrequest"
 )
 

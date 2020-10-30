@@ -124,10 +124,16 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 		// When we finally delete all issuers, the endpoint should be down.
 		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config6Duplicate2, client, ns, scheme, addr, caBundle, issuer6)
 
-		// "Host" headers can be used to send requests to discovery endpoints when the public address is different from the issuer name.
-		issuer7 := "https://some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com:2684/issuer7"
-		config7, _ := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer7, client)
-		requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config7, client, ns, scheme, addr, caBundle, issuer7)
+		// Only test this for http endpoints because https endpoints are going through an Ingress,
+		// and while it is possible to configure an Ingress to serve multiple hostnames with matching TLS certs
+		// for each hostname, that it not something that we felt like doing on all of our clusters that we
+		// run tests against.  :)
+		if scheme == "http" {
+			// "Host" headers can be used to send requests to discovery endpoints when the public address is different from the issuer name.
+			issuer7 := "https://some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com:2684/issuer7"
+			config7, _ := requireCreatingOIDCProviderConfigCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer7, client)
+			requireDeletingOIDCProviderConfigCausesDiscoveryEndpointsToDisappear(t, config7, client, ns, scheme, addr, caBundle, issuer7)
+		}
 
 		// When we create a provider with an invalid issuer, the status is set to invalid.
 		badConfig := library.CreateTestOIDCProvider(ctx, t, badIssuer, "")

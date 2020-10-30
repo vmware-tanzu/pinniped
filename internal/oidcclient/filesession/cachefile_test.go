@@ -16,7 +16,7 @@ import (
 
 // validSession should be the same data as `testdata/valid.yaml`.
 var validSession = sessionCache{
-	TypeMeta: metav1.TypeMeta{APIVersion: "config.pinniped.dev/v1alpha1", Kind: "SessionCache"},
+	TypeMeta: metav1.TypeMeta{APIVersion: "config.supervisor.pinniped.dev/v1alpha1", Kind: "SessionCache"},
 	Sessions: []sessionEntry{
 		{
 			Key: oidcclient.SessionCacheKey{
@@ -57,7 +57,7 @@ func TestReadSessionCache(t *testing.T) {
 			name: "does not exist",
 			path: "./testdata/does-not-exist.yaml",
 			want: &sessionCache{
-				TypeMeta: metav1.TypeMeta{APIVersion: "config.pinniped.dev/v1alpha1", Kind: "SessionCache"},
+				TypeMeta: metav1.TypeMeta{APIVersion: "config.supervisor.pinniped.dev/v1alpha1", Kind: "SessionCache"},
 				Sessions: []sessionEntry{},
 			},
 		},
@@ -74,7 +74,7 @@ func TestReadSessionCache(t *testing.T) {
 		{
 			name:    "wrong version",
 			path:    "./testdata/wrong-version.yaml",
-			wantErr: `unsupported session version: v1.TypeMeta{Kind:"NotASessionCache", APIVersion:"config.pinniped.dev/v2alpha6"}`,
+			wantErr: `unsupported session version: v1.TypeMeta{Kind:"NotASessionCache", APIVersion:"config.supervisor.pinniped.dev/v2alpha6"}`,
 		},
 		{
 			name: "valid",
@@ -102,7 +102,7 @@ func TestReadSessionCache(t *testing.T) {
 func TestEmptySessionCache(t *testing.T) {
 	t.Parallel()
 	got := emptySessionCache()
-	require.Equal(t, metav1.TypeMeta{APIVersion: "config.pinniped.dev/v1alpha1", Kind: "SessionCache"}, got.TypeMeta)
+	require.Equal(t, metav1.TypeMeta{APIVersion: "config.supervisor.pinniped.dev/v1alpha1", Kind: "SessionCache"}, got.TypeMeta)
 	require.Equal(t, 0, len(got.Sessions))
 	require.Equal(t, 1, cap(got.Sessions))
 }
@@ -217,7 +217,7 @@ func TestNormalized(t *testing.T) {
 
 		// Expect that all but the last two valid session are pruned, and that they're sorted.
 		require.Equal(t, &sessionCache{
-			TypeMeta: metav1.TypeMeta{APIVersion: "config.pinniped.dev/v1alpha1", Kind: "SessionCache"},
+			TypeMeta: metav1.TypeMeta{APIVersion: "config.supervisor.pinniped.dev/v1alpha1", Kind: "SessionCache"},
 			Sessions: []sessionEntry{
 				{
 					CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),

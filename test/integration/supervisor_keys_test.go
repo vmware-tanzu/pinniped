@@ -14,14 +14,14 @@ import (
 	"gopkg.in/square/go-jose.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
 	"go.pinniped.dev/test/library"
 )
 
 func TestSupervisorOIDCKeys(t *testing.T) {
 	env := library.IntegrationEnv(t)
 	kubeClient := library.NewClientset(t)
-	pinnipedClient := library.NewPinnipedClientset(t)
+	supervisorClient := library.NewSupervisorClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -33,7 +33,7 @@ func TestSupervisorOIDCKeys(t *testing.T) {
 	var updatedOPC *configv1alpha1.OIDCProviderConfig
 	var err error
 	assert.Eventually(t, func() bool {
-		updatedOPC, err = pinnipedClient.
+		updatedOPC, err = supervisorClient.
 			ConfigV1alpha1().
 			OIDCProviderConfigs(env.SupervisorNamespace).
 			Get(ctx, opc.Name, metav1.GetOptions{})

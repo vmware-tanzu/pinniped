@@ -20,8 +20,8 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
 	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
+	pinnipedfake "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned/fake"
+	pinnipedinformers "go.pinniped.dev/generated/1.19/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/testutil"

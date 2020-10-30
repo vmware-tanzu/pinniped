@@ -13,8 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	authv1alpha "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/1.19/client/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
+	pinnipedfake "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned/fake"
+	pinnipedinformers "go.pinniped.dev/generated/1.19/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/testutil/testlogger"

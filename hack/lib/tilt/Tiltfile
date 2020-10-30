@@ -111,7 +111,7 @@ k8s_resource(
     new_name='supervisor', # this is the name that will appear in the tilt UI
     objects=[
         # these are the objects that would otherwise appear in the "uncategorized" tab in the tilt UI
-        'oidcproviderconfigs.config.pinniped.dev:customresourcedefinition',
+        'oidcproviderconfigs.config.supervisor.pinniped.dev:customresourcedefinition',
         'pinniped-supervisor-static-config:configmap',
         'supervisor:namespace',
         'pinniped-supervisor:role',
@@ -169,7 +169,7 @@ k8s_resource(
         'pinniped-concierge-kube-system-pod-read:rolebinding',
         'pinniped-concierge:clusterrolebinding',
         'pinniped-concierge:serviceaccount',
-        'credentialissuerconfigs.config.pinniped.dev:customresourcedefinition',
+        'credentialissuerconfigs.config.concierge.pinniped.dev:customresourcedefinition',
         'webhookauthenticators.authentication.concierge.pinniped.dev:customresourcedefinition',
         'v1alpha1.login.concierge.pinniped.dev:apiservice',
     ],

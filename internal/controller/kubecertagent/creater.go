@@ -14,7 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/constable"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"

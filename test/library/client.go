@@ -24,8 +24,9 @@ import (
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
-	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
+	conciergeclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
+	supervisorclientset "go.pinniped.dev/generated/1.19/client/supervisor/clientset/versioned"
 
 	// Import to initialize client auth plugins - the kubeconfig that we use for
 	// testing may use gcloud, az, oidc, etc.
@@ -66,16 +67,22 @@ func NewClientsetWithCertAndKey(t *testing.T, clientCertificateData, clientKeyDa
 	return newClientsetWithConfig(t, newAnonymousClientRestConfigWithCertAndKeyAdded(t, clientCertificateData, clientKeyData))
 }
 
-func NewPinnipedClientset(t *testing.T) pinnipedclientset.Interface {
+func NewSupervisorClientset(t *testing.T) supervisorclientset.Interface {
 	t.Helper()
 
-	return pinnipedclientset.NewForConfigOrDie(NewClientConfig(t))
+	return supervisorclientset.NewForConfigOrDie(NewClientConfig(t))
 }
 
-func NewAnonymousPinnipedClientset(t *testing.T) pinnipedclientset.Interface {
+func NewConciergeClientset(t *testing.T) conciergeclientset.Interface {
 	t.Helper()
 
-	return pinnipedclientset.NewForConfigOrDie(newAnonymousClientRestConfig(t))
+	return conciergeclientset.NewForConfigOrDie(NewClientConfig(t))
+}
+
+func NewAnonymousConciergeClientset(t *testing.T) conciergeclientset.Interface {
+	t.Helper()
+
+	return conciergeclientset.NewForConfigOrDie(newAnonymousClientRestConfig(t))
 }
 
 func NewAggregatedClientset(t *testing.T) aggregatorclient.Interface {
@@ -126,7 +133,7 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
-	client := NewPinnipedClientset(t)
+	client := NewConciergeClientset(t)
 	webhooks := client.AuthenticationV1alpha1().WebhookAuthenticators(testEnv.ConciergeNamespace)
 
 	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -178,7 +185,7 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer, sniCertif
 		require.NoError(t, err)
 	}
 
-	opcs := NewPinnipedClientset(t).ConfigV1alpha1().OIDCProviderConfigs(testEnv.SupervisorNamespace)
+	opcs := NewSupervisorClientset(t).ConfigV1alpha1().OIDCProviderConfigs(testEnv.SupervisorNamespace)
 	opc, err := opcs.Create(createContext, &configv1alpha1.OIDCProviderConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-oidc-provider-",

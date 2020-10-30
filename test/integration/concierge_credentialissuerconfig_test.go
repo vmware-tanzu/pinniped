@@ -12,14 +12,14 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/config/v1alpha1"
 	"go.pinniped.dev/test/library"
 )
 
 func TestCredentialIssuerConfig(t *testing.T) {
 	env := library.IntegrationEnv(t)
 	config := library.NewClientConfig(t)
-	client := library.NewPinnipedClientset(t)
+	client := library.NewConciergeClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

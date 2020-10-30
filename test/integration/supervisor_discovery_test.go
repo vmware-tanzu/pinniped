@@ -25,8 +25,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	"go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/supervisor/clientset/versioned"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/test/library"
@@ -42,7 +42,7 @@ import (
 // handled by the others tests in this file.
 func TestSupervisorOIDCDiscovery(t *testing.T) {
 	env := library.IntegrationEnv(t)
-	client := library.NewPinnipedClientset(t)
+	client := library.NewSupervisorClientset(t)
 
 	ns := env.SupervisorNamespace
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -145,7 +145,7 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 
 func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	env := library.IntegrationEnv(t)
-	pinnipedClient := library.NewPinnipedClientset(t)
+	pinnipedClient := library.NewSupervisorClientset(t)
 	kubeClient := library.NewClientset(t)
 
 	ns := env.SupervisorNamespace
@@ -212,7 +212,7 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 
 func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	env := library.IntegrationEnv(t)
-	pinnipedClient := library.NewPinnipedClientset(t)
+	pinnipedClient := library.NewSupervisorClientset(t)
 	kubeClient := library.NewClientset(t)
 
 	ns := env.SupervisorNamespace

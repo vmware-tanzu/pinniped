@@ -24,8 +24,8 @@ import (
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/klog/v2"
 
-	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/config/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/controller/issuerconfig"
 )
 

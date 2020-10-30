@@ -20,8 +20,8 @@ import (
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
-	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
+	pinnipedinformers "go.pinniped.dev/generated/1.19/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/config/concierge"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"

@@ -96,6 +96,10 @@ func TestAnnotaterControllerSync(t *testing.T) {
 					Namespace:      agentPodNamespace,
 					ContainerImage: "some-agent-image",
 					PodNamePrefix:  "some-agent-name-",
+					AdditionalLabels: map[string]string{
+						"myLabelKey1": "myLabelValue1",
+						"myLabelKey2": "myLabelValue2",
+					},
 				},
 				&CredentialIssuerConfigLocationConfig{
 					Namespace: credentialIssuerConfigNamespaceName,
@@ -559,6 +563,46 @@ func TestAnnotaterControllerSync(t *testing.T) {
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					r.Equal(
 						[]coretesting.Action{},
+						kubeAPIClient.Actions(),
+					)
+				})
+			})
+		})
+
+		when("there is an agent pod without annotations set which does not have the configured additional labels", func() {
+			it.Before(func() {
+				delete(agentPod.ObjectMeta.Labels, "myLabelKey1")
+				r.NoError(agentInformerClient.Tracker().Add(agentPod))
+				r.NoError(kubeAPIClient.Tracker().Add(agentPod))
+			})
+
+			when("there is a matching controller manager pod", func() {
+				it.Before(func() {
+					r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
+					r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
+				})
+
+				it("updates the annotations according to the controller manager pod", func() {
+					startInformersAndController()
+					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+
+					updatedAgentPod := agentPod.DeepCopy()
+					updatedAgentPod.Annotations[certPathAnnotation] = certPath
+					updatedAgentPod.Annotations[keyPathAnnotation] = keyPath
+
+					r.Equal(
+						[]coretesting.Action{
+							coretesting.NewGetAction(
+								podsGVR,
+								agentPodNamespace,
+								updatedAgentPod.Name,
+							),
+							coretesting.NewUpdateAction(
+								podsGVR,
+								agentPodNamespace,
+								updatedAgentPod,
+							),
+						},
 						kubeAPIClient.Actions(),
 					)
 				})

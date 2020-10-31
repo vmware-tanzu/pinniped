@@ -11,9 +11,8 @@ ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 xargs -n 1 -P 8 "$ROOT/hack/lib/update-codegen.sh" < "${ROOT}/hack/lib/kube-versions.txt"
 
 # Copy each CRD yaml to the app which should cause it to be installed.
-cp "$ROOT"/generated/1.19/crds/*oidcproviderconfigs.yaml "$ROOT/deploy/supervisor"
-cp "$ROOT"/generated/1.19/crds/*credentialissuerconfigs.yaml "$ROOT/deploy/concierge"
-cp "$ROOT"/generated/1.19/crds/*webhookauthenticators.yaml "$ROOT/deploy/concierge"
+cp "$ROOT"/generated/1.19/crds/*.supervisor.*.yaml "$ROOT/deploy/supervisor"
+cp "$ROOT"/generated/1.19/crds/*.concierge.*.yaml "$ROOT/deploy/concierge"
 
 # Make sure we didn't miss any new CRDs.
 crdCount=$(find "$ROOT"/generated/1.19/crds/ -maxdepth 1 -type f -name '*.yaml' | wc -l | tr -d ' ')

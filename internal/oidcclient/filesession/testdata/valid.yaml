@@ -1,4 +1,4 @@
-apiVersion: config.pinniped.dev/v1alpha1
+apiVersion: config.supervisor.pinniped.dev/v1alpha1
 kind: SessionCache
 sessions:
   - creationTimestamp: "2020-10-20T18:42:07Z"

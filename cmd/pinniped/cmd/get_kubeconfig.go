@@ -21,8 +21,8 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	v1 "k8s.io/client-go/tools/clientcmd/api/v1"
 
-	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/config/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/config/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/here"
 )

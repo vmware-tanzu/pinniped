@@ -16,7 +16,7 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
 	"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
-	"go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	"go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
 )
 
 // ErrLoginFailed is returned by ExchangeToken when the server rejects the login request.

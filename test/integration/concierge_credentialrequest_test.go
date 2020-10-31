@@ -140,7 +140,7 @@ func makeRequest(ctx context.Context, t *testing.T, spec loginv1alpha1.TokenCred
 	t.Helper()
 	env := library.IntegrationEnv(t)
 
-	client := library.NewAnonymousPinnipedClientset(t)
+	client := library.NewAnonymousConciergeClientset(t)
 
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()

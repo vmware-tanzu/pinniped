@@ -12,7 +12,7 @@ import (
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/klog/v2"
 
-	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/dynamiccert"

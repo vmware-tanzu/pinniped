@@ -6,7 +6,9 @@
 
 .Packages
 - xref:{anchor_prefix}-authentication-concierge-pinniped-dev-v1alpha1[$$authentication.concierge.pinniped.dev/v1alpha1$$]
-- xref:{anchor_prefix}-config-pinniped-dev-v1alpha1[$$config.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-config-concierge-pinniped-dev-config[$$config.concierge.pinniped.dev/config$$]
+- xref:{anchor_prefix}-config-concierge-pinniped-dev-v1alpha1[$$config.concierge.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-config-supervisor-pinniped-dev-v1alpha1[$$config.supervisor.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-login-concierge-pinniped-dev-v1alpha1[$$login.concierge.pinniped.dev/v1alpha1$$]
 
 
@@ -114,21 +116,29 @@ Status of a webhook authenticator.
 
 
 
-[id="{anchor_prefix}-config-pinniped-dev-v1alpha1"]
-=== config.pinniped.dev/v1alpha1
+[id="{anchor_prefix}-config-concierge-pinniped-dev-config"]
+=== config.concierge.pinniped.dev/config
 
-Package v1alpha1 is the v1alpha1 version of the Pinniped configuration API.
+Package config is the internal version of the Pinniped concierge configuration API.
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-credentialissuerconfig"]
+
+[id="{anchor_prefix}-config-concierge-pinniped-dev-v1alpha1"]
+=== config.concierge.pinniped.dev/v1alpha1
+
+Package v1alpha1 is the v1alpha1 version of the Pinniped concierge configuration API.
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfig"]
 ==== CredentialIssuerConfig 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-credentialissuerconfiglist[$$CredentialIssuerConfigList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfiglist[$$CredentialIssuerConfigList$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -136,18 +146,18 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped configuration API.
 | Field | Description
 | *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]__ | Status of the credential issuer.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]__ | Status of the credential issuer.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-credentialissuerconfigkubeconfiginfo"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigkubeconfiginfo"]
 ==== CredentialIssuerConfigKubeConfigInfo 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -160,32 +170,32 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped configuration API.
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-credentialissuerconfigstatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigstatus"]
 ==== CredentialIssuerConfigStatus 
 
 Status of a credential issuer.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-credentialissuerconfig[$$CredentialIssuerConfig$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfig[$$CredentialIssuerConfig$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`strategies`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-credentialissuerconfigstrategy[$$CredentialIssuerConfigStrategy$$] array__ | List of integration strategies that were attempted by Pinniped.
-| *`kubeConfigInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-credentialissuerconfigkubeconfiginfo[$$CredentialIssuerConfigKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
+| *`strategies`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigstrategy[$$CredentialIssuerConfigStrategy$$] array__ | List of integration strategies that were attempted by Pinniped.
+| *`kubeConfigInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigkubeconfiginfo[$$CredentialIssuerConfigKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-credentialissuerconfigstrategy"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigstrategy"]
 ==== CredentialIssuerConfigStrategy 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -199,14 +209,22 @@ Status of a credential issuer.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-oidcproviderconfig"]
+
+[id="{anchor_prefix}-config-supervisor-pinniped-dev-v1alpha1"]
+=== config.supervisor.pinniped.dev/v1alpha1
+
+Package v1alpha1 is the v1alpha1 version of the Pinniped supervisor configuration API.
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfig"]
 ==== OIDCProviderConfig 
 
 OIDCProviderConfig describes the configuration of an OIDC provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-oidcproviderconfiglist[$$OIDCProviderConfigList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfiglist[$$OIDCProviderConfigList$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -214,21 +232,21 @@ OIDCProviderConfig describes the configuration of an OIDC provider.
 | Field | Description
 | *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-oidcproviderconfigspec[$$OIDCProviderConfigSpec$$]__ | Spec of the OIDC provider.
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-oidcproviderconfigstatus[$$OIDCProviderConfigStatus$$]__ | Status of the OIDC provider.
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfigspec[$$OIDCProviderConfigSpec$$]__ | Spec of the OIDC provider.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfigstatus[$$OIDCProviderConfigStatus$$]__ | Status of the OIDC provider.
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-oidcproviderconfigspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfigspec"]
 ==== OIDCProviderConfigSpec 
 
 OIDCProviderConfigSpec is a struct that describes an OIDC Provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-oidcproviderconfig[$$OIDCProviderConfig$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfig[$$OIDCProviderConfig$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -244,14 +262,14 @@ OIDCProviderConfigSpec is a struct that describes an OIDC Provider.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-oidcproviderconfigstatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfigstatus"]
 ==== OIDCProviderConfigStatus 
 
 OIDCProviderConfigStatus is a struct that describes the actual state of an OIDC Provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-config-v1alpha1-oidcproviderconfig[$$OIDCProviderConfig$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfig[$$OIDCProviderConfig$$]
 ****
 
 [cols="25a,75a", options="header"]

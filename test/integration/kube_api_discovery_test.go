@@ -15,7 +15,7 @@ import (
 func TestGetAPIResourceList(t *testing.T) {
 	library.SkipUnlessIntegration(t)
 
-	client := library.NewPinnipedClientset(t)
+	client := library.NewConciergeClientset(t)
 
 	groups, resources, err := client.Discovery().ServerGroupsAndResources()
 	require.NoError(t, err)
@@ -56,28 +56,20 @@ func TestGetAPIResourceList(t *testing.T) {
 		},
 		{
 			group: metav1.APIGroup{
-				Name: "config.pinniped.dev",
+				Name: "config.supervisor.pinniped.dev",
 				Versions: []metav1.GroupVersionForDiscovery{
 					{
-						GroupVersion: "config.pinniped.dev/v1alpha1",
+						GroupVersion: "config.supervisor.pinniped.dev/v1alpha1",
 						Version:      "v1alpha1",
 					},
 				},
 				PreferredVersion: metav1.GroupVersionForDiscovery{
-					GroupVersion: "config.pinniped.dev/v1alpha1",
+					GroupVersion: "config.supervisor.pinniped.dev/v1alpha1",
 					Version:      "v1alpha1",
 				},
 			},
 			resourceByVersion: map[string][]metav1.APIResource{
-				"config.pinniped.dev/v1alpha1": {
-					{
-						Name:         "credentialissuerconfigs",
-						SingularName: "credentialissuerconfig",
-						Namespaced:   true,
-						Kind:         "CredentialIssuerConfig",
-						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
-						ShortNames:   []string{"cic"},
-					},
+				"config.supervisor.pinniped.dev/v1alpha1": {
 					{
 						Name:         "oidcproviderconfigs",
 						SingularName: "oidcproviderconfig",
@@ -85,6 +77,33 @@ func TestGetAPIResourceList(t *testing.T) {
 						Kind:         "OIDCProviderConfig",
 						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
 						ShortNames:   []string{"opc"},
+					},
+				},
+			},
+		},
+		{
+			group: metav1.APIGroup{
+				Name: "config.concierge.pinniped.dev",
+				Versions: []metav1.GroupVersionForDiscovery{
+					{
+						GroupVersion: "config.concierge.pinniped.dev/v1alpha1",
+						Version:      "v1alpha1",
+					},
+				},
+				PreferredVersion: metav1.GroupVersionForDiscovery{
+					GroupVersion: "config.concierge.pinniped.dev/v1alpha1",
+					Version:      "v1alpha1",
+				},
+			},
+			resourceByVersion: map[string][]metav1.APIResource{
+				"config.concierge.pinniped.dev/v1alpha1": {
+					{
+						Name:         "credentialissuerconfigs",
+						SingularName: "credentialissuerconfig",
+						Namespaced:   true,
+						Kind:         "CredentialIssuerConfig",
+						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
+						ShortNames:   []string{"cic"},
 					},
 				},
 			},

@@ -27,7 +27,7 @@ var (
 
 const (
 	// apiVersion is the Kubernetes-style API version of the session file object.
-	apiVersion = "config.pinniped.dev/v1alpha1"
+	apiVersion = "config.supervisor.pinniped.dev/v1alpha1"
 
 	// apiKind is the Kubernetes-style Kind of the session file object.
 	apiKind = "SessionCache"

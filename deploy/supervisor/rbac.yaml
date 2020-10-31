@@ -16,7 +16,7 @@ rules:
   - apiGroups: [""]
     resources: [secrets]
     verbs: [create, get, list, patch, update, watch, delete]
-  - apiGroups: [config.pinniped.dev]
+  - apiGroups: [config.supervisor.pinniped.dev]
     resources: [oidcproviderconfigs]
     verbs: [update, get, list, watch]
 ---

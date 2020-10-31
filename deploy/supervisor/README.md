@@ -137,7 +137,7 @@ The Supervisor can be configured as an OIDC provider by creating `OIDCProviderCo
 in the same namespace where the Supervisor app was installed. For example:
 
 ```yaml
-apiVersion: config.pinniped.dev/v1alpha1
+apiVersion: config.supervisor.pinniped.dev/v1alpha1
 kind: OIDCProviderConfig
 metadata:
   name: my-provider

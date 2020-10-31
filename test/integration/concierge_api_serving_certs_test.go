@@ -75,7 +75,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			kubeClient := library.NewClientset(t)
 			aggregatedClient := library.NewAggregatedClientset(t)
-			pinnipedClient := library.NewPinnipedClientset(t)
+			conciergeClient := library.NewConciergeClientset(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
 
@@ -140,7 +140,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			// pod has rotated their cert, but not the other ones sitting behind the service.
 			aggregatedAPIWorking := func() bool {
 				for i := 0; i < 10; i++ {
-					_, err = pinnipedClient.LoginV1alpha1().TokenCredentialRequests(env.ConciergeNamespace).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
+					_, err = conciergeClient.LoginV1alpha1().TokenCredentialRequests(env.ConciergeNamespace).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 						TypeMeta:   metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{},
 						Spec:       loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token"},

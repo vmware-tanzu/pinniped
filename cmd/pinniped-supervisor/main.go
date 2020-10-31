@@ -23,8 +23,8 @@ import (
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 
-	pinnipedclientset "go.pinniped.dev/generated/1.19/client/clientset/versioned"
-	pinnipedinformers "go.pinniped.dev/generated/1.19/client/informers/externalversions"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/supervisor/clientset/versioned"
+	pinnipedinformers "go.pinniped.dev/generated/1.19/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/controller/supervisorconfig"
 	"go.pinniped.dev/internal/controllerlib"

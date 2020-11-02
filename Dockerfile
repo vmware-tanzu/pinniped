@@ -31,8 +31,11 @@ COPY --from=build-env /work/out/pinniped-concierge /usr/local/bin/pinniped-conci
 COPY --from=build-env /work/out/pinniped-supervisor /usr/local/bin/pinniped-supervisor
 COPY --from=build-env /work/out/local-user-authenticator /usr/local/bin/local-user-authenticator
 
-# Document the port
-EXPOSE 443
+# Document the ports
+EXPOSE 8080 8443
+
+# Run as non-root for security posture
+USER 1001:1001
 
 # Set the entrypoint
 ENTRYPOINT ["/usr/local/bin/pinniped-concierge"]

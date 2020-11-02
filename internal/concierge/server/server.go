@@ -173,6 +173,7 @@ func getAggregatedAPIServerConfig(
 	)
 	recommendedOptions.Etcd = nil // turn off etcd storage because we don't need it yet
 	recommendedOptions.SecureServing.ServerCert.GeneratedCert = dynamicCertProvider
+	recommendedOptions.SecureServing.BindPort = 8443 // Don't run on default 443 because that requires root
 
 	serverConfig := genericapiserver.NewRecommendedConfig(apiserver.Codecs)
 	// Note that among other things, this ApplyTo() function copies

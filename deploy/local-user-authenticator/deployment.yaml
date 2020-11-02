@@ -47,6 +47,9 @@ spec:
       labels:
         app: local-user-authenticator
     spec:
+      securityContext:
+        runAsUser: 1001
+        runAsGroup: 1001
       serviceAccountName: local-user-authenticator
       #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
       imagePullSecrets:
@@ -77,4 +80,4 @@ spec:
   ports:
     - protocol: TCP
       port: 443
-      targetPort: 443
+      targetPort: 8443

@@ -8,7 +8,7 @@ FROM debian:10.5-slim
 COPY build/pinniped-concierge /usr/local/bin/pinniped-concierge
 
 # Document the port
-EXPOSE 443
+EXPOSE 8443
 
 # Set the entrypoint
 ENTRYPOINT ["/usr/local/bin/pinniped-concierge"]

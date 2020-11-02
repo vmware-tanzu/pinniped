@@ -6,22 +6,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.0
   creationTimestamp: null
-  name: oidcproviderconfigs.config.supervisor.pinniped.dev
+  name: oidcproviders.config.supervisor.pinniped.dev
 spec:
   group: config.supervisor.pinniped.dev
   names:
-    kind: OIDCProviderConfig
-    listKind: OIDCProviderConfigList
-    plural: oidcproviderconfigs
-    shortNames:
-    - opc
-    singular: oidcproviderconfig
+    kind: OIDCProvider
+    listKind: OIDCProviderList
+    plural: oidcproviders
+    singular: oidcprovider
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: OIDCProviderConfig describes the configuration of an OIDC provider.
+        description: OIDCProvider describes the configuration of an OIDC provider.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation

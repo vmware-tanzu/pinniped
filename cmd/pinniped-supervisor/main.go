@@ -81,11 +81,11 @@ func startControllers(
 	controllerManager := controllerlib.
 		NewManager().
 		WithController(
-			supervisorconfig.NewOIDCProviderConfigWatcherController(
+			supervisorconfig.NewOIDCProviderWatcherController(
 				issuerManager,
 				clock.RealClock{},
 				pinnipedClient,
-				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
+				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -96,7 +96,7 @@ func startControllers(
 				kubeClient,
 				pinnipedClient,
 				kubeInformers.Core().V1().Secrets(),
-				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
+				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -105,7 +105,7 @@ func startControllers(
 			supervisorconfig.NewJWKSObserverController(
 				dynamicJWKSProvider,
 				kubeInformers.Core().V1().Secrets(),
-				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
+				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -115,7 +115,7 @@ func startControllers(
 				dynamicTLSCertProvider,
 				cfg.NamesConfig.DefaultTLSCertificateSecret,
 				kubeInformers.Core().V1().Secrets(),
-				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
+				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
 				controllerlib.WithInformer,
 			),
 			singletonWorker,

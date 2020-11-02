@@ -30,12 +30,12 @@ func TestSupervisorOIDCKeys(t *testing.T) {
 	opc := library.CreateTestOIDCProvider(ctx, t, "", "")
 
 	// Ensure a secret is created with the OPC's JWKS.
-	var updatedOPC *configv1alpha1.OIDCProviderConfig
+	var updatedOPC *configv1alpha1.OIDCProvider
 	var err error
 	assert.Eventually(t, func() bool {
 		updatedOPC, err = supervisorClient.
 			ConfigV1alpha1().
-			OIDCProviderConfigs(env.SupervisorNamespace).
+			OIDCProviders(env.SupervisorNamespace).
 			Get(ctx, opc.Name, metav1.GetOptions{})
 		return err == nil && updatedOPC.Status.JWKSSecret.Name != ""
 	}, time.Second*10, time.Millisecond*500)

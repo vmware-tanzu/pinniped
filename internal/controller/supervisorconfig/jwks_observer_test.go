@@ -28,25 +28,25 @@ import (
 func TestJWKSObserverControllerInformerFilters(t *testing.T) {
 	spec.Run(t, "informer filters", func(t *testing.T, when spec.G, it spec.S) {
 		var (
-			r                                *require.Assertions
-			observableWithInformerOption     *testutil.ObservableWithInformerOption
-			secretsInformerFilter            controllerlib.Filter
-			oidcProviderConfigInformerFilter controllerlib.Filter
+			r                            *require.Assertions
+			observableWithInformerOption *testutil.ObservableWithInformerOption
+			secretsInformerFilter        controllerlib.Filter
+			oidcProviderInformerFilter   controllerlib.Filter
 		)
 
 		it.Before(func() {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
-			oidcProviderConfigInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().OIDCProviderConfigs()
+			oidcProviderInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().OIDCProviders()
 			_ = NewJWKSObserverController(
 				nil,
 				secretsInformer,
-				oidcProviderConfigInformer,
+				oidcProviderInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
 			)
 			secretsInformerFilter = observableWithInformerOption.GetFilterForInformer(secretsInformer)
-			oidcProviderConfigInformerFilter = observableWithInformerOption.GetFilterForInformer(oidcProviderConfigInformer)
+			oidcProviderInformerFilter = observableWithInformerOption.GetFilterForInformer(oidcProviderInformer)
 		})
 
 		when("watching Secret objects", func() {
@@ -71,19 +71,19 @@ func TestJWKSObserverControllerInformerFilters(t *testing.T) {
 			})
 		})
 
-		when("watching OIDCProviderConfig objects", func() {
+		when("watching OIDCProvider objects", func() {
 			var (
 				subject                 controllerlib.Filter
-				provider, otherProvider *v1alpha1.OIDCProviderConfig
+				provider, otherProvider *v1alpha1.OIDCProvider
 			)
 
 			it.Before(func() {
-				subject = oidcProviderConfigInformerFilter
-				provider = &v1alpha1.OIDCProviderConfig{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: "any-namespace"}}
-				otherProvider = &v1alpha1.OIDCProviderConfig{ObjectMeta: metav1.ObjectMeta{Name: "any-other-name", Namespace: "any-other-namespace"}}
+				subject = oidcProviderInformerFilter
+				provider = &v1alpha1.OIDCProvider{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: "any-namespace"}}
+				otherProvider = &v1alpha1.OIDCProvider{ObjectMeta: metav1.ObjectMeta{Name: "any-other-name", Namespace: "any-other-namespace"}}
 			})
 
-			when("any OIDCProviderConfig changes", func() {
+			when("any OIDCProvider changes", func() {
 				it("returns true to trigger the sync method", func() {
 					r.True(subject.Add(provider))
 					r.True(subject.Update(provider, otherProvider))
@@ -129,7 +129,7 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 			subject = NewJWKSObserverController(
 				issuerToJWKSSetter,
 				kubeInformers.Core().V1().Secrets(),
-				pinnipedInformers.Config().V1alpha1().OIDCProviderConfigs(),
+				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
 				controllerlib.WithInformer,
 			)
 
@@ -173,7 +173,7 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 			timeoutContextCancel()
 		})
 
-		when("there are no OIDCProviderConfigs and no JWKS Secrets yet", func() {
+		when("there are no OIDCProviders and no JWKS Secrets yet", func() {
 			it("sets the issuerToJWKSSetter's map to be empty", func() {
 				startInformersAndController()
 				err := controllerlib.TestSync(t, subject, *syncContext)
@@ -184,55 +184,55 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 			})
 		})
 
-		when("there are OIDCProviderConfigs where some have corresponding JWKS Secrets and some don't", func() {
+		when("there are OIDCProviders where some have corresponding JWKS Secrets and some don't", func() {
 			var (
 				expectedJWK1, expectedJWK2 string
 			)
 
 			it.Before(func() {
-				oidcProviderConfigWithoutSecret1 := &v1alpha1.OIDCProviderConfig{
+				oidcProviderWithoutSecret1 := &v1alpha1.OIDCProvider{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "no-secret-oidcproviderconfig1",
+						Name:      "no-secret-oidcprovider1",
 						Namespace: installedInNamespace,
 					},
-					Spec:   v1alpha1.OIDCProviderConfigSpec{Issuer: "https://no-secret-issuer1.com"},
-					Status: v1alpha1.OIDCProviderConfigStatus{}, // no JWKSSecret field
+					Spec:   v1alpha1.OIDCProviderSpec{Issuer: "https://no-secret-issuer1.com"},
+					Status: v1alpha1.OIDCProviderStatus{}, // no JWKSSecret field
 				}
-				oidcProviderConfigWithoutSecret2 := &v1alpha1.OIDCProviderConfig{
+				oidcProviderWithoutSecret2 := &v1alpha1.OIDCProvider{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "no-secret-oidcproviderconfig2",
+						Name:      "no-secret-oidcprovider2",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderConfigSpec{Issuer: "https://no-secret-issuer2.com"},
+					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://no-secret-issuer2.com"},
 					// no Status field
 				}
-				oidcProviderConfigWithBadSecret := &v1alpha1.OIDCProviderConfig{
+				oidcProviderWithBadSecret := &v1alpha1.OIDCProvider{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "bad-secret-oidcproviderconfig",
+						Name:      "bad-secret-oidcprovider",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderConfigSpec{Issuer: "https://bad-secret-issuer.com"},
-					Status: v1alpha1.OIDCProviderConfigStatus{
+					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://bad-secret-issuer.com"},
+					Status: v1alpha1.OIDCProviderStatus{
 						JWKSSecret: corev1.LocalObjectReference{Name: "bad-jwks-secret-name"},
 					},
 				}
-				oidcProviderConfigWithGoodSecret1 := &v1alpha1.OIDCProviderConfig{
+				oidcProviderWithGoodSecret1 := &v1alpha1.OIDCProvider{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "good-secret-oidcproviderconfig1",
+						Name:      "good-secret-oidcprovider1",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderConfigSpec{Issuer: "https://issuer-with-good-secret1.com"},
-					Status: v1alpha1.OIDCProviderConfigStatus{
+					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://issuer-with-good-secret1.com"},
+					Status: v1alpha1.OIDCProviderStatus{
 						JWKSSecret: corev1.LocalObjectReference{Name: "good-jwks-secret-name1"},
 					},
 				}
-				oidcProviderConfigWithGoodSecret2 := &v1alpha1.OIDCProviderConfig{
+				oidcProviderWithGoodSecret2 := &v1alpha1.OIDCProvider{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "good-secret-oidcproviderconfig2",
+						Name:      "good-secret-oidcprovider2",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderConfigSpec{Issuer: "https://issuer-with-good-secret2.com"},
-					Status: v1alpha1.OIDCProviderConfigStatus{
+					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://issuer-with-good-secret2.com"},
+					Status: v1alpha1.OIDCProviderStatus{
 						JWKSSecret: corev1.LocalObjectReference{Name: "good-jwks-secret-name2"},
 					},
 				}
@@ -267,11 +267,11 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 					},
 					Data: map[string][]byte{"junk": nil},
 				}
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderConfigWithoutSecret1))
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderConfigWithoutSecret2))
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderConfigWithBadSecret))
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderConfigWithGoodSecret1))
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderConfigWithGoodSecret2))
+				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithoutSecret1))
+				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithoutSecret2))
+				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithBadSecret))
+				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithGoodSecret1))
+				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithGoodSecret2))
 				r.NoError(kubeInformerClient.Tracker().Add(goodJWKSSecret1))
 				r.NoError(kubeInformerClient.Tracker().Add(goodJWKSSecret2))
 				r.NoError(kubeInformerClient.Tracker().Add(badJWKSSecret))

@@ -71,12 +71,11 @@ func TestGetAPIResourceList(t *testing.T) {
 			resourceByVersion: map[string][]metav1.APIResource{
 				"config.supervisor.pinniped.dev/v1alpha1": {
 					{
-						Name:         "oidcproviderconfigs",
-						SingularName: "oidcproviderconfig",
+						Name:         "oidcproviders",
+						SingularName: "oidcprovider",
 						Namespaced:   true,
-						Kind:         "OIDCProviderConfig",
+						Kind:         "OIDCProvider",
 						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
-						ShortNames:   []string{"opc"},
 					},
 				},
 			},

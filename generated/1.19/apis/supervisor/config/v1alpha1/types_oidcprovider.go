@@ -9,17 +9,17 @@ import (
 )
 
 // +kubebuilder:validation:Enum=Success;Duplicate;Invalid
-type OIDCProviderStatus string
+type OIDCProviderStatusCondition string
 
 const (
-	SuccessOIDCProviderStatus                         = OIDCProviderStatus("Success")
-	DuplicateOIDCProviderStatus                       = OIDCProviderStatus("Duplicate")
-	SameIssuerHostMustUseSameSecretOIDCProviderStatus = OIDCProviderStatus("SameIssuerHostMustUseSameSecret")
-	InvalidOIDCProviderStatus                         = OIDCProviderStatus("Invalid")
+	SuccessOIDCProviderStatusCondition                         = OIDCProviderStatusCondition("Success")
+	DuplicateOIDCProviderStatusCondition                       = OIDCProviderStatusCondition("Duplicate")
+	SameIssuerHostMustUseSameSecretOIDCProviderStatusCondition = OIDCProviderStatusCondition("SameIssuerHostMustUseSameSecret")
+	InvalidOIDCProviderStatusCondition                         = OIDCProviderStatusCondition("Invalid")
 )
 
-// OIDCProviderConfigSpec is a struct that describes an OIDC Provider.
-type OIDCProviderConfigSpec struct {
+// OIDCProviderSpec is a struct that describes an OIDC Provider.
+type OIDCProviderSpec struct {
 	// Issuer is the OIDC Provider's issuer, per the OIDC Discovery Metadata document, as well as the
 	// identifier that it will use for the iss claim in issued JWTs. This field will also be used as
 	// the base URL for any endpoints used by the OIDC Provider (e.g., if your issuer is
@@ -54,12 +54,12 @@ type OIDCProviderConfigSpec struct {
 	SNICertificateSecretName string `json:"sniCertificateSecretName,omitempty"`
 }
 
-// OIDCProviderConfigStatus is a struct that describes the actual state of an OIDC Provider.
-type OIDCProviderConfigStatus struct {
+// OIDCProviderStatus is a struct that describes the actual state of an OIDC Provider.
+type OIDCProviderStatus struct {
 	// Status holds an enum that describes the state of this OIDC Provider. Note that this Status can
 	// represent success or failure.
 	// +optional
-	Status OIDCProviderStatus `json:"status,omitempty"`
+	Status OIDCProviderStatusCondition `json:"status,omitempty"`
 
 	// Message provides human-readable details about the Status.
 	// +optional
@@ -78,27 +78,25 @@ type OIDCProviderConfigStatus struct {
 	JWKSSecret corev1.LocalObjectReference `json:"jwksSecret,omitempty"`
 }
 
-// OIDCProviderConfig describes the configuration of an OIDC provider.
+// OIDCProvider describes the configuration of an OIDC provider.
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:shortName=opc
-type OIDCProviderConfig struct {
+type OIDCProvider struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Spec of the OIDC provider.
-	Spec OIDCProviderConfigSpec `json:"spec"`
+	Spec OIDCProviderSpec `json:"spec"`
 
 	// Status of the OIDC provider.
-	Status OIDCProviderConfigStatus `json:"status,omitempty"`
+	Status OIDCProviderStatus `json:"status,omitempty"`
 }
 
-// List of OIDCProviderConfig objects.
+// List of OIDCProvider objects.
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-type OIDCProviderConfigList struct {
+type OIDCProviderList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 
-	Items []OIDCProviderConfig `json:"items"`
+	Items []OIDCProvider `json:"items"`
 }

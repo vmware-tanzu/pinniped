@@ -166,13 +166,13 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 	}
 }
 
-// CreateTestOIDCProvider creates and returns a test OIDCProviderConfig in
+// CreateTestOIDCProvider creates and returns a test OIDCProvider in
 // $PINNIPED_TEST_SUPERVISOR_NAMESPACE, which will be automatically deleted at the end of the
-// current test's lifetime. It generates a random, valid, issuer for the OIDCProviderConfig.
+// current test's lifetime. It generates a random, valid, issuer for the OIDCProvider.
 //
 // If the provided issuer is not the empty string, then it will be used for the
-// OIDCProviderConfig.Spec.Issuer field. Else, a random issuer will be generated.
-func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer, sniCertificateSecretName string) *configv1alpha1.OIDCProviderConfig {
+// OIDCProvider.Spec.Issuer field. Else, a random issuer will be generated.
+func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer, sniCertificateSecretName string) *configv1alpha1.OIDCProvider {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
@@ -185,31 +185,31 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer, sniCertif
 		require.NoError(t, err)
 	}
 
-	opcs := NewSupervisorClientset(t).ConfigV1alpha1().OIDCProviderConfigs(testEnv.SupervisorNamespace)
-	opc, err := opcs.Create(createContext, &configv1alpha1.OIDCProviderConfig{
+	opcs := NewSupervisorClientset(t).ConfigV1alpha1().OIDCProviders(testEnv.SupervisorNamespace)
+	opc, err := opcs.Create(createContext, &configv1alpha1.OIDCProvider{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-oidc-provider-",
 			Labels:       map[string]string{"pinniped.dev/test": ""},
 			Annotations:  map[string]string{"pinniped.dev/testName": t.Name()},
 		},
-		Spec: configv1alpha1.OIDCProviderConfigSpec{
+		Spec: configv1alpha1.OIDCProviderSpec{
 			Issuer:                   issuer,
 			SNICertificateSecretName: sniCertificateSecretName,
 		},
 	}, metav1.CreateOptions{})
-	require.NoError(t, err, "could not create test OIDCProviderConfig")
-	t.Logf("created test OIDCProviderConfig %s/%s", opc.Namespace, opc.Name)
+	require.NoError(t, err, "could not create test OIDCProvider")
+	t.Logf("created test OIDCProvider %s/%s", opc.Namespace, opc.Name)
 
 	t.Cleanup(func() {
 		t.Helper()
-		t.Logf("cleaning up test OIDCProviderConfig %s/%s", opc.Namespace, opc.Name)
+		t.Logf("cleaning up test OIDCProvider %s/%s", opc.Namespace, opc.Name)
 		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		err := opcs.Delete(deleteCtx, opc.Name, metav1.DeleteOptions{})
 		notFound := k8serrors.IsNotFound(err)
 		// It's okay if it is not found, because it might have been deleted by another part of this test.
 		if !notFound {
-			require.NoErrorf(t, err, "could not cleanup test OIDCProviderConfig %s/%s", opc.Namespace, opc.Name)
+			require.NoErrorf(t, err, "could not cleanup test OIDCProvider %s/%s", opc.Namespace, opc.Name)
 		}
 	})
 

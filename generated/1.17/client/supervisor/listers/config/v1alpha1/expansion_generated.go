@@ -5,10 +5,10 @@
 
 package v1alpha1
 
-// OIDCProviderConfigListerExpansion allows custom methods to be added to
-// OIDCProviderConfigLister.
-type OIDCProviderConfigListerExpansion interface{}
+// OIDCProviderListerExpansion allows custom methods to be added to
+// OIDCProviderLister.
+type OIDCProviderListerExpansion interface{}
 
-// OIDCProviderConfigNamespaceListerExpansion allows custom methods to be added to
-// OIDCProviderConfigNamespaceLister.
-type OIDCProviderConfigNamespaceListerExpansion interface{}
+// OIDCProviderNamespaceListerExpansion allows custom methods to be added to
+// OIDCProviderNamespaceLister.
+type OIDCProviderNamespaceListerExpansion interface{}

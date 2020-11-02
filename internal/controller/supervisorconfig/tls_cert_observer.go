@@ -21,7 +21,7 @@ import (
 type tlsCertObserverController struct {
 	issuerTLSCertSetter             IssuerTLSCertSetter
 	defaultTLSCertificateSecretName string
-	oidcProviderConfigInformer      v1alpha1.OIDCProviderConfigInformer
+	oidcProviderInformer            v1alpha1.OIDCProviderInformer
 	secretInformer                  corev1informers.SecretInformer
 }
 
@@ -34,7 +34,7 @@ func NewTLSCertObserverController(
 	issuerTLSCertSetter IssuerTLSCertSetter,
 	defaultTLSCertificateSecretName string,
 	secretInformer corev1informers.SecretInformer,
-	oidcProviderConfigInformer v1alpha1.OIDCProviderConfigInformer,
+	oidcProviderInformer v1alpha1.OIDCProviderInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
@@ -43,7 +43,7 @@ func NewTLSCertObserverController(
 			Syncer: &tlsCertObserverController{
 				issuerTLSCertSetter:             issuerTLSCertSetter,
 				defaultTLSCertificateSecretName: defaultTLSCertificateSecretName,
-				oidcProviderConfigInformer:      oidcProviderConfigInformer,
+				oidcProviderInformer:            oidcProviderInformer,
 				secretInformer:                  secretInformer,
 			},
 		},
@@ -53,7 +53,7 @@ func NewTLSCertObserverController(
 			controllerlib.InformerOption{},
 		),
 		withInformer(
-			oidcProviderConfigInformer,
+			oidcProviderInformer,
 			pinnipedcontroller.MatchAnythingFilter(),
 			controllerlib.InformerOption{},
 		),
@@ -62,9 +62,9 @@ func NewTLSCertObserverController(
 
 func (c *tlsCertObserverController) Sync(ctx controllerlib.Context) error {
 	ns := ctx.Key.Namespace
-	allProviders, err := c.oidcProviderConfigInformer.Lister().OIDCProviderConfigs(ns).List(labels.Everything())
+	allProviders, err := c.oidcProviderInformer.Lister().OIDCProviders(ns).List(labels.Everything())
 	if err != nil {
-		return fmt.Errorf("failed to list OIDCProviderConfigs: %w", err)
+		return fmt.Errorf("failed to list OIDCProviders: %w", err)
 	}
 
 	// Rebuild the whole map on any change to any Secret or OIDCProvider, because either can have changes that

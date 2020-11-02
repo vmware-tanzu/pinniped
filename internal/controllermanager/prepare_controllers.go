@@ -101,9 +101,9 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		ContainerImagePullSecrets: c.KubeCertAgentConfig.ImagePullSecrets,
 		AdditionalLabels:          c.Labels,
 	}
-	credentialIssuerConfigLocationConfig := &kubecertagent.CredentialIssuerConfigLocationConfig{
+	credentialIssuerLocationConfig := &kubecertagent.CredentialIssuerLocationConfig{
 		Namespace: c.ServerInstallationNamespace,
-		Name:      c.NamesConfig.CredentialIssuerConfig,
+		Name:      c.NamesConfig.CredentialIssuer,
 	}
 
 	// Create controller manager.
@@ -111,11 +111,11 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		NewManager().
 
 		// KubeConfig info publishing controller is responsible for writing the KubeConfig information to the
-		// CredentialIssuerConfig resource and keeping that information up to date.
+		// CredentialIssuer resource and keeping that information up to date.
 		WithController(
 			issuerconfig.NewKubeConfigInfoPublisherController(
 				c.ServerInstallationNamespace,
-				c.NamesConfig.CredentialIssuerConfig,
+				c.NamesConfig.CredentialIssuer,
 				c.Labels,
 				c.DiscoveryURLOverride,
 				pinnipedClient,
@@ -179,7 +179,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		WithController(
 			kubecertagent.NewCreaterController(
 				agentPodConfig,
-				credentialIssuerConfigLocationConfig,
+				credentialIssuerLocationConfig,
 				c.Labels,
 				clock.RealClock{},
 				k8sClient,
@@ -194,7 +194,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		WithController(
 			kubecertagent.NewAnnotaterController(
 				agentPodConfig,
-				credentialIssuerConfigLocationConfig,
+				credentialIssuerLocationConfig,
 				clock.RealClock{},
 				k8sClient,
 				pinnipedClient,
@@ -206,7 +206,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		).
 		WithController(
 			kubecertagent.NewExecerController(
-				credentialIssuerConfigLocationConfig,
+				credentialIssuerLocationConfig,
 				c.DynamicSigningCertProvider,
 				kubecertagent.NewPodCommandExecutor(kubeConfig, k8sClient),
 				pinnipedClient,

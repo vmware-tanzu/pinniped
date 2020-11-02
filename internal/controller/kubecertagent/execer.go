@@ -19,22 +19,22 @@ import (
 )
 
 type execerController struct {
-	credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig
-	dynamicCertProvider                  dynamiccert.Provider
-	podCommandExecutor                   PodCommandExecutor
-	clock                                clock.Clock
-	pinnipedAPIClient                    pinnipedclientset.Interface
-	agentPodInformer                     corev1informers.PodInformer
+	credentialIssuerLocationConfig *CredentialIssuerLocationConfig
+	dynamicCertProvider            dynamiccert.Provider
+	podCommandExecutor             PodCommandExecutor
+	clock                          clock.Clock
+	pinnipedAPIClient              pinnipedclientset.Interface
+	agentPodInformer               corev1informers.PodInformer
 }
 
 // NewExecerController returns a controllerlib.Controller that listens for agent pods with proper
 // cert/key path annotations and execs into them to get the cert/key material. It sets the retrieved
 // key material in a provided dynamicCertProvider.
 //
-// It also is tasked with updating the CredentialIssuerConfig, located via the provided
-// credentialIssuerConfigLocationConfig, with any errors that it encounters.
+// It also is tasked with updating the CredentialIssuer, located via the provided
+// credentialIssuerLocationConfig, with any errors that it encounters.
 func NewExecerController(
-	credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig,
+	credentialIssuerLocationConfig *CredentialIssuerLocationConfig,
 	dynamicCertProvider dynamiccert.Provider,
 	podCommandExecutor PodCommandExecutor,
 	pinnipedAPIClient pinnipedclientset.Interface,
@@ -46,12 +46,12 @@ func NewExecerController(
 		controllerlib.Config{
 			Name: "kube-cert-agent-execer-controller",
 			Syncer: &execerController{
-				credentialIssuerConfigLocationConfig: credentialIssuerConfigLocationConfig,
-				dynamicCertProvider:                  dynamicCertProvider,
-				podCommandExecutor:                   podCommandExecutor,
-				pinnipedAPIClient:                    pinnipedAPIClient,
-				clock:                                clock,
-				agentPodInformer:                     agentPodInformer,
+				credentialIssuerLocationConfig: credentialIssuerLocationConfig,
+				dynamicCertProvider:            dynamicCertProvider,
+				podCommandExecutor:             podCommandExecutor,
+				pinnipedAPIClient:              pinnipedAPIClient,
+				clock:                          clock,
+				agentPodInformer:               agentPodInformer,
 			},
 		},
 		withInformer(
@@ -87,21 +87,21 @@ func (c *execerController) Sync(ctx controllerlib.Context) error {
 
 	certPEM, err := c.podCommandExecutor.Exec(agentPod.Namespace, agentPod.Name, "cat", certPath)
 	if err != nil {
-		strategyResultUpdateErr := createOrUpdateCredentialIssuerConfig(ctx.Context, *c.credentialIssuerConfigLocationConfig, nil, c.clock, c.pinnipedAPIClient, err)
-		klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuerConfig with strategy success")
+		strategyResultUpdateErr := createOrUpdateCredentialIssuer(ctx.Context, *c.credentialIssuerLocationConfig, nil, c.clock, c.pinnipedAPIClient, err)
+		klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuer with strategy success")
 		return err
 	}
 
 	keyPEM, err := c.podCommandExecutor.Exec(agentPod.Namespace, agentPod.Name, "cat", keyPath)
 	if err != nil {
-		strategyResultUpdateErr := createOrUpdateCredentialIssuerConfig(ctx.Context, *c.credentialIssuerConfigLocationConfig, nil, c.clock, c.pinnipedAPIClient, err)
-		klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuerConfig with strategy success")
+		strategyResultUpdateErr := createOrUpdateCredentialIssuer(ctx.Context, *c.credentialIssuerLocationConfig, nil, c.clock, c.pinnipedAPIClient, err)
+		klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuer with strategy success")
 		return err
 	}
 
 	c.dynamicCertProvider.Set([]byte(certPEM), []byte(keyPEM))
 
-	err = createOrUpdateCredentialIssuerConfig(ctx.Context, *c.credentialIssuerConfigLocationConfig, nil, c.clock, c.pinnipedAPIClient, nil)
+	err = createOrUpdateCredentialIssuer(ctx.Context, *c.credentialIssuerLocationConfig, nil, c.clock, c.pinnipedAPIClient, nil)
 	if err != nil {
 		return err
 	}

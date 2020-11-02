@@ -34,14 +34,14 @@ func TestCreaterControllerFilter(t *testing.T) {
 		"CreaterControllerFilter",
 		func(
 			agentPodConfig *AgentPodConfig,
-			credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig,
+			credentialIssuerLocationConfig *CredentialIssuerLocationConfig,
 			kubeSystemPodInformer corev1informers.PodInformer,
 			agentPodInformer corev1informers.PodInformer,
 			observableWithInformerOption *testutil.ObservableWithInformerOption,
 		) {
 			_ = NewCreaterController(
 				agentPodConfig,
-				credentialIssuerConfigLocationConfig,
+				credentialIssuerLocationConfig,
 				map[string]string{},
 				nil, // clock, shouldn't matter
 				nil, // k8sClient, shouldn't matter
@@ -66,7 +66,7 @@ func TestCreaterControllerInitialEvent(t *testing.T) {
 
 	_ = NewCreaterController(
 		nil, // agentPodConfig, shouldn't matter
-		nil, // credentialIssuerConfigLocationConfig, shouldn't matter
+		nil, // credentialIssuerLocationConfig, shouldn't matter
 		map[string]string{},
 		nil, // clock, shouldn't matter
 		nil, // k8sClient, shouldn't matter
@@ -83,8 +83,8 @@ func TestCreaterControllerSync(t *testing.T) {
 	spec.Run(t, "CreaterControllerSync", func(t *testing.T, when spec.G, it spec.S) {
 		const kubeSystemNamespace = "kube-system"
 		const agentPodNamespace = "agent-pod-namespace"
-		const credentialIssuerConfigNamespaceName = "cic-namespace-name"
-		const credentialIssuerConfigResourceName = "cic-resource-name"
+		const credentialIssuerNamespaceName = "ci-namespace-name"
+		const credentialIssuerResourceName = "ci-resource-name"
 
 		var r *require.Assertions
 
@@ -100,7 +100,7 @@ func TestCreaterControllerSync(t *testing.T) {
 		var syncContext *controllerlib.Context
 		var controllerManagerPod, agentPod *corev1.Pod
 		var podsGVR schema.GroupVersionResource
-		var credentialIssuerConfigGVR schema.GroupVersionResource
+		var credentialIssuerGVR schema.GroupVersionResource
 		var frozenNow time.Time
 
 		// Defer starting the informers until the last possible moment so that the
@@ -118,9 +118,9 @@ func TestCreaterControllerSync(t *testing.T) {
 						"myLabelKey2": "myLabelValue2",
 					},
 				},
-				&CredentialIssuerConfigLocationConfig{
-					Namespace: credentialIssuerConfigNamespaceName,
-					Name:      credentialIssuerConfigResourceName,
+				&CredentialIssuerLocationConfig{
+					Namespace: credentialIssuerNamespaceName,
+					Name:      credentialIssuerResourceName,
 				},
 				map[string]string{
 					"myLabelKey1": "myLabelValue1",
@@ -176,10 +176,10 @@ func TestCreaterControllerSync(t *testing.T) {
 				Resource: "pods",
 			}
 
-			credentialIssuerConfigGVR = schema.GroupVersionResource{
+			credentialIssuerGVR = schema.GroupVersionResource{
 				Group:    configv1alpha1.GroupName,
 				Version:  configv1alpha1.SchemeGroupVersion.Version,
-				Resource: "credentialissuerconfigs",
+				Resource: "credentialissuers",
 			}
 
 			frozenNow = time.Date(2020, time.September, 23, 7, 42, 0, 0, time.Local)
@@ -300,33 +300,33 @@ func TestCreaterControllerSync(t *testing.T) {
 						)
 					})
 
-					when("there is already a CredentialIssuerConfig", func() {
-						var initialCredentialIssuerConfig *configv1alpha1.CredentialIssuerConfig
+					when("there is already a CredentialIssuer", func() {
+						var initialCredentialIssuer *configv1alpha1.CredentialIssuer
 
 						it.Before(func() {
-							initialCredentialIssuerConfig = &configv1alpha1.CredentialIssuerConfig{
+							initialCredentialIssuer = &configv1alpha1.CredentialIssuer{
 								TypeMeta: metav1.TypeMeta{},
 								ObjectMeta: metav1.ObjectMeta{
-									Name:      credentialIssuerConfigResourceName,
-									Namespace: credentialIssuerConfigNamespaceName,
+									Name:      credentialIssuerResourceName,
+									Namespace: credentialIssuerNamespaceName,
 								},
-								Status: configv1alpha1.CredentialIssuerConfigStatus{
-									Strategies: []configv1alpha1.CredentialIssuerConfigStrategy{},
-									KubeConfigInfo: &configv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+								Status: configv1alpha1.CredentialIssuerStatus{
+									Strategies: []configv1alpha1.CredentialIssuerStrategy{},
+									KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
 										Server:                   "some-server",
 										CertificateAuthorityData: "some-ca-value",
 									},
 								},
 							}
-							r.NoError(pinnipedAPIClient.Tracker().Add(initialCredentialIssuerConfig))
+							r.NoError(pinnipedAPIClient.Tracker().Add(initialCredentialIssuer))
 						})
 
-						it("updates the CredentialIssuerConfig status saying that controller manager pods couldn't be found", func() {
+						it("updates the CredentialIssuer status saying that controller manager pods couldn't be found", func() {
 							startInformersAndController()
 							err := controllerlib.TestSync(t, subject, *syncContext)
 
-							expectedCredentialIssuerConfig := initialCredentialIssuerConfig.DeepCopy()
-							expectedCredentialIssuerConfig.Status.Strategies = []configv1alpha1.CredentialIssuerConfigStrategy{
+							expectedCredentialIssuer := initialCredentialIssuer.DeepCopy()
+							expectedCredentialIssuer.Status.Strategies = []configv1alpha1.CredentialIssuerStrategy{
 								{
 									Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 									Status:         configv1alpha1.ErrorStrategyStatus,
@@ -336,14 +336,14 @@ func TestCreaterControllerSync(t *testing.T) {
 								},
 							}
 							expectedGetAction := coretesting.NewGetAction(
-								credentialIssuerConfigGVR,
-								credentialIssuerConfigNamespaceName,
-								credentialIssuerConfigResourceName,
+								credentialIssuerGVR,
+								credentialIssuerNamespaceName,
+								credentialIssuerResourceName,
 							)
 							expectedUpdateAction := coretesting.NewUpdateAction(
-								credentialIssuerConfigGVR,
-								credentialIssuerConfigNamespaceName,
-								expectedCredentialIssuerConfig,
+								credentialIssuerGVR,
+								credentialIssuerNamespaceName,
+								expectedCredentialIssuer,
 							)
 
 							r.EqualError(err, "cannot create agent pod: some create error")
@@ -356,11 +356,11 @@ func TestCreaterControllerSync(t *testing.T) {
 							)
 						})
 
-						when("the CredentialIssuerConfig operation fails", func() {
+						when("the CredentialIssuer operation fails", func() {
 							it.Before(func() {
 								pinnipedAPIClient.PrependReactor(
 									"update",
-									"credentialissuerconfigs",
+									"credentialissuers",
 									func(_ coretesting.Action) (bool, runtime.Object, error) {
 										return true, nil, errors.New("some update error")
 									},
@@ -375,23 +375,23 @@ func TestCreaterControllerSync(t *testing.T) {
 						})
 					})
 
-					when("there is not already a CredentialIssuerConfig", func() {
-						it("returns an error and updates the CredentialIssuerConfig status", func() {
+					when("there is not already a CredentialIssuer", func() {
+						it("returns an error and updates the CredentialIssuer status", func() {
 							startInformersAndController()
 							err := controllerlib.TestSync(t, subject, *syncContext)
 
-							expectedCredentialIssuerConfig := &configv1alpha1.CredentialIssuerConfig{
+							expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
 								TypeMeta: metav1.TypeMeta{},
 								ObjectMeta: metav1.ObjectMeta{
-									Name:      credentialIssuerConfigResourceName,
-									Namespace: credentialIssuerConfigNamespaceName,
+									Name:      credentialIssuerResourceName,
+									Namespace: credentialIssuerNamespaceName,
 									Labels: map[string]string{
 										"myLabelKey1": "myLabelValue1",
 										"myLabelKey2": "myLabelValue2",
 									},
 								},
-								Status: configv1alpha1.CredentialIssuerConfigStatus{
-									Strategies: []configv1alpha1.CredentialIssuerConfigStrategy{
+								Status: configv1alpha1.CredentialIssuerStatus{
+									Strategies: []configv1alpha1.CredentialIssuerStrategy{
 										{
 											Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 											Status:         configv1alpha1.ErrorStrategyStatus,
@@ -403,14 +403,14 @@ func TestCreaterControllerSync(t *testing.T) {
 								},
 							}
 							expectedGetAction := coretesting.NewGetAction(
-								credentialIssuerConfigGVR,
-								credentialIssuerConfigNamespaceName,
-								credentialIssuerConfigResourceName,
+								credentialIssuerGVR,
+								credentialIssuerNamespaceName,
+								credentialIssuerResourceName,
 							)
 							expectedCreateAction := coretesting.NewCreateAction(
-								credentialIssuerConfigGVR,
-								credentialIssuerConfigNamespaceName,
-								expectedCredentialIssuerConfig,
+								credentialIssuerGVR,
+								credentialIssuerNamespaceName,
+								expectedCredentialIssuer,
 							)
 
 							r.EqualError(err, "cannot create agent pod: some create error")
@@ -428,33 +428,33 @@ func TestCreaterControllerSync(t *testing.T) {
 		})
 
 		when("there is no controller manager pod", func() {
-			when("there is already a CredentialIssuerConfig", func() {
-				var initialCredentialIssuerConfig *configv1alpha1.CredentialIssuerConfig
+			when("there is already a CredentialIssuer", func() {
+				var initialCredentialIssuer *configv1alpha1.CredentialIssuer
 
 				it.Before(func() {
-					initialCredentialIssuerConfig = &configv1alpha1.CredentialIssuerConfig{
+					initialCredentialIssuer = &configv1alpha1.CredentialIssuer{
 						TypeMeta: metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      credentialIssuerConfigResourceName,
-							Namespace: credentialIssuerConfigNamespaceName,
+							Name:      credentialIssuerResourceName,
+							Namespace: credentialIssuerNamespaceName,
 						},
-						Status: configv1alpha1.CredentialIssuerConfigStatus{
-							Strategies: []configv1alpha1.CredentialIssuerConfigStrategy{},
-							KubeConfigInfo: &configv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+						Status: configv1alpha1.CredentialIssuerStatus{
+							Strategies: []configv1alpha1.CredentialIssuerStrategy{},
+							KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
 								Server:                   "some-server",
 								CertificateAuthorityData: "some-ca-value",
 							},
 						},
 					}
-					r.NoError(pinnipedAPIClient.Tracker().Add(initialCredentialIssuerConfig))
+					r.NoError(pinnipedAPIClient.Tracker().Add(initialCredentialIssuer))
 				})
 
-				it("updates the CredentialIssuerConfig status saying that controller manager pods couldn't be found", func() {
+				it("updates the CredentialIssuer status saying that controller manager pods couldn't be found", func() {
 					startInformersAndController()
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
-					expectedCredentialIssuerConfig := initialCredentialIssuerConfig.DeepCopy()
-					expectedCredentialIssuerConfig.Status.Strategies = []configv1alpha1.CredentialIssuerConfigStrategy{
+					expectedCredentialIssuer := initialCredentialIssuer.DeepCopy()
+					expectedCredentialIssuer.Status.Strategies = []configv1alpha1.CredentialIssuerStrategy{
 						{
 							Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 							Status:         configv1alpha1.ErrorStrategyStatus,
@@ -464,14 +464,14 @@ func TestCreaterControllerSync(t *testing.T) {
 						},
 					}
 					expectedGetAction := coretesting.NewGetAction(
-						credentialIssuerConfigGVR,
-						credentialIssuerConfigNamespaceName,
-						credentialIssuerConfigResourceName,
+						credentialIssuerGVR,
+						credentialIssuerNamespaceName,
+						credentialIssuerResourceName,
 					)
 					expectedUpdateAction := coretesting.NewUpdateAction(
-						credentialIssuerConfigGVR,
-						credentialIssuerConfigNamespaceName,
-						expectedCredentialIssuerConfig,
+						credentialIssuerGVR,
+						credentialIssuerNamespaceName,
+						expectedCredentialIssuer,
 					)
 
 					r.Equal(
@@ -483,11 +483,11 @@ func TestCreaterControllerSync(t *testing.T) {
 					)
 				})
 
-				when("when updating the CredentialIssuerConfig fails", func() {
+				when("when updating the CredentialIssuer fails", func() {
 					it.Before(func() {
 						pinnipedAPIClient.PrependReactor(
 							"update",
-							"credentialissuerconfigs",
+							"credentialissuers",
 							func(_ coretesting.Action) (bool, runtime.Object, error) {
 								return true, nil, errors.New("some update error")
 							},
@@ -497,15 +497,15 @@ func TestCreaterControllerSync(t *testing.T) {
 					it("returns an error", func() {
 						startInformersAndController()
 						err := controllerlib.TestSync(t, subject, *syncContext)
-						r.EqualError(err, "could not create or update credentialissuerconfig: some update error")
+						r.EqualError(err, "could not create or update credentialissuer: some update error")
 					})
 				})
 
-				when("when getting the CredentialIssuerConfig fails", func() {
+				when("when getting the CredentialIssuer fails", func() {
 					it.Before(func() {
 						pinnipedAPIClient.PrependReactor(
 							"get",
-							"credentialissuerconfigs",
+							"credentialissuers",
 							func(_ coretesting.Action) (bool, runtime.Object, error) {
 								return true, nil, errors.New("some get error")
 							},
@@ -515,28 +515,28 @@ func TestCreaterControllerSync(t *testing.T) {
 					it("returns an error", func() {
 						startInformersAndController()
 						err := controllerlib.TestSync(t, subject, *syncContext)
-						r.EqualError(err, "could not create or update credentialissuerconfig: get failed: some get error")
+						r.EqualError(err, "could not create or update credentialissuer: get failed: some get error")
 					})
 				})
 			})
 
-			when("there is not already a CredentialIssuerConfig", func() {
-				it("creates the CredentialIssuerConfig status saying that controller manager pods couldn't be found", func() {
+			when("there is not already a CredentialIssuer", func() {
+				it("creates the CredentialIssuer status saying that controller manager pods couldn't be found", func() {
 					startInformersAndController()
 					err := controllerlib.TestSync(t, subject, *syncContext)
 
-					expectedCredentialIssuerConfig := &configv1alpha1.CredentialIssuerConfig{
+					expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
 						TypeMeta: metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      credentialIssuerConfigResourceName,
-							Namespace: credentialIssuerConfigNamespaceName,
+							Name:      credentialIssuerResourceName,
+							Namespace: credentialIssuerNamespaceName,
 							Labels: map[string]string{
 								"myLabelKey1": "myLabelValue1",
 								"myLabelKey2": "myLabelValue2",
 							},
 						},
-						Status: configv1alpha1.CredentialIssuerConfigStatus{
-							Strategies: []configv1alpha1.CredentialIssuerConfigStrategy{
+						Status: configv1alpha1.CredentialIssuerStatus{
+							Strategies: []configv1alpha1.CredentialIssuerStrategy{
 								{
 									Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 									Status:         configv1alpha1.ErrorStrategyStatus,
@@ -548,14 +548,14 @@ func TestCreaterControllerSync(t *testing.T) {
 						},
 					}
 					expectedGetAction := coretesting.NewGetAction(
-						credentialIssuerConfigGVR,
-						credentialIssuerConfigNamespaceName,
-						credentialIssuerConfigResourceName,
+						credentialIssuerGVR,
+						credentialIssuerNamespaceName,
+						credentialIssuerResourceName,
 					)
 					expectedCreateAction := coretesting.NewCreateAction(
-						credentialIssuerConfigGVR,
-						credentialIssuerConfigNamespaceName,
-						expectedCredentialIssuerConfig,
+						credentialIssuerGVR,
+						credentialIssuerNamespaceName,
+						expectedCredentialIssuer,
 					)
 
 					r.NoError(err)
@@ -568,11 +568,11 @@ func TestCreaterControllerSync(t *testing.T) {
 					)
 				})
 
-				when("when creating the CredentialIssuerConfig fails", func() {
+				when("when creating the CredentialIssuer fails", func() {
 					it.Before(func() {
 						pinnipedAPIClient.PrependReactor(
 							"create",
-							"credentialissuerconfigs",
+							"credentialissuers",
 							func(_ coretesting.Action) (bool, runtime.Object, error) {
 								return true, nil, errors.New("some create error")
 							},
@@ -582,15 +582,15 @@ func TestCreaterControllerSync(t *testing.T) {
 					it("returns an error", func() {
 						startInformersAndController()
 						err := controllerlib.TestSync(t, subject, *syncContext)
-						r.EqualError(err, "could not create or update credentialissuerconfig: create failed: some create error")
+						r.EqualError(err, "could not create or update credentialissuer: create failed: some create error")
 					})
 				})
 
-				when("when getting the CredentialIssuerConfig fails", func() {
+				when("when getting the CredentialIssuer fails", func() {
 					it.Before(func() {
 						pinnipedAPIClient.PrependReactor(
 							"get",
-							"credentialissuerconfigs",
+							"credentialissuers",
 							func(_ coretesting.Action) (bool, runtime.Object, error) {
 								return true, nil, errors.New("some get error")
 							},
@@ -600,7 +600,7 @@ func TestCreaterControllerSync(t *testing.T) {
 					it("returns an error", func() {
 						startInformersAndController()
 						err := controllerlib.TestSync(t, subject, *syncContext)
-						r.EqualError(err, "could not create or update credentialissuerconfig: get failed: some get error")
+						r.EqualError(err, "could not create or update credentialissuer: get failed: some get error")
 					})
 				})
 			})

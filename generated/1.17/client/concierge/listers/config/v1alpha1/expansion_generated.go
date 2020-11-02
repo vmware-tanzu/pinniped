@@ -5,10 +5,10 @@
 
 package v1alpha1
 
-// CredentialIssuerConfigListerExpansion allows custom methods to be added to
-// CredentialIssuerConfigLister.
-type CredentialIssuerConfigListerExpansion interface{}
+// CredentialIssuerListerExpansion allows custom methods to be added to
+// CredentialIssuerLister.
+type CredentialIssuerListerExpansion interface{}
 
-// CredentialIssuerConfigNamespaceListerExpansion allows custom methods to be added to
-// CredentialIssuerConfigNamespaceLister.
-type CredentialIssuerConfigNamespaceListerExpansion interface{}
+// CredentialIssuerNamespaceListerExpansion allows custom methods to be added to
+// CredentialIssuerNamespaceLister.
+type CredentialIssuerNamespaceListerExpansion interface{}

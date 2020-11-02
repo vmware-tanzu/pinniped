@@ -98,12 +98,11 @@ func TestGetAPIResourceList(t *testing.T) {
 			resourceByVersion: map[string][]metav1.APIResource{
 				"config.concierge.pinniped.dev/v1alpha1": {
 					{
-						Name:         "credentialissuerconfigs",
-						SingularName: "credentialissuerconfig",
+						Name:         "credentialissuers",
+						SingularName: "credentialissuer",
 						Namespaced:   true,
-						Kind:         "CredentialIssuerConfig",
+						Kind:         "CredentialIssuer",
 						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
-						ShortNames:   []string{"cic"},
 					},
 				},
 			},

@@ -25,17 +25,17 @@ const (
 )
 
 // Status of a credential issuer.
-type CredentialIssuerConfigStatus struct {
+type CredentialIssuerStatus struct {
 	// List of integration strategies that were attempted by Pinniped.
-	Strategies []CredentialIssuerConfigStrategy `json:"strategies"`
+	Strategies []CredentialIssuerStrategy `json:"strategies"`
 
 	// Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
 	// +optional
-	KubeConfigInfo *CredentialIssuerConfigKubeConfigInfo `json:"kubeConfigInfo,omitempty"`
+	KubeConfigInfo *CredentialIssuerKubeConfigInfo `json:"kubeConfigInfo,omitempty"`
 }
 
 // Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
-type CredentialIssuerConfigKubeConfigInfo struct {
+type CredentialIssuerKubeConfigInfo struct {
 	// The K8s API server URL.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:Pattern=`^https://|^http://`
@@ -47,7 +47,7 @@ type CredentialIssuerConfigKubeConfigInfo struct {
 }
 
 // Status of an integration strategy that was attempted by Pinniped.
-type CredentialIssuerConfigStrategy struct {
+type CredentialIssuerStrategy struct {
 	// Type of integration attempted.
 	Type StrategyType `json:"type"`
 
@@ -68,22 +68,21 @@ type CredentialIssuerConfigStrategy struct {
 // Describes the configuration status of a Pinniped credential issuer.
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:shortName=cic
 
-type CredentialIssuerConfig struct {
+type CredentialIssuer struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Status of the credential issuer.
-	Status CredentialIssuerConfigStatus `json:"status"`
+	Status CredentialIssuerStatus `json:"status"`
 }
 
-// List of CredentialIssuerConfig objects.
+// List of CredentialIssuer objects.
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-type CredentialIssuerConfigList struct {
+type CredentialIssuerList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 
-	Items []CredentialIssuerConfig `json:"items"`
+	Items []CredentialIssuer `json:"items"`
 }

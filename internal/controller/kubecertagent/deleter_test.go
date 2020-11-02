@@ -28,7 +28,7 @@ func TestDeleterControllerFilter(t *testing.T) {
 		"DeleterControllerFilter",
 		func(
 			agentPodConfig *AgentPodConfig,
-			_ *CredentialIssuerConfigLocationConfig,
+			_ *CredentialIssuerLocationConfig,
 			kubeSystemPodInformer corev1informers.PodInformer,
 			agentPodInformer corev1informers.PodInformer,
 			observableWithInformerOption *testutil.ObservableWithInformerOption,

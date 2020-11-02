@@ -73,11 +73,11 @@ type AgentPodConfig struct {
 	AdditionalLabels map[string]string
 }
 
-type CredentialIssuerConfigLocationConfig struct {
-	// The namespace in which the CredentialIssuerConfig should be created/updated.
+type CredentialIssuerLocationConfig struct {
+	// The namespace in which the CredentialIssuer should be created/updated.
 	Namespace string
 
-	// The resource name for the CredentialIssuerConfig to be created/updated.
+	// The resource name for the CredentialIssuer to be created/updated.
 	Name string
 }
 
@@ -283,35 +283,35 @@ func findControllerManagerPodForSpecificAgentPod(
 	return maybeControllerManagerPod, nil
 }
 
-func createOrUpdateCredentialIssuerConfig(ctx context.Context,
-	cicConfig CredentialIssuerConfigLocationConfig,
-	credentialIssuerConfigLabels map[string]string,
+func createOrUpdateCredentialIssuer(ctx context.Context,
+	ciConfig CredentialIssuerLocationConfig,
+	credentialIssuerLabels map[string]string,
 	clock clock.Clock,
 	pinnipedAPIClient pinnipedclientset.Interface,
 	err error,
 ) error {
-	return issuerconfig.CreateOrUpdateCredentialIssuerConfig(
+	return issuerconfig.CreateOrUpdateCredentialIssuer(
 		ctx,
-		cicConfig.Namespace,
-		cicConfig.Name,
-		credentialIssuerConfigLabels,
+		ciConfig.Namespace,
+		ciConfig.Name,
+		credentialIssuerLabels,
 		pinnipedAPIClient,
-		func(configToUpdate *configv1alpha1.CredentialIssuerConfig) {
-			var strategyResult configv1alpha1.CredentialIssuerConfigStrategy
+		func(configToUpdate *configv1alpha1.CredentialIssuer) {
+			var strategyResult configv1alpha1.CredentialIssuerStrategy
 			if err == nil {
 				strategyResult = strategySuccess(clock)
 			} else {
 				strategyResult = strategyError(clock, err)
 			}
-			configToUpdate.Status.Strategies = []configv1alpha1.CredentialIssuerConfigStrategy{
+			configToUpdate.Status.Strategies = []configv1alpha1.CredentialIssuerStrategy{
 				strategyResult,
 			}
 		},
 	)
 }
 
-func strategySuccess(clock clock.Clock) configv1alpha1.CredentialIssuerConfigStrategy {
-	return configv1alpha1.CredentialIssuerConfigStrategy{
+func strategySuccess(clock clock.Clock) configv1alpha1.CredentialIssuerStrategy {
+	return configv1alpha1.CredentialIssuerStrategy{
 		Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 		Status:         configv1alpha1.SuccessStrategyStatus,
 		Reason:         configv1alpha1.FetchedKeyStrategyReason,
@@ -320,8 +320,8 @@ func strategySuccess(clock clock.Clock) configv1alpha1.CredentialIssuerConfigStr
 	}
 }
 
-func strategyError(clock clock.Clock, err error) configv1alpha1.CredentialIssuerConfigStrategy {
-	return configv1alpha1.CredentialIssuerConfigStrategy{
+func strategyError(clock clock.Clock, err error) configv1alpha1.CredentialIssuerStrategy {
+	return configv1alpha1.CredentialIssuerStrategy{
 		Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
 		Status:         configv1alpha1.ErrorStrategyStatus,
 		Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,

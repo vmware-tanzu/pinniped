@@ -79,13 +79,13 @@ func maybeSetKubeCertAgentDefaults(cfg *KubeCertAgentSpec) {
 func validateNames(names *NamesConfigSpec) error {
 	missingNames := []string{}
 	if names == nil {
-		missingNames = append(missingNames, "servingCertificateSecret", "credentialIssuerConfig", "apiService")
+		missingNames = append(missingNames, "servingCertificateSecret", "credentialIssuer", "apiService")
 	} else {
 		if names.ServingCertificateSecret == "" {
 			missingNames = append(missingNames, "servingCertificateSecret")
 		}
-		if names.CredentialIssuerConfig == "" {
-			missingNames = append(missingNames, "credentialIssuerConfig")
+		if names.CredentialIssuer == "" {
+			missingNames = append(missingNames, "credentialIssuer")
 		}
 		if names.APIService == "" {
 			missingNames = append(missingNames, "apiService")

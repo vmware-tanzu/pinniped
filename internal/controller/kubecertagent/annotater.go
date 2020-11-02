@@ -29,13 +29,13 @@ const (
 )
 
 type annotaterController struct {
-	agentPodConfig                       *AgentPodConfig
-	credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig
-	clock                                clock.Clock
-	k8sClient                            kubernetes.Interface
-	pinnipedAPIClient                    pinnipedclientset.Interface
-	kubeSystemPodInformer                corev1informers.PodInformer
-	agentPodInformer                     corev1informers.PodInformer
+	agentPodConfig                 *AgentPodConfig
+	credentialIssuerLocationConfig *CredentialIssuerLocationConfig
+	clock                          clock.Clock
+	k8sClient                      kubernetes.Interface
+	pinnipedAPIClient              pinnipedclientset.Interface
+	kubeSystemPodInformer          corev1informers.PodInformer
+	agentPodInformer               corev1informers.PodInformer
 }
 
 // NewAnnotaterController returns a controller that updates agent pods with the path to the kube
@@ -44,11 +44,11 @@ type annotaterController struct {
 // This controller will add annotations to agent pods with the best-guess paths to the kube API's
 // certificate and key.
 //
-// It also is tasked with updating the CredentialIssuerConfig, located via the provided
-// credentialIssuerConfigLocationConfig, with any errors that it encounters.
+// It also is tasked with updating the CredentialIssuer, located via the provided
+// credentialIssuerLocationConfig, with any errors that it encounters.
 func NewAnnotaterController(
 	agentPodConfig *AgentPodConfig,
-	credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig,
+	credentialIssuerLocationConfig *CredentialIssuerLocationConfig,
 	clock clock.Clock,
 	k8sClient kubernetes.Interface,
 	pinnipedAPIClient pinnipedclientset.Interface,
@@ -60,13 +60,13 @@ func NewAnnotaterController(
 		controllerlib.Config{
 			Name: "kube-cert-agent-annotater-controller",
 			Syncer: &annotaterController{
-				agentPodConfig:                       agentPodConfig,
-				credentialIssuerConfigLocationConfig: credentialIssuerConfigLocationConfig,
-				clock:                                clock,
-				k8sClient:                            k8sClient,
-				pinnipedAPIClient:                    pinnipedAPIClient,
-				kubeSystemPodInformer:                kubeSystemPodInformer,
-				agentPodInformer:                     agentPodInformer,
+				agentPodConfig:                 agentPodConfig,
+				credentialIssuerLocationConfig: credentialIssuerLocationConfig,
+				clock:                          clock,
+				k8sClient:                      k8sClient,
+				pinnipedAPIClient:              pinnipedAPIClient,
+				kubeSystemPodInformer:          kubeSystemPodInformer,
+				agentPodInformer:               agentPodInformer,
 			},
 		},
 		withInformer(
@@ -120,11 +120,11 @@ func (c *annotaterController) Sync(ctx controllerlib.Context) error {
 			keyPath,
 		); err != nil {
 			err = fmt.Errorf("cannot update agent pod: %w", err)
-			strategyResultUpdateErr := createOrUpdateCredentialIssuerConfig(ctx.Context, *c.credentialIssuerConfigLocationConfig, nil, c.clock, c.pinnipedAPIClient, err)
+			strategyResultUpdateErr := createOrUpdateCredentialIssuer(ctx.Context, *c.credentialIssuerLocationConfig, nil, c.clock, c.pinnipedAPIClient, err)
 			if strategyResultUpdateErr != nil {
-				// If the CIC update fails, then we probably want to try again. This controller will get
-				// called again because of the pod create failure, so just try the CIC update again then.
-				klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuerConfig")
+				// If the CI update fails, then we probably want to try again. This controller will get
+				// called again because of the pod create failure, so just try the CI update again then.
+				klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuer")
 			}
 
 			return err

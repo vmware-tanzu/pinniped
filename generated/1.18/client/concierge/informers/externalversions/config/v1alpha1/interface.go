@@ -11,8 +11,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// CredentialIssuerConfigs returns a CredentialIssuerConfigInformer.
-	CredentialIssuerConfigs() CredentialIssuerConfigInformer
+	// CredentialIssuers returns a CredentialIssuerInformer.
+	CredentialIssuers() CredentialIssuerInformer
 }
 
 type version struct {
@@ -26,7 +26,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// CredentialIssuerConfigs returns a CredentialIssuerConfigInformer.
-func (v *version) CredentialIssuerConfigs() CredentialIssuerConfigInformer {
-	return &credentialIssuerConfigInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+// CredentialIssuers returns a CredentialIssuerInformer.
+func (v *version) CredentialIssuers() CredentialIssuerInformer {
+	return &credentialIssuerInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

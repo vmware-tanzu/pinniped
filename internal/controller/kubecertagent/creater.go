@@ -21,25 +21,25 @@ import (
 )
 
 type createrController struct {
-	agentPodConfig                       *AgentPodConfig
-	credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig
-	credentialIssuerConfigLabels         map[string]string
-	clock                                clock.Clock
-	k8sClient                            kubernetes.Interface
-	pinnipedAPIClient                    pinnipedclientset.Interface
-	kubeSystemPodInformer                corev1informers.PodInformer
-	agentPodInformer                     corev1informers.PodInformer
+	agentPodConfig                 *AgentPodConfig
+	credentialIssuerLocationConfig *CredentialIssuerLocationConfig
+	credentialIssuerLabels         map[string]string
+	clock                          clock.Clock
+	k8sClient                      kubernetes.Interface
+	pinnipedAPIClient              pinnipedclientset.Interface
+	kubeSystemPodInformer          corev1informers.PodInformer
+	agentPodInformer               corev1informers.PodInformer
 }
 
 // NewCreaterController returns a controller that creates new kube-cert-agent pods for every known
 // kube-controller-manager pod.
 //
-// It also is tasked with updating the CredentialIssuerConfig, located via the provided
-// credentialIssuerConfigLocationConfig, with any errors that it encounters.
+// It also is tasked with updating the CredentialIssuer, located via the provided
+// credentialIssuerLocationConfig, with any errors that it encounters.
 func NewCreaterController(
 	agentPodConfig *AgentPodConfig,
-	credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig,
-	credentialIssuerConfigLabels map[string]string,
+	credentialIssuerLocationConfig *CredentialIssuerLocationConfig,
+	credentialIssuerLabels map[string]string,
 	clock clock.Clock,
 	k8sClient kubernetes.Interface,
 	pinnipedAPIClient pinnipedclientset.Interface,
@@ -53,14 +53,14 @@ func NewCreaterController(
 			//nolint: misspell
 			Name: "kube-cert-agent-creater-controller",
 			Syncer: &createrController{
-				agentPodConfig:                       agentPodConfig,
-				credentialIssuerConfigLocationConfig: credentialIssuerConfigLocationConfig,
-				credentialIssuerConfigLabels:         credentialIssuerConfigLabels,
-				clock:                                clock,
-				k8sClient:                            k8sClient,
-				pinnipedAPIClient:                    pinnipedAPIClient,
-				kubeSystemPodInformer:                kubeSystemPodInformer,
-				agentPodInformer:                     agentPodInformer,
+				agentPodConfig:                 agentPodConfig,
+				credentialIssuerLocationConfig: credentialIssuerLocationConfig,
+				credentialIssuerLabels:         credentialIssuerLabels,
+				clock:                          clock,
+				k8sClient:                      k8sClient,
+				pinnipedAPIClient:              pinnipedAPIClient,
+				kubeSystemPodInformer:          kubeSystemPodInformer,
+				agentPodInformer:               agentPodInformer,
 			},
 		},
 		withInformer(
@@ -73,7 +73,7 @@ func NewCreaterController(
 			pinnipedcontroller.SimpleFilter(isAgentPod),
 			controllerlib.InformerOption{},
 		),
-		// Be sure to run once even to make sure the CIC is updated if there are no controller manager
+		// Be sure to run once even to make sure the CI is updated if there are no controller manager
 		// pods. We should be able to pass an empty key since we don't use the key in the sync (we sync
 		// the world).
 		withInitialEvent(controllerlib.Key{}),
@@ -94,11 +94,11 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 
 	if len(controllerManagerPods) == 0 {
 		// If there are no controller manager pods, we alert the user that we can't find the keypair via
-		// the CredentialIssuerConfig.
-		return createOrUpdateCredentialIssuerConfig(
+		// the CredentialIssuer.
+		return createOrUpdateCredentialIssuer(
 			ctx.Context,
-			*c.credentialIssuerConfigLocationConfig,
-			c.credentialIssuerConfigLabels,
+			*c.credentialIssuerLocationConfig,
+			c.credentialIssuerLabels,
 			c.clock,
 			c.pinnipedAPIClient,
 			constable.Error("did not find kube-controller-manager pod(s)"),
@@ -130,18 +130,18 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 				Create(ctx.Context, agentPod, metav1.CreateOptions{})
 			if err != nil {
 				err = fmt.Errorf("cannot create agent pod: %w", err)
-				strategyResultUpdateErr := createOrUpdateCredentialIssuerConfig(
+				strategyResultUpdateErr := createOrUpdateCredentialIssuer(
 					ctx.Context,
-					*c.credentialIssuerConfigLocationConfig,
-					c.credentialIssuerConfigLabels,
+					*c.credentialIssuerLocationConfig,
+					c.credentialIssuerLabels,
 					c.clock,
 					c.pinnipedAPIClient,
 					err,
 				)
 				if strategyResultUpdateErr != nil {
-					// If the CIC update fails, then we probably want to try again. This controller will get
-					// called again because of the pod create failure, so just try the CIC update again then.
-					klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuerConfig")
+					// If the CI update fails, then we probably want to try again. This controller will get
+					// called again because of the pod create failure, so just try the CI update again then.
+					klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuer")
 				}
 
 				return err

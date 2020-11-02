@@ -170,18 +170,18 @@ func (e expectedKubeconfigYAML) String() string {
 		`, e.clusterCAData, e.clusterServer, e.command, e.pinnipedEndpoint, e.pinnipedCABundle, e.namespace, e.token, e.authenticatorType, e.authenticatorName)
 }
 
-func newCredentialIssuerConfig(name, namespace, server, certificateAuthorityData string) *configv1alpha1.CredentialIssuerConfig {
-	return &configv1alpha1.CredentialIssuerConfig{
+func newCredentialIssuer(name, namespace, server, certificateAuthorityData string) *configv1alpha1.CredentialIssuer {
+	return &configv1alpha1.CredentialIssuer{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "CredentialIssuerConfig",
+			Kind:       "CredentialIssuer",
 			APIVersion: configv1alpha1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Status: configv1alpha1.CredentialIssuerConfigStatus{
-			KubeConfigInfo: &configv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+		Status: configv1alpha1.CredentialIssuerStatus{
+			KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
 				Server:                   server,
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(certificateAuthorityData)),
 			},
@@ -264,59 +264,59 @@ func TestRun(t *testing.T) {
 			wantError: `multiple authenticators were found in namespace "test-namespace", so --authenticator-name/--authenticator-type must be specified`,
 		},
 		{
-			name: "fail to get CredentialIssuerConfigs",
+			name: "fail to get CredentialIssuers",
 			mocks: func(cmd *getKubeConfigCommand) {
 				clientset := pinnipedfake.NewSimpleClientset()
 				clientset.PrependReactor("*", "*", func(_ coretesting.Action) (bool, runtime.Object, error) {
-					return true, nil, fmt.Errorf("some error getting CredentialIssuerConfigs")
+					return true, nil, fmt.Errorf("some error getting CredentialIssuers")
 				})
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
 					return clientset, nil
 				}
 			},
-			wantError: "some error getting CredentialIssuerConfigs",
+			wantError: "some error getting CredentialIssuers",
 		},
 		{
-			name: "zero CredentialIssuerConfigs found",
+			name: "zero CredentialIssuers found",
 			mocks: func(cmd *getKubeConfigCommand) {
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
 					return pinnipedfake.NewSimpleClientset(
-						newCredentialIssuerConfig("pinniped-config-1", "not-the-test-namespace", "", ""),
+						newCredentialIssuer("pinniped-config-1", "not-the-test-namespace", "", ""),
 					), nil
 				}
 			},
-			wantError: `No CredentialIssuerConfig was found in namespace "test-namespace". Is Pinniped installed on this cluster in namespace "test-namespace"?`,
+			wantError: `No CredentialIssuer was found in namespace "test-namespace". Is Pinniped installed on this cluster in namespace "test-namespace"?`,
 		},
 		{
-			name: "multiple CredentialIssuerConfigs found",
+			name: "multiple CredentialIssuers found",
 			mocks: func(cmd *getKubeConfigCommand) {
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
 					return pinnipedfake.NewSimpleClientset(
-						newCredentialIssuerConfig("pinniped-config-1", "test-namespace", "", ""),
-						newCredentialIssuerConfig("pinniped-config-2", "test-namespace", "", ""),
+						newCredentialIssuer("pinniped-config-1", "test-namespace", "", ""),
+						newCredentialIssuer("pinniped-config-2", "test-namespace", "", ""),
 					), nil
 				}
 			},
-			wantError: `More than one CredentialIssuerConfig was found in namespace "test-namespace"`,
+			wantError: `More than one CredentialIssuer was found in namespace "test-namespace"`,
 		},
 		{
-			name: "CredentialIssuerConfig missing KubeConfigInfo",
+			name: "CredentialIssuer missing KubeConfigInfo",
 			mocks: func(cmd *getKubeConfigCommand) {
-				cic := newCredentialIssuerConfig("pinniped-config", "test-namespace", "", "")
-				cic.Status.KubeConfigInfo = nil
+				ci := newCredentialIssuer("pinniped-config", "test-namespace", "", "")
+				ci.Status.KubeConfigInfo = nil
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
-					return pinnipedfake.NewSimpleClientset(cic), nil
+					return pinnipedfake.NewSimpleClientset(ci), nil
 				}
 			},
-			wantError: `CredentialIssuerConfig "pinniped-config" was missing KubeConfigInfo`,
+			wantError: `CredentialIssuer "pinniped-config" was missing KubeConfigInfo`,
 		},
 		{
 			name: "KubeConfigInfo has invalid base64",
 			mocks: func(cmd *getKubeConfigCommand) {
-				cic := newCredentialIssuerConfig("pinniped-config", "test-namespace", "https://example.com", "")
-				cic.Status.KubeConfigInfo.CertificateAuthorityData = "invalid-base64-test-ca"
+				ci := newCredentialIssuer("pinniped-config", "test-namespace", "https://example.com", "")
+				ci.Status.KubeConfigInfo.CertificateAuthorityData = "invalid-base64-test-ca"
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
-					return pinnipedfake.NewSimpleClientset(cic), nil
+					return pinnipedfake.NewSimpleClientset(ci), nil
 				}
 			},
 			wantError: `illegal base64 data at input byte 7`,
@@ -324,9 +324,9 @@ func TestRun(t *testing.T) {
 		{
 			name: "success using remote CA data",
 			mocks: func(cmd *getKubeConfigCommand) {
-				cic := newCredentialIssuerConfig("pinniped-config", "test-namespace", "https://fake-server-url-value", "fake-certificate-authority-data-value")
+				ci := newCredentialIssuer("pinniped-config", "test-namespace", "https://fake-server-url-value", "fake-certificate-authority-data-value")
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
-					return pinnipedfake.NewSimpleClientset(cic), nil
+					return pinnipedfake.NewSimpleClientset(ci), nil
 				}
 			},
 			wantStdout: expectedKubeconfigYAML{
@@ -350,11 +350,11 @@ func TestRun(t *testing.T) {
 				cmd.kubeClientCreator = func(_ *rest.Config) (pinnipedclientset.Interface, error) {
 					return pinnipedfake.NewSimpleClientset(
 						&authv1alpha.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "discovered-authenticator"}},
-						newCredentialIssuerConfig("pinniped-config", "test-namespace", "https://example.com", "test-ca"),
+						newCredentialIssuer("pinniped-config", "test-namespace", "https://example.com", "test-ca"),
 					), nil
 				}
 			},
-			wantStderr: `WARNING: Server and certificate authority did not match between local kubeconfig and Pinniped's CredentialIssuerConfig on the cluster. Using local kubeconfig values.`,
+			wantStderr: `WARNING: Server and certificate authority did not match between local kubeconfig and Pinniped's CredentialIssuer on the cluster. Using local kubeconfig values.`,
 			wantStdout: expectedKubeconfigYAML{
 				clusterCAData:     "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
 				clusterServer:     "https://fake-server-url-value",

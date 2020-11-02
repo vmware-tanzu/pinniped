@@ -13,7 +13,7 @@ import (
 
 type ConfigV1alpha1Interface interface {
 	RESTClient() rest.Interface
-	CredentialIssuerConfigsGetter
+	CredentialIssuersGetter
 }
 
 // ConfigV1alpha1Client is used to interact with features provided by the config.concierge.pinniped.dev group.
@@ -21,8 +21,8 @@ type ConfigV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *ConfigV1alpha1Client) CredentialIssuerConfigs(namespace string) CredentialIssuerConfigInterface {
-	return newCredentialIssuerConfigs(c, namespace)
+func (c *ConfigV1alpha1Client) CredentialIssuers(namespace string) CredentialIssuerInterface {
+	return newCredentialIssuers(c, namespace)
 }
 
 // NewForConfig creates a new ConfigV1alpha1Client for the given config.

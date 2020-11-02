@@ -70,7 +70,7 @@ func (c *deleterController) Sync(ctx controllerlib.Context) error {
 			return err
 		}
 		if controllerManagerPod == nil ||
-			!isAgentPodUpToDate(agentPod, newAgentPod(controllerManagerPod, c.agentPodConfig.PodTemplate())) {
+			!isAgentPodUpToDate(agentPod, c.agentPodConfig.newAgentPod(controllerManagerPod)) {
 			klog.InfoS("deleting agent pod", "pod", klog.KObj(agentPod))
 			err := c.k8sClient.
 				CoreV1().

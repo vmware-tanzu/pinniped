@@ -264,7 +264,8 @@ func TestDeleterControllerSync(t *testing.T) {
 				when("the agent pod is out of sync via automount service account token", func() {
 					it.Before(func() {
 						updatedAgentPod := agentPod.DeepCopy()
-						updatedAgentPod.Spec.AutomountServiceAccountToken = boolPtr(true)
+						t := true
+						updatedAgentPod.Spec.AutomountServiceAccountToken = &t
 						r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
 						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
 					})
@@ -299,6 +300,59 @@ func TestDeleterControllerSync(t *testing.T) {
 					it.Before(func() {
 						updatedAgentPod := agentPod.DeepCopy()
 						updatedAgentPod.Spec.Containers[0].Image = "new-image"
+						r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+					})
+
+					it("deletes the agent pod", func() {
+						startInformersAndController()
+						err := controllerlib.TestSync(t, subject, *syncContext)
+
+						r.NoError(err)
+						requireAgentPodWasDeleted()
+					})
+				})
+
+				when("the agent pod is out of sync with the template via runAsUser", func() {
+					it.Before(func() {
+						updatedAgentPod := agentPod.DeepCopy()
+						notRoot := int64(1234)
+						updatedAgentPod.Spec.SecurityContext.RunAsUser = &notRoot
+						r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+					})
+
+					it("deletes the agent pod", func() {
+						startInformersAndController()
+						err := controllerlib.TestSync(t, subject, *syncContext)
+
+						r.NoError(err)
+						requireAgentPodWasDeleted()
+					})
+				})
+
+				when("the agent pod is out of sync with the template via runAsGroup", func() {
+					it.Before(func() {
+						updatedAgentPod := agentPod.DeepCopy()
+						notRoot := int64(1234)
+						updatedAgentPod.Spec.SecurityContext.RunAsGroup = &notRoot
+						r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+					})
+
+					it("deletes the agent pod", func() {
+						startInformersAndController()
+						err := controllerlib.TestSync(t, subject, *syncContext)
+
+						r.NoError(err)
+						requireAgentPodWasDeleted()
+					})
+				})
+
+				when("the agent pod is out of sync with the template via having a nil SecurityContext", func() {
+					it.Before(func() {
+						updatedAgentPod := agentPod.DeepCopy()
+						updatedAgentPod.Spec.SecurityContext = nil
 						r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
 						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
 					})

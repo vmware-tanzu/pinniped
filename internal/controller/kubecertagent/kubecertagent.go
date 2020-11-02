@@ -95,8 +95,11 @@ func (c *AgentPodConfig) AgentSelector() labels.Selector {
 	return labels.SelectorFromSet(map[string]string{agentPodLabelKey: agentPodLabelValue})
 }
 
-func (c *AgentPodConfig) PodTemplate() *corev1.Pod {
+func (c *AgentPodConfig) newAgentPod(controllerManagerPod *corev1.Pod) *corev1.Pod {
 	terminateImmediately := int64(0)
+	rootID := int64(0)
+	f := false
+	falsePtr := &f
 
 	imagePullSecrets := []corev1.LocalObjectReference{}
 	for _, imagePullSecret := range c.ContainerImagePullSecrets {
@@ -108,11 +111,15 @@ func (c *AgentPodConfig) PodTemplate() *corev1.Pod {
 		)
 	}
 
-	pod := &corev1.Pod{
+	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      c.PodNamePrefix,
+			Name:      fmt.Sprintf("%s%s", c.PodNamePrefix, hash(controllerManagerPod)),
 			Namespace: c.Namespace,
 			Labels:    c.Labels(),
+			Annotations: map[string]string{
+				controllerManagerNameAnnotationKey: controllerManagerPod.Name,
+				controllerManagerUIDAnnotationKey:  string(controllerManagerPod.UID),
+			},
 		},
 		Spec: corev1.PodSpec{
 			TerminationGracePeriodSeconds: &terminateImmediately,
@@ -123,6 +130,7 @@ func (c *AgentPodConfig) PodTemplate() *corev1.Pod {
 					Image:           c.ContainerImage,
 					ImagePullPolicy: corev1.PullIfNotPresent,
 					Command:         []string{"/bin/sleep", "infinity"},
+					VolumeMounts:    controllerManagerPod.Spec.Containers[0].VolumeMounts,
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
 							corev1.ResourceMemory: resource.MustParse("16Mi"),
@@ -135,44 +143,20 @@ func (c *AgentPodConfig) PodTemplate() *corev1.Pod {
 					},
 				},
 			},
+			Volumes:                      controllerManagerPod.Spec.Volumes,
+			RestartPolicy:                corev1.RestartPolicyNever,
+			NodeSelector:                 controllerManagerPod.Spec.NodeSelector,
+			AutomountServiceAccountToken: falsePtr,
+			NodeName:                     controllerManagerPod.Spec.NodeName,
+			Tolerations:                  controllerManagerPod.Spec.Tolerations,
+			// We need to run the agent pod as root since the file permissions
+			// on the cluster keypair usually restricts access to only root.
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsUser:  &rootID,
+				RunAsGroup: &rootID,
+			},
 		},
 	}
-	return pod
-}
-
-func newAgentPod(
-	controllerManagerPod *corev1.Pod,
-	template *corev1.Pod,
-) *corev1.Pod {
-	agentPod := template.DeepCopy()
-
-	agentPod.Name = fmt.Sprintf("%s%s", agentPod.Name, hash(controllerManagerPod))
-
-	// It would be nice to use the OwnerReferences field here, but the agent pod is most likely in a
-	// different namespace than the kube-controller-manager pod, and therefore that breaks the
-	// OwnerReferences contract (see metav1.OwnerReference doc).
-	if agentPod.Annotations == nil {
-		agentPod.Annotations = make(map[string]string)
-	}
-	agentPod.Annotations[controllerManagerNameAnnotationKey] = controllerManagerPod.Name
-	agentPod.Annotations[controllerManagerUIDAnnotationKey] = string(controllerManagerPod.UID)
-
-	// We need to run the agent pod as root since the file permissions on the cluster keypair usually
-	// restricts access to only root.
-	rootID := int64(0)
-	agentPod.Spec.Containers[0].VolumeMounts = controllerManagerPod.Spec.Containers[0].VolumeMounts
-	agentPod.Spec.Volumes = controllerManagerPod.Spec.Volumes
-	agentPod.Spec.RestartPolicy = corev1.RestartPolicyNever
-	agentPod.Spec.NodeSelector = controllerManagerPod.Spec.NodeSelector
-	agentPod.Spec.AutomountServiceAccountToken = boolPtr(false)
-	agentPod.Spec.NodeName = controllerManagerPod.Spec.NodeName
-	agentPod.Spec.Tolerations = controllerManagerPod.Spec.Tolerations
-	agentPod.Spec.SecurityContext = &corev1.PodSecurityContext{
-		RunAsUser:  &rootID,
-		RunAsGroup: &rootID,
-	}
-
-	return agentPod
 }
 
 func isAgentPodUpToDate(actualAgentPod, expectedAgentPod *corev1.Pod) bool {
@@ -345,8 +329,6 @@ func strategyError(clock clock.Clock, err error) configv1alpha1.CredentialIssuer
 		LastUpdateTime: metav1.NewTime(clock.Now()),
 	}
 }
-
-func boolPtr(b bool) *bool { return &b }
 
 func hash(controllerManagerPod *corev1.Pod) string {
 	// FNV should be faster than SHA, and we don't care about hash-reversibility here, and Kubernetes

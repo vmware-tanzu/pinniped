@@ -116,7 +116,7 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 			return err
 		}
 		if agentPod == nil {
-			agentPod = newAgentPod(controllerManagerPod, c.agentPodConfig.PodTemplate())
+			agentPod = c.agentPodConfig.newAgentPod(controllerManagerPod)
 
 			klog.InfoS(
 				"creating agent pod",

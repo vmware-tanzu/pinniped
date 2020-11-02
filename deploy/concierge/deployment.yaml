@@ -101,8 +101,10 @@ spec:
           imagePullPolicy: IfNotPresent
           resources:
             requests:
+              cpu: "100m"
               memory: "128Mi"
             limits:
+              cpu: "100m"
               memory: "128Mi"
           args:
             - --config=/etc/config/pinniped.yaml

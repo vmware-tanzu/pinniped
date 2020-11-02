@@ -110,7 +110,7 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 			controllerManagerPod,
 			c.kubeSystemPodInformer,
 			c.agentPodInformer,
-			c.agentPodConfig.Labels(),
+			c.agentPodConfig.AgentSelector(),
 		)
 		if err != nil {
 			return err
@@ -158,9 +158,8 @@ func findAgentPodForSpecificControllerManagerPod(
 	controllerManagerPod *corev1.Pod,
 	kubeSystemPodInformer corev1informers.PodInformer,
 	agentPodInformer corev1informers.PodInformer,
-	agentLabels map[string]string,
+	agentSelector labels.Selector,
 ) (*corev1.Pod, error) {
-	agentSelector := labels.SelectorFromSet(agentLabels)
 	agentPods, err := agentPodInformer.
 		Lister().
 		List(agentSelector)

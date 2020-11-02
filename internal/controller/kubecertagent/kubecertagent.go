@@ -20,6 +20,7 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/clock"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/klog/v2"
@@ -81,13 +82,17 @@ type CredentialIssuerConfigLocationConfig struct {
 }
 
 func (c *AgentPodConfig) Labels() map[string]string {
-	labels := map[string]string{
+	allLabels := map[string]string{
 		agentPodLabelKey: agentPodLabelValue,
 	}
 	for k, v := range c.AdditionalLabels {
-		labels[k] = v
+		allLabels[k] = v
 	}
-	return labels
+	return allLabels
+}
+
+func (c *AgentPodConfig) AgentSelector() labels.Selector {
+	return labels.SelectorFromSet(map[string]string{agentPodLabelKey: agentPodLabelValue})
 }
 
 func (c *AgentPodConfig) PodTemplate() *corev1.Pod {
@@ -164,10 +169,19 @@ func newAgentPod(
 }
 
 func isAgentPodUpToDate(actualAgentPod, expectedAgentPod *corev1.Pod) bool {
-	return equality.Semantic.DeepEqual(
-		actualAgentPod.Spec.Containers[0].VolumeMounts,
-		expectedAgentPod.Spec.Containers[0].VolumeMounts,
-	) &&
+	requiredLabelsAllPresentWithCorrectValues := true
+	actualLabels := actualAgentPod.ObjectMeta.Labels
+	for expectedLabelKey, expectedLabelValue := range expectedAgentPod.ObjectMeta.Labels {
+		if actualLabels[expectedLabelKey] != expectedLabelValue {
+			requiredLabelsAllPresentWithCorrectValues = false
+			break
+		}
+	}
+	return requiredLabelsAllPresentWithCorrectValues &&
+		equality.Semantic.DeepEqual(
+			actualAgentPod.Spec.Containers[0].VolumeMounts,
+			expectedAgentPod.Spec.Containers[0].VolumeMounts,
+		) &&
 		equality.Semantic.DeepEqual(
 			actualAgentPod.Spec.Containers[0].Name,
 			expectedAgentPod.Spec.Containers[0].Name,

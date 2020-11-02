@@ -223,10 +223,24 @@ func TestCreaterControllerSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 
 					r.NoError(err)
-					r.Equal(
-						[]coretesting.Action{},
-						kubeAPIClient.Actions(),
-					)
+					r.Empty(kubeAPIClient.Actions())
+				})
+			})
+
+			when("there is a matching agent pod that is missing some of the configured additional labels", func() {
+				it.Before(func() {
+					nonMatchingAgentPod := agentPod.DeepCopy()
+					delete(nonMatchingAgentPod.ObjectMeta.Labels, "myLabelKey1")
+					r.NoError(agentInformerClient.Tracker().Add(nonMatchingAgentPod))
+					r.NoError(kubeAPIClient.Tracker().Add(nonMatchingAgentPod))
+				})
+
+				it("does nothing because the deleter controller is responsible for deleting it", func() {
+					startInformersAndController()
+					err := controllerlib.TestSync(t, subject, *syncContext)
+
+					r.NoError(err)
+					r.Empty(kubeAPIClient.Actions())
 				})
 			})
 

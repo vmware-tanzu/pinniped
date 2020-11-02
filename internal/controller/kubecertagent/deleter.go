@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -57,11 +56,10 @@ func NewDeleterController(
 
 // Sync implements controllerlib.Syncer.
 func (c *deleterController) Sync(ctx controllerlib.Context) error {
-	agentSelector := labels.SelectorFromSet(c.agentPodConfig.Labels())
 	agentPods, err := c.agentPodInformer.
 		Lister().
 		Pods(c.agentPodConfig.Namespace).
-		List(agentSelector)
+		List(c.agentPodConfig.AgentSelector())
 	if err != nil {
 		return fmt.Errorf("informer cannot list agent pods: %w", err)
 	}

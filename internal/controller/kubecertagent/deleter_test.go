@@ -72,6 +72,10 @@ func TestDeleterControllerSync(t *testing.T) {
 					Namespace:      agentPodNamespace,
 					ContainerImage: "some-agent-image",
 					PodNamePrefix:  "some-agent-name-",
+					AdditionalLabels: map[string]string{
+						"myLabelKey1": "myLabelValue1",
+						"myLabelKey2": "myLabelValue2",
+					},
 				},
 				kubeAPIClient,
 				kubeSystemInformers.Core().V1().Pods(),
@@ -93,6 +97,13 @@ func TestDeleterControllerSync(t *testing.T) {
 			kubeSystemInformers.Start(timeoutContext.Done())
 			agentInformers.Start(timeoutContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
+		}
+
+		var requireAgentPodWasDeleted = func() {
+			r.Equal(
+				[]coretesting.Action{coretesting.NewDeleteAction(podsGVR, agentPodNamespace, agentPod.Name)},
+				kubeAPIClient.Actions(),
+			)
 		}
 
 		it.Before(func() {
@@ -148,19 +159,12 @@ func TestDeleterControllerSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 
 					r.NoError(err)
-					r.Equal(
-						[]coretesting.Action{},
-						kubeAPIClient.Actions(),
-					)
+					r.Empty(kubeAPIClient.Actions())
 				})
 
 				when("the agent pod is out of sync with the controller manager via volume mounts", func() {
 					it.Before(func() {
-						controllerManagerPod.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
-							{
-								Name: "some-other-volume-mount",
-							},
-						}
+						controllerManagerPod.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{{Name: "some-other-volume-mount"}}
 						r.NoError(kubeSystemInformerClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
 						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
 					})
@@ -170,26 +174,13 @@ func TestDeleterControllerSync(t *testing.T) {
 						err := controllerlib.TestSync(t, subject, *syncContext)
 
 						r.NoError(err)
-						r.Equal(
-							[]coretesting.Action{
-								coretesting.NewDeleteAction(
-									podsGVR,
-									agentPodNamespace,
-									agentPod.Name,
-								),
-							},
-							kubeAPIClient.Actions(),
-						)
+						requireAgentPodWasDeleted()
 					})
 				})
 
 				when("the agent pod is out of sync with the controller manager via volumes", func() {
 					it.Before(func() {
-						controllerManagerPod.Spec.Volumes = []corev1.Volume{
-							{
-								Name: "some-other-volume",
-							},
-						}
+						controllerManagerPod.Spec.Volumes = []corev1.Volume{{Name: "some-other-volume"}}
 						r.NoError(kubeSystemInformerClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
 						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
 					})
@@ -199,16 +190,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						err := controllerlib.TestSync(t, subject, *syncContext)
 
 						r.NoError(err)
-						r.Equal(
-							[]coretesting.Action{
-								coretesting.NewDeleteAction(
-									podsGVR,
-									agentPodNamespace,
-									agentPod.Name,
-								),
-							},
-							kubeAPIClient.Actions(),
-						)
+						requireAgentPodWasDeleted()
 					})
 				})
 
@@ -226,16 +208,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						err := controllerlib.TestSync(t, subject, *syncContext)
 
 						r.NoError(err)
-						r.Equal(
-							[]coretesting.Action{
-								coretesting.NewDeleteAction(
-									podsGVR,
-									agentPodNamespace,
-									agentPod.Name,
-								),
-							},
-							kubeAPIClient.Actions(),
-						)
+						requireAgentPodWasDeleted()
 					})
 				})
 
@@ -251,26 +224,13 @@ func TestDeleterControllerSync(t *testing.T) {
 						err := controllerlib.TestSync(t, subject, *syncContext)
 
 						r.NoError(err)
-						r.Equal(
-							[]coretesting.Action{
-								coretesting.NewDeleteAction(
-									podsGVR,
-									agentPodNamespace,
-									agentPod.Name,
-								),
-							},
-							kubeAPIClient.Actions(),
-						)
+						requireAgentPodWasDeleted()
 					})
 				})
 
 				when("the agent pod is out of sync with the controller manager via tolerations", func() {
 					it.Before(func() {
-						controllerManagerPod.Spec.Tolerations = []corev1.Toleration{
-							{
-								Key: "some-other-toleration-key",
-							},
-						}
+						controllerManagerPod.Spec.Tolerations = []corev1.Toleration{{Key: "some-other-toleration-key"}}
 						r.NoError(kubeSystemInformerClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
 						r.NoError(kubeAPIClient.Tracker().Update(podsGVR, controllerManagerPod, controllerManagerPod.Namespace))
 					})
@@ -280,16 +240,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						err := controllerlib.TestSync(t, subject, *syncContext)
 
 						r.NoError(err)
-						r.Equal(
-							[]coretesting.Action{
-								coretesting.NewDeleteAction(
-									podsGVR,
-									agentPodNamespace,
-									agentPod.Name,
-								),
-							},
-							kubeAPIClient.Actions(),
-						)
+						requireAgentPodWasDeleted()
 					})
 				})
 
@@ -306,16 +257,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						err := controllerlib.TestSync(t, subject, *syncContext)
 
 						r.NoError(err)
-						r.Equal(
-							[]coretesting.Action{
-								coretesting.NewDeleteAction(
-									podsGVR,
-									agentPodNamespace,
-									agentPod.Name,
-								),
-							},
-							kubeAPIClient.Actions(),
-						)
+						requireAgentPodWasDeleted()
 					})
 				})
 
@@ -332,16 +274,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						err := controllerlib.TestSync(t, subject, *syncContext)
 
 						r.NoError(err)
-						r.Equal(
-							[]coretesting.Action{
-								coretesting.NewDeleteAction(
-									podsGVR,
-									agentPodNamespace,
-									agentPod.Name,
-								),
-							},
-							kubeAPIClient.Actions(),
-						)
+						requireAgentPodWasDeleted()
 					})
 				})
 
@@ -358,16 +291,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						err := controllerlib.TestSync(t, subject, *syncContext)
 
 						r.NoError(err)
-						r.Equal(
-							[]coretesting.Action{
-								coretesting.NewDeleteAction(
-									podsGVR,
-									agentPodNamespace,
-									agentPod.Name,
-								),
-							},
-							kubeAPIClient.Actions(),
-						)
+						requireAgentPodWasDeleted()
 					})
 				})
 
@@ -384,16 +308,74 @@ func TestDeleterControllerSync(t *testing.T) {
 						err := controllerlib.TestSync(t, subject, *syncContext)
 
 						r.NoError(err)
-						r.Equal(
-							[]coretesting.Action{
-								coretesting.NewDeleteAction(
-									podsGVR,
-									agentPodNamespace,
-									agentPod.Name,
-								),
-							},
-							kubeAPIClient.Actions(),
-						)
+						requireAgentPodWasDeleted()
+					})
+				})
+
+				when("the agent pod is out of sync with the template via labels", func() {
+					when("an additional label's value was changed", func() {
+						it.Before(func() {
+							updatedAgentPod := agentPod.DeepCopy()
+							updatedAgentPod.ObjectMeta.Labels = map[string]string{
+								"kube-cert-agent.pinniped.dev": "true",
+								// the value of a label is wrong so the pod should be deleted so it can get recreated with the new labels
+								"myLabelKey1": "myLabelValue1-outdated-value",
+								"myLabelKey2": "myLabelValue2-outdated-value",
+							}
+							r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+							r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+						})
+
+						it("deletes the agent pod", func() {
+							startInformersAndController()
+							err := controllerlib.TestSync(t, subject, *syncContext)
+
+							r.NoError(err)
+							requireAgentPodWasDeleted()
+						})
+					})
+
+					when("an additional custom label was added since the agent pod was created", func() {
+						it.Before(func() {
+							updatedAgentPod := agentPod.DeepCopy()
+							updatedAgentPod.ObjectMeta.Labels = map[string]string{
+								"kube-cert-agent.pinniped.dev": "true",
+								"myLabelKey1":                  "myLabelValue1",
+								// "myLabelKey2" is missing so the pod should be deleted so it can get recreated with the new labels
+							}
+							r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+							r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+						})
+
+						it("deletes the agent pod", func() {
+							startInformersAndController()
+							err := controllerlib.TestSync(t, subject, *syncContext)
+
+							r.NoError(err)
+							requireAgentPodWasDeleted()
+						})
+					})
+
+					when("the agent pod has extra labels that seem unrelated to the additional labels", func() {
+						it.Before(func() {
+							updatedAgentPod := agentPod.DeepCopy()
+							updatedAgentPod.ObjectMeta.Labels = map[string]string{
+								"kube-cert-agent.pinniped.dev": "true",
+								"myLabelKey1":                  "myLabelValue1",
+								"myLabelKey2":                  "myLabelValue2",
+								"extra-label":                  "not-related-to-the-sepcified-additional-labels",
+							}
+							r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+							r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
+						})
+
+						it("does not delete the agent pod because someone else might have put those labels on it", func() {
+							startInformersAndController()
+							err := controllerlib.TestSync(t, subject, *syncContext)
+
+							r.NoError(err)
+							r.Empty(kubeAPIClient.Actions())
+						})
 					})
 				})
 
@@ -410,16 +392,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						err := controllerlib.TestSync(t, subject, *syncContext)
 
 						r.NoError(err)
-						r.Equal(
-							[]coretesting.Action{
-								coretesting.NewDeleteAction(
-									podsGVR,
-									agentPodNamespace,
-									agentPod.Name,
-								),
-							},
-							kubeAPIClient.Actions(),
-						)
+						requireAgentPodWasDeleted()
 					})
 				})
 			})
@@ -436,16 +409,7 @@ func TestDeleterControllerSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 
 					r.NoError(err)
-					r.Equal(
-						[]coretesting.Action{
-							coretesting.NewDeleteAction(
-								podsGVR,
-								agentPodNamespace,
-								agentPod.Name,
-							),
-						},
-						kubeAPIClient.Actions(),
-					)
+					requireAgentPodWasDeleted()
 				})
 			})
 
@@ -461,16 +425,7 @@ func TestDeleterControllerSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 
 					r.NoError(err)
-					r.Equal(
-						[]coretesting.Action{
-							coretesting.NewDeleteAction(
-								podsGVR,
-								agentPodNamespace,
-								agentPod.Name,
-							),
-						},
-						kubeAPIClient.Actions(),
-					)
+					requireAgentPodWasDeleted()
 				})
 			})
 
@@ -480,16 +435,7 @@ func TestDeleterControllerSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 
 					r.NoError(err)
-					r.Equal(
-						[]coretesting.Action{
-							coretesting.NewDeleteAction(
-								podsGVR,
-								agentPodNamespace,
-								agentPod.Name,
-							),
-						},
-						kubeAPIClient.Actions(),
-					)
+					requireAgentPodWasDeleted()
 				})
 			})
 		})
@@ -500,10 +446,7 @@ func TestDeleterControllerSync(t *testing.T) {
 				err := controllerlib.TestSync(t, subject, *syncContext)
 
 				r.NoError(err)
-				r.Equal(
-					[]coretesting.Action{},
-					kubeAPIClient.Actions(),
-				)
+				r.Empty(kubeAPIClient.Actions())
 			})
 		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))

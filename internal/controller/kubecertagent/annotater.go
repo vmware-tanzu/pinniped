@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/clock"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -85,11 +84,10 @@ func NewAnnotaterController(
 
 // Sync implements controllerlib.Syncer.
 func (c *annotaterController) Sync(ctx controllerlib.Context) error {
-	agentSelector := labels.SelectorFromSet(c.agentPodConfig.Labels())
 	agentPods, err := c.agentPodInformer.
 		Lister().
 		Pods(c.agentPodConfig.Namespace).
-		List(agentSelector)
+		List(c.agentPodConfig.AgentSelector())
 	if err != nil {
 		return fmt.Errorf("informer cannot list agent pods: %w", err)
 	}

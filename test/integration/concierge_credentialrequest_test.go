@@ -54,6 +54,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 		return response.Status.Credential != nil
 	}
 	assert.Eventually(t, successfulResponse, 10*time.Second, 500*time.Millisecond)
+	require.NotNil(t, response)
 	require.NotNil(t, response.Status.Credential)
 	require.Empty(t, response.Status.Message)
 	require.Empty(t, response.Spec)

@@ -157,6 +157,9 @@ func newAgentPod(
 	agentPod.Annotations[controllerManagerNameAnnotationKey] = controllerManagerPod.Name
 	agentPod.Annotations[controllerManagerUIDAnnotationKey] = string(controllerManagerPod.UID)
 
+	// We need to run the agent pod as root since the file permissions on the cluster keypair usually
+	// restricts access to only root.
+	rootID := int64(0)
 	agentPod.Spec.Containers[0].VolumeMounts = controllerManagerPod.Spec.Containers[0].VolumeMounts
 	agentPod.Spec.Volumes = controllerManagerPod.Spec.Volumes
 	agentPod.Spec.RestartPolicy = corev1.RestartPolicyNever
@@ -164,6 +167,10 @@ func newAgentPod(
 	agentPod.Spec.AutomountServiceAccountToken = boolPtr(false)
 	agentPod.Spec.NodeName = controllerManagerPod.Spec.NodeName
 	agentPod.Spec.Tolerations = controllerManagerPod.Spec.Tolerations
+	agentPod.Spec.SecurityContext = &corev1.PodSecurityContext{
+		RunAsUser:  &rootID,
+		RunAsGroup: &rootID,
+	}
 
 	return agentPod
 }
@@ -177,6 +184,11 @@ func isAgentPodUpToDate(actualAgentPod, expectedAgentPod *corev1.Pod) bool {
 			break
 		}
 	}
+
+	if actualAgentPod.Spec.SecurityContext == nil {
+		return false
+	}
+
 	return requiredLabelsAllPresentWithCorrectValues &&
 		equality.Semantic.DeepEqual(
 			actualAgentPod.Spec.Containers[0].VolumeMounts,
@@ -217,6 +229,14 @@ func isAgentPodUpToDate(actualAgentPod, expectedAgentPod *corev1.Pod) bool {
 		equality.Semantic.DeepEqual(
 			actualAgentPod.Spec.Tolerations,
 			expectedAgentPod.Spec.Tolerations,
+		) &&
+		equality.Semantic.DeepEqual(
+			actualAgentPod.Spec.SecurityContext.RunAsUser,
+			expectedAgentPod.Spec.SecurityContext.RunAsUser,
+		) &&
+		equality.Semantic.DeepEqual(
+			actualAgentPod.Spec.SecurityContext.RunAsGroup,
+			expectedAgentPod.Spec.SecurityContext.RunAsGroup,
 		)
 }
 

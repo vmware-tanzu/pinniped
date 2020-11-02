@@ -21,7 +21,7 @@ spec:
     - name: http
       protocol: TCP
       port: #@ data.values.service_http_nodeport_port
-      targetPort: 80
+      targetPort: 8080
       #@ if data.values.service_http_nodeport_nodeport:
       nodePort: #@ data.values.service_http_nodeport_nodeport
       #@ end
@@ -30,7 +30,7 @@ spec:
     - name: https
       protocol: TCP
       port: #@ data.values.service_https_nodeport_port
-      targetPort: 443
+      targetPort: 8443
       #@ if data.values.service_https_nodeport_nodeport:
       nodePort: #@ data.values.service_https_nodeport_nodeport
       #@ end
@@ -53,13 +53,13 @@ spec:
     - name: http
       protocol: TCP
       port: #@ data.values.service_http_clusterip_port
-      targetPort: 80
+      targetPort: 8080
     #@ end
     #@ if data.values.service_https_clusterip_port:
     - name: https
       protocol: TCP
       port: #@ data.values.service_https_clusterip_port
-      targetPort: 443
+      targetPort: 8443
     #@ end
 #@ end
 
@@ -82,12 +82,12 @@ spec:
     - name: http
       protocol: TCP
       port: #@ data.values.service_http_loadbalancer_port
-      targetPort: 80
+      targetPort: 8080
     #@ end
     #@ if data.values.service_https_loadbalancer_port:
     - name: https
       protocol: TCP
       port: #@ data.values.service_https_loadbalancer_port
-      targetPort: 443
+      targetPort: 8443
     #@ end
 #@ end

@@ -32,13 +32,13 @@ import (
 	"go.pinniped.dev/test/library"
 )
 
-// This test is intended to exercise the supervisor's HTTP port 80. It can either access it directly via
+// This test is intended to exercise the supervisor's HTTP port 8080. It can either access it directly via
 // the env.SupervisorHTTPAddress setting, or it can access it indirectly through a TLS-enabled Ingress which
-// uses the supervisor's port 80 as its backend via the env.SupervisorHTTPSIngressAddress and
+// uses the supervisor's port 8080 as its backend via the env.SupervisorHTTPSIngressAddress and
 // env.SupervisorHTTPSIngressCABundle settings, or it can exercise it both ways when all of those
 // env settings are present.
 //
-// Testing talking to the supervisor's port 443 where the supervisor is terminating TLS itself is
+// Testing talking to the supervisor's port 8443 where the supervisor is terminating TLS itself is
 // handled by the others tests in this file.
 func TestSupervisorOIDCDiscovery(t *testing.T) {
 	env := library.IntegrationEnv(t)
@@ -155,7 +155,7 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	temporarilyRemoveAllOIDCProviderConfigsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), pinnipedClient, kubeClient)
 
 	scheme := "https"
-	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 443
+	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 8443
 
 	hostname1 := strings.Split(address, ":")[0]
 	issuer1 := fmt.Sprintf("%s://%s/issuer1", scheme, address)
@@ -222,12 +222,12 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	temporarilyRemoveAllOIDCProviderConfigsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), pinnipedClient, kubeClient)
 
 	scheme := "https"
-	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 443
+	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 8443
 
 	hostAndPortSegments := strings.Split(address, ":")
 	// hostnames are case-insensitive, so test mis-matching the case of the issuer URL and the request URL
 	hostname := strings.ToLower(hostAndPortSegments[0])
-	port := "443"
+	port := "8443"
 	if len(hostAndPortSegments) > 1 {
 		port = hostAndPortSegments[1]
 	}

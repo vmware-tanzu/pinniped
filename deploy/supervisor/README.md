@@ -47,7 +47,7 @@ The most common ways are:
 
 1. Define an [`Ingress` resource](https://kubernetes.io/docs/concepts/services-networking/ingress/) with TLS certificates.
    In this case, the ingress will terminate TLS. Typically, the ingress will then talk plain HTTP to its backend,
-   which would be a NodePort or LoadBalancer Service in front of the HTTP port 80 of the Supervisor pods.
+   which would be a NodePort or LoadBalancer Service in front of the HTTP port 8080 of the Supervisor pods.
 
    The required configuration of the Ingress is specific to your cluster's Ingress Controller, so please refer to the
    documentation from your Kubernetes provider. If you are using a cluster from a cloud provider, then you'll probably
@@ -60,10 +60,10 @@ The most common ways are:
 1. Or, define a [TCP LoadBalancer Service](https://kubernetes.io/docs/concepts/services-networking/service/#loadbalancer)
    which is a layer 4 load balancer and does not terminate TLS. In this case, the Supervisor app will need to be
    configured with TLS certificates and will terminate the TLS connection itself (see the section about
-   OIDCProviderConfig below). The LoadBalancer Service should be configured to use the HTTPS port 443 of
+   OIDCProviderConfig below). The LoadBalancer Service should be configured to use the HTTPS port 8443 of
    the Supervisor pods as its `targetPort`.
 
-   *Warning:* Do not expose the Supervisor's port 80 to the public. It would not be secure for the OIDC protocol
+   *Warning:* Do not expose the Supervisor's port 8080 to the public. It would not be secure for the OIDC protocol
    to use HTTP, because the user's secret OIDC tokens would be transmitted across the network without encryption.
 
 1. Or, expose the Supervisor app using a Kubernetes service mesh technology, e.g. [Istio](https://istio.io/).
@@ -79,7 +79,7 @@ so if you choose to use an Ingress then you'll need to create that separately af
 
 #### Example: Using a LoadBalancer Service
 
-This is an example of creating a LoadBalancer Service to expose port 443 of the Supervisor app outside the cluster.
+This is an example of creating a LoadBalancer Service to expose port 8443 of the Supervisor app outside the cluster.
 
 ```yaml
 apiVersion: v1
@@ -96,7 +96,7 @@ spec:
   ports:
   - protocol: TCP
     port: 443
-    targetPort: 443
+    targetPort: 8443
 ```
 
 #### Example: Using a NodePort Service
@@ -127,7 +127,7 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: 80
+    targetPort: 8080
     nodePort: 31234 # This is the port that you would forward to the kind host. Or omit this key for a random port.
 ```
 

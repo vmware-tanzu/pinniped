@@ -60,6 +60,9 @@ spec:
     metadata:
       labels: #@ defaultLabel()
     spec:
+      securityContext:
+        runAsUser: 1001
+        runAsGroup: 1001
       serviceAccountName: #@ defaultResourceName()
       #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
       imagePullSecrets:
@@ -87,14 +90,14 @@ spec:
             - name: podinfo
               mountPath: /etc/podinfo
           ports:
-            - containerPort: 80
+            - containerPort: 8080
               protocol: TCP
-            - containerPort: 443
+            - containerPort: 8443
               protocol: TCP
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 80
+              port: 8080
               scheme: HTTP
             initialDelaySeconds: 2
             timeoutSeconds: 15
@@ -103,7 +106,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /healthz
-              port: 80
+              port: 8080
               scheme: HTTP
             initialDelaySeconds: 2
             timeoutSeconds: 3

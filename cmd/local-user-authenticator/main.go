@@ -375,7 +375,7 @@ func run() error {
 	klog.InfoS("controllers are ready")
 
 	//nolint: gosec // Intentionally binding to all network interfaces.
-	l, err := net.Listen("tcp", ":443")
+	l, err := net.Listen("tcp", ":8443")
 	if err != nil {
 		return fmt.Errorf("cannot create listener: %w", err)
 	}

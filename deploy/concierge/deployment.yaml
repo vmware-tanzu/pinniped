@@ -86,6 +86,9 @@ spec:
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ""
     spec:
+      securityContext:
+        runAsUser: 1001
+        runAsGroup: 1001
       serviceAccountName: #@ defaultResourceName()
       #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
       imagePullSecrets:
@@ -113,7 +116,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 443
+              port: 8443
               scheme: HTTPS
             initialDelaySeconds: 2
             timeoutSeconds: 15
@@ -122,7 +125,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /healthz
-              port: 443
+              port: 8443
               scheme: HTTPS
             initialDelaySeconds: 2
             timeoutSeconds: 3
@@ -173,7 +176,7 @@ spec:
   ports:
     - protocol: TCP
       port: 443
-      targetPort: 443
+      targetPort: 8443
 ---
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService

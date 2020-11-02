@@ -70,6 +70,7 @@ func exampleControllerManagerAndAgentPods(
 	}
 
 	zero := int64(0)
+	f := false
 
 	// fnv 32a hash of controller-manager uid
 	controllerManagerPodHash := "fbb0addd"
@@ -114,10 +115,11 @@ func exampleControllerManagerAndAgentPods(
 				},
 			},
 			RestartPolicy:                corev1.RestartPolicyNever,
-			AutomountServiceAccountToken: boolPtr(false),
+			AutomountServiceAccountToken: &f,
 			NodeName:                     controllerManagerPod.Spec.NodeName,
 			NodeSelector:                 controllerManagerPod.Spec.NodeSelector,
 			Tolerations:                  controllerManagerPod.Spec.Tolerations,
+			SecurityContext:              &corev1.PodSecurityContext{RunAsUser: &zero, RunAsGroup: &zero},
 		},
 	}
 

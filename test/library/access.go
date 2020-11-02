@@ -26,7 +26,7 @@ const (
 	accessRetryTimeout  = 10 * time.Second
 )
 
-// accessAsUserTest runs a generic test in which a clientUnderTest operating with username
+// AccessAsUserTest runs a generic test in which a clientUnderTest operating with username
 // testUsername tries to auth to the kube API (i.e., list namespaces).
 //
 // Use this function if you want to simply validate that a user can auth to the kube API after
@@ -49,6 +49,7 @@ func AccessAsUserTest(
 		}
 		assert.Eventually(t, canListNamespaces, accessRetryTimeout, accessRetryInterval)
 		require.NoError(t, err) // prints out the error and stops the test in case of failure
+		require.NotNil(t, listNamespaceResponse)
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	}
 }
@@ -73,11 +74,11 @@ func AccessAsUserWithKubectlTest(
 
 		assert.Eventually(t, canListNamespaces, accessRetryTimeout, accessRetryInterval)
 		require.NoError(t, err) // prints out the error and stops the test in case of failure
-		require.Contains(t, kubectlCommandOutput, expectedNamespace)
+		require.Containsf(t, kubectlCommandOutput, expectedNamespace, "actual output: %q", kubectlCommandOutput)
 	}
 }
 
-// accessAsGroupTest runs a generic test in which a clientUnderTest with membership in group
+// AccessAsGroupTest runs a generic test in which a clientUnderTest with membership in group
 // testGroup tries to auth to the kube API (i.e., list namespaces).
 //
 // Use this function if you want to simply validate that a user can auth to the kube API (via
@@ -100,6 +101,7 @@ func AccessAsGroupTest(
 		}
 		assert.Eventually(t, canListNamespaces, accessRetryTimeout, accessRetryInterval)
 		require.NoError(t, err) // prints out the error and stops the test in case of failure
+		require.NotNil(t, listNamespaceResponse)
 		require.NotEmpty(t, listNamespaceResponse.Items)
 	}
 }
@@ -124,7 +126,7 @@ func AccessAsGroupWithKubectlTest(
 
 		assert.Eventually(t, canListNamespaces, accessRetryTimeout, accessRetryInterval)
 		require.NoError(t, err) // prints out the error and stops the test in case of failure
-		require.Contains(t, kubectlCommandOutput, expectedNamespace)
+		require.Containsf(t, kubectlCommandOutput, expectedNamespace, "actual output: %q", kubectlCommandOutput)
 	}
 }
 

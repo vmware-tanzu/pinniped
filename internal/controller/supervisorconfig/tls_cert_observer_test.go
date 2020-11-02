@@ -225,8 +225,8 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 						Namespace: installedInNamespace,
 					},
 					Spec: v1alpha1.OIDCProviderSpec{
-						Issuer:                   "https://no-secret-issuer2.com",
-						SNICertificateSecretName: "",
+						Issuer: "https://no-secret-issuer2.com",
+						TLS:    &v1alpha1.OIDCProviderTLSSpec{SecretName: ""},
 					},
 				}
 				oidcProviderWithBadSecret := &v1alpha1.OIDCProvider{
@@ -235,8 +235,8 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 						Namespace: installedInNamespace,
 					},
 					Spec: v1alpha1.OIDCProviderSpec{
-						Issuer:                   "https://bad-secret-issuer.com",
-						SNICertificateSecretName: "bad-tls-secret-name",
+						Issuer: "https://bad-secret-issuer.com",
+						TLS:    &v1alpha1.OIDCProviderTLSSpec{SecretName: "bad-tls-secret-name"},
 					},
 				}
 				// Also add one with a URL that cannot be parsed to make sure that the controller is not confused by invalid URLs.
@@ -257,8 +257,8 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 					},
 					// Issuer hostname should be treated in a case-insensitive way and SNI ignores port numbers. Test without a port number.
 					Spec: v1alpha1.OIDCProviderSpec{
-						Issuer:                   "https://www.iSSuer-wiTh-goOd-secRet1.cOm/path",
-						SNICertificateSecretName: "good-tls-secret-name1",
+						Issuer: "https://www.iSSuer-wiTh-goOd-secRet1.cOm/path",
+						TLS:    &v1alpha1.OIDCProviderTLSSpec{SecretName: "good-tls-secret-name1"},
 					},
 				}
 				oidcProviderWithGoodSecret2 := &v1alpha1.OIDCProvider{
@@ -268,8 +268,8 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 					},
 					// Issuer hostname should be treated in a case-insensitive way and SNI ignores port numbers. Test with a port number.
 					Spec: v1alpha1.OIDCProviderSpec{
-						Issuer:                   "https://www.issUEr-WIth-gOOd-seCret2.com:1234/path",
-						SNICertificateSecretName: "good-tls-secret-name2",
+						Issuer: "https://www.issUEr-WIth-gOOd-seCret2.com:1234/path",
+						TLS:    &v1alpha1.OIDCProviderTLSSpec{SecretName: "good-tls-secret-name2"},
 					},
 				}
 				testCrt1 := readTestFile("testdata/test.crt")

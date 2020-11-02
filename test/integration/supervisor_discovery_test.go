@@ -159,26 +159,26 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 
 	hostname1 := strings.Split(address, ":")[0]
 	issuer1 := fmt.Sprintf("%s://%s/issuer1", scheme, address)
-	sniCertificateSecretName1 := "integration-test-sni-cert-1"
+	certSecretName1 := "integration-test-cert-1"
 
-	// Create an OIDCProvider with an sniCertificateSecretName.
-	oidcProvider1 := library.CreateTestOIDCProvider(ctx, t, issuer1, sniCertificateSecretName1)
+	// Create an OIDCProvider with a spec.tls.secretName.
+	oidcProvider1 := library.CreateTestOIDCProvider(ctx, t, issuer1, certSecretName1)
 	requireStatus(t, pinnipedClient, oidcProvider1.Namespace, oidcProvider1.Name, v1alpha1.SuccessOIDCProviderStatusCondition)
 
-	// The sniCertificateSecretName Secret does not exist, so the endpoints should fail with TLS errors.
+	// The spec.tls.secretName Secret does not exist, so the endpoints should fail with TLS errors.
 	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
 
 	// Create the Secret.
-	ca1 := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, sniCertificateSecretName1, kubeClient)
+	ca1 := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, certSecretName1, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
 	_ = requireDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1.Bundle()), issuer1, nil)
 
-	// Update the config to take away the sniCertificateSecretName.
-	sniCertificateSecretName1update := "integration-test-sni-cert-1-update"
+	// Update the config to with a new .spec.tls.secretName.
+	certSecretName1update := "integration-test-cert-1-update"
 	oidcProvider1LatestVersion, err := pinnipedClient.ConfigV1alpha1().OIDCProviders(ns).Get(ctx, oidcProvider1.Name, metav1.GetOptions{})
 	require.NoError(t, err)
-	oidcProvider1LatestVersion.Spec.SNICertificateSecretName = sniCertificateSecretName1update
+	oidcProvider1LatestVersion.Spec.TLS = &v1alpha1.OIDCProviderTLSSpec{SecretName: certSecretName1update}
 	_, err = pinnipedClient.ConfigV1alpha1().OIDCProviders(ns).Update(ctx, oidcProvider1LatestVersion, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
@@ -186,7 +186,7 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
 
 	// Create a Secret at the updated name.
-	ca1update := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, sniCertificateSecretName1update, kubeClient)
+	ca1update := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, certSecretName1update, kubeClient)
 
 	// Now that the Secret exists at the new name, we should be able to access the endpoints by hostname using the CA.
 	_ = requireDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1update.Bundle()), issuer1, nil)
@@ -195,14 +195,14 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	hostname2 := "some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com"
 	hostnamePort2 := "2684"
 	issuer2 := fmt.Sprintf("%s://%s:%s/issuer2", scheme, hostname2, hostnamePort2)
-	sniCertificateSecretName2 := "integration-test-sni-cert-2"
+	certSecretName2 := "integration-test-cert-2"
 
-	// Create an OIDCProvider with an sniCertificateSecretName.
-	oidcProvider2 := library.CreateTestOIDCProvider(ctx, t, issuer2, sniCertificateSecretName2)
+	// Create an OIDCProvider with a spec.tls.secretName.
+	oidcProvider2 := library.CreateTestOIDCProvider(ctx, t, issuer2, certSecretName2)
 	requireStatus(t, pinnipedClient, oidcProvider2.Namespace, oidcProvider2.Name, v1alpha1.SuccessOIDCProviderStatusCondition)
 
 	// Create the Secret.
-	ca2 := createTLSCertificateSecret(ctx, t, ns, hostname2, nil, sniCertificateSecretName2, kubeClient)
+	ca2 := createTLSCertificateSecret(ctx, t, ns, hostname2, nil, certSecretName2, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
 	_ = requireDiscoveryEndpointsAreWorking(t, scheme, hostname2+":"+hostnamePort2, string(ca2.Bundle()), issuer2, map[string]string{
@@ -240,11 +240,11 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	issuerUsingIPAddress := fmt.Sprintf("%s://%s/issuer1", scheme, ipWithPort)
 	issuerUsingHostname := fmt.Sprintf("%s://%s/issuer1", scheme, address)
 
-	// Create an OIDCProvider without an sniCertificateSecretName.
+	// Create an OIDCProvider without a spec.tls.secretName.
 	oidcProvider1 := library.CreateTestOIDCProvider(ctx, t, issuerUsingIPAddress, "")
 	requireStatus(t, pinnipedClient, oidcProvider1.Namespace, oidcProvider1.Name, v1alpha1.SuccessOIDCProviderStatusCondition)
 
-	// There is no default TLS cert and the sniCertificateSecretName was not set, so the endpoints should fail with TLS errors.
+	// There is no default TLS cert and the spec.tls.secretName was not set, so the endpoints should fail with TLS errors.
 	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuerUsingIPAddress)
 
 	// Create a Secret at the special name which represents the default TLS cert.
@@ -253,18 +253,18 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	// Now that the Secret exists, we should be able to access the endpoints by IP address using the CA.
 	_ = requireDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
 
-	// Create an OIDCProvider with an sniCertificateSecretName.
-	sniCertificateSecretName := "integration-test-sni-cert-1"
-	oidcProvider2 := library.CreateTestOIDCProvider(ctx, t, issuerUsingHostname, sniCertificateSecretName)
+	// Create an OIDCProvider with a spec.tls.secretName.
+	certSecretName := "integration-test-cert-1"
+	oidcProvider2 := library.CreateTestOIDCProvider(ctx, t, issuerUsingHostname, certSecretName)
 	requireStatus(t, pinnipedClient, oidcProvider2.Namespace, oidcProvider2.Name, v1alpha1.SuccessOIDCProviderStatusCondition)
 
 	// Create the Secret.
-	sniCA := createTLSCertificateSecret(ctx, t, ns, hostname, nil, sniCertificateSecretName, kubeClient)
+	certCA := createTLSCertificateSecret(ctx, t, ns, hostname, nil, certSecretName, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA from the SNI cert.
 	// Hostnames are case-insensitive, so the request should still work even if the case of the hostname is different
 	// from the case of the issuer URL's hostname.
-	_ = requireDiscoveryEndpointsAreWorking(t, scheme, strings.ToUpper(hostname)+":"+port, string(sniCA.Bundle()), issuerUsingHostname, nil)
+	_ = requireDiscoveryEndpointsAreWorking(t, scheme, strings.ToUpper(hostname)+":"+port, string(certCA.Bundle()), issuerUsingHostname, nil)
 
 	// And we can still access the other issuer using the default cert.
 	_ = requireDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)

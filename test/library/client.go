@@ -172,7 +172,7 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 //
 // If the provided issuer is not the empty string, then it will be used for the
 // OIDCProvider.Spec.Issuer field. Else, a random issuer will be generated.
-func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer, sniCertificateSecretName string) *configv1alpha1.OIDCProvider {
+func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer, certSecretName string) *configv1alpha1.OIDCProvider {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
@@ -193,8 +193,8 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer, sniCertif
 			Annotations:  map[string]string{"pinniped.dev/testName": t.Name()},
 		},
 		Spec: configv1alpha1.OIDCProviderSpec{
-			Issuer:                   issuer,
-			SNICertificateSecretName: sniCertificateSecretName,
+			Issuer: issuer,
+			TLS:    &configv1alpha1.OIDCProviderTLSSpec{SecretName: certSecretName},
 		},
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test OIDCProvider")

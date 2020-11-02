@@ -18,6 +18,29 @@ const (
 	InvalidOIDCProviderStatusCondition                         = OIDCProviderStatusCondition("Invalid")
 )
 
+// OIDCProviderTLSSpec is a struct that describes the TLS configuration for an OIDC Provider.
+type OIDCProviderTLSSpec struct {
+	// SecretName is an optional name of a Secret in the same namespace, of type `kubernetes.io/tls`, which contains
+	// the TLS serving certificate for the HTTPS endpoints served by this OIDCProvider. When provided, the TLS Secret
+	// named here must contain keys named `tls.crt` and `tls.key` that contain the certificate and private key to use
+	// for TLS.
+	//
+	// Server Name Indication (SNI) is an extension to the Transport Layer Security (TLS) supported by all major browsers.
+	//
+	// SecretName is required if you would like to use different TLS certificates for issuers of different hostnames.
+	// SNI requests do not include port numbers, so all issuers with the same DNS hostname must use the same
+	// SecretName value even if they have different port numbers.
+	//
+	// SecretName is not required when you would like to use only the HTTP endpoints (e.g. when terminating TLS at an
+	// Ingress). It is also not required when you would like all requests to this OIDC Provider's HTTPS endpoints to
+	// use the default TLS certificate, which is configured elsewhere.
+	//
+	// When your Issuer URL's host is an IP address, then this field is ignored. SNI does not work for IP addresses.
+	//
+	// +optional
+	SecretName string `json:"secretName,omitempty"`
+}
+
 // OIDCProviderSpec is a struct that describes an OIDC Provider.
 type OIDCProviderSpec struct {
 	// Issuer is the OIDC Provider's issuer, per the OIDC Discovery Metadata document, as well as the
@@ -31,27 +54,9 @@ type OIDCProviderSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	Issuer string `json:"issuer"`
 
-	// SNICertificateSecretName is an optional name of a Secret in the same namespace, of type `kubernetes.io/tls`,
-	// which contains the TLS serving certificate for the HTTPS endpoints served by this OIDC Provider.
-	// When provided, the TLS Secret named here must contain keys named `tls.crt` and `tls.key` that
-	// contain the certificate and private key to use for TLS.
-	//
-	// Server Name Indication (SNI) is an extension to the Transport Layer Security (TLS) supported by all major browsers.
-	//
-	// SNICertificateSecretName is required if you would like to use different TLS certificates for
-	// issuers of different hostnames. SNI requests do not include port numbers, so all issuers with the same
-	// DNS hostname must use the same SNICertificateSecretName value even if they have different port numbers.
-	//
-	// SNICertificateSecretName is not required when you would like to use only the
-	// HTTP endpoints (e.g. when terminating TLS at an Ingress). It is also not required when you
-	// would like all requests to this OIDC Provider's HTTPS endpoints to use the default TLS certificate,
-	// which is configured elsewhere.
-	//
-	// When your Issuer URL's host is an IP address, then this field is ignored. SNI does not work
-	// for IP addresses.
-	//
+	// TLS configures how this OIDCProvider is served over Transport Layer Security (TLS).
 	// +optional
-	SNICertificateSecretName string `json:"sniCertificateSecretName,omitempty"`
+	TLS *OIDCProviderTLSSpec `json:"tls,omitempty"`
 }
 
 // OIDCProviderStatus is a struct that describes the actual state of an OIDC Provider.

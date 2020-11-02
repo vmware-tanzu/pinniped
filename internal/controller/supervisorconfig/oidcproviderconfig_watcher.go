@@ -102,7 +102,9 @@ func (c *oidcProviderWatcherController) Sync(ctx controllerlib.Context) error {
 			setOfSecretNames = make(map[string]bool)
 			uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)] = setOfSecretNames
 		}
-		setOfSecretNames[opc.Spec.SNICertificateSecretName] = true
+		if opc.Spec.TLS != nil {
+			setOfSecretNames[opc.Spec.TLS.SecretName] = true
+		}
 	}
 
 	errs := multierror.New()

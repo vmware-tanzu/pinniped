@@ -317,7 +317,7 @@ func TestDeleterControllerSync(t *testing.T) {
 						it.Before(func() {
 							updatedAgentPod := agentPod.DeepCopy()
 							updatedAgentPod.ObjectMeta.Labels = map[string]string{
-								agentPodLabelKey: agentPodLabelValue,
+								"kube-cert-agent.pinniped.dev": "true",
 								// the value of a label is wrong so the pod should be deleted so it can get recreated with the new labels
 								"myLabelKey1": "myLabelValue1-outdated-value",
 								"myLabelKey2": "myLabelValue2-outdated-value",
@@ -335,12 +335,12 @@ func TestDeleterControllerSync(t *testing.T) {
 						})
 					})
 
-					when("an additional label was added", func() {
+					when("an additional custom label was added since the agent pod was created", func() {
 						it.Before(func() {
 							updatedAgentPod := agentPod.DeepCopy()
 							updatedAgentPod.ObjectMeta.Labels = map[string]string{
-								agentPodLabelKey: agentPodLabelValue,
-								"myLabelKey1":    "myLabelValue1",
+								"kube-cert-agent.pinniped.dev": "true",
+								"myLabelKey1":                  "myLabelValue1",
 								// "myLabelKey2" is missing so the pod should be deleted so it can get recreated with the new labels
 							}
 							r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
@@ -360,10 +360,10 @@ func TestDeleterControllerSync(t *testing.T) {
 						it.Before(func() {
 							updatedAgentPod := agentPod.DeepCopy()
 							updatedAgentPod.ObjectMeta.Labels = map[string]string{
-								agentPodLabelKey: agentPodLabelValue,
-								"myLabelKey1":    "myLabelValue1",
-								"myLabelKey2":    "myLabelValue2",
-								"extra-label":    "not-related-to-the-sepcified-additional-labels",
+								"kube-cert-agent.pinniped.dev": "true",
+								"myLabelKey1":                  "myLabelValue1",
+								"myLabelKey2":                  "myLabelValue2",
+								"extra-label":                  "not-related-to-the-sepcified-additional-labels",
 							}
 							r.NoError(agentInformerClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))
 							r.NoError(kubeAPIClient.Tracker().Update(podsGVR, updatedAgentPod, updatedAgentPod.Namespace))

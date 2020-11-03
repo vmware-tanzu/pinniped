@@ -15,8 +15,8 @@ type FakeConfigV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeConfigV1alpha1) CredentialIssuerConfigs(namespace string) v1alpha1.CredentialIssuerConfigInterface {
-	return &FakeCredentialIssuerConfigs{c, namespace}
+func (c *FakeConfigV1alpha1) CredentialIssuers(namespace string) v1alpha1.CredentialIssuerInterface {
+	return &FakeCredentialIssuers{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

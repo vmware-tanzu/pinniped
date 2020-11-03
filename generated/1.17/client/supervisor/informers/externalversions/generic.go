@@ -40,8 +40,8 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=config.supervisor.pinniped.dev, Version=v1alpha1
-	case v1alpha1.SchemeGroupVersion.WithResource("oidcproviderconfigs"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().OIDCProviderConfigs().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("oidcproviders"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().OIDCProviders().Informer()}, nil
 
 	}
 

@@ -5,4 +5,4 @@
 
 package v1alpha1
 
-type OIDCProviderConfigExpansion interface{}
+type OIDCProviderExpansion interface{}

@@ -59,9 +59,8 @@ The most common ways are:
 
 1. Or, define a [TCP LoadBalancer Service](https://kubernetes.io/docs/concepts/services-networking/service/#loadbalancer)
    which is a layer 4 load balancer and does not terminate TLS. In this case, the Supervisor app will need to be
-   configured with TLS certificates and will terminate the TLS connection itself (see the section about
-   OIDCProviderConfig below). The LoadBalancer Service should be configured to use the HTTPS port 8443 of
-   the Supervisor pods as its `targetPort`.
+   configured with TLS certificates and will terminate the TLS connection itself (see the section about OIDCProvider
+   below). The LoadBalancer Service should be configured to use the HTTPS port 443 of the Supervisor pods as its `targetPort`.
 
    *Warning:* Do not expose the Supervisor's port 8080 to the public. It would not be secure for the OIDC protocol
    to use HTTP, because the user's secret OIDC tokens would be transmitted across the network without encryption.
@@ -133,12 +132,12 @@ spec:
 
 ### Configuring the Supervisor to Act as an OIDC Provider
 
-The Supervisor can be configured as an OIDC provider by creating `OIDCProviderConfig` resources
+The Supervisor can be configured as an OIDC provider by creating `OIDCProvider` resources
 in the same namespace where the Supervisor app was installed. For example:
 
 ```yaml
 apiVersion: config.supervisor.pinniped.dev/v1alpha1
-kind: OIDCProviderConfig
+kind: OIDCProvider
 metadata:
   name: my-provider
   # Assuming that this is the namespace where the supervisor was installed. This is the default in install-supervisor.yaml.
@@ -147,30 +146,32 @@ spec:
   # The hostname would typically match the DNS name of the public ingress or load balancer for the cluster.
   # Any path can be specified, which allows a single hostname to have multiple different issuers. The path is optional.
   issuer: https://my-issuer.example.com/any/path
+
   # Optionally configure the name of a Secret in the same namespace, of type `kubernetes.io/tls`,
   # which contains the TLS serving certificate for the HTTPS endpoints served by this OIDC Provider.
-  sniCertificateSecretName: my-tls-cert-secret
+  tls:
+    secretName: my-tls-cert-secret
 ```
 
 #### Configuring TLS for the Supervisor OIDC Endpoints
 
 If you have terminated TLS outside the app, for example using an Ingress with TLS certificates, then you do not need to
-configure TLS certificates on the OIDCProviderConfig.
+configure TLS certificates on the OIDCProvider.
 
 If you are using a LoadBalancer Service to expose the Supervisor app outside your cluster, then you will
 also need to configure the Supervisor app to terminate TLS. There are two places to configure TLS certificates:
 
-1. Each `OIDCProviderConfig` can be configured with TLS certificates, using the `sniCertificateSecretName` field.
+1. Each `OIDCProvider` can be configured with TLS certificates, using the `spec.tls.secretName` field.
 
 1. The default TLS certificate for all OIDC providers can be configured by creating a Secret called
 `pinniped-supervisor-default-tls-certificate` in the same namespace in which the Supervisor was installed.
 
-The default TLS certificate will be used for all OIDC providers which did not declare an `sniCertificateSecretName`.
-Also, the `sniCertificateSecretName` will be ignored for incoming requests to the OIDC endpoints
+The default TLS certificate will be used for all OIDC providers which did not declare a `spec.tls.secretName`.
+Also, the `spec.tls.secretName` will be ignored for incoming requests to the OIDC endpoints
 that use an IP address as the host, so those requests will always present the default TLS certificates
 to the client. When the request includes the hostname, and that hostname matches the hostname of an `Issuer`,
-then the TLS certificate defined by the `sniCertificateSecretName` will be used. If that issuer did not
-define `sniCertificateSecretName` then the default TLS certificate will be used. If neither exists,
+then the TLS certificate defined by the `spec.tls.secretName` will be used. If that issuer did not
+define `spec.tls.secretName` then the default TLS certificate will be used. If neither exists,
 then the client will get a TLS error because the server will not present any TLS certificate.
 
 It is recommended that you have a DNS entry for your load balancer or Ingress, and that you configure the

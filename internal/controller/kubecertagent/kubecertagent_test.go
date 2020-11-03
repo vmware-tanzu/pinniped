@@ -131,7 +131,7 @@ func defineSharedKubecertagentFilterSpecs(
 	name string,
 	newFunc func(
 		agentPodConfig *AgentPodConfig,
-		credentialIssuerConfigLocationConfig *CredentialIssuerConfigLocationConfig,
+		credentialIssuerLocationConfig *CredentialIssuerLocationConfig,
 		kubeSystemPodInformer corev1informers.PodInformer,
 		agentPodInformer corev1informers.PodInformer,
 		observableWithInformerOption *testutil.ObservableWithInformerOption,
@@ -149,7 +149,7 @@ func defineSharedKubecertagentFilterSpecs(
 			kubeSystemPodInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Pods()
 			agentPodInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Pods()
 			observableWithInformerOption := testutil.NewObservableWithInformerOption()
-			newFunc(&AgentPodConfig{}, &CredentialIssuerConfigLocationConfig{}, kubeSystemPodInformer, agentPodInformer, observableWithInformerOption)
+			newFunc(&AgentPodConfig{}, &CredentialIssuerLocationConfig{}, kubeSystemPodInformer, agentPodInformer, observableWithInformerOption)
 
 			kubeSystemPodInformerFilter = observableWithInformerOption.GetFilterForInformer(kubeSystemPodInformer)
 			agentPodInformerFilter = observableWithInformerOption.GetFilterForInformer(agentPodInformer)

@@ -16,7 +16,7 @@ import (
 	"go.pinniped.dev/test/library"
 )
 
-func TestCredentialIssuerConfig(t *testing.T) {
+func TestCredentialIssuer(t *testing.T) {
 	env := library.IntegrationEnv(t)
 	config := library.NewClientConfig(t)
 	client := library.NewConciergeClientset(t)
@@ -24,10 +24,10 @@ func TestCredentialIssuerConfig(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	t.Run("test successful CredentialIssuerConfig", func(t *testing.T) {
+	t.Run("test successful CredentialIssuer", func(t *testing.T) {
 		actualConfigList, err := client.
 			ConfigV1alpha1().
-			CredentialIssuerConfigs(env.ConciergeNamespace).
+			CredentialIssuers(env.ConciergeNamespace).
 			List(ctx, metav1.ListOptions{})
 		require.NoError(t, err)
 
@@ -37,7 +37,7 @@ func TestCredentialIssuerConfig(t *testing.T) {
 		actualStatusKubeConfigInfo := actualConfigList.Items[0].Status.KubeConfigInfo
 
 		for k, v := range env.ConciergeCustomLabels {
-			require.Equalf(t, v, actualConfig.Labels[k], "expected cic to have label `%s: %s`", k, v)
+			require.Equalf(t, v, actualConfig.Labels[k], "expected ci to have label `%s: %s`", k, v)
 		}
 		require.Equal(t, env.ConciergeAppName, actualConfig.Labels["app"])
 
@@ -54,7 +54,7 @@ func TestCredentialIssuerConfig(t *testing.T) {
 			// Verify the published kube config info.
 			require.Equal(
 				t,
-				&configv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+				&configv1alpha1.CredentialIssuerKubeConfigInfo{
 					Server:                   config.Host,
 					CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.TLSClientConfig.CAData),
 				},

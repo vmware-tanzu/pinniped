@@ -32,7 +32,7 @@ func TestFromPath(t *testing.T) {
 					renewBeforeSeconds: 2400
 				names:
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
-				  credentialIssuerConfig: pinniped-config
+				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
 				  kubeCertAgentPrefix: kube-cert-agent-prefix
 				labels:
@@ -55,7 +55,7 @@ func TestFromPath(t *testing.T) {
 				},
 				NamesConfig: NamesConfigSpec{
 					ServingCertificateSecret: "pinniped-concierge-api-tls-serving-certificate",
-					CredentialIssuerConfig:   "pinniped-config",
+					CredentialIssuer:         "pinniped-config",
 					APIService:               "pinniped-api",
 				},
 				Labels: map[string]string{
@@ -75,7 +75,7 @@ func TestFromPath(t *testing.T) {
 				---
 				names:
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
-				  credentialIssuerConfig: pinniped-config
+				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
 			`),
 			wantConfig: &Config{
@@ -90,7 +90,7 @@ func TestFromPath(t *testing.T) {
 				},
 				NamesConfig: NamesConfigSpec{
 					ServingCertificateSecret: "pinniped-concierge-api-tls-serving-certificate",
-					CredentialIssuerConfig:   "pinniped-config",
+					CredentialIssuer:         "pinniped-config",
 					APIService:               "pinniped-api",
 				},
 				Labels: map[string]string{},
@@ -103,7 +103,7 @@ func TestFromPath(t *testing.T) {
 		{
 			name:      "Empty",
 			yaml:      here.Doc(``),
-			wantError: "validate names: missing required names: servingCertificateSecret, credentialIssuerConfig, apiService",
+			wantError: "validate names: missing required names: servingCertificateSecret, credentialIssuer, apiService",
 		},
 		{
 			name: "Missing apiService name",
@@ -111,26 +111,26 @@ func TestFromPath(t *testing.T) {
 				---
 				names:
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
-				  credentialIssuerConfig: pinniped-config
+				  credentialIssuer: pinniped-config
 			`),
 			wantError: "validate names: missing required names: apiService",
 		},
 		{
-			name: "Missing credentialIssuerConfig name",
+			name: "Missing credentialIssuer name",
 			yaml: here.Doc(`
 				---
 				names:
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  apiService: pinniped-api
 			`),
-			wantError: "validate names: missing required names: credentialIssuerConfig",
+			wantError: "validate names: missing required names: credentialIssuer",
 		},
 		{
 			name: "Missing servingCertificateSecret name",
 			yaml: here.Doc(`
 				---
 				names:
-				  credentialIssuerConfig: pinniped-config
+				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
 			`),
 			wantError: "validate names: missing required names: servingCertificateSecret",
@@ -145,7 +145,7 @@ func TestFromPath(t *testing.T) {
 					renewBeforeSeconds: 3600
 				names:
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
-				  credentialIssuerConfig: pinniped-config
+				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
 			`),
 			wantError: "validate api: durationSeconds cannot be smaller than renewBeforeSeconds",
@@ -160,7 +160,7 @@ func TestFromPath(t *testing.T) {
 					renewBeforeSeconds: -10
 				names:
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
-				  credentialIssuerConfig: pinniped-config
+				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
 			`),
 			wantError: "validate api: renewBefore must be positive",
@@ -175,7 +175,7 @@ func TestFromPath(t *testing.T) {
 					renewBeforeSeconds: -10
 				names:
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
-				  credentialIssuerConfig: pinniped-config
+				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
 			`),
 			wantError: "validate api: renewBefore must be positive",

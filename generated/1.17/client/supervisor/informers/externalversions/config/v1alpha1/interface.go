@@ -11,8 +11,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// OIDCProviderConfigs returns a OIDCProviderConfigInformer.
-	OIDCProviderConfigs() OIDCProviderConfigInformer
+	// OIDCProviders returns a OIDCProviderInformer.
+	OIDCProviders() OIDCProviderInformer
 }
 
 type version struct {
@@ -26,7 +26,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// OIDCProviderConfigs returns a OIDCProviderConfigInformer.
-func (v *version) OIDCProviderConfigs() OIDCProviderConfigInformer {
-	return &oIDCProviderConfigInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+// OIDCProviders returns a OIDCProviderInformer.
+func (v *version) OIDCProviders() OIDCProviderInformer {
+	return &oIDCProviderInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

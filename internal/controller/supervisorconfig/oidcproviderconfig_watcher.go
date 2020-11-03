@@ -32,26 +32,26 @@ type ProvidersSetter interface {
 	SetProviders(oidcProviders ...*provider.OIDCProvider)
 }
 
-type oidcProviderConfigWatcherController struct {
+type oidcProviderWatcherController struct {
 	providerSetter ProvidersSetter
 	clock          clock.Clock
 	client         pinnipedclientset.Interface
-	opcInformer    configinformers.OIDCProviderConfigInformer
+	opcInformer    configinformers.OIDCProviderInformer
 }
 
-// NewOIDCProviderConfigWatcherController creates a controllerlib.Controller that watches
-// OIDCProviderConfig objects and notifies a callback object of the collection of provider configs.
-func NewOIDCProviderConfigWatcherController(
+// NewOIDCProviderWatcherController creates a controllerlib.Controller that watches
+// OIDCProvider objects and notifies a callback object of the collection of provider configs.
+func NewOIDCProviderWatcherController(
 	providerSetter ProvidersSetter,
 	clock clock.Clock,
 	client pinnipedclientset.Interface,
-	opcInformer configinformers.OIDCProviderConfigInformer,
+	opcInformer configinformers.OIDCProviderInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
-			Name: "OIDCProviderConfigWatcherController",
-			Syncer: &oidcProviderConfigWatcherController{
+			Name: "OIDCProviderWatcherController",
+			Syncer: &oidcProviderWatcherController{
 				providerSetter: providerSetter,
 				clock:          clock,
 				client:         client,
@@ -67,7 +67,7 @@ func NewOIDCProviderConfigWatcherController(
 }
 
 // Sync implements controllerlib.Syncer.
-func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) error {
+func (c *oidcProviderWatcherController) Sync(ctx controllerlib.Context) error {
 	all, err := c.opcInformer.Lister().List(labels.Everything())
 	if err != nil {
 		return err
@@ -82,7 +82,7 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 	}
 
 	// Make a map of issuer hostnames -> set of unique secret names. This will help us complain when
-	// multiple OIDCProviderConfigs have the same issuer hostname (excluding port) but specify
+	// multiple OIDCProviders have the same issuer hostname (excluding port) but specify
 	// different TLS serving Secrets. Doesn't make sense to have the one address use more than one
 	// TLS cert. Ignore ports because SNI information on the incoming requests is not going to include
 	// port numbers. Also make a helper function for forming keys into this map.
@@ -102,7 +102,9 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 			setOfSecretNames = make(map[string]bool)
 			uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)] = setOfSecretNames
 		}
-		setOfSecretNames[opc.Spec.SNICertificateSecretName] = true
+		if opc.Spec.TLS != nil {
+			setOfSecretNames[opc.Spec.TLS.SecretName] = true
+		}
 	}
 
 	errs := multierror.New()
@@ -118,7 +120,7 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 					ctx.Context,
 					opc.Namespace,
 					opc.Name,
-					configv1alpha1.DuplicateOIDCProviderStatus,
+					configv1alpha1.DuplicateOIDCProviderStatusCondition,
 					"Duplicate issuer: "+opc.Spec.Issuer,
 				); err != nil {
 					errs.Add(fmt.Errorf("could not update status: %w", err))
@@ -133,7 +135,7 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 				ctx.Context,
 				opc.Namespace,
 				opc.Name,
-				configv1alpha1.SameIssuerHostMustUseSameSecretOIDCProviderStatus,
+				configv1alpha1.SameIssuerHostMustUseSameSecretOIDCProviderStatusCondition,
 				"Issuers with the same DNS hostname (address not including port) must use the same secretName: "+issuerURLToHostnameKey(issuerURL),
 			); err != nil {
 				errs.Add(fmt.Errorf("could not update status: %w", err))
@@ -147,7 +149,7 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 				ctx.Context,
 				opc.Namespace,
 				opc.Name,
-				configv1alpha1.InvalidOIDCProviderStatus,
+				configv1alpha1.InvalidOIDCProviderStatusCondition,
 				"Invalid: "+err.Error(),
 			); err != nil {
 				errs.Add(fmt.Errorf("could not update status: %w", err))
@@ -159,7 +161,7 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 			ctx.Context,
 			opc.Namespace,
 			opc.Name,
-			configv1alpha1.SuccessOIDCProviderStatus,
+			configv1alpha1.SuccessOIDCProviderStatusCondition,
 			"Provider successfully created",
 		); err != nil {
 			errs.Add(fmt.Errorf("could not update status: %w", err))
@@ -173,14 +175,14 @@ func (c *oidcProviderConfigWatcherController) Sync(ctx controllerlib.Context) er
 	return errs.ErrOrNil()
 }
 
-func (c *oidcProviderConfigWatcherController) updateStatus(
+func (c *oidcProviderWatcherController) updateStatus(
 	ctx context.Context,
 	namespace, name string,
-	status configv1alpha1.OIDCProviderStatus,
+	status configv1alpha1.OIDCProviderStatusCondition,
 	message string,
 ) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		opc, err := c.client.ConfigV1alpha1().OIDCProviderConfigs(namespace).Get(ctx, name, metav1.GetOptions{})
+		opc, err := c.client.ConfigV1alpha1().OIDCProviders(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("get failed: %w", err)
 		}
@@ -201,7 +203,7 @@ func (c *oidcProviderConfigWatcherController) updateStatus(
 		opc.Status.Status = status
 		opc.Status.Message = message
 		opc.Status.LastUpdateTime = timePtr(metav1.NewTime(c.clock.Now()))
-		_, err = c.client.ConfigV1alpha1().OIDCProviderConfigs(namespace).Update(ctx, opc, metav1.UpdateOptions{})
+		_, err = c.client.ConfigV1alpha1().OIDCProviders(namespace).Update(ctx, opc, metav1.UpdateOptions{})
 		return err
 	})
 }

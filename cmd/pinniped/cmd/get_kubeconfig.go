@@ -124,13 +124,13 @@ func (c *getKubeConfigCommand) run(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	credentialIssuerConfig, err := fetchPinnipedCredentialIssuerConfig(clientset, c.flags.namespace)
+	credentialIssuer, err := fetchPinnipedCredentialIssuer(clientset, c.flags.namespace)
 	if err != nil {
 		return err
 	}
 
-	if credentialIssuerConfig.Status.KubeConfigInfo == nil {
-		return constable.Error(`CredentialIssuerConfig "pinniped-config" was missing KubeConfigInfo`)
+	if credentialIssuer.Status.KubeConfigInfo == nil {
+		return constable.Error(`CredentialIssuer "pinniped-config" was missing KubeConfigInfo`)
 	}
 
 	v1Cluster, err := copyCurrentClusterFromExistingKubeConfig(currentKubeConfig, c.flags.contextOverride)
@@ -138,7 +138,7 @@ func (c *getKubeConfigCommand) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	err = issueWarningForNonMatchingServerOrCA(v1Cluster, credentialIssuerConfig, cmd.ErrOrStderr())
+	err = issueWarningForNonMatchingServerOrCA(v1Cluster, credentialIssuer, cmd.ErrOrStderr())
 	if err != nil {
 		return err
 	}
@@ -153,14 +153,14 @@ func (c *getKubeConfigCommand) run(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func issueWarningForNonMatchingServerOrCA(v1Cluster v1.Cluster, credentialIssuerConfig *configv1alpha1.CredentialIssuerConfig, warningsWriter io.Writer) error {
-	credentialIssuerConfigCA, err := base64.StdEncoding.DecodeString(credentialIssuerConfig.Status.KubeConfigInfo.CertificateAuthorityData)
+func issueWarningForNonMatchingServerOrCA(v1Cluster v1.Cluster, credentialIssuer *configv1alpha1.CredentialIssuer, warningsWriter io.Writer) error {
+	credentialIssuerCA, err := base64.StdEncoding.DecodeString(credentialIssuer.Status.KubeConfigInfo.CertificateAuthorityData)
 	if err != nil {
 		return err
 	}
-	if v1Cluster.Server != credentialIssuerConfig.Status.KubeConfigInfo.Server ||
-		!bytes.Equal(v1Cluster.CertificateAuthorityData, credentialIssuerConfigCA) {
-		_, err := warningsWriter.Write([]byte("WARNING: Server and certificate authority did not match between local kubeconfig and Pinniped's CredentialIssuerConfig on the cluster. Using local kubeconfig values.\n"))
+	if v1Cluster.Server != credentialIssuer.Status.KubeConfigInfo.Server ||
+		!bytes.Equal(v1Cluster.CertificateAuthorityData, credentialIssuerCA) {
+		_, err := warningsWriter.Write([]byte("WARNING: Server and certificate authority did not match between local kubeconfig and Pinniped's CredentialIssuer on the cluster. Using local kubeconfig values.\n"))
 		if err != nil {
 			return fmt.Errorf("output write error: %w", err)
 		}
@@ -207,31 +207,31 @@ func getDefaultAuthenticator(clientset pinnipedclientset.Interface, namespace st
 	return authenticators[0].authenticatorType, authenticators[0].authenticatorName, nil
 }
 
-func fetchPinnipedCredentialIssuerConfig(clientset pinnipedclientset.Interface, pinnipedInstallationNamespace string) (*configv1alpha1.CredentialIssuerConfig, error) {
+func fetchPinnipedCredentialIssuer(clientset pinnipedclientset.Interface, pinnipedInstallationNamespace string) (*configv1alpha1.CredentialIssuer, error) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancelFunc()
 
-	credentialIssuerConfigs, err := clientset.ConfigV1alpha1().CredentialIssuerConfigs(pinnipedInstallationNamespace).List(ctx, metav1.ListOptions{})
+	credentialIssuers, err := clientset.ConfigV1alpha1().CredentialIssuers(pinnipedInstallationNamespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	if len(credentialIssuerConfigs.Items) == 0 {
+	if len(credentialIssuers.Items) == 0 {
 		return nil, constable.Error(fmt.Sprintf(
-			`No CredentialIssuerConfig was found in namespace "%s". Is Pinniped installed on this cluster in namespace "%s"?`,
+			`No CredentialIssuer was found in namespace "%s". Is Pinniped installed on this cluster in namespace "%s"?`,
 			pinnipedInstallationNamespace,
 			pinnipedInstallationNamespace,
 		))
 	}
 
-	if len(credentialIssuerConfigs.Items) > 1 {
+	if len(credentialIssuers.Items) > 1 {
 		return nil, constable.Error(fmt.Sprintf(
-			`More than one CredentialIssuerConfig was found in namespace "%s"`,
+			`More than one CredentialIssuer was found in namespace "%s"`,
 			pinnipedInstallationNamespace,
 		))
 	}
 
-	return &credentialIssuerConfigs.Items[0], nil
+	return &credentialIssuers.Items[0], nil
 }
 
 func newClientConfig(kubeconfigPathOverride string, currentContextName string) clientcmd.ClientConfig {

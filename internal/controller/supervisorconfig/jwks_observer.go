@@ -18,16 +18,16 @@ import (
 )
 
 type jwksObserverController struct {
-	issuerToJWKSSetter         IssuerToJWKSMapSetter
-	oidcProviderConfigInformer v1alpha1.OIDCProviderConfigInformer
-	secretInformer             corev1informers.SecretInformer
+	issuerToJWKSSetter   IssuerToJWKSMapSetter
+	oidcProviderInformer v1alpha1.OIDCProviderInformer
+	secretInformer       corev1informers.SecretInformer
 }
 
 type IssuerToJWKSMapSetter interface {
 	SetIssuerToJWKSMap(issuerToJWKSMap map[string]*jose.JSONWebKeySet)
 }
 
-// Returns a controller which watches all of the OIDCProviderConfigs and their corresponding Secrets
+// Returns a controller which watches all of the OIDCProviders and their corresponding Secrets
 // and fills an in-memory cache of the JWKS info for each currently configured issuer.
 // This controller assumes that the informers passed to it are already scoped down to the
 // appropriate namespace. It also assumes that the IssuerToJWKSMapSetter passed to it has an
@@ -35,16 +35,16 @@ type IssuerToJWKSMapSetter interface {
 func NewJWKSObserverController(
 	issuerToJWKSSetter IssuerToJWKSMapSetter,
 	secretInformer corev1informers.SecretInformer,
-	oidcProviderConfigInformer v1alpha1.OIDCProviderConfigInformer,
+	oidcProviderInformer v1alpha1.OIDCProviderInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "jwks-observer-controller",
 			Syncer: &jwksObserverController{
-				issuerToJWKSSetter:         issuerToJWKSSetter,
-				oidcProviderConfigInformer: oidcProviderConfigInformer,
-				secretInformer:             secretInformer,
+				issuerToJWKSSetter:   issuerToJWKSSetter,
+				oidcProviderInformer: oidcProviderInformer,
+				secretInformer:       secretInformer,
 			},
 		},
 		withInformer(
@@ -53,7 +53,7 @@ func NewJWKSObserverController(
 			controllerlib.InformerOption{},
 		),
 		withInformer(
-			oidcProviderConfigInformer,
+			oidcProviderInformer,
 			pinnipedcontroller.MatchAnythingFilter(),
 			controllerlib.InformerOption{},
 		),
@@ -62,9 +62,9 @@ func NewJWKSObserverController(
 
 func (c *jwksObserverController) Sync(ctx controllerlib.Context) error {
 	ns := ctx.Key.Namespace
-	allProviders, err := c.oidcProviderConfigInformer.Lister().OIDCProviderConfigs(ns).List(labels.Everything())
+	allProviders, err := c.oidcProviderInformer.Lister().OIDCProviders(ns).List(labels.Everything())
 	if err != nil {
-		return fmt.Errorf("failed to list OIDCProviderConfigs: %w", err)
+		return fmt.Errorf("failed to list OIDCProviders: %w", err)
 	}
 
 	// Rebuild the whole map on any change to any Secret or OIDCProvider, because either can have changes that

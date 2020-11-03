@@ -17,69 +17,70 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderConfig":       schema_apis_supervisor_config_v1alpha1_OIDCProviderConfig(ref),
-		"go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderConfigList":   schema_apis_supervisor_config_v1alpha1_OIDCProviderConfigList(ref),
-		"go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderConfigSpec":   schema_apis_supervisor_config_v1alpha1_OIDCProviderConfigSpec(ref),
-		"go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderConfigStatus": schema_apis_supervisor_config_v1alpha1_OIDCProviderConfigStatus(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                                           schema_pkg_apis_meta_v1_APIGroup(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroupList":                                       schema_pkg_apis_meta_v1_APIGroupList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":                                        schema_pkg_apis_meta_v1_APIResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResourceList":                                    schema_pkg_apis_meta_v1_APIResourceList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIVersions":                                        schema_pkg_apis_meta_v1_APIVersions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.CreateOptions":                                      schema_pkg_apis_meta_v1_CreateOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.DeleteOptions":                                      schema_pkg_apis_meta_v1_DeleteOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Duration":                                           schema_pkg_apis_meta_v1_Duration(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ExportOptions":                                      schema_pkg_apis_meta_v1_ExportOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.FieldsV1":                                           schema_pkg_apis_meta_v1_FieldsV1(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GetOptions":                                         schema_pkg_apis_meta_v1_GetOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupKind":                                          schema_pkg_apis_meta_v1_GroupKind(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupResource":                                      schema_pkg_apis_meta_v1_GroupResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersion":                                       schema_pkg_apis_meta_v1_GroupVersion(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionForDiscovery":                           schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionKind":                                   schema_pkg_apis_meta_v1_GroupVersionKind(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionResource":                               schema_pkg_apis_meta_v1_GroupVersionResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.InternalEvent":                                      schema_pkg_apis_meta_v1_InternalEvent(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector":                                      schema_pkg_apis_meta_v1_LabelSelector(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelectorRequirement":                           schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.List":                                               schema_pkg_apis_meta_v1_List(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta":                                           schema_pkg_apis_meta_v1_ListMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ListOptions":                                        schema_pkg_apis_meta_v1_ListOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry":                                 schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.MicroTime":                                          schema_pkg_apis_meta_v1_MicroTime(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta":                                         schema_pkg_apis_meta_v1_ObjectMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.OwnerReference":                                     schema_pkg_apis_meta_v1_OwnerReference(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadata":                              schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadataList":                          schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Patch":                                              schema_pkg_apis_meta_v1_Patch(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PatchOptions":                                       schema_pkg_apis_meta_v1_PatchOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Preconditions":                                      schema_pkg_apis_meta_v1_Preconditions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.RootPaths":                                          schema_pkg_apis_meta_v1_RootPaths(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ServerAddressByClientCIDR":                          schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Status":                                             schema_pkg_apis_meta_v1_Status(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusCause":                                        schema_pkg_apis_meta_v1_StatusCause(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusDetails":                                      schema_pkg_apis_meta_v1_StatusDetails(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Table":                                              schema_pkg_apis_meta_v1_Table(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableColumnDefinition":                              schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableOptions":                                       schema_pkg_apis_meta_v1_TableOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRow":                                           schema_pkg_apis_meta_v1_TableRow(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRowCondition":                                  schema_pkg_apis_meta_v1_TableRowCondition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Time":                                               schema_pkg_apis_meta_v1_Time(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Timestamp":                                          schema_pkg_apis_meta_v1_Timestamp(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TypeMeta":                                           schema_pkg_apis_meta_v1_TypeMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.UpdateOptions":                                      schema_pkg_apis_meta_v1_UpdateOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.WatchEvent":                                         schema_pkg_apis_meta_v1_WatchEvent(ref),
-		"k8s.io/apimachinery/pkg/runtime.RawExtension":                                            schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
-		"k8s.io/apimachinery/pkg/runtime.TypeMeta":                                                schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
-		"k8s.io/apimachinery/pkg/runtime.Unknown":                                                 schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
-		"k8s.io/apimachinery/pkg/version.Info":                                                    schema_k8sio_apimachinery_pkg_version_Info(ref),
+		"go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProvider":        schema_apis_supervisor_config_v1alpha1_OIDCProvider(ref),
+		"go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderList":    schema_apis_supervisor_config_v1alpha1_OIDCProviderList(ref),
+		"go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderSpec":    schema_apis_supervisor_config_v1alpha1_OIDCProviderSpec(ref),
+		"go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderStatus":  schema_apis_supervisor_config_v1alpha1_OIDCProviderStatus(ref),
+		"go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderTLSSpec": schema_apis_supervisor_config_v1alpha1_OIDCProviderTLSSpec(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                                      schema_pkg_apis_meta_v1_APIGroup(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroupList":                                  schema_pkg_apis_meta_v1_APIGroupList(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":                                   schema_pkg_apis_meta_v1_APIResource(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResourceList":                               schema_pkg_apis_meta_v1_APIResourceList(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.APIVersions":                                   schema_pkg_apis_meta_v1_APIVersions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.CreateOptions":                                 schema_pkg_apis_meta_v1_CreateOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.DeleteOptions":                                 schema_pkg_apis_meta_v1_DeleteOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Duration":                                      schema_pkg_apis_meta_v1_Duration(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ExportOptions":                                 schema_pkg_apis_meta_v1_ExportOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.FieldsV1":                                      schema_pkg_apis_meta_v1_FieldsV1(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GetOptions":                                    schema_pkg_apis_meta_v1_GetOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupKind":                                     schema_pkg_apis_meta_v1_GroupKind(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupResource":                                 schema_pkg_apis_meta_v1_GroupResource(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersion":                                  schema_pkg_apis_meta_v1_GroupVersion(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionForDiscovery":                      schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionKind":                              schema_pkg_apis_meta_v1_GroupVersionKind(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionResource":                          schema_pkg_apis_meta_v1_GroupVersionResource(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.InternalEvent":                                 schema_pkg_apis_meta_v1_InternalEvent(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector":                                 schema_pkg_apis_meta_v1_LabelSelector(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelectorRequirement":                      schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.List":                                          schema_pkg_apis_meta_v1_List(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta":                                      schema_pkg_apis_meta_v1_ListMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ListOptions":                                   schema_pkg_apis_meta_v1_ListOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry":                            schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.MicroTime":                                     schema_pkg_apis_meta_v1_MicroTime(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta":                                    schema_pkg_apis_meta_v1_ObjectMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.OwnerReference":                                schema_pkg_apis_meta_v1_OwnerReference(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadata":                         schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadataList":                     schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Patch":                                         schema_pkg_apis_meta_v1_Patch(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.PatchOptions":                                  schema_pkg_apis_meta_v1_PatchOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Preconditions":                                 schema_pkg_apis_meta_v1_Preconditions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.RootPaths":                                     schema_pkg_apis_meta_v1_RootPaths(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.ServerAddressByClientCIDR":                     schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Status":                                        schema_pkg_apis_meta_v1_Status(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusCause":                                   schema_pkg_apis_meta_v1_StatusCause(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusDetails":                                 schema_pkg_apis_meta_v1_StatusDetails(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Table":                                         schema_pkg_apis_meta_v1_Table(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableColumnDefinition":                         schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableOptions":                                  schema_pkg_apis_meta_v1_TableOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRow":                                      schema_pkg_apis_meta_v1_TableRow(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRowCondition":                             schema_pkg_apis_meta_v1_TableRowCondition(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Time":                                          schema_pkg_apis_meta_v1_Time(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.Timestamp":                                     schema_pkg_apis_meta_v1_Timestamp(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.TypeMeta":                                      schema_pkg_apis_meta_v1_TypeMeta(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.UpdateOptions":                                 schema_pkg_apis_meta_v1_UpdateOptions(ref),
+		"k8s.io/apimachinery/pkg/apis/meta/v1.WatchEvent":                                    schema_pkg_apis_meta_v1_WatchEvent(ref),
+		"k8s.io/apimachinery/pkg/runtime.RawExtension":                                       schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
+		"k8s.io/apimachinery/pkg/runtime.TypeMeta":                                           schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
+		"k8s.io/apimachinery/pkg/runtime.Unknown":                                            schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
+		"k8s.io/apimachinery/pkg/version.Info":                                               schema_k8sio_apimachinery_pkg_version_Info(ref),
 	}
 }
 
-func schema_apis_supervisor_config_v1alpha1_OIDCProviderConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_apis_supervisor_config_v1alpha1_OIDCProvider(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "OIDCProviderConfig describes the configuration of an OIDC provider.",
+				Description: "OIDCProvider describes the configuration of an OIDC provider.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
@@ -104,13 +105,13 @@ func schema_apis_supervisor_config_v1alpha1_OIDCProviderConfig(ref common.Refere
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Spec of the OIDC provider.",
-							Ref:         ref("go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderConfigSpec"),
+							Ref:         ref("go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderSpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Status of the OIDC provider.",
-							Ref:         ref("go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderConfigStatus"),
+							Ref:         ref("go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderStatus"),
 						},
 					},
 				},
@@ -118,15 +119,16 @@ func schema_apis_supervisor_config_v1alpha1_OIDCProviderConfig(ref common.Refere
 			},
 		},
 		Dependencies: []string{
-			"go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderConfigSpec", "go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderConfigStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderSpec", "go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
-func schema_apis_supervisor_config_v1alpha1_OIDCProviderConfigList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_apis_supervisor_config_v1alpha1_OIDCProviderList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "List of OIDCProvider objects.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
 						SchemaProps: spec.SchemaProps{
@@ -153,7 +155,7 @@ func schema_apis_supervisor_config_v1alpha1_OIDCProviderConfigList(ref common.Re
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderConfig"),
+										Ref: ref("go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProvider"),
 									},
 								},
 							},
@@ -164,15 +166,15 @@ func schema_apis_supervisor_config_v1alpha1_OIDCProviderConfigList(ref common.Re
 			},
 		},
 		Dependencies: []string{
-			"go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderConfig", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			"go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProvider", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
 	}
 }
 
-func schema_apis_supervisor_config_v1alpha1_OIDCProviderConfigSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_apis_supervisor_config_v1alpha1_OIDCProviderSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "OIDCProviderConfigSpec is a struct that describes an OIDC Provider.",
+				Description: "OIDCProviderSpec is a struct that describes an OIDC Provider.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"issuer": {
@@ -182,25 +184,26 @@ func schema_apis_supervisor_config_v1alpha1_OIDCProviderConfigSpec(ref common.Re
 							Format:      "",
 						},
 					},
-					"sniCertificateSecretName": {
+					"tls": {
 						SchemaProps: spec.SchemaProps{
-							Description: "SNICertificateSecretName is an optional name of a Secret in the same namespace, of type `kubernetes.io/tls`, which contains the TLS serving certificate for the HTTPS endpoints served by this OIDC Provider. When provided, the TLS Secret named here must contain keys named `tls.crt` and `tls.key` that contain the certificate and private key to use for TLS.\n\nServer Name Indication (SNI) is an extension to the Transport Layer Security (TLS) supported by all major browsers.\n\nSNICertificateSecretName is required if you would like to use different TLS certificates for issuers of different hostnames. SNI requests do not include port numbers, so all issuers with the same DNS hostname must use the same SNICertificateSecretName value even if they have different port numbers.\n\nSNICertificateSecretName is not required when you would like to use only the HTTP endpoints (e.g. when terminating TLS at an Ingress). It is also not required when you would like all requests to this OIDC Provider's HTTPS endpoints to use the default TLS certificate, which is configured elsewhere.\n\nWhen your Issuer URL's host is an IP address, then this field is ignored. SNI does not work for IP addresses.",
-							Type:        []string{"string"},
-							Format:      "",
+							Description: "TLS configures how this OIDCProvider is served over Transport Layer Security (TLS).",
+							Ref:         ref("go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderTLSSpec"),
 						},
 					},
 				},
 				Required: []string{"issuer"},
 			},
 		},
+		Dependencies: []string{
+			"go.pinniped.dev/generated/1.18/apis/supervisor/config/v1alpha1.OIDCProviderTLSSpec"},
 	}
 }
 
-func schema_apis_supervisor_config_v1alpha1_OIDCProviderConfigStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_apis_supervisor_config_v1alpha1_OIDCProviderStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "OIDCProviderConfigStatus is a struct that describes the actual state of an OIDC Provider.",
+				Description: "OIDCProviderStatus is a struct that describes the actual state of an OIDC Provider.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"status": {
@@ -234,6 +237,26 @@ func schema_apis_supervisor_config_v1alpha1_OIDCProviderConfigStatus(ref common.
 		},
 		Dependencies: []string{
 			"k8s.io/api/core/v1.LocalObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_apis_supervisor_config_v1alpha1_OIDCProviderTLSSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "OIDCProviderTLSSpec is a struct that describes the TLS configuration for an OIDC Provider.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"secretName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SecretName is an optional name of a Secret in the same namespace, of type `kubernetes.io/tls`, which contains the TLS serving certificate for the HTTPS endpoints served by this OIDCProvider. When provided, the TLS Secret named here must contain keys named `tls.crt` and `tls.key` that contain the certificate and private key to use for TLS.\n\nServer Name Indication (SNI) is an extension to the Transport Layer Security (TLS) supported by all major browsers.\n\nSecretName is required if you would like to use different TLS certificates for issuers of different hostnames. SNI requests do not include port numbers, so all issuers with the same DNS hostname must use the same SecretName value even if they have different port numbers.\n\nSecretName is not required when you would like to use only the HTTP endpoints (e.g. when terminating TLS at an Ingress). It is also not required when you would like all requests to this OIDC Provider's HTTPS endpoints to use the default TLS certificate, which is configured elsewhere.\n\nWhen your Issuer URL's host is an IP address, then this field is ignored. SNI does not work for IP addresses.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

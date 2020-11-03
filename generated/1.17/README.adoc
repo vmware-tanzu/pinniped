@@ -131,14 +131,14 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped concierge configuration
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfig"]
-==== CredentialIssuerConfig 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuer"]
+==== CredentialIssuer 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfiglist[$$CredentialIssuerConfigList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerlist[$$CredentialIssuerList$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -146,18 +146,18 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped concierge configuration
 | Field | Description
 | *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]__ | Status of the credential issuer.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerstatus[$$CredentialIssuerStatus$$]__ | Status of the credential issuer.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigkubeconfiginfo"]
-==== CredentialIssuerConfigKubeConfigInfo 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerkubeconfiginfo"]
+==== CredentialIssuerKubeConfigInfo 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerstatus[$$CredentialIssuerStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -170,32 +170,32 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped concierge configuration
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigstatus"]
-==== CredentialIssuerConfigStatus 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerstatus"]
+==== CredentialIssuerStatus 
 
 Status of a credential issuer.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfig[$$CredentialIssuerConfig$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuer[$$CredentialIssuer$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`strategies`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigstrategy[$$CredentialIssuerConfigStrategy$$] array__ | List of integration strategies that were attempted by Pinniped.
-| *`kubeConfigInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigkubeconfiginfo[$$CredentialIssuerConfigKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
+| *`strategies`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$] array__ | List of integration strategies that were attempted by Pinniped.
+| *`kubeConfigInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerkubeconfiginfo[$$CredentialIssuerKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigstrategy"]
-==== CredentialIssuerConfigStrategy 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerstrategy"]
+==== CredentialIssuerStrategy 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerconfigstatus[$$CredentialIssuerConfigStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerstatus[$$CredentialIssuerStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -217,14 +217,14 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped supervisor configuratio
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfig"]
-==== OIDCProviderConfig 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcprovider"]
+==== OIDCProvider 
 
-OIDCProviderConfig describes the configuration of an OIDC provider.
+OIDCProvider describes the configuration of an OIDC provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfiglist[$$OIDCProviderConfigList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderlist[$$OIDCProviderList$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -232,21 +232,21 @@ OIDCProviderConfig describes the configuration of an OIDC provider.
 | Field | Description
 | *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfigspec[$$OIDCProviderConfigSpec$$]__ | Spec of the OIDC provider.
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfigstatus[$$OIDCProviderConfigStatus$$]__ | Status of the OIDC provider.
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderspec[$$OIDCProviderSpec$$]__ | Spec of the OIDC provider.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderstatus[$$OIDCProviderStatus$$]__ | Status of the OIDC provider.
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfigspec"]
-==== OIDCProviderConfigSpec 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderspec"]
+==== OIDCProviderSpec 
 
-OIDCProviderConfigSpec is a struct that describes an OIDC Provider.
+OIDCProviderSpec is a struct that describes an OIDC Provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfig[$$OIDCProviderConfig$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcprovider[$$OIDCProvider$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -254,31 +254,48 @@ OIDCProviderConfigSpec is a struct that describes an OIDC Provider.
 | Field | Description
 | *`issuer`* __string__ | Issuer is the OIDC Provider's issuer, per the OIDC Discovery Metadata document, as well as the identifier that it will use for the iss claim in issued JWTs. This field will also be used as the base URL for any endpoints used by the OIDC Provider (e.g., if your issuer is https://example.com/foo, then your authorization endpoint will look like https://example.com/foo/some/path/to/auth/endpoint). 
  See https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.3 for more information.
-| *`sniCertificateSecretName`* __string__ | SNICertificateSecretName is an optional name of a Secret in the same namespace, of type `kubernetes.io/tls`, which contains the TLS serving certificate for the HTTPS endpoints served by this OIDC Provider. When provided, the TLS Secret named here must contain keys named `tls.crt` and `tls.key` that contain the certificate and private key to use for TLS. 
- Server Name Indication (SNI) is an extension to the Transport Layer Security (TLS) supported by all major browsers. 
- SNICertificateSecretName is required if you would like to use different TLS certificates for issuers of different hostnames. SNI requests do not include port numbers, so all issuers with the same DNS hostname must use the same SNICertificateSecretName value even if they have different port numbers. 
- SNICertificateSecretName is not required when you would like to use only the HTTP endpoints (e.g. when terminating TLS at an Ingress). It is also not required when you would like all requests to this OIDC Provider's HTTPS endpoints to use the default TLS certificate, which is configured elsewhere. 
- When your Issuer URL's host is an IP address, then this field is ignored. SNI does not work for IP addresses.
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcprovidertlsspec[$$OIDCProviderTLSSpec$$]__ | TLS configures how this OIDCProvider is served over Transport Layer Security (TLS).
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfigstatus"]
-==== OIDCProviderConfigStatus 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderstatus"]
+==== OIDCProviderStatus 
 
-OIDCProviderConfigStatus is a struct that describes the actual state of an OIDC Provider.
+OIDCProviderStatus is a struct that describes the actual state of an OIDC Provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderconfig[$$OIDCProviderConfig$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcprovider[$$OIDCProvider$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`status`* __OIDCProviderStatus__ | Status holds an enum that describes the state of this OIDC Provider. Note that this Status can represent success or failure.
+| *`status`* __OIDCProviderStatusCondition__ | Status holds an enum that describes the state of this OIDC Provider. Note that this Status can represent success or failure.
 | *`message`* __string__ | Message provides human-readable details about the Status.
 | *`lastUpdateTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#time-v1-meta[$$Time$$]__ | LastUpdateTime holds the time at which the Status was last updated. It is a pointer to get around some undesirable behavior with respect to the empty metav1.Time value (see https://github.com/kubernetes/kubernetes/issues/86811).
 | *`jwksSecret`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#localobjectreference-v1-core[$$LocalObjectReference$$]__ | JWKSSecret holds the name of the secret in which this OIDC Provider's signing/verification keys are stored. If it is empty, then the signing/verification keys are either unknown or they don't exist.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcprovidertlsspec"]
+==== OIDCProviderTLSSpec 
+
+OIDCProviderTLSSpec is a struct that describes the TLS configuration for an OIDC Provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-config-v1alpha1-oidcproviderspec[$$OIDCProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`secretName`* __string__ | SecretName is an optional name of a Secret in the same namespace, of type `kubernetes.io/tls`, which contains the TLS serving certificate for the HTTPS endpoints served by this OIDCProvider. When provided, the TLS Secret named here must contain keys named `tls.crt` and `tls.key` that contain the certificate and private key to use for TLS. 
+ Server Name Indication (SNI) is an extension to the Transport Layer Security (TLS) supported by all major browsers. 
+ SecretName is required if you would like to use different TLS certificates for issuers of different hostnames. SNI requests do not include port numbers, so all issuers with the same DNS hostname must use the same SecretName value even if they have different port numbers. 
+ SecretName is not required when you would like to use only the HTTP endpoints (e.g. when terminating TLS at an Ingress). It is also not required when you would like all requests to this OIDC Provider's HTTPS endpoints to use the default TLS certificate, which is configured elsewhere. 
+ When your Issuer URL's host is an IP address, then this field is ignored. SNI does not work for IP addresses.
 |===
 
 

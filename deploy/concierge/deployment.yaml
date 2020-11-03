@@ -39,7 +39,7 @@ data:
         renewBeforeSeconds: (@= str(data.values.api_serving_certificate_renew_before_seconds) @)
     names:
       servingCertificateSecret: (@= defaultResourceNameWithSuffix("api-tls-serving-certificate") @)
-      credentialIssuerConfig: (@= defaultResourceNameWithSuffix("config") @)
+      credentialIssuer: (@= defaultResourceNameWithSuffix("config") @)
       apiService: (@= defaultResourceNameWithSuffix("api") @)
     labels: (@= json.encode(labels()).rstrip() @)
     kubeCertAgent:

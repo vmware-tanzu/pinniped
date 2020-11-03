@@ -29,7 +29,7 @@ import (
 
 func TestInformerFilters(t *testing.T) {
 	spec.Run(t, "informer filters", func(t *testing.T, when spec.G, it spec.S) {
-		const credentialIssuerConfigResourceName = "some-resource-name"
+		const credentialIssuerResourceName = "some-resource-name"
 		const installedInNamespace = "some-namespace"
 
 		var r *require.Assertions
@@ -42,7 +42,7 @@ func TestInformerFilters(t *testing.T) {
 			configMapInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().ConfigMaps()
 			_ = NewKubeConfigInfoPublisherController(
 				installedInNamespace,
-				credentialIssuerConfigResourceName,
+				credentialIssuerResourceName,
 				map[string]string{},
 				nil,
 				nil,
@@ -104,7 +104,7 @@ func TestInformerFilters(t *testing.T) {
 
 func TestSync(t *testing.T) {
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
-		const credentialIssuerConfigResourceName = "some-resource-name"
+		const credentialIssuerResourceName = "some-resource-name"
 		const installedInNamespace = "some-namespace"
 
 		var r *require.Assertions
@@ -118,30 +118,30 @@ func TestSync(t *testing.T) {
 		var timeoutContextCancel context.CancelFunc
 		var syncContext *controllerlib.Context
 
-		var expectedCredentialIssuerConfig = func(expectedNamespace, expectedServerURL, expectedCAData string) (schema.GroupVersionResource, *configv1alpha1.CredentialIssuerConfig) {
-			expectedCredentialIssuerConfigGVR := schema.GroupVersionResource{
+		var expectedCredentialIssuer = func(expectedNamespace, expectedServerURL, expectedCAData string) (schema.GroupVersionResource, *configv1alpha1.CredentialIssuer) {
+			expectedCredentialIssuerGVR := schema.GroupVersionResource{
 				Group:    configv1alpha1.GroupName,
 				Version:  "v1alpha1",
-				Resource: "credentialissuerconfigs",
+				Resource: "credentialissuers",
 			}
-			expectedCredentialIssuerConfig := &configv1alpha1.CredentialIssuerConfig{
+			expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      credentialIssuerConfigResourceName,
+					Name:      credentialIssuerResourceName,
 					Namespace: expectedNamespace,
 					Labels: map[string]string{
 						"myLabelKey1": "myLabelValue1",
 						"myLabelKey2": "myLabelValue2",
 					},
 				},
-				Status: configv1alpha1.CredentialIssuerConfigStatus{
-					Strategies: []configv1alpha1.CredentialIssuerConfigStrategy{},
-					KubeConfigInfo: &configv1alpha1.CredentialIssuerConfigKubeConfigInfo{
+				Status: configv1alpha1.CredentialIssuerStatus{
+					Strategies: []configv1alpha1.CredentialIssuerStrategy{},
+					KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
 						Server:                   expectedServerURL,
 						CertificateAuthorityData: expectedCAData,
 					},
 				},
 			}
-			return expectedCredentialIssuerConfigGVR, expectedCredentialIssuerConfig
+			return expectedCredentialIssuerGVR, expectedCredentialIssuer
 		}
 
 		// Defer starting the informers until the last possible moment so that the
@@ -150,7 +150,7 @@ func TestSync(t *testing.T) {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewKubeConfigInfoPublisherController(
 				installedInNamespace,
-				credentialIssuerConfigResourceName,
+				credentialIssuerResourceName,
 				map[string]string{
 					"myLabelKey1": "myLabelValue1",
 					"myLabelKey2": "myLabelValue2",
@@ -216,13 +216,13 @@ func TestSync(t *testing.T) {
 					r.NoError(err)
 				})
 
-				when("the CredentialIssuerConfig does not already exist", func() {
-					it("creates a CredentialIssuerConfig", func() {
+				when("the CredentialIssuer does not already exist", func() {
+					it("creates a CredentialIssuer", func() {
 						startInformersAndController()
 						err := controllerlib.TestSync(t, subject, *syncContext)
 						r.NoError(err)
 
-						expectedCredentialIssuerConfigGVR, expectedCredentialIssuerConfig := expectedCredentialIssuerConfig(
+						expectedCredentialIssuerGVR, expectedCredentialIssuer := expectedCredentialIssuer(
 							installedInNamespace,
 							kubeServerURL,
 							caData,
@@ -230,22 +230,22 @@ func TestSync(t *testing.T) {
 
 						r.Equal(
 							[]coretesting.Action{
-								coretesting.NewGetAction(expectedCredentialIssuerConfigGVR, installedInNamespace, expectedCredentialIssuerConfig.Name),
+								coretesting.NewGetAction(expectedCredentialIssuerGVR, installedInNamespace, expectedCredentialIssuer.Name),
 								coretesting.NewCreateAction(
-									expectedCredentialIssuerConfigGVR,
+									expectedCredentialIssuerGVR,
 									installedInNamespace,
-									expectedCredentialIssuerConfig,
+									expectedCredentialIssuer,
 								),
 							},
 							pinnipedAPIClient.Actions(),
 						)
 					})
 
-					when("creating the CredentialIssuerConfig fails", func() {
+					when("creating the CredentialIssuer fails", func() {
 						it.Before(func() {
 							pinnipedAPIClient.PrependReactor(
 								"create",
-								"credentialissuerconfigs",
+								"credentialissuers",
 								func(_ coretesting.Action) (bool, runtime.Object, error) {
 									return true, nil, errors.New("create failed")
 								},
@@ -255,7 +255,7 @@ func TestSync(t *testing.T) {
 						it("returns the create error", func() {
 							startInformersAndController()
 							err := controllerlib.TestSync(t, subject, *syncContext)
-							r.EqualError(err, "could not create or update credentialissuerconfig: create failed: create failed")
+							r.EqualError(err, "could not create or update credentialissuer: create failed: create failed")
 						})
 					})
 
@@ -268,20 +268,20 @@ func TestSync(t *testing.T) {
 							err := controllerlib.TestSync(t, subject, *syncContext)
 							r.NoError(err)
 
-							expectedCredentialIssuerConfigGVR, expectedCredentialIssuerConfig := expectedCredentialIssuerConfig(
+							expectedCredentialIssuerGVR, expectedCredentialIssuer := expectedCredentialIssuer(
 								installedInNamespace,
 								kubeServerURL,
 								caData,
 							)
-							expectedCredentialIssuerConfig.Status.KubeConfigInfo.Server = "https://some-server-override"
+							expectedCredentialIssuer.Status.KubeConfigInfo.Server = "https://some-server-override"
 
 							r.Equal(
 								[]coretesting.Action{
-									coretesting.NewGetAction(expectedCredentialIssuerConfigGVR, installedInNamespace, expectedCredentialIssuerConfig.Name),
+									coretesting.NewGetAction(expectedCredentialIssuerGVR, installedInNamespace, expectedCredentialIssuer.Name),
 									coretesting.NewCreateAction(
-										expectedCredentialIssuerConfigGVR,
+										expectedCredentialIssuerGVR,
 										installedInNamespace,
-										expectedCredentialIssuerConfig,
+										expectedCredentialIssuer,
 									),
 								},
 								pinnipedAPIClient.Actions(),
@@ -290,72 +290,72 @@ func TestSync(t *testing.T) {
 					})
 				})
 
-				when("the CredentialIssuerConfig already exists", func() {
-					when("the CredentialIssuerConfig is already up to date according to the data in the ConfigMap", func() {
-						var credentialIssuerConfigGVR schema.GroupVersionResource
-						var credentialIssuerConfig *configv1alpha1.CredentialIssuerConfig
+				when("the CredentialIssuer already exists", func() {
+					when("the CredentialIssuer is already up to date according to the data in the ConfigMap", func() {
+						var credentialIssuerGVR schema.GroupVersionResource
+						var credentialIssuer *configv1alpha1.CredentialIssuer
 
 						it.Before(func() {
-							credentialIssuerConfigGVR, credentialIssuerConfig = expectedCredentialIssuerConfig(
+							credentialIssuerGVR, credentialIssuer = expectedCredentialIssuer(
 								installedInNamespace,
 								kubeServerURL,
 								caData,
 							)
-							err := pinnipedAPIClient.Tracker().Add(credentialIssuerConfig)
+							err := pinnipedAPIClient.Tracker().Add(credentialIssuer)
 							r.NoError(err)
 						})
 
-						it("does not update the CredentialIssuerConfig to avoid unnecessary etcd writes/api calls", func() {
+						it("does not update the CredentialIssuer to avoid unnecessary etcd writes/api calls", func() {
 							startInformersAndController()
 							err := controllerlib.TestSync(t, subject, *syncContext)
 							r.NoError(err)
 
 							r.Equal(
 								[]coretesting.Action{
-									coretesting.NewGetAction(credentialIssuerConfigGVR, installedInNamespace, credentialIssuerConfig.Name),
+									coretesting.NewGetAction(credentialIssuerGVR, installedInNamespace, credentialIssuer.Name),
 								},
 								pinnipedAPIClient.Actions(),
 							)
 						})
 					})
 
-					when("the CredentialIssuerConfig is stale compared to the data in the ConfigMap", func() {
+					when("the CredentialIssuer is stale compared to the data in the ConfigMap", func() {
 						it.Before(func() {
-							_, expectedCredentialIssuerConfig := expectedCredentialIssuerConfig(
+							_, expectedCredentialIssuer := expectedCredentialIssuer(
 								installedInNamespace,
 								kubeServerURL,
 								caData,
 							)
-							expectedCredentialIssuerConfig.Status.KubeConfigInfo.Server = "https://some-other-server"
-							r.NoError(pinnipedAPIClient.Tracker().Add(expectedCredentialIssuerConfig))
+							expectedCredentialIssuer.Status.KubeConfigInfo.Server = "https://some-other-server"
+							r.NoError(pinnipedAPIClient.Tracker().Add(expectedCredentialIssuer))
 						})
 
-						it("updates the existing CredentialIssuerConfig", func() {
+						it("updates the existing CredentialIssuer", func() {
 							startInformersAndController()
 							err := controllerlib.TestSync(t, subject, *syncContext)
 							r.NoError(err)
 
-							expectedCredentialIssuerConfigGVR, expectedCredentialIssuerConfig := expectedCredentialIssuerConfig(
+							expectedCredentialIssuerGVR, expectedCredentialIssuer := expectedCredentialIssuer(
 								installedInNamespace,
 								kubeServerURL,
 								caData,
 							)
 							expectedActions := []coretesting.Action{
-								coretesting.NewGetAction(expectedCredentialIssuerConfigGVR, installedInNamespace, expectedCredentialIssuerConfig.Name),
+								coretesting.NewGetAction(expectedCredentialIssuerGVR, installedInNamespace, expectedCredentialIssuer.Name),
 								coretesting.NewUpdateAction(
-									expectedCredentialIssuerConfigGVR,
+									expectedCredentialIssuerGVR,
 									installedInNamespace,
-									expectedCredentialIssuerConfig,
+									expectedCredentialIssuer,
 								),
 							}
 							r.Equal(expectedActions, pinnipedAPIClient.Actions())
 						})
 
-						when("updating the CredentialIssuerConfig fails", func() {
+						when("updating the CredentialIssuer fails", func() {
 							it.Before(func() {
 								pinnipedAPIClient.PrependReactor(
 									"update",
-									"credentialissuerconfigs",
+									"credentialissuers",
 									func(_ coretesting.Action) (bool, runtime.Object, error) {
 										return true, nil, errors.New("update failed")
 									},
@@ -365,7 +365,7 @@ func TestSync(t *testing.T) {
 							it("returns the update error", func() {
 								startInformersAndController()
 								err := controllerlib.TestSync(t, subject, *syncContext)
-								r.EqualError(err, "could not create or update credentialissuerconfig: update failed")
+								r.EqualError(err, "could not create or update credentialissuer: update failed")
 							})
 						})
 					})

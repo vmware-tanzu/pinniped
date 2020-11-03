@@ -30,7 +30,7 @@ type APIConfigSpec struct {
 // NamesConfigSpec configures the names of some Kubernetes resources for the Concierge.
 type NamesConfigSpec struct {
 	ServingCertificateSecret string `json:"servingCertificateSecret"`
-	CredentialIssuerConfig   string `json:"credentialIssuerConfig"`
+	CredentialIssuer         string `json:"credentialIssuer"`
 	APIService               string `json:"apiService"`
 }
 

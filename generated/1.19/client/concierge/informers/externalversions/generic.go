@@ -46,8 +46,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Authentication().V1alpha1().WebhookAuthenticators().Informer()}, nil
 
 		// Group=config.concierge.pinniped.dev, Version=v1alpha1
-	case configv1alpha1.SchemeGroupVersion.WithResource("credentialissuerconfigs"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().CredentialIssuerConfigs().Informer()}, nil
+	case configv1alpha1.SchemeGroupVersion.WithResource("credentialissuers"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().CredentialIssuers().Informer()}, nil
 
 		// Group=login.concierge.pinniped.dev, Version=v1alpha1
 	case loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests"):

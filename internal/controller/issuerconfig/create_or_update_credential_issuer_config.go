@@ -17,48 +17,48 @@ import (
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
 )
 
-func CreateOrUpdateCredentialIssuerConfig(
+func CreateOrUpdateCredentialIssuer(
 	ctx context.Context,
-	credentialIssuerConfigNamespace string,
-	credentialIssuerConfigResourceName string,
-	credentialIssuerConfigLabels map[string]string,
+	credentialIssuerNamespace string,
+	credentialIssuerResourceName string,
+	credentialIssuerLabels map[string]string,
 	pinnipedClient pinnipedclientset.Interface,
-	applyUpdatesToCredentialIssuerConfigFunc func(configToUpdate *configv1alpha1.CredentialIssuerConfig),
+	applyUpdatesToCredentialIssuerFunc func(configToUpdate *configv1alpha1.CredentialIssuer),
 ) error {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		existingCredentialIssuerConfig, err := pinnipedClient.
+		existingCredentialIssuer, err := pinnipedClient.
 			ConfigV1alpha1().
-			CredentialIssuerConfigs(credentialIssuerConfigNamespace).
-			Get(ctx, credentialIssuerConfigResourceName, metav1.GetOptions{})
+			CredentialIssuers(credentialIssuerNamespace).
+			Get(ctx, credentialIssuerResourceName, metav1.GetOptions{})
 
 		notFound := k8serrors.IsNotFound(err)
 		if err != nil && !notFound {
 			return fmt.Errorf("get failed: %w", err)
 		}
 
-		credentialIssuerConfigsClient := pinnipedClient.ConfigV1alpha1().CredentialIssuerConfigs(credentialIssuerConfigNamespace)
+		credentialIssuersClient := pinnipedClient.ConfigV1alpha1().CredentialIssuers(credentialIssuerNamespace)
 
 		if notFound {
 			// Create it
-			credentialIssuerConfig := minimalValidCredentialIssuerConfig(
-				credentialIssuerConfigResourceName, credentialIssuerConfigNamespace, credentialIssuerConfigLabels,
+			credentialIssuer := minimalValidCredentialIssuer(
+				credentialIssuerResourceName, credentialIssuerNamespace, credentialIssuerLabels,
 			)
-			applyUpdatesToCredentialIssuerConfigFunc(credentialIssuerConfig)
+			applyUpdatesToCredentialIssuerFunc(credentialIssuer)
 
-			if _, err := credentialIssuerConfigsClient.Create(ctx, credentialIssuerConfig, metav1.CreateOptions{}); err != nil {
+			if _, err := credentialIssuersClient.Create(ctx, credentialIssuer, metav1.CreateOptions{}); err != nil {
 				return fmt.Errorf("create failed: %w", err)
 			}
 		} else {
 			// Already exists, so check to see if we need to update it
-			credentialIssuerConfig := existingCredentialIssuerConfig.DeepCopy()
-			applyUpdatesToCredentialIssuerConfigFunc(credentialIssuerConfig)
+			credentialIssuer := existingCredentialIssuer.DeepCopy()
+			applyUpdatesToCredentialIssuerFunc(credentialIssuer)
 
-			if equality.Semantic.DeepEqual(existingCredentialIssuerConfig, credentialIssuerConfig) {
+			if equality.Semantic.DeepEqual(existingCredentialIssuer, credentialIssuer) {
 				// Nothing interesting would change as a result of this update, so skip it
 				return nil
 			}
 
-			if _, err := credentialIssuerConfigsClient.Update(ctx, credentialIssuerConfig, metav1.UpdateOptions{}); err != nil {
+			if _, err := credentialIssuersClient.Update(ctx, credentialIssuer, metav1.UpdateOptions{}); err != nil {
 				return err
 			}
 		}
@@ -66,25 +66,25 @@ func CreateOrUpdateCredentialIssuerConfig(
 	})
 
 	if err != nil {
-		return fmt.Errorf("could not create or update credentialissuerconfig: %w", err)
+		return fmt.Errorf("could not create or update credentialissuer: %w", err)
 	}
 	return nil
 }
 
-func minimalValidCredentialIssuerConfig(
-	credentialIssuerConfigName string,
-	credentialIssuerConfigNamespace string,
-	credentialIssuerConfigLabels map[string]string,
-) *configv1alpha1.CredentialIssuerConfig {
-	return &configv1alpha1.CredentialIssuerConfig{
+func minimalValidCredentialIssuer(
+	credentialIssuerName string,
+	credentialIssuerNamespace string,
+	credentialIssuerLabels map[string]string,
+) *configv1alpha1.CredentialIssuer {
+	return &configv1alpha1.CredentialIssuer{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      credentialIssuerConfigName,
-			Namespace: credentialIssuerConfigNamespace,
-			Labels:    credentialIssuerConfigLabels,
+			Name:      credentialIssuerName,
+			Namespace: credentialIssuerNamespace,
+			Labels:    credentialIssuerLabels,
 		},
-		Status: configv1alpha1.CredentialIssuerConfigStatus{
-			Strategies:     []configv1alpha1.CredentialIssuerConfigStrategy{},
+		Status: configv1alpha1.CredentialIssuerStatus{
+			Strategies:     []configv1alpha1.CredentialIssuerStrategy{},
 			KubeConfigInfo: nil,
 		},
 	}

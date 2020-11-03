@@ -111,10 +111,10 @@ as the identity provider.
 1. Deploy Pinniped.
 
    ```bash
-    kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/$pinniped_version/install-pinniped.yaml
+    kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/$pinniped_version/install-pinniped-concierge.yaml
    ```
 
-   The `install-pinniped.yaml` file includes the default deployment options.
+   The `install-pinniped-concierge.yaml` file includes the default deployment options.
    If you would prefer to customize the available options, please see [deploy/concierge/README.md](../deploy/concierge/README.md)
    for instructions on how to deploy using `ytt`.
 

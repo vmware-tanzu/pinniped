@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidcclient/nonce"
 	"go.pinniped.dev/internal/oidcclient/pkce"
@@ -112,22 +113,15 @@ func TestAuthorizationEndpoint(t *testing.T) {
 
 	issuer := "https://my-issuer.com/some-path"
 
+	// Configure fosite the same way that the production code would, except use in-memory storage.
 	oauthStore := &storage.MemoryStore{
-		Clients: map[string]fosite.Client{
-			"pinniped-cli": &fosite.DefaultOpenIDConnectClient{
-				DefaultClient: &fosite.DefaultClient{
-					ID:            "pinniped-cli",
-					Public:        true,
-					RedirectURIs:  []string{downstreamRedirectURI},
-					ResponseTypes: []string{"code"},
-					GrantTypes:    []string{"authorization_code"},
-					Scopes:        []string{"openid", "profile", "email"},
-				},
-			},
-		},
+		Clients:        map[string]fosite.Client{oidc.PinnipedCLIOIDCClient().ID: oidc.PinnipedCLIOIDCClient()},
 		AuthorizeCodes: map[string]storage.StoreAuthorizeCode{},
 		PKCES:          map[string]fosite.Requester{},
 	}
+	hmacSecret := []byte("some secret - must have at least 32 bytes")
+	require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
+	oauthHelper := oidc.FositeOauth2Helper(oauthStore, hmacSecret)
 
 	happyStateGenerator := func() (state.State, error) { return "test-state", nil }
 	happyPKCEGenerator := func() (pkce.Code, error) { return "test-pkce", nil }
@@ -290,6 +284,25 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:      http.StatusBadRequest,
 			wantContentType: "application/json; charset=utf-8",
 			wantBodyJSON:    fositeInvalidRedirectURIErrorBody,
+		},
+		{
+			name:          "downstream redirect uri matches what is configured for client except for the port number",
+			issuer:        issuer,
+			idpListGetter: newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateState: happyStateGenerator,
+			generatePKCE:  happyPKCEGenerator,
+			generateNonce: happyNonceGenerator,
+			method:        http.MethodGet,
+			path: modifiedHappyGetRequestPath(map[string]string{
+				"redirect_uri": "http://127.0.0.1:42/callback",
+			}),
+			wantStatus:      http.StatusFound,
+			wantContentType: "text/html; charset=utf-8",
+			wantBodyString: fmt.Sprintf(`<a href="%s">Found</a>.%s`,
+				html.EscapeString(happyGetRequestExpectedRedirectLocation),
+				"\n\n",
+			),
+			wantLocationHeader: happyGetRequestExpectedRedirectLocation,
 		},
 		{
 			name:               "response type is unsupported",
@@ -534,7 +547,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			subject := NewHandler(test.issuer, test.idpListGetter, oauthStore, test.generateState, test.generatePKCE, test.generateNonce)
+			subject := NewHandler(test.issuer, test.idpListGetter, oauthHelper, test.generateState, test.generatePKCE, test.generateNonce)
 			runOneTestCase(t, test, subject)
 		})
 	}
@@ -543,7 +556,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		test := tests[0]
 		require.Equal(t, "happy path using GET", test.name) // re-use the happy path test case
 
-		subject := NewHandler(test.issuer, test.idpListGetter, oauthStore, test.generateState, test.generatePKCE, test.generateNonce)
+		subject := NewHandler(test.issuer, test.idpListGetter, oauthHelper, test.generateState, test.generatePKCE, test.generateNonce)
 
 		runOneTestCase(t, test, subject)
 

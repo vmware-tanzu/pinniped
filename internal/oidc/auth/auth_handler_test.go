@@ -39,6 +39,16 @@ func TestAuthorizationEndpoint(t *testing.T) {
       "status_code":       401
     }
 	`)
+
+		fositeInvalidRedirectURIErrorBody = here.Doc(`
+		{
+      "error":             "invalid_request",
+      "error_verbose":     "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed",
+      "error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nThe \"redirect_uri\" parameter does not match any of the OAuth 2.0 Client's pre-registered redirect urls.",
+      "error_hint":        "The \"redirect_uri\" parameter does not match any of the OAuth 2.0 Client's pre-registered redirect urls.",
+      "status_code":       400
+    }
+	`)
 	)
 
 	upstreamAuthURL, err := url.Parse("https://some-upstream-idp:8443/auth")
@@ -193,6 +203,23 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:      http.StatusUnauthorized,
 			wantContentType: "application/json; charset=utf-8",
 			wantBodyJSON:    fositeInvalidClientErrorBody,
+		},
+		{
+			name:          "downstream redirect uri does not match what is configured for client",
+			issuer:        issuer,
+			idpListGetter: newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateState: happyStateGenerator,
+			generatePKCE:  happyPKCEGenerator,
+			generateNonce: happyNonceGenerator,
+			method:        http.MethodGet,
+			path: fmt.Sprintf(
+				"/some/path?response_type=code&scope=%s&client_id=pinniped-cli&state=some-state-value&redirect_uri=%s",
+				url.QueryEscape("openid profile email"),
+				url.QueryEscape("http://127.0.0.1/does-not-match-what-is-configured-for-pinniped-cli-client"),
+			),
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: "application/json; charset=utf-8",
+			wantBodyJSON:    fositeInvalidRedirectURIErrorBody,
 		},
 		{
 			name:            "error while generating state",

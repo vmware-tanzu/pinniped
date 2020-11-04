@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
 	"github.com/ory/fosite/storage"
 	"github.com/stretchr/testify/require"
 
@@ -77,18 +76,6 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			},
 		},
 	}
-	oauthHelper := compose.Compose(
-		&compose.Config{},
-		oauthStore,
-		&compose.CommonStrategy{
-			// Shouldn't need any of this - we aren't doing auth code stuff, issuing ID tokens, or signing
-			// anything yet.
-		},
-		nil,                                    // hasher, shouldn't need this - we aren't doing any client auth
-		compose.OAuth2AuthorizeExplicitFactory, // need this to validate generic OAuth2 stuff
-		compose.OpenIDConnectExplicitFactory,   // need this to validate OIDC stuff
-		compose.OAuth2PKCEFactory,              // need this to validate PKCE stuff
-	)
 
 	happyStateGenerator := func() (state.State, error) { return "test-state", nil }
 	happyPKCEGenerator := func() (pkce.Code, error) { return "test-pkce", nil }
@@ -340,7 +327,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			subject := NewHandler(test.issuer, test.idpListGetter, oauthHelper, test.generateState, test.generatePKCE, test.generateNonce)
+			subject := NewHandler(test.issuer, test.idpListGetter, oauthStore, test.generateState, test.generatePKCE, test.generateNonce)
 			runOneTestCase(t, test, subject)
 		})
 	}
@@ -349,7 +336,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		test := tests[0]
 		require.Equal(t, "happy path using GET", test.name) // re-use the happy path test case
 
-		subject := NewHandler(test.issuer, test.idpListGetter, oauthHelper, test.generateState, test.generatePKCE, test.generateNonce)
+		subject := NewHandler(test.issuer, test.idpListGetter, oauthStore, test.generateState, test.generatePKCE, test.generateNonce)
 
 		runOneTestCase(t, test, subject)
 

@@ -30,23 +30,23 @@ func TestAuthorizationEndpoint(t *testing.T) {
 
 	var (
 		fositeInvalidClientErrorBody = here.Doc(`
-		{
-      "error":             "invalid_client",
-      "error_verbose":     "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)",
-      "error_description": "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)\n\nThe requested OAuth 2.0 Client does not exist.",
-      "error_hint":        "The requested OAuth 2.0 Client does not exist.",
-      "status_code":       401
-    }
+			{
+				"error":             "invalid_client",
+				"error_verbose":     "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)",
+				"error_description": "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)\n\nThe requested OAuth 2.0 Client does not exist.",
+				"error_hint":        "The requested OAuth 2.0 Client does not exist.",
+				"status_code":       401
+			 }
 	`)
 
 		fositeInvalidRedirectURIErrorBody = here.Doc(`
-		{
-      "error":             "invalid_request",
-      "error_verbose":     "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed",
-      "error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nThe \"redirect_uri\" parameter does not match any of the OAuth 2.0 Client's pre-registered redirect urls.",
-      "error_hint":        "The \"redirect_uri\" parameter does not match any of the OAuth 2.0 Client's pre-registered redirect urls.",
-      "status_code":       400
-    }
+			{
+				"error":             "invalid_request",
+				"error_verbose":     "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed",
+				"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nThe \"redirect_uri\" parameter does not match any of the OAuth 2.0 Client's pre-registered redirect urls.",
+				"error_hint":        "The \"redirect_uri\" parameter does not match any of the OAuth 2.0 Client's pre-registered redirect urls.",
+				"status_code":       400
+			}
 	`)
 
 		fositeUnsupportedResponseTypeErrorQuery = url.Values{

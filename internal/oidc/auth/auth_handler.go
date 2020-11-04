@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/ory/fosite/handler/openid"
+
 	"github.com/ory/fosite/compose"
 	"golang.org/x/oauth2"
 	"k8s.io/klog/v2"
@@ -31,10 +33,14 @@ func NewHandler(
 	generatePKCE func() (pkce.Code, error),
 	generateNonce func() (nonce.Nonce, error),
 ) http.Handler {
+	oauthConfig := &compose.Config{
+		EnforcePKCEForPublicClients: true,
+	}
+	secret := []byte("some-cool-secret-that-is-32bytes") // TODO use a real secret once we care about real authorization codes
 	oauthHelper := compose.Compose(
 		// Empty Config for right now since we aren't using anything in it. We may want to inject this
 		// in the future since it has some really nice configuration knobs like token lifetime.
-		&compose.Config{},
+		oauthConfig,
 
 		// This is the thing that matters right now - the store is used to get information about the
 		// client in the authorization request.
@@ -42,16 +48,18 @@ func NewHandler(
 
 		// Shouldn't need any of this filled in as of right now - we aren't doing auth code stuff,
 		// issuing ID tokens, or signing anything yet.
-		&compose.CommonStrategy{},
+		&compose.CommonStrategy{
+			CoreStrategy: compose.NewOAuth2HMACStrategy(oauthConfig, secret, nil),
+		},
 
 		// hasher, shouldn't need this right now - we aren't doing any client auth...yet?
 		nil,
 
 		// We will _probably_ want the below handlers somewhere in the code, but I'm not sure where yet,
 		// and we don't need them for the tests to pass currently, so they are commented out.
-		// compose.OAuth2AuthorizeExplicitFactory,
+		compose.OAuth2AuthorizeExplicitFactory,
 		// compose.OpenIDConnectExplicitFactory,
-		// compose.OAuth2PKCEFactory,
+		compose.OAuth2PKCEFactory,
 	)
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		if r.Method != http.MethodPost && r.Method != http.MethodGet {
@@ -64,6 +72,17 @@ func NewHandler(
 		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(
 			r.Context(), // TODO: maybe another context here since this one will expire?
 			r,
+		)
+		if err != nil {
+			oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+			return nil
+		}
+
+		// Perform validations
+		_, err = oauthHelper.NewAuthorizeResponse(
+			r.Context(), // TODO: maybe another context here since this one will expire?
+			authorizeRequester,
+			&openid.DefaultSession{},
 		)
 		if err != nil {
 			oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)

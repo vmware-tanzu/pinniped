@@ -5,6 +5,7 @@ package auth
 
 import (
 	"fmt"
+	"html"
 	"mime"
 	"net/http"
 	"net/http/httptest"
@@ -48,6 +49,20 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				"status_code":       400
 			}
 		`)
+
+		fositeMissingCodeChallengeErrorQuery = map[string]string{
+			"error":             "invalid_request",
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nThis client must include a code_challenge when performing the authorize code flow, but it is missing.",
+			"error_hint":        "This client must include a code_challenge when performing the authorize code flow, but it is missing.",
+			"state":             "some-state-value",
+		}
+
+		fositeMissingCodeChallengeMethodErrorQuery = map[string]string{
+			"error":             "invalid_request",
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nClients must use code_challenge_method=S256, plain is not allowed.",
+			"error_hint":        "Clients must use code_challenge_method=S256, plain is not allowed.",
+			"state":             "some-state-value",
+		}
 
 		fositeUnsupportedResponseTypeErrorQuery = map[string]string{
 			"error":             "unsupported_response_type",
@@ -103,6 +118,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				},
 			},
 		},
+		AuthorizeCodes: map[string]storage.StoreAuthorizeCode{},
+		PKCES:          map[string]fosite.Requester{},
 	}
 
 	happyStateGenerator := func() (state.State, error) { return "test-state", nil }
@@ -111,7 +128,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 
 	// This is the PKCE challenge which is calculated as base64(sha256("test-pkce")). For example:
 	// $ echo -n test-pkce | shasum -a 256 | cut -d" " -f1 | xxd -r -p | base64 | cut -d"=" -f1
-	expectedCodeChallenge := "VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g"
+	expectedUpstreamCodeChallenge := "VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g"
 
 	pathWithQuery := func(path string, query map[string]string) string {
 		values := url.Values{}
@@ -135,12 +152,14 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	}
 
 	happyGetRequestQueryMap := map[string]string{
-		"response_type": "code",
-		"scope":         "openid profile email",
-		"client_id":     "pinniped-cli",
-		"state":         "some-state-value",
-		"nonce":         "some-nonce-value",
-		"redirect_uri":  downstreamRedirectURI,
+		"response_type":         "code",
+		"scope":                 "openid profile email",
+		"client_id":             "pinniped-cli",
+		"state":                 "some-state-value",
+		"nonce":                 "some-nonce-value",
+		"code_challenge":        "some-challenge",
+		"code_challenge_method": "S256",
+		"redirect_uri":          downstreamRedirectURI,
 	}
 
 	happyGetRequestPath := pathWithQuery("/some/path", happyGetRequestQueryMap)
@@ -169,7 +188,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			"client_id":             "some-client-id",
 			"state":                 "test-state",
 			"nonce":                 "test-nonce",
-			"code_challenge":        expectedCodeChallenge,
+			"code_challenge":        expectedUpstreamCodeChallenge,
 			"code_challenge_method": "S256",
 			"redirect_uri":          issuer + "/callback/some-idp",
 		},
@@ -197,17 +216,20 @@ func TestAuthorizationEndpoint(t *testing.T) {
 
 	tests := []testCase{
 		{
-			name:               "happy path using GET",
-			issuer:             issuer,
-			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:      happyStateGenerator,
-			generatePKCE:       happyPKCEGenerator,
-			generateNonce:      happyNonceGenerator,
-			method:             http.MethodGet,
-			path:               happyGetRequestPath,
-			wantStatus:         http.StatusFound,
-			wantContentType:    "text/html; charset=utf-8",
-			wantBodyString:     "",
+			name:            "happy path using GET",
+			issuer:          issuer,
+			idpListGetter:   newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateState:   happyStateGenerator,
+			generatePKCE:    happyPKCEGenerator,
+			generateNonce:   happyNonceGenerator,
+			method:          http.MethodGet,
+			path:            happyGetRequestPath,
+			wantStatus:      http.StatusFound,
+			wantContentType: "text/html; charset=utf-8",
+			wantBodyString: fmt.Sprintf(`<a href="%s">Found</a>.%s`,
+				html.EscapeString(happyGetRequestExpectedRedirectLocation),
+				"\n\n",
+			),
 			wantLocationHeader: happyGetRequestExpectedRedirectLocation,
 		},
 		{
@@ -221,11 +243,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path:          "/some/path",
 			contentType:   "application/x-www-form-urlencoded",
 			body: url.Values{
-				"response_type": []string{"code"},
-				"scope":         []string{"openid profile email"},
-				"client_id":     []string{"pinniped-cli"},
-				"state":         []string{"some-state-value"},
-				"redirect_uri":  []string{downstreamRedirectURI},
+				"response_type":         []string{"code"},
+				"scope":                 []string{"openid profile email"},
+				"client_id":             []string{"pinniped-cli"},
+				"state":                 []string{"some-state-value"},
+				"code_challenge":        []string{"some-challenge"},
+				"code_challenge_method": []string{"S256"},
+				"redirect_uri":          []string{downstreamRedirectURI},
 			}.Encode(),
 			wantStatus:         http.StatusFound,
 			wantContentType:    "",
@@ -272,6 +296,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:         http.StatusFound,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeUnsupportedResponseTypeErrorQuery),
+			wantBodyString:     "",
 		},
 		{
 			name:               "downstream scopes do not match what is configured for client",
@@ -285,6 +310,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:         http.StatusFound,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidScopeErrorQuery),
+			wantBodyString:     "",
 		},
 		{
 			name:               "missing response type in request",
@@ -298,6 +324,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:         http.StatusFound,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
+			wantBodyString:     "",
 		},
 		{
 			name:            "missing client id in request",
@@ -313,6 +340,34 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyJSON:    fositeInvalidClientErrorBody,
 		},
 		{
+			name:               "missing PKCE code_challenge in request", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
+			issuer:             issuer,
+			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateState:      happyStateGenerator,
+			generatePKCE:       happyPKCEGenerator,
+			generateNonce:      happyNonceGenerator,
+			method:             http.MethodGet,
+			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge": ""}),
+			wantStatus:         http.StatusFound,
+			wantContentType:    "application/json; charset=utf-8",
+			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeErrorQuery),
+			wantBodyString:     "",
+		},
+		{
+			name:               "missing PKCE code_challenge_method in request", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
+			issuer:             issuer,
+			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateState:      happyStateGenerator,
+			generatePKCE:       happyPKCEGenerator,
+			generateNonce:      happyNonceGenerator,
+			method:             http.MethodGet,
+			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": ""}),
+			wantStatus:         http.StatusFound,
+			wantContentType:    "application/json; charset=utf-8",
+			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
+			wantBodyString:     "",
+		},
+		{
 			name:               "state does not have enough entropy",
 			issuer:             issuer,
 			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
@@ -324,6 +379,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:         http.StatusFound,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidStateErrorQuery),
+			wantBodyString:     "",
 		},
 		{
 			name:            "error while generating state",
@@ -428,11 +484,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		require.Equal(t, test.wantStatus, rsp.Code)
 		requireEqualContentType(t, rsp.Header().Get("Content-Type"), test.wantContentType)
 
-		if test.wantBodyString != "" {
-			require.Equal(t, test.wantBodyString, rsp.Body.String())
-		}
 		if test.wantBodyJSON != "" {
 			require.JSONEq(t, test.wantBodyJSON, rsp.Body.String())
+		} else {
+			require.Equal(t, test.wantBodyString, rsp.Body.String())
 		}
 
 		if test.wantLocationHeader != "" {
@@ -475,10 +530,14 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				"client_id":             "some-other-client-id",
 				"state":                 "test-state",
 				"nonce":                 "test-nonce",
-				"code_challenge":        expectedCodeChallenge,
+				"code_challenge":        expectedUpstreamCodeChallenge,
 				"code_challenge_method": "S256",
 				"redirect_uri":          issuer + "/callback/some-other-idp",
 			},
+		)
+		test.wantBodyString = fmt.Sprintf(`<a href="%s">Found</a>.%s`,
+			html.EscapeString(test.wantLocationHeader),
+			"\n\n",
 		)
 
 		// Run again on the same instance of the subject with the modified upstream IDP settings and the

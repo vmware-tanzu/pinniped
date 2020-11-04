@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/ory/fosite"
 	"golang.org/x/oauth2"
 	"k8s.io/klog/v2"
 
@@ -25,6 +26,7 @@ type IDPListGetter interface {
 func NewHandler(
 	issuer string,
 	idpListGetter IDPListGetter,
+	oauthHelper fosite.OAuth2Provider,
 	generateState func() (state.State, error),
 	generatePKCE func() (pkce.Code, error),
 	generateNonce func() (nonce.Nonce, error),
@@ -35,6 +37,15 @@ func NewHandler(
 			// Authorization Servers MUST support the use of the HTTP GET and POST methods defined in
 			// RFC 2616 [RFC2616] at the Authorization Endpoint.
 			return httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET or POST)", r.Method)
+		}
+
+		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(
+			r.Context(), // TODO: maybe another context here since this one will expire?
+			r,
+		)
+		if err != nil {
+			oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+			return nil
 		}
 
 		upstreamIDP, err := chooseUpstreamIDP(idpListGetter)

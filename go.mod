@@ -14,6 +14,7 @@ require (
 	github.com/golang/mock v1.4.4
 	github.com/golangci/golangci-lint v1.31.0
 	github.com/google/go-cmp v0.5.2
+	github.com/ory/fosite v0.35.1
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
 	github.com/sclevine/agouti v3.0.0+incompatible
 	github.com/sclevine/spec v1.4.0
@@ -22,8 +23,8 @@ require (
 	github.com/stretchr/testify v1.6.1
 	go.pinniped.dev/generated/1.19/apis v0.0.0-00010101000000-000000000000
 	go.pinniped.dev/generated/1.19/client v0.0.0-00010101000000-000000000000
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	golang.org/x/oauth2 v0.0.0-20191202225959-858c2ad4c8b6
+	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
+	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	gopkg.in/square/go-jose.v2 v2.5.1
 	k8s.io/api v0.19.2

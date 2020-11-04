@@ -5,14 +5,19 @@ package auth
 
 import (
 	"fmt"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
+	"github.com/ory/fosite"
+	"github.com/ory/fosite/compose"
+	"github.com/ory/fosite/storage"
 	"github.com/stretchr/testify/require"
 
+	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidcclient/nonce"
 	"go.pinniped.dev/internal/oidcclient/pkce"
@@ -20,6 +25,22 @@ import (
 )
 
 func TestAuthorizationEndpoint(t *testing.T) {
+	const (
+		downstreamRedirectURI = "http://127.0.0.1/callback"
+	)
+
+	var (
+		fositeInvalidClientErrorBody = here.Doc(`
+		{
+      "error":             "invalid_client",
+      "error_verbose":     "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)",
+      "error_description": "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)\n\nThe requested OAuth 2.0 Client does not exist.",
+      "error_hint":        "The requested OAuth 2.0 Client does not exist.",
+      "status_code":       401
+    }
+	`)
+	)
+
 	upstreamAuthURL, err := url.Parse("https://some-upstream-idp:8443/auth")
 	require.NoError(t, err)
 
@@ -32,6 +53,33 @@ func TestAuthorizationEndpoint(t *testing.T) {
 
 	issuer := "https://my-issuer.com/some-path"
 
+	oauthStore := &storage.MemoryStore{
+		Clients: map[string]fosite.Client{
+			"pinniped-cli": &fosite.DefaultOpenIDConnectClient{
+				DefaultClient: &fosite.DefaultClient{
+					ID:            "pinniped-cli",
+					Public:        true,
+					RedirectURIs:  []string{downstreamRedirectURI},
+					ResponseTypes: []string{"code"},
+					GrantTypes:    []string{"authorization_code"},
+					Scopes:        []string{"openid", "profile", "email"},
+				},
+			},
+		},
+	}
+	oauthHelper := compose.Compose(
+		&compose.Config{},
+		oauthStore,
+		&compose.CommonStrategy{
+			// Shouldn't need any of this - we aren't doing auth code stuff, issuing ID tokens, or signing
+			// anything yet.
+		},
+		nil,                                    // hasher, shouldn't need this - we aren't doing any client auth
+		compose.OAuth2AuthorizeExplicitFactory, // need this to validate generic OAuth2 stuff
+		compose.OpenIDConnectExplicitFactory,   // need this to validate OIDC stuff
+		compose.OAuth2PKCEFactory,              // need this to validate PKCE stuff
+	)
+
 	happyStateGenerator := func() (state.State, error) { return "test-state", nil }
 	happyPKCEGenerator := func() (pkce.Code, error) { return "test-pkce", nil }
 	happyNonceGenerator := func() (nonce.Nonce, error) { return "test-nonce", nil }
@@ -43,7 +91,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	happyGetRequestPath := fmt.Sprintf(
 		"/some/path?response_type=code&scope=%s&client_id=pinniped-cli&state=some-state-value&redirect_uri=%s",
 		url.QueryEscape("openid profile email"),
-		url.QueryEscape("http://127.0.0.1/callback"),
+		url.QueryEscape(downstreamRedirectURI),
 	)
 
 	type testCase struct {
@@ -56,11 +104,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		generateNonce func() (nonce.Nonce, error)
 		method        string
 		path          string
+		contentType   string
 		body          string
 
 		wantStatus         int
 		wantContentType    string
 		wantBodyString     string
+		wantBodyJSON       string
 		wantLocationHeader string
 	}
 
@@ -101,12 +151,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			generateNonce: happyNonceGenerator,
 			method:        http.MethodPost,
 			path:          "/some/path",
+			contentType:   "application/x-www-form-urlencoded",
 			body: url.Values{
 				"response_type": []string{"code"},
 				"scope":         []string{"openid profile email"},
 				"client_id":     []string{"pinniped-cli"},
 				"state":         []string{"some-state-value"},
-				"redirect_uri":  []string{"http://127.0.0.1/callback"},
+				"redirect_uri":  []string{downstreamRedirectURI},
 			}.Encode(),
 			wantStatus:      http.StatusFound,
 			wantContentType: "",
@@ -125,6 +176,23 @@ func TestAuthorizationEndpoint(t *testing.T) {
 					"redirect_uri":          []string{issuer + "/callback/some-idp"},
 				}.Encode(),
 			),
+		},
+		{
+			name:          "downstream client does not exist",
+			issuer:        issuer,
+			idpListGetter: newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateState: happyStateGenerator,
+			generatePKCE:  happyPKCEGenerator,
+			generateNonce: happyNonceGenerator,
+			method:        http.MethodGet,
+			path: fmt.Sprintf(
+				"/some/path?response_type=code&scope=%s&client_id=invalid-client&state=some-state-value&redirect_uri=%s",
+				url.QueryEscape("openid profile email"),
+				url.QueryEscape(downstreamRedirectURI),
+			),
+			wantStatus:      http.StatusUnauthorized,
+			wantContentType: "application/json; charset=utf-8",
+			wantBodyJSON:    fositeInvalidClientErrorBody,
 		},
 		{
 			name:            "error while generating state",
@@ -219,14 +287,21 @@ func TestAuthorizationEndpoint(t *testing.T) {
 
 	runOneTestCase := func(t *testing.T, test testCase, subject http.Handler) {
 		req := httptest.NewRequest(test.method, test.path, strings.NewReader(test.body))
+		req.Header.Set("Content-Type", test.contentType)
 		rsp := httptest.NewRecorder()
 		subject.ServeHTTP(rsp, req)
 
+		t.Logf("response: %#v", rsp)
+		t.Logf("body: %q", rsp.Body.String())
+
 		require.Equal(t, test.wantStatus, rsp.Code)
-		require.Equal(t, test.wantContentType, rsp.Header().Get("Content-Type"))
+		requireEqualContentType(t, rsp.Header().Get("Content-Type"), test.wantContentType)
 
 		if test.wantBodyString != "" {
 			require.Equal(t, test.wantBodyString, rsp.Body.String())
+		}
+		if test.wantBodyJSON != "" {
+			require.JSONEq(t, test.wantBodyJSON, rsp.Body.String())
 		}
 
 		if test.wantLocationHeader != "" {
@@ -238,7 +313,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			subject := NewHandler(test.issuer, test.idpListGetter, test.generateState, test.generatePKCE, test.generateNonce)
+			subject := NewHandler(test.issuer, test.idpListGetter, oauthHelper, test.generateState, test.generatePKCE, test.generateNonce)
 			runOneTestCase(t, test, subject)
 		})
 	}
@@ -247,7 +322,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		test := tests[0]
 		require.Equal(t, "happy path using GET", test.name) // re-use the happy path test case
 
-		subject := NewHandler(test.issuer, test.idpListGetter, test.generateState, test.generatePKCE, test.generateNonce)
+		subject := NewHandler(test.issuer, test.idpListGetter, oauthHelper, test.generateState, test.generatePKCE, test.generateNonce)
 
 		runOneTestCase(t, test, subject)
 
@@ -284,7 +359,24 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	})
 }
 
+func requireEqualContentType(t *testing.T, actual string, expected string) {
+	t.Helper()
+
+	if expected == "" {
+		require.Empty(t, actual)
+		return
+	}
+
+	actualContentType, actualContentTypeParams, err := mime.ParseMediaType(expected)
+	require.NoError(t, err)
+	expectedContentType, expectedContentTypeParams, err := mime.ParseMediaType(expected)
+	require.NoError(t, err)
+	require.Equal(t, actualContentType, expectedContentType)
+	require.Equal(t, actualContentTypeParams, expectedContentTypeParams)
+}
+
 func requireEqualURLs(t *testing.T, actualURL string, expectedURL string) {
+	t.Helper()
 	actualLocationURL, err := url.Parse(actualURL)
 	require.NoError(t, err)
 	expectedLocationURL, err := url.Parse(expectedURL)

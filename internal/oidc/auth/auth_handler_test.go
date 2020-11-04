@@ -48,6 +48,34 @@ func TestAuthorizationEndpoint(t *testing.T) {
       "status_code":       400
     }
 	`)
+
+		fositeUnsupportedResponseTypeErrorQuery = url.Values{
+			"error":             []string{"unsupported_response_type"},
+			"error_description": []string{"The authorization server does not support obtaining a token using this method\n\nThe client is not allowed to request response_type \"unsupported\"."},
+			"error_hint":        []string{`The client is not allowed to request response_type "unsupported".`},
+			"state":             []string{"some-state-value"},
+		}.Encode()
+
+		fositeInvalidScopeErrorQuery = url.Values{
+			"error":             []string{"invalid_scope"},
+			"error_description": []string{"The requested scope is invalid, unknown, or malformed\n\nThe OAuth 2.0 Client is not allowed to request scope \"tuna\"."},
+			"error_hint":        []string{`The OAuth 2.0 Client is not allowed to request scope "tuna".`},
+			"state":             []string{"some-state-value"},
+		}.Encode()
+
+		fositeInvalidStateErrorQuery = url.Values{
+			"error":             []string{"invalid_state"},
+			"error_description": []string{"The state is missing or does not have enough characters and is therefore considered too weak\n\nRequest parameter \"state\" must be at least be 8 characters long to ensure sufficient entropy."},
+			"error_hint":        []string{`Request parameter "state" must be at least be 8 characters long to ensure sufficient entropy.`},
+			"state":             []string{"short"},
+		}.Encode()
+
+		fositeMissingResponseTypeErrorQuery = url.Values{
+			"error":             []string{"unsupported_response_type"},
+			"error_description": []string{"The authorization server does not support obtaining a token using this method\n\nThe request is missing the \"response_type\"\" parameter."},
+			"error_hint":        []string{`The request is missing the "response_type"" parameter.`},
+			"state":             []string{"some-state-value"},
+		}.Encode()
 	)
 
 	upstreamAuthURL, err := url.Parse("https://some-upstream-idp:8443/auth")
@@ -207,6 +235,91 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:      http.StatusBadRequest,
 			wantContentType: "application/json; charset=utf-8",
 			wantBodyJSON:    fositeInvalidRedirectURIErrorBody,
+		},
+		{
+			name:          "response type is unsupported",
+			issuer:        issuer,
+			idpListGetter: newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateState: happyStateGenerator,
+			generatePKCE:  happyPKCEGenerator,
+			generateNonce: happyNonceGenerator,
+			method:        http.MethodGet,
+			path: fmt.Sprintf(
+				"/some/path?response_type=unsupported&scope=%s&client_id=pinniped-cli&state=some-state-value&redirect_uri=%s",
+				url.QueryEscape("openid profile email"),
+				url.QueryEscape(downstreamRedirectURI),
+			),
+			wantStatus:         http.StatusFound,
+			wantContentType:    "application/json; charset=utf-8",
+			wantLocationHeader: fmt.Sprintf("%s?%s", downstreamRedirectURI, fositeUnsupportedResponseTypeErrorQuery),
+		},
+		{
+			name:          "downstream scopes do not match what is configured for client",
+			issuer:        issuer,
+			idpListGetter: newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateState: happyStateGenerator,
+			generatePKCE:  happyPKCEGenerator,
+			generateNonce: happyNonceGenerator,
+			method:        http.MethodGet,
+			path: fmt.Sprintf(
+				"/some/path?response_type=code&scope=%s&client_id=pinniped-cli&state=some-state-value&redirect_uri=%s",
+				url.QueryEscape("openid profile email tuna"),
+				url.QueryEscape(downstreamRedirectURI),
+			),
+			wantStatus:         http.StatusFound,
+			wantContentType:    "application/json; charset=utf-8",
+			wantLocationHeader: fmt.Sprintf("%s?%s", downstreamRedirectURI, fositeInvalidScopeErrorQuery),
+		},
+		{
+			name:          "missing response type in request",
+			issuer:        issuer,
+			idpListGetter: newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateState: happyStateGenerator,
+			generatePKCE:  happyPKCEGenerator,
+			generateNonce: happyNonceGenerator,
+			method:        http.MethodGet,
+			path: fmt.Sprintf(
+				"/some/path?scope=%s&client_id=pinniped-cli&state=some-state-value&redirect_uri=%s",
+				url.QueryEscape("openid profile email"),
+				url.QueryEscape(downstreamRedirectURI),
+			),
+			wantStatus:         http.StatusFound,
+			wantContentType:    "application/json; charset=utf-8",
+			wantLocationHeader: fmt.Sprintf("%s?%s", downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
+		},
+		{
+			name:          "missing client id in request",
+			issuer:        issuer,
+			idpListGetter: newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateState: happyStateGenerator,
+			generatePKCE:  happyPKCEGenerator,
+			generateNonce: happyNonceGenerator,
+			method:        http.MethodGet,
+			path: fmt.Sprintf(
+				"/some/path?response_type=code&scope=%s&state=some-state-value&redirect_uri=%s",
+				url.QueryEscape("openid profile email"),
+				url.QueryEscape(downstreamRedirectURI),
+			),
+			wantStatus:      http.StatusUnauthorized,
+			wantContentType: "application/json; charset=utf-8",
+			wantBodyJSON:    fositeInvalidClientErrorBody,
+		},
+		{
+			name:          "state does not have enough entropy",
+			issuer:        issuer,
+			idpListGetter: newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateState: happyStateGenerator,
+			generatePKCE:  happyPKCEGenerator,
+			generateNonce: happyNonceGenerator,
+			method:        http.MethodGet,
+			path: fmt.Sprintf(
+				"/some/path?response_type=code&scope=%s&client_id=pinniped-cli&state=short&redirect_uri=%s",
+				url.QueryEscape("openid profile email"),
+				url.QueryEscape(downstreamRedirectURI),
+			),
+			wantStatus:         http.StatusFound,
+			wantContentType:    "application/json; charset=utf-8",
+			wantLocationHeader: fmt.Sprintf("%s?%s", downstreamRedirectURI, fositeInvalidStateErrorQuery),
 		},
 		{
 			name:            "error while generating state",

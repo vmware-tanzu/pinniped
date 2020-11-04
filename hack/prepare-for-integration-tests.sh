@@ -100,6 +100,7 @@ check_dependency ytt "Please install ytt. e.g. 'brew tap k14s/tap && brew instal
 check_dependency kapp "Please install kapp. e.g. 'brew tap k14s/tap && brew install kapp' for MacOS"
 check_dependency kubectl "Please install kubectl. e.g. 'brew install kubectl' for MacOS"
 check_dependency htpasswd "Please install htpasswd. Should be pre-installed on MacOS. Usually found in 'apache2-utils' package for linux."
+check_dependency chromedriver "Please install chromedriver. e.g. 'brew install chromedriver' for MacOS"
 
 # Require kubectl >= 1.18.x
 if [ "$(kubectl version --client=true --short | cut -d '.' -f 2)" -lt 18 ]; then

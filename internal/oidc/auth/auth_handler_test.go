@@ -37,7 +37,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				"error_hint":        "The requested OAuth 2.0 Client does not exist.",
 				"status_code":       401
 			 }
-	`)
+		`)
 
 		fositeInvalidRedirectURIErrorBody = here.Doc(`
 			{
@@ -47,7 +47,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				"error_hint":        "The \"redirect_uri\" parameter does not match any of the OAuth 2.0 Client's pre-registered redirect urls.",
 				"status_code":       400
 			}
-	`)
+		`)
 
 		fositeUnsupportedResponseTypeErrorQuery = url.Values{
 			"error":             []string{"unsupported_response_type"},

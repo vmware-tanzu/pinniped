@@ -64,6 +64,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			"state":             "some-state-value",
 		}
 
+		fositeInvalidCodeChallengeErrorQuery = map[string]string{
+			"error":             "invalid_request",
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nThe code_challenge_method is not supported, use S256 instead.",
+			"error_hint":        "The code_challenge_method is not supported, use S256 instead.",
+			"state":             "some-state-value",
+		}
+
 		fositeUnsupportedResponseTypeErrorQuery = map[string]string{
 			"error":             "unsupported_response_type",
 			"error_description": "The authorization server does not support obtaining a token using this method\n\nThe client is not allowed to request response_type \"unsupported\".",
@@ -351,6 +358,34 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:         http.StatusFound,
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeErrorQuery),
+			wantBodyString:     "",
+		},
+		{
+			name:               "invalid value for PKCE code_challenge_method in request", // https://tools.ietf.org/html/rfc7636#section-4.3
+			issuer:             issuer,
+			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateState:      happyStateGenerator,
+			generatePKCE:       happyPKCEGenerator,
+			generateNonce:      happyNonceGenerator,
+			method:             http.MethodGet,
+			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
+			wantStatus:         http.StatusFound,
+			wantContentType:    "application/json; charset=utf-8",
+			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidCodeChallengeErrorQuery),
+			wantBodyString:     "",
+		},
+		{
+			name:               "when PKCE code_challenge_method in request is `plain`", // https://tools.ietf.org/html/rfc7636#section-4.3
+			issuer:             issuer,
+			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateState:      happyStateGenerator,
+			generatePKCE:       happyPKCEGenerator,
+			generateNonce:      happyNonceGenerator,
+			method:             http.MethodGet,
+			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "plain"}),
+			wantStatus:         http.StatusFound,
+			wantContentType:    "application/json; charset=utf-8",
+			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
 			wantBodyString:     "",
 		},
 		{

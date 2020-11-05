@@ -108,7 +108,7 @@ as the identity provider.
      | tee /tmp/local-user-authenticator-ca-base64-encoded
    ```
 
-1. Deploy Pinniped.
+1. Deploy the Pinniped concierge.
 
    ```bash
     kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/$pinniped_version/install-pinniped-concierge.yaml
@@ -121,7 +121,7 @@ as the identity provider.
 1. Create a `WebhookAuthenticator` object to configure Pinniped to authenticate using local-user-authenticator.
 
     ```bash
-    cat <<EOF | kubectl create --namespace pinniped -f -
+    cat <<EOF | kubectl create --namespace pinniped-concierge -f -
     apiVersion: authentication.concierge.pinniped.dev/v1alpha1
     kind: WebhookAuthenticator
     metadata:
@@ -143,7 +143,7 @@ as the identity provider.
    allow you to authenticate as the user that you created above.
 
    ```bash
-   pinniped get-kubeconfig --token "pinny-the-seal:password123" --authenticator-type webhook --authenticator-name local-user-authenticator > /tmp/pinniped-kubeconfig
+   pinniped get-kubeconfig --pinniped-namespace pinniped-concierge --token "pinny-the-seal:password123" --authenticator-type webhook --authenticator-name local-user-authenticator > /tmp/pinniped-kubeconfig
    ```
 
    If you are using MacOS, you may get an error dialog that says
@@ -162,7 +162,7 @@ as the identity provider.
    the `pinny-the-seal` user.
 
    ```bash
-   kubectl --kubeconfig /tmp/pinniped-kubeconfig get pods -n pinniped
+   kubectl --kubeconfig /tmp/pinniped-kubeconfig get pods -n pinniped-concierge
    ```
 
    Because this user has no RBAC permissions on this cluster, the previous command
@@ -179,7 +179,7 @@ as the identity provider.
 1. Use the generated kubeconfig to issue arbitrary `kubectl` commands as the `pinny-the-seal` user.
 
    ```bash
-   kubectl --kubeconfig /tmp/pinniped-kubeconfig get pods -n pinniped
+   kubectl --kubeconfig /tmp/pinniped-kubeconfig get pods -n pinniped-concierge
    ```
 
    The user has permission to list pods, so the command succeeds this time.

@@ -51,7 +51,7 @@ type getKubeConfigCommand struct {
 func newGetKubeConfigCommand() *getKubeConfigCommand {
 	return &getKubeConfigCommand{
 		flags: getKubeConfigFlags{
-			namespace: "pinniped",
+			namespace: "pinniped-concierge",
 		},
 		getPathToSelf: os.Executable,
 		kubeClientCreator: func(restConfig *rest.Config) (pinnipedclientset.Interface, error) {

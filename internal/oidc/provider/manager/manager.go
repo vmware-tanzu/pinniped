@@ -8,12 +8,18 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ory/fosite"
+	"github.com/ory/fosite/storage"
 	"k8s.io/klog/v2"
 
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/auth"
 	"go.pinniped.dev/internal/oidc/discovery"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidcclient/nonce"
+	"go.pinniped.dev/internal/oidcclient/pkce"
+	"go.pinniped.dev/internal/oidcclient/state"
 )
 
 // Manager can manage multiple active OIDC providers. It acts as a request router for them.
@@ -25,16 +31,19 @@ type Manager struct {
 	providerHandlers    map[string]http.Handler  // map of all routes for all providers
 	nextHandler         http.Handler             // the next handler in a chain, called when this manager didn't know how to handle a request
 	dynamicJWKSProvider jwks.DynamicJWKSProvider // in-memory cache of per-issuer JWKS data
+	idpListGetter       auth.IDPListGetter       // in-memory cache of upstream IDPs
 }
 
 // NewManager returns an empty Manager.
 // nextHandler will be invoked for any requests that could not be handled by this manager's providers.
 // dynamicJWKSProvider will be used as an in-memory cache for per-issuer JWKS data.
-func NewManager(nextHandler http.Handler, dynamicJWKSProvider jwks.DynamicJWKSProvider) *Manager {
+// idpListGetter will be used as an in-memory cache of currently configured upstream IDPs.
+func NewManager(nextHandler http.Handler, dynamicJWKSProvider jwks.DynamicJWKSProvider, idpListGetter auth.IDPListGetter) *Manager {
 	return &Manager{
 		providerHandlers:    make(map[string]http.Handler),
 		nextHandler:         nextHandler,
 		dynamicJWKSProvider: dynamicJWKSProvider,
+		idpListGetter:       idpListGetter,
 	}
 }
 
@@ -59,6 +68,17 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 
 		jwksURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.JWKSEndpointPath
 		m.providerHandlers[jwksURL] = jwks.NewHandler(incomingProvider.Issuer(), m.dynamicJWKSProvider)
+
+		// Each OIDC provider gets its own storage.
+		oauthStore := &storage.MemoryStore{
+			Clients:        map[string]fosite.Client{oidc.PinnipedCLIOIDCClient().ID: oidc.PinnipedCLIOIDCClient()},
+			AuthorizeCodes: map[string]storage.StoreAuthorizeCode{},
+			PKCES:          map[string]fosite.Requester{},
+		}
+		oauthHelper := oidc.FositeOauth2Helper(oauthStore, []byte("some secret - must have at least 32 bytes")) // TODO replace this secret
+
+		authURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.AuthorizationEndpointPath
+		m.providerHandlers[authURL] = auth.NewHandler(incomingProvider.Issuer(), m.idpListGetter, oauthHelper, state.Generate, pkce.Generate, nonce.Generate)
 
 		klog.InfoS("oidc provider manager added or updated issuer", "issuer", incomingProvider.Issuer())
 	}

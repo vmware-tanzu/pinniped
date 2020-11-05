@@ -44,23 +44,27 @@ func NewHandler(
 
 		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), r)
 		if err != nil {
+			klog.InfoS("authorize request error", "err", err, "details", fosite.ErrorToRFC6749Error(err).ToValues())
 			oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
 			return nil
 		}
 
 		upstreamIDP, err := chooseUpstreamIDP(idpListGetter)
 		if err != nil {
+			klog.InfoS("authorize request upstream selection error", "err", err)
 			return err
 		}
 
 		_, err = oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &openid.DefaultSession{})
 		if err != nil {
+			klog.InfoS("authorize response error", "err", err, "details", fosite.ErrorToRFC6749Error(err).ToValues())
 			oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
 			return nil
 		}
 
 		stateValue, nonceValue, pkceValue, err := generateParams(generateState, generateNonce, generatePKCE)
 		if err != nil {
+			klog.InfoS("authorize generate error", "err", err)
 			return err
 		}
 

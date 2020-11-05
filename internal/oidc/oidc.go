@@ -29,8 +29,7 @@ func PinnipedCLIOIDCClient() *fosite.DefaultOpenIDConnectClient {
 	}
 }
 
-// Note that Fosite requires the HMAC secret to be 32 bytes.
-func FositeOauth2Helper(oauthStore interface{}, hmacSecretOfLength32 []byte) fosite.OAuth2Provider {
+func FositeOauth2Helper(oauthStore interface{}, hmacSecretOfLengthAtLeast32 []byte) fosite.OAuth2Provider {
 	oauthConfig := &compose.Config{
 		EnforcePKCEForPublicClients: true,
 	}
@@ -39,7 +38,8 @@ func FositeOauth2Helper(oauthStore interface{}, hmacSecretOfLength32 []byte) fos
 		oauthConfig,
 		oauthStore,
 		&compose.CommonStrategy{
-			CoreStrategy: compose.NewOAuth2HMACStrategy(oauthConfig, hmacSecretOfLength32, nil),
+			// Note that Fosite requires the HMAC secret to be at least 32 bytes.
+			CoreStrategy: compose.NewOAuth2HMACStrategy(oauthConfig, hmacSecretOfLengthAtLeast32, nil),
 		},
 		nil, // hasher, defaults to using BCrypt when nil. Used for hashing client secrets.
 		compose.OAuth2AuthorizeExplicitFactory,

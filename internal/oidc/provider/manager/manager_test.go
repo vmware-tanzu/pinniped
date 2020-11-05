@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -32,12 +33,15 @@ func TestManager(t *testing.T) {
 			dynamicJWKSProvider      jwks.DynamicJWKSProvider
 		)
 
-		issuer1 := "https://example.com/some/path"
-		issuer1DifferentCaseHostname := "https://eXamPle.coM/some/path"
-		issuer1KeyID := "issuer1-key"
-		issuer2 := "https://example.com/some/path/more/deeply/nested/path" // note that this is a sub-path of the other issuer url
-		issuer2DifferentCaseHostname := "https://exAmPlE.Com/some/path/more/deeply/nested/path"
-		issuer2KeyID := "issuer2-key"
+		const (
+			issuer1                      = "https://example.com/some/path"
+			issuer1DifferentCaseHostname = "https://eXamPle.coM/some/path"
+			issuer1KeyID                 = "issuer1-key"
+			issuer2                      = "https://example.com/some/path/more/deeply/nested/path" // note that this is a sub-path of the other issuer url
+			issuer2DifferentCaseHostname = "https://exAmPlE.Com/some/path/more/deeply/nested/path"
+			issuer2KeyID                 = "issuer2-key"
+			upstreamIDPAuthorizationURL  = "https://test-upstream.com/auth"
+		)
 
 		newGetRequest := func(url string) *http.Request {
 			return httptest.NewRequest(http.MethodGet, url, nil)
@@ -50,15 +54,31 @@ func TestManager(t *testing.T) {
 
 			r.False(fallbackHandlerWasCalled)
 
+			// Minimal check to ensure that the right discovery endpoint was called
 			r.Equal(http.StatusOK, recorder.Code)
 			responseBody, err := ioutil.ReadAll(recorder.Body)
 			r.NoError(err)
 			parsedDiscoveryResult := discovery.Metadata{}
 			err = json.Unmarshal(responseBody, &parsedDiscoveryResult)
 			r.NoError(err)
-
-			// Minimal check to ensure that the right discovery endpoint was called
 			r.Equal(expectedIssuerInResponse, parsedDiscoveryResult.Issuer)
+		}
+
+		requireAuthorizationRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedRedirectLocationPrefix string) {
+			recorder := httptest.NewRecorder()
+
+			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.AuthorizationEndpointPath+requestURLSuffix))
+
+			r.False(fallbackHandlerWasCalled)
+
+			// Minimal check to ensure that the right endpoint was called
+			r.Equal(http.StatusFound, recorder.Code)
+			actualLocation := recorder.Header().Get("Location")
+			r.True(
+				strings.HasPrefix(actualLocation, expectedRedirectLocationPrefix),
+				"actual location %s did not start with expected prefix %s",
+				actualLocation, expectedRedirectLocationPrefix,
+			)
 		}
 
 		requireJWKSRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedJWKKeyID string) {
@@ -68,14 +88,13 @@ func TestManager(t *testing.T) {
 
 			r.False(fallbackHandlerWasCalled)
 
+			// Minimal check to ensure that the right JWKS endpoint was called
 			r.Equal(http.StatusOK, recorder.Code)
 			responseBody, err := ioutil.ReadAll(recorder.Body)
 			r.NoError(err)
 			parsedJWKSResult := jose.JSONWebKeySet{}
 			err = json.Unmarshal(responseBody, &parsedJWKSResult)
 			r.NoError(err)
-
-			// Minimal check to ensure that the right JWKS endpoint was called
 			r.Equal(expectedJWKKeyID, parsedJWKSResult.Keys[0].KeyID)
 		}
 
@@ -85,7 +104,20 @@ func TestManager(t *testing.T) {
 				fallbackHandlerWasCalled = true
 			}
 			dynamicJWKSProvider = jwks.NewDynamicJWKSProvider()
-			subject = NewManager(nextHandler, dynamicJWKSProvider)
+
+			parsedUpstreamIDPAuthorizationURL, err := url.Parse(upstreamIDPAuthorizationURL)
+			r.NoError(err)
+			idpListGetter := provider.NewDynamicUpstreamIDPProvider()
+			idpListGetter.SetIDPList([]provider.UpstreamOIDCIdentityProvider{
+				{
+					Name:             "test-idp",
+					ClientID:         "test-client-id",
+					AuthorizationURL: *parsedUpstreamIDPAuthorizationURL,
+					Scopes:           []string{"test-scope"},
+				},
+			})
+
+			subject = NewManager(nextHandler, dynamicJWKSProvider, idpListGetter)
 		})
 
 		when("given no providers via SetProviders()", func() {
@@ -113,6 +145,45 @@ func TestManager(t *testing.T) {
 			return k
 		}
 
+		requireRoutesMatchingRequestsToAppropriateProvider := func() {
+			requireDiscoveryRequestToBeHandled(issuer1, "", issuer1)
+			requireDiscoveryRequestToBeHandled(issuer2, "", issuer2)
+			requireDiscoveryRequestToBeHandled(issuer2, "?some=query", issuer2)
+
+			// Hostnames are case-insensitive, so test that we can handle that.
+			requireDiscoveryRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1)
+			requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2)
+			requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2)
+
+			requireJWKSRequestToBeHandled(issuer1, "", issuer1KeyID)
+			requireJWKSRequestToBeHandled(issuer2, "", issuer2KeyID)
+			requireJWKSRequestToBeHandled(issuer2, "?some=query", issuer2KeyID)
+
+			// Hostnames are case-insensitive, so test that we can handle that.
+			requireJWKSRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1KeyID)
+			requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2KeyID)
+			requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2KeyID)
+
+			authRedirectURI := "http://127.0.0.1/callback"
+			authRequestParams := "?" + url.Values{
+				"response_type":         []string{"code"},
+				"scope":                 []string{"openid profile email"},
+				"client_id":             []string{"pinniped-cli"},
+				"state":                 []string{"some-state-value"},
+				"nonce":                 []string{"some-nonce-value"},
+				"code_challenge":        []string{"some-challenge"},
+				"code_challenge_method": []string{"S256"},
+				"redirect_uri":          []string{authRedirectURI},
+			}.Encode()
+
+			requireAuthorizationRequestToBeHandled(issuer1, authRequestParams, upstreamIDPAuthorizationURL)
+			requireAuthorizationRequestToBeHandled(issuer2, authRequestParams, upstreamIDPAuthorizationURL)
+
+			// Hostnames are case-insensitive, so test that we can handle that.
+			requireAuthorizationRequestToBeHandled(issuer1DifferentCaseHostname, authRequestParams, upstreamIDPAuthorizationURL)
+			requireAuthorizationRequestToBeHandled(issuer2DifferentCaseHostname, authRequestParams, upstreamIDPAuthorizationURL)
+		}
+
 		when("given some valid providers via SetProviders()", func() {
 			it.Before(func() {
 				p1, err := provider.NewOIDCProvider(issuer1)
@@ -129,8 +200,8 @@ func TestManager(t *testing.T) {
 
 			it("sends all non-matching host requests to the nextHandler", func() {
 				r.False(fallbackHandlerWasCalled)
-				url := strings.ReplaceAll(issuer1+oidc.WellKnownEndpointPath, "example.com", "wrong-host.com")
-				subject.ServeHTTP(httptest.NewRecorder(), newGetRequest(url))
+				wrongHostURL := strings.ReplaceAll(issuer1+oidc.WellKnownEndpointPath, "example.com", "wrong-host.com")
+				subject.ServeHTTP(httptest.NewRecorder(), newGetRequest(wrongHostURL))
 				r.True(fallbackHandlerWasCalled)
 			})
 
@@ -147,23 +218,7 @@ func TestManager(t *testing.T) {
 			})
 
 			it("routes matching requests to the appropriate provider", func() {
-				requireDiscoveryRequestToBeHandled(issuer1, "", issuer1)
-				requireDiscoveryRequestToBeHandled(issuer2, "", issuer2)
-				requireDiscoveryRequestToBeHandled(issuer2, "?some=query", issuer2)
-
-				// Hostnames are case-insensitive, so test that we can handle that.
-				requireDiscoveryRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1)
-				requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2)
-				requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2)
-
-				requireJWKSRequestToBeHandled(issuer1, "", issuer1KeyID)
-				requireJWKSRequestToBeHandled(issuer2, "", issuer2KeyID)
-				requireJWKSRequestToBeHandled(issuer2, "?some=query", issuer2KeyID)
-
-				// Hostnames are case-insensitive, so test that we can handle that.
-				requireJWKSRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1KeyID)
-				requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2KeyID)
-				requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2KeyID)
+				requireRoutesMatchingRequestsToAppropriateProvider()
 			})
 		})
 
@@ -182,23 +237,7 @@ func TestManager(t *testing.T) {
 			})
 
 			it("still routes matching requests to the appropriate provider", func() {
-				requireDiscoveryRequestToBeHandled(issuer1, "", issuer1)
-				requireDiscoveryRequestToBeHandled(issuer2, "", issuer2)
-				requireDiscoveryRequestToBeHandled(issuer2, "?some=query", issuer2)
-
-				// Hostnames are case-insensitive, so test that we can handle that.
-				requireDiscoveryRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1)
-				requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2)
-				requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2)
-
-				requireJWKSRequestToBeHandled(issuer1, "", issuer1KeyID)
-				requireJWKSRequestToBeHandled(issuer2, "", issuer2KeyID)
-				requireJWKSRequestToBeHandled(issuer2, "?some=query", issuer2KeyID)
-
-				// Hostnames are case-insensitive, so test that we can handle that.
-				requireJWKSRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1KeyID)
-				requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2KeyID)
-				requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2KeyID)
+				requireRoutesMatchingRequestsToAppropriateProvider()
 			})
 		})
 	})

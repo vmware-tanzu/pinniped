@@ -1,0 +1,36 @@
+baseURL: "https://pinneped.dev/"
+languageCode: "en-us"
+title: "Pinniped"
+theme: "pinniped"
+params:
+  twitter_url: "https://twitter.com/projectpinniped"
+  github_url: "https://github.com/vmware-tanzu/pinniped"
+  slack_url: "https://kubernetes.slack.com/messages/pinniped"
+pygmentsCodefences: true
+pygmentsStyle: "pygments"
+markup:
+  highlight:
+    anchorLineNos: false
+    codeFences: true
+    guessSyntax: false
+    hl_Lines: ""
+    lineAnchors: ""
+    lineNoStart: 1
+    lineNos: false
+    lineNumbersInTable: true
+    noClasses: false
+    style: monokai
+    tabWidth: 4
+menu:
+  docs:
+  - name: Overview
+    url: /docs/
+    weight: 100
+  - name: Architecture
+    url: /docs/architecture/
+    name: Demo
+    url: /docs/demo/
+  - name: Scope
+    url: /docs/scope/
+  - name: Update Images
+    url: /docs/img/

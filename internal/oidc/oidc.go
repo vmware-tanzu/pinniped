@@ -44,7 +44,7 @@ func FositeOauth2Helper(oauthStore interface{}, hmacSecretOfLengthAtLeast32 []by
 		nil, // hasher, defaults to using BCrypt when nil. Used for hashing client secrets.
 		compose.OAuth2AuthorizeExplicitFactory,
 		// compose.OAuth2RefreshTokenGrantFactory,
-		// compose.OpenIDConnectExplicitFactory,
+		compose.OpenIDConnectExplicitFactory,
 		// compose.OpenIDConnectRefreshFactory,
 		compose.OAuth2PKCEFactory,
 	)

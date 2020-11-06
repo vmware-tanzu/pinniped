@@ -51,6 +51,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			}
 		`)
 
+		fositePromptHasNoneAndOtherValueErrorQuery = map[string]string{
+			"error":             "invalid_request",
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nParameter \"prompt\" was set to \"none\", but contains other values as well which is not allowed.",
+			"error_hint":        "Parameter \"prompt\" was set to \"none\", but contains other values as well which is not allowed.",
+			"state":             "some-state-value",
+		}
+
 		fositeMissingCodeChallengeErrorQuery = map[string]string{
 			"error":             "invalid_request",
 			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nThis client must include a code_challenge when performing the authorize code flow, but it is missing.",
@@ -118,6 +125,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		Clients:        map[string]fosite.Client{oidc.PinnipedCLIOIDCClient().ID: oidc.PinnipedCLIOIDCClient()},
 		AuthorizeCodes: map[string]storage.StoreAuthorizeCode{},
 		PKCES:          map[string]fosite.Requester{},
+		IDSessions:     map[string]fosite.Requester{},
 	}
 	hmacSecret := []byte("some secret - must have at least 32 bytes")
 	require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
@@ -416,6 +424,22 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:     "",
 		},
 		{
+			// This is just one of the many OIDC validations run by fosite. This test is to ensure that we are running
+			// through that part of the fosite library.
+			name:               "prompt param is not allowed to have none and another legal value at the same time",
+			issuer:             issuer,
+			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateState:      happyStateGenerator,
+			generatePKCE:       happyPKCEGenerator,
+			generateNonce:      happyNonceGenerator,
+			method:             http.MethodGet,
+			path:               modifiedHappyGetRequestPath(map[string]string{"prompt": "none login"}),
+			wantStatus:         http.StatusFound,
+			wantContentType:    "application/json; charset=utf-8",
+			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositePromptHasNoneAndOtherValueErrorQuery),
+			wantBodyString:     "",
+		},
+		{
 			name:               "state does not have enough entropy",
 			issuer:             issuer,
 			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
@@ -525,9 +549,6 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		req.Header.Set("Content-Type", test.contentType)
 		rsp := httptest.NewRecorder()
 		subject.ServeHTTP(rsp, req)
-
-		t.Logf("response: %#v", rsp)
-		t.Logf("body: %q", rsp.Body.String())
 
 		require.Equal(t, test.wantStatus, rsp.Code)
 		requireEqualContentType(t, rsp.Header().Get("Content-Type"), test.wantContentType)

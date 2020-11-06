@@ -74,6 +74,7 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 			Clients:        map[string]fosite.Client{oidc.PinnipedCLIOIDCClient().ID: oidc.PinnipedCLIOIDCClient()},
 			AuthorizeCodes: map[string]storage.StoreAuthorizeCode{},
 			PKCES:          map[string]fosite.Requester{},
+			IDSessions:     map[string]fosite.Requester{},
 		}
 		oauthHelper := oidc.FositeOauth2Helper(oauthStore, []byte("some secret - must have at least 32 bytes")) // TODO replace this secret
 

@@ -7,11 +7,11 @@ package auth
 import (
 	"fmt"
 	"net/http"
-
-	"github.com/ory/fosite/handler/openid"
+	"time"
 
 	"github.com/ory/fosite"
-
+	"github.com/ory/fosite/handler/openid"
+	"github.com/ory/fosite/token/jwt"
 	"golang.org/x/oauth2"
 	"k8s.io/klog/v2"
 
@@ -55,7 +55,22 @@ func NewHandler(
 			return err
 		}
 
-		_, err = oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &openid.DefaultSession{})
+		// Grant the openid scope (for now) if they asked for it so that `NewAuthorizeResponse` will perform its OIDC validations.
+		for _, scope := range authorizeRequester.GetRequestedScopes() {
+			if scope == "openid" {
+				authorizeRequester.GrantScope(scope)
+			}
+		}
+
+		now := time.Now()
+		_, err = oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &openid.DefaultSession{
+			Claims: &jwt.IDTokenClaims{
+				// Temporary claim values to allow `NewAuthorizeResponse` to perform other OIDC validations.
+				Subject:     "none",
+				AuthTime:    now,
+				RequestedAt: now,
+			},
+		})
 		if err != nil {
 			klog.InfoS("authorize response error", "err", err, "details", fosite.ErrorToRFC6749Error(err).ToValues())
 			oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)

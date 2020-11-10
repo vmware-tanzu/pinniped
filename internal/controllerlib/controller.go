@@ -16,6 +16,8 @@ import (
 	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+
+	"go.pinniped.dev/internal/plog"
 )
 
 // Controller interface represents a runnable Kubernetes controller.
@@ -87,7 +89,7 @@ type controller struct {
 func (c *controller) Run(ctx context.Context, workers int) {
 	defer utilruntime.HandleCrash(crash) // prevent panics from killing the process
 
-	klog.InfoS("starting controller", "controller", c.Name(), "workers", workers)
+	plog.Debug("starting controller", "controller", c.Name(), "workers", workers)
 
 	c.invokeAllRunOpts()
 
@@ -108,17 +110,17 @@ func (c *controller) Run(ctx context.Context, workers int) {
 		// at this point the Run() can hang and callers have to implement the logic that will kill
 		// this controller (SIGKILL).
 		workerWg.Wait()
-		klog.InfoS("all workers have been terminated, shutting down", "controller", c.Name(), "workers", workers)
+		plog.Debug("all workers have been terminated, shutting down", "controller", c.Name(), "workers", workers)
 	}()
 
 	for i := 1; i <= workers; i++ {
 		idx := i
-		klog.InfoS("starting worker", "controller", c.Name(), "worker", idx)
+		plog.Debug("starting worker", "controller", c.Name(), "worker", idx)
 		workerWg.Add(1)
 		go func() {
 			defer utilruntime.HandleCrash(crash) // prevent panics from killing the process
 			defer func() {
-				klog.InfoS("shutting down worker", "controller", c.Name(), "worker", idx)
+				plog.Debug("shutting down worker", "controller", c.Name(), "worker", idx)
 				workerWg.Done()
 			}()
 			c.runWorker(workerContext)

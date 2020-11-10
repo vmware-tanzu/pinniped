@@ -23,11 +23,11 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/clock"
 	corev1informers "k8s.io/client-go/informers/core/v1"
-	"k8s.io/klog/v2"
 
 	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/controller/issuerconfig"
+	"go.pinniped.dev/internal/plog"
 )
 
 const (
@@ -257,13 +257,13 @@ func findControllerManagerPodForSpecificAgentPod(
 ) (*corev1.Pod, error) {
 	name, ok := agentPod.Annotations[controllerManagerNameAnnotationKey]
 	if !ok {
-		klog.InfoS("agent pod missing parent name annotation", "pod", agentPod.Name)
+		plog.Debug("agent pod missing parent name annotation", "pod", agentPod.Name)
 		return nil, nil
 	}
 
 	uid, ok := agentPod.Annotations[controllerManagerUIDAnnotationKey]
 	if !ok {
-		klog.InfoS("agent pod missing parent uid annotation", "pod", agentPod.Name)
+		plog.Debug("agent pod missing parent uid annotation", "pod", agentPod.Name)
 		return nil, nil
 	}
 

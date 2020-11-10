@@ -9,8 +9,6 @@ import (
 	"net/url"
 	"strings"
 
-	"go.pinniped.dev/internal/multierror"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/clock"
@@ -22,7 +20,9 @@ import (
 	configinformers "go.pinniped.dev/generated/1.19/client/supervisor/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/multierror"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/plog"
 )
 
 // ProvidersSetter can be notified of all known valid providers with its SetIssuer function.
@@ -191,7 +191,7 @@ func (c *oidcProviderWatcherController) updateStatus(
 			return nil
 		}
 
-		klog.InfoS(
+		plog.Debug(
 			"attempting status update",
 			"openidproviderconfig",
 			klog.KRef(namespace, name),

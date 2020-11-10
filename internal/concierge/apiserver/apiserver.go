@@ -15,10 +15,10 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/pkg/version"
-	"k8s.io/klog/v2"
 
 	loginapi "go.pinniped.dev/generated/1.19/apis/concierge/login"
 	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/registry/credentialrequest"
 )
 
@@ -111,7 +111,7 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 
 	s.GenericAPIServer.AddPostStartHookOrDie("start-controllers",
 		func(postStartContext genericapiserver.PostStartHookContext) error {
-			klog.InfoS("start-controllers post start hook starting")
+			plog.Debug("start-controllers post start hook starting")
 
 			ctx, cancel := context.WithCancel(context.Background())
 			go func() {

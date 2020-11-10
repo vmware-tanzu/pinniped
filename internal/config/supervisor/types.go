@@ -3,10 +3,13 @@
 
 package supervisor
 
+import "go.pinniped.dev/internal/plog"
+
 // Config contains knobs to setup an instance of the Pinniped Supervisor.
 type Config struct {
 	Labels      map[string]string `json:"labels"`
 	NamesConfig NamesConfigSpec   `json:"names"`
+	LogLevel    plog.LogLevel     `json:"logLevel"`
 }
 
 // NamesConfigSpec configures the names of some Kubernetes resources for the Supervisor.

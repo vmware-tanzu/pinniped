@@ -3,6 +3,8 @@
 
 package concierge
 
+import "go.pinniped.dev/internal/plog"
+
 // Config contains knobs to setup an instance of the Pinniped Concierge.
 type Config struct {
 	DiscoveryInfo       DiscoveryInfoSpec `json:"discovery"`
@@ -10,6 +12,7 @@ type Config struct {
 	NamesConfig         NamesConfigSpec   `json:"names"`
 	KubeCertAgentConfig KubeCertAgentSpec `json:"kubeCertAgent"`
 	Labels              map[string]string `json:"labels"`
+	LogLevel            plog.LogLevel     `json:"logLevel"`
 }
 
 // DiscoveryInfoSpec contains configuration knobs specific to

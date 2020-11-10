@@ -5,6 +5,7 @@ package plog
 
 import "k8s.io/klog/v2"
 
+// Use Error to log an unexpected system error.
 func Error(err error, msg string, keysAndValues ...interface{}) {
 	klog.ErrorS(err, msg, keysAndValues...)
 }
@@ -20,6 +21,11 @@ func Warning(msg string, keysAndValues ...interface{}) {
 
 func Info(msg string, keysAndValues ...interface{}) {
 	klog.V(klogLevelInfo).InfoS(msg, keysAndValues...)
+}
+
+// Use InfoErr to log an expected error, e.g. validation failure of an http parameter.
+func InfoErr(msg string, err error, keysAndValues ...interface{}) {
+	klog.V(klogLevelInfo).InfoS(msg, append([]interface{}{"error", err}, keysAndValues)...)
 }
 
 func Debug(msg string, keysAndValues ...interface{}) {

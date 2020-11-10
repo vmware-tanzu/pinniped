@@ -9,17 +9,17 @@ import (
 	"net/http"
 	"time"
 
+	"go.pinniped.dev/internal/plog"
+
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
-	"golang.org/x/oauth2"
-	"k8s.io/klog/v2"
-
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidcclient/nonce"
 	"go.pinniped.dev/internal/oidcclient/pkce"
 	"go.pinniped.dev/internal/oidcclient/state"
+	"golang.org/x/oauth2"
 )
 
 type IDPListGetter interface {
@@ -44,14 +44,14 @@ func NewHandler(
 
 		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), r)
 		if err != nil {
-			klog.InfoS("authorize request error", "err", err, "details", fosite.ErrorToRFC6749Error(err).ToValues())
+			plog.Info("authorize request error", fositeErrorForLog(err)...)
 			oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
 			return nil
 		}
 
 		upstreamIDP, err := chooseUpstreamIDP(idpListGetter)
 		if err != nil {
-			klog.InfoS("authorize request upstream selection error", "err", err)
+			plog.InfoErr("authorize request error", err)
 			return err
 		}
 
@@ -72,14 +72,14 @@ func NewHandler(
 			},
 		})
 		if err != nil {
-			klog.InfoS("authorize response error", "err", err, "details", fosite.ErrorToRFC6749Error(err).ToValues())
+			plog.Info("authorize response error", fositeErrorForLog(err)...)
 			oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
 			return nil
 		}
 
 		stateValue, nonceValue, pkceValue, err := generateParams(generateState, generateNonce, generatePKCE)
 		if err != nil {
-			klog.InfoS("authorize generate error", "err", err)
+			plog.InfoErr("authorize generate error", err)
 			return err
 		}
 
@@ -130,18 +130,30 @@ func generateParams(
 ) (state.State, nonce.Nonce, pkce.Code, error) {
 	stateValue, err := generateState()
 	if err != nil {
-		klog.InfoS("error generating state param", "err", err)
+		plog.InfoErr("error generating state param", err)
 		return "", "", "", httperr.Wrap(http.StatusInternalServerError, "error generating state param", err)
 	}
 	nonceValue, err := generateNonce()
 	if err != nil {
-		klog.InfoS("error generating nonce param", "err", err)
+		plog.InfoErr("error generating nonce param", err)
 		return "", "", "", httperr.Wrap(http.StatusInternalServerError, "error generating nonce param", err)
 	}
 	pkceValue, err := generatePKCE()
 	if err != nil {
-		klog.InfoS("error generating PKCE param", "err", err)
+		plog.InfoErr("error generating PKCE param", err)
 		return "", "", "", httperr.Wrap(http.StatusInternalServerError, "error generating PKCE param", err)
 	}
 	return stateValue, nonceValue, pkceValue, nil
+}
+
+func fositeErrorForLog(err error) []interface{} {
+	rfc6749Error := fosite.ErrorToRFC6749Error(err)
+	keysAndValues := make([]interface{}, 0)
+	keysAndValues = append(keysAndValues, "name")
+	keysAndValues = append(keysAndValues, rfc6749Error.Name)
+	keysAndValues = append(keysAndValues, "status")
+	keysAndValues = append(keysAndValues, rfc6749Error.Status())
+	keysAndValues = append(keysAndValues, "description")
+	keysAndValues = append(keysAndValues, rfc6749Error.Description)
+	return keysAndValues
 }

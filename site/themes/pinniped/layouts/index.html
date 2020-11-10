@@ -1,0 +1,20 @@
+{{ define "main" }}
+	<main>
+		{{ partial "hero.html" . }}
+		{{ partial "homepage-grid.html" . }}
+		<div class="bg-grey introduction">
+			<div class="wrapper grid two">
+				<div class="col">
+					<p class="strong">Introduction to Pinniped</p>
+					<p><a href="https://github.com/vmware-tanzu/pinniped/blob/main/doc/demo.md">Learn how Pinniped</a> provides identity services to Kubernetes</p>
+				</div>
+				<div class="col">
+					<p class="strong">How do you use Pinniped?</p>
+					<p>Tell us about your experience using Pinniped <a href="https://github.com/vmware-tanzu/pinniped/discussions/152">Share with us here!</a></p>
+				</div>
+			</div>
+		</div>
+		{{ partial "use-cases.html" . }}
+		{{ partial "team.html" . }}
+	</main>
+{{ end }}

@@ -1,0 +1,8 @@
+<div class="side-nav">
+    <ul>
+        {{ $currentPage := . }}
+        {{ range .Site.Menus.docs }}
+            <li><a href="{{ .URL }}" {{ if (eq $currentPage.RelPermalink .URL)  }}class="active"{{ end }}>{{ .Name }}</a></li>
+        {{ end }}
+    </ul>
+</div>

@@ -1,0 +1,59 @@
+@import 'variables';
+@import 'mixins';
+@import 'base';
+
+footer {
+    .left-links {
+        padding: 0px;
+        float: left;
+        li {
+            img {
+                vertical-align: bottom;
+                margin-right: 10px;
+            }
+            a {
+                color: $grey;
+                font-weight: 300;
+                font-size: 12px;
+                font-family: $metropolis-light;
+            }
+        }
+    }
+    .right-links {
+        float: right;
+        p {
+            margin: 0px;
+        }
+        .copywrite {
+            font-size: 12px;
+            padding-right: 10px;
+            a {
+                font-size: 12px;
+                color: $grey;
+                font-family: $metropolis-light;
+            }
+        }
+        a {
+            vertical-align: middle;
+        }
+    }
+    @include breakpoint(small) {
+        .left-links {
+            width: 100%;
+            float: none;
+            li {
+                display: block;
+                width: 33%;
+                float: left;
+                padding-right: 0px;
+            }
+        }
+        .right-links {
+            width: 100%;
+            padding-top: 20px;
+            .image {
+                display: none;
+            }
+        }
+    }
+}

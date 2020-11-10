@@ -1,0 +1,16 @@
+{{ define "main" }}
+	<main>
+		<div class="hero subpage">
+			<div class="wrapper">
+				<h2>Pinniped Documentation</h2>
+			</div>
+		</div>
+		<div class="wrapper docs clearfix">
+			{{ partial "docs-sidebar.html" . }}
+			
+			<div class="docs-content">
+				{{ .Content }}
+			</div>
+		</div>
+	</main>
+{{ end }}

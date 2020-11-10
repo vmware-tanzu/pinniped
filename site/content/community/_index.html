@@ -1,5 +1,5 @@
 ---
-title: ""
+title: "Pinniped Community"
 layout: section
 ---
 
@@ -13,28 +13,28 @@ layout: section
     <div class="grid three">
         <div class="col">
             <div class="icon">
-                <img src="/img/github-image.svg" />
+                <a href="{{< param "github_url" >}}"><img src="/img/github-image.svg" /></a>
             </div>
             <div class="content">
-                <h3><a href="{{ .Site.Params.github_url }}">Check out Github</a></h3>
+                <h3><a href="{{< param "github_url" >}}">Check out Github</a></h3>
                 <p>Head over to our git repo and check out the discussions and issues sections.</p>
             </div>
         </div>
         <div class="col">
             <div class="icon">
-                <img src="/img/slack.svg" />
+                <a href="{{< param "slack_url" >}}"><img src="/img/slack.svg" /></a>
             </div>
             <div class="content">
-                <h3><a href="{{ .Site.Params.slack_url }}">Chat with us on our Slack channel</a></h3>
+                <h3><a href="{{< param "slack_url" >}}">Chat with us on our Slack channel</a></h3>
                 <p>Chat with us on our Kubernetes Slack channel #pinniped</p>
             </div>
         </div>
         <div class="col">
             <div class="icon">
-                <img src="/img/calendar.svg" />
+                <a href="{{< param "community_url" >}}"><img src="/img/calendar.svg" /></a>
             </div>
             <div class="content">
-                <h3><a href="#">Join the Meetings</a></h3>
+                <h3><a href="{{< param "community_url" >}}">Join the Meetings</a></h3>
                 <p>Join the Pinniped Community Meetings every 1st and 3rd Thursday</p>
             </div>
         </div>

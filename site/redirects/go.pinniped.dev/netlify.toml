@@ -18,7 +18,7 @@
 
 [[redirects]]
   from = "/community/slack"
-  to = "https://kubernetes.slack.com/archives/C01BW364RJA"
+  to = "https://kubernetes.slack.com/messages/pinniped"
   status = 302
   force = true
 

@@ -1,6 +1,6 @@
 <img src="doc/img/pinniped_logo.svg" alt="Pinniped Logo" width="100%"/>
 
-## Overview
+## Overview Stuff
 
 Pinniped provides identity services to Kubernetes.
 

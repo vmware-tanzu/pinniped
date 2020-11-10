@@ -56,7 +56,7 @@ func NewExecerController(
 		},
 		withInformer(
 			agentPodInformer,
-			pinnipedcontroller.SimpleFilter(isAgentPod),
+			pinnipedcontroller.SimpleFilter(isAgentPod, nil), // nil parent func is fine because each event is distinct
 			controllerlib.InformerOption{},
 		),
 	)

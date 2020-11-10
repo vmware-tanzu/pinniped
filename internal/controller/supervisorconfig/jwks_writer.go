@@ -27,6 +27,7 @@ import (
 	configinformers "go.pinniped.dev/generated/1.19/client/supervisor/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/plog"
 )
 
 // These constants are the keys in an OPC's Secret's Data map.
@@ -110,7 +111,7 @@ func NewJWKSWriterController(
 		// We want to be notified when anything happens to an OPC.
 		withInformer(
 			opcInformer,
-			pinnipedcontroller.MatchAnythingFilter(),
+			pinnipedcontroller.MatchAnythingFilter(nil), // nil parent func is fine because each event is distinct
 			controllerlib.InformerOption{},
 		),
 	)
@@ -132,7 +133,7 @@ func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
 	if notFound {
 		// The corresponding secret to this OPC should have been garbage collected since it should have
 		// had this OPC as its owner.
-		klog.InfoS(
+		plog.Debug(
 			"oidcprovider deleted",
 			"oidcprovider",
 			klog.KRef(ctx.Key.Namespace, ctx.Key.Name),
@@ -146,7 +147,7 @@ func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
 	}
 	if !secretNeedsUpdate {
 		// Secret is up to date - we are good to go.
-		klog.InfoS(
+		plog.Debug(
 			"secret is up to date",
 			"oidcprovider",
 			klog.KRef(ctx.Key.Namespace, ctx.Key.Name),
@@ -164,7 +165,7 @@ func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
 	if err := c.createOrUpdateSecret(ctx.Context, secret); err != nil {
 		return fmt.Errorf("cannot create or update secret: %w", err)
 	}
-	klog.InfoS("created/updated secret", "secret", klog.KObj(secret))
+	plog.Debug("created/updated secret", "secret", klog.KObj(secret))
 
 	// Ensure that the OPC points to the secret.
 	newOPC := opc.DeepCopy()
@@ -172,7 +173,7 @@ func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
 	if err := c.updateOPC(ctx.Context, newOPC); err != nil {
 		return fmt.Errorf("cannot update opc: %w", err)
 	}
-	klog.InfoS("updated oidcprovider", "oidcprovider", klog.KObj(newOPC))
+	plog.Debug("updated oidcprovider", "oidcprovider", klog.KObj(newOPC))
 
 	return nil
 }
@@ -323,45 +324,45 @@ func isOPCControllee(obj metav1.Object) bool {
 func isValid(secret *corev1.Secret) bool {
 	jwkData, ok := secret.Data[activeJWKKey]
 	if !ok {
-		klog.InfoS("secret does not contain active jwk")
+		plog.Debug("secret does not contain active jwk")
 		return false
 	}
 
 	var activeJWK jose.JSONWebKey
 	if err := json.Unmarshal(jwkData, &activeJWK); err != nil {
-		klog.InfoS("cannot unmarshal active jwk", "err", err)
+		plog.Debug("cannot unmarshal active jwk", "err", err)
 		return false
 	}
 
 	if activeJWK.IsPublic() {
-		klog.InfoS("active jwk is public", "keyid", activeJWK.KeyID)
+		plog.Debug("active jwk is public", "keyid", activeJWK.KeyID)
 		return false
 	}
 
 	if !activeJWK.Valid() {
-		klog.InfoS("active jwk is not valid", "keyid", activeJWK.KeyID)
+		plog.Debug("active jwk is not valid", "keyid", activeJWK.KeyID)
 		return false
 	}
 
 	jwksData, ok := secret.Data[jwksKey]
 	if !ok {
-		klog.InfoS("secret does not contain valid jwks")
+		plog.Debug("secret does not contain valid jwks")
 	}
 
 	var validJWKS jose.JSONWebKeySet
 	if err := json.Unmarshal(jwksData, &validJWKS); err != nil {
-		klog.InfoS("cannot unmarshal valid jwks", "err", err)
+		plog.Debug("cannot unmarshal valid jwks", "err", err)
 		return false
 	}
 
 	foundActiveJWK := false
 	for _, validJWK := range validJWKS.Keys {
 		if !validJWK.IsPublic() {
-			klog.InfoS("jwks key is not public", "keyid", validJWK.KeyID)
+			plog.Debug("jwks key is not public", "keyid", validJWK.KeyID)
 			return false
 		}
 		if !validJWK.Valid() {
-			klog.InfoS("jwks key is not valid", "keyid", validJWK.KeyID)
+			plog.Debug("jwks key is not valid", "keyid", validJWK.KeyID)
 			return false
 		}
 		if validJWK.KeyID == activeJWK.KeyID {
@@ -370,7 +371,7 @@ func isValid(secret *corev1.Secret) bool {
 	}
 
 	if !foundActiveJWK {
-		klog.InfoS("did not find active jwk in valid jwks", "keyid", activeJWK.KeyID)
+		plog.Debug("did not find active jwk in valid jwks", "keyid", activeJWK.KeyID)
 		return false
 	}
 

@@ -7,7 +7,7 @@ import (
 	"context"
 	"sync"
 
-	"k8s.io/klog/v2"
+	"go.pinniped.dev/internal/plog"
 )
 
 type Manager interface {
@@ -48,7 +48,7 @@ func (c *controllerManager) Start(ctx context.Context) {
 		idx := i
 		go func() {
 			r := c.controllers[idx]
-			defer klog.InfoS("controller terminated", "controller", r.controller.Name())
+			defer plog.Debug("controller terminated", "controller", r.controller.Name())
 			defer wg.Done()
 			r.controller.Run(ctx, r.workers)
 		}()

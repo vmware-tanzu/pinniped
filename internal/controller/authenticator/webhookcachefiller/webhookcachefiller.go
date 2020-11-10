@@ -40,7 +40,7 @@ func New(cache *authncache.Cache, webhooks authinformers.WebhookAuthenticatorInf
 		},
 		controllerlib.WithInformer(
 			webhooks,
-			pinnipedcontroller.MatchAnythingFilter(),
+			pinnipedcontroller.MatchAnythingFilter(nil), // nil parent func is fine because each event is distinct
 			controllerlib.InformerOption{},
 		),
 	)

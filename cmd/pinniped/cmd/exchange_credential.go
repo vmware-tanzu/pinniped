@@ -20,6 +20,7 @@ import (
 	"go.pinniped.dev/internal/client"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/plog"
 )
 
 //nolint: gochecknoinits
@@ -79,6 +80,8 @@ func newExchangeCredentialCmd(args []string, stdout, stderr io.Writer) *exchange
 	c.cmd.SetArgs(args)
 	c.cmd.SetOut(stdout)
 	c.cmd.SetErr(stderr)
+
+	plog.RemoveKlogGlobalFlags()
 
 	return c
 }

@@ -18,6 +18,7 @@ import (
 	"go.pinniped.dev/internal/constable"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/plog"
 )
 
 type createrController struct {
@@ -65,12 +66,12 @@ func NewCreaterController(
 		},
 		withInformer(
 			kubeSystemPodInformer,
-			pinnipedcontroller.SimpleFilter(isControllerManagerPod),
+			pinnipedcontroller.SimpleFilterWithSingletonQueue(isControllerManagerPod),
 			controllerlib.InformerOption{},
 		),
 		withInformer(
 			agentPodInformer,
-			pinnipedcontroller.SimpleFilter(isAgentPod),
+			pinnipedcontroller.SimpleFilterWithSingletonQueue(isAgentPod),
 			controllerlib.InformerOption{},
 		),
 		// Be sure to run once even to make sure the CI is updated if there are no controller manager
@@ -118,7 +119,7 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 		if agentPod == nil {
 			agentPod = c.agentPodConfig.newAgentPod(controllerManagerPod)
 
-			klog.InfoS(
+			plog.Debug(
 				"creating agent pod",
 				"pod",
 				klog.KObj(agentPod),

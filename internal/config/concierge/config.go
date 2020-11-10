@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/plog"
 )
 
 const (
@@ -47,6 +48,10 @@ func FromPath(path string) (*Config, error) {
 
 	if err := validateNames(&config.NamesConfig); err != nil {
 		return nil, fmt.Errorf("validate names: %w", err)
+	}
+
+	if err := plog.ValidateAndSetLogLevelGlobally(config.LogLevel); err != nil {
+		return nil, fmt.Errorf("validate log level: %w", err)
 	}
 
 	if config.Labels == nil {

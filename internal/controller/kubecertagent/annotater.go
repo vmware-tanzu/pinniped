@@ -19,6 +19,7 @@ import (
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/plog"
 )
 
 // These constants are the default values for the kube-controller-manager flags. If the flags are
@@ -71,12 +72,12 @@ func NewAnnotaterController(
 		},
 		withInformer(
 			kubeSystemPodInformer,
-			pinnipedcontroller.SimpleFilter(isControllerManagerPod),
+			pinnipedcontroller.SimpleFilterWithSingletonQueue(isControllerManagerPod),
 			controllerlib.InformerOption{},
 		),
 		withInformer(
 			agentPodInformer,
-			pinnipedcontroller.SimpleFilter(isAgentPod),
+			pinnipedcontroller.SimpleFilterWithSingletonQueue(isAgentPod),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -177,7 +178,7 @@ func (c *annotaterController) reallyUpdateAgentPod(
 	updatedAgentPod.Annotations[agentPodCertPathAnnotationKey] = certPath
 	updatedAgentPod.Annotations[agentPodKeyPathAnnotationKey] = keyPath
 
-	klog.InfoS(
+	plog.Debug(
 		"updating agent pod annotations",
 		"pod",
 		klog.KObj(updatedAgentPod),

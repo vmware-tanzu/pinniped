@@ -10,11 +10,11 @@ import (
 	"gopkg.in/square/go-jose.v2"
 	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
-	"k8s.io/klog/v2"
 
 	"go.pinniped.dev/generated/1.19/client/supervisor/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/plog"
 )
 
 type jwksObserverController struct {
@@ -49,12 +49,12 @@ func NewJWKSObserverController(
 		},
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.MatchAnythingFilter(),
+			pinnipedcontroller.MatchAnythingFilter(nil),
 			controllerlib.InformerOption{},
 		),
 		withInformer(
 			oidcProviderInformer,
-			pinnipedcontroller.MatchAnythingFilter(),
+			pinnipedcontroller.MatchAnythingFilter(nil),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -75,19 +75,19 @@ func (c *jwksObserverController) Sync(ctx controllerlib.Context) error {
 		secretRef := provider.Status.JWKSSecret
 		jwksSecret, err := c.secretInformer.Lister().Secrets(ns).Get(secretRef.Name)
 		if err != nil {
-			klog.InfoS("jwksObserverController Sync could not find JWKS secret", "namespace", ns, "secretName", secretRef.Name)
+			plog.Debug("jwksObserverController Sync could not find JWKS secret", "namespace", ns, "secretName", secretRef.Name)
 			continue
 		}
 		jwkFromSecret := jose.JSONWebKeySet{}
 		err = json.Unmarshal(jwksSecret.Data[jwksKey], &jwkFromSecret)
 		if err != nil {
-			klog.InfoS("jwksObserverController Sync found a JWKS secret with Data in an unexpected format", "namespace", ns, "secretName", secretRef.Name)
+			plog.Debug("jwksObserverController Sync found a JWKS secret with Data in an unexpected format", "namespace", ns, "secretName", secretRef.Name)
 			continue
 		}
 		issuerToJWKSMap[provider.Spec.Issuer] = &jwkFromSecret
 	}
 
-	klog.InfoS("jwksObserverController Sync updated the JWKS cache", "issuerCount", len(issuerToJWKSMap))
+	plog.Debug("jwksObserverController Sync updated the JWKS cache", "issuerCount", len(issuerToJWKSMap))
 	c.issuerToJWKSSetter.SetIssuerToJWKSMap(issuerToJWKSMap)
 
 	return nil

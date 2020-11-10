@@ -10,7 +10,6 @@ import (
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/storage"
-	"k8s.io/klog/v2"
 
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/auth"
@@ -20,6 +19,7 @@ import (
 	"go.pinniped.dev/internal/oidcclient/nonce"
 	"go.pinniped.dev/internal/oidcclient/pkce"
 	"go.pinniped.dev/internal/oidcclient/state"
+	"go.pinniped.dev/internal/plog"
 )
 
 // Manager can manage multiple active OIDC providers. It acts as a request router for them.
@@ -81,7 +81,7 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 		authURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.AuthorizationEndpointPath
 		m.providerHandlers[authURL] = auth.NewHandler(incomingProvider.Issuer(), m.idpListGetter, oauthHelper, state.Generate, pkce.Generate, nonce.Generate)
 
-		klog.InfoS("oidc provider manager added or updated issuer", "issuer", incomingProvider.Issuer())
+		plog.Debug("oidc provider manager added or updated issuer", "issuer", incomingProvider.Issuer())
 	}
 }
 
@@ -89,7 +89,7 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 func (m *Manager) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	requestHandler := m.findHandler(req)
 
-	klog.InfoS(
+	plog.Debug(
 		"oidc provider manager examining request",
 		"method", req.Method,
 		"host", req.Host,

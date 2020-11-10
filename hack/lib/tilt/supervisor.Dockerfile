@@ -11,7 +11,9 @@ COPY build/pinniped-supervisor /usr/local/bin/pinniped-supervisor
 EXPOSE 8080 8443
 
 # Run as non-root for security posture
-USER 1001:1001
+# Commented out because it breaks the live-reload feature of Tilt. See https://github.com/tilt-dev/tilt/issues/2300
+# Be aware that this creates a significant difference between running with Tilt and running otherwise.
+#USER 1001:1001
 
 # Set the entrypoint
 ENTRYPOINT ["/usr/local/bin/pinniped-supervisor"]

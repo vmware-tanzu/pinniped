@@ -3,10 +3,21 @@
 
 package plog
 
-import "github.com/spf13/pflag"
+import (
+	"sync"
+
+	"github.com/spf13/pflag"
+)
+
+//nolint: gochecknoglobals
+var removeKlogGlobalFlagsLock sync.Mutex
 
 // RemoveKlogGlobalFlags attempts to "remove" flags that get unconditionally added by importing klog.
 func RemoveKlogGlobalFlags() {
+	// since we mess with global state, we need a lock to synchronize us when called in parallel during tests
+	removeKlogGlobalFlagsLock.Lock()
+	defer removeKlogGlobalFlagsLock.Unlock()
+
 	// if this function starts to panic, it likely means that klog stopped mucking with global flags
 	const globalLogFlushFlag = "log-flush-frequency"
 	if err := pflag.CommandLine.MarkHidden(globalLogFlushFlag); err != nil {

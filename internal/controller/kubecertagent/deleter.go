@@ -13,6 +13,7 @@ import (
 
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/plog"
 )
 
 type deleterController struct {
@@ -71,7 +72,7 @@ func (c *deleterController) Sync(ctx controllerlib.Context) error {
 		}
 		if controllerManagerPod == nil ||
 			!isAgentPodUpToDate(agentPod, c.agentPodConfig.newAgentPod(controllerManagerPod)) {
-			klog.InfoS("deleting agent pod", "pod", klog.KObj(agentPod))
+			plog.Debug("deleting agent pod", "pod", klog.KObj(agentPod))
 			err := c.k8sClient.
 				CoreV1().
 				Pods(agentPod.Namespace).

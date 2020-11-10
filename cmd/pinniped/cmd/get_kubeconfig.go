@@ -25,6 +25,7 @@ import (
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/plog"
 )
 
 //nolint: gochecknoinits
@@ -91,6 +92,7 @@ func (c *getKubeConfigCommand) Command() *cobra.Command {
 	cmd.Flags().StringVar(&c.flags.authenticatorType, "authenticator-type", c.flags.authenticatorType, "Authenticator type (e.g., 'webhook')")
 	cmd.Flags().StringVar(&c.flags.authenticatorName, "authenticator-name", c.flags.authenticatorType, "Authenticator name")
 	mustMarkRequired(cmd, "token")
+	plog.RemoveKlogGlobalFlags()
 	return cmd
 }
 

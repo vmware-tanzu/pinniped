@@ -36,7 +36,6 @@ var (
 )
 
 func TestNewVersionCmd(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		name             string
 		args             []string
@@ -64,7 +63,6 @@ func TestNewVersionCmd(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			cmd := newVersionCommand()
 			require.NotNil(t, cmd)
 

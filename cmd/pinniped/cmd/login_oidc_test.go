@@ -16,8 +16,6 @@ import (
 )
 
 func TestLoginOIDCCommand(t *testing.T) {
-	t.Parallel()
-
 	cfgDir := mustGetConfigDir()
 
 	time1 := time.Date(3020, 10, 12, 13, 14, 15, 16, time.UTC)
@@ -88,7 +86,6 @@ func TestLoginOIDCCommand(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			var (
 				gotIssuer   string
 				gotClientID string

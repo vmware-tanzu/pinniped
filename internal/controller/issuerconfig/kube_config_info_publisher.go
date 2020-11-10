@@ -16,6 +16,7 @@ import (
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/plog"
 )
 
 const (
@@ -75,7 +76,7 @@ func (c *kubeConigInfoPublisherController) Sync(ctx controllerlib.Context) error
 		return fmt.Errorf("failed to get %s configmap: %w", clusterInfoName, err)
 	}
 	if notFound {
-		klog.InfoS(
+		plog.Debug(
 			"could not find config map",
 			"configmap",
 			klog.KRef(ClusterInfoNamespace, clusterInfoName),
@@ -85,13 +86,13 @@ func (c *kubeConigInfoPublisherController) Sync(ctx controllerlib.Context) error
 
 	kubeConfig, kubeConfigPresent := configMap.Data[clusterInfoConfigMapKey]
 	if !kubeConfigPresent {
-		klog.InfoS("could not find kubeconfig configmap key")
+		plog.Debug("could not find kubeconfig configmap key")
 		return nil
 	}
 
 	config, err := clientcmd.Load([]byte(kubeConfig))
 	if err != nil {
-		klog.InfoS("could not load kubeconfig configmap key")
+		plog.Debug("could not load kubeconfig configmap key")
 		return nil
 	}
 

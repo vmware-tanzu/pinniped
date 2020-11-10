@@ -32,6 +32,7 @@ import (
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/provider/manager"
+	"go.pinniped.dev/internal/plog"
 )
 
 const (
@@ -50,11 +51,11 @@ func start(ctx context.Context, l net.Listener, handler http.Handler) {
 	go func() {
 		select {
 		case err := <-errCh:
-			klog.InfoS("server exited", "err", err)
+			plog.Debug("server exited", "err", err)
 		case <-ctx.Done():
-			klog.InfoS("server context cancelled", "err", ctx.Err())
+			plog.Debug("server context cancelled", "err", ctx.Err())
 			if err := server.Shutdown(context.Background()); err != nil {
-				klog.InfoS("server shutdown failed", "err", err)
+				plog.Debug("server shutdown failed", "err", err)
 			}
 		}
 	}()
@@ -211,7 +212,7 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			cert := dynamicTLSCertProvider.GetTLSCert(strings.ToLower(info.ServerName))
 			defaultCert := dynamicTLSCertProvider.GetDefaultTLSCert()
-			klog.InfoS("GetCertificate called for port 8443",
+			plog.Debug("GetCertificate called for port 8443",
 				"info.ServerName", info.ServerName,
 				"foundSNICert", cert != nil,
 				"foundDefaultCert", defaultCert != nil,
@@ -228,13 +229,13 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 	defer func() { _ = httpsListener.Close() }()
 	start(ctx, httpsListener, oidProvidersManager)
 
-	klog.InfoS("supervisor is ready",
+	plog.Debug("supervisor is ready",
 		"httpAddress", httpListener.Addr().String(),
 		"httpsAddress", httpsListener.Addr().String(),
 	)
 
 	gotSignal := waitForSignal()
-	klog.InfoS("supervisor exiting", "signal", gotSignal)
+	plog.Debug("supervisor exiting", "signal", gotSignal)
 
 	return nil
 }
@@ -242,6 +243,7 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
+	plog.RemoveKlogGlobalFlags() // move this whenever the below code gets refactored to use cobra
 
 	klog.Infof("Running %s at %#v", rest.DefaultKubernetesUserAgent(), version.Get())
 	klog.Infof("Command-line arguments were: %s %s %s", os.Args[0], os.Args[1], os.Args[2])

@@ -8,12 +8,11 @@ import (
 	"strings"
 	"sync"
 
-	"k8s.io/klog/v2"
-
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/discovery"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/plog"
 )
 
 // Manager can manage multiple active OIDC providers. It acts as a request router for them.
@@ -60,7 +59,7 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 		jwksURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.JWKSEndpointPath
 		m.providerHandlers[jwksURL] = jwks.NewHandler(incomingProvider.Issuer(), m.dynamicJWKSProvider)
 
-		klog.InfoS("oidc provider manager added or updated issuer", "issuer", incomingProvider.Issuer())
+		plog.Debug("oidc provider manager added or updated issuer", "issuer", incomingProvider.Issuer())
 	}
 }
 
@@ -68,7 +67,7 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 func (m *Manager) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	requestHandler := m.findHandler(req)
 
-	klog.InfoS(
+	plog.Debug(
 		"oidc provider manager examining request",
 		"method", req.Method,
 		"host", req.Host,

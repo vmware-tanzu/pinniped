@@ -18,6 +18,7 @@ import (
 	"go.pinniped.dev/internal/constable"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/plog"
 )
 
 type createrController struct {
@@ -118,7 +119,7 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 		if agentPod == nil {
 			agentPod = c.agentPodConfig.newAgentPod(controllerManagerPod)
 
-			klog.InfoS(
+			plog.Debug(
 				"creating agent pod",
 				"pod",
 				klog.KObj(agentPod),

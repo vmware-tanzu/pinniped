@@ -120,7 +120,7 @@ func TestNewCredentialExchangeCmd(t *testing.T) {
 			r.Equal(knownGoodHelpForExchangeCredential, stdout.String())
 			r.Empty(stderr.String())
 		})
-	}, spec.Parallel(), spec.Report(report.Terminal{}))
+	}, spec.Sequential(), spec.Report(report.Terminal{}))
 }
 
 func TestExchangeCredential(t *testing.T) {

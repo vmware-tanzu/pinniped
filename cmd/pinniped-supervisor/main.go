@@ -32,6 +32,7 @@ import (
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/provider/manager"
+	"go.pinniped.dev/internal/plog"
 )
 
 const (
@@ -242,6 +243,7 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
+	plog.RemoveKlogGlobalFlags() // move this whenever the below code gets refactored to use cobra
 
 	klog.Infof("Running %s at %#v", rest.DefaultKubernetesUserAgent(), version.Get())
 	klog.Infof("Command-line arguments were: %s %s %s", os.Args[0], os.Args[1], os.Args[2])

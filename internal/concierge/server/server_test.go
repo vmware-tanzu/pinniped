@@ -23,10 +23,9 @@ Usage:
   pinniped-concierge [flags]
 
 Flags:
-  -c, --config string                  path to configuration file (default "pinniped.yaml")
-      --downward-api-path string       path to Downward API volume mount (default "/etc/podinfo")
-  -h, --help                           help for pinniped-concierge
-      --log-flush-frequency duration   Maximum number of seconds between log flushes (default 5s)
+  -c, --config string              path to configuration file (default "pinniped.yaml")
+      --downward-api-path string   path to Downward API volume mount (default "/etc/podinfo")
+  -h, --help                       help for pinniped-concierge
 `
 
 func TestCommand(t *testing.T) {

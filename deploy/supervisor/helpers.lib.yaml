@@ -28,3 +28,11 @@ app: #@ data.values.app_name
 _: #@ template.replace(defaultLabel())
 _: #@ template.replace(data.values.custom_labels)
 #@ end
+
+#@ def getAndValidateLogLevel():
+#@   log_level = data.values.log_level
+#@   if log_level != "info" and log_level != "debug" and log_level != "trace" and log_level != "all":
+#@     fail("log_level '" + log_level + "' is invalid")
+#@   end
+#@   return log_level
+#@ end

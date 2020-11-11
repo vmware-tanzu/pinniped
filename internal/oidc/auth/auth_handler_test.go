@@ -169,24 +169,22 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		return urlToReturn
 	}
 
-	happyGetRequestQueryMap := func(downstreamRedirectURI string) map[string]string {
-		return map[string]string{
-			"response_type":         "code",
-			"scope":                 "openid profile email",
-			"client_id":             "pinniped-cli",
-			"state":                 "some-state-value",
-			"nonce":                 "some-nonce-value",
-			"code_challenge":        "some-challenge",
-			"code_challenge_method": "S256",
-			"redirect_uri":          downstreamRedirectURI,
-		}
+	happyGetRequestQueryMap := map[string]string{
+		"response_type":         "code",
+		"scope":                 "openid profile email",
+		"client_id":             "pinniped-cli",
+		"state":                 "some-state-value",
+		"nonce":                 "some-nonce-value",
+		"code_challenge":        "some-challenge",
+		"code_challenge_method": "S256",
+		"redirect_uri":          downstreamRedirectURI,
 	}
 
-	happyGetRequestPath := pathWithQuery("/some/path", happyGetRequestQueryMap(downstreamRedirectURI))
+	happyGetRequestPath := pathWithQuery("/some/path", happyGetRequestQueryMap)
 
-	modifiedHappyGetRequestPath := func(queryOverrides map[string]string) string {
+	modifiedHappyGetRequestQueryMap := func(queryOverrides map[string]string) map[string]string {
 		copyOfHappyGetRequestQueryMap := map[string]string{}
-		for k, v := range happyGetRequestQueryMap(downstreamRedirectURI) {
+		for k, v := range happyGetRequestQueryMap {
 			copyOfHappyGetRequestQueryMap[k] = v
 		}
 		for k, v := range queryOverrides {
@@ -197,13 +195,17 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				copyOfHappyGetRequestQueryMap[k] = v
 			}
 		}
-		return pathWithQuery("/some/path", copyOfHappyGetRequestQueryMap)
+		return copyOfHappyGetRequestQueryMap
 	}
 
-	happyExpectedUpstreamStateParam := func(downstreamRedirectURI string) string {
+	modifiedHappyGetRequestPath := func(queryOverrides map[string]string) string {
+		return pathWithQuery("/some/path", modifiedHappyGetRequestQueryMap(queryOverrides))
+	}
+
+	expectedUpstreamStateParam := func(queryOverrides map[string]string) string {
 		encoded, err := happyEncoder.Encode("s",
 			expectedUpstreamStateParamFormat{
-				P: encodeQuery(happyGetRequestQueryMap(downstreamRedirectURI)),
+				P: encodeQuery(modifiedHappyGetRequestQueryMap(queryOverrides)),
 				N: happyNonce,
 				C: happyCSRF,
 				K: happyPKCE,
@@ -214,13 +216,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		return encoded
 	}
 
-	happyExpectedRedirectLocation := func(downstreamRedirectURI string) string {
+	expectedRedirectLocation := func(expectedUpstreamState string) string {
 		return urlWithQuery(upstreamAuthURL.String(), map[string]string{
 			"response_type":         "code",
 			"access_type":           "offline",
 			"scope":                 "scope1 scope2",
 			"client_id":             "some-client-id",
-			"state":                 happyExpectedUpstreamStateParam(downstreamRedirectURI),
+			"state":                 expectedUpstreamState,
 			"nonce":                 happyNonce,
 			"code_challenge":        expectedUpstreamCodeChallenge,
 			"code_challenge_method": "S256",
@@ -267,11 +269,11 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:      http.StatusFound,
 			wantContentType: "text/html; charset=utf-8",
 			wantBodyString: fmt.Sprintf(`<a href="%s">Found</a>.%s`,
-				html.EscapeString(happyExpectedRedirectLocation(downstreamRedirectURI)),
+				html.EscapeString(expectedRedirectLocation(expectedUpstreamStateParam(nil))),
 				"\n\n",
 			),
 			wantCSRFCookieHeader:                   happyCSRFSetCookieHeaderValue,
-			wantLocationHeader:                     happyExpectedRedirectLocation(downstreamRedirectURI),
+			wantLocationHeader:                     expectedRedirectLocation(expectedUpstreamStateParam(nil)),
 			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
@@ -285,12 +287,12 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:                                 http.MethodPost,
 			path:                                   "/some/path",
 			contentType:                            "application/x-www-form-urlencoded",
-			body:                                   encodeQuery(happyGetRequestQueryMap(downstreamRedirectURI)),
+			body:                                   encodeQuery(happyGetRequestQueryMap),
 			wantStatus:                             http.StatusFound,
 			wantContentType:                        "",
 			wantBodyString:                         "",
 			wantCSRFCookieHeader:                   happyCSRFSetCookieHeaderValue,
-			wantLocationHeader:                     happyExpectedRedirectLocation(downstreamRedirectURI),
+			wantLocationHeader:                     expectedRedirectLocation(expectedUpstreamStateParam(nil)),
 			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
@@ -308,11 +310,15 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:      http.StatusFound,
 			wantContentType: "text/html; charset=utf-8",
 			wantBodyString: fmt.Sprintf(`<a href="%s">Found</a>.%s`,
-				html.EscapeString(happyExpectedRedirectLocation(downstreamRedirectURIWithDifferentPort)),
+				html.EscapeString(expectedRedirectLocation(expectedUpstreamStateParam(map[string]string{
+					"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
+				}))),
 				"\n\n",
 			),
-			wantCSRFCookieHeader:                   happyCSRFSetCookieHeaderValue,
-			wantLocationHeader:                     happyExpectedRedirectLocation(downstreamRedirectURIWithDifferentPort),
+			wantCSRFCookieHeader: happyCSRFSetCookieHeaderValue,
+			wantLocationHeader: expectedRedirectLocation(expectedUpstreamStateParam(map[string]string{
+				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
+			})),
 			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
@@ -480,6 +486,27 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositePromptHasNoneAndOtherValueErrorQuery),
 			wantBodyString:     "",
+		},
+		{
+			name:          "OIDC validations are skipped when the openid scope was not requested",
+			issuer:        issuer,
+			idpListGetter: newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateCSRF:  happyCSRFGenerator,
+			generatePKCE:  happyPKCEGenerator,
+			generateNonce: happyNonceGenerator,
+			encoder:       happyEncoder,
+			method:        http.MethodGet,
+			// The following prompt value is illegal when openid is requested, but note that openid is not requested.
+			path:            modifiedHappyGetRequestPath(map[string]string{"prompt": "none login", "scope": "email"}),
+			wantStatus:      http.StatusFound,
+			wantContentType: "text/html; charset=utf-8",
+			wantBodyString: fmt.Sprintf(`<a href="%s">Found</a>.%s`,
+				html.EscapeString(expectedRedirectLocation(expectedUpstreamStateParam(map[string]string{"prompt": "none login", "scope": "email"}))),
+				"\n\n",
+			),
+			wantCSRFCookieHeader:                   happyCSRFSetCookieHeaderValue,
+			wantLocationHeader:                     expectedRedirectLocation(expectedUpstreamStateParam(map[string]string{"prompt": "none login", "scope": "email"})),
+			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
 			name:               "state does not have enough entropy",
@@ -670,7 +697,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				"access_type":           "offline",
 				"scope":                 "other-scope1 other-scope2",
 				"client_id":             "some-other-client-id",
-				"state":                 happyExpectedUpstreamStateParam(downstreamRedirectURI),
+				"state":                 expectedUpstreamStateParam(nil),
 				"nonce":                 happyNonce,
 				"code_challenge":        expectedUpstreamCodeChallenge,
 				"code_challenge_method": "S256",

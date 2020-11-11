@@ -9,30 +9,42 @@ import (
 	"net/http"
 	"time"
 
-	"go.pinniped.dev/internal/plog"
-
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
+	"golang.org/x/oauth2"
+
 	"go.pinniped.dev/internal/httputil/httperr"
+	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidcclient/nonce"
 	"go.pinniped.dev/internal/oidcclient/pkce"
-	"go.pinniped.dev/internal/oidcclient/state"
-	"golang.org/x/oauth2"
+	"go.pinniped.dev/internal/plog"
+)
+
+const (
+	// Just in case we need to make a breaking change to the format of the upstream state param,
+	// we are including a format version number. This gives the opportunity for a future version of Pinniped
+	// to have the consumer of this format decide to reject versions that it doesn't understand.
+	stateParamFormatVersion = "1"
 )
 
 type IDPListGetter interface {
 	GetIDPList() []provider.UpstreamOIDCIdentityProvider
 }
 
+type Encoder interface {
+	Encode(name string, value interface{}) (string, error)
+}
+
 func NewHandler(
 	issuer string,
 	idpListGetter IDPListGetter,
 	oauthHelper fosite.OAuth2Provider,
-	generateState func() (state.State, error),
+	generateCSRF func() (csrftoken.CSRFToken, error),
 	generatePKCE func() (pkce.Code, error),
 	generateNonce func() (nonce.Nonce, error),
+	encoder Encoder,
 ) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		if r.Method != http.MethodPost && r.Method != http.MethodGet {
@@ -77,7 +89,7 @@ func NewHandler(
 			return nil
 		}
 
-		stateValue, nonceValue, pkceValue, err := generateParams(generateState, generateNonce, generatePKCE)
+		csrfValue, nonceValue, pkceValue, err := generateValues(generateCSRF, generateNonce, generatePKCE)
 		if err != nil {
 			plog.InfoErr("authorize generate error", err)
 			return err
@@ -92,9 +104,28 @@ func NewHandler(
 			Scopes:      upstreamIDP.Scopes,
 		}
 
+		// `__Host` prefix has a special meaning. See https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#Cookie_prefixes
+		http.SetCookie(w, &http.Cookie{
+			Name:     "__Host-pinniped-csrf",
+			Value:    string(csrfValue),
+			HttpOnly: true,
+			SameSite: http.SameSiteStrictMode,
+			Secure:   true,
+		})
+
+		stateParamData := upstreamStateParamData{
+			AuthParams:              authorizeRequester.GetRequestForm().Encode(),
+			Nonce:                   nonceValue,
+			CSRFToken:               csrfValue,
+			PKCECode:                pkceValue,
+			StateParamFormatVersion: stateParamFormatVersion,
+		}
+		encodedStateParamValue, err := encoder.Encode("s", stateParamData)
+		// TODO handle the above error
+
 		http.Redirect(w, r,
 			upstreamOAuthConfig.AuthCodeURL(
-				stateValue.String(),
+				encodedStateParamValue,
 				oauth2.AccessTypeOffline,
 				nonceValue.Param(),
 				pkceValue.Challenge(),
@@ -105,6 +136,15 @@ func NewHandler(
 
 		return nil
 	})
+}
+
+// Keep the JSON to a minimal size because the upstream provider could impose size limitations on the state param.
+type upstreamStateParamData struct {
+	AuthParams              string              `json:"p"`
+	Nonce                   nonce.Nonce         `json:"n"`
+	CSRFToken               csrftoken.CSRFToken `json:"c"`
+	PKCECode                pkce.Code           `json:"k"`
+	StateParamFormatVersion string              `json:"v"`
 }
 
 func chooseUpstreamIDP(idpListGetter IDPListGetter) (*provider.UpstreamOIDCIdentityProvider, error) {
@@ -123,15 +163,15 @@ func chooseUpstreamIDP(idpListGetter IDPListGetter) (*provider.UpstreamOIDCIdent
 	return &allUpstreamIDPs[0], nil
 }
 
-func generateParams(
-	generateState func() (state.State, error),
+func generateValues(
+	generateCSRF func() (csrftoken.CSRFToken, error),
 	generateNonce func() (nonce.Nonce, error),
 	generatePKCE func() (pkce.Code, error),
-) (state.State, nonce.Nonce, pkce.Code, error) {
-	stateValue, err := generateState()
+) (csrftoken.CSRFToken, nonce.Nonce, pkce.Code, error) {
+	csrfValue, err := generateCSRF()
 	if err != nil {
-		plog.InfoErr("error generating state param", err)
-		return "", "", "", httperr.Wrap(http.StatusInternalServerError, "error generating state param", err)
+		plog.InfoErr("error generating csrf param", err)
+		return "", "", "", httperr.Wrap(http.StatusInternalServerError, "error generating CSRF token", err)
 	}
 	nonceValue, err := generateNonce()
 	if err != nil {
@@ -143,7 +183,7 @@ func generateParams(
 		plog.InfoErr("error generating PKCE param", err)
 		return "", "", "", httperr.Wrap(http.StatusInternalServerError, "error generating PKCE param", err)
 	}
-	return stateValue, nonceValue, pkceValue, nil
+	return csrfValue, nonceValue, pkceValue, nil
 }
 
 func fositeErrorForLog(err error) []interface{} {

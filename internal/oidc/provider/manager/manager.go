@@ -8,6 +8,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/gorilla/securecookie"
+	"go.pinniped.dev/internal/oidc/csrftoken"
+
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/storage"
 
@@ -18,7 +21,6 @@ import (
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidcclient/nonce"
 	"go.pinniped.dev/internal/oidcclient/pkce"
-	"go.pinniped.dev/internal/oidcclient/state"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -78,8 +80,13 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 		}
 		oauthHelper := oidc.FositeOauth2Helper(oauthStore, []byte("some secret - must have at least 32 bytes")) // TODO replace this secret
 
+		var encoderHashKey = []byte("fake-hash-secret")  // TODO fix this
+		var encoderBlockKey = []byte("16-bytes-aaaaaaa") // TODO fix this
+		var encoder = securecookie.New(encoderHashKey, encoderBlockKey)
+		encoder.SetSerializer(securecookie.JSONEncoder{})
+
 		authURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.AuthorizationEndpointPath
-		m.providerHandlers[authURL] = auth.NewHandler(incomingProvider.Issuer(), m.idpListGetter, oauthHelper, state.Generate, pkce.Generate, nonce.Generate)
+		m.providerHandlers[authURL] = auth.NewHandler(incomingProvider.Issuer(), m.idpListGetter, oauthHelper, csrftoken.Generate, pkce.Generate, nonce.Generate, encoder)
 
 		plog.Debug("oidc provider manager added or updated issuer", "issuer", incomingProvider.Issuer())
 	}

@@ -14,6 +14,7 @@ require (
 	github.com/golang/mock v1.4.4
 	github.com/golangci/golangci-lint v1.31.0
 	github.com/google/go-cmp v0.5.2
+	github.com/gorilla/securecookie v1.1.1
 	github.com/ory/fosite v0.35.1
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
 	github.com/sclevine/agouti v3.0.0+incompatible

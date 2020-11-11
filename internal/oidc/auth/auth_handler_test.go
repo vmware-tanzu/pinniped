@@ -13,16 +13,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gorilla/securecookie"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/storage"
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidcclient/nonce"
 	"go.pinniped.dev/internal/oidcclient/pkce"
-	"go.pinniped.dev/internal/oidcclient/state"
 )
 
 func TestAuthorizationEndpoint(t *testing.T) {
@@ -131,30 +132,37 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
 	oauthHelper := oidc.FositeOauth2Helper(oauthStore, hmacSecret)
 
-	happyStateGenerator := func() (state.State, error) { return "test-state", nil }
-	happyPKCEGenerator := func() (pkce.Code, error) { return "test-pkce", nil }
-	happyNonceGenerator := func() (nonce.Nonce, error) { return "test-nonce", nil }
+	happyCSRF := "test-csrf"
+	happyPKCE := "test-pkce"
+	happyNonce := "test-nonce"
+	happyCSRFGenerator := func() (csrftoken.CSRFToken, error) { return csrftoken.CSRFToken(happyCSRF), nil }
+	happyPKCEGenerator := func() (pkce.Code, error) { return pkce.Code(happyPKCE), nil }
+	happyNonceGenerator := func() (nonce.Nonce, error) { return nonce.Nonce(happyNonce), nil }
 
 	// This is the PKCE challenge which is calculated as base64(sha256("test-pkce")). For example:
 	// $ echo -n test-pkce | shasum -a 256 | cut -d" " -f1 | xxd -r -p | base64 | cut -d"=" -f1
 	expectedUpstreamCodeChallenge := "VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g"
 
-	pathWithQuery := func(path string, query map[string]string) string {
+	var encoderHashKey = []byte("fake-hash-secret")
+	var encoder = securecookie.New(encoderHashKey, nil) // note that nil block key argument turns off encryption
+	encoder.SetSerializer(securecookie.JSONEncoder{})
+
+	encodeQuery := func(query map[string]string) string {
 		values := url.Values{}
 		for k, v := range query {
 			values[k] = []string{v}
 		}
-		pathToReturn := fmt.Sprintf("%s?%s", path, values.Encode())
+		return values.Encode()
+	}
+
+	pathWithQuery := func(path string, query map[string]string) string {
+		pathToReturn := fmt.Sprintf("%s?%s", path, encodeQuery(query))
 		require.NotRegexp(t, "^http", pathToReturn, "pathWithQuery helper was used to create a URL")
 		return pathToReturn
 	}
 
 	urlWithQuery := func(baseURL string, query map[string]string) string {
-		values := url.Values{}
-		for k, v := range query {
-			values[k] = []string{v}
-		}
-		urlToReturn := fmt.Sprintf("%s?%s", baseURL, values.Encode())
+		urlToReturn := fmt.Sprintf("%s?%s", baseURL, encodeQuery(query))
 		_, err := url.Parse(urlToReturn)
 		require.NoError(t, err, "urlWithQuery helper was used to create an illegal URL")
 		return urlToReturn
@@ -189,26 +197,47 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		return pathWithQuery("/some/path", copyOfHappyGetRequestQueryMap)
 	}
 
+	// We're going to use this value to make assertions, so specify the exact expected value.
+	happyUpstreamStateParam, err := encoder.Encode("s",
+		// Ensure that the order of the serialized fields is exactly this order, so we can make simpler equality assertions below.
+		struct {
+			P string `json:"p"`
+			N string `json:"n"`
+			C string `json:"c"`
+			K string `json:"k"`
+			V string `json:"v"`
+		}{
+			P: encodeQuery(happyGetRequestQueryMap),
+			N: happyNonce,
+			C: happyCSRF,
+			K: happyPKCE,
+			V: "1",
+		},
+	)
+	require.NoError(t, err)
+
 	happyGetRequestExpectedRedirectLocation := urlWithQuery(upstreamAuthURL.String(),
 		map[string]string{
 			"response_type":         "code",
 			"access_type":           "offline",
 			"scope":                 "scope1 scope2",
 			"client_id":             "some-client-id",
-			"state":                 "test-state",
-			"nonce":                 "test-nonce",
+			"state":                 happyUpstreamStateParam,
+			"nonce":                 happyNonce,
 			"code_challenge":        expectedUpstreamCodeChallenge,
 			"code_challenge_method": "S256",
 			"redirect_uri":          issuer + "/callback/some-idp",
 		},
 	)
 
+	happyCSRFSetCookieHeaderValue := fmt.Sprintf("__Host-pinniped-csrf=%s; HttpOnly; Secure; SameSite=Strict", happyCSRF)
+
 	type testCase struct {
 		name string
 
 		issuer        string
 		idpListGetter provider.DynamicUpstreamIDPProvider
-		generateState func() (state.State, error)
+		generateCSRF  func() (csrftoken.CSRFToken, error)
 		generatePKCE  func() (pkce.Code, error)
 		generateNonce func() (nonce.Nonce, error)
 		method        string
@@ -216,11 +245,12 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		contentType   string
 		body          string
 
-		wantStatus         int
-		wantContentType    string
-		wantBodyString     string
-		wantBodyJSON       string
-		wantLocationHeader string
+		wantStatus           int
+		wantContentType      string
+		wantBodyString       string
+		wantBodyJSON         string
+		wantLocationHeader   string
+		wantCSRFCookieHeader string
 	}
 
 	tests := []testCase{
@@ -228,7 +258,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:            "happy path using GET",
 			issuer:          issuer,
 			idpListGetter:   newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:   happyStateGenerator,
+			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
 			method:          http.MethodGet,
@@ -239,13 +269,14 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				html.EscapeString(happyGetRequestExpectedRedirectLocation),
 				"\n\n",
 			),
-			wantLocationHeader: happyGetRequestExpectedRedirectLocation,
+			wantLocationHeader:   happyGetRequestExpectedRedirectLocation,
+			wantCSRFCookieHeader: happyCSRFSetCookieHeaderValue,
 		},
 		{
 			name:          "happy path using POST",
 			issuer:        issuer,
 			idpListGetter: newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState: happyStateGenerator,
+			generateCSRF:  happyCSRFGenerator,
 			generatePKCE:  happyPKCEGenerator,
 			generateNonce: happyNonceGenerator,
 			method:        http.MethodPost,
@@ -260,16 +291,17 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				"code_challenge_method": []string{"S256"},
 				"redirect_uri":          []string{downstreamRedirectURI},
 			}.Encode(),
-			wantStatus:         http.StatusFound,
-			wantContentType:    "",
-			wantBodyString:     "",
-			wantLocationHeader: happyGetRequestExpectedRedirectLocation,
+			wantStatus:           http.StatusFound,
+			wantContentType:      "",
+			wantBodyString:       "",
+			wantLocationHeader:   happyGetRequestExpectedRedirectLocation,
+			wantCSRFCookieHeader: happyCSRFSetCookieHeaderValue,
 		},
 		{
 			name:            "downstream client does not exist",
 			issuer:          issuer,
 			idpListGetter:   newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:   happyStateGenerator,
+			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
 			method:          http.MethodGet,
@@ -282,7 +314,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:          "downstream redirect uri does not match what is configured for client",
 			issuer:        issuer,
 			idpListGetter: newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState: happyStateGenerator,
+			generateCSRF:  happyCSRFGenerator,
 			generatePKCE:  happyPKCEGenerator,
 			generateNonce: happyNonceGenerator,
 			method:        http.MethodGet,
@@ -294,10 +326,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyJSON:    fositeInvalidRedirectURIErrorBody,
 		},
 		{
-			name:          "downstream redirect uri matches what is configured for client except for the port number",
+			name:          "happy path when downstream redirect uri matches what is configured for client except for the port number",
 			issuer:        issuer,
 			idpListGetter: newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState: happyStateGenerator,
+			generateCSRF:  happyCSRFGenerator,
 			generatePKCE:  happyPKCEGenerator,
 			generateNonce: happyNonceGenerator,
 			method:        http.MethodGet,
@@ -310,13 +342,14 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				html.EscapeString(happyGetRequestExpectedRedirectLocation),
 				"\n\n",
 			),
-			wantLocationHeader: happyGetRequestExpectedRedirectLocation,
+			wantLocationHeader:   happyGetRequestExpectedRedirectLocation,
+			wantCSRFCookieHeader: happyCSRFSetCookieHeaderValue,
 		},
 		{
 			name:               "response type is unsupported",
 			issuer:             issuer,
 			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:      happyStateGenerator,
+			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
 			method:             http.MethodGet,
@@ -330,7 +363,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:               "downstream scopes do not match what is configured for client",
 			issuer:             issuer,
 			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:      happyStateGenerator,
+			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
 			method:             http.MethodGet,
@@ -344,7 +377,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:               "missing response type in request",
 			issuer:             issuer,
 			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:      happyStateGenerator,
+			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
 			method:             http.MethodGet,
@@ -358,7 +391,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:            "missing client id in request",
 			issuer:          issuer,
 			idpListGetter:   newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:   happyStateGenerator,
+			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
 			method:          http.MethodGet,
@@ -371,7 +404,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:               "missing PKCE code_challenge in request", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
 			issuer:             issuer,
 			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:      happyStateGenerator,
+			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
 			method:             http.MethodGet,
@@ -385,7 +418,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:               "invalid value for PKCE code_challenge_method in request", // https://tools.ietf.org/html/rfc7636#section-4.3
 			issuer:             issuer,
 			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:      happyStateGenerator,
+			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
 			method:             http.MethodGet,
@@ -399,7 +432,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:               "when PKCE code_challenge_method in request is `plain`", // https://tools.ietf.org/html/rfc7636#section-4.3
 			issuer:             issuer,
 			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:      happyStateGenerator,
+			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
 			method:             http.MethodGet,
@@ -413,7 +446,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:               "missing PKCE code_challenge_method in request", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
 			issuer:             issuer,
 			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:      happyStateGenerator,
+			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
 			method:             http.MethodGet,
@@ -429,7 +462,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:               "prompt param is not allowed to have none and another legal value at the same time",
 			issuer:             issuer,
 			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:      happyStateGenerator,
+			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
 			method:             http.MethodGet,
@@ -443,7 +476,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:               "state does not have enough entropy",
 			issuer:             issuer,
 			idpListGetter:      newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:      happyStateGenerator,
+			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
 			method:             http.MethodGet,
@@ -454,23 +487,23 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:     "",
 		},
 		{
-			name:            "error while generating state",
+			name:            "error while generating CSRF token",
 			issuer:          issuer,
 			idpListGetter:   newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:   func() (state.State, error) { return "", fmt.Errorf("some state generator error") },
+			generateCSRF:    func() (csrftoken.CSRFToken, error) { return "", fmt.Errorf("some csrf generator error") },
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
 			method:          http.MethodGet,
 			path:            happyGetRequestPath,
 			wantStatus:      http.StatusInternalServerError,
 			wantContentType: "text/plain; charset=utf-8",
-			wantBodyString:  "Internal Server Error: error generating state param\n",
+			wantBodyString:  "Internal Server Error: error generating CSRF token\n",
 		},
 		{
 			name:            "error while generating nonce",
 			issuer:          issuer,
 			idpListGetter:   newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:   happyStateGenerator,
+			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   func() (nonce.Nonce, error) { return "", fmt.Errorf("some nonce generator error") },
 			method:          http.MethodGet,
@@ -483,7 +516,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			name:            "error while generating PKCE",
 			issuer:          issuer,
 			idpListGetter:   newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateState:   happyStateGenerator,
+			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    func() (pkce.Code, error) { return "", fmt.Errorf("some PKCE generator error") },
 			generateNonce:   happyNonceGenerator,
 			method:          http.MethodGet,
@@ -562,13 +595,23 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		if test.wantLocationHeader != "" {
 			actualLocation := rsp.Header().Get("Location")
 			requireEqualURLs(t, actualLocation, test.wantLocationHeader)
+		} else {
+			require.Empty(t, rsp.Header().Values("Location"))
+		}
+
+		if test.wantCSRFCookieHeader != "" {
+			require.Len(t, rsp.Header().Values("Set-Cookie"), 1)
+			actualCookie := rsp.Header().Get("Set-Cookie")
+			require.Equal(t, actualCookie, test.wantCSRFCookieHeader)
+		} else {
+			require.Empty(t, rsp.Header().Values("Set-Cookie"))
 		}
 	}
 
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			subject := NewHandler(test.issuer, test.idpListGetter, oauthHelper, test.generateState, test.generatePKCE, test.generateNonce)
+			subject := NewHandler(test.issuer, test.idpListGetter, oauthHelper, test.generateCSRF, test.generatePKCE, test.generateNonce, encoder)
 			runOneTestCase(t, test, subject)
 		})
 	}
@@ -577,7 +620,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		test := tests[0]
 		require.Equal(t, "happy path using GET", test.name) // re-use the happy path test case
 
-		subject := NewHandler(test.issuer, test.idpListGetter, oauthHelper, test.generateState, test.generatePKCE, test.generateNonce)
+		subject := NewHandler(test.issuer, test.idpListGetter, oauthHelper, test.generateCSRF, test.generatePKCE, test.generateNonce, encoder)
 
 		runOneTestCase(t, test, subject)
 
@@ -597,8 +640,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				"access_type":           "offline",
 				"scope":                 "other-scope1 other-scope2",
 				"client_id":             "some-other-client-id",
-				"state":                 "test-state",
-				"nonce":                 "test-nonce",
+				"state":                 happyUpstreamStateParam,
+				"nonce":                 happyNonce,
 				"code_challenge":        expectedUpstreamCodeChallenge,
 				"code_challenge_method": "S256",
 				"redirect_uri":          issuer + "/callback/some-other-idp",

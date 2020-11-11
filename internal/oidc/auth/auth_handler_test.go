@@ -14,8 +14,6 @@ import (
 	"testing"
 
 	"github.com/gorilla/securecookie"
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/storage"
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/here"
@@ -123,12 +121,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	issuer := "https://my-issuer.com/some-path"
 
 	// Configure fosite the same way that the production code would, except use in-memory storage.
-	oauthStore := &storage.MemoryStore{
-		Clients:        map[string]fosite.Client{oidc.PinnipedCLIOIDCClient().ID: oidc.PinnipedCLIOIDCClient()},
-		AuthorizeCodes: map[string]storage.StoreAuthorizeCode{},
-		PKCES:          map[string]fosite.Requester{},
-		IDSessions:     map[string]fosite.Requester{},
-	}
+	oauthStore := oidc.NullStorage{}
 	hmacSecret := []byte("some secret - must have at least 32 bytes")
 	require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
 	oauthHelper := oidc.FositeOauth2Helper(oauthStore, hmacSecret)

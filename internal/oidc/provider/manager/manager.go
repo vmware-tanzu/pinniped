@@ -9,8 +9,6 @@ import (
 	"sync"
 
 	"github.com/gorilla/securecookie"
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/storage"
 
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/auth"
@@ -70,17 +68,12 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 		jwksURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.JWKSEndpointPath
 		m.providerHandlers[jwksURL] = jwks.NewHandler(incomingProvider.Issuer(), m.dynamicJWKSProvider)
 
-		// Each OIDC provider gets its own storage.
-		oauthStore := &storage.MemoryStore{
-			Clients:        map[string]fosite.Client{oidc.PinnipedCLIOIDCClient().ID: oidc.PinnipedCLIOIDCClient()},
-			AuthorizeCodes: map[string]storage.StoreAuthorizeCode{},
-			PKCES:          map[string]fosite.Requester{},
-			IDSessions:     map[string]fosite.Requester{},
-		}
-		oauthHelper := oidc.FositeOauth2Helper(oauthStore, []byte("some secret - must have at least 32 bytes")) // TODO replace this secret
+		// Use NullStorage for the authorize endpoint because we do not actually want to store anything until
+		// the upstream callback endpoint is called later.
+		oauthHelper := oidc.FositeOauth2Helper(oidc.NullStorage{}, []byte("some secret - must have at least 32 bytes")) // TODO replace this secret
 
-		var encoderHashKey = []byte("fake-hash-secret")  // TODO fix this
-		var encoderBlockKey = []byte("16-bytes-aaaaaaa") // TODO fix this
+		var encoderHashKey = []byte("fake-hash-secret")  // TODO replace this secret
+		var encoderBlockKey = []byte("16-bytes-aaaaaaa") // TODO replace this secret
 		var encoder = securecookie.New(encoderHashKey, encoderBlockKey)
 		encoder.SetSerializer(securecookie.JSONEncoder{})
 

@@ -8,11 +8,11 @@ import (
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	corev1informers "k8s.io/client-go/informers/core/v1"
-	"k8s.io/klog/v2"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/plog"
 )
 
 type apiServiceUpdaterController struct {
@@ -59,15 +59,15 @@ func (c *apiServiceUpdaterController) Sync(ctx controllerlib.Context) error {
 	}
 	if notFound {
 		// The secret does not exist yet, so nothing to do.
-		klog.Info("apiServiceUpdaterController Sync found that the secret does not exist yet or was deleted")
+		plog.Info("apiServiceUpdaterController Sync found that the secret does not exist yet or was deleted")
 		return nil
 	}
 
 	// Update the APIService to give it the new CA bundle.
-	if err := UpdateAPIService(ctx.Context, c.aggregatorClient, c.apiServiceName, certSecret.Data[caCertificateSecretKey]); err != nil {
+	if err := UpdateAPIService(ctx.Context, c.aggregatorClient, c.apiServiceName, c.namespace, certSecret.Data[caCertificateSecretKey]); err != nil {
 		return fmt.Errorf("could not update the API service: %w", err)
 	}
 
-	klog.Info("apiServiceUpdaterController Sync successfully updated API service")
+	plog.Debug("apiServiceUpdaterController Sync complete")
 	return nil
 }

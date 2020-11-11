@@ -276,6 +276,36 @@ func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 					r.Regexp("could not get existing version of API service: .* not found", err.Error())
 				})
 			})
+
+			when("the APIService exists for another pinniped instance", func() {
+				it.Before(func() {
+					apiService := &apiregistrationv1.APIService{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: loginv1alpha1.SchemeGroupVersion.Version + "." + loginv1alpha1.GroupName,
+						},
+						Spec: apiregistrationv1.APIServiceSpec{
+							CABundle:        nil,
+							VersionPriority: 1234,
+
+							Service: &apiregistrationv1.ServiceReference{
+								Namespace: installedInNamespace + "-not",
+							},
+						},
+					}
+					err := aggregatorAPIClient.Tracker().Add(apiService)
+					r.NoError(err)
+				})
+
+				it("does not update the APIService", func() {
+					startInformersAndController()
+					err := controllerlib.TestSync(t, subject, *syncContext)
+					r.NoError(err)
+
+					// make sure we get the API service and decide to leave it alone
+					r.Len(aggregatorAPIClient.Actions(), 1)
+					r.Equal("get", aggregatorAPIClient.Actions()[0].GetVerb())
+				})
+			})
 		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))
 }

@@ -22,11 +22,13 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
 
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/supervisor/clientset/versioned"
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/controller/supervisorconfig"
+	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatcher"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/oidc/jwks"
@@ -73,6 +75,7 @@ func startControllers(
 	issuerManager *manager.Manager,
 	dynamicJWKSProvider jwks.DynamicJWKSProvider,
 	dynamicTLSCertProvider provider.DynamicTLSCertProvider,
+	dynamicUpstreamIDPProvider provider.DynamicUpstreamIDPProvider,
 	kubeClient kubernetes.Interface,
 	pinnipedClient pinnipedclientset.Interface,
 	kubeInformers kubeinformers.SharedInformerFactory,
@@ -120,7 +123,15 @@ func startControllers(
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
-		)
+		).
+		WithController(
+			upstreamwatcher.New(
+				dynamicUpstreamIDPProvider,
+				pinnipedClient,
+				pinnipedInformers.IDP().V1alpha1().UpstreamOIDCProviders(),
+				kubeInformers.Core().V1().Secrets(),
+				klogr.New()),
+			singletonWorker)
 
 	kubeInformers.Start(ctx.Done())
 	pinnipedInformers.Start(ctx.Done())
@@ -193,6 +204,7 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 		oidProvidersManager,
 		dynamicJWKSProvider,
 		dynamicTLSCertProvider,
+		dynamicUpstreamIDPProvider,
 		kubeClient,
 		pinnipedClient,
 		kubeInformers,

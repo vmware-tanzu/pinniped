@@ -95,6 +95,7 @@ k8s_yaml(local([
     '--data-value', 'namespace=supervisor',
     '--data-value', 'image_repo=image/supervisor',
     '--data-value', 'image_tag=tilt-dev',
+    '--data-value', 'log_level=debug',
     '--data-value-yaml', 'replicas=1',
     '--data-value-yaml', 'service_http_nodeport_port=80',
     '--data-value-yaml', 'service_http_nodeport_nodeport=31234',
@@ -142,6 +143,7 @@ k8s_yaml(local([
     '--data-value image_tag=tilt-dev ' +
     '--data-value kube_cert_agent_image=debian:10.6-slim ' +
     '--data-value discovery_url=$(TERM=dumb kubectl cluster-info | awk \'/Kubernetes master/ {print $NF}\') ' +
+    '--data-value log_level=debug ' +
     '--data-value-yaml replicas=1 ' +
     '--data-value-yaml "custom_labels={myConciergeCustomLabelName: myConciergeCustomLabelValue}"'
 ]))

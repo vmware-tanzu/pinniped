@@ -395,6 +395,11 @@ func run() error {
 }
 
 func main() {
+	// Hardcode the logging level to debug, since this is a test app and it is very helpful to have
+	// verbose logs to debug test failures.
+	if err := plog.ValidateAndSetLogLevelGlobally(plog.LevelDebug); err != nil {
+		klog.Fatal(err)
+	}
 	if err := run(); err != nil {
 		klog.Fatal(err)
 	}

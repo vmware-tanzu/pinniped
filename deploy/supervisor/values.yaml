@@ -52,3 +52,7 @@ service_https_clusterip_port: #! when specified, creates a ClusterIP Service wit
 #! Ignored unless service_http_loadbalancer_port and/or service_https_loadbalancer_port are provided.
 #! Optional.
 service_loadbalancer_ip: #! e.g. 1.2.3.4
+
+#! Specify the verbosity of logging: info ("nice to know" information), debug (developer
+#! information), trace (timing information), all (kitchen sink).
+log_level: #! By default, when this value is left unset, only warnings and errors are printed. There is no way to suppress warning and error logs.

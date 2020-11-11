@@ -50,3 +50,7 @@ discovery_url: #! e.g., https://example.com
 #! about every 25 days.
 api_serving_certificate_duration_seconds: 2592000
 api_serving_certificate_renew_before_seconds: 2160000
+
+#! Specify the verbosity of logging: info ("nice to know" information), debug (developer
+#! information), trace (timing information), all (kitchen sink).
+log_level: #! By default, when this value is left unset, only warnings and errors are printed. There is no way to suppress warning and error logs.

@@ -3,7 +3,7 @@
 
 #@ load("@ytt:data", "data")
 #@ load("@ytt:json", "json")
-#@ load("helpers.lib.yaml", "defaultLabel", "labels", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix")
+#@ load("helpers.lib.yaml", "defaultLabel", "labels", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix", "getAndValidateLogLevel")
 
 #@ if not data.values.into_namespace:
 ---
@@ -33,6 +33,9 @@ data:
     names:
       defaultTLSCertificateSecret: (@= defaultResourceNameWithSuffix("default-tls-certificate") @)
     labels: (@= json.encode(labels()).rstrip() @)
+    (@ if data.values.log_level: @)
+    logLevel: (@= getAndValidateLogLevel() @)
+    (@ end @)
 ---
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
 apiVersion: v1

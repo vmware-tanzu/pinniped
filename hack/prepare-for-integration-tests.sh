@@ -224,6 +224,7 @@ if ! tilt_mode; then
     --data-value "namespace=$supervisor_namespace" \
     --data-value "image_repo=$registry_repo" \
     --data-value "image_tag=$tag" \
+    --data-value "log_level=debug" \
     --data-value-yaml "custom_labels=$supervisor_custom_labels" \
     --data-value-yaml 'service_http_nodeport_port=80' \
     --data-value-yaml 'service_http_nodeport_nodeport=31234' \
@@ -253,6 +254,7 @@ if ! tilt_mode; then
   ytt --file . \
     --data-value "app_name=$concierge_app_name" \
     --data-value "namespace=$concierge_namespace" \
+    --data-value "log_level=debug" \
     --data-value-yaml "custom_labels=$concierge_custom_labels" \
     --data-value "image_repo=$registry_repo" \
     --data-value "image_tag=$tag" \

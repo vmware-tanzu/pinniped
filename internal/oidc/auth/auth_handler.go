@@ -26,13 +26,22 @@ const (
 	// Just in case we need to make a breaking change to the format of the upstream state param,
 	// we are including a format version number. This gives the opportunity for a future version of Pinniped
 	// to have the consumer of this format decide to reject versions that it doesn't understand.
-	stateParamFormatVersion = "1"
+	upstreamStateParamFormatVersion = "1"
+
+	// The `name` passed to the encoder for encoding the upstream state param value. This name is short
+	// because it will be encoded into the upstream state param value and we're trying to keep that small.
+	upstreamStateParamEncodingName = "s"
+
+	// The name of the browser cookie which shall hold our CSRF value.
+	// `__Host` prefix has a special meaning. See https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#Cookie_prefixes
+	csrfCookieName = "__Host-pinniped-csrf"
 )
 
 type IDPListGetter interface {
 	GetIDPList() []provider.UpstreamOIDCIdentityProvider
 }
 
+// This is the encoding side of the securecookie.Codec interface.
 type Encoder interface {
 	Encode(name string, value interface{}) (string, error)
 }
@@ -63,7 +72,7 @@ func NewHandler(
 
 		upstreamIDP, err := chooseUpstreamIDP(idpListGetter)
 		if err != nil {
-			plog.InfoErr("authorize request error", err)
+			plog.WarningErr("authorize upstream config", err)
 			return err
 		}
 
@@ -91,7 +100,7 @@ func NewHandler(
 
 		csrfValue, nonceValue, pkceValue, err := generateValues(generateCSRF, generateNonce, generatePKCE)
 		if err != nil {
-			plog.InfoErr("authorize generate error", err)
+			plog.Error("authorize generate error", err)
 			return err
 		}
 
@@ -104,24 +113,13 @@ func NewHandler(
 			Scopes:      upstreamIDP.Scopes,
 		}
 
-		// `__Host` prefix has a special meaning. See https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#Cookie_prefixes
-		http.SetCookie(w, &http.Cookie{
-			Name:     "__Host-pinniped-csrf",
-			Value:    string(csrfValue),
-			HttpOnly: true,
-			SameSite: http.SameSiteStrictMode,
-			Secure:   true,
-		})
-
-		stateParamData := upstreamStateParamData{
-			AuthParams:              authorizeRequester.GetRequestForm().Encode(),
-			Nonce:                   nonceValue,
-			CSRFToken:               csrfValue,
-			PKCECode:                pkceValue,
-			StateParamFormatVersion: stateParamFormatVersion,
+		encodedStateParamValue, err := upstreamStateParam(authorizeRequester, nonceValue, csrfValue, pkceValue, encoder)
+		if err != nil {
+			plog.Error("authorize upstream state param error", err)
+			return err
 		}
-		encodedStateParamValue, err := encoder.Encode("s", stateParamData)
-		// TODO handle the above error
+
+		addCSRFSetCookieHeader(w, csrfValue)
 
 		http.Redirect(w, r,
 			upstreamOAuthConfig.AuthCodeURL(
@@ -136,15 +134,6 @@ func NewHandler(
 
 		return nil
 	})
-}
-
-// Keep the JSON to a minimal size because the upstream provider could impose size limitations on the state param.
-type upstreamStateParamData struct {
-	AuthParams              string              `json:"p"`
-	Nonce                   nonce.Nonce         `json:"n"`
-	CSRFToken               csrftoken.CSRFToken `json:"c"`
-	PKCECode                pkce.Code           `json:"k"`
-	StateParamFormatVersion string              `json:"v"`
 }
 
 func chooseUpstreamIDP(idpListGetter IDPListGetter) (*provider.UpstreamOIDCIdentityProvider, error) {
@@ -170,20 +159,57 @@ func generateValues(
 ) (csrftoken.CSRFToken, nonce.Nonce, pkce.Code, error) {
 	csrfValue, err := generateCSRF()
 	if err != nil {
-		plog.InfoErr("error generating csrf param", err)
 		return "", "", "", httperr.Wrap(http.StatusInternalServerError, "error generating CSRF token", err)
 	}
 	nonceValue, err := generateNonce()
 	if err != nil {
-		plog.InfoErr("error generating nonce param", err)
 		return "", "", "", httperr.Wrap(http.StatusInternalServerError, "error generating nonce param", err)
 	}
 	pkceValue, err := generatePKCE()
 	if err != nil {
-		plog.InfoErr("error generating PKCE param", err)
 		return "", "", "", httperr.Wrap(http.StatusInternalServerError, "error generating PKCE param", err)
 	}
 	return csrfValue, nonceValue, pkceValue, nil
+}
+
+// Keep the JSON to a minimal size because the upstream provider could impose size limitations on the state param.
+type upstreamStateParamData struct {
+	AuthParams              string              `json:"p"`
+	Nonce                   nonce.Nonce         `json:"n"`
+	CSRFToken               csrftoken.CSRFToken `json:"c"`
+	PKCECode                pkce.Code           `json:"k"`
+	StateParamFormatVersion string              `json:"v"`
+}
+
+func upstreamStateParam(
+	authorizeRequester fosite.AuthorizeRequester,
+	nonceValue nonce.Nonce,
+	csrfValue csrftoken.CSRFToken,
+	pkceValue pkce.Code,
+	encoder Encoder,
+) (string, error) {
+	stateParamData := upstreamStateParamData{
+		AuthParams:              authorizeRequester.GetRequestForm().Encode(),
+		Nonce:                   nonceValue,
+		CSRFToken:               csrfValue,
+		PKCECode:                pkceValue,
+		StateParamFormatVersion: upstreamStateParamFormatVersion,
+	}
+	encodedStateParamValue, err := encoder.Encode(upstreamStateParamEncodingName, stateParamData)
+	if err != nil {
+		return "", httperr.Wrap(http.StatusInternalServerError, "error encoding upstream state param", err)
+	}
+	return encodedStateParamValue, nil
+}
+
+func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     csrfCookieName,
+		Value:    string(csrfValue),
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Secure:   true,
+	})
 }
 
 func fositeErrorForLog(err error) []interface{} {

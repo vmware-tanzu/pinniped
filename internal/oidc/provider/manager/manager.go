@@ -9,13 +9,12 @@ import (
 	"sync"
 
 	"github.com/gorilla/securecookie"
-	"go.pinniped.dev/internal/oidc/csrftoken"
-
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/storage"
 
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/auth"
+	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/discovery"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"

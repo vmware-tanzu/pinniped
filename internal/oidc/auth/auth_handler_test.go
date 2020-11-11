@@ -28,7 +28,8 @@ import (
 
 func TestAuthorizationEndpoint(t *testing.T) {
 	const (
-		downstreamRedirectURI = "http://127.0.0.1/callback"
+		downstreamRedirectURI                  = "http://127.0.0.1/callback"
+		downstreamRedirectURIWithDifferentPort = "http://127.0.0.1:42/callback"
 	)
 
 	var (
@@ -144,8 +145,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	expectedUpstreamCodeChallenge := "VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g"
 
 	var encoderHashKey = []byte("fake-hash-secret")
-	var encoder = securecookie.New(encoderHashKey, nil) // note that nil block key argument turns off encryption
-	encoder.SetSerializer(securecookie.JSONEncoder{})
+	var happyEncoder = securecookie.New(encoderHashKey, nil) // note that nil block key argument turns off encryption
+	happyEncoder.SetSerializer(securecookie.JSONEncoder{})
 
 	encodeQuery := func(query map[string]string) string {
 		values := url.Values{}
@@ -168,22 +169,24 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		return urlToReturn
 	}
 
-	happyGetRequestQueryMap := map[string]string{
-		"response_type":         "code",
-		"scope":                 "openid profile email",
-		"client_id":             "pinniped-cli",
-		"state":                 "some-state-value",
-		"nonce":                 "some-nonce-value",
-		"code_challenge":        "some-challenge",
-		"code_challenge_method": "S256",
-		"redirect_uri":          downstreamRedirectURI,
+	happyGetRequestQueryMap := func(downstreamRedirectURI string) map[string]string {
+		return map[string]string{
+			"response_type":         "code",
+			"scope":                 "openid profile email",
+			"client_id":             "pinniped-cli",
+			"state":                 "some-state-value",
+			"nonce":                 "some-nonce-value",
+			"code_challenge":        "some-challenge",
+			"code_challenge_method": "S256",
+			"redirect_uri":          downstreamRedirectURI,
+		}
 	}
 
-	happyGetRequestPath := pathWithQuery("/some/path", happyGetRequestQueryMap)
+	happyGetRequestPath := pathWithQuery("/some/path", happyGetRequestQueryMap(downstreamRedirectURI))
 
 	modifiedHappyGetRequestPath := func(queryOverrides map[string]string) string {
 		copyOfHappyGetRequestQueryMap := map[string]string{}
-		for k, v := range happyGetRequestQueryMap {
+		for k, v := range happyGetRequestQueryMap(downstreamRedirectURI) {
 			copyOfHappyGetRequestQueryMap[k] = v
 		}
 		for k, v := range queryOverrides {
@@ -197,38 +200,33 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		return pathWithQuery("/some/path", copyOfHappyGetRequestQueryMap)
 	}
 
-	// We're going to use this value to make assertions, so specify the exact expected value.
-	happyUpstreamStateParam, err := encoder.Encode("s",
-		// Ensure that the order of the serialized fields is exactly this order, so we can make simpler equality assertions below.
-		struct {
-			P string `json:"p"`
-			N string `json:"n"`
-			C string `json:"c"`
-			K string `json:"k"`
-			V string `json:"v"`
-		}{
-			P: encodeQuery(happyGetRequestQueryMap),
-			N: happyNonce,
-			C: happyCSRF,
-			K: happyPKCE,
-			V: "1",
-		},
-	)
-	require.NoError(t, err)
+	happyExpectedUpstreamStateParam := func(downstreamRedirectURI string) string {
+		encoded, err := happyEncoder.Encode("s",
+			expectedUpstreamStateParamFormat{
+				P: encodeQuery(happyGetRequestQueryMap(downstreamRedirectURI)),
+				N: happyNonce,
+				C: happyCSRF,
+				K: happyPKCE,
+				V: "1",
+			},
+		)
+		require.NoError(t, err)
+		return encoded
+	}
 
-	happyGetRequestExpectedRedirectLocation := urlWithQuery(upstreamAuthURL.String(),
-		map[string]string{
+	happyExpectedRedirectLocation := func(downstreamRedirectURI string) string {
+		return urlWithQuery(upstreamAuthURL.String(), map[string]string{
 			"response_type":         "code",
 			"access_type":           "offline",
 			"scope":                 "scope1 scope2",
 			"client_id":             "some-client-id",
-			"state":                 happyUpstreamStateParam,
+			"state":                 happyExpectedUpstreamStateParam(downstreamRedirectURI),
 			"nonce":                 happyNonce,
 			"code_challenge":        expectedUpstreamCodeChallenge,
 			"code_challenge_method": "S256",
 			"redirect_uri":          issuer + "/callback/some-idp",
-		},
-	)
+		})
+	}
 
 	happyCSRFSetCookieHeaderValue := fmt.Sprintf("__Host-pinniped-csrf=%s; HttpOnly; Secure; SameSite=Strict", happyCSRF)
 
@@ -240,6 +238,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		generateCSRF  func() (csrftoken.CSRFToken, error)
 		generatePKCE  func() (pkce.Code, error)
 		generateNonce func() (nonce.Nonce, error)
+		encoder       securecookie.Codec
 		method        string
 		path          string
 		contentType   string
@@ -251,8 +250,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		wantBodyJSON         string
 		wantLocationHeader   string
 		wantCSRFCookieHeader string
-	}
 
+		wantUpstreamStateParamInLocationHeader bool
+	}
 	tests := []testCase{
 		{
 			name:            "happy path using GET",
@@ -261,54 +261,59 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
+			encoder:         happyEncoder,
 			method:          http.MethodGet,
 			path:            happyGetRequestPath,
 			wantStatus:      http.StatusFound,
 			wantContentType: "text/html; charset=utf-8",
 			wantBodyString: fmt.Sprintf(`<a href="%s">Found</a>.%s`,
-				html.EscapeString(happyGetRequestExpectedRedirectLocation),
+				html.EscapeString(happyExpectedRedirectLocation(downstreamRedirectURI)),
 				"\n\n",
 			),
-			wantLocationHeader:   happyGetRequestExpectedRedirectLocation,
-			wantCSRFCookieHeader: happyCSRFSetCookieHeaderValue,
+			wantCSRFCookieHeader:                   happyCSRFSetCookieHeaderValue,
+			wantLocationHeader:                     happyExpectedRedirectLocation(downstreamRedirectURI),
+			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
-			name:          "happy path using POST",
+			name:                                   "happy path using POST",
+			issuer:                                 issuer,
+			idpListGetter:                          newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateCSRF:                           happyCSRFGenerator,
+			generatePKCE:                           happyPKCEGenerator,
+			generateNonce:                          happyNonceGenerator,
+			encoder:                                happyEncoder,
+			method:                                 http.MethodPost,
+			path:                                   "/some/path",
+			contentType:                            "application/x-www-form-urlencoded",
+			body:                                   encodeQuery(happyGetRequestQueryMap(downstreamRedirectURI)),
+			wantStatus:                             http.StatusFound,
+			wantContentType:                        "",
+			wantBodyString:                         "",
+			wantCSRFCookieHeader:                   happyCSRFSetCookieHeaderValue,
+			wantLocationHeader:                     happyExpectedRedirectLocation(downstreamRedirectURI),
+			wantUpstreamStateParamInLocationHeader: true,
+		},
+		{
+			name:          "happy path when downstream redirect uri matches what is configured for client except for the port number",
 			issuer:        issuer,
 			idpListGetter: newIDPListGetter(upstreamOIDCIdentityProvider),
 			generateCSRF:  happyCSRFGenerator,
 			generatePKCE:  happyPKCEGenerator,
 			generateNonce: happyNonceGenerator,
-			method:        http.MethodPost,
-			path:          "/some/path",
-			contentType:   "application/x-www-form-urlencoded",
-			body: url.Values{
-				"response_type":         []string{"code"},
-				"scope":                 []string{"openid profile email"},
-				"client_id":             []string{"pinniped-cli"},
-				"state":                 []string{"some-state-value"},
-				"code_challenge":        []string{"some-challenge"},
-				"code_challenge_method": []string{"S256"},
-				"redirect_uri":          []string{downstreamRedirectURI},
-			}.Encode(),
-			wantStatus:           http.StatusFound,
-			wantContentType:      "",
-			wantBodyString:       "",
-			wantLocationHeader:   happyGetRequestExpectedRedirectLocation,
-			wantCSRFCookieHeader: happyCSRFSetCookieHeaderValue,
-		},
-		{
-			name:            "downstream client does not exist",
-			issuer:          issuer,
-			idpListGetter:   newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateCSRF:    happyCSRFGenerator,
-			generatePKCE:    happyPKCEGenerator,
-			generateNonce:   happyNonceGenerator,
-			method:          http.MethodGet,
-			path:            modifiedHappyGetRequestPath(map[string]string{"client_id": "invalid-client"}),
-			wantStatus:      http.StatusUnauthorized,
-			wantContentType: "application/json; charset=utf-8",
-			wantBodyJSON:    fositeInvalidClientErrorBody,
+			encoder:       happyEncoder,
+			method:        http.MethodGet,
+			path: modifiedHappyGetRequestPath(map[string]string{
+				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
+			}),
+			wantStatus:      http.StatusFound,
+			wantContentType: "text/html; charset=utf-8",
+			wantBodyString: fmt.Sprintf(`<a href="%s">Found</a>.%s`,
+				html.EscapeString(happyExpectedRedirectLocation(downstreamRedirectURIWithDifferentPort)),
+				"\n\n",
+			),
+			wantCSRFCookieHeader:                   happyCSRFSetCookieHeaderValue,
+			wantLocationHeader:                     happyExpectedRedirectLocation(downstreamRedirectURIWithDifferentPort),
+			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
 			name:          "downstream redirect uri does not match what is configured for client",
@@ -317,6 +322,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			generateCSRF:  happyCSRFGenerator,
 			generatePKCE:  happyPKCEGenerator,
 			generateNonce: happyNonceGenerator,
+			encoder:       happyEncoder,
 			method:        http.MethodGet,
 			path: modifiedHappyGetRequestPath(map[string]string{
 				"redirect_uri": "http://127.0.0.1/does-not-match-what-is-configured-for-pinniped-cli-client",
@@ -326,24 +332,18 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyJSON:    fositeInvalidRedirectURIErrorBody,
 		},
 		{
-			name:          "happy path when downstream redirect uri matches what is configured for client except for the port number",
-			issuer:        issuer,
-			idpListGetter: newIDPListGetter(upstreamOIDCIdentityProvider),
-			generateCSRF:  happyCSRFGenerator,
-			generatePKCE:  happyPKCEGenerator,
-			generateNonce: happyNonceGenerator,
-			method:        http.MethodGet,
-			path: modifiedHappyGetRequestPath(map[string]string{
-				"redirect_uri": "http://127.0.0.1:42/callback",
-			}),
-			wantStatus:      http.StatusFound,
-			wantContentType: "text/html; charset=utf-8",
-			wantBodyString: fmt.Sprintf(`<a href="%s">Found</a>.%s`,
-				html.EscapeString(happyGetRequestExpectedRedirectLocation),
-				"\n\n",
-			),
-			wantLocationHeader:   happyGetRequestExpectedRedirectLocation,
-			wantCSRFCookieHeader: happyCSRFSetCookieHeaderValue,
+			name:            "downstream client does not exist",
+			issuer:          issuer,
+			idpListGetter:   newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateCSRF:    happyCSRFGenerator,
+			generatePKCE:    happyPKCEGenerator,
+			generateNonce:   happyNonceGenerator,
+			encoder:         happyEncoder,
+			method:          http.MethodGet,
+			path:            modifiedHappyGetRequestPath(map[string]string{"client_id": "invalid-client"}),
+			wantStatus:      http.StatusUnauthorized,
+			wantContentType: "application/json; charset=utf-8",
+			wantBodyJSON:    fositeInvalidClientErrorBody,
 		},
 		{
 			name:               "response type is unsupported",
@@ -352,6 +352,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
+			encoder:            happyEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
 			wantStatus:         http.StatusFound,
@@ -366,6 +367,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
+			encoder:            happyEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"scope": "openid profile email tuna"}),
 			wantStatus:         http.StatusFound,
@@ -380,6 +382,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
+			encoder:            happyEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"response_type": ""}),
 			wantStatus:         http.StatusFound,
@@ -394,6 +397,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
+			encoder:         happyEncoder,
 			method:          http.MethodGet,
 			path:            modifiedHappyGetRequestPath(map[string]string{"client_id": ""}),
 			wantStatus:      http.StatusUnauthorized,
@@ -407,6 +411,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
+			encoder:            happyEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge": ""}),
 			wantStatus:         http.StatusFound,
@@ -421,6 +426,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
+			encoder:            happyEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
 			wantStatus:         http.StatusFound,
@@ -435,6 +441,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
+			encoder:            happyEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "plain"}),
 			wantStatus:         http.StatusFound,
@@ -449,6 +456,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
+			encoder:            happyEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": ""}),
 			wantStatus:         http.StatusFound,
@@ -465,6 +473,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
+			encoder:            happyEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"prompt": "none login"}),
 			wantStatus:         http.StatusFound,
@@ -479,6 +488,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
+			encoder:            happyEncoder,
 			method:             http.MethodGet,
 			path:               modifiedHappyGetRequestPath(map[string]string{"state": "short"}),
 			wantStatus:         http.StatusFound,
@@ -487,12 +497,27 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:     "",
 		},
 		{
+			name:            "error while encoding upstream state param",
+			issuer:          issuer,
+			idpListGetter:   newIDPListGetter(upstreamOIDCIdentityProvider),
+			generateCSRF:    happyCSRFGenerator,
+			generatePKCE:    happyPKCEGenerator,
+			generateNonce:   happyNonceGenerator,
+			encoder:         &errorReturningEncoder{},
+			method:          http.MethodGet,
+			path:            happyGetRequestPath,
+			wantStatus:      http.StatusInternalServerError,
+			wantContentType: "text/plain; charset=utf-8",
+			wantBodyString:  "Internal Server Error: error encoding upstream state param\n",
+		},
+		{
 			name:            "error while generating CSRF token",
 			issuer:          issuer,
 			idpListGetter:   newIDPListGetter(upstreamOIDCIdentityProvider),
 			generateCSRF:    func() (csrftoken.CSRFToken, error) { return "", fmt.Errorf("some csrf generator error") },
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
+			encoder:         happyEncoder,
 			method:          http.MethodGet,
 			path:            happyGetRequestPath,
 			wantStatus:      http.StatusInternalServerError,
@@ -506,6 +531,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   func() (nonce.Nonce, error) { return "", fmt.Errorf("some nonce generator error") },
+			encoder:         happyEncoder,
 			method:          http.MethodGet,
 			path:            happyGetRequestPath,
 			wantStatus:      http.StatusInternalServerError,
@@ -519,6 +545,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    func() (pkce.Code, error) { return "", fmt.Errorf("some PKCE generator error") },
 			generateNonce:   happyNonceGenerator,
+			encoder:         happyEncoder,
 			method:          http.MethodGet,
 			path:            happyGetRequestPath,
 			wantStatus:      http.StatusInternalServerError,
@@ -586,17 +613,20 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		require.Equal(t, test.wantStatus, rsp.Code)
 		requireEqualContentType(t, rsp.Header().Get("Content-Type"), test.wantContentType)
 
+		if test.wantLocationHeader != "" {
+			actualLocation := rsp.Header().Get("Location")
+			if test.wantUpstreamStateParamInLocationHeader {
+				requireEqualDecodedStateParams(t, actualLocation, test.wantLocationHeader, test.encoder)
+			}
+			requireEqualURLs(t, actualLocation, test.wantLocationHeader)
+		} else {
+			require.Empty(t, rsp.Header().Values("Location"))
+		}
+
 		if test.wantBodyJSON != "" {
 			require.JSONEq(t, test.wantBodyJSON, rsp.Body.String())
 		} else {
 			require.Equal(t, test.wantBodyString, rsp.Body.String())
-		}
-
-		if test.wantLocationHeader != "" {
-			actualLocation := rsp.Header().Get("Location")
-			requireEqualURLs(t, actualLocation, test.wantLocationHeader)
-		} else {
-			require.Empty(t, rsp.Header().Values("Location"))
 		}
 
 		if test.wantCSRFCookieHeader != "" {
@@ -611,7 +641,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			subject := NewHandler(test.issuer, test.idpListGetter, oauthHelper, test.generateCSRF, test.generatePKCE, test.generateNonce, encoder)
+			subject := NewHandler(test.issuer, test.idpListGetter, oauthHelper, test.generateCSRF, test.generatePKCE, test.generateNonce, test.encoder)
 			runOneTestCase(t, test, subject)
 		})
 	}
@@ -620,7 +650,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		test := tests[0]
 		require.Equal(t, "happy path using GET", test.name) // re-use the happy path test case
 
-		subject := NewHandler(test.issuer, test.idpListGetter, oauthHelper, test.generateCSRF, test.generatePKCE, test.generateNonce, encoder)
+		subject := NewHandler(test.issuer, test.idpListGetter, oauthHelper, test.generateCSRF, test.generatePKCE, test.generateNonce, test.encoder)
 
 		runOneTestCase(t, test, subject)
 
@@ -640,7 +670,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				"access_type":           "offline",
 				"scope":                 "other-scope1 other-scope2",
 				"client_id":             "some-other-client-id",
-				"state":                 happyUpstreamStateParam,
+				"state":                 happyExpectedUpstreamStateParam(downstreamRedirectURI),
 				"nonce":                 happyNonce,
 				"code_challenge":        expectedUpstreamCodeChallenge,
 				"code_challenge_method": "S256",
@@ -660,6 +690,26 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	})
 }
 
+// Declare a separate type from the production code to ensure that the state param's contents was serialized
+// in the format that we expect, with the json keys that we expect, etc. This also ensure that the order of
+// the serialized fields is the same, which doesn't really matter expect that we can make simpler equality
+// assertions about the redirect URL in this test.
+type expectedUpstreamStateParamFormat struct {
+	P string `json:"p"`
+	N string `json:"n"`
+	C string `json:"c"`
+	K string `json:"k"`
+	V string `json:"v"`
+}
+
+type errorReturningEncoder struct {
+	securecookie.Codec
+}
+
+func (*errorReturningEncoder) Encode(_ string, _ interface{}) (string, error) {
+	return "", fmt.Errorf("some encoding error")
+}
+
 func requireEqualContentType(t *testing.T, actual string, expected string) {
 	t.Helper()
 
@@ -674,6 +724,28 @@ func requireEqualContentType(t *testing.T, actual string, expected string) {
 	require.NoError(t, err)
 	require.Equal(t, actualContentType, expectedContentType)
 	require.Equal(t, actualContentTypeParams, expectedContentTypeParams)
+}
+
+func requireEqualDecodedStateParams(t *testing.T, actualURL string, expectedURL string, stateParamDecoder securecookie.Codec) {
+	t.Helper()
+	actualLocationURL, err := url.Parse(actualURL)
+	require.NoError(t, err)
+	expectedLocationURL, err := url.Parse(expectedURL)
+	require.NoError(t, err)
+
+	expectedQueryStateParam := expectedLocationURL.Query().Get("state")
+	require.NotEmpty(t, expectedQueryStateParam)
+	var expectedDecodedStateParam expectedUpstreamStateParamFormat
+	err = stateParamDecoder.Decode("s", expectedQueryStateParam, &expectedDecodedStateParam)
+	require.NoError(t, err)
+
+	actualQueryStateParam := actualLocationURL.Query().Get("state")
+	require.NotEmpty(t, actualQueryStateParam)
+	var actualDecodedStateParam expectedUpstreamStateParamFormat
+	err = stateParamDecoder.Decode("s", actualQueryStateParam, &actualDecodedStateParam)
+	require.NoError(t, err)
+
+	require.Equal(t, expectedDecodedStateParam, actualDecodedStateParam)
 }
 
 func requireEqualURLs(t *testing.T, actualURL string, expectedURL string) {

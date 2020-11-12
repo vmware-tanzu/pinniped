@@ -24,11 +24,12 @@ func TestUpdateAPIService(t *testing.T) {
 	const apiServiceName = "v1alpha1.login.concierge.pinniped.dev"
 
 	tests := []struct {
-		name        string
-		mocks       func(*aggregatorv1fake.Clientset)
-		caInput     []byte
-		wantObjects []apiregistrationv1.APIService
-		wantErr     string
+		name             string
+		mocks            func(*aggregatorv1fake.Clientset)
+		caInput          []byte
+		serviceNamespace string
+		wantObjects      []apiregistrationv1.APIService
+		wantErr          string
 	}{
 		{
 			name: "happy path update when the pre-existing APIService did not already have a CA bundle",
@@ -90,6 +91,36 @@ func TestUpdateAPIService(t *testing.T) {
 				Spec: apiregistrationv1.APIServiceSpec{
 					GroupPriorityMinimum: 999,
 					CABundle:             []byte("some-ca-bundle"), // unchanged
+				},
+			}},
+		},
+		{
+			name: "skip update when there is another pinniped instance",
+			mocks: func(c *aggregatorv1fake.Clientset) {
+				_ = c.Tracker().Add(&apiregistrationv1.APIService{
+					ObjectMeta: metav1.ObjectMeta{Name: apiServiceName},
+					Spec: apiregistrationv1.APIServiceSpec{
+						GroupPriorityMinimum: 999,
+						CABundle:             []byte("some-other-different-ca-bundle"),
+						Service: &apiregistrationv1.ServiceReference{
+							Namespace: "namespace-2",
+						},
+					},
+				})
+				c.PrependReactor("update", "apiservices", func(_ kubetesting.Action) (bool, runtime.Object, error) {
+					return true, nil, fmt.Errorf("should not encounter this error because update should be skipped in this case")
+				})
+			},
+			caInput:          []byte("some-ca-bundle"),
+			serviceNamespace: "namespace-1",
+			wantObjects: []apiregistrationv1.APIService{{
+				ObjectMeta: metav1.ObjectMeta{Name: apiServiceName},
+				Spec: apiregistrationv1.APIServiceSpec{
+					GroupPriorityMinimum: 999,
+					CABundle:             []byte("some-other-different-ca-bundle"), // unchanged
+					Service: &apiregistrationv1.ServiceReference{
+						Namespace: "namespace-2",
+					},
 				},
 			}},
 		},
@@ -181,7 +212,7 @@ func TestUpdateAPIService(t *testing.T) {
 				tt.mocks(client)
 			}
 
-			err := UpdateAPIService(ctx, client, loginv1alpha1.SchemeGroupVersion.Version+"."+loginv1alpha1.GroupName, tt.caInput)
+			err := UpdateAPIService(ctx, client, loginv1alpha1.SchemeGroupVersion.Version+"."+loginv1alpha1.GroupName, tt.serviceNamespace, tt.caInput)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				return

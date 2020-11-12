@@ -3,19 +3,19 @@
 		<article>
 			<div class="hero subpage">
 				<div class="wrapper">
-					<h2>Pinniped Blog</h2>
+					<h1>Pinniped Blog</h1>
 				</div>
 			</div>
 			<div class="wrapper blog">
 				<div class="blog-post">
-					<h3>{{ .Title }}</h3>
+					<h2>{{ .Title }}</h2>
 					<p class="author">
 						<a href="/tags/{{ .Params.author | urlize }}">{{ .Params.author }}</a>
 					</p>
 					<p class="date">{{ dateFormat "Jan 2, 2006" .Date }}</p>
 					{{ .Content }}
 				</div>
-				<h3>Related Content</h3>
+				<h2>Related Content</h2>
 				<div class="grid three">
 					{{ $related := (where (.Site.RegularPages.Related .) "Type" "posts") | first 3 }}
 					{{ with $related }}

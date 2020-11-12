@@ -42,11 +42,17 @@ body {
 h1, h2, h3, h4, h5, h6 {
     font-weight: 300;
 }
-h2 {
+h1 {
     font-size: 36px;
+}
+h2 {
+    font-size: 28px;
 }
 h3 {
     font-size: 22px;
+}
+h4 {
+    font-size: 18px;
 }
 li {
     list-style-type: none;
@@ -60,7 +66,7 @@ li {
 p {
     line-height: 1.5em;
     font-weight: 300;
-    font-size: 16px;
+    font-size: 14px;
     color: $grey;
 }
 a {
@@ -101,7 +107,7 @@ button {
     }
 }
 .strong {
-    font-weight: 600;
+    font-family: $metropolis-medium;
 }
 .bg-grey {
     background-color: $lightgrey;

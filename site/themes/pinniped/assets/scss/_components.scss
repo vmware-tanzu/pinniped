@@ -10,8 +10,12 @@
         padding: 0px 0px 10px 0px;
         p {
             margin-bottom: 20px;
+            font-size: 18px;
             color: $white;
         }
+    }
+    h2 {
+        font-size: 36px;
     }
     &.homepage {
         background-image: url(/img/hero-image.png);
@@ -62,6 +66,7 @@
         padding: 35px 20px;
         p {
             margin: 0px;
+            font-size: 16px;
             &.strong {
                 color: $black;
             }
@@ -127,7 +132,8 @@
         color: $black;
     }
     p.strong {
-        color: $black;
+        color: #1B3951;
+        font-size: 16px;
     }
 }
 
@@ -135,6 +141,9 @@
     background-color: $navyblue;
     h2, h3, p {
         color: $white;
+    }
+    p {
+        font-size: 16px;
     }
     a {
         color: $white;
@@ -155,11 +164,10 @@
                 margin: 0px;
                 &.name {
                     font-size: 16px;
-                    font-weight: 600;
+                    font-family: $metropolis-medium;
                 }
                 &.position {
                     font-size: 14px;
-                    font-weight: 300;
                 }
             }
         }
@@ -208,6 +216,9 @@
     &.landing {
         background-color: #fff;
         margin-top: -90px;
+        h3 a {
+            font-size: 16px;
+        }
         .pagination {
             margin: 30px auto 50px auto;
             ul {
@@ -249,6 +260,60 @@
             color: $black;
             font-weight: 600;
         }
+        a {
+            font-size: 14px;
+        }
+        ul {
+            list-style-type: disc;
+            padding-left: 20px;
+            li {
+                list-style-type: unset;
+                display: list-item;
+                margin-bottom: 10px;
+                font-size: 14px;
+                color: $grey;
+                line-height: 1.6em;
+                list-style-image: url(/img/arrow.svg);
+            }
+        }
+        ol {
+            li {
+                list-style-type: decimal;
+                display: list-item;
+                margin-bottom: 10px;
+                font-size: 14px;
+                color: $grey;
+            }
+        }
+        code {
+            background-color: $white;
+            color: $grey;
+            border: 2px solid #EFEFEF;
+            padding: 2px 8px;
+            .c1 {
+                color: $blue;
+                font-style: italic;
+            }
+            .se {
+                color: #ff0000;
+            }
+        }
+        pre {
+            white-space: pre-wrap;
+            white-space: -moz-pre-wrap;
+            white-space: -pre-wrap;
+            white-space: -o-pre-wrap;
+            word-wrap: break-word;
+            code {
+                display: block;
+                border: 15px solid #EFEFEF;
+                padding: 15px;
+                margin-bottom: 30px;
+            }
+        }
+        img {
+            max-width: 100%;
+        }
     }
 }
 
@@ -257,6 +322,7 @@
     color: $black;
     p {
         color: $black;
+        font-size: 16px;
     }
     .left-side {
         width: 50%;
@@ -356,6 +422,9 @@
     .docs-content {
         width: 75%;
         float: right;
+        a {
+            font-size: 14px;
+        }
         ul {
             list-style-type: disc;
             padding-left: 20px;
@@ -367,9 +436,15 @@
                 color: $grey;
                 line-height: 1.6em;
                 list-style-image: url(/img/arrow.svg);
-                a {
-                    font-size: 14px;
-                }
+            }
+        }
+        ol {
+            li {
+                list-style-type: decimal;
+                display: list-item;
+                margin-bottom: 10px;
+                font-size: 14px;
+                color: $grey;
             }
         }
         code {

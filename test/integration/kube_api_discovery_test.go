@@ -163,6 +163,18 @@ func TestGetAPIResourceList(t *testing.T) {
 		}
 	})
 
+	t.Run("Pinniped resources do not have short names", func(t *testing.T) {
+		t.Parallel()
+		for _, r := range resources {
+			if !strings.Contains(r.GroupVersion, "pinniped.dev") {
+				continue
+			}
+			for _, a := range r.APIResources {
+				assert.Empty(t, a.ShortNames, "expected resource %q not to have any short names", a.Name)
+			}
+		}
+	})
+
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.group.Name, func(t *testing.T) {

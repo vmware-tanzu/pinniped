@@ -3,7 +3,6 @@
 
 // +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=package
-// +k8s:conversion-gen=go.pinniped.dev/generated/1.17/apis/concierge/config
 // +k8s:defaulter-gen=TypeMeta
 // +groupName=config.concierge.pinniped.dev
 

@@ -30,7 +30,7 @@ type WebhookAuthenticatorSpec struct {
 // WebhookAuthenticator describes the configuration of a webhook authenticator.
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:categories=all;authenticator;authenticators
+// +kubebuilder:resource:categories=pinniped;pinniped-authenticator;pinniped-authenticators
 // +kubebuilder:printcolumn:name="Endpoint",type=string,JSONPath=`.spec.endpoint`
 type WebhookAuthenticator struct {
 	metav1.TypeMeta   `json:",inline"`

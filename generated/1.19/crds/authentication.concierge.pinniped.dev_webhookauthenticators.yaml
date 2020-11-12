@@ -11,9 +11,9 @@ spec:
   group: authentication.concierge.pinniped.dev
   names:
     categories:
-    - all
-    - authenticator
-    - authenticators
+    - pinniped
+    - pinniped-authenticator
+    - pinniped-authenticators
     kind: WebhookAuthenticator
     listKind: WebhookAuthenticatorList
     plural: webhookauthenticators

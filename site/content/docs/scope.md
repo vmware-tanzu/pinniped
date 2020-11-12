@@ -1,3 +1,10 @@
+---
+title: "Pinniped Scope"
+cascade:
+  layout: docs
+---
+
+
 # Project Scope
 
 The Pinniped project is guided by the following principles.

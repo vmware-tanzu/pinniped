@@ -29,9 +29,7 @@ menu:
     weight: 100
   - name: Architecture
     url: /docs/architecture/
-    name: Demo
+  - name: Demo
     url: /docs/demo/
   - name: Scope
     url: /docs/scope/
-  - name: Update Images
-    url: /docs/img/

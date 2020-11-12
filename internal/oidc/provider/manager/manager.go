@@ -72,13 +72,17 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 		// the upstream callback endpoint is called later.
 		oauthHelper := oidc.FositeOauth2Helper(oidc.NullStorage{}, []byte("some secret - must have at least 32 bytes")) // TODO replace this secret
 
+		// TODO use different codecs for the state and the cookie, because:
+		//  1. we would like to state to have an embedded expiration date while the cookie does not need that
+		//  2. we would like each downstream provider to use different secrets for signing/encrypting the upstream state, not share secrets
+		//  3. we would like *all* downstream providers to use the *same* signing key for the CSRF cookie (which doesn't need to be encrypted) because cookies are sent per-domain and our issuers can share a domain name (but have different paths)
 		var encoderHashKey = []byte("fake-hash-secret")  // TODO replace this secret
 		var encoderBlockKey = []byte("16-bytes-aaaaaaa") // TODO replace this secret
 		var encoder = securecookie.New(encoderHashKey, encoderBlockKey)
 		encoder.SetSerializer(securecookie.JSONEncoder{})
 
 		authURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.AuthorizationEndpointPath
-		m.providerHandlers[authURL] = auth.NewHandler(incomingProvider.Issuer(), m.idpListGetter, oauthHelper, csrftoken.Generate, pkce.Generate, nonce.Generate, encoder)
+		m.providerHandlers[authURL] = auth.NewHandler(incomingProvider.Issuer(), m.idpListGetter, oauthHelper, csrftoken.Generate, pkce.Generate, nonce.Generate, encoder, encoder)
 
 		plog.Debug("oidc provider manager added or updated issuer", "issuer", incomingProvider.Issuer())
 	}

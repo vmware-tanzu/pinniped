@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gorilla/securecookie"
+
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
@@ -35,6 +37,9 @@ const (
 	// The name of the browser cookie which shall hold our CSRF value.
 	// `__Host` prefix has a special meaning. See https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#Cookie_prefixes
 	csrfCookieName = "__Host-pinniped-csrf"
+
+	// The `name` passed to the encoder for encoding and decoding the CSRF cookie contents.
+	csrfCookieEncodingName = "csrf"
 )
 
 type IDPListGetter interface {
@@ -53,7 +58,8 @@ func NewHandler(
 	generateCSRF func() (csrftoken.CSRFToken, error),
 	generatePKCE func() (pkce.Code, error),
 	generateNonce func() (nonce.Nonce, error),
-	encoder Encoder,
+	upstreamStateEncoder Encoder,
+	cookieCodec securecookie.Codec,
 ) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		if r.Method != http.MethodPost && r.Method != http.MethodGet {
@@ -61,6 +67,12 @@ func NewHandler(
 			// Authorization Servers MUST support the use of the HTTP GET and POST methods defined in
 			// RFC 2616 [RFC2616] at the Authorization Endpoint.
 			return httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET or POST)", r.Method)
+		}
+
+		csrfFromCookie, err := readCSRFCookie(r, cookieCodec)
+		if err != nil {
+			plog.InfoErr("error reading CSRF cookie", err)
+			return err
 		}
 
 		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), r)
@@ -77,11 +89,7 @@ func NewHandler(
 		}
 
 		// Grant the openid scope (for now) if they asked for it so that `NewAuthorizeResponse` will perform its OIDC validations.
-		for _, scope := range authorizeRequester.GetRequestedScopes() {
-			if scope == "openid" {
-				authorizeRequester.GrantScope(scope)
-			}
-		}
+		grantOpenIDScopeIfRequested(authorizeRequester)
 
 		now := time.Now()
 		_, err = oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &openid.DefaultSession{
@@ -103,6 +111,9 @@ func NewHandler(
 			plog.Error("authorize generate error", err)
 			return err
 		}
+		if csrfFromCookie != "" {
+			csrfValue = csrfFromCookie
+		}
 
 		upstreamOAuthConfig := oauth2.Config{
 			ClientID: upstreamIDP.ClientID,
@@ -113,13 +124,20 @@ func NewHandler(
 			Scopes:      upstreamIDP.Scopes,
 		}
 
-		encodedStateParamValue, err := upstreamStateParam(authorizeRequester, nonceValue, csrfValue, pkceValue, encoder)
+		encodedStateParamValue, err := upstreamStateParam(authorizeRequester, nonceValue, csrfValue, pkceValue, upstreamStateEncoder)
 		if err != nil {
 			plog.Error("authorize upstream state param error", err)
 			return err
 		}
 
-		addCSRFSetCookieHeader(w, csrfValue)
+		if csrfFromCookie == "" {
+			// We did not receive an incoming CSRF cookie, so write a new one.
+			err := addCSRFSetCookieHeader(w, csrfValue, cookieCodec)
+			if err != nil {
+				plog.Error("error setting CSRF cookie", err)
+				return err
+			}
+		}
 
 		http.Redirect(w, r,
 			upstreamOAuthConfig.AuthCodeURL(
@@ -134,6 +152,30 @@ func NewHandler(
 
 		return nil
 	})
+}
+
+func readCSRFCookie(r *http.Request, codec securecookie.Codec) (csrftoken.CSRFToken, error) {
+	receivedCSRFCookie, err := r.Cookie(csrfCookieName)
+	if err != nil {
+		// Error means that the cookie was not found
+		return "", nil
+	}
+
+	var csrfFromCookie csrftoken.CSRFToken
+	err = codec.Decode(csrfCookieEncodingName, receivedCSRFCookie.Value, &csrfFromCookie)
+	if err != nil {
+		return "", httperr.Wrap(http.StatusUnprocessableEntity, "error reading CSRF cookie", err)
+	}
+
+	return csrfFromCookie, nil
+}
+
+func grantOpenIDScopeIfRequested(authorizeRequester fosite.AuthorizeRequester) {
+	for _, scope := range authorizeRequester.GetRequestedScopes() {
+		if scope == "openid" {
+			authorizeRequester.GrantScope(scope)
+		}
+	}
 }
 
 func chooseUpstreamIDP(idpListGetter IDPListGetter) (*provider.UpstreamOIDCIdentityProvider, error) {
@@ -202,14 +244,21 @@ func upstreamStateParam(
 	return encodedStateParamValue, nil
 }
 
-func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken) {
+func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken, codec securecookie.Codec) error {
+	encodedCSRFValue, err := codec.Encode(csrfCookieEncodingName, csrfValue)
+	if err != nil {
+		return httperr.Wrap(http.StatusInternalServerError, "error encoding CSRF cookie", err)
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     csrfCookieName,
-		Value:    string(csrfValue),
+		Value:    encodedCSRFValue,
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 		Secure:   true,
 	})
+
+	return nil
 }
 
 func fositeErrorForLog(err error) []interface{} {

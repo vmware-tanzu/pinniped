@@ -1,3 +1,9 @@
+---
+title: "Pinniped Architecture"
+cascade:
+  layout: docs
+---
+
 # Architecture
 
 The principal purpose of Pinniped is to allow users to access Kubernetes
@@ -8,7 +14,7 @@ This integration is implemented using a credential exchange API which takes as
 input a credential from the external IDP and returns a credential which is understood by the host
 Kubernetes cluster.
 
-<img src="img/pinniped_architecture.svg" alt="Pinniped Architecture Sketch" width="300px"/>
+![Pinniped Architecture Sketch](/docs/img/pinniped_architecture.svg)
 
 Pinniped supports various IDP types and implements different integration strategies
 for various Kubernetes distributions to make authentication possible.
@@ -50,7 +56,7 @@ cleanly enable this integration.
 
 Pinniped supports the following cluster integration strategies.
 
-1. Pinniped hosts a credential exchange API endpoint via a Kubernetes aggregated API server.
+* Pinniped hosts a credential exchange API endpoint via a Kubernetes aggregated API server.
 This API returns a new cluster-specific credential using the cluster's signing keypair to
 issue short-lived cluster certificates. (In the future, when the Kubernetes CSR API
 provides a way to issue short-lived certificates, then the Pinniped credential exchange API
@@ -65,7 +71,7 @@ With any of the above IDPs and integration strategies, `kubectl` commands receiv
 cluster-specific credential via a
 [Kubernetes client-go credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins).
 Users may use the Pinniped CLI as the credential plugin, or they may use any proprietary CLI
-built with the [Pinniped Go client library](.https://github.com/vmware-tanzu/pinniped/generated).
+built with the [Pinniped Go client library](https://github.com/vmware-tanzu/pinniped/generated).
 
 ## Example Cluster Authentication Sequence Diagram
 

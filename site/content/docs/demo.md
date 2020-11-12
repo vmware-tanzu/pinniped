@@ -1,17 +1,23 @@
+---
+title: "Pinniped Demo"
+cascade:
+  layout: docs
+---
+
 # Trying Pinniped
 
 ## Prerequisites
 
-1. A Kubernetes cluster of a type supported by Pinniped as described in [doc/architecture.md](../doc/architecture.md).
+1. A Kubernetes cluster of a type supported by Pinniped as described in [architecture](/docs/architecture).
 
    Don't have a cluster handy? Consider using [kind](https://kind.sigs.k8s.io/) on your local machine.
    See below for an example of using kind.
 
-1. An identity provider of a type supported by Pinniped as described in [doc/architecture.md](../doc/architecture.md).
+1. An identity provider of a type supported by Pinniped as described in [architecture](/docs/architecture).
 
    Don't have an identity provider of a type supported by Pinniped handy? No problem, there is a demo identity provider
    available. Start by installing local-user-authenticator on the same cluster where you would like to try Pinniped
-   by following the directions in [deploy/local-user-authenticator/README.md](../deploy/local-user-authenticator/README.md).
+   by following the directions in [deploy/local-user-authenticator/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/local-user-authenticator/README.md).
    See below for an example of deploying this on kind.
 
 1. A kubeconfig where the current context points to the cluster and has admin-like
@@ -22,7 +28,7 @@
 Installing and trying Pinniped on any cluster will consist of the following general steps. See the next section below
 for a more specific example of installing onto a local kind cluster, including the exact commands to use for that case.
 
-1. Install Pinniped. See [deploy/concierge/README.md](../deploy/concierge/README.md).
+1. Install Pinniped. See [deploy/concierge/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/concierge/README.md).
 1. Download the Pinniped CLI from [Pinniped's github Releases page](https://github.com/vmware-tanzu/pinniped/releases/latest).
 1. Generate a kubeconfig using the Pinniped CLI. Run `pinniped get-kubeconfig --help` for more information.
 1. Run `kubectl` commands using the generated kubeconfig. Pinniped will automatically be used for authentication during those commands.
@@ -36,14 +42,9 @@ non-production cluster.
 The following steps will deploy the latest release of Pinniped on kind using the local-user-authenticator component
 as the identity provider.
 
+
+![Pinniped Installation Demo](https://user-images.githubusercontent.com/25013435/95272990-b2ea9780-07f6-11eb-994d-872e3cb68457.gif)
 <!-- The following image was uploaded to GitHub's CDN using this awesome trick: https://gist.github.com/vinkla/dca76249ba6b73c5dd66a4e986df4c8d -->
-<p align="center" width="100%">
-<img
-  src="https://user-images.githubusercontent.com/25013435/95272990-b2ea9780-07f6-11eb-994d-872e3cb68457.gif"
-  alt="Pinniped Installation Demo"
-  width="80%"
-  />
-</p>
 
 1. Install the tools required for the following steps.
 
@@ -88,7 +89,7 @@ as the identity provider.
 
    The `install-local-user-authenticator.yaml` file includes the default deployment options.
    If you would prefer to customize the available options, please
-   see [deploy/local-user-authenticator/README.md](../deploy/local-user-authenticator/README.md)
+   see [deploy/local-user-authenticator/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/local-user-authenticator/README.md)
    for instructions on how to deploy using `ytt`.
 
 1. Create a test user named `pinny-the-seal` in the local-user-authenticator identity provider.
@@ -115,7 +116,7 @@ as the identity provider.
    ```
 
    The `install-pinniped-concierge.yaml` file includes the default deployment options.
-   If you would prefer to customize the available options, please see [deploy/concierge/README.md](../deploy/concierge/README.md)
+   If you would prefer to customize the available options, please see [deploy/concierge/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/concierge/README.md)
    for instructions on how to deploy using `ytt`.
 
 1. Create a `WebhookAuthenticator` object to configure Pinniped to authenticate using local-user-authenticator.

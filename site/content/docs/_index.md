@@ -4,7 +4,7 @@ cascade:
   layout: docs
 ---
 
-![Pinneped Logo](/docs/img/pinniped_logo.svg)
+![Pinniped Logo](/docs/img/pinniped_logo.svg)
 
 ## Overview
 
@@ -48,14 +48,14 @@ Got a question, comment, or idea? Please don't hesitate to reach out via the Git
 
 ## Contributions
 
-Contributions are welcome. Before contributing, please see the [contributing guide](/docs/CONTRIBUTING).
+Contributions are welcome. Before contributing, please see the [contributing guide](https://github.com/vmware-tanzu/pinniped/blob/main/CONTRIBUTING.md).
 
 ## Reporting Security Vulnerabilities
 
-Please follow the procedure described in [SECURITY.md](/docs/SECURITY).
+Please follow the procedure described in [SECURITY.md](https://github.com/vmware-tanzu/pinniped/blob/main/SECURITY.md).
 
 ## License
 
-Pinniped is open source and licensed under Apache License Version 2.0. See [LICENSE](/docs/LICENSE).
+Pinniped is open source and licensed under Apache License Version 2.0. See [LICENSE](https://github.com/vmware-tanzu/pinniped/blob/main/LICENSE).
 
 Copyright 2020 the Pinniped contributors. All Rights Reserved.

@@ -138,7 +138,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	expectedUpstreamCodeChallenge := "VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g"
 
 	var encoderHashKey = []byte("fake-hash-secret")
-	var happyEncoder = securecookie.New(encoderHashKey, nil) // note that nil block key argument turns off encryption
+	var encoderBlockKey = []byte("0123456789ABCDEF")                     // block encryption requires 16/24/32 bytes for AES
+	var happyEncoder = securecookie.New(encoderHashKey, encoderBlockKey) // note that nil block key argument turns off encryption
 	happyEncoder.SetSerializer(securecookie.JSONEncoder{})
 
 	encodeQuery := func(query map[string]string) string {

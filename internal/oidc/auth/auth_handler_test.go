@@ -637,12 +637,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			require.Empty(t, rsp.Header().Values("Location"))
 		}
 
-		if test.wantBodyJSON != "" {
+		switch {
+		case test.wantBodyJSON != "":
 			require.JSONEq(t, test.wantBodyJSON, rsp.Body.String())
-		} else if test.wantBodyStringWithLocationInHref {
+		case test.wantBodyStringWithLocationInHref:
 			anchorTagWithLocationHref := fmt.Sprintf("<a href=\"%s\">Found</a>.\n\n", html.EscapeString(actualLocation))
 			require.Equal(t, anchorTagWithLocationHref, rsp.Body.String())
-		} else {
+		default:
 			require.Equal(t, test.wantBodyString, rsp.Body.String())
 		}
 

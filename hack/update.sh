@@ -14,12 +14,5 @@ xargs -n 1 -P 8 "$ROOT/hack/lib/update-codegen.sh" < "${ROOT}/hack/lib/kube-vers
 cp "$ROOT"/generated/1.19/crds/*.supervisor.*.yaml "$ROOT/deploy/supervisor"
 cp "$ROOT"/generated/1.19/crds/*.concierge.*.yaml "$ROOT/deploy/concierge"
 
-# Make sure we didn't miss any new CRDs.
-crdCount=$(find "$ROOT"/generated/1.19/crds/ -maxdepth 1 -type f -name '*.yaml' | wc -l | tr -d ' ')
-if [[ "$crdCount" != "3" ]]; then
-  echo "Looks like you added a new CRD. Please update this update.sh script to decide where to copy it and then run it again."
-  exit 1
-fi
-
 # Tidy.
 "$ROOT/hack/module.sh" tidy

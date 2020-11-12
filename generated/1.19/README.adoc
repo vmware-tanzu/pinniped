@@ -6,7 +6,6 @@
 
 .Packages
 - xref:{anchor_prefix}-authentication-concierge-pinniped-dev-v1alpha1[$$authentication.concierge.pinniped.dev/v1alpha1$$]
-- xref:{anchor_prefix}-config-concierge-pinniped-dev-config[$$config.concierge.pinniped.dev/config$$]
 - xref:{anchor_prefix}-config-concierge-pinniped-dev-v1alpha1[$$config.concierge.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-config-supervisor-pinniped-dev-v1alpha1[$$config.supervisor.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-login-concierge-pinniped-dev-v1alpha1[$$login.concierge.pinniped.dev/v1alpha1$$]
@@ -113,14 +112,6 @@ Status of a webhook authenticator.
 | Field | Description
 | *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-condition[$$Condition$$]__ | Represents the observations of the authenticator's current state.
 |===
-
-
-
-[id="{anchor_prefix}-config-concierge-pinniped-dev-config"]
-=== config.concierge.pinniped.dev/config
-
-Package config is the internal version of the Pinniped concierge configuration API.
-
 
 
 

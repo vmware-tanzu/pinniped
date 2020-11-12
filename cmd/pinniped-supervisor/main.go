@@ -182,9 +182,10 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 
 	dynamicJWKSProvider := jwks.NewDynamicJWKSProvider()
 	dynamicTLSCertProvider := provider.NewDynamicTLSCertProvider()
+	dynamicUpstreamIDPProvider := provider.NewDynamicUpstreamIDPProvider()
 
 	// OIDC endpoints will be served by the oidProvidersManager, and any non-OIDC paths will fallback to the healthMux.
-	oidProvidersManager := manager.NewManager(healthMux, dynamicJWKSProvider)
+	oidProvidersManager := manager.NewManager(healthMux, dynamicJWKSProvider, dynamicUpstreamIDPProvider)
 
 	startControllers(
 		ctx,

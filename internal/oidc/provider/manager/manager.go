@@ -8,10 +8,16 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/gorilla/securecookie"
+
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/auth"
+	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/discovery"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidcclient/nonce"
+	"go.pinniped.dev/internal/oidcclient/pkce"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -24,16 +30,19 @@ type Manager struct {
 	providerHandlers    map[string]http.Handler  // map of all routes for all providers
 	nextHandler         http.Handler             // the next handler in a chain, called when this manager didn't know how to handle a request
 	dynamicJWKSProvider jwks.DynamicJWKSProvider // in-memory cache of per-issuer JWKS data
+	idpListGetter       auth.IDPListGetter       // in-memory cache of upstream IDPs
 }
 
 // NewManager returns an empty Manager.
 // nextHandler will be invoked for any requests that could not be handled by this manager's providers.
 // dynamicJWKSProvider will be used as an in-memory cache for per-issuer JWKS data.
-func NewManager(nextHandler http.Handler, dynamicJWKSProvider jwks.DynamicJWKSProvider) *Manager {
+// idpListGetter will be used as an in-memory cache of currently configured upstream IDPs.
+func NewManager(nextHandler http.Handler, dynamicJWKSProvider jwks.DynamicJWKSProvider, idpListGetter auth.IDPListGetter) *Manager {
 	return &Manager{
 		providerHandlers:    make(map[string]http.Handler),
 		nextHandler:         nextHandler,
 		dynamicJWKSProvider: dynamicJWKSProvider,
+		idpListGetter:       idpListGetter,
 	}
 }
 
@@ -58,6 +67,18 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 
 		jwksURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.JWKSEndpointPath
 		m.providerHandlers[jwksURL] = jwks.NewHandler(incomingProvider.Issuer(), m.dynamicJWKSProvider)
+
+		// Use NullStorage for the authorize endpoint because we do not actually want to store anything until
+		// the upstream callback endpoint is called later.
+		oauthHelper := oidc.FositeOauth2Helper(oidc.NullStorage{}, []byte("some secret - must have at least 32 bytes")) // TODO replace this secret
+
+		var encoderHashKey = []byte("fake-hash-secret")  // TODO replace this secret
+		var encoderBlockKey = []byte("16-bytes-aaaaaaa") // TODO replace this secret
+		var encoder = securecookie.New(encoderHashKey, encoderBlockKey)
+		encoder.SetSerializer(securecookie.JSONEncoder{})
+
+		authURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.AuthorizationEndpointPath
+		m.providerHandlers[authURL] = auth.NewHandler(incomingProvider.Issuer(), m.idpListGetter, oauthHelper, csrftoken.Generate, pkce.Generate, nonce.Generate, encoder)
 
 		plog.Debug("oidc provider manager added or updated issuer", "issuer", incomingProvider.Issuer())
 	}

@@ -10,6 +10,8 @@ metadata:
 spec:
   group: config.supervisor.pinniped.dev
   names:
+    categories:
+    - pinniped
     kind: OIDCProvider
     listKind: OIDCProviderList
     plural: oidcproviders

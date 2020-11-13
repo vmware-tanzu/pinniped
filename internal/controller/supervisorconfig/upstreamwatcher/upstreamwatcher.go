@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc"
@@ -208,12 +207,11 @@ func (c *controller) validateIssuer(ctx context.Context, upstream *v1alpha1.Upst
 		var err error
 		discoveredProvider, err = oidc.NewProvider(ctx, upstream.Spec.Issuer)
 		if err != nil {
-			err := fmt.Errorf("failed to perform OIDC discovery against %q: %w", upstream.Spec.Issuer, err)
 			return &v1alpha1.Condition{
 				Type:    typeOIDCDiscoverySucceeded,
 				Status:  v1alpha1.ConditionFalse,
 				Reason:  reasonUnreachable,
-				Message: strings.TrimSpace(err.Error()),
+				Message: fmt.Sprintf("failed to perform OIDC discovery against %q", upstream.Spec.Issuer),
 			}
 		}
 

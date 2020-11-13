@@ -42,7 +42,7 @@ func TestSupervisorUpstreamOIDCDiscovery(t *testing.T) {
 				Type:    "OIDCDiscoverySucceeded",
 				Status:  v1alpha1.ConditionFalse,
 				Reason:  "Unreachable",
-				Message: `failed to perform OIDC discovery against "https://127.0.0.1:444444/issuer": Get "https://127.0.0.1:444444/issuer/.well-known/openid-configuration": dial tcp: address 444444: invalid port`,
+				Message: `failed to perform OIDC discovery against "https://127.0.0.1:444444/issuer"`,
 			},
 		})
 	})

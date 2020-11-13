@@ -24,13 +24,6 @@ import (
 // clientCertificateTTL is the TTL for short-lived client certificates returned by this API.
 const clientCertificateTTL = 1 * time.Hour
 
-type Storage interface {
-	rest.Creater
-	rest.NamespaceScopedStrategy
-	rest.Scoper
-	rest.Storage
-}
-
 type CertIssuer interface {
 	IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) ([]byte, []byte, error)
 }
@@ -51,12 +44,25 @@ type REST struct {
 	issuer        CertIssuer
 }
 
+// Assert that our *REST implements all the optional interfaces that we expect it to implement.
+var _ interface {
+	rest.Creater
+	rest.NamespaceScopedStrategy
+	rest.Scoper
+	rest.Storage
+	rest.CategoriesProvider
+} = (*REST)(nil)
+
 func (*REST) New() runtime.Object {
 	return &loginapi.TokenCredentialRequest{}
 }
 
 func (*REST) NamespaceScoped() bool {
 	return true
+}
+
+func (*REST) Categories() []string {
+	return []string{"pinniped"}
 }
 
 func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {

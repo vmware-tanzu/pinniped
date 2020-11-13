@@ -30,14 +30,14 @@ type Manager struct {
 	providerHandlers    map[string]http.Handler  // map of all routes for all providers
 	nextHandler         http.Handler             // the next handler in a chain, called when this manager didn't know how to handle a request
 	dynamicJWKSProvider jwks.DynamicJWKSProvider // in-memory cache of per-issuer JWKS data
-	idpListGetter       auth.IDPListGetter       // in-memory cache of upstream IDPs
+	idpListGetter       oidc.IDPListGetter       // in-memory cache of upstream IDPs
 }
 
 // NewManager returns an empty Manager.
 // nextHandler will be invoked for any requests that could not be handled by this manager's providers.
 // dynamicJWKSProvider will be used as an in-memory cache for per-issuer JWKS data.
 // idpListGetter will be used as an in-memory cache of currently configured upstream IDPs.
-func NewManager(nextHandler http.Handler, dynamicJWKSProvider jwks.DynamicJWKSProvider, idpListGetter auth.IDPListGetter) *Manager {
+func NewManager(nextHandler http.Handler, dynamicJWKSProvider jwks.DynamicJWKSProvider, idpListGetter oidc.IDPListGetter) *Manager {
 	return &Manager{
 		providerHandlers:    make(map[string]http.Handler),
 		nextHandler:         nextHandler,

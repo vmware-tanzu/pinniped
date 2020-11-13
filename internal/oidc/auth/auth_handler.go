@@ -17,6 +17,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"go.pinniped.dev/internal/httputil/httperr"
+	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidcclient/nonce"
@@ -42,10 +43,6 @@ const (
 	csrfCookieEncodingName = "csrf"
 )
 
-type IDPListGetter interface {
-	GetIDPList() []provider.UpstreamOIDCIdentityProvider
-}
-
 // This is the encoding side of the securecookie.Codec interface.
 type Encoder interface {
 	Encode(name string, value interface{}) (string, error)
@@ -53,7 +50,7 @@ type Encoder interface {
 
 func NewHandler(
 	issuer string,
-	idpListGetter IDPListGetter,
+	idpListGetter oidc.IDPListGetter,
 	oauthHelper fosite.OAuth2Provider,
 	generateCSRF func() (csrftoken.CSRFToken, error),
 	generatePKCE func() (pkce.Code, error),
@@ -178,7 +175,7 @@ func grantOpenIDScopeIfRequested(authorizeRequester fosite.AuthorizeRequester) {
 	}
 }
 
-func chooseUpstreamIDP(idpListGetter IDPListGetter) (*provider.UpstreamOIDCIdentityProvider, error) {
+func chooseUpstreamIDP(idpListGetter oidc.IDPListGetter) (*provider.UpstreamOIDCIdentityProvider, error) {
 	allUpstreamIDPs := idpListGetter.GetIDPList()
 	if len(allUpstreamIDPs) == 0 {
 		return nil, httperr.New(

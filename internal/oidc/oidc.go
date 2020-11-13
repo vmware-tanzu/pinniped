@@ -7,6 +7,8 @@ package oidc
 import (
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
+
+	"go.pinniped.dev/internal/oidc/provider"
 )
 
 const (
@@ -48,4 +50,8 @@ func FositeOauth2Helper(oauthStore interface{}, hmacSecretOfLengthAtLeast32 []by
 		// compose.OpenIDConnectRefreshFactory,
 		compose.OAuth2PKCEFactory,
 	)
+}
+
+type IDPListGetter interface {
+	GetIDPList() []provider.UpstreamOIDCIdentityProvider
 }

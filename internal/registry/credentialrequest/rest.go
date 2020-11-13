@@ -22,7 +22,7 @@ import (
 )
 
 // clientCertificateTTL is the TTL for short-lived client certificates returned by this API.
-const clientCertificateTTL = 1 * time.Hour
+const clientCertificateTTL = 5 * time.Minute
 
 type Storage interface {
 	rest.Creater

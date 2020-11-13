@@ -69,7 +69,7 @@ func TestCreate(t *testing.T) {
 					CommonName:   "test-user",
 					Organization: []string{"test-group-1", "test-group-2"}},
 				[]string{},
-				1*time.Hour,
+				5*time.Minute,
 			).Return([]byte("test-cert"), []byte("test-key"), nil)
 
 			storage := NewREST(requestAuthenticator, issuer)
@@ -81,7 +81,7 @@ func TestCreate(t *testing.T) {
 
 			expires := response.(*loginapi.TokenCredentialRequest).Status.Credential.ExpirationTimestamp
 			r.NotNil(expires)
-			r.InDelta(time.Now().Add(1*time.Hour).Unix(), expires.Unix(), 5)
+			r.InDelta(time.Now().Add(5*time.Minute).Unix(), expires.Unix(), 5)
 			response.(*loginapi.TokenCredentialRequest).Status.Credential.ExpirationTimestamp = metav1.Time{}
 
 			r.Equal(response, &loginapi.TokenCredentialRequest{

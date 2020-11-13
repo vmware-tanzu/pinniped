@@ -78,7 +78,7 @@ func TestClient(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NotNil(t, resp.Status.ExpirationTimestamp)
-	require.InDelta(t, time.Until(resp.Status.ExpirationTimestamp.Time), 1*time.Hour, float64(3*time.Minute))
+	require.InDelta(t, 5*time.Minute, time.Until(resp.Status.ExpirationTimestamp.Time), float64(time.Minute))
 
 	// Create a client using the certificate and key returned by the token exchange.
 	validClient := library.NewClientsetWithCertAndKey(t, resp.Status.ClientCertificateData, resp.Status.ClientKeyData)

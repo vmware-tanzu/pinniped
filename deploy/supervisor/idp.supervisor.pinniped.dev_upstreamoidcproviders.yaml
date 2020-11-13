@@ -64,8 +64,6 @@ spec:
                     items:
                       type: string
                     type: array
-                required:
-                - additionalScopes
                 type: object
               claims:
                 description: Claims provides the names of token claims that will be
@@ -79,9 +77,6 @@ spec:
                     description: Username provides the name of the token claim that
                       will be used to ascertain an identity's username.
                     type: string
-                required:
-                - groups
-                - username
                 type: object
               client:
                 description: OIDCClient contains OIDC client information to be used
@@ -104,8 +99,6 @@ spec:
                 pattern: ^https://
                 type: string
             required:
-            - authorizationConfig
-            - claims
             - client
             - issuer
             type: object

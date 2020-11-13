@@ -16,7 +16,7 @@ const (
 	// PhaseReady is the phase for an UpstreamOIDCProvider resource in a healthy state.
 	PhaseReady UpstreamOIDCProviderPhase = "Ready"
 
-	// PhaseErorr is the phase for an UpstreamOIDCProvider in an unhealthy state.
+	// PhaseError is the phase for an UpstreamOIDCProvider in an unhealthy state.
 	PhaseError UpstreamOIDCProviderPhase = "Error"
 )
 
@@ -40,6 +40,7 @@ type UpstreamOIDCProviderStatus struct {
 type OIDCAuthorizationConfig struct {
 	// AdditionalScopes are the scopes in addition to "openid" that will be requested as part of the authorization
 	// request flow with an OIDC identity provider. By default only the "openid" scope will be requested.
+	// +optional
 	AdditionalScopes []string `json:"additionalScopes"`
 }
 
@@ -47,10 +48,12 @@ type OIDCAuthorizationConfig struct {
 type OIDCClaims struct {
 	// Groups provides the name of the token claim that will be used to ascertain the groups to which
 	// an identity belongs.
+	// +optional
 	Groups string `json:"groups"`
 
 	// Username provides the name of the token claim that will be used to ascertain an identity's
 	// username.
+	// +optional
 	Username string `json:"username"`
 }
 
@@ -74,10 +77,12 @@ type UpstreamOIDCProviderSpec struct {
 
 	// AuthorizationConfig holds information about how to form the OAuth2 authorization request
 	// parameters to be used with this OIDC identity provider.
+	// +optional
 	AuthorizationConfig OIDCAuthorizationConfig `json:"authorizationConfig"`
 
 	// Claims provides the names of token claims that will be used when inspecting an identity from
 	// this OIDC identity provider.
+	// +optional
 	Claims OIDCClaims `json:"claims"`
 
 	// OIDCClient contains OIDC client information to be used used with this OIDC identity

@@ -36,4 +36,4 @@ The following items are out of scope for the Pinniped project.
 More details coming soon!
 
 For more details on proposing features and bugs, check out our
-[contributing](../CONTRIBUTING.md) doc.
+[contributing](https://github.com/vmware-tanzu/pinniped/blob/main/CONTRIBUTING.md) doc.

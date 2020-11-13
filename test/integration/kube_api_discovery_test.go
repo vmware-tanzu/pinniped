@@ -17,8 +17,7 @@ import (
 func TestGetAPIResourceList(t *testing.T) {
 	library.SkipUnlessIntegration(t)
 
-	client := library.NewConciergeClientset(t)
-
+	client := library.NewClientset(t)
 	groups, resources, err := client.Discovery().ServerGroupsAndResources()
 	require.NoError(t, err)
 
@@ -47,6 +46,7 @@ func TestGetAPIResourceList(t *testing.T) {
 						Kind:       "TokenCredentialRequest",
 						Verbs:      []string{"create"},
 						Namespaced: true,
+						Categories: []string{"pinniped"},
 					},
 				},
 			},
@@ -188,14 +188,11 @@ func TestGetAPIResourceList(t *testing.T) {
 				continue
 			}
 			for _, a := range r.APIResources {
-				assert.NotContainsf(t, a.Categories, "all", "expected resource %q not to be in the 'all' category", a.Name)
 				if strings.HasSuffix(a.Name, "/status") {
 					continue
 				}
-				if a.Kind == "TokenCredentialRequest" {
-					continue
-				}
 				assert.Containsf(t, a.Categories, "pinniped", "expected resource %q to be in the 'pinniped' category", a.Name)
+				assert.NotContainsf(t, a.Categories, "all", "expected resource %q not to be in the 'all' category", a.Name)
 			}
 		}
 	})

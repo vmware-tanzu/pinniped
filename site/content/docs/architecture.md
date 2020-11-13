@@ -42,7 +42,7 @@ Pinniped supports the following external IDP types.
    serve as an extension point for Pinniped by allowing for integration of arbitrary custom authenticators.
    While a custom implementation may be in any language or framework, this project provides a
    sample implementation in Golang. See the `ServeHTTP` method of
-   [cmd/local-user-authenticator/main.go](https://github.com/vmware-tanzu/pinniped/cmd/local-user-authenticator/main.go).
+   [cmd/local-user-authenticator/main.go](https://github.com/vmware-tanzu/pinniped/blob/main/cmd/local-user-authenticator/main.go).
 
 More IDP types are coming soon.
 

@@ -208,8 +208,8 @@ func TestController(t *testing.T) {
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"invalid-url\": Get \"invalid-url/.well-known/openid-configuration\": unsupported protocol scheme \"\"" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "error"="UpstreamOIDCProvider has a failing condition" "msg"="found failing condition" "message"="failed to perform OIDC discovery against \"invalid-url\": Get \"invalid-url/.well-known/openid-configuration\": unsupported protocol scheme \"\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
+				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"invalid-url\"" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
+				`upstream-observer "error"="UpstreamOIDCProvider has a failing condition" "msg"="found failing condition" "message"="failed to perform OIDC discovery against \"invalid-url\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.UpstreamOIDCProvider{{
@@ -229,7 +229,7 @@ func TestController(t *testing.T) {
 							Status:             "False",
 							LastTransitionTime: now,
 							Reason:             "Unreachable",
-							Message:            `failed to perform OIDC discovery against "invalid-url": Get "invalid-url/.well-known/openid-configuration": unsupported protocol scheme ""`,
+							Message:            `failed to perform OIDC discovery against "invalid-url"`,
 						},
 					},
 				},

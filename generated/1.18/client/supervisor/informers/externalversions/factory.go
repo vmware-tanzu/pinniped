@@ -12,6 +12,7 @@ import (
 
 	versioned "go.pinniped.dev/generated/1.18/client/supervisor/clientset/versioned"
 	config "go.pinniped.dev/generated/1.18/client/supervisor/informers/externalversions/config"
+	idp "go.pinniped.dev/generated/1.18/client/supervisor/informers/externalversions/idp"
 	internalinterfaces "go.pinniped.dev/generated/1.18/client/supervisor/informers/externalversions/internalinterfaces"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -160,8 +161,13 @@ type SharedInformerFactory interface {
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
 	Config() config.Interface
+	IDP() idp.Interface
 }
 
 func (f *sharedInformerFactory) Config() config.Interface {
 	return config.New(f, f.namespace, f.tweakListOptions)
+}
+
+func (f *sharedInformerFactory) IDP() idp.Interface {
+	return idp.New(f, f.namespace, f.tweakListOptions)
 }

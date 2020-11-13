@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	v1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/idp/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -42,6 +43,10 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=config.supervisor.pinniped.dev, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("oidcproviders"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().OIDCProviders().Informer()}, nil
+
+		// Group=idp.supervisor.pinniped.dev, Version=v1alpha1
+	case idpv1alpha1.SchemeGroupVersion.WithResource("upstreamoidcproviders"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.IDP().V1alpha1().UpstreamOIDCProviders().Informer()}, nil
 
 	}
 

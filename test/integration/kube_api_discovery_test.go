@@ -80,6 +80,39 @@ func TestGetAPIResourceList(t *testing.T) {
 		},
 		{
 			group: metav1.APIGroup{
+				Name: "idp.supervisor.pinniped.dev",
+				Versions: []metav1.GroupVersionForDiscovery{
+					{
+						GroupVersion: "idp.supervisor.pinniped.dev/v1alpha1",
+						Version:      "v1alpha1",
+					},
+				},
+				PreferredVersion: metav1.GroupVersionForDiscovery{
+					GroupVersion: "idp.supervisor.pinniped.dev/v1alpha1",
+					Version:      "v1alpha1",
+				},
+			},
+			resourceByVersion: map[string][]metav1.APIResource{
+				"idp.supervisor.pinniped.dev/v1alpha1": {
+					{
+						Name:         "upstreamoidcproviders",
+						SingularName: "upstreamoidcprovider",
+						Namespaced:   true,
+						Kind:         "UpstreamOIDCProvider",
+						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
+						Categories:   []string{"pinniped", "pinniped-idp", "pinniped-idps"},
+					},
+					{
+						Name:       "upstreamoidcproviders/status",
+						Namespaced: true,
+						Kind:       "UpstreamOIDCProvider",
+						Verbs:      []string{"get", "patch", "update"},
+					},
+				},
+			},
+		},
+		{
+			group: metav1.APIGroup{
 				Name: "config.concierge.pinniped.dev",
 				Versions: []metav1.GroupVersionForDiscovery{
 					{
@@ -155,10 +188,14 @@ func TestGetAPIResourceList(t *testing.T) {
 				continue
 			}
 			for _, a := range r.APIResources {
-				if a.Kind != "TokenCredentialRequest" {
-					assert.Containsf(t, a.Categories, "pinniped", "expected resource %q to be in the 'pinniped' category", a.Name)
-				}
 				assert.NotContainsf(t, a.Categories, "all", "expected resource %q not to be in the 'all' category", a.Name)
+				if strings.HasSuffix(a.Name, "/status") {
+					continue
+				}
+				if a.Kind == "TokenCredentialRequest" {
+					continue
+				}
+				assert.Containsf(t, a.Categories, "pinniped", "expected resource %q to be in the 'pinniped' category", a.Name)
 			}
 		}
 	})

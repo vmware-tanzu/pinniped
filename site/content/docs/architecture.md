@@ -71,7 +71,7 @@ With any of the above IDPs and integration strategies, `kubectl` commands receiv
 cluster-specific credential via a
 [Kubernetes client-go credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins).
 Users may use the Pinniped CLI as the credential plugin, or they may use any proprietary CLI
-built with the [Pinniped Go client library](https://github.com/vmware-tanzu/pinniped/generated).
+built with the [Pinniped Go client library](https://github.com/vmware-tanzu/pinniped/tree/main/generated).
 
 ## Example Cluster Authentication Sequence Diagram
 

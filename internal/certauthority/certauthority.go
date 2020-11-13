@@ -27,7 +27,7 @@ import (
 // This could certainly be made configurable by an installer of pinniped, but we
 // will see if we can save adding a configuration knob with a reasonable default
 // here.
-const certBackdate = 5 * time.Minute
+const certBackdate = 10 * time.Second
 
 type env struct {
 	// secure random number generators for various steps (usually crypto/rand.Reader, but broken out here for tests).

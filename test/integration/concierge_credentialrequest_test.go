@@ -64,7 +64,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 	require.ElementsMatch(t, env.TestUser.ExpectedGroups, getOrganizations(t, response.Status.Credential.ClientCertificateData))
 	require.NotEmpty(t, response.Status.Credential.ClientKeyData)
 	require.NotNil(t, response.Status.Credential.ExpirationTimestamp)
-	require.InDelta(t, time.Until(response.Status.Credential.ExpirationTimestamp.Time), 1*time.Hour, float64(3*time.Minute))
+	require.InDelta(t, 5*time.Minute, time.Until(response.Status.Credential.ExpirationTimestamp.Time), float64(time.Minute))
 
 	// Create a client using the admin kubeconfig.
 	adminClient := library.NewClientset(t)

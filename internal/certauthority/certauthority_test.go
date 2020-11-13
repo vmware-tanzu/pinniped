@@ -94,7 +94,7 @@ func TestNew(t *testing.T) {
 	caCert, err := x509.ParseCertificate(got.caCertBytes)
 	require.NoError(t, err)
 	require.Equal(t, "Test CA", caCert.Subject.CommonName)
-	require.WithinDuration(t, now.Add(-5*time.Minute), caCert.NotBefore, 10*time.Second)
+	require.WithinDuration(t, now.Add(-10*time.Second), caCert.NotBefore, 10*time.Second)
 	require.WithinDuration(t, now.Add(time.Minute), caCert.NotAfter, 10*time.Second)
 }
 
@@ -149,7 +149,7 @@ func TestNewInternal(t *testing.T) {
 			},
 			wantCommonName: "Test CA",
 			wantNotAfter:   now.Add(time.Minute),
-			wantNotBefore:  now.Add(-5 * time.Minute),
+			wantNotBefore:  now.Add(-10 * time.Second),
 		},
 	}
 	for _, tt := range tests {

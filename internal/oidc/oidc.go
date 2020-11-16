@@ -8,7 +8,10 @@ import (
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 
+	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidcclient/nonce"
+	"go.pinniped.dev/internal/oidcclient/pkce"
 )
 
 const (
@@ -19,6 +22,15 @@ const (
 )
 
 const (
+	// Just in case we need to make a breaking change to the format of the upstream state param,
+	// we are including a format version number. This gives the opportunity for a future version of Pinniped
+	// to have the consumer of this format decide to reject versions that it doesn't understand.
+	UpstreamStateParamFormatVersion = "1"
+
+	// The `name` passed to the encoder for encoding the upstream state param value. This name is short
+	// because it will be encoded into the upstream state param value and we're trying to keep that small.
+	UpstreamStateParamEncodingName = "s"
+
 	// CSRFCookieName is the name of the browser cookie which shall hold our CSRF value.
 	// The `__Host` prefix has a special meaning. See
 	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#Cookie_prefixes.
@@ -28,6 +40,36 @@ const (
 	// cookie contents.
 	CSRFCookieEncodingName = "csrf"
 )
+
+// Encoder is the encoding side of the securecookie.Codec interface.
+type Encoder interface {
+	Encode(name string, value interface{}) (string, error)
+}
+
+// Decoder is the decoding side of the securecookie.Codec interface.
+type Decoder interface {
+	Decode(name, value string, into interface{}) error
+}
+
+// Codec is both the encoding and decoding sides of the securecookie.Codec interface. It is
+// interface'd here so that we properly wrap the securecookie dependency.
+type Codec interface {
+	Encoder
+	Decoder
+}
+
+// UpstreamStateParamData is the format of the state parameter that we use when we communicate to an
+// upstream OIDC provider.
+//
+// Keep the JSON to a minimal size because the upstream provider could impose size limitations on
+// the state param.
+type UpstreamStateParamData struct {
+	AuthParams    string              `json:"p"`
+	Nonce         nonce.Nonce         `json:"n"`
+	CSRFToken     csrftoken.CSRFToken `json:"c"`
+	PKCECode      pkce.Code           `json:"k"`
+	FormatVersion string              `json:"v"`
+}
 
 func PinnipedCLIOIDCClient() *fosite.DefaultOpenIDConnectClient {
 	return &fosite.DefaultOpenIDConnectClient{

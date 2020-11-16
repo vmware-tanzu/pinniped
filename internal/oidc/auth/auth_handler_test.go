@@ -249,8 +249,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		generateCSRF  func() (csrftoken.CSRFToken, error)
 		generatePKCE  func() (pkce.Code, error)
 		generateNonce func() (nonce.Nonce, error)
-		stateEncoder  securecookie.Codec
-		cookieEncoder securecookie.Codec
+		stateEncoder  oidc.Codec
+		cookieEncoder oidc.Codec
 		method        string
 		path          string
 		contentType   string
@@ -807,7 +807,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 }
 
 type errorReturningEncoder struct {
-	securecookie.Codec
+	oidc.Codec
 }
 
 func (*errorReturningEncoder) Encode(_ string, _ interface{}) (string, error) {
@@ -830,7 +830,7 @@ func requireEqualContentType(t *testing.T, actual string, expected string) {
 	require.Equal(t, actualContentTypeParams, expectedContentTypeParams)
 }
 
-func requireEqualDecodedStateParams(t *testing.T, actualURL string, expectedURL string, stateParamDecoder securecookie.Codec) {
+func requireEqualDecodedStateParams(t *testing.T, actualURL string, expectedURL string, stateParamDecoder oidc.Codec) {
 	t.Helper()
 	actualLocationURL, err := url.Parse(actualURL)
 	require.NoError(t, err)

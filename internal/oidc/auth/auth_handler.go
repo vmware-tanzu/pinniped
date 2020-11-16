@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/securecookie"
-
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
@@ -25,22 +23,6 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-const (
-	// Just in case we need to make a breaking change to the format of the upstream state param,
-	// we are including a format version number. This gives the opportunity for a future version of Pinniped
-	// to have the consumer of this format decide to reject versions that it doesn't understand.
-	upstreamStateParamFormatVersion = "1"
-
-	// The `name` passed to the encoder for encoding the upstream state param value. This name is short
-	// because it will be encoded into the upstream state param value and we're trying to keep that small.
-	upstreamStateParamEncodingName = "s"
-)
-
-// Encoder is the encoding side of the securecookie.Codec interface.
-type Encoder interface {
-	Encode(name string, value interface{}) (string, error)
-}
-
 func NewHandler(
 	issuer string,
 	idpListGetter oidc.IDPListGetter,
@@ -48,8 +30,8 @@ func NewHandler(
 	generateCSRF func() (csrftoken.CSRFToken, error),
 	generatePKCE func() (pkce.Code, error),
 	generateNonce func() (nonce.Nonce, error),
-	upstreamStateEncoder Encoder,
-	cookieCodec securecookie.Codec,
+	upstreamStateEncoder oidc.Encoder,
+	cookieCodec oidc.Codec,
 ) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		if r.Method != http.MethodPost && r.Method != http.MethodGet {
@@ -144,7 +126,7 @@ func NewHandler(
 	})
 }
 
-func readCSRFCookie(r *http.Request, codec securecookie.Codec) (csrftoken.CSRFToken, error) {
+func readCSRFCookie(r *http.Request, codec oidc.Codec) (csrftoken.CSRFToken, error) {
 	receivedCSRFCookie, err := r.Cookie(oidc.CSRFCookieName)
 	if err != nil {
 		// Error means that the cookie was not found
@@ -204,37 +186,28 @@ func generateValues(
 	return csrfValue, nonceValue, pkceValue, nil
 }
 
-// Keep the JSON to a minimal size because the upstream provider could impose size limitations on the state param.
-type upstreamStateParamData struct {
-	AuthParams              string              `json:"p"`
-	Nonce                   nonce.Nonce         `json:"n"`
-	CSRFToken               csrftoken.CSRFToken `json:"c"`
-	PKCECode                pkce.Code           `json:"k"`
-	StateParamFormatVersion string              `json:"v"`
-}
-
 func upstreamStateParam(
 	authorizeRequester fosite.AuthorizeRequester,
 	nonceValue nonce.Nonce,
 	csrfValue csrftoken.CSRFToken,
 	pkceValue pkce.Code,
-	encoder Encoder,
+	encoder oidc.Encoder,
 ) (string, error) {
-	stateParamData := upstreamStateParamData{
-		AuthParams:              authorizeRequester.GetRequestForm().Encode(),
-		Nonce:                   nonceValue,
-		CSRFToken:               csrfValue,
-		PKCECode:                pkceValue,
-		StateParamFormatVersion: upstreamStateParamFormatVersion,
+	stateParamData := oidc.UpstreamStateParamData{
+		AuthParams:    authorizeRequester.GetRequestForm().Encode(),
+		Nonce:         nonceValue,
+		CSRFToken:     csrfValue,
+		PKCECode:      pkceValue,
+		FormatVersion: oidc.UpstreamStateParamFormatVersion,
 	}
-	encodedStateParamValue, err := encoder.Encode(upstreamStateParamEncodingName, stateParamData)
+	encodedStateParamValue, err := encoder.Encode(oidc.UpstreamStateParamEncodingName, stateParamData)
 	if err != nil {
 		return "", httperr.Wrap(http.StatusInternalServerError, "error encoding upstream state param", err)
 	}
 	return encodedStateParamValue, nil
 }
 
-func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken, codec securecookie.Codec) error {
+func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken, codec oidc.Codec) error {
 	encodedCSRFValue, err := codec.Encode(oidc.CSRFCookieEncodingName, csrfValue)
 	if err != nil {
 		return httperr.Wrap(http.StatusInternalServerError, "error encoding CSRF cookie", err)

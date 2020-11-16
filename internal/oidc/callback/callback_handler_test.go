@@ -48,28 +48,49 @@ func TestCallbackEndpoint(t *testing.T) {
 	require.NotEqual(t, stateEncoderHashKey, cookieEncoderHashKey)
 	require.NotEqual(t, stateEncoderBlockKey, cookieEncoderBlockKey)
 
-	var happyStateEncoder = securecookie.New(stateEncoderHashKey, stateEncoderBlockKey)
-	happyStateEncoder.SetSerializer(securecookie.JSONEncoder{})
-	var happyCookieEncoder = securecookie.New(cookieEncoderHashKey, cookieEncoderBlockKey)
-	happyCookieEncoder.SetSerializer(securecookie.JSONEncoder{})
+	var happyStateCodec = securecookie.New(stateEncoderHashKey, stateEncoderBlockKey)
+	happyStateCodec.SetSerializer(securecookie.JSONEncoder{})
+	var happyCookieCodec = securecookie.New(cookieEncoderHashKey, cookieEncoderBlockKey)
+	happyCookieCodec.SetSerializer(securecookie.JSONEncoder{})
 
-	// happyCSRF := "test-csrf"
-	// happyPKCE := "test-pkce"
-	// happyNonce := "test-nonce"
-	//
-	// happyEncodedState, err := happyStateEncoder.Encode("s",
-	// 	testutil.ExpectedUpstreamStateParamFormat{
-	// 		P: "todo query goes here",
-	// 		N: happyNonce,
-	// 		C: happyCSRF,
-	// 		K: happyPKCE,
-	// 		V: "1",
-	// 	},
-	// )
-	// require.NoError(t, err)
+	happyCSRF := "test-csrf"
+	happyPKCE := "test-pkce"
+	happyNonce := "test-nonce"
 
-	incomingCookieCSRFValue := "csrf-value-from-cookie"
-	encodedIncomingCookieCSRFValue, err := happyCookieEncoder.Encode("csrf", incomingCookieCSRFValue)
+	happyState, err := happyStateCodec.Encode("s",
+		testutil.ExpectedUpstreamStateParamFormat{
+			P: "todo query goes here",
+			N: happyNonce,
+			C: happyCSRF,
+			K: happyPKCE,
+			V: "1",
+		},
+	)
+	require.NoError(t, err)
+
+	wrongCSRFValueState, err := happyStateCodec.Encode("s",
+		testutil.ExpectedUpstreamStateParamFormat{
+			P: "todo query goes here",
+			N: happyNonce,
+			C: "wrong-csrf-value",
+			K: happyPKCE,
+			V: "1",
+		},
+	)
+	require.NoError(t, err)
+
+	wrongVersionState, err := happyStateCodec.Encode("s",
+		testutil.ExpectedUpstreamStateParamFormat{
+			P: "todo query goes here",
+			N: happyNonce,
+			C: happyCSRF,
+			K: happyPKCE,
+			V: "wrong-version",
+		},
+	)
+	require.NoError(t, err)
+
+	encodedIncomingCookieCSRFValue, err := happyCookieCodec.Encode("csrf", happyCSRF)
 	require.NoError(t, err)
 	happyCSRFCookie := "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue
 
@@ -77,7 +98,6 @@ func TestCallbackEndpoint(t *testing.T) {
 		name string
 
 		idpListGetter provider.DynamicUpstreamIDPProvider
-		cookieDecoder Decoder
 		method        string
 		path          string
 		csrfCookie    string
@@ -118,39 +138,44 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantBody:   "Method Not Allowed: DELETE (try GET)\n",
 		},
 		{
-			name:          "code param was not included on request",
-			cookieDecoder: happyCookieEncoder,
-			method:        http.MethodGet,
-			path:          newRequestPath().WithoutCode().String(),
-			csrfCookie:    happyCSRFCookie,
-			wantStatus:    http.StatusBadRequest,
-			wantBody:      "Bad Request: code param not found\n",
+			name:       "code param was not included on request",
+			method:     http.MethodGet,
+			path:       newRequestPath().WithState(happyState).WithoutCode().String(),
+			csrfCookie: happyCSRFCookie,
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "Bad Request: code param not found\n",
 		},
 		{
-			name:          "state param was not included on request",
-			cookieDecoder: happyCookieEncoder,
-			method:        http.MethodGet,
-			path:          newRequestPath().WithoutState().String(),
-			csrfCookie:    happyCSRFCookie,
-			wantStatus:    http.StatusBadRequest,
-			wantBody:      "Bad Request: state param not found\n",
+			name:       "state param was not included on request",
+			method:     http.MethodGet,
+			path:       newRequestPath().WithoutState().String(),
+			csrfCookie: happyCSRFCookie,
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "Bad Request: state param not found\n",
 		},
 		{
 			name:          "state param was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
 			idpListGetter: testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
-			cookieDecoder: happyCookieEncoder,
 			method:        http.MethodGet,
 			path:          newRequestPath().WithState("this-will-not-decode").String(),
 			csrfCookie:    happyCSRFCookie,
 			wantStatus:    http.StatusBadRequest,
-			wantBody:      "Bad Request: state param not valid\n",
+			wantBody:      "Bad Request: error reading state\n",
+		},
+		{
+			name:          "state's internal version does not match what we want",
+			idpListGetter: testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
+			method:        http.MethodGet,
+			path:          newRequestPath().WithState(wrongVersionState).String(),
+			csrfCookie:    happyCSRFCookie,
+			wantStatus:    http.StatusUnprocessableEntity,
+			wantBody:      "Unprocessable Entity: state format version is invalid\n",
 		},
 		{
 			name:          "the UpstreamOIDCProvider CRD has been deleted",
 			idpListGetter: testutil.NewIDPListGetter(otherUpstreamOIDCIdentityProvider),
-			cookieDecoder: happyCookieEncoder,
 			method:        http.MethodGet,
-			path:          newRequestPath().String(),
+			path:          newRequestPath().WithState(happyState).String(),
 			csrfCookie:    happyCSRFCookie,
 			wantStatus:    http.StatusUnprocessableEntity,
 			wantBody:      "Unprocessable Entity: upstream provider not found\n",
@@ -158,24 +183,29 @@ func TestCallbackEndpoint(t *testing.T) {
 		{
 			name:          "the CSRF cookie does not exist on request",
 			idpListGetter: testutil.NewIDPListGetter(otherUpstreamOIDCIdentityProvider),
-			cookieDecoder: happyCookieEncoder,
 			method:        http.MethodGet,
-			path:          newRequestPath().String(),
+			path:          newRequestPath().WithState(happyState).String(),
 			wantStatus:    http.StatusForbidden,
-			wantBody:      "Forbidden: unauthorized request\n",
+			wantBody:      "Forbidden: CSRF cookie is missing\n",
 		},
 		{
-			name:          "the CSRF cookie cannot be decoded",
+			name:          "cookie was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
 			idpListGetter: testutil.NewIDPListGetter(otherUpstreamOIDCIdentityProvider),
-			cookieDecoder: happyCookieEncoder,
 			method:        http.MethodGet,
-			path:          newRequestPath().String(),
+			path:          newRequestPath().WithState(happyState).String(),
 			csrfCookie:    "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
 			wantStatus:    http.StatusForbidden,
-			wantBody:      "Forbidden: unauthorized request\n",
+			wantBody:      "Forbidden: error reading CSRF cookie\n",
 		},
-		// TODO: csrf value from inside state param does not match csrf cookie value
-		// TODO: state's internal version does not match what we want
+		{
+			name:          "cookie csrf value does not match state csrf value",
+			idpListGetter: testutil.NewIDPListGetter(otherUpstreamOIDCIdentityProvider),
+			method:        http.MethodGet,
+			path:          newRequestPath().WithState(wrongCSRFValueState).String(),
+			csrfCookie:    happyCSRFCookie,
+			wantStatus:    http.StatusForbidden,
+			wantBody:      "Forbidden: CSRF value does not match\n",
+		},
 
 		// Upstream exchange
 		// TODO: network call to upstream token endpoint fails
@@ -201,7 +231,7 @@ func TestCallbackEndpoint(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			subject := NewHandler(test.idpListGetter, test.cookieDecoder)
+			subject := NewHandler(test.idpListGetter, happyStateCodec, happyCookieCodec)
 			req := httptest.NewRequest(test.method, test.path, nil)
 			if test.csrfCookie != "" {
 				req.Header.Set("Cookie", test.csrfCookie)

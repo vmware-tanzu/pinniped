@@ -34,16 +34,9 @@ const (
 	// The `name` passed to the encoder for encoding the upstream state param value. This name is short
 	// because it will be encoded into the upstream state param value and we're trying to keep that small.
 	upstreamStateParamEncodingName = "s"
-
-	// The name of the browser cookie which shall hold our CSRF value.
-	// `__Host` prefix has a special meaning. See https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#Cookie_prefixes
-	csrfCookieName = "__Host-pinniped-csrf"
-
-	// The `name` passed to the encoder for encoding and decoding the CSRF cookie contents.
-	csrfCookieEncodingName = "csrf"
 )
 
-// This is the encoding side of the securecookie.Codec interface.
+// Encoder is the encoding side of the securecookie.Codec interface.
 type Encoder interface {
 	Encode(name string, value interface{}) (string, error)
 }
@@ -152,14 +145,14 @@ func NewHandler(
 }
 
 func readCSRFCookie(r *http.Request, codec securecookie.Codec) (csrftoken.CSRFToken, error) {
-	receivedCSRFCookie, err := r.Cookie(csrfCookieName)
+	receivedCSRFCookie, err := r.Cookie(oidc.CSRFCookieName)
 	if err != nil {
 		// Error means that the cookie was not found
 		return "", nil
 	}
 
 	var csrfFromCookie csrftoken.CSRFToken
-	err = codec.Decode(csrfCookieEncodingName, receivedCSRFCookie.Value, &csrfFromCookie)
+	err = codec.Decode(oidc.CSRFCookieEncodingName, receivedCSRFCookie.Value, &csrfFromCookie)
 	if err != nil {
 		return "", httperr.Wrap(http.StatusUnprocessableEntity, "error reading CSRF cookie", err)
 	}
@@ -242,13 +235,13 @@ func upstreamStateParam(
 }
 
 func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken, codec securecookie.Codec) error {
-	encodedCSRFValue, err := codec.Encode(csrfCookieEncodingName, csrfValue)
+	encodedCSRFValue, err := codec.Encode(oidc.CSRFCookieEncodingName, csrfValue)
 	if err != nil {
 		return httperr.Wrap(http.StatusInternalServerError, "error encoding CSRF cookie", err)
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     csrfCookieName,
+		Name:     oidc.CSRFCookieName,
 		Value:    encodedCSRFValue,
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,

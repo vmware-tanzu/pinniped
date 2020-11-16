@@ -18,6 +18,17 @@ const (
 	JWKSEndpointPath          = "/jwks.json"
 )
 
+const (
+	// CSRFCookieName is the name of the browser cookie which shall hold our CSRF value.
+	// The `__Host` prefix has a special meaning. See
+	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#Cookie_prefixes.
+	CSRFCookieName = "__Host-pinniped-csrf"
+
+	// CSRFCookieEncodingName is the `name` passed to the encoder for encoding and decoding the CSRF
+	// cookie contents.
+	CSRFCookieEncodingName = "csrf"
+)
+
 func PinnipedCLIOIDCClient() *fosite.DefaultOpenIDConnectClient {
 	return &fosite.DefaultOpenIDConnectClient{
 		DefaultClient: &fosite.DefaultClient{

@@ -5,7 +5,9 @@
 package callback
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 	"path"
 
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -20,7 +22,8 @@ func NewHandler(
 	stateDecoder, cookieDecoder oidc.Decoder,
 ) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		if err := validateRequest(r, stateDecoder, cookieDecoder); err != nil {
+		state, err := validateRequest(r, stateDecoder, cookieDecoder)
+		if err != nil {
 			return err
 		}
 
@@ -29,43 +32,56 @@ func NewHandler(
 			return httperr.New(http.StatusUnprocessableEntity, "upstream provider not found")
 		}
 
+		downstreamAuthParams, err := url.ParseQuery(state.AuthParams)
+		if err != nil {
+			panic(err)
+		}
+
+		downstreamCallbackURL := fmt.Sprintf(
+			"%s?code=%s&state=%s",
+			downstreamAuthParams.Get("redirect_uri"),
+			url.QueryEscape("some-code"),
+			url.QueryEscape(downstreamAuthParams.Get("state")),
+		)
+		http.Redirect(w, r, downstreamCallbackURL, 302)
+
 		return nil
 	})
 }
 
-func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) error {
+func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) (*oidc.UpstreamStateParamData, error) {
 	if r.Method != http.MethodGet {
-		return httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET)", r.Method)
+		return nil, httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET)", r.Method)
 	}
 
 	csrfValue, err := readCSRFCookie(r, cookieDecoder)
 	if err != nil {
 		plog.InfoErr("error reading CSRF cookie", err)
-		return err
+		return nil, err
 	}
 
 	if r.FormValue("code") == "" {
 		plog.Info("code param not found")
-		return httperr.New(http.StatusBadRequest, "code param not found")
+		return nil, httperr.New(http.StatusBadRequest, "code param not found")
 	}
 
 	if r.FormValue("state") == "" {
 		plog.Info("state param not found")
-		return httperr.New(http.StatusBadRequest, "state param not found")
+		return nil, httperr.New(http.StatusBadRequest, "state param not found")
 	}
 
 	state, err := readState(r, stateDecoder)
 	if err != nil {
 		plog.InfoErr("error reading state", err)
-		return err
+		return nil, err
 	}
 
 	if state.CSRFToken != csrfValue {
 		plog.InfoErr("CSRF value does not match", err)
-		return httperr.Wrap(http.StatusForbidden, "CSRF value does not match", err)
+		return nil, httperr.Wrap(http.StatusForbidden, "CSRF value does not match", err)
 	}
 
-	return nil
+	return state, nil
 }
 
 func findUpstreamIDPConfig(r *http.Request, idpListGetter oidc.IDPListGetter) *provider.UpstreamOIDCIdentityProvider {

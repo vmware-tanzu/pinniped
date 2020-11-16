@@ -130,8 +130,8 @@ func getLoginProvider(t *testing.T) *loginProviderPatterns {
 		},
 		{
 			Name:                "Dex",
-			IssuerPattern:       regexp.MustCompile(`\Ahttp://127\.0\.0\.1.+/dex.*\z`),
-			LoginPagePattern:    regexp.MustCompile(`\Ahttp://127\.0\.0\.1.+/dex/auth/local.+\z`),
+			IssuerPattern:       regexp.MustCompile(`\Ahttp://dex\.dex\.svc\.cluster\.local/dex.*\z`),
+			LoginPagePattern:    regexp.MustCompile(`\Ahttp://dex\.dex\.svc\.cluster\.local/dex/auth/local.+\z`),
 			UsernameSelector:    "input#login",
 			PasswordSelector:    "input#password",
 			LoginButtonSelector: "button#submit-login",
@@ -156,7 +156,18 @@ func TestCLILoginOIDC(t *testing.T) {
 
 	// Start the browser driver.
 	t.Logf("opening browser driver")
+	caps := agouti.NewCapabilities()
+	if env.Proxy != "" {
+		t.Logf("configuring Chrome to use proxy %q", env.Proxy)
+		caps = caps.Proxy(agouti.ProxyConfig{
+			ProxyType: "manual",
+			HTTPProxy: env.Proxy,
+			SSLProxy:  env.Proxy,
+			NoProxy:   "127.0.0.1",
+		})
+	}
 	agoutiDriver := agouti.ChromeDriver(
+		agouti.Desired(caps),
 		agouti.ChromeOptions("args", []string{
 			"--no-sandbox",
 			"--headless", // Comment out this line to see the tests happen in a visible browser window.
@@ -395,11 +406,19 @@ func spawnTestGoroutine(t *testing.T, f func() error) {
 
 func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, sessionCachePath string) *exec.Cmd {
 	env := library.IntegrationEnv(t)
-	return exec.CommandContext(ctx, pinnipedExe, "login", "oidc",
+	cmd := exec.CommandContext(ctx, pinnipedExe, "login", "oidc",
 		"--issuer", env.OIDCUpstream.Issuer,
 		"--client-id", env.OIDCUpstream.ClientID,
 		"--listen-port", strconv.Itoa(env.OIDCUpstream.LocalhostPort),
 		"--session-cache", sessionCachePath,
 		"--skip-browser",
 	)
+	if env.Proxy != "" {
+		cmd.Env = append(os.Environ(),
+			"http_proxy="+env.Proxy,
+			"https_proxy="+env.Proxy,
+			"no_proxy=127.0.0.1",
+		)
+	}
+	return cmd
 }

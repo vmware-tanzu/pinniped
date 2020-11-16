@@ -44,6 +44,8 @@ type handlerState struct {
 	scopes   []string
 	cache    SessionCache
 
+	httpClient *http.Client
+
 	// Parameters of the localhost listener.
 	listenAddr   string
 	callbackPath string
@@ -122,6 +124,14 @@ func WithSessionCache(cache SessionCache) Option {
 	}
 }
 
+// WithClient sets the HTTP client used to make CLI-to-provider requests.
+func WithClient(httpClient *http.Client) Option {
+	return func(h *handlerState) error {
+		h.httpClient = httpClient
+		return nil
+	}
+}
+
 // nopCache is a SessionCache that doesn't actually do anything.
 type nopCache struct{}
 
@@ -144,6 +154,7 @@ func Login(issuer string, clientID string, opts ...Option) (*Token, error) {
 		callbackPath: "/callback",
 		ctx:          context.Background(),
 		callbacks:    make(chan callbackResult),
+		httpClient:   http.DefaultClient,
 
 		// Default implementations of external dependencies (to be mocked in tests).
 		generateState: state.Generate,
@@ -163,6 +174,7 @@ func Login(issuer string, clientID string, opts ...Option) (*Token, error) {
 	// Always set a long, but non-infinite timeout for this operation.
 	ctx, cancel := context.WithTimeout(h.ctx, 10*time.Minute)
 	defer cancel()
+	ctx = oidc.ClientContext(ctx, h.httpClient)
 	h.ctx = ctx
 
 	// Initialize login parameters.

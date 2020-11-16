@@ -60,7 +60,7 @@ issues:
 
 linters-settings:
   funlen:
-    lines: 125
+    lines: 150
     statements: 50
   goheader:
     template: |-

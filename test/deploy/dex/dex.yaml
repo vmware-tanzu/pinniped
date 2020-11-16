@@ -6,13 +6,13 @@
 #@ load("@ytt:yaml", "yaml")
 
 #@ def dexConfig():
-issuer: #@ "http://127.0.0.1:" + str(data.values.ports.local) + "/dex"
+issuer: http://dex.dex.svc.cluster.local/dex
 storage:
   type: sqlite3
   config:
     file: ":memory:"
 web:
-  http: 0.0.0.0:5556
+  http: 0.0.0.0:80
 oauth2:
   skipApprovalScreen: true
 staticClients:
@@ -77,7 +77,7 @@ spec:
           - /etc/dex/cfg/config.yaml
           ports:
           - name: http
-            containerPort: 5556
+            containerPort: 80
           volumeMounts:
           - name: config
             mountPath: /etc/dex/cfg
@@ -94,9 +94,8 @@ metadata:
   labels:
     app: dex
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: dex
   ports:
-    - port: 5556
-      nodePort: #@ data.values.ports.node
+    - port: 80

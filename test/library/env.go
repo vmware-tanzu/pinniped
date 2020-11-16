@@ -38,6 +38,7 @@ type TestEnv struct {
 	SupervisorHTTPSAddress         string                               `json:"supervisorHttpsAddress"`
 	SupervisorHTTPSIngressAddress  string                               `json:"supervisorHttpsIngressAddress"`
 	SupervisorHTTPSIngressCABundle string                               `json:"supervisorHttpsIngressCABundle"`
+	Proxy                          string                               `json:"proxy"`
 
 	TestUser struct {
 		Token            string   `json:"token"`
@@ -126,6 +127,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 	require.NoErrorf(t, err, "PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS must be a YAML map of string to string")
 	result.SupervisorCustomLabels = supervisorCustomLabels
 	require.NotEmpty(t, result.SupervisorCustomLabels, "PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS cannot be empty")
+	result.Proxy = os.Getenv("PINNIPED_TEST_PROXY")
 
 	result.OIDCUpstream.Issuer = needEnv(t, "PINNIPED_TEST_CLI_OIDC_ISSUER")
 	result.OIDCUpstream.ClientID = needEnv(t, "PINNIPED_TEST_CLI_OIDC_CLIENT_ID")

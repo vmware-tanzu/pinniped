@@ -1,0 +1,101 @@
+#! Copyright 2020 the Pinniped contributors. All Rights Reserved.
+#! SPDX-License-Identifier: Apache-2.0
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cert-issuer
+  namespace: dex
+  labels:
+    app: cert-issuer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cert-issuer
+  namespace: dex
+  labels:
+    app: cert-issuer
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create, get, patch, update, watch, delete]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: cert-issuer
+  namespace: dex
+  labels:
+    app: cert-issuer
+subjects:
+  - kind: ServiceAccount
+    name: cert-issuer
+    namespace: dex
+roleRef:
+  kind: Role
+  name: cert-issuer
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cert-issuer
+  namespace: dex
+  labels:
+    app: cert-issuer
+spec:
+  template:
+    spec:
+      serviceAccountName: cert-issuer
+      initContainers:
+      - name: generate-certs
+        image: cfssl/cfssl:1.5.0
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/bash"]
+        args:
+        - -c
+        - |
+          cd /var/certs
+          cfssl print-defaults config > /tmp/cfssl-default.json
+          echo '{"CN": "Pinniped Test","hosts": [],"key": {"algo": "ecdsa","size": 256},"names": [{}]}' > /tmp/csr.json
+
+          echo "generating CA key..."
+          cfssl genkey \
+            -config /tmp/cfssl-default.json \
+            -initca /tmp/csr.json \
+            | cfssljson -bare ca
+
+          echo "generating Dex server certificate..."
+          cfssl gencert \
+            -ca ca.pem -ca-key ca-key.pem \
+            -config /tmp/cfssl-default.json \
+            -profile www \
+            -cn "dex.dex.svc.cluster.local" \
+            -hostname "dex.dex.svc.cluster.local" \
+            /tmp/csr.json \
+            | cfssljson -bare dex
+
+          chmod -R 777 /var/certs
+
+          echo "generated certificates:"
+          ls -l /var/certs
+        volumeMounts:
+        - name: certs
+          mountPath: /var/certs
+      containers:
+      - name: save-certs
+        image: bitnami/kubectl
+        command: ["/bin/bash"]
+        args:
+        - -c
+        - |
+          kubectl get secrets -n dex certs -o jsonpath='created: {.metadata.creationTimestamp}' || \
+            kubectl create secret generic certs --from-file=/var/certs
+        volumeMounts:
+        - name: certs
+          mountPath: /var/certs
+      volumes:
+      - name: certs
+        emptyDir: {}
+      restartPolicy: Never

@@ -266,6 +266,11 @@ if ! tilt_mode; then
 fi
 
 #
+# Download the test CA bundle that was generated in the Dex pod.
+#
+test_ca_bundle_pem="$(kubectl exec -n dex deployment/dex -- cat /var/certs/ca.pem)"
+
+#
 # Create the environment file
 #
 kind_capabilities_file="$pinniped_path/test/cluster_capabilities/kind.yaml"
@@ -286,7 +291,9 @@ export PINNIPED_TEST_SUPERVISOR_APP_NAME=${supervisor_app_name}
 export PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS='${supervisor_custom_labels}'
 export PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS="127.0.0.1:12345"
 export PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS="localhost:12344"
-export PINNIPED_TEST_CLI_OIDC_ISSUER=http://127.0.0.1:12346/dex
+export PINNIPED_TEST_PROXY=http://127.0.0.1:12346
+export PINNIPED_TEST_CLI_OIDC_ISSUER=https://dex.dex.svc.cluster.local/dex
+export PINNIPED_TEST_CLI_OIDC_ISSUER_CA_BUNDLE="${test_ca_bundle_pem}"
 export PINNIPED_TEST_CLI_OIDC_CLIENT_ID=pinniped-cli
 export PINNIPED_TEST_CLI_OIDC_LOCALHOST_PORT=48095
 export PINNIPED_TEST_CLI_OIDC_USERNAME=pinny@example.com

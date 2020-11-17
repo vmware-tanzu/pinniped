@@ -8,6 +8,7 @@
 - xref:{anchor_prefix}-authentication-concierge-pinniped-dev-v1alpha1[$$authentication.concierge.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-config-concierge-pinniped-dev-v1alpha1[$$config.concierge.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-config-supervisor-pinniped-dev-v1alpha1[$$config.supervisor.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-idp-supervisor-pinniped-dev-v1alpha1[$$idp.supervisor.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-login-concierge-pinniped-dev-v1alpha1[$$login.concierge.pinniped.dev/v1alpha1$$]
 
 
@@ -287,6 +288,166 @@ OIDCProviderTLSSpec is a struct that describes the TLS configuration for an OIDC
  SecretName is required if you would like to use different TLS certificates for issuers of different hostnames. SNI requests do not include port numbers, so all issuers with the same DNS hostname must use the same SecretName value even if they have different port numbers. 
  SecretName is not required when you would like to use only the HTTP endpoints (e.g. when terminating TLS at an Ingress). It is also not required when you would like all requests to this OIDC Provider's HTTPS endpoints to use the default TLS certificate, which is configured elsewhere. 
  When your Issuer URL's host is an IP address, then this field is ignored. SNI does not work for IP addresses.
+|===
+
+
+
+[id="{anchor_prefix}-idp-supervisor-pinniped-dev-v1alpha1"]
+=== idp.supervisor.pinniped.dev/v1alpha1
+
+Package v1alpha1 is the v1alpha1 version of the Pinniped supervisor identity provider (IDP) API.
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-condition"]
+==== Condition 
+
+Condition status of a resource (mirrored from the metav1.Condition type added in Kubernetes 1.19). In a future API version we can switch to using the upstream type. See https://github.com/kubernetes/apimachinery/blob/v0.19.0/pkg/apis/meta/v1/types.go#L1353-L1413.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-upstreamoidcproviderstatus[$$UpstreamOIDCProviderStatus$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`type`* __string__ | type of condition in CamelCase or in foo.example.com/CamelCase. --- Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be useful (see .node.status.conditions), the ability to deconflict is important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+| *`status`* __ConditionStatus__ | status of the condition, one of True, False, Unknown.
+| *`observedGeneration`* __integer__ | observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance.
+| *`lastTransitionTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#time-v1-meta[$$Time$$]__ | lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+| *`reason`* __string__ | reason contains a programmatic identifier indicating the reason for the condition's last transition. Producers of specific condition types may define expected values and meanings for this field, and whether the values are considered a guaranteed API. The value should be a CamelCase string. This field may not be empty.
+| *`message`* __string__ | message is a human readable message indicating details about the transition. This may be an empty string.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcauthorizationconfig"]
+==== OIDCAuthorizationConfig 
+
+OIDCAuthorizationConfig provides information about how to form the OAuth2 authorization request parameters.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-upstreamoidcproviderspec[$$UpstreamOIDCProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`additionalScopes`* __string array__ | AdditionalScopes are the scopes in addition to "openid" that will be requested as part of the authorization request flow with an OIDC identity provider. By default only the "openid" scope will be requested.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcclaims"]
+==== OIDCClaims 
+
+OIDCClaims provides a mapping from upstream claims into identities.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-upstreamoidcproviderspec[$$UpstreamOIDCProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`groups`* __string__ | Groups provides the name of the token claim that will be used to ascertain the groups to which an identity belongs.
+| *`username`* __string__ | Username provides the name of the token claim that will be used to ascertain an identity's username.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcclient"]
+==== OIDCClient 
+
+OIDCClient contains information about an OIDC client (e.g., client ID and client secret).
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-upstreamoidcproviderspec[$$UpstreamOIDCProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`secretName`* __string__ | SecretName contains the name of a namespace-local Secret object that provides the clientID and clientSecret for an OIDC client. If only the SecretName is specified in an OIDCClient struct, then it is expected that the Secret is of type "secrets.pinniped.dev/oidc" with keys "clientID" and "clientSecret".
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-tlsspec"]
+==== TLSSpec 
+
+Configuration for TLS parameters related to identity provider integration.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-upstreamoidcproviderspec[$$UpstreamOIDCProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`certificateAuthorityData`* __string__ | X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-upstreamoidcprovider"]
+==== UpstreamOIDCProvider 
+
+UpstreamOIDCProvider describes the configuration of an upstream OpenID Connect identity provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-upstreamoidcproviderlist[$$UpstreamOIDCProviderList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-upstreamoidcproviderspec[$$UpstreamOIDCProviderSpec$$]__ | Spec for configuring the identity provider.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-upstreamoidcproviderstatus[$$UpstreamOIDCProviderStatus$$]__ | Status of the identity provider.
+|===
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-upstreamoidcproviderspec"]
+==== UpstreamOIDCProviderSpec 
+
+Spec for configuring an OIDC identity provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-upstreamoidcprovider[$$UpstreamOIDCProvider$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`issuer`* __string__ | Issuer is the issuer URL of this OIDC identity provider, i.e., where to fetch /.well-known/openid-configuration.
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration for discovery/JWKS requests to the issuer.
+| *`authorizationConfig`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcauthorizationconfig[$$OIDCAuthorizationConfig$$]__ | AuthorizationConfig holds information about how to form the OAuth2 authorization request parameters to be used with this OIDC identity provider.
+| *`claims`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcclaims[$$OIDCClaims$$]__ | Claims provides the names of token claims that will be used when inspecting an identity from this OIDC identity provider.
+| *`client`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcclient[$$OIDCClient$$]__ | OIDCClient contains OIDC client information to be used used with this OIDC identity provider.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-upstreamoidcproviderstatus"]
+==== UpstreamOIDCProviderStatus 
+
+Status of an OIDC identity provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-upstreamoidcprovider[$$UpstreamOIDCProvider$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`phase`* __UpstreamOIDCProviderPhase__ | Phase summarizes the overall status of the UpstreamOIDCProvider.
+| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-condition[$$Condition$$]__ | Represents the observations of an identity provider's current state.
 |===
 
 

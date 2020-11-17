@@ -4,6 +4,8 @@
 # Use a runtime image based on Debian slim
 FROM debian:10.6-slim
 
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
 # Copy the binary which was built outside the container.
 COPY build/pinniped-supervisor /usr/local/bin/pinniped-supervisor
 

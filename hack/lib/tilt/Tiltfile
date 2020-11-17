@@ -113,6 +113,7 @@ k8s_resource(
     objects=[
         # these are the objects that would otherwise appear in the "uncategorized" tab in the tilt UI
         'oidcproviders.config.supervisor.pinniped.dev:customresourcedefinition',
+        'upstreamoidcproviders.idp.supervisor.pinniped.dev:customresourcedefinition',
         'pinniped-supervisor-static-config:configmap',
         'supervisor:namespace',
         'pinniped-supervisor:role',

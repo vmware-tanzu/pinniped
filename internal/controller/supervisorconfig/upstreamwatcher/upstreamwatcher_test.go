@@ -5,9 +5,9 @@ package upstreamwatcher
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -25,6 +25,7 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/testlogger"
 )
 
@@ -34,7 +35,8 @@ func TestController(t *testing.T) {
 	earlier := metav1.NewTime(now.Add(-1 * time.Hour).UTC())
 
 	// Start another test server that answers discovery successfully.
-	testIssuer := newTestIssuer(t)
+	testIssuerCA, testIssuerURL := newTestIssuer(t)
+	testIssuerCABase64 := base64.StdEncoding.EncodeToString([]byte(testIssuerCA))
 	testIssuerAuthorizeURL, err := url.Parse("https://example.com/authorize")
 	require.NoError(t, err)
 
@@ -65,7 +67,8 @@ func TestController(t *testing.T) {
 			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Spec: v1alpha1.UpstreamOIDCProviderSpec{
-					Issuer:              testIssuer.URL,
+					Issuer:              testIssuerURL,
+					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
 					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: testAdditionalScopes},
 				},
@@ -106,7 +109,8 @@ func TestController(t *testing.T) {
 			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Spec: v1alpha1.UpstreamOIDCProviderSpec{
-					Issuer:              testIssuer.URL,
+					Issuer:              testIssuerURL,
+					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
 					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: testAdditionalScopes},
 				},
@@ -151,7 +155,8 @@ func TestController(t *testing.T) {
 			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Spec: v1alpha1.UpstreamOIDCProviderSpec{
-					Issuer:              testIssuer.URL,
+					Issuer:              testIssuerURL,
+					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
 					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: testAdditionalScopes},
 				},
@@ -185,6 +190,102 @@ func TestController(t *testing.T) {
 							LastTransitionTime: now,
 							Reason:             "Success",
 							Message:            "discovered issuer configuration",
+						},
+					},
+				},
+			}},
+		},
+		{
+			name: "TLS CA bundle is invalid base64",
+			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "test-name"},
+				Spec: v1alpha1.UpstreamOIDCProviderSpec{
+					Issuer: testIssuerURL,
+					TLS: &v1alpha1.TLSSpec{
+						CertificateAuthorityData: "invalid-base64",
+					},
+					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
+					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: append(testAdditionalScopes, "xyz", "openid")},
+				},
+			}},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
+				Type:       "secrets.pinniped.dev/oidc-client",
+				Data:       testValidSecretData,
+			}},
+			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
+			wantLogs: []string{
+				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7" "reason"="InvalidTLSConfig" "status"="False" "type"="OIDCDiscoverySucceeded"`,
+				`upstream-observer "error"="UpstreamOIDCProvider has a failing condition" "msg"="found failing condition" "message"="spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidTLSConfig" "type"="OIDCDiscoverySucceeded"`,
+			},
+			wantResultingCache: []provider.UpstreamOIDCIdentityProvider{},
+			wantResultingUpstreams: []v1alpha1.UpstreamOIDCProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
+				Status: v1alpha1.UpstreamOIDCProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:               "ClientCredentialsValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded client credentials",
+						},
+						{
+							Type:               "OIDCDiscoverySucceeded",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "InvalidTLSConfig",
+							Message:            `spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7`,
+						},
+					},
+				},
+			}},
+		},
+		{
+			name: "TLS CA bundle does not have any certificates",
+			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "test-name"},
+				Spec: v1alpha1.UpstreamOIDCProviderSpec{
+					Issuer: testIssuerURL,
+					TLS: &v1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte("not-a-pem-ca-bundle")),
+					},
+					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
+					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: append(testAdditionalScopes, "xyz", "openid")},
+				},
+			}},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
+				Type:       "secrets.pinniped.dev/oidc-client",
+				Data:       testValidSecretData,
+			}},
+			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
+			wantLogs: []string{
+				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="spec.certificateAuthorityData is invalid: no certificates found" "reason"="InvalidTLSConfig" "status"="False" "type"="OIDCDiscoverySucceeded"`,
+				`upstream-observer "error"="UpstreamOIDCProvider has a failing condition" "msg"="found failing condition" "message"="spec.certificateAuthorityData is invalid: no certificates found" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidTLSConfig" "type"="OIDCDiscoverySucceeded"`,
+			},
+			wantResultingCache: []provider.UpstreamOIDCIdentityProvider{},
+			wantResultingUpstreams: []v1alpha1.UpstreamOIDCProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
+				Status: v1alpha1.UpstreamOIDCProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:               "ClientCredentialsValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded client credentials",
+						},
+						{
+							Type:               "OIDCDiscoverySucceeded",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "InvalidTLSConfig",
+							Message:            `spec.certificateAuthorityData is invalid: no certificates found`,
 						},
 					},
 				},
@@ -240,7 +341,8 @@ func TestController(t *testing.T) {
 			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Spec: v1alpha1.UpstreamOIDCProviderSpec{
-					Issuer:              testIssuer.URL + "/invalid",
+					Issuer:              testIssuerURL + "/invalid",
+					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
 					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: testAdditionalScopes},
 				},
@@ -285,7 +387,8 @@ func TestController(t *testing.T) {
 			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Spec: v1alpha1.UpstreamOIDCProviderSpec{
-					Issuer:              testIssuer.URL + "/insecure",
+					Issuer:              testIssuerURL + "/insecure",
+					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
 					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: testAdditionalScopes},
 				},
@@ -330,7 +433,8 @@ func TestController(t *testing.T) {
 			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "test-name"},
 				Spec: v1alpha1.UpstreamOIDCProviderSpec{
-					Issuer:              testIssuer.URL,
+					Issuer:              testIssuerURL,
+					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
 					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: append(testAdditionalScopes, "xyz", "openid")},
 				},
@@ -373,7 +477,8 @@ func TestController(t *testing.T) {
 			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
 				Spec: v1alpha1.UpstreamOIDCProviderSpec{
-					Issuer:              testIssuer.URL,
+					Issuer:              testIssuerURL,
+					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
 					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: testAdditionalScopes},
 				},
@@ -486,10 +591,9 @@ func normalizeUpstreams(upstreams []v1alpha1.UpstreamOIDCProvider, now metav1.Ti
 	return result
 }
 
-func newTestIssuer(t *testing.T) *httptest.Server {
+func newTestIssuer(t *testing.T) (string, string) {
 	mux := http.NewServeMux()
-	testServer := httptest.NewServer(mux)
-	t.Cleanup(testServer.Close)
+	caBundlePEM, testURL := testutil.TLSTestServer(t, mux.ServeHTTP)
 
 	type providerJSON struct {
 		Issuer   string `json:"issuer"`
@@ -502,7 +606,7 @@ func newTestIssuer(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:  testServer.URL,
+			Issuer:  testURL,
 			AuthURL: "https://example.com/authorize",
 		})
 	})
@@ -511,7 +615,7 @@ func newTestIssuer(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/invalid/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:  testServer.URL + "/invalid",
+			Issuer:  testURL + "/invalid",
 			AuthURL: "%",
 		})
 	})
@@ -520,10 +624,10 @@ func newTestIssuer(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/insecure/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:  testServer.URL + "/insecure",
+			Issuer:  testURL + "/insecure",
 			AuthURL: "http://example.com/authorize",
 		})
 	})
 
-	return testServer
+	return caBundlePEM, testURL
 }

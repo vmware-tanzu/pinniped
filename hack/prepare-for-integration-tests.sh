@@ -268,7 +268,7 @@ fi
 #
 # Download the test CA bundle that was generated in the Dex pod.
 #
-test_ca_bundle_pem="$(kubectl exec -n dex deployment/dex -- cat /var/certs/ca.pem)"
+test_ca_bundle_pem="$(kubectl get secrets -n dex certs -o go-template='{{index .data "ca.pem" | base64decode}}')"
 
 #
 # Create the environment file

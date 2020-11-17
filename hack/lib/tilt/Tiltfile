@@ -27,6 +27,17 @@ k8s_yaml(local(['ytt','--file', '../../../test/deploy/dex']))
 # Tell tilt to watch all of those files for changes.
 watch_file('../../../test/deploy/dex')
 
+# Collect all the deployed certificate issuer resources under a "cert-issuer" resource tab.
+k8s_resource(
+    workload='cert-issuer',
+    objects=[
+        # these are the objects that would otherwise appear in the "uncategorized" tab in the tilt UI
+        'cert-issuer:serviceaccount',
+        'cert-issuer:role',
+        'cert-issuer:rolebinding',
+    ],
+)
+
 # Collect all the deployed Dex resources under a "dex" resource tab.
 k8s_resource(
     workload='dex', # this is the deployment name
@@ -35,6 +46,7 @@ k8s_resource(
         'dex:namespace',
         'dex-config:configmap',
    ],
+   resource_deps=['cert-issuer'],
 )
 
 #####################################################################################################
@@ -186,6 +198,6 @@ k8s_resource(
 local_resource(
   'test-env',
   'TILT_MODE=yes ../../prepare-for-integration-tests.sh',
-  resource_deps=['local-user-auth', 'concierge', 'supervisor'],
+  resource_deps=['local-user-auth', 'concierge', 'supervisor', 'dex', 'cert-issuer'],
   deps=['../../prepare-for-integration-tests.sh'],
 )

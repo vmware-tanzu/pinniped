@@ -19,35 +19,25 @@ local_resource(
 )
 
 #####################################################################################################
-# Dex
+# Test IDP (Dex + cert generation + squid proxy)
 #
 
-# Render the Dex installation manifest using ytt.
+# Render the IDP installation manifest using ytt.
 k8s_yaml(local(['ytt','--file', '../../../test/deploy/dex']))
 # Tell tilt to watch all of those files for changes.
 watch_file('../../../test/deploy/dex')
 
-# Collect all the deployed certificate issuer resources under a "cert-issuer" resource tab.
-k8s_resource(
-    workload='cert-issuer',
-    objects=[
-        # these are the objects that would otherwise appear in the "uncategorized" tab in the tilt UI
-        'cert-issuer:serviceaccount',
-        'cert-issuer:role',
-        'cert-issuer:rolebinding',
-    ],
-)
+k8s_resource(objects=['dex:namespace'], new_name='dex-ns')
+k8s_resource(workload='cert-issuer', resource_deps=['dex-ns'], objects=[
+    'cert-issuer:serviceaccount',
+    'cert-issuer:role',
+    'cert-issuer:rolebinding',
+])
+k8s_resource(workload='proxy', resource_deps=['dex-ns'])
+k8s_resource(workload='dex', resource_deps=['dex-ns', 'cert-issuer'], objects=[
+    'dex-config:configmap',
+])
 
-# Collect all the deployed Dex resources under a "dex" resource tab.
-k8s_resource(
-    workload='dex', # this is the deployment name
-    objects=[
-        # these are the objects that would otherwise appear in the "uncategorized" tab in the tilt UI
-        'dex:namespace',
-        'dex-config:configmap',
-   ],
-   resource_deps=['cert-issuer'],
-)
 
 #####################################################################################################
 # Local-user-authenticator app
@@ -198,6 +188,6 @@ k8s_resource(
 local_resource(
   'test-env',
   'TILT_MODE=yes ../../prepare-for-integration-tests.sh',
-  resource_deps=['local-user-auth', 'concierge', 'supervisor', 'dex', 'cert-issuer'],
+  resource_deps=['local-user-auth', 'concierge', 'supervisor', 'dex', 'proxy'],
   deps=['../../prepare-for-integration-tests.sh'],
 )

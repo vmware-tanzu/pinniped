@@ -373,6 +373,23 @@ OIDCClient contains information about an OIDC client (e.g., client ID and client
 |===
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-idp-v1alpha1-tlsspec"]
+==== TLSSpec 
+
+Configuration for TLS parameters related to identity provider integration.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-idp-v1alpha1-upstreamoidcproviderspec[$$UpstreamOIDCProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`certificateAuthorityData`* __string__ | X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted.
+|===
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-idp-v1alpha1-upstreamoidcprovider"]
 ==== UpstreamOIDCProvider 
 
@@ -409,6 +426,7 @@ Spec for configuring an OIDC identity provider.
 |===
 | Field | Description
 | *`issuer`* __string__ | Issuer is the issuer URL of this OIDC identity provider, i.e., where to fetch /.well-known/openid-configuration.
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration for discovery/JWKS requests to the issuer.
 | *`authorizationConfig`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-idp-v1alpha1-oidcauthorizationconfig[$$OIDCAuthorizationConfig$$]__ | AuthorizationConfig holds information about how to form the OAuth2 authorization request parameters to be used with this OIDC identity provider.
 | *`claims`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-idp-v1alpha1-oidcclaims[$$OIDCClaims$$]__ | Claims provides the names of token claims that will be used when inspecting an identity from this OIDC identity provider.
 | *`client`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-supervisor-idp-v1alpha1-oidcclient[$$OIDCClient$$]__ | OIDCClient contains OIDC client information to be used used with this OIDC identity provider.

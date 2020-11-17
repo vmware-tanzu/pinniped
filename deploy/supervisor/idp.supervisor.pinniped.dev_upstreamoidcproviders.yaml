@@ -98,6 +98,15 @@ spec:
                 minLength: 1
                 pattern: ^https://
                 type: string
+              tls:
+                description: TLS configuration for discovery/JWKS requests to the
+                  issuer.
+                properties:
+                  certificateAuthorityData:
+                    description: X.509 Certificate Authority (base64-encoded PEM bundle).
+                      If omitted, a default set of system roots will be trusted.
+                    type: string
+                type: object
             required:
             - client
             - issuer

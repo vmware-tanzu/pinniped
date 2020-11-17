@@ -130,8 +130,8 @@ func getLoginProvider(t *testing.T) *loginProviderPatterns {
 		},
 		{
 			Name:                "Dex",
-			IssuerPattern:       regexp.MustCompile(`\Ahttp://dex\.dex\.svc\.cluster\.local/dex.*\z`),
-			LoginPagePattern:    regexp.MustCompile(`\Ahttp://dex\.dex\.svc\.cluster\.local/dex/auth/local.+\z`),
+			IssuerPattern:       regexp.MustCompile(`\Ahttps://dex\.dex\.svc\.cluster\.local/dex.*\z`),
+			LoginPagePattern:    regexp.MustCompile(`\Ahttps://dex\.dex\.svc\.cluster\.local/dex/auth/local.+\z`),
 			UsernameSelector:    "input#login",
 			PasswordSelector:    "input#password",
 			LoginButtonSelector: "button#submit-login",
@@ -170,6 +170,7 @@ func TestCLILoginOIDC(t *testing.T) {
 		agouti.Desired(caps),
 		agouti.ChromeOptions("args", []string{
 			"--no-sandbox",
+			"--ignore-certificate-errors",
 			"--headless", // Comment out this line to see the tests happen in a visible browser window.
 		}),
 		// Uncomment this to see stdout/stderr from chromedriver.
@@ -413,6 +414,15 @@ func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, ses
 		"--session-cache", sessionCachePath,
 		"--skip-browser",
 	)
+
+	// If there is a custom CA bundle, pass it via --ca-bundle and a temporary file.
+	if env.OIDCUpstream.CABundle != "" {
+		path := filepath.Join(t.TempDir(), "test-ca.pem")
+		require.NoError(t, ioutil.WriteFile(path, []byte(env.OIDCUpstream.CABundle), 0600))
+		cmd.Args = append(cmd.Args, "--ca-bundle", path)
+	}
+
+	// If there is a custom proxy, set it using standard environment variables.
 	if env.Proxy != "" {
 		cmd.Env = append(os.Environ(),
 			"http_proxy="+env.Proxy,

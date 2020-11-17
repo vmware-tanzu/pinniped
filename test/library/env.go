@@ -48,6 +48,7 @@ type TestEnv struct {
 
 	OIDCUpstream struct {
 		Issuer        string `json:"issuer"`
+		CABundle      string `json:"caBundle" `
 		ClientID      string `json:"clientID"`
 		LocalhostPort int    `json:"localhostPort"`
 		Username      string `json:"username"`
@@ -130,6 +131,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 	result.Proxy = os.Getenv("PINNIPED_TEST_PROXY")
 
 	result.OIDCUpstream.Issuer = needEnv(t, "PINNIPED_TEST_CLI_OIDC_ISSUER")
+	result.OIDCUpstream.CABundle = os.Getenv("PINNIPED_TEST_CLI_OIDC_ISSUER_CA_BUNDLE")
 	result.OIDCUpstream.ClientID = needEnv(t, "PINNIPED_TEST_CLI_OIDC_CLIENT_ID")
 	result.OIDCUpstream.LocalhostPort, _ = strconv.Atoi(needEnv(t, "PINNIPED_TEST_CLI_OIDC_LOCALHOST_PORT"))
 	result.OIDCUpstream.Username = needEnv(t, "PINNIPED_TEST_CLI_OIDC_USERNAME")

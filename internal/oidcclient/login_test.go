@@ -416,6 +416,7 @@ func TestLogin(t *testing.T) {
 						require.Equal(t, []*Token{&testToken}, cache.sawPutTokens)
 					})
 					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithClient(&http.Client{Timeout: 10 * time.Second})(h))
 
 					h.openURL = func(actualURL string) error {
 						parsedActualURL, err := url.Parse(actualURL)

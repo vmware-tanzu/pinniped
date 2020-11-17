@@ -6,13 +6,15 @@
 #@ load("@ytt:yaml", "yaml")
 
 #@ def dexConfig():
-issuer: http://dex.dex.svc.cluster.local/dex
+issuer: https://dex.dex.svc.cluster.local/dex
 storage:
   type: sqlite3
   config:
     file: ":memory:"
 web:
-  http: 0.0.0.0:80
+  https: 0.0.0.0:443
+  tlsCert: /var/certs/dex.pem
+  tlsKey: /var/certs/dex-key.pem
 oauth2:
   skipApprovalScreen: true
 staticClients:
@@ -67,24 +69,59 @@ spec:
       annotations:
         dexConfigHash: #@ sha256.sum(yaml.encode(dexConfig()))
     spec:
+      initContainers:
+      - name: generate-certs
+        image: cfssl/cfssl:1.5.0
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/bash"]
+        args:
+        - -c
+        - |
+          cd /var/certs
+          cfssl print-defaults config > /tmp/cfssl-default.json
+          echo '{"CN": "Pinniped Test","hosts": [],"key": {"algo": "ecdsa","size": 256},"names": [{}]}' > csr.json
+
+          echo "generating CA key..."
+          cfssl genkey \
+            -config /tmp/cfssl-default.json \
+            -initca csr.json \
+            | cfssljson -bare ca
+
+          echo "generating Dex server certificate..."
+          cfssl gencert \
+            -ca ca.pem -ca-key ca-key.pem \
+            -config /tmp/cfssl-default.json \
+            -profile www \
+            -cn "dex.dex.svc.cluster.local" \
+            -hostname "dex.dex.svc.cluster.local" \
+            csr.json \
+            | cfssljson -bare dex
+        volumeMounts:
+          - name: certs
+            mountPath: /var/certs
       containers:
-        - name: dex
-          image: quay.io/dexidp/dex:v2.10.0
-          imagePullPolicy: IfNotPresent
-          command:
-          - /usr/local/bin/dex
-          - serve
-          - /etc/dex/cfg/config.yaml
-          ports:
-          - name: http
-            containerPort: 80
-          volumeMounts:
-          - name: config
-            mountPath: /etc/dex/cfg
+      - name: dex
+        image: quay.io/dexidp/dex:v2.10.0
+        imagePullPolicy: IfNotPresent
+        command:
+        - /usr/local/bin/dex
+        - serve
+        - /etc/dex/cfg/config.yaml
+        ports:
+        - name: https
+          containerPort: 443
+        volumeMounts:
+        - name: dex-config
+          mountPath: /etc/dex/cfg
+        - name: certs
+          mountPath: /var/certs
+          readOnly: true
       volumes:
-      - name: config
+      - name: dex-config
         configMap:
           name: dex-config
+      - name: certs
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -98,4 +135,5 @@ spec:
   selector:
     app: dex
   ports:
-    - port: 80
+  - port: 443
+    name: https

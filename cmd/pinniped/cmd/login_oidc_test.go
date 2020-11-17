@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/here"
-	"go.pinniped.dev/internal/oidcclient"
+	"go.pinniped.dev/pkg/oidcclient"
 )
 
 func TestLoginOIDCCommand(t *testing.T) {
@@ -40,6 +40,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				  oidc --issuer ISSUER --client-id CLIENT_ID [flags]
 
 				Flags:
+					  --ca-bundle strings      Path to TLS certificate authority bundle (PEM format, optional, can be repeated).
 					  --client-id string       OpenID Connect client ID.
 				  -h, --help                   help for oidc
 					  --issuer string          OpenID Connect issuer URL.

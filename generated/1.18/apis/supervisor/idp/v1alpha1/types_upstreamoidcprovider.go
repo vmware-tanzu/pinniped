@@ -75,6 +75,10 @@ type UpstreamOIDCProviderSpec struct {
 	// +kubebuilder:validation:Pattern=`^https://`
 	Issuer string `json:"issuer"`
 
+	// TLS configuration for discovery/JWKS requests to the issuer.
+	// +optional
+	TLS *TLSSpec `json:"tls,omitempty"`
+
 	// AuthorizationConfig holds information about how to form the OAuth2 authorization request
 	// parameters to be used with this OIDC identity provider.
 	// +optional

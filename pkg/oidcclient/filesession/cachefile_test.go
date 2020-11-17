@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"go.pinniped.dev/internal/oidcclient"
+	"go.pinniped.dev/pkg/oidcclient"
 )
 
 // validSession should be the same data as `testdata/valid.yaml`.

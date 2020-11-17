@@ -5,6 +5,7 @@ package integration
 
 import (
 	"context"
+	"encoding/base64"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 )
 
 func TestSupervisorUpstreamOIDCDiscovery(t *testing.T) {
-	library.SkipUnlessIntegration(t)
+	env := library.IntegrationEnv(t)
 
 	t.Run("invalid missing secret and bad issuer", func(t *testing.T) {
 		t.Parallel()
@@ -50,7 +51,10 @@ func TestSupervisorUpstreamOIDCDiscovery(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
 		spec := v1alpha1.UpstreamOIDCProviderSpec{
-			Issuer: "https://accounts.google.com", // Use Google as an example of a valid OIDC issuer for now.
+			Issuer: env.OIDCUpstream.Issuer,
+			TLS: &v1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.OIDCUpstream.CABundle)),
+			},
 			AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{
 				AdditionalScopes: []string{"email", "profile"},
 			},

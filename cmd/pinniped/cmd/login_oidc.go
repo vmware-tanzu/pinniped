@@ -4,7 +4,12 @@
 package cmd
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -13,8 +18,8 @@ import (
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 	"k8s.io/klog/v2/klogr"
 
-	"go.pinniped.dev/internal/oidcclient"
-	"go.pinniped.dev/internal/oidcclient/filesession"
+	"go.pinniped.dev/pkg/oidcclient"
+	"go.pinniped.dev/pkg/oidcclient/filesession"
 )
 
 //nolint: gochecknoinits
@@ -36,6 +41,7 @@ func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...oid
 		scopes            []string
 		skipBrowser       bool
 		sessionCachePath  string
+		caBundlePaths     []string
 		debugSessionCache bool
 	)
 	cmd.Flags().StringVar(&issuer, "issuer", "", "OpenID Connect issuer URL.")
@@ -44,6 +50,7 @@ func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...oid
 	cmd.Flags().StringSliceVar(&scopes, "scopes", []string{"offline_access", "openid", "email", "profile"}, "OIDC scopes to request during login.")
 	cmd.Flags().BoolVar(&skipBrowser, "skip-browser", false, "Skip opening the browser (just print the URL).")
 	cmd.Flags().StringVar(&sessionCachePath, "session-cache", filepath.Join(mustGetConfigDir(), "sessions.yaml"), "Path to session cache file.")
+	cmd.Flags().StringSliceVar(&caBundlePaths, "ca-bundle", nil, "Path to TLS certificate authority bundle (PEM format, optional, can be repeated).")
 	cmd.Flags().BoolVar(&debugSessionCache, "debug-session-cache", false, "Print debug logs related to the session cache.")
 	mustMarkHidden(&cmd, "debug-session-cache")
 	mustMarkRequired(&cmd, "issuer", "client-id")
@@ -77,6 +84,27 @@ func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...oid
 			opts = append(opts, oidcclient.WithBrowserOpen(func(url string) error {
 				cmd.PrintErr("Please log in: ", url, "\n")
 				return nil
+			}))
+		}
+
+		if len(caBundlePaths) > 0 {
+			pool := x509.NewCertPool()
+			for _, p := range caBundlePaths {
+				pem, err := ioutil.ReadFile(p)
+				if err != nil {
+					return fmt.Errorf("could not read --ca-bundle: %w", err)
+				}
+				pool.AppendCertsFromPEM(pem)
+			}
+			tlsConfig := tls.Config{
+				RootCAs:    pool,
+				MinVersion: tls.VersionTLS12,
+			}
+			opts = append(opts, oidcclient.WithClient(&http.Client{
+				Transport: &http.Transport{
+					Proxy:           http.ProxyFromEnvironment,
+					TLSClientConfig: &tlsConfig,
+				},
 			}))
 		}
 

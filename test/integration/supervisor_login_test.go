@@ -1,0 +1,196 @@
+// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
+package integration
+
+import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/base64"
+	"fmt"
+	"net/http"
+	"net/url"
+	"testing"
+	"time"
+
+	"github.com/coreos/go-oidc"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/oauth2"
+
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/idp/v1alpha1"
+	"go.pinniped.dev/pkg/oidcclient/nonce"
+	"go.pinniped.dev/pkg/oidcclient/pkce"
+	"go.pinniped.dev/pkg/oidcclient/state"
+	"go.pinniped.dev/test/library"
+)
+
+func TestSupervisorLogin(t *testing.T) {
+	env := library.IntegrationEnv(t)
+	client := library.NewSupervisorClientset(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// Create downstream OIDC provider (i.e., update supervisor with OIDC provider).
+	scheme := "http"
+	addr := env.SupervisorHTTPAddress
+	caBundle := ""
+	path := "/some/path"
+	issuer := fmt.Sprintf("https://%s%s", addr, path)
+	_, _ = requireCreatingOIDCProviderCausesDiscoveryEndpointsToAppear(
+		ctx,
+		t,
+		scheme,
+		addr,
+		caBundle,
+		issuer,
+		client,
+	)
+
+	// Create HTTP client.
+	httpClient := newHTTPClient(t, caBundle, nil)
+	httpClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+		// Don't follow any redirects right now, since we simply want to validate that our auth endpoint
+		// redirects us.
+		return http.ErrUseLastResponse
+	}
+
+	// Declare the downstream auth endpoint url we will use.
+	downstreamAuthURL := makeDownstreamAuthURL(t, scheme, addr, path)
+
+	// Make request to auth endpoint - should fail, since we have no upstreams.
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthURL, nil)
+	require.NoError(t, err)
+	rsp, err := httpClient.Do(req)
+	require.NoError(t, err)
+	defer rsp.Body.Close()
+	require.Equal(t, http.StatusUnprocessableEntity, rsp.StatusCode)
+
+	// Create upstream OIDC provider.
+	testClientID := "test-client-id"
+	testClientSecret := "test-client-secret"
+	spec := idpv1alpha1.UpstreamOIDCProviderSpec{
+		Issuer: env.OIDCUpstream.Issuer,
+		TLS: &idpv1alpha1.TLSSpec{
+			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.OIDCUpstream.CABundle)),
+		},
+		AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
+			AdditionalScopes: []string{},
+		},
+		Client: idpv1alpha1.OIDCClient{
+			SecretName: makeTestClientCredsSecret(t, testClientID, testClientSecret).Name,
+		},
+	}
+	upstream := makeTestUpstream(t, spec, idpv1alpha1.PhaseReady)
+
+	upstreamRedirectURI := fmt.Sprintf("https://%s/some/path/callback/%s", env.SupervisorHTTPAddress, upstream.Name)
+
+	// Make request to authorize endpoint - should pass, since we now have an upstream.
+	req, err = http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthURL, nil)
+	require.NoError(t, err)
+	rsp, err = httpClient.Do(req)
+	require.NoError(t, err)
+	defer rsp.Body.Close()
+	require.Equal(t, http.StatusFound, rsp.StatusCode)
+	requireValidRedirectLocation(
+		ctx,
+		t,
+		upstream.Spec.Issuer,
+		testClientID,
+		upstreamRedirectURI,
+		rsp.Header.Get("Location"),
+	)
+}
+
+func makeDownstreamAuthURL(t *testing.T, scheme, addr, path string) string {
+	t.Helper()
+	downstreamOAuth2Config := oauth2.Config{
+		// This is the hardcoded public client that the supervisor supports.
+		ClientID: "pinniped-cli",
+		Endpoint: oauth2.Endpoint{
+			AuthURL: fmt.Sprintf("%s://%s%s/oauth2/authorize", scheme, addr, path),
+		},
+		// This is the hardcoded downstream redirect URI that the supervisor supports.
+		RedirectURL: "http://127.0.0.1/callback",
+		Scopes:      []string{"openid"},
+	}
+	state, nonce, pkce := generateAuthRequestParams(t)
+	return downstreamOAuth2Config.AuthCodeURL(
+		state.String(),
+		nonce.Param(),
+		pkce.Challenge(),
+		pkce.Method(),
+	)
+}
+
+func generateAuthRequestParams(t *testing.T) (state.State, nonce.Nonce, pkce.Code) {
+	t.Helper()
+	state, err := state.Generate()
+	require.NoError(t, err)
+	nonce, err := nonce.Generate()
+	require.NoError(t, err)
+	pkce, err := pkce.Generate()
+	require.NoError(t, err)
+	return state, nonce, pkce
+}
+
+func requireValidRedirectLocation(
+	ctx context.Context,
+	t *testing.T,
+	issuer, clientID, redirectURI, actualLocation string,
+) {
+	t.Helper()
+	env := library.IntegrationEnv(t)
+
+	// Do OIDC discovery on our test issuer to get auth endpoint.
+	transport := http.Transport{}
+	if env.Proxy != "" {
+		transport.Proxy = func(_ *http.Request) (*url.URL, error) {
+			return url.Parse(env.Proxy)
+		}
+	}
+	if env.OIDCUpstream.CABundle != "" {
+		transport.TLSClientConfig = &tls.Config{RootCAs: x509.NewCertPool()}
+		transport.TLSClientConfig.RootCAs.AppendCertsFromPEM([]byte(env.OIDCUpstream.CABundle))
+	}
+
+	ctx = oidc.ClientContext(ctx, &http.Client{Transport: &transport})
+	upstreamProvider, err := oidc.NewProvider(ctx, issuer)
+	require.NoError(t, err)
+
+	// Parse expected upstream auth URL.
+	expectedLocationURL, err := url.Parse(
+		(&oauth2.Config{
+			ClientID:    clientID,
+			Endpoint:    upstreamProvider.Endpoint(),
+			RedirectURL: redirectURI,
+			Scopes:      []string{"openid"},
+		}).AuthCodeURL("", oauth2.AccessTypeOffline),
+	)
+	require.NoError(t, err)
+
+	// Parse actual upstream auth URL.
+	actualLocationURL, err := url.Parse(actualLocation)
+	require.NoError(t, err)
+
+	// First make some assertions on the query values. Note that we will not be able to know what
+	// certain query values are since they may be random (e.g., state, pkce, nonce).
+	expectedLocationQuery := expectedLocationURL.Query()
+	actualLocationQuery := actualLocationURL.Query()
+	require.NotEmpty(t, actualLocationQuery.Get("state"))
+	actualLocationQuery.Del("state")
+	require.NotEmpty(t, actualLocationQuery.Get("code_challenge"))
+	actualLocationQuery.Del("code_challenge")
+	require.NotEmpty(t, actualLocationQuery.Get("code_challenge_method"))
+	actualLocationQuery.Del("code_challenge_method")
+	require.NotEmpty(t, actualLocationQuery.Get("nonce"))
+	actualLocationQuery.Del("nonce")
+	require.Equal(t, expectedLocationQuery, actualLocationQuery)
+
+	// Zero-out query values, since we made specific assertions about those above, and assert that the
+	// URL's are equal otherwise.
+	expectedLocationURL.RawQuery = ""
+	actualLocationURL.RawQuery = ""
+	require.Equal(t, expectedLocationURL, actualLocationURL)
+}

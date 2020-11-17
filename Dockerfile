@@ -13,6 +13,7 @@ RUN go mod download
 # Copy only the production source code to avoid cache misses when editing other files
 COPY generated ./generated
 COPY cmd ./cmd
+COPY pkg ./pkg
 COPY internal ./internal
 COPY tools ./tools
 COPY hack ./hack

@@ -23,9 +23,9 @@ import (
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/mocks/mockkeyset"
-	"go.pinniped.dev/internal/oidcclient/nonce"
-	"go.pinniped.dev/internal/oidcclient/pkce"
-	"go.pinniped.dev/internal/oidcclient/state"
+	"go.pinniped.dev/pkg/oidcclient/nonce"
+	"go.pinniped.dev/pkg/oidcclient/pkce"
+	"go.pinniped.dev/pkg/oidcclient/state"
 )
 
 // mockSessionCache exists to avoid an import cycle if we generate mocks into another package.

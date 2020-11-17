@@ -15,7 +15,7 @@ import (
 	"github.com/gofrs/flock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"go.pinniped.dev/internal/oidcclient"
+	"go.pinniped.dev/pkg/oidcclient"
 )
 
 const (

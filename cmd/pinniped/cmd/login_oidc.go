@@ -18,8 +18,8 @@ import (
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 	"k8s.io/klog/v2/klogr"
 
-	"go.pinniped.dev/internal/oidcclient"
-	"go.pinniped.dev/internal/oidcclient/filesession"
+	"go.pinniped.dev/pkg/oidcclient"
+	"go.pinniped.dev/pkg/oidcclient/filesession"
 )
 
 //nolint: gochecknoinits

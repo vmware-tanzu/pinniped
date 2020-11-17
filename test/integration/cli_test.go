@@ -26,8 +26,8 @@ import (
 	"gopkg.in/square/go-jose.v2"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
-	"go.pinniped.dev/internal/oidcclient"
-	"go.pinniped.dev/internal/oidcclient/filesession"
+	"go.pinniped.dev/pkg/oidcclient"
+	"go.pinniped.dev/pkg/oidcclient/filesession"
 	"go.pinniped.dev/test/library"
 )
 

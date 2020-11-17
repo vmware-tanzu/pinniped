@@ -19,9 +19,9 @@ import (
 	"golang.org/x/oauth2"
 
 	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/idp/v1alpha1"
-	"go.pinniped.dev/internal/oidcclient/nonce"
-	"go.pinniped.dev/internal/oidcclient/pkce"
-	"go.pinniped.dev/internal/oidcclient/state"
+	"go.pinniped.dev/pkg/oidcclient/nonce"
+	"go.pinniped.dev/pkg/oidcclient/pkce"
+	"go.pinniped.dev/pkg/oidcclient/state"
 	"go.pinniped.dev/test/library"
 )
 

@@ -113,7 +113,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	upstreamAuthURL, err := url.Parse("https://some-upstream-idp:8443/auth")
 	require.NoError(t, err)
 
-	upstreamOIDCIdentityProvider := provider.UpstreamOIDCIdentityProvider{
+	upstreamOIDCIdentityProvider := testutil.TestUpstreamOIDCIdentityProvider{
 		Name:             "some-idp",
 		ClientID:         "some-client-id",
 		AuthorizationURL: *upstreamAuthURL,
@@ -122,7 +122,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 
 	issuer := "https://my-issuer.com/some-path"
 
-	// Configure fosite the same way that the production code would, except use in-memory storage.
+	// Configure fosite the same way that the production code would, using NullStorage to turn off storage.
 	oauthStore := oidc.NullStorage{}
 	hmacSecret := []byte("some secret - must have at least 32 bytes")
 	require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
@@ -771,13 +771,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		runOneTestCase(t, test, subject)
 
 		// Call the setter to change the upstream IDP settings.
-		newProviderSettings := provider.UpstreamOIDCIdentityProvider{
+		newProviderSettings := testutil.TestUpstreamOIDCIdentityProvider{
 			Name:             "some-other-idp",
 			ClientID:         "some-other-client-id",
 			AuthorizationURL: *upstreamAuthURL,
 			Scopes:           []string{"other-scope1", "other-scope2"},
 		}
-		test.idpListGetter.SetIDPList([]provider.UpstreamOIDCIdentityProvider{newProviderSettings})
+		test.idpListGetter.SetIDPList([]provider.UpstreamOIDCIdentityProviderI{provider.UpstreamOIDCIdentityProviderI(&newProviderSettings)})
 
 		// Update the expectations of the test case to match the new upstream IDP settings.
 		test.wantLocationHeader = urlWithQuery(upstreamAuthURL.String(),

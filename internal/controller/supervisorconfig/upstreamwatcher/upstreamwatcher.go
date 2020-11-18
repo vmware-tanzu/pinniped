@@ -62,7 +62,7 @@ const (
 
 // IDPCache is a thread safe cache that holds a list of validated upstream OIDC IDP configurations.
 type IDPCache interface {
-	SetIDPList([]provider.UpstreamOIDCIdentityProvider)
+	SetIDPList([]provider.UpstreamOIDCIdentityProviderI)
 }
 
 // lruValidatorCache caches the *oidc.Provider associated with a particular issuer/TLS configuration.
@@ -132,13 +132,13 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 	}
 
 	requeue := false
-	validatedUpstreams := make([]provider.UpstreamOIDCIdentityProvider, 0, len(actualUpstreams))
+	validatedUpstreams := make([]provider.UpstreamOIDCIdentityProviderI, 0, len(actualUpstreams))
 	for _, upstream := range actualUpstreams {
 		valid := c.validateUpstream(ctx, upstream)
 		if valid == nil {
 			requeue = true
 		} else {
-			validatedUpstreams = append(validatedUpstreams, *valid)
+			validatedUpstreams = append(validatedUpstreams, provider.UpstreamOIDCIdentityProviderI(valid))
 		}
 	}
 	c.cache.SetIDPList(validatedUpstreams)
@@ -257,6 +257,8 @@ func (c *controller) validateIssuer(ctx context.Context, upstream *v1alpha1.Upst
 		// Update the cache with the newly discovered value.
 		c.validatorCache.putProvider(&upstream.Spec, discoveredProvider)
 	}
+
+	// TODO also parse the token endpoint from the discovery info and put it onto the `result`
 
 	// Parse out and validate the discovered authorize endpoint.
 	authURL, err := url.Parse(discoveredProvider.Endpoint().AuthURL)

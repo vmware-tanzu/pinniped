@@ -527,7 +527,9 @@ func TestController(t *testing.T) {
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			testLog := testlogger.New(t)
 			cache := provider.NewDynamicUpstreamIDPProvider()
-			cache.SetIDPList([]provider.UpstreamOIDCIdentityProvider{{Name: "initial-entry"}})
+			initialProviderList := make([]provider.UpstreamOIDCIdentityProviderI, 1)
+			initialProviderList[0] = &provider.UpstreamOIDCIdentityProvider{Name: "initial-entry"}
+			cache.SetIDPList(initialProviderList)
 
 			controller := New(
 				cache,
@@ -551,7 +553,13 @@ func TestController(t *testing.T) {
 				require.NoError(t, err)
 			}
 			require.Equal(t, strings.Join(tt.wantLogs, "\n"), strings.Join(testLog.Lines(), "\n"))
-			require.ElementsMatch(t, tt.wantResultingCache, cache.GetIDPList())
+
+			actualIDPList := cache.GetIDPList()
+			require.Equal(t, len(tt.wantResultingCache), len(actualIDPList))
+			for i := range actualIDPList {
+				actualIDP := actualIDPList[i].(*provider.UpstreamOIDCIdentityProvider)
+				require.Equal(t, tt.wantResultingCache[i], *actualIDP)
+			}
 
 			actualUpstreams, err := fakePinnipedClient.IDPV1alpha1().UpstreamOIDCProviders(testNamespace).List(ctx, metav1.ListOptions{})
 			require.NoError(t, err)

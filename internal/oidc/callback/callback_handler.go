@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"path"
 
+	"github.com/ory/fosite"
+
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/csrftoken"
@@ -17,10 +19,7 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-func NewHandler(
-	idpListGetter oidc.IDPListGetter,
-	stateDecoder, cookieDecoder oidc.Decoder,
-) http.Handler {
+func NewHandler(idpListGetter oidc.IDPListGetter, oauthHelper fosite.OAuth2Provider, stateDecoder, cookieDecoder oidc.Decoder) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		state, err := validateRequest(r, stateDecoder, cookieDecoder)
 		if err != nil {
@@ -84,10 +83,10 @@ func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) 
 	return state, nil
 }
 
-func findUpstreamIDPConfig(r *http.Request, idpListGetter oidc.IDPListGetter) *provider.UpstreamOIDCIdentityProvider {
+func findUpstreamIDPConfig(r *http.Request, idpListGetter oidc.IDPListGetter) *provider.UpstreamOIDCIdentityProviderI {
 	_, lastPathComponent := path.Split(r.URL.Path)
 	for _, p := range idpListGetter.GetIDPList() {
-		if p.Name == lastPathComponent {
+		if p.GetName() == lastPathComponent {
 			return &p
 		}
 	}

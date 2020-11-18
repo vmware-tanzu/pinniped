@@ -3,13 +3,73 @@
 
 package testutil
 
-import "go.pinniped.dev/internal/oidc/provider"
+import (
+	"context"
+	"net/url"
+
+	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidcclient"
+	"go.pinniped.dev/internal/oidcclient/nonce"
+	"go.pinniped.dev/internal/oidcclient/pkce"
+)
 
 // Test helpers for the OIDC package.
 
-func NewIDPListGetter(upstreamOIDCIdentityProviders ...provider.UpstreamOIDCIdentityProvider) provider.DynamicUpstreamIDPProvider {
+type TestUpstreamOIDCIdentityProvider struct {
+	Name                                  string
+	ClientID                              string
+	AuthorizationURL                      url.URL
+	UsernameClaim                         string
+	GroupsClaim                           string
+	Scopes                                []string
+	ExchangeAuthcodeAndValidateTokensFunc func(
+		ctx context.Context,
+		authcode string,
+		pkceCodeVerifier pkce.Code,
+		expectedIDTokenNonce nonce.Nonce,
+	) (oidcclient.Token, map[string]interface{}, error)
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) GetName() string {
+	return u.Name
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) GetClientID() string {
+	return u.ClientID
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) GetAuthorizationURL() *url.URL {
+	return &u.AuthorizationURL
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) GetScopes() []string {
+	return u.Scopes
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) GetUsernameClaim() string {
+	return u.UsernameClaim
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) GetGroupsClaim() string {
+	return u.GroupsClaim
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokens(
+	ctx context.Context,
+	authcode string,
+	pkceCodeVerifier pkce.Code,
+	expectedIDTokenNonce nonce.Nonce,
+) (oidcclient.Token, map[string]interface{}, error) {
+	return u.ExchangeAuthcodeAndValidateTokensFunc(ctx, authcode, pkceCodeVerifier, expectedIDTokenNonce)
+}
+
+func NewIDPListGetter(upstreamOIDCIdentityProviders ...TestUpstreamOIDCIdentityProvider) provider.DynamicUpstreamIDPProvider {
 	idpProvider := provider.NewDynamicUpstreamIDPProvider()
-	idpProvider.SetIDPList(upstreamOIDCIdentityProviders)
+	upstreams := make([]provider.UpstreamOIDCIdentityProviderI, len(upstreamOIDCIdentityProviders))
+	for i := range upstreamOIDCIdentityProviders {
+		upstreams[i] = provider.UpstreamOIDCIdentityProviderI(&upstreamOIDCIdentityProviders[i])
+	}
+	idpProvider.SetIDPList(upstreams)
 	return idpProvider
 }
 

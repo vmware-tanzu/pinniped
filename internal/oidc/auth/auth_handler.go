@@ -88,12 +88,12 @@ func NewHandler(
 		}
 
 		upstreamOAuthConfig := oauth2.Config{
-			ClientID: upstreamIDP.ClientID,
+			ClientID: upstreamIDP.GetClientID(),
 			Endpoint: oauth2.Endpoint{
-				AuthURL: upstreamIDP.AuthorizationURL.String(),
+				AuthURL: upstreamIDP.GetAuthorizationURL().String(),
 			},
-			RedirectURL: fmt.Sprintf("%s/callback/%s", issuer, upstreamIDP.Name),
-			Scopes:      upstreamIDP.Scopes,
+			RedirectURL: fmt.Sprintf("%s/callback/%s", issuer, upstreamIDP.GetName()),
+			Scopes:      upstreamIDP.GetScopes(),
 		}
 
 		encodedStateParamValue, err := upstreamStateParam(authorizeRequester, nonceValue, csrfValue, pkceValue, upstreamStateEncoder)
@@ -150,7 +150,7 @@ func grantOpenIDScopeIfRequested(authorizeRequester fosite.AuthorizeRequester) {
 	}
 }
 
-func chooseUpstreamIDP(idpListGetter oidc.IDPListGetter) (*provider.UpstreamOIDCIdentityProvider, error) {
+func chooseUpstreamIDP(idpListGetter oidc.IDPListGetter) (provider.UpstreamOIDCIdentityProviderI, error) {
 	allUpstreamIDPs := idpListGetter.GetIDPList()
 	if len(allUpstreamIDPs) == 0 {
 		return nil, httperr.New(
@@ -163,7 +163,7 @@ func chooseUpstreamIDP(idpListGetter oidc.IDPListGetter) (*provider.UpstreamOIDC
 			"Too many upstream providers are configured (support for multiple upstreams is not yet implemented)",
 		)
 	}
-	return &allUpstreamIDPs[0], nil
+	return allUpstreamIDPs[0], nil
 }
 
 func generateValues(

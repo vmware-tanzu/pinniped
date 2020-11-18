@@ -13,8 +13,11 @@ import (
 	"testing"
 
 	"github.com/gorilla/securecookie"
+	"github.com/ory/fosite"
+	"github.com/ory/fosite/storage"
 	"github.com/stretchr/testify/require"
 
+	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -28,23 +31,41 @@ func TestCallbackEndpoint(t *testing.T) {
 		downstreamRedirectURI = "http://127.0.0.1/callback"
 	)
 
-	upstreamAuthURL, err := url.Parse("https://some-upstream-idp:8443/auth")
-	require.NoError(t, err)
-	otherUpstreamAuthURL, err := url.Parse("https://some-other-upstream-idp:8443/auth")
-	require.NoError(t, err)
+	// TODO use a fosite memory store and pass in a fostite oauthHelper
+	// TODO write a test double for UpstreamOIDCIdentityProviderI ID token with a claim called "the-user-claim" and put a username as the value of that claim
+	// TODO assert that after the callback request, the fosite storage has 1 authcode key saved,
+	//   and it is the same key that was returned in the redirect,
+	//   and the value in storage includes the username in the fosite session
+	// TODO do the same thing with the groups list (store it in the fosite session as JWT claim)
+	// TODO test for when UpstreamOIDCIdentityProviderI authcode exchange fails
+	// TODO wire in the callback endpoint into the oidc manager request router
+	// TODO update the upstream watcher controller to also populate the new fields
+	// TODO update the integration test
+	// TODO DO NOT store the upstream tokens (or maybe just the refresh token) for this story. In a future story, we can store them/it in some other storage interface indexed by the same authcode hash that fosite used for storage.
+	// TODO grab the upstream config name from the state param instead of the URL path
 
-	upstreamOIDCIdentityProvider := provider.UpstreamOIDCIdentityProvider{
-		Name:             happyUpstreamIDPName,
-		ClientID:         "some-client-id",
-		AuthorizationURL: *upstreamAuthURL,
-		Scopes:           []string{"scope1", "scope2"},
+	// Configure fosite the same way that the production code would, except use in-memory storage.
+	oauthStore := &storage.MemoryStore{
+		Clients:        map[string]fosite.Client{oidc.PinnipedCLIOIDCClient().ID: oidc.PinnipedCLIOIDCClient()},
+		AuthorizeCodes: map[string]storage.StoreAuthorizeCode{},
+		PKCES:          map[string]fosite.Requester{},
+		IDSessions:     map[string]fosite.Requester{},
+	}
+	hmacSecret := []byte("some secret - must have at least 32 bytes")
+	require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
+	oauthHelper := oidc.FositeOauth2Helper(oauthStore, hmacSecret)
+
+	upstreamOIDCIdentityProvider := testutil.TestUpstreamOIDCIdentityProvider{
+		Name:          happyUpstreamIDPName,
+		ClientID:      "some-client-id",
+		UsernameClaim: "the-user-claim",
+		Scopes:        []string{"scope1", "scope2"},
 	}
 
-	otherUpstreamOIDCIdentityProvider := provider.UpstreamOIDCIdentityProvider{
-		Name:             "other-upstream-idp-name",
-		ClientID:         "other-some-client-id",
-		AuthorizationURL: *otherUpstreamAuthURL,
-		Scopes:           []string{"other-scope1", "other-scope2"},
+	otherUpstreamOIDCIdentityProvider := testutil.TestUpstreamOIDCIdentityProvider{
+		Name:     "other-upstream-idp-name",
+		ClientID: "other-some-client-id",
+		Scopes:   []string{"other-scope1", "other-scope2"},
 	}
 
 	var stateEncoderHashKey = []byte("fake-hash-secret")
@@ -61,7 +82,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 	happyDownstreamState := "some-downstream-state"
 
-	happyOrignalRequestParams := url.Values{
+	happyOriginalRequestParams := url.Values{
 		"response_type":         []string{"code"},
 		"scope":                 []string{"openid profile email"},
 		"client_id":             []string{"pinniped-cli"},
@@ -77,7 +98,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 	happyState, err := happyStateCodec.Encode("s",
 		testutil.ExpectedUpstreamStateParamFormat{
-			P: happyOrignalRequestParams,
+			P: happyOriginalRequestParams,
 			N: happyNonce,
 			C: happyCSRF,
 			K: happyPKCE,
@@ -88,7 +109,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 	wrongCSRFValueState, err := happyStateCodec.Encode("s",
 		testutil.ExpectedUpstreamStateParamFormat{
-			P: happyOrignalRequestParams,
+			P: happyOriginalRequestParams,
 			N: happyNonce,
 			C: "wrong-csrf-value",
 			K: happyPKCE,
@@ -99,7 +120,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 	wrongVersionState, err := happyStateCodec.Encode("s",
 		testutil.ExpectedUpstreamStateParamFormat{
-			P: happyOrignalRequestParams,
+			P: happyOriginalRequestParams,
 			N: happyNonce,
 			C: happyCSRF,
 			K: happyPKCE,
@@ -260,7 +281,7 @@ func TestCallbackEndpoint(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			subject := NewHandler(test.idpListGetter, happyStateCodec, happyCookieCodec)
+			subject := NewHandler(test.idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec)
 			req := httptest.NewRequest(test.method, test.path, nil)
 			if test.csrfCookie != "" {
 				req.Header.Set("Cookie", test.csrfCookie)
@@ -285,7 +306,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				capturedAuthCode := submatches[1]
 				_ = capturedAuthCode
 
-				// Assert capturedAuthCode storage stuff...
+				// TODO Assert capturedAuthCode storage stuff...
 
 				// Assert that body contains anchor tag with redirect location.
 				anchorTagWithLocationHref := fmt.Sprintf("<a href=\"%s\">Found</a>.\n\n", html.EscapeString(actualLocation))

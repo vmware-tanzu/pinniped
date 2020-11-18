@@ -106,5 +106,5 @@ func FositeOauth2Helper(oauthStore interface{}, hmacSecretOfLengthAtLeast32 []by
 }
 
 type IDPListGetter interface {
-	GetIDPList() []provider.UpstreamOIDCIdentityProvider
+	GetIDPList() []provider.UpstreamOIDCIdentityProviderI
 }

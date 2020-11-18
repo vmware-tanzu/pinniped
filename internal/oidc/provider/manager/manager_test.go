@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"go.pinniped.dev/internal/testutil"
+
 	"github.com/sclevine/spec"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
@@ -107,14 +109,11 @@ func TestManager(t *testing.T) {
 
 			parsedUpstreamIDPAuthorizationURL, err := url.Parse(upstreamIDPAuthorizationURL)
 			r.NoError(err)
-			idpListGetter := provider.NewDynamicUpstreamIDPProvider()
-			idpListGetter.SetIDPList([]provider.UpstreamOIDCIdentityProvider{
-				{
-					Name:             "test-idp",
-					ClientID:         "test-client-id",
-					AuthorizationURL: *parsedUpstreamIDPAuthorizationURL,
-					Scopes:           []string{"test-scope"},
-				},
+			idpListGetter := testutil.NewIDPListGetter(testutil.TestUpstreamOIDCIdentityProvider{
+				Name:             "test-idp",
+				ClientID:         "test-client-id",
+				AuthorizationURL: *parsedUpstreamIDPAuthorizationURL,
+				Scopes:           []string{"test-scope"},
 			})
 
 			subject = NewManager(nextHandler, dynamicJWKSProvider, idpListGetter)

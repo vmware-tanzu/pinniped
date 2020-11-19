@@ -72,7 +72,7 @@ func NewHandler(
 
 		_, idTokenClaims, err := upstreamIDPConfig.ExchangeAuthcodeAndValidateTokens(
 			r.Context(),
-			r.URL.Query().Get("code"), // TODO: do we need to validate this?
+			authcode(r),
 			state.PKCECode,
 			state.Nonce,
 		)
@@ -113,7 +113,7 @@ func NewHandler(
 			Claims: &jwt.IDTokenClaims{
 				Issuer:      downstreamIssuer,
 				Subject:     username,
-				Audience:    []string{"my-client"},     // TODO use the right value here
+				Audience:    []string{downstreamAuthParams.Get("client_id")},
 				ExpiresAt:   now.Add(time.Minute * 30), // TODO use the right value here
 				IssuedAt:    now,                       // TODO test this
 				RequestedAt: now,                       // TODO test this
@@ -133,6 +133,10 @@ func NewHandler(
 	})
 }
 
+func authcode(r *http.Request) string {
+	return r.FormValue("code")
+}
+
 func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) (*oidc.UpstreamStateParamData, error) {
 	if r.Method != http.MethodGet {
 		return nil, httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET)", r.Method)
@@ -144,7 +148,7 @@ func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) 
 		return nil, err
 	}
 
-	if r.FormValue("code") == "" {
+	if authcode(r) == "" {
 		plog.Info("code param not found")
 		return nil, httperr.New(http.StatusBadRequest, "code param not found")
 	}

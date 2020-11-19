@@ -36,6 +36,12 @@ func TestCallbackEndpoint(t *testing.T) {
 		downstreamIssuer      = "https://my-downstream-issuer.com/path"
 		downstreamRedirectURI = "http://127.0.0.1/callback"
 		happyUpstreamAuthcode = "upstream-auth-code"
+		upstreamUsername      = "test-pinniped-username"
+		downstreamClientID    = "pinniped-cli"
+	)
+
+	var (
+		upstreamGroupMembership = []string{"test-pinniped-group-0", "test-pinniped-group-1"}
 	)
 
 	upstreamOIDCIdentityProvider := testutil.TestUpstreamOIDCIdentityProvider{
@@ -47,8 +53,8 @@ func TestCallbackEndpoint(t *testing.T) {
 		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (oidcclient.Token, map[string]interface{}, error) {
 			return oidcclient.Token{},
 				map[string]interface{}{
-					"the-user-claim":   "test-pinniped-username",
-					"the-groups-claim": []string{"test-pinniped-group-0", "test-pinniped-group-1"},
+					"the-user-claim":   upstreamUsername,
+					"the-groups-claim": upstreamGroupMembership,
 					"other-claim":      "should be ignored",
 				},
 				nil
@@ -62,8 +68,8 @@ func TestCallbackEndpoint(t *testing.T) {
 		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (oidcclient.Token, map[string]interface{}, error) {
 			return oidcclient.Token{},
 				map[string]interface{}{
-					"sub":         "test-pinniped-username",
-					"groups":      []string{"test-pinniped-group-0", "test-pinniped-group-1"},
+					"sub":         upstreamUsername,
+					"groups":      upstreamGroupMembership,
 					"other-claim": "should be ignored",
 				},
 				nil
@@ -104,7 +110,7 @@ func TestCallbackEndpoint(t *testing.T) {
 	happyOriginalRequestParamsQuery := url.Values{
 		"response_type":         []string{"code"},
 		"scope":                 []string{"openid profile email"},
-		"client_id":             []string{"pinniped-cli"},
+		"client_id":             []string{downstreamClientID},
 		"state":                 []string{happyDownstreamState},
 		"nonce":                 []string{"some-nonce-value"},
 		"code_challenge":        []string{"some-challenge"},
@@ -451,8 +457,9 @@ func TestCallbackEndpoint(t *testing.T) {
 					require.NotContains(t, storedRequest.GetGrantedScopes(), "openid")
 				}
 				require.Equal(t, downstreamIssuer, storedSession.Claims.Issuer)
-				require.Equal(t, "test-pinniped-username", storedSession.Claims.Subject)
-				require.Equal(t, []string{"test-pinniped-group-0", "test-pinniped-group-1"}, storedSession.Claims.Extra["oidc.pinniped.dev/groups"])
+				require.Equal(t, upstreamUsername, storedSession.Claims.Subject)
+				require.Equal(t, []string{downstreamClientID}, storedSession.Claims.Audience)
+				require.Equal(t, upstreamGroupMembership, storedSession.Claims.Extra["oidc.pinniped.dev/groups"])
 			} else {
 				require.Empty(t, rsp.Header().Values("Location"))
 			}

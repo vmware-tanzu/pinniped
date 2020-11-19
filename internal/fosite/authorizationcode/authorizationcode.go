@@ -211,7 +211,7 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 			"m\"e尚鬞ƻɼ抹d誉y鿜Ķ"
 		],
 		"id": "ō澩ć|3U2Ǜl霨ǦǵpƉ",
-		"requestedAt": "1989-11-05T17:02:31.105295894-05:00",
+		"requestedAt": "1989-11-05T22:02:31.105295894Z",
 		"client": {
 			"id": "[:c顎疻紵D",
 			"client_secret": "mQ==",
@@ -324,10 +324,10 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 					"渇Ȯʕc"
 				],
 				"Nonce": "Ǖ=rlƆ褡{ǏS",
-				"ExpiresAt": "1975-11-17T09:21:34.205609651-05:00",
-				"IssuedAt": "2104-07-03T11:40:03.66710966-04:00",
-				"RequestedAt": "2031-05-18T01:14:19.449350555-04:00",
-				"AuthTime": "2018-01-27T02:55:06.056862114-05:00",
+				"ExpiresAt": "1975-11-17T14:21:34.205609651Z",
+				"IssuedAt": "2104-07-03T15:40:03.66710966Z",
+				"RequestedAt": "2031-05-18T05:14:19.449350555Z",
+				"AuthTime": "2018-01-27T07:55:06.056862114Z",
 				"AccessTokenHash": "鹰肁躧",
 				"AuthenticationContextClassReference": "}Ɇ",
 				"AuthenticationMethodsReference": "DQh:uȣ",
@@ -364,9 +364,9 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 				}
 			},
 			"ExpiresAt": {
-				"\"嘬ȹĹaó剺撱Ȱ": "1985-09-09T00:35:40.533197189-04:00",
-				"ʆ\u003e": "1998-08-07T01:37:11.759718906-04:00",
-				"柏ʒ鴙*鸆偡Ȓ肯Ûx": "2036-12-19T01:36:14.414805124-05:00"
+				"\"嘬ȹĹaó剺撱Ȱ": "1985-09-09T04:35:40.533197189Z",
+				"ʆ\u003e": "1998-08-07T05:37:11.759718906Z",
+				"柏ʒ鴙*鸆偡Ȓ肯Ûx": "2036-12-19T06:36:14.414805124Z"
 			},
 			"Username": "qmʎaðƠ绗ʢ緦Hū",
 			"Subject": "屾Ê窢ɋ鄊qɠ谫ǯǵƕ牀1鞊\\ȹ)"

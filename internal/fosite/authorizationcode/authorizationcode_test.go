@@ -272,7 +272,7 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 		// set this to make the .Equal comparison work
 		// this is safe because Time explicitly implements JSON marshalling and unmarshalling
 		func(tp *time.Time, c fuzz.Continue) {
-			*tp = time.Unix(c.Int63n(1<<32), c.Int63n(1<<32))
+			*tp = time.Unix(c.Int63n(1<<32), c.Int63n(1<<32)).UTC()
 		},
 
 		// make random strings that do not contain any ` characters

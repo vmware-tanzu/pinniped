@@ -5,12 +5,14 @@
 package callback
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"path"
+	"time"
 
 	"github.com/ory/fosite"
+	"github.com/ory/fosite/handler/openid"
+	"github.com/ory/fosite/token/jwt"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
@@ -26,23 +28,64 @@ func NewHandler(idpListGetter oidc.IDPListGetter, oauthHelper fosite.OAuth2Provi
 			return err
 		}
 
-		if findUpstreamIDPConfig(r, idpListGetter) == nil {
+		upstreamIDPConfig := findUpstreamIDPConfig(r, idpListGetter)
+		if upstreamIDPConfig == nil {
 			plog.Warning("upstream provider not found")
 			return httperr.New(http.StatusUnprocessableEntity, "upstream provider not found")
 		}
 
 		downstreamAuthParams, err := url.ParseQuery(state.AuthParams)
 		if err != nil {
-			panic(err)
+			panic(err) // TODO
 		}
 
-		downstreamCallbackURL := fmt.Sprintf(
-			"%s?code=%s&state=%s",
-			downstreamAuthParams.Get("redirect_uri"),
-			url.QueryEscape("some-code"),
-			url.QueryEscape(downstreamAuthParams.Get("state")),
+		// Recreate enough of the original authorize request so we can pass it to NewAuthorizeRequest().
+		reconstitutedAuthRequest := &http.Request{Form: downstreamAuthParams}
+		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), reconstitutedAuthRequest)
+		if err != nil {
+			panic(err) // TODO
+		}
+
+		// TODO: grant the openid scope only if it was requested, similar to what we did in auth_handler.go
+		authorizeRequester.GrantScope("openid")
+
+		_, idTokenClaims, err := upstreamIDPConfig.ExchangeAuthcodeAndValidateTokens(
+			r.Context(),
+			"TODO", // TODO use the upstream authcode (code param) here
+			"TODO", // TODO use the pkce value from the decoded state param here
+			"TODO", // TODO use the nonce value from the decoded state param here
 		)
-		http.Redirect(w, r, downstreamCallbackURL, 302)
+		if err != nil {
+			panic(err) // TODO
+		}
+
+		var username string
+		// TODO handle the case when upstreamIDPConfig.GetUsernameClaim() is the empty string by defaulting to something reasonable
+		usernameAsInterface := idTokenClaims[upstreamIDPConfig.GetUsernameClaim()]
+		username, ok := usernameAsInterface.(string)
+		if !ok {
+			panic(err) // TODO
+		}
+
+		// TODO also look at the upstream ID token's groups claim and store that value as a downstream ID token claim
+
+		now := time.Now()
+		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &openid.DefaultSession{
+			Claims: &jwt.IDTokenClaims{
+				Issuer:      "https://fosite.my-application.com", // TODO use the right value here
+				Subject:     username,
+				Audience:    []string{"my-client"},     // TODO use the right value here
+				ExpiresAt:   now.Add(time.Minute * 30), // TODO use the right value here
+				IssuedAt:    now,                       // TODO test this
+				RequestedAt: now,                       // TODO test this
+				AuthTime:    now,                       // TODO test this
+			},
+		})
+		if err != nil {
+			panic(err) // TODO
+		}
+
+		oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
 
 		return nil
 	})
@@ -83,11 +126,11 @@ func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) 
 	return state, nil
 }
 
-func findUpstreamIDPConfig(r *http.Request, idpListGetter oidc.IDPListGetter) *provider.UpstreamOIDCIdentityProviderI {
+func findUpstreamIDPConfig(r *http.Request, idpListGetter oidc.IDPListGetter) provider.UpstreamOIDCIdentityProviderI {
 	_, lastPathComponent := path.Split(r.URL.Path)
 	for _, p := range idpListGetter.GetIDPList() {
 		if p.GetName() == lastPathComponent {
-			return &p
+			return p
 		}
 	}
 	return nil

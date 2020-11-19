@@ -4,21 +4,26 @@
 package callback
 
 import (
+	"context"
 	"fmt"
-	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/gorilla/securecookie"
 	"github.com/ory/fosite"
+	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/storage"
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidcclient"
+	"go.pinniped.dev/internal/oidcclient/nonce"
+	"go.pinniped.dev/internal/oidcclient/pkce"
 	"go.pinniped.dev/internal/testutil"
 )
 
@@ -30,19 +35,6 @@ func TestCallbackEndpoint(t *testing.T) {
 	const (
 		downstreamRedirectURI = "http://127.0.0.1/callback"
 	)
-
-	// TODO use a fosite memory store and pass in a fostite oauthHelper
-	// TODO write a test double for UpstreamOIDCIdentityProviderI ID token with a claim called "the-user-claim" and put a username as the value of that claim
-	// TODO assert that after the callback request, the fosite storage has 1 authcode key saved,
-	//   and it is the same key that was returned in the redirect,
-	//   and the value in storage includes the username in the fosite session
-	// TODO do the same thing with the groups list (store it in the fosite session as JWT claim)
-	// TODO test for when UpstreamOIDCIdentityProviderI authcode exchange fails
-	// TODO wire in the callback endpoint into the oidc manager request router
-	// TODO update the upstream watcher controller to also populate the new fields
-	// TODO update the integration test
-	// TODO DO NOT store the upstream tokens (or maybe just the refresh token) for this story. In a future story, we can store them/it in some other storage interface indexed by the same authcode hash that fosite used for storage.
-	// TODO grab the upstream config name from the state param instead of the URL path
 
 	// Configure fosite the same way that the production code would, except use in-memory storage.
 	oauthStore := &storage.MemoryStore{
@@ -59,7 +51,16 @@ func TestCallbackEndpoint(t *testing.T) {
 		Name:          happyUpstreamIDPName,
 		ClientID:      "some-client-id",
 		UsernameClaim: "the-user-claim",
+		GroupsClaim:   "the-groups-claim",
 		Scopes:        []string{"scope1", "scope2"},
+		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (oidcclient.Token, map[string]interface{}, error) {
+			return oidcclient.Token{},
+				map[string]interface{}{
+					"the-user-claim": "test-pinniped-username",
+					"other-claim":    "should be ignored",
+				},
+				nil
+		},
 	}
 
 	otherUpstreamOIDCIdentityProvider := testutil.TestUpstreamOIDCIdentityProvider{
@@ -144,17 +145,19 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantStatus                 int
 		wantBody                   string
 		wantRedirectLocationRegexp string
+		wantAuthcodeStored         bool
 	}{
-		// Happy path
-		// TODO: GET with good state and cookie and successful upstream token exchange and 302 to downstream client callback with its state and code
 		{
-			name:                       "GET with good state and cookie and successful upstream token exchange returns 302 to downstream client callback with its state and code",
-			idpListGetter:              testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
-			method:                     http.MethodGet,
-			path:                       newRequestPath().WithState(happyState).String(),
-			csrfCookie:                 happyCSRFCookie,
-			wantStatus:                 http.StatusFound,
-			wantRedirectLocationRegexp: downstreamRedirectURI + `\?code=([^&]+)&state=` + happyDownstreamState,
+			name:          "GET with good state and cookie and successful upstream token exchange returns 302 to downstream client callback with its state and code",
+			idpListGetter: testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
+			method:        http.MethodGet,
+			path:          newRequestPath().WithState(happyState).String(),
+			csrfCookie:    happyCSRFCookie,
+			wantStatus:    http.StatusFound,
+			// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
+			wantRedirectLocationRegexp: downstreamRedirectURI + `\?code=([^&]+)&scope=openid&state=` + happyDownstreamState,
+			wantAuthcodeStored:         true,
+			wantBody:                   "",
 		},
 		// TODO: when we call the callback twice in a row, we get two different auth codes (to prove we are using an RNG for auth codes)
 
@@ -256,27 +259,6 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:    http.StatusForbidden,
 			wantBody:      "Forbidden: CSRF value does not match\n",
 		},
-
-		// Upstream exchange
-		// TODO: network call to upstream token endpoint fails
-		// TODO: the upstream token endpoint returns an error
-
-		// Post-upstream-exchange verification
-		// TODO: returned tokens are invalid (all the stuff from the spec...)
-		// TODO: there
-		// TODO: are
-		// TODO: probably
-		// TODO: a
-		// TODO: lot
-		// TODO: of
-		// TODO: test
-		// TODO: cases
-		// TODO: here (e.g., id jwt cannot be verified, nonce is wrong, we didn't get refresh token, we didn't get access token, we didn't get id token, access token expires too quickly)
-
-		// Downstream redirect
-		// TODO: we grant the openid scope if it was requested, similar to what we did in auth_handler.go
-		// TODO: cannot generate auth code
-		// TODO: cannot persist downstream state
 	}
 	for _, test := range tests {
 		test := test
@@ -292,11 +274,14 @@ func TestCallbackEndpoint(t *testing.T) {
 			require.Equal(t, test.wantStatus, rsp.Code)
 
 			require.False(t, test.wantBody != "" && test.wantRedirectLocationRegexp != "", "test cannot set both body and redirect assertions")
-			switch {
-			case test.wantBody != "":
-				require.Empty(t, rsp.Header().Values("Location"))
+
+			if test.wantBody != "" {
 				require.Equal(t, test.wantBody, rsp.Body.String())
-			case test.wantRedirectLocationRegexp != "":
+			} else {
+				require.Empty(t, rsp.Body.String())
+			}
+
+			if test.wantRedirectLocationRegexp != "" {
 				// Assert that Location header matches regular expression.
 				require.Len(t, rsp.Header().Values("Location"), 1)
 				actualLocation := rsp.Header().Get("Location")
@@ -304,16 +289,28 @@ func TestCallbackEndpoint(t *testing.T) {
 				submatches := regex.FindStringSubmatch(actualLocation)
 				require.Lenf(t, submatches, 2, "no regexp match in actualLocation: %q", actualLocation)
 				capturedAuthCode := submatches[1]
-				_ = capturedAuthCode
 
-				// TODO Assert capturedAuthCode storage stuff...
+				// One authcode should have been stored.
+				require.Len(t, oauthStore.AuthorizeCodes, 1)
 
-				// Assert that body contains anchor tag with redirect location.
-				anchorTagWithLocationHref := fmt.Sprintf("<a href=\"%s\">Found</a>.\n\n", html.EscapeString(actualLocation))
-				require.Equal(t, anchorTagWithLocationHref, rsp.Body.String())
-			default:
+				// fosite authcodes are in the format `data.signature`, so grab the signature part, which is the lookup key in the storage interface
+				authcodeDataAndSignature := strings.Split(capturedAuthCode, ".")
+				require.Len(t, authcodeDataAndSignature, 2)
+
+				// Get the authcode session back from storage so we can require that it was stored correctly.
+				storedAuthorizeRequest, err := oauthStore.GetAuthorizeCodeSession(context.Background(), authcodeDataAndSignature[1], nil)
+				require.NoError(t, err)
+
+				// Check that storage returned the expected concrete data types.
+				_, ok := storedAuthorizeRequest.(*fosite.Request)
+				require.True(t, ok)
+				storedSession, ok := storedAuthorizeRequest.GetSession().(*openid.DefaultSession)
+				require.True(t, ok)
+
+				// Check various fields of the stored data.
+				require.Equal(t, "test-pinniped-username", storedSession.Claims.Subject)
+			} else {
 				require.Empty(t, rsp.Header().Values("Location"))
-				require.Empty(t, rsp.Body.String())
 			}
 		})
 	}

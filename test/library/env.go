@@ -6,7 +6,6 @@ package library
 import (
 	"io/ioutil"
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -46,14 +45,18 @@ type TestEnv struct {
 		ExpectedGroups   []string `json:"expectedGroups"`
 	} `json:"testUser"`
 
-	OIDCUpstream struct {
-		Issuer        string `json:"issuer"`
-		CABundle      string `json:"caBundle" `
-		ClientID      string `json:"clientID"`
-		LocalhostPort int    `json:"localhostPort"`
-		Username      string `json:"username"`
-		Password      string `json:"password"`
-	} `json:"oidcUpstream"`
+	CLITestUpstream        TestOIDCUpstream `json:"cliOIDCUpstream"`
+	SupervisorTestUpstream TestOIDCUpstream `json:"supervisorOIDCUpstream"`
+}
+
+type TestOIDCUpstream struct {
+	Issuer       string `json:"issuer"`
+	CABundle     string `json:"caBundle" `
+	ClientID     string `json:"clientID"`
+	ClientSecret string `json:"clientSecret"`
+	CallbackURL  string `json:"callback"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
 }
 
 // IntegrationEnv gets the integration test environment from OS environment variables. This
@@ -130,12 +133,24 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 	require.NotEmpty(t, result.SupervisorCustomLabels, "PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS cannot be empty")
 	result.Proxy = os.Getenv("PINNIPED_TEST_PROXY")
 
-	result.OIDCUpstream.Issuer = needEnv(t, "PINNIPED_TEST_CLI_OIDC_ISSUER")
-	result.OIDCUpstream.CABundle = os.Getenv("PINNIPED_TEST_CLI_OIDC_ISSUER_CA_BUNDLE")
-	result.OIDCUpstream.ClientID = needEnv(t, "PINNIPED_TEST_CLI_OIDC_CLIENT_ID")
-	result.OIDCUpstream.LocalhostPort, _ = strconv.Atoi(needEnv(t, "PINNIPED_TEST_CLI_OIDC_LOCALHOST_PORT"))
-	result.OIDCUpstream.Username = needEnv(t, "PINNIPED_TEST_CLI_OIDC_USERNAME")
-	result.OIDCUpstream.Password = needEnv(t, "PINNIPED_TEST_CLI_OIDC_PASSWORD")
+	result.CLITestUpstream = TestOIDCUpstream{
+		Issuer:      needEnv(t, "PINNIPED_TEST_CLI_OIDC_ISSUER"),
+		CABundle:    os.Getenv("PINNIPED_TEST_CLI_OIDC_ISSUER_CA_BUNDLE"),
+		ClientID:    needEnv(t, "PINNIPED_TEST_CLI_OIDC_CLIENT_ID"),
+		CallbackURL: needEnv(t, "PINNIPED_TEST_CLI_OIDC_CALLBACK_URL"),
+		Username:    needEnv(t, "PINNIPED_TEST_CLI_OIDC_USERNAME"),
+		Password:    needEnv(t, "PINNIPED_TEST_CLI_OIDC_PASSWORD"),
+	}
+
+	result.SupervisorTestUpstream = TestOIDCUpstream{
+		Issuer:       needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER"),
+		CABundle:     os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER_CA_BUNDLE"),
+		ClientID:     needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CLIENT_ID"),
+		ClientSecret: needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CLIENT_SECRET"),
+		CallbackURL:  needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CALLBACK_URL"),
+		Username:     needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME"),
+		Password:     needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD"),
+	}
 }
 
 func (e *TestEnv) HasCapability(cap Capability) bool {

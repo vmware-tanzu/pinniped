@@ -24,6 +24,12 @@ staticClients:
   redirectURIs:
   - #@ "http://127.0.0.1:" + str(data.values.ports.cli) + "/callback"
   - #@ "http://[::1]:" + str(data.values.ports.cli) + "/callback"
+- id: pinniped-supervisor
+  name: 'Pinniped Supervisor'
+  secret: pinniped-supervisor-secret
+  redirectURIs:
+    - #@ "http://127.0.0.1:" + str(data.values.ports.cli) + "/callback"
+    - #@ "http://[::1]:" + str(data.values.ports.cli) + "/callback"
 enablePasswordDB: true
 staticPasswords:
 - username: "pinny"

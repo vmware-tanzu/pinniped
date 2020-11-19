@@ -26,14 +26,9 @@ const (
 	// ID token if the upstream OIDC IDP did not tell us to use another claim.
 	defaultUpstreamUsernameClaim = "sub"
 
-	// defaultUpstreamGroupsClaim is what we will use to extract the groups from an upstream OIDC ID
-	// token if the upstream OIDC IDP did not tell us to use another claim.
-	defaultUpstreamGroupsClaim = "groups"
-
 	// downstreamGroupsClaim is what we will use to encode the groups in the downstream OIDC ID token
 	// information.
-	// TODO: should this be per-issuer? Or per version?
-	downstreamGroupsClaim = "oidc.pinniped.dev/groups"
+	downstreamGroupsClaim = "groups"
 )
 
 func NewHandler(
@@ -56,6 +51,7 @@ func NewHandler(
 
 		downstreamAuthParams, err := url.ParseQuery(state.AuthParams)
 		if err != nil {
+			plog.Error("error reading state downstream auth params", err)
 			return httperr.New(http.StatusBadRequest, "error reading state downstream auth params")
 		}
 
@@ -63,11 +59,11 @@ func NewHandler(
 		reconstitutedAuthRequest := &http.Request{Form: downstreamAuthParams}
 		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), reconstitutedAuthRequest)
 		if err != nil {
+			plog.Error("error using state downstream auth params", err)
 			return httperr.New(http.StatusBadRequest, "error using state downstream auth params")
 		}
 
 		// Grant the openid scope only if it was requested.
-		// TODO: shouldn't we be potentially granting more scopes than just openid...
 		grantOpenIDScopeIfRequested(authorizeRequester)
 
 		_, idTokenClaims, err := upstreamIDPConfig.ExchangeAuthcodeAndValidateTokens(
@@ -77,52 +73,18 @@ func NewHandler(
 			state.Nonce,
 		)
 		if err != nil {
+			plog.WarningErr("error exchanging and validating upstream tokens", err, "upstreamName", upstreamIDPConfig.GetName())
 			return httperr.New(http.StatusBadGateway, "error exchanging and validating upstream tokens")
 		}
 
-		var username string
-		usernameClaim := upstreamIDPConfig.GetUsernameClaim()
-		if usernameClaim == "" {
-			usernameClaim = defaultUpstreamUsernameClaim
-		}
-		usernameAsInterface, ok := idTokenClaims[usernameClaim]
-		if !ok {
-			panic(err) // TODO
-		}
-		username, ok = usernameAsInterface.(string)
-		if !ok {
-			panic(err) // TODO
+		username, err := getUsernameFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims)
+		if err != nil {
+			return err
 		}
 
-		var groups []string
-		groupsClaim := upstreamIDPConfig.GetGroupsClaim()
-		if groupsClaim == "" {
-			groupsClaim = defaultUpstreamGroupsClaim
-		}
-		groupsAsInterface, ok := idTokenClaims[groupsClaim]
-		if !ok {
-			panic(err) // TODO
-		}
-		groups, ok = groupsAsInterface.([]string)
-		if !ok {
-			panic(err) // TODO
-		}
-
-		now := time.Now()
-		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &openid.DefaultSession{
-			Claims: &jwt.IDTokenClaims{
-				Issuer:      downstreamIssuer,
-				Subject:     username,
-				Audience:    []string{downstreamAuthParams.Get("client_id")},
-				ExpiresAt:   now.Add(time.Minute * 30), // TODO use the right value here
-				IssuedAt:    now,                       // TODO test this
-				RequestedAt: now,                       // TODO test this
-				AuthTime:    now,                       // TODO test this
-				Extra: map[string]interface{}{
-					downstreamGroupsClaim: groups,
-				},
-			},
-		})
+		groups := getGroupsFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims)
+		openIDSession := makeDownstreamSession(downstreamIssuer, downstreamAuthParams.Get("client_id"), username, groups)
+		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 		if err != nil {
 			panic(err) // TODO
 		}
@@ -221,4 +183,77 @@ func grantOpenIDScopeIfRequested(authorizeRequester fosite.AuthorizeRequester) {
 			authorizeRequester.GrantScope(scope)
 		}
 	}
+}
+
+func getUsernameFromUpstreamIDToken(
+	upstreamIDPConfig provider.UpstreamOIDCIdentityProviderI,
+	idTokenClaims map[string]interface{},
+) (string, error) {
+	usernameClaim := upstreamIDPConfig.GetUsernameClaim()
+	if usernameClaim == "" {
+		// TODO: if we use the default "sub" claim, maybe we should create the username with the issuer
+		// since the spec says the "sub" claim is only unique per issuer.
+		usernameClaim = defaultUpstreamUsernameClaim
+	}
+
+	usernameAsInterface, ok := idTokenClaims[usernameClaim]
+	if !ok {
+		plog.Warning(
+			"no username claim in upstream ID token",
+			"upstreamName", upstreamIDPConfig.GetName(),
+			"configuredUsernameClaim", upstreamIDPConfig.GetUsernameClaim(),
+			"usernameClaim", usernameClaim,
+		)
+		return "", httperr.New(http.StatusUnprocessableEntity, "no username claim in upstream ID token")
+	}
+
+	username, ok := usernameAsInterface.(string)
+	if !ok {
+		panic("todo bbb") // TODO
+	}
+
+	return username, nil
+}
+
+func getGroupsFromUpstreamIDToken(
+	upstreamIDPConfig provider.UpstreamOIDCIdentityProviderI,
+	idTokenClaims map[string]interface{},
+) []string {
+	groupsClaim := upstreamIDPConfig.GetGroupsClaim()
+	if groupsClaim == "" {
+		return nil
+	}
+
+	groupsAsInterface, ok := idTokenClaims[groupsClaim]
+	if !ok {
+		panic("todo ccc") // TODO
+	}
+
+	groups, ok := groupsAsInterface.([]string)
+	if !ok {
+		panic("todo ddd") // TODO
+	}
+
+	return groups
+}
+
+func makeDownstreamSession(issuer, clientID, username string, groups []string) *openid.DefaultSession {
+	now := time.Now()
+	openIDSession := &openid.DefaultSession{
+		Claims: &jwt.IDTokenClaims{
+			Issuer:      issuer,
+			Subject:     username,
+			Audience:    []string{clientID},
+			ExpiresAt:   now.Add(time.Minute * 30), // TODO use the right value here
+			IssuedAt:    now,                       // TODO test this
+			RequestedAt: now,                       // TODO test this
+			AuthTime:    now,                       // TODO test this
+		},
+	}
+	if groups != nil {
+		openIDSession.Claims.Extra = map[string]interface{}{
+			downstreamGroupsClaim: groups,
+		}
+	}
+	return openIDSession
 }

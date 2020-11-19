@@ -21,6 +21,21 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
+const (
+	// defaultUpstreamUsernameClaim is what we will use to extract the username from an upstream OIDC
+	// ID token if the upstream OIDC IDP did not tell us to use another claim.
+	defaultUpstreamUsernameClaim = "sub"
+
+	// defaultUpstreamGroupsClaim is what we will use to extract the groups from an upstream OIDC ID
+	// token if the upstream OIDC IDP did not tell us to use another claim.
+	defaultUpstreamGroupsClaim = "groups"
+
+	// downstreamGroupsClaim is what we will use to encode the groups in the downstream OIDC ID token
+	// information.
+	// TODO: should this be per-issuer? Or per version?
+	downstreamGroupsClaim = "oidc.pinniped.dev/groups"
+)
+
 func NewHandler(idpListGetter oidc.IDPListGetter, oauthHelper fosite.OAuth2Provider, stateDecoder, cookieDecoder oidc.Decoder) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		state, err := validateRequest(r, stateDecoder, cookieDecoder)
@@ -61,14 +76,32 @@ func NewHandler(idpListGetter oidc.IDPListGetter, oauthHelper fosite.OAuth2Provi
 		}
 
 		var username string
-		// TODO handle the case when upstreamIDPConfig.GetUsernameClaim() is the empty string by defaulting to something reasonable
-		usernameAsInterface := idTokenClaims[upstreamIDPConfig.GetUsernameClaim()]
-		username, ok := usernameAsInterface.(string)
+		usernameClaim := upstreamIDPConfig.GetUsernameClaim()
+		if usernameClaim == "" {
+			usernameClaim = defaultUpstreamUsernameClaim
+		}
+		usernameAsInterface, ok := idTokenClaims[usernameClaim]
+		if !ok {
+			panic(err) // TODO
+		}
+		username, ok = usernameAsInterface.(string)
 		if !ok {
 			panic(err) // TODO
 		}
 
-		// TODO also look at the upstream ID token's groups claim and store that value as a downstream ID token claim
+		var groups []string
+		groupsClaim := upstreamIDPConfig.GetGroupsClaim()
+		if groupsClaim == "" {
+			groupsClaim = defaultUpstreamGroupsClaim
+		}
+		groupsAsInterface, ok := idTokenClaims[groupsClaim]
+		if !ok {
+			panic(err) // TODO
+		}
+		groups, ok = groupsAsInterface.([]string)
+		if !ok {
+			panic(err) // TODO
+		}
 
 		now := time.Now()
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &openid.DefaultSession{
@@ -80,6 +113,9 @@ func NewHandler(idpListGetter oidc.IDPListGetter, oauthHelper fosite.OAuth2Provi
 				IssuedAt:    now,                       // TODO test this
 				RequestedAt: now,                       // TODO test this
 				AuthTime:    now,                       // TODO test this
+				Extra: map[string]interface{}{
+					downstreamGroupsClaim: groups,
+				},
 			},
 		})
 		if err != nil {

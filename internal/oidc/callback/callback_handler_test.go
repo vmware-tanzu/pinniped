@@ -47,8 +47,24 @@ func TestCallbackEndpoint(t *testing.T) {
 		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (oidcclient.Token, map[string]interface{}, error) {
 			return oidcclient.Token{},
 				map[string]interface{}{
-					"the-user-claim": "test-pinniped-username",
-					"other-claim":    "should be ignored",
+					"the-user-claim":   "test-pinniped-username",
+					"the-groups-claim": []string{"test-pinniped-group-0", "test-pinniped-group-1"},
+					"other-claim":      "should be ignored",
+				},
+				nil
+		},
+	}
+
+	defaultClaimsUpstreamOIDCIdentityProvider := testutil.TestUpstreamOIDCIdentityProvider{
+		Name:     happyUpstreamIDPName,
+		ClientID: "some-client-id",
+		Scopes:   []string{"scope1", "scope2"},
+		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (oidcclient.Token, map[string]interface{}, error) {
+			return oidcclient.Token{},
+				map[string]interface{}{
+					"sub":         "test-pinniped-username",
+					"groups":      []string{"test-pinniped-group-0", "test-pinniped-group-1"},
+					"other-claim": "should be ignored",
 				},
 				nil
 		},
@@ -177,6 +193,9 @@ func TestCallbackEndpoint(t *testing.T) {
 		ExpectedIDTokenNonce: nonce.Nonce(happyNonce),
 	}
 
+	// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
+	happyRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid&state=` + happyDownstreamState
+
 	tests := []struct {
 		name string
 
@@ -195,14 +214,26 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantExchangeAndValidateTokensCall *testutil.ExchangeAuthcodeAndValidateTokenArgs
 	}{
 		{
-			name:       "GET with good state and cookie and successful upstream token exchange returns 302 to downstream client callback with its state and code",
-			idp:        upstreamOIDCIdentityProvider,
-			method:     http.MethodGet,
-			path:       newRequestPath().WithState(happyState).WithCode(happyUpstreamAuthcode).String(),
-			csrfCookie: happyCSRFCookie,
-			wantStatus: http.StatusFound,
-			// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
-			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid&state=` + happyDownstreamState,
+			name:                              "GET with good state and cookie and successful upstream token exchange returns 302 to downstream client callback with its state and code",
+			idp:                               upstreamOIDCIdentityProvider,
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).WithCode(happyUpstreamAuthcode).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusFound,
+			wantRedirectLocationRegexp:        happyRedirectLocationRegexp,
+			wantAuthcodeStored:                true,
+			wantGrantedOpenidScope:            true,
+			wantBody:                          "",
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
+			name:                              "upstream IDP uses default claims",
+			idp:                               defaultClaimsUpstreamOIDCIdentityProvider,
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).WithCode(happyUpstreamAuthcode).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusFound,
+			wantRedirectLocationRegexp:        happyRedirectLocationRegexp,
 			wantAuthcodeStored:                true,
 			wantGrantedOpenidScope:            true,
 			wantBody:                          "",
@@ -418,6 +449,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					require.NotContains(t, storedRequest.GetGrantedScopes(), "openid")
 				}
 				require.Equal(t, "test-pinniped-username", storedSession.Claims.Subject)
+				require.Equal(t, []string{"test-pinniped-group-0", "test-pinniped-group-1"}, storedSession.Claims.Extra["oidc.pinniped.dev/groups"])
 			} else {
 				require.Empty(t, rsp.Header().Values("Location"))
 			}

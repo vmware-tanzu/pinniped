@@ -75,9 +75,6 @@ func TestSupervisorLogin(t *testing.T) {
 		TLS: &idpv1alpha1.TLSSpec{
 			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.OIDCUpstream.CABundle)),
 		},
-		AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
-			AdditionalScopes: []string{},
-		},
 		Client: idpv1alpha1.OIDCClient{
 			SecretName: makeTestClientCredsSecret(t, testClientID, testClientSecret).Name,
 		},

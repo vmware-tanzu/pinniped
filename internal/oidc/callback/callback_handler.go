@@ -36,14 +36,14 @@ func NewHandler(idpListGetter oidc.IDPListGetter, oauthHelper fosite.OAuth2Provi
 
 		downstreamAuthParams, err := url.ParseQuery(state.AuthParams)
 		if err != nil {
-			return httperr.New(http.StatusBadRequest, "error reading state's downstream auth params")
+			return httperr.New(http.StatusBadRequest, "error reading state downstream auth params")
 		}
 
 		// Recreate enough of the original authorize request so we can pass it to NewAuthorizeRequest().
 		reconstitutedAuthRequest := &http.Request{Form: downstreamAuthParams}
 		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), reconstitutedAuthRequest)
 		if err != nil {
-			panic(err) // TODO
+			return httperr.New(http.StatusBadRequest, "error using state downstream auth params")
 		}
 
 		// TODO: grant the openid scope only if it was requested, similar to what we did in auth_handler.go

@@ -83,7 +83,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 	happyDownstreamState := "some-downstream-state"
 
-	happyOriginalRequestParams := url.Values{
+	happyOriginalRequestParamsQuery := url.Values{
 		"response_type":         []string{"code"},
 		"scope":                 []string{"openid profile email"},
 		"client_id":             []string{"pinniped-cli"},
@@ -92,7 +92,8 @@ func TestCallbackEndpoint(t *testing.T) {
 		"code_challenge":        []string{"some-challenge"},
 		"code_challenge_method": []string{"S256"},
 		"redirect_uri":          []string{downstreamRedirectURI},
-	}.Encode()
+	}
+	happyOriginalRequestParams := happyOriginalRequestParamsQuery.Encode()
 	happyCSRF := "test-csrf"
 	happyPKCE := "test-pkce"
 	happyNonce := "test-nonce"
@@ -134,6 +135,17 @@ func TestCallbackEndpoint(t *testing.T) {
 	wrongDownstreamAuthParamsState, err := happyStateCodec.Encode("s",
 		testutil.ExpectedUpstreamStateParamFormat{
 			P: "these-is-not-a-valid-url-query-%z",
+			N: happyNonce,
+			C: happyCSRF,
+			K: happyPKCE,
+			V: happyStateVersion,
+		},
+	)
+	require.NoError(t, err)
+
+	missingClientIDState, err := happyStateCodec.Encode("s",
+		testutil.ExpectedUpstreamStateParamFormat{
+			P: shallowCopyQueryExceptFor(happyOriginalRequestParamsQuery, "client_id").Encode(),
 			N: happyNonce,
 			C: happyCSRF,
 			K: happyPKCE,
@@ -243,7 +255,16 @@ func TestCallbackEndpoint(t *testing.T) {
 			path:          newRequestPath().WithState(wrongDownstreamAuthParamsState).String(),
 			csrfCookie:    happyCSRFCookie,
 			wantStatus:    http.StatusBadRequest,
-			wantBody:      "Bad Request: error reading state's downstream auth params\n",
+			wantBody:      "Bad Request: error reading state downstream auth params\n",
+		},
+		{
+			name:          "state's downstream auth params are missing required value (e.g., client_id)",
+			idpListGetter: testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
+			method:        http.MethodGet,
+			path:          newRequestPath().WithState(missingClientIDState).String(),
+			csrfCookie:    happyCSRFCookie,
+			wantStatus:    http.StatusBadRequest,
+			wantBody:      "Bad Request: error using state downstream auth params\n",
 		},
 		{
 			name:          "the UpstreamOIDCProvider CRD has been deleted",
@@ -387,4 +408,23 @@ func (r *requestPath) String() string {
 		params.Add("state", *r.state)
 	}
 	return path + params.Encode()
+}
+
+func shallowCopyQueryExceptFor(query url.Values, keys ...string) url.Values {
+	copied := url.Values{}
+	for key, value := range query {
+		if !contains(keys, key) {
+			copied[key] = value
+		}
+	}
+	return copied
+}
+
+func contains(haystack []string, needle string) bool {
+	for _, hay := range haystack {
+		if hay == needle {
+			return true
+		}
+	}
+	return false
 }

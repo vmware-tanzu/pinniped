@@ -360,6 +360,36 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantBody:                          "Unprocessable Entity: no username claim in upstream ID token\n",
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
+		{
+			name:                              "upstream ID token does not contain requested groups claim",
+			idp:                               happyUpstream().WithoutIDTokenClaim(upstreamGroupsClaim).Build(),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).WithCode(happyUpstreamAuthcode).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusUnprocessableEntity,
+			wantBody:                          "Unprocessable Entity: no groups claim in upstream ID token\n",
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
+			name:                              "upstream ID token contains username claim with weird format",
+			idp:                               happyUpstream().WithIDTokenClaim(upstreamUsernameClaim, 42).Build(),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).WithCode(happyUpstreamAuthcode).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusUnprocessableEntity,
+			wantBody:                          "Unprocessable Entity: username claim in upstream ID token has invalid format\n",
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
+			name:                              "upstream ID token contains groups claim with weird format",
+			idp:                               happyUpstream().WithIDTokenClaim(upstreamGroupsClaim, 42).Build(),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).WithCode(happyUpstreamAuthcode).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusUnprocessableEntity,
+			wantBody:                          "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
 	}
 	for _, test := range tests {
 		test := test
@@ -531,7 +561,7 @@ func (u *upstreamOIDCIdentityProviderBuilder) WithoutGroupsClaim() *upstreamOIDC
 	return u
 }
 
-func (u *upstreamOIDCIdentityProviderBuilder) WithIDTokenClaim(name, value string) *upstreamOIDCIdentityProviderBuilder {
+func (u *upstreamOIDCIdentityProviderBuilder) WithIDTokenClaim(name string, value interface{}) *upstreamOIDCIdentityProviderBuilder {
 	u.idToken[name] = value
 	return u
 }

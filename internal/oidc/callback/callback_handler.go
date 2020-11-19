@@ -82,7 +82,11 @@ func NewHandler(
 			return err
 		}
 
-		groups := getGroupsFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims)
+		groups, err := getGroupsFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims)
+		if err != nil {
+			return err
+		}
+
 		openIDSession := makeDownstreamSession(downstreamIssuer, downstreamAuthParams.Get("client_id"), username, groups)
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 		if err != nil {
@@ -209,7 +213,13 @@ func getUsernameFromUpstreamIDToken(
 
 	username, ok := usernameAsInterface.(string)
 	if !ok {
-		panic("todo bbb") // TODO
+		plog.Warning(
+			"username claim in upstream ID token has invalid format",
+			"upstreamName", upstreamIDPConfig.GetName(),
+			"configuredUsernameClaim", upstreamIDPConfig.GetUsernameClaim(),
+			"usernameClaim", usernameClaim,
+		)
+		return "", httperr.New(http.StatusUnprocessableEntity, "username claim in upstream ID token has invalid format")
 	}
 
 	return username, nil
@@ -218,23 +228,35 @@ func getUsernameFromUpstreamIDToken(
 func getGroupsFromUpstreamIDToken(
 	upstreamIDPConfig provider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
-) []string {
+) ([]string, error) {
 	groupsClaim := upstreamIDPConfig.GetGroupsClaim()
 	if groupsClaim == "" {
-		return nil
+		return nil, nil
 	}
 
 	groupsAsInterface, ok := idTokenClaims[groupsClaim]
 	if !ok {
-		panic("todo ccc") // TODO
+		plog.Warning(
+			"no groups claim in upstream ID token",
+			"upstreamName", upstreamIDPConfig.GetName(),
+			"configuredGroupsClaim", upstreamIDPConfig.GetGroupsClaim(),
+			"groupsClaim", groupsClaim,
+		)
+		return nil, httperr.New(http.StatusUnprocessableEntity, "no groups claim in upstream ID token")
 	}
 
 	groups, ok := groupsAsInterface.([]string)
 	if !ok {
-		panic("todo ddd") // TODO
+		plog.Warning(
+			"groups claim in upstream ID token has invalid format",
+			"upstreamName", upstreamIDPConfig.GetName(),
+			"configuredGroupsClaim", upstreamIDPConfig.GetGroupsClaim(),
+			"groupsClaim", groupsClaim,
+		)
+		return nil, httperr.New(http.StatusUnprocessableEntity, "groups claim in upstream ID token has invalid format")
 	}
 
-	return groups
+	return groups, nil
 }
 
 func makeDownstreamSession(issuer, clientID, username string, groups []string) *openid.DefaultSession {

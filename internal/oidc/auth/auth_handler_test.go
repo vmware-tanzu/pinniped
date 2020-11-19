@@ -711,6 +711,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		}
 		rsp := httptest.NewRecorder()
 		subject.ServeHTTP(rsp, req)
+		t.Logf("response: %#v", rsp)
+		t.Logf("response body: %q", rsp.Body.String())
 
 		require.Equal(t, test.wantStatus, rsp.Code)
 		requireEqualContentType(t, rsp.Header().Get("Content-Type"), test.wantContentType)

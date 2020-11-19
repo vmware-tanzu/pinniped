@@ -37,17 +37,6 @@ func TestCallbackEndpoint(t *testing.T) {
 		downstreamRedirectURI = "http://127.0.0.1/callback"
 	)
 
-	// Configure fosite the same way that the production code would, except use in-memory storage.
-	oauthStore := &storage.MemoryStore{
-		Clients:        map[string]fosite.Client{oidc.PinnipedCLIOIDCClient().ID: oidc.PinnipedCLIOIDCClient()},
-		AuthorizeCodes: map[string]storage.StoreAuthorizeCode{},
-		PKCES:          map[string]fosite.Requester{},
-		IDSessions:     map[string]fosite.Requester{},
-	}
-	hmacSecret := []byte("some secret - must have at least 32 bytes")
-	require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
-	oauthHelper := oidc.FositeOauth2Helper(oauthStore, hmacSecret)
-
 	upstreamOIDCIdentityProvider := testutil.TestUpstreamOIDCIdentityProvider{
 		Name:          happyUpstreamIDPName,
 		ClientID:      "some-client-id",
@@ -157,7 +146,18 @@ func TestCallbackEndpoint(t *testing.T) {
 
 	missingClientIDState, err := happyStateCodec.Encode("s",
 		testutil.ExpectedUpstreamStateParamFormat{
-			P: shallowCopyQueryExceptFor(happyOriginalRequestParamsQuery, "client_id").Encode(),
+			P: shallowCopyAndModifyQuery(happyOriginalRequestParamsQuery, map[string]string{"client_id": ""}).Encode(),
+			N: happyNonce,
+			C: happyCSRF,
+			K: happyPKCE,
+			V: happyStateVersion,
+		},
+	)
+	require.NoError(t, err)
+
+	noOpenidScopeState, err := happyStateCodec.Encode("s",
+		testutil.ExpectedUpstreamStateParamFormat{
+			P: shallowCopyAndModifyQuery(happyOriginalRequestParamsQuery, map[string]string{"scope": "profile email"}).Encode(),
 			N: happyNonce,
 			C: happyCSRF,
 			K: happyPKCE,
@@ -181,7 +181,9 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantStatus                 int
 		wantBody                   string
 		wantRedirectLocationRegexp string
-		wantAuthcodeStored         bool
+		// TODO: I am unused...
+		wantAuthcodeStored     bool
+		wantGrantedOpenidScope bool
 	}{
 		{
 			name:          "GET with good state and cookie and successful upstream token exchange returns 302 to downstream client callback with its state and code",
@@ -193,6 +195,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
 			wantRedirectLocationRegexp: downstreamRedirectURI + `\?code=([^&]+)&scope=openid&state=` + happyDownstreamState,
 			wantAuthcodeStored:         true,
+			wantGrantedOpenidScope:     true,
 			wantBody:                   "",
 		},
 		// TODO: when we call the callback twice in a row, we get two different auth codes (to prove we are using an RNG for auth codes)
@@ -279,6 +282,15 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantBody:      "Bad Request: error using state downstream auth params\n",
 		},
 		{
+			name:                       "state's downstream auth params does not contain openid scope",
+			idpListGetter:              testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
+			method:                     http.MethodGet,
+			path:                       newRequestPath().WithState(noOpenidScopeState).String(),
+			csrfCookie:                 happyCSRFCookie,
+			wantStatus:                 http.StatusFound,
+			wantRedirectLocationRegexp: downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyDownstreamState,
+		},
+		{
 			name:          "the UpstreamOIDCProvider CRD has been deleted",
 			idpListGetter: testutil.NewIDPListGetter(otherUpstreamOIDCIdentityProvider),
 			method:        http.MethodGet,
@@ -328,6 +340,18 @@ func TestCallbackEndpoint(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
+			// Configure fosite the same way that the production code would, except use in-memory storage.
+			// Inject this into our test subject at the last second so we get a fresh storage for every test.
+			oauthStore := &storage.MemoryStore{
+				Clients:        map[string]fosite.Client{oidc.PinnipedCLIOIDCClient().ID: oidc.PinnipedCLIOIDCClient()},
+				AuthorizeCodes: map[string]storage.StoreAuthorizeCode{},
+				PKCES:          map[string]fosite.Requester{},
+				IDSessions:     map[string]fosite.Requester{},
+			}
+			hmacSecret := []byte("some secret - must have at least 32 bytes")
+			require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
+			oauthHelper := oidc.FositeOauth2Helper(oauthStore, hmacSecret)
+
 			subject := NewHandler(test.idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec)
 			req := httptest.NewRequest(test.method, test.path, nil)
 			if test.csrfCookie != "" {
@@ -335,6 +359,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			}
 			rsp := httptest.NewRecorder()
 			subject.ServeHTTP(rsp, req)
+			t.Logf("response: %#v", rsp)
+			t.Logf("response body: %q", rsp.Body.String())
 
 			require.Equal(t, test.wantStatus, rsp.Code)
 
@@ -367,12 +393,17 @@ func TestCallbackEndpoint(t *testing.T) {
 				require.NoError(t, err)
 
 				// Check that storage returned the expected concrete data types.
-				_, ok := storedAuthorizeRequest.(*fosite.Request)
+				storedRequest, ok := storedAuthorizeRequest.(*fosite.Request)
 				require.True(t, ok)
 				storedSession, ok := storedAuthorizeRequest.GetSession().(*openid.DefaultSession)
 				require.True(t, ok)
 
 				// Check various fields of the stored data.
+				if test.wantGrantedOpenidScope {
+					require.Contains(t, storedRequest.GetGrantedScopes(), "openid")
+				} else {
+					require.NotContains(t, storedRequest.GetGrantedScopes(), "openid")
+				}
 				require.Equal(t, "test-pinniped-username", storedSession.Claims.Subject)
 			} else {
 				require.Empty(t, rsp.Header().Values("Location"))
@@ -433,21 +464,16 @@ func (r *requestPath) String() string {
 	return path + params.Encode()
 }
 
-func shallowCopyQueryExceptFor(query url.Values, keys ...string) url.Values {
+func shallowCopyAndModifyQuery(query url.Values, modifications map[string]string) url.Values {
 	copied := url.Values{}
 	for key, value := range query {
-		if !contains(keys, key) {
+		if modification, ok := modifications[key]; ok {
+			if modification != "" {
+				copied[key] = []string{modification}
+			}
+		} else {
 			copied[key] = value
 		}
 	}
 	return copied
-}
-
-func contains(haystack []string, needle string) bool {
-	for _, hay := range haystack {
-		if hay == needle {
-			return true
-		}
-	}
-	return false
 }

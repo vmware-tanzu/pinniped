@@ -46,8 +46,8 @@ func NewHandler(idpListGetter oidc.IDPListGetter, oauthHelper fosite.OAuth2Provi
 			return httperr.New(http.StatusBadRequest, "error using state downstream auth params")
 		}
 
-		// TODO: grant the openid scope only if it was requested, similar to what we did in auth_handler.go
-		authorizeRequester.GrantScope("openid")
+		// Grant the openid scope only if it was requested.
+		grantOpenIDScopeIfRequested(authorizeRequester)
 
 		_, idTokenClaims, err := upstreamIDPConfig.ExchangeAuthcodeAndValidateTokens(
 			r.Context(),
@@ -167,4 +167,12 @@ func readState(r *http.Request, stateDecoder oidc.Decoder) (*oidc.UpstreamStateP
 	}
 
 	return &state, nil
+}
+
+func grantOpenIDScopeIfRequested(authorizeRequester fosite.AuthorizeRequester) {
+	for _, scope := range authorizeRequester.GetRequestedScopes() {
+		if scope == "openid" {
+			authorizeRequester.GrantScope(scope)
+		}
+	}
 }

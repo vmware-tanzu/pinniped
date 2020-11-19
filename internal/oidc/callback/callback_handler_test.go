@@ -21,7 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/oidc"
-	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidcclient"
 	"go.pinniped.dev/internal/oidcclient/nonce"
 	"go.pinniped.dev/internal/oidcclient/pkce"
@@ -35,6 +34,8 @@ const (
 func TestCallbackEndpoint(t *testing.T) {
 	const (
 		downstreamRedirectURI = "http://127.0.0.1/callback"
+
+		happyUpstreamAuthcode = "upstream-auth-code"
 	)
 
 	upstreamOIDCIdentityProvider := testutil.TestUpstreamOIDCIdentityProvider{
@@ -170,13 +171,19 @@ func TestCallbackEndpoint(t *testing.T) {
 	require.NoError(t, err)
 	happyCSRFCookie := "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue
 
+	happyExchangeAndValidateTokensArgs := &testutil.ExchangeAuthcodeAndValidateTokenArgs{
+		Authcode:             happyUpstreamAuthcode,
+		PKCECodeVerifier:     pkce.Code(happyPKCE),
+		ExpectedIDTokenNonce: nonce.Nonce(happyNonce),
+	}
+
 	tests := []struct {
 		name string
 
-		idpListGetter provider.DynamicUpstreamIDPProvider
-		method        string
-		path          string
-		csrfCookie    string
+		idp        testutil.TestUpstreamOIDCIdentityProvider
+		method     string
+		path       string
+		csrfCookie string
 
 		wantStatus                 int
 		wantBody                   string
@@ -184,19 +191,22 @@ func TestCallbackEndpoint(t *testing.T) {
 		// TODO: I am unused...
 		wantAuthcodeStored     bool
 		wantGrantedOpenidScope bool
+
+		wantExchangeAndValidateTokensCall *testutil.ExchangeAuthcodeAndValidateTokenArgs
 	}{
 		{
-			name:          "GET with good state and cookie and successful upstream token exchange returns 302 to downstream client callback with its state and code",
-			idpListGetter: testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
-			method:        http.MethodGet,
-			path:          newRequestPath().WithState(happyState).String(),
-			csrfCookie:    happyCSRFCookie,
-			wantStatus:    http.StatusFound,
+			name:       "GET with good state and cookie and successful upstream token exchange returns 302 to downstream client callback with its state and code",
+			idp:        upstreamOIDCIdentityProvider,
+			method:     http.MethodGet,
+			path:       newRequestPath().WithState(happyState).WithCode(happyUpstreamAuthcode).String(),
+			csrfCookie: happyCSRFCookie,
+			wantStatus: http.StatusFound,
 			// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
-			wantRedirectLocationRegexp: downstreamRedirectURI + `\?code=([^&]+)&scope=openid&state=` + happyDownstreamState,
-			wantAuthcodeStored:         true,
-			wantGrantedOpenidScope:     true,
-			wantBody:                   "",
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid&state=` + happyDownstreamState,
+			wantAuthcodeStored:                true,
+			wantGrantedOpenidScope:            true,
+			wantBody:                          "",
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 		// TODO: when we call the callback twice in a row, we get two different auth codes (to prove we are using an RNG for auth codes)
 
@@ -246,95 +256,97 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantBody:   "Bad Request: state param not found\n",
 		},
 		{
-			name:          "state param was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
-			idpListGetter: testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
-			method:        http.MethodGet,
-			path:          newRequestPath().WithState("this-will-not-decode").String(),
-			csrfCookie:    happyCSRFCookie,
-			wantStatus:    http.StatusBadRequest,
-			wantBody:      "Bad Request: error reading state\n",
+			name:       "state param was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
+			idp:        upstreamOIDCIdentityProvider,
+			method:     http.MethodGet,
+			path:       newRequestPath().WithState("this-will-not-decode").String(),
+			csrfCookie: happyCSRFCookie,
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "Bad Request: error reading state\n",
 		},
 		{
-			name:          "state's internal version does not match what we want",
-			idpListGetter: testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
-			method:        http.MethodGet,
-			path:          newRequestPath().WithState(wrongVersionState).String(),
-			csrfCookie:    happyCSRFCookie,
-			wantStatus:    http.StatusUnprocessableEntity,
-			wantBody:      "Unprocessable Entity: state format version is invalid\n",
+			name:       "state's internal version does not match what we want",
+			idp:        upstreamOIDCIdentityProvider,
+			method:     http.MethodGet,
+			path:       newRequestPath().WithState(wrongVersionState).String(),
+			csrfCookie: happyCSRFCookie,
+			wantStatus: http.StatusUnprocessableEntity,
+			wantBody:   "Unprocessable Entity: state format version is invalid\n",
 		},
 		{
-			name:          "state's downstream auth params element is invalid",
-			idpListGetter: testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
-			method:        http.MethodGet,
-			path:          newRequestPath().WithState(wrongDownstreamAuthParamsState).String(),
-			csrfCookie:    happyCSRFCookie,
-			wantStatus:    http.StatusBadRequest,
-			wantBody:      "Bad Request: error reading state downstream auth params\n",
+			name:       "state's downstream auth params element is invalid",
+			idp:        upstreamOIDCIdentityProvider,
+			method:     http.MethodGet,
+			path:       newRequestPath().WithState(wrongDownstreamAuthParamsState).String(),
+			csrfCookie: happyCSRFCookie,
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "Bad Request: error reading state downstream auth params\n",
 		},
 		{
-			name:          "state's downstream auth params are missing required value (e.g., client_id)",
-			idpListGetter: testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
-			method:        http.MethodGet,
-			path:          newRequestPath().WithState(missingClientIDState).String(),
-			csrfCookie:    happyCSRFCookie,
-			wantStatus:    http.StatusBadRequest,
-			wantBody:      "Bad Request: error using state downstream auth params\n",
+			name:       "state's downstream auth params are missing required value (e.g., client_id)",
+			idp:        upstreamOIDCIdentityProvider,
+			method:     http.MethodGet,
+			path:       newRequestPath().WithState(missingClientIDState).String(),
+			csrfCookie: happyCSRFCookie,
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "Bad Request: error using state downstream auth params\n",
 		},
 		{
-			name:                       "state's downstream auth params does not contain openid scope",
-			idpListGetter:              testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
-			method:                     http.MethodGet,
-			path:                       newRequestPath().WithState(noOpenidScopeState).String(),
-			csrfCookie:                 happyCSRFCookie,
-			wantStatus:                 http.StatusFound,
-			wantRedirectLocationRegexp: downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyDownstreamState,
+			name:                              "state's downstream auth params does not contain openid scope",
+			idp:                               upstreamOIDCIdentityProvider,
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(noOpenidScopeState).WithCode(happyUpstreamAuthcode).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusFound,
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyDownstreamState,
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 		{
-			name:          "the UpstreamOIDCProvider CRD has been deleted",
-			idpListGetter: testutil.NewIDPListGetter(otherUpstreamOIDCIdentityProvider),
-			method:        http.MethodGet,
-			path:          newRequestPath().WithState(happyState).String(),
-			csrfCookie:    happyCSRFCookie,
-			wantStatus:    http.StatusUnprocessableEntity,
-			wantBody:      "Unprocessable Entity: upstream provider not found\n",
+			name:       "the UpstreamOIDCProvider CRD has been deleted",
+			idp:        otherUpstreamOIDCIdentityProvider,
+			method:     http.MethodGet,
+			path:       newRequestPath().WithState(happyState).String(),
+			csrfCookie: happyCSRFCookie,
+			wantStatus: http.StatusUnprocessableEntity,
+			wantBody:   "Unprocessable Entity: upstream provider not found\n",
 		},
 		{
-			name:          "the CSRF cookie does not exist on request",
-			idpListGetter: testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
-			method:        http.MethodGet,
-			path:          newRequestPath().WithState(happyState).String(),
-			wantStatus:    http.StatusForbidden,
-			wantBody:      "Forbidden: CSRF cookie is missing\n",
+			name:       "the CSRF cookie does not exist on request",
+			idp:        upstreamOIDCIdentityProvider,
+			method:     http.MethodGet,
+			path:       newRequestPath().WithState(happyState).String(),
+			wantStatus: http.StatusForbidden,
+			wantBody:   "Forbidden: CSRF cookie is missing\n",
 		},
 		{
-			name:          "cookie was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
-			idpListGetter: testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
-			method:        http.MethodGet,
-			path:          newRequestPath().WithState(happyState).String(),
-			csrfCookie:    "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
-			wantStatus:    http.StatusForbidden,
-			wantBody:      "Forbidden: error reading CSRF cookie\n",
+			name:       "cookie was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
+			idp:        upstreamOIDCIdentityProvider,
+			method:     http.MethodGet,
+			path:       newRequestPath().WithState(happyState).String(),
+			csrfCookie: "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
+			wantStatus: http.StatusForbidden,
+			wantBody:   "Forbidden: error reading CSRF cookie\n",
 		},
 		{
-			name:          "cookie csrf value does not match state csrf value",
-			idpListGetter: testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
-			method:        http.MethodGet,
-			path:          newRequestPath().WithState(wrongCSRFValueState).String(),
-			csrfCookie:    happyCSRFCookie,
-			wantStatus:    http.StatusForbidden,
-			wantBody:      "Forbidden: CSRF value does not match\n",
+			name:       "cookie csrf value does not match state csrf value",
+			idp:        upstreamOIDCIdentityProvider,
+			method:     http.MethodGet,
+			path:       newRequestPath().WithState(wrongCSRFValueState).String(),
+			csrfCookie: happyCSRFCookie,
+			wantStatus: http.StatusForbidden,
+			wantBody:   "Forbidden: CSRF value does not match\n",
 		},
 
 		// Upstream exchange
 		{
-			name:          "upstream auth code exchange fails",
-			idpListGetter: testutil.NewIDPListGetter(failedExchangeUpstreamOIDCIdentityProvider),
-			method:        http.MethodGet,
-			path:          newRequestPath().WithState(happyState).String(),
-			csrfCookie:    happyCSRFCookie,
-			wantStatus:    http.StatusBadGateway,
-			wantBody:      "Bad Gateway: error exchanging and validating upstream tokens\n",
+			name:                              "upstream auth code exchange fails",
+			idp:                               failedExchangeUpstreamOIDCIdentityProvider,
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).WithCode(happyUpstreamAuthcode).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusBadGateway,
+			wantBody:                          "Bad Gateway: error exchanging and validating upstream tokens\n",
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 	}
 	for _, test := range tests {
@@ -352,7 +364,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
 			oauthHelper := oidc.FositeOauth2Helper(oauthStore, hmacSecret)
 
-			subject := NewHandler(test.idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec)
+			idpListGetter := testutil.NewIDPListGetter(&test.idp)
+			subject := NewHandler(idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec)
 			req := httptest.NewRequest(test.method, test.path, nil)
 			if test.csrfCookie != "" {
 				req.Header.Set("Cookie", test.csrfCookie)
@@ -407,6 +420,14 @@ func TestCallbackEndpoint(t *testing.T) {
 				require.Equal(t, "test-pinniped-username", storedSession.Claims.Subject)
 			} else {
 				require.Empty(t, rsp.Header().Values("Location"))
+			}
+
+			if test.wantExchangeAndValidateTokensCall != nil {
+				require.Equal(t, 1, test.idp.ExchangeAuthcodeAndValidateTokensCallCount())
+				test.wantExchangeAndValidateTokensCall.Ctx = req.Context()
+				require.Equal(t, test.wantExchangeAndValidateTokensCall, test.idp.ExchangeAuthcodeAndValidateTokensArgs(0))
+			} else {
+				require.Equal(t, 0, test.idp.ExchangeAuthcodeAndValidateTokensCallCount())
 			}
 		})
 	}

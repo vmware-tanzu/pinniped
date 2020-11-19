@@ -109,7 +109,7 @@ func TestManager(t *testing.T) {
 
 			parsedUpstreamIDPAuthorizationURL, err := url.Parse(upstreamIDPAuthorizationURL)
 			r.NoError(err)
-			idpListGetter := testutil.NewIDPListGetter(testutil.TestUpstreamOIDCIdentityProvider{
+			idpListGetter := testutil.NewIDPListGetter(&testutil.TestUpstreamOIDCIdentityProvider{
 				Name:             "test-idp",
 				ClientID:         "test-client-id",
 				AuthorizationURL: *parsedUpstreamIDPAuthorizationURL,

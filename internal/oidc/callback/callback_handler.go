@@ -47,13 +47,14 @@ func NewHandler(idpListGetter oidc.IDPListGetter, oauthHelper fosite.OAuth2Provi
 		}
 
 		// Grant the openid scope only if it was requested.
+		// TODO: shouldn't we be potentially granting more scopes than just openid...
 		grantOpenIDScopeIfRequested(authorizeRequester)
 
 		_, idTokenClaims, err := upstreamIDPConfig.ExchangeAuthcodeAndValidateTokens(
 			r.Context(),
-			"TODO", // TODO use the upstream authcode (code param) here
-			"TODO", // TODO use the pkce value from the decoded state param here
-			"TODO", // TODO use the nonce value from the decoded state param here
+			r.URL.Query().Get("code"), // TODO: do we need to validate this?
+			state.PKCECode,
+			state.Nonce,
 		)
 		if err != nil {
 			return httperr.New(http.StatusBadGateway, "error exchanging and validating upstream tokens")

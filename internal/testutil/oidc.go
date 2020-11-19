@@ -15,6 +15,15 @@ import (
 
 // Test helpers for the OIDC package.
 
+// ExchangeAuthcodeAndValidateTokenArgs is a POGO (plain old go object?) used to spy on calls to
+// TestUpstreamOIDCIdentityProvider.ExchangeAuthcodeAndValidateTokensFunc().
+type ExchangeAuthcodeAndValidateTokenArgs struct {
+	Ctx                  context.Context
+	Authcode             string
+	PKCECodeVerifier     pkce.Code
+	ExpectedIDTokenNonce nonce.Nonce
+}
+
 type TestUpstreamOIDCIdentityProvider struct {
 	Name                                  string
 	ClientID                              string
@@ -28,6 +37,9 @@ type TestUpstreamOIDCIdentityProvider struct {
 		pkceCodeVerifier pkce.Code,
 		expectedIDTokenNonce nonce.Nonce,
 	) (oidcclient.Token, map[string]interface{}, error)
+
+	exchangeAuthcodeAndValidateTokensCallCount int
+	exchangeAuthcodeAndValidateTokensArgs      []*ExchangeAuthcodeAndValidateTokenArgs
 }
 
 func (u *TestUpstreamOIDCIdentityProvider) GetName() string {
@@ -60,14 +72,35 @@ func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokens(
 	pkceCodeVerifier pkce.Code,
 	expectedIDTokenNonce nonce.Nonce,
 ) (oidcclient.Token, map[string]interface{}, error) {
+	if u.exchangeAuthcodeAndValidateTokensArgs == nil {
+		u.exchangeAuthcodeAndValidateTokensArgs = make([]*ExchangeAuthcodeAndValidateTokenArgs, 0)
+	}
+	u.exchangeAuthcodeAndValidateTokensCallCount++
+	u.exchangeAuthcodeAndValidateTokensArgs = append(u.exchangeAuthcodeAndValidateTokensArgs, &ExchangeAuthcodeAndValidateTokenArgs{
+		Ctx:                  ctx,
+		Authcode:             authcode,
+		PKCECodeVerifier:     pkceCodeVerifier,
+		ExpectedIDTokenNonce: expectedIDTokenNonce,
+	})
 	return u.ExchangeAuthcodeAndValidateTokensFunc(ctx, authcode, pkceCodeVerifier, expectedIDTokenNonce)
 }
 
-func NewIDPListGetter(upstreamOIDCIdentityProviders ...TestUpstreamOIDCIdentityProvider) provider.DynamicUpstreamIDPProvider {
+func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokensCallCount() int {
+	return u.exchangeAuthcodeAndValidateTokensCallCount
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokensArgs(call int) *ExchangeAuthcodeAndValidateTokenArgs {
+	if u.exchangeAuthcodeAndValidateTokensArgs == nil {
+		u.exchangeAuthcodeAndValidateTokensArgs = make([]*ExchangeAuthcodeAndValidateTokenArgs, 0)
+	}
+	return u.exchangeAuthcodeAndValidateTokensArgs[call]
+}
+
+func NewIDPListGetter(upstreamOIDCIdentityProviders ...*TestUpstreamOIDCIdentityProvider) provider.DynamicUpstreamIDPProvider {
 	idpProvider := provider.NewDynamicUpstreamIDPProvider()
 	upstreams := make([]provider.UpstreamOIDCIdentityProviderI, len(upstreamOIDCIdentityProviders))
 	for i := range upstreamOIDCIdentityProviders {
-		upstreams[i] = provider.UpstreamOIDCIdentityProviderI(&upstreamOIDCIdentityProviders[i])
+		upstreams[i] = provider.UpstreamOIDCIdentityProviderI(upstreamOIDCIdentityProviders[i])
 	}
 	idpProvider.SetIDPList(upstreams)
 	return idpProvider

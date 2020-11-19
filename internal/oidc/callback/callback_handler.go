@@ -56,7 +56,7 @@ func NewHandler(idpListGetter oidc.IDPListGetter, oauthHelper fosite.OAuth2Provi
 			"TODO", // TODO use the nonce value from the decoded state param here
 		)
 		if err != nil {
-			panic(err) // TODO
+			return httperr.New(http.StatusBadGateway, "error exchanging and validating upstream tokens")
 		}
 
 		var username string

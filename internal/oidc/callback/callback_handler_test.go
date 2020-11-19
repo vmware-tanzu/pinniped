@@ -33,8 +33,8 @@ const (
 
 func TestCallbackEndpoint(t *testing.T) {
 	const (
+		downstreamIssuer      = "https://my-downstream-issuer.com/path"
 		downstreamRedirectURI = "http://127.0.0.1/callback"
-
 		happyUpstreamAuthcode = "upstream-auth-code"
 	)
 
@@ -207,9 +207,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantStatus                 int
 		wantBody                   string
 		wantRedirectLocationRegexp string
-		// TODO: I am unused...
-		wantAuthcodeStored     bool
-		wantGrantedOpenidScope bool
+		wantGrantedOpenidScope     bool
 
 		wantExchangeAndValidateTokensCall *testutil.ExchangeAuthcodeAndValidateTokenArgs
 	}{
@@ -221,7 +219,6 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyRedirectLocationRegexp,
-			wantAuthcodeStored:                true,
 			wantGrantedOpenidScope:            true,
 			wantBody:                          "",
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
@@ -234,7 +231,6 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyRedirectLocationRegexp,
-			wantAuthcodeStored:                true,
 			wantGrantedOpenidScope:            true,
 			wantBody:                          "",
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
@@ -396,7 +392,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			oauthHelper := oidc.FositeOauth2Helper(oauthStore, hmacSecret)
 
 			idpListGetter := testutil.NewIDPListGetter(&test.idp)
-			subject := NewHandler(idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec)
+			subject := NewHandler(downstreamIssuer, idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec)
 			req := httptest.NewRequest(test.method, test.path, nil)
 			if test.csrfCookie != "" {
 				req.Header.Set("Cookie", test.csrfCookie)
@@ -406,9 +402,15 @@ func TestCallbackEndpoint(t *testing.T) {
 			t.Logf("response: %#v", rsp)
 			t.Logf("response body: %q", rsp.Body.String())
 
-			require.Equal(t, test.wantStatus, rsp.Code)
+			if test.wantExchangeAndValidateTokensCall != nil {
+				require.Equal(t, 1, test.idp.ExchangeAuthcodeAndValidateTokensCallCount())
+				test.wantExchangeAndValidateTokensCall.Ctx = req.Context()
+				require.Equal(t, test.wantExchangeAndValidateTokensCall, test.idp.ExchangeAuthcodeAndValidateTokensArgs(0))
+			} else {
+				require.Equal(t, 0, test.idp.ExchangeAuthcodeAndValidateTokensCallCount())
+			}
 
-			require.False(t, test.wantBody != "" && test.wantRedirectLocationRegexp != "", "test cannot set both body and redirect assertions")
+			require.Equal(t, test.wantStatus, rsp.Code)
 
 			if test.wantBody != "" {
 				require.Equal(t, test.wantBody, rsp.Body.String())
@@ -448,18 +450,11 @@ func TestCallbackEndpoint(t *testing.T) {
 				} else {
 					require.NotContains(t, storedRequest.GetGrantedScopes(), "openid")
 				}
+				require.Equal(t, downstreamIssuer, storedSession.Claims.Issuer)
 				require.Equal(t, "test-pinniped-username", storedSession.Claims.Subject)
 				require.Equal(t, []string{"test-pinniped-group-0", "test-pinniped-group-1"}, storedSession.Claims.Extra["oidc.pinniped.dev/groups"])
 			} else {
 				require.Empty(t, rsp.Header().Values("Location"))
-			}
-
-			if test.wantExchangeAndValidateTokensCall != nil {
-				require.Equal(t, 1, test.idp.ExchangeAuthcodeAndValidateTokensCallCount())
-				test.wantExchangeAndValidateTokensCall.Ctx = req.Context()
-				require.Equal(t, test.wantExchangeAndValidateTokensCall, test.idp.ExchangeAuthcodeAndValidateTokensArgs(0))
-			} else {
-				require.Equal(t, 0, test.idp.ExchangeAuthcodeAndValidateTokensCallCount())
 			}
 		})
 	}

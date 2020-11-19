@@ -36,7 +36,12 @@ const (
 	downstreamGroupsClaim = "oidc.pinniped.dev/groups"
 )
 
-func NewHandler(idpListGetter oidc.IDPListGetter, oauthHelper fosite.OAuth2Provider, stateDecoder, cookieDecoder oidc.Decoder) http.Handler {
+func NewHandler(
+	downstreamIssuer string,
+	idpListGetter oidc.IDPListGetter,
+	oauthHelper fosite.OAuth2Provider,
+	stateDecoder, cookieDecoder oidc.Decoder,
+) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		state, err := validateRequest(r, stateDecoder, cookieDecoder)
 		if err != nil {
@@ -106,7 +111,7 @@ func NewHandler(idpListGetter oidc.IDPListGetter, oauthHelper fosite.OAuth2Provi
 		now := time.Now()
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &openid.DefaultSession{
 			Claims: &jwt.IDTokenClaims{
-				Issuer:      "https://fosite.my-application.com", // TODO use the right value here
+				Issuer:      downstreamIssuer,
 				Subject:     username,
 				Audience:    []string{"my-client"},     // TODO use the right value here
 				ExpiresAt:   now.Add(time.Minute * 30), // TODO use the right value here

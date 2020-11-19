@@ -24,7 +24,7 @@ import (
 )
 
 func NewHandler(
-	issuer string,
+	downstreamIssuer string,
 	idpListGetter oidc.IDPListGetter,
 	oauthHelper fosite.OAuth2Provider,
 	generateCSRF func() (csrftoken.CSRFToken, error),
@@ -92,7 +92,7 @@ func NewHandler(
 			Endpoint: oauth2.Endpoint{
 				AuthURL: upstreamIDP.GetAuthorizationURL().String(),
 			},
-			RedirectURL: fmt.Sprintf("%s/callback/%s", issuer, upstreamIDP.GetName()),
+			RedirectURL: fmt.Sprintf("%s/callback/%s", downstreamIssuer, upstreamIDP.GetName()),
 			Scopes:      upstreamIDP.GetScopes(),
 		}
 

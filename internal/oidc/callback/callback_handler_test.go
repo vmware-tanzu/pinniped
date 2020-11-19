@@ -96,6 +96,7 @@ func TestCallbackEndpoint(t *testing.T) {
 	happyCSRF := "test-csrf"
 	happyPKCE := "test-pkce"
 	happyNonce := "test-nonce"
+	happyStateVersion := "1"
 
 	happyState, err := happyStateCodec.Encode("s",
 		testutil.ExpectedUpstreamStateParamFormat{
@@ -103,7 +104,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			N: happyNonce,
 			C: happyCSRF,
 			K: happyPKCE,
-			V: "1",
+			V: happyStateVersion,
 		},
 	)
 	require.NoError(t, err)
@@ -114,7 +115,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			N: happyNonce,
 			C: "wrong-csrf-value",
 			K: happyPKCE,
-			V: "1",
+			V: happyStateVersion,
 		},
 	)
 	require.NoError(t, err)
@@ -125,7 +126,18 @@ func TestCallbackEndpoint(t *testing.T) {
 			N: happyNonce,
 			C: happyCSRF,
 			K: happyPKCE,
-			V: "wrong-version",
+			V: "wrong-state-version",
+		},
+	)
+	require.NoError(t, err)
+
+	wrongDownstreamAuthParamsState, err := happyStateCodec.Encode("s",
+		testutil.ExpectedUpstreamStateParamFormat{
+			P: "these-is-not-a-valid-url-query-%z",
+			N: happyNonce,
+			C: happyCSRF,
+			K: happyPKCE,
+			V: happyStateVersion,
 		},
 	)
 	require.NoError(t, err)
@@ -223,6 +235,15 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:    happyCSRFCookie,
 			wantStatus:    http.StatusUnprocessableEntity,
 			wantBody:      "Unprocessable Entity: state format version is invalid\n",
+		},
+		{
+			name:          "state's downstream auth params element is invalid",
+			idpListGetter: testutil.NewIDPListGetter(upstreamOIDCIdentityProvider),
+			method:        http.MethodGet,
+			path:          newRequestPath().WithState(wrongDownstreamAuthParamsState).String(),
+			csrfCookie:    happyCSRFCookie,
+			wantStatus:    http.StatusBadRequest,
+			wantBody:      "Bad Request: error reading state's downstream auth params\n",
 		},
 		{
 			name:          "the UpstreamOIDCProvider CRD has been deleted",

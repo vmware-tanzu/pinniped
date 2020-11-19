@@ -36,7 +36,7 @@ func NewHandler(idpListGetter oidc.IDPListGetter, oauthHelper fosite.OAuth2Provi
 
 		downstreamAuthParams, err := url.ParseQuery(state.AuthParams)
 		if err != nil {
-			panic(err) // TODO
+			return httperr.New(http.StatusBadRequest, "error reading state's downstream auth params")
 		}
 
 		// Recreate enough of the original authorize request so we can pass it to NewAuthorizeRequest().

@@ -430,10 +430,10 @@ func TestCallbackEndpoint(t *testing.T) {
 			}
 			hmacSecret := []byte("some secret - must have at least 32 bytes")
 			require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
-			oauthHelper := oidc.FositeOauth2Helper(oauthStore, hmacSecret)
+			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecret)
 
 			idpListGetter := oidctestutil.NewIDPListGetter(&test.idp)
-			subject := NewHandler(downstreamIssuer, idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec)
+			subject := NewHandler(idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec)
 			req := httptest.NewRequest(test.method, test.path, nil)
 			if test.csrfCookie != "" {
 				req.Header.Set("Cookie", test.csrfCookie)
@@ -480,7 +480,6 @@ func TestCallbackEndpoint(t *testing.T) {
 					test.wantDownstreamIDTokenSubject,
 					test.wantDownstreamIDTokenGroups,
 					test.wantDownstreamRequestedScopes,
-					test.wantDownstreamNonce,
 				)
 
 				validatePKCEStorage(
@@ -688,7 +687,6 @@ func validateAuthcodeStorage(
 	wantDownstreamIDTokenSubject string,
 	wantDownstreamIDTokenGroups []string,
 	wantDownstreamRequestedScopes []string,
-	wantDownstreamNonce string,
 ) (*fosite.Request, *openid.DefaultSession) {
 	t.Helper()
 
@@ -740,14 +738,22 @@ func validateAuthcodeStorage(
 		require.NotContains(t, actualClaims.Extra, "groups")
 	}
 
-	// Check the rest of the downstream ID token's claims.
-	require.Equal(t, downstreamIssuer, actualClaims.Issuer)
-	require.Equal(t, []string{downstreamClientID}, actualClaims.Audience)
-	require.Equal(t, wantDownstreamNonce, actualClaims.Nonce)
-	testutil.RequireTimeInDelta(t, time.Now().Add(time.Minute*5), actualClaims.ExpiresAt, timeComparisonFudgeFactor)
-	testutil.RequireTimeInDelta(t, time.Now(), actualClaims.IssuedAt, timeComparisonFudgeFactor)
-	testutil.RequireTimeInDelta(t, time.Now(), actualClaims.RequestedAt, timeComparisonFudgeFactor)
-	testutil.RequireTimeInDelta(t, time.Now(), actualClaims.AuthTime, timeComparisonFudgeFactor)
+	// Check the rest of the downstream ID token's claims. Fosite wants us to set these (in UTC time).
+	testutil.RequireTimeInDelta(t, time.Now().UTC(), actualClaims.RequestedAt, timeComparisonFudgeFactor)
+	testutil.RequireTimeInDelta(t, time.Now().UTC(), actualClaims.AuthTime, timeComparisonFudgeFactor)
+	requestedAtZone, _ := actualClaims.RequestedAt.Zone()
+	require.Equal(t, "UTC", requestedAtZone)
+	authTimeZone, _ := actualClaims.AuthTime.Zone()
+	require.Equal(t, "UTC", authTimeZone)
+
+	// Fosite will set these fields for us in the token endpoint based on the store session
+	// information. Therefore, we assert that they are empty because we want the library to do the
+	// lifting for us.
+	require.Empty(t, actualClaims.Issuer)
+	require.Nil(t, actualClaims.Audience)
+	require.Empty(t, actualClaims.Nonce)
+	require.Zero(t, actualClaims.ExpiresAt)
+	require.Zero(t, actualClaims.IssuedAt)
 
 	// These are not needed yet.
 	require.Empty(t, actualClaims.JTI)

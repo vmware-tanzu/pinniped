@@ -125,7 +125,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	oauthStore := oidc.NullStorage{}
 	hmacSecret := []byte("some secret - must have at least 32 bytes")
 	require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
-	oauthHelper := oidc.FositeOauth2Helper(oauthStore, hmacSecret)
+	oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecret)
 
 	happyCSRF := "test-csrf"
 	happyPKCE := "test-pkce"

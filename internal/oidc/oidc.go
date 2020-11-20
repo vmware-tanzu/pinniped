@@ -85,9 +85,10 @@ func PinnipedCLIOIDCClient() *fosite.DefaultOpenIDConnectClient {
 	}
 }
 
-func FositeOauth2Helper(oauthStore interface{}, hmacSecretOfLengthAtLeast32 []byte) fosite.OAuth2Provider {
+func FositeOauth2Helper(oauthStore interface{}, issuer string, hmacSecretOfLengthAtLeast32 []byte) fosite.OAuth2Provider {
 	oauthConfig := &compose.Config{
 		EnforcePKCEForPublicClients: true,
+		IDTokenIssuer:               issuer,
 	}
 
 	return compose.Compose(

@@ -36,13 +36,9 @@ const (
 	// downstreamGroupsClaim is what we will use to encode the groups in the downstream OIDC ID token
 	// information.
 	downstreamGroupsClaim = "groups"
-
-	// The lifetime of an issued downstream ID token.
-	downstreamIDTokenLifetime = time.Minute * 5
 )
 
 func NewHandler(
-	downstreamIssuer string,
 	idpListGetter oidc.IDPListGetter,
 	oauthHelper fosite.OAuth2Provider,
 	stateDecoder, cookieDecoder oidc.Decoder,
@@ -97,13 +93,7 @@ func NewHandler(
 			return err
 		}
 
-		openIDSession := makeDownstreamSession(
-			downstreamIssuer,
-			downstreamAuthParams.Get("client_id"),
-			downstreamAuthParams.Get("nonce"),
-			username,
-			groups,
-		)
+		openIDSession := makeDownstreamSession(username, groups)
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 		if err != nil {
 			plog.WarningErr("error while generating and saving authcode", err, "upstreamName", upstreamIDPConfig.GetName())
@@ -297,16 +287,11 @@ func getGroupsFromUpstreamIDToken(
 	return groups, nil
 }
 
-func makeDownstreamSession(issuer, clientID, nonce, username string, groups []string) *openid.DefaultSession {
-	now := time.Now()
+func makeDownstreamSession(username string, groups []string) *openid.DefaultSession {
+	now := time.Now().UTC()
 	openIDSession := &openid.DefaultSession{
 		Claims: &jwt.IDTokenClaims{
-			Issuer:      issuer,
 			Subject:     username,
-			Audience:    []string{clientID},
-			Nonce:       nonce,
-			ExpiresAt:   now.Add(downstreamIDTokenLifetime),
-			IssuedAt:    now,
 			RequestedAt: now,
 			AuthTime:    now,
 		},

@@ -48,9 +48,9 @@ func TestSupervisorUpstreamOIDCDiscovery(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
 		spec := v1alpha1.UpstreamOIDCProviderSpec{
-			Issuer: env.OIDCUpstream.Issuer,
+			Issuer: env.SupervisorTestUpstream.Issuer,
 			TLS: &v1alpha1.TLSSpec{
-				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.OIDCUpstream.CABundle)),
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
 			},
 			AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{
 				AdditionalScopes: []string{"email", "profile"},

@@ -68,15 +68,13 @@ func TestSupervisorLogin(t *testing.T) {
 	require.Equal(t, http.StatusUnprocessableEntity, rsp.StatusCode)
 
 	// Create upstream OIDC provider.
-	testClientID := "test-client-id"
-	testClientSecret := "test-client-secret"
 	spec := idpv1alpha1.UpstreamOIDCProviderSpec{
-		Issuer: env.OIDCUpstream.Issuer,
+		Issuer: env.SupervisorTestUpstream.Issuer,
 		TLS: &idpv1alpha1.TLSSpec{
-			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.OIDCUpstream.CABundle)),
+			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
 		},
 		Client: idpv1alpha1.OIDCClient{
-			SecretName: makeTestClientCredsSecret(t, testClientID, testClientSecret).Name,
+			SecretName: makeTestClientCredsSecret(t, env.SupervisorTestUpstream.ClientID, env.SupervisorTestUpstream.ClientSecret).Name,
 		},
 	}
 	upstream := makeTestUpstream(t, spec, idpv1alpha1.PhaseReady)
@@ -94,7 +92,7 @@ func TestSupervisorLogin(t *testing.T) {
 		ctx,
 		t,
 		upstream.Spec.Issuer,
-		testClientID,
+		env.SupervisorTestUpstream.ClientID,
 		upstreamRedirectURI,
 		rsp.Header.Get("Location"),
 	)
@@ -147,9 +145,9 @@ func requireValidRedirectLocation(
 			return url.Parse(env.Proxy)
 		}
 	}
-	if env.OIDCUpstream.CABundle != "" {
+	if env.SupervisorTestUpstream.CABundle != "" {
 		transport.TLSClientConfig = &tls.Config{RootCAs: x509.NewCertPool()}
-		transport.TLSClientConfig.RootCAs.AppendCertsFromPEM([]byte(env.OIDCUpstream.CABundle))
+		transport.TLSClientConfig.RootCAs.AppendCertsFromPEM([]byte(env.SupervisorTestUpstream.CABundle))
 	}
 
 	ctx = oidc.ClientContext(ctx, &http.Client{Transport: &transport})

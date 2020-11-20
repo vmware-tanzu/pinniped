@@ -40,7 +40,7 @@ const (
 
 	happyUpstreamAuthcode = "upstream-auth-code"
 
-	happyDownstreamState        = "some-downstream-state"
+	happyDownstreamState        = "some-downstream-state-with-at-least-32-bytes"
 	happyDownstreamCSRF         = "test-csrf"
 	happyDownstreamPKCE         = "test-pkce"
 	happyDownstreamNonce        = "test-nonce"
@@ -714,8 +714,8 @@ func validateAuthcodeStorage(
 	require.Empty(t, storedSessionFromAuthcode.Username)
 	require.Empty(t, storedSessionFromAuthcode.Headers)
 
-	// The authcode that we are issuing should be good for 15 minutes, which is default for fosite.
-	testutil.RequireTimeInDelta(t, time.Now().Add(time.Minute*15), storedSessionFromAuthcode.ExpiresAt[fosite.AuthorizeCode], timeComparisonFudgeFactor)
+	// The authcode that we are issuing should be good for the length of time that we declare in the fosite config.
+	testutil.RequireTimeInDelta(t, time.Now().Add(time.Minute*3), storedSessionFromAuthcode.ExpiresAt[fosite.AuthorizeCode], timeComparisonFudgeFactor)
 	require.Len(t, storedSessionFromAuthcode.ExpiresAt, 1)
 
 	// Now confirm the ID token claims.

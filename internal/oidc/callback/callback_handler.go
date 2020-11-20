@@ -97,7 +97,13 @@ func NewHandler(
 			return err
 		}
 
-		openIDSession := makeDownstreamSession(downstreamIssuer, downstreamAuthParams.Get("client_id"), username, groups)
+		openIDSession := makeDownstreamSession(
+			downstreamIssuer,
+			downstreamAuthParams.Get("client_id"),
+			downstreamAuthParams.Get("nonce"),
+			username,
+			groups,
+		)
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 		if err != nil {
 			plog.WarningErr("error while generating and saving authcode", err, "upstreamName", upstreamIDPConfig.GetName())
@@ -291,7 +297,7 @@ func getGroupsFromUpstreamIDToken(
 	return groups, nil
 }
 
-func makeDownstreamSession(issuer, clientID, username string, groups []string) *openid.DefaultSession {
+func makeDownstreamSession(issuer, clientID, nonce, username string, groups []string) *openid.DefaultSession {
 	now := time.Now()
 	openIDSession := &openid.DefaultSession{
 		Claims: &jwt.IDTokenClaims{
@@ -302,6 +308,7 @@ func makeDownstreamSession(issuer, clientID, username string, groups []string) *
 			IssuedAt:    now,
 			RequestedAt: now,
 			AuthTime:    now,
+			Nonce:       nonce,
 		},
 	}
 	if groups != nil {

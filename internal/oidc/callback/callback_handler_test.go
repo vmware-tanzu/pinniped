@@ -49,6 +49,7 @@ const (
 	happyUpstreamAuthcode = "upstream-auth-code"
 	downstreamRedirectURI = "http://127.0.0.1/callback"
 	downstreamClientID    = "pinniped-cli"
+	downstreamNonce       = "some-nonce-value"
 
 	timeComparisonFudgeFactor = time.Second * 15
 )
@@ -62,7 +63,7 @@ var (
 		"scope":                 []string{strings.Join(happyDownstreamScopesRequested, " ")},
 		"client_id":             []string{downstreamClientID},
 		"state":                 []string{happyDownstreamState},
-		"nonce":                 []string{"some-nonce-value"},
+		"nonce":                 []string{downstreamNonce},
 		"code_challenge":        []string{"some-challenge"},
 		"code_challenge_method": []string{"S256"},
 		"redirect_uri":          []string{downstreamRedirectURI},
@@ -119,6 +120,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantDownstreamIDTokenSubject  string
 		wantDownstreamIDTokenGroups   []string
 		wantDownstreamRequestedScopes []string
+		wantDownstreamNonce           string
 
 		wantExchangeAndValidateTokensCall *oidctestutil.ExchangeAuthcodeAndValidateTokenArgs
 	}{
@@ -135,6 +137,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamIDTokenSubject:      upstreamUsername,
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamNonce:               downstreamNonce,
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 		{
@@ -150,6 +153,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
 			wantDownstreamIDTokenGroups:       nil,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamNonce:               downstreamNonce,
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 		{
@@ -165,6 +169,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamIDTokenSubject:      upstreamSubject,
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamNonce:               downstreamNonce,
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 
@@ -287,6 +292,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamIDTokenSubject:      upstreamUsername,
 			wantDownstreamRequestedScopes:     []string{"profile", "email"},
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamNonce:               downstreamNonce,
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 		{
@@ -507,6 +513,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				// Check the rest of the downstream ID token's claims.
 				require.Equal(t, downstreamIssuer, actualClaims.Issuer)
 				require.Equal(t, []string{downstreamClientID}, actualClaims.Audience)
+				require.Equal(t, test.wantDownstreamNonce, actualClaims.Nonce)
 				testutil.RequireTimeInDelta(t, time.Now().Add(time.Minute*5), actualClaims.ExpiresAt, timeComparisonFudgeFactor)
 				testutil.RequireTimeInDelta(t, time.Now(), actualClaims.IssuedAt, timeComparisonFudgeFactor)
 				testutil.RequireTimeInDelta(t, time.Now(), actualClaims.RequestedAt, timeComparisonFudgeFactor)
@@ -518,9 +525,6 @@ func TestCallbackEndpoint(t *testing.T) {
 				require.Empty(t, actualClaims.AccessTokenHash)
 				require.Empty(t, actualClaims.AuthenticationContextClassReference)
 				require.Empty(t, actualClaims.AuthenticationMethodsReference)
-
-				// TODO we should put the downstream request's nonce into the ID token, but maybe the token endpoint is responsible for that?
-				require.Empty(t, actualClaims.Nonce)
 
 				// TODO add thorough tests about what should be stored for PKCES and IDSessions
 			} else {

@@ -329,6 +329,26 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
+			name:            "error while decoding CSRF cookie just generates a new cookie and succeeds as usual",
+			issuer:          downstreamIssuer,
+			idpListGetter:   oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			generateCSRF:    happyCSRFGenerator,
+			generatePKCE:    happyPKCEGenerator,
+			generateNonce:   happyNonceGenerator,
+			stateEncoder:    happyStateEncoder,
+			cookieEncoder:   happyCookieEncoder,
+			method:          http.MethodGet,
+			path:            happyGetRequestPath,
+			csrfCookie:      "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
+			wantStatus:      http.StatusFound,
+			wantContentType: "text/html; charset=utf-8",
+			// Generated a new CSRF cookie and set it in the response.
+			wantCSRFValueInCookieHeader:            happyCSRF,
+			wantLocationHeader:                     expectedRedirectLocation(expectedUpstreamStateParam(nil, "", "")),
+			wantUpstreamStateParamInLocationHeader: true,
+			wantBodyStringWithLocationInHref:       true,
+		},
+		{
 			name:          "happy path when downstream redirect uri matches what is configured for client except for the port number",
 			issuer:        downstreamIssuer,
 			idpListGetter: oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
@@ -640,22 +660,6 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:  "Internal Server Error: error generating PKCE param\n",
 		},
 		{
-			name:            "error while decoding CSRF cookie",
-			issuer:          downstreamIssuer,
-			idpListGetter:   oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
-			generateCSRF:    happyCSRFGenerator,
-			generatePKCE:    happyPKCEGenerator,
-			generateNonce:   happyNonceGenerator,
-			stateEncoder:    happyStateEncoder,
-			cookieEncoder:   happyCookieEncoder,
-			method:          http.MethodGet,
-			path:            happyGetRequestPath,
-			csrfCookie:      "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
-			wantStatus:      http.StatusUnprocessableEntity,
-			wantContentType: "text/plain; charset=utf-8",
-			wantBodyString:  "Unprocessable Entity: error reading CSRF cookie\n",
-		},
-		{
 			name:            "no upstream providers are configured",
 			issuer:          downstreamIssuer,
 			idpListGetter:   oidctestutil.NewIDPListGetter(), // empty
@@ -864,10 +868,20 @@ func requireEqualURLs(t *testing.T, actualURL string, expectedURL string, ignore
 	require.NoError(t, err)
 	expectedLocationURL, err := url.Parse(expectedURL)
 	require.NoError(t, err)
-	require.Equal(t, expectedLocationURL.Scheme, actualLocationURL.Scheme)
-	require.Equal(t, expectedLocationURL.User, actualLocationURL.User)
-	require.Equal(t, expectedLocationURL.Host, actualLocationURL.Host)
-	require.Equal(t, expectedLocationURL.Path, actualLocationURL.Path)
+	require.Equal(t, expectedLocationURL.Scheme, actualLocationURL.Scheme,
+		"schemes were not equal: expected %s but got %s", expectedURL, actualURL,
+	)
+	require.Equal(t, expectedLocationURL.User, actualLocationURL.User,
+		"users were not equal: expected %s but got %s", expectedURL, actualURL,
+	)
+
+	require.Equal(t, expectedLocationURL.Host, actualLocationURL.Host,
+		"hosts were not equal: expected %s but got %s", expectedURL, actualURL,
+	)
+
+	require.Equal(t, expectedLocationURL.Path, actualLocationURL.Path,
+		"paths were not equal: expected %s but got %s", expectedURL, actualURL,
+	)
 
 	expectedLocationQuery := expectedLocationURL.Query()
 	actualLocationQuery := actualLocationURL.Query()

@@ -41,11 +41,7 @@ func NewHandler(
 			return httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET or POST)", r.Method)
 		}
 
-		csrfFromCookie, err := readCSRFCookie(r, cookieCodec)
-		if err != nil {
-			plog.InfoErr("error reading CSRF cookie", err)
-			return err
-		}
+		csrfFromCookie := readCSRFCookie(r, cookieCodec)
 
 		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), r)
 		if err != nil {
@@ -133,20 +129,23 @@ func NewHandler(
 	})
 }
 
-func readCSRFCookie(r *http.Request, codec oidc.Codec) (csrftoken.CSRFToken, error) {
+func readCSRFCookie(r *http.Request, codec oidc.Codec) csrftoken.CSRFToken {
 	receivedCSRFCookie, err := r.Cookie(oidc.CSRFCookieName)
 	if err != nil {
 		// Error means that the cookie was not found
-		return "", nil
+		return ""
 	}
 
 	var csrfFromCookie csrftoken.CSRFToken
 	err = codec.Decode(oidc.CSRFCookieEncodingName, receivedCSRFCookie.Value, &csrfFromCookie)
 	if err != nil {
-		return "", httperr.Wrap(http.StatusUnprocessableEntity, "error reading CSRF cookie", err)
+		// We can ignore any errors and just make a new cookie. Hopefully this will
+		// make the user experience better if, for example, the server rotated
+		// cookie signing keys and then a user submitted a very old cookie.
+		return ""
 	}
 
-	return csrfFromCookie, nil
+	return csrfFromCookie
 }
 
 func grantOpenIDScopeIfRequested(authorizeRequester fosite.AuthorizeRequester) {

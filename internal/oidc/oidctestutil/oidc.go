@@ -112,6 +112,7 @@ func NewIDPListGetter(upstreamOIDCIdentityProviders ...*TestUpstreamOIDCIdentity
 // assertions about the redirect URL in this test.
 type ExpectedUpstreamStateParamFormat struct {
 	P string `json:"p"`
+	U string `json:"u"`
 	N string `json:"n"`
 	C string `json:"c"`
 	K string `json:"k"`

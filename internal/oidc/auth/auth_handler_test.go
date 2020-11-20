@@ -204,14 +204,19 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		return pathWithQuery("/some/path", modifiedHappyGetRequestQueryMap(queryOverrides))
 	}
 
-	expectedUpstreamStateParam := func(queryOverrides map[string]string, csrfValueOverride string) string {
+	expectedUpstreamStateParam := func(queryOverrides map[string]string, csrfValueOverride, upstreamNameOverride string) string {
 		csrf := happyCSRF
 		if csrfValueOverride != "" {
 			csrf = csrfValueOverride
 		}
+		upstreamName := upstreamOIDCIdentityProvider.Name
+		if upstreamNameOverride != "" {
+			upstreamName = upstreamNameOverride
+		}
 		encoded, err := happyStateEncoder.Encode("s",
 			oidctestutil.ExpectedUpstreamStateParamFormat{
 				P: encodeQuery(modifiedHappyGetRequestQueryMap(queryOverrides)),
+				U: upstreamName,
 				N: happyNonce,
 				C: csrf,
 				K: happyPKCE,
@@ -232,7 +237,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			"nonce":                 happyNonce,
 			"code_challenge":        expectedUpstreamCodeChallenge,
 			"code_challenge_method": "S256",
-			"redirect_uri":          downstreamIssuer + "/callback/some-idp",
+			"redirect_uri":          downstreamIssuer + "/callback",
 		})
 	}
 
@@ -281,7 +286,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:                             http.StatusFound,
 			wantContentType:                        "text/html; charset=utf-8",
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     expectedRedirectLocation(expectedUpstreamStateParam(nil, "")),
+			wantLocationHeader:                     expectedRedirectLocation(expectedUpstreamStateParam(nil, "", "")),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -299,7 +304,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			csrfCookie:                             "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue,
 			wantStatus:                             http.StatusFound,
 			wantContentType:                        "text/html; charset=utf-8",
-			wantLocationHeader:                     expectedRedirectLocation(expectedUpstreamStateParam(nil, incomingCookieCSRFValue)),
+			wantLocationHeader:                     expectedRedirectLocation(expectedUpstreamStateParam(nil, incomingCookieCSRFValue, "")),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -320,7 +325,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:                        "",
 			wantBodyString:                         "",
 			wantCSRFValueInCookieHeader:            happyCSRF,
-			wantLocationHeader:                     expectedRedirectLocation(expectedUpstreamStateParam(nil, "")),
+			wantLocationHeader:                     expectedRedirectLocation(expectedUpstreamStateParam(nil, "", "")),
 			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
@@ -341,7 +346,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantCSRFValueInCookieHeader: happyCSRF,
 			wantLocationHeader: expectedRedirectLocation(expectedUpstreamStateParam(map[string]string{
 				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
-			}, "")),
+			}, "", "")),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},
@@ -538,7 +543,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:             "text/html; charset=utf-8",
 			wantCSRFValueInCookieHeader: happyCSRF,
 			wantLocationHeader: expectedRedirectLocation(expectedUpstreamStateParam(
-				map[string]string{"prompt": "none login", "scope": "email"}, "",
+				map[string]string{"prompt": "none login", "scope": "email"}, "", "",
 			)),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
@@ -787,11 +792,11 @@ func TestAuthorizationEndpoint(t *testing.T) {
 				"access_type":           "offline",
 				"scope":                 "other-scope1 other-scope2",
 				"client_id":             "some-other-client-id",
-				"state":                 expectedUpstreamStateParam(nil, ""),
+				"state":                 expectedUpstreamStateParam(nil, "", newProviderSettings.Name),
 				"nonce":                 happyNonce,
 				"code_challenge":        expectedUpstreamCodeChallenge,
 				"code_challenge_method": "S256",
-				"redirect_uri":          downstreamIssuer + "/callback/some-other-idp",
+				"redirect_uri":          downstreamIssuer + "/callback",
 			},
 		)
 		test.wantBodyString = fmt.Sprintf(`<a href="%s">Found</a>.%s`,

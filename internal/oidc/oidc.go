@@ -66,6 +66,7 @@ type Codec interface {
 // the state param.
 type UpstreamStateParamData struct {
 	AuthParams    string              `json:"p"`
+	UpstreamName  string              `json:"u"`
 	Nonce         nonce.Nonce         `json:"n"`
 	CSRFToken     csrftoken.CSRFToken `json:"c"`
 	PKCECode      pkce.Code           `json:"k"`

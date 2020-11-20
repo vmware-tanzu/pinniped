@@ -92,11 +92,18 @@ func NewHandler(
 			Endpoint: oauth2.Endpoint{
 				AuthURL: upstreamIDP.GetAuthorizationURL().String(),
 			},
-			RedirectURL: fmt.Sprintf("%s/callback/%s", downstreamIssuer, upstreamIDP.GetName()),
+			RedirectURL: fmt.Sprintf("%s/callback", downstreamIssuer),
 			Scopes:      upstreamIDP.GetScopes(),
 		}
 
-		encodedStateParamValue, err := upstreamStateParam(authorizeRequester, nonceValue, csrfValue, pkceValue, upstreamStateEncoder)
+		encodedStateParamValue, err := upstreamStateParam(
+			authorizeRequester,
+			upstreamIDP.GetName(),
+			nonceValue,
+			csrfValue,
+			pkceValue,
+			upstreamStateEncoder,
+		)
 		if err != nil {
 			plog.Error("authorize upstream state param error", err)
 			return err
@@ -188,6 +195,7 @@ func generateValues(
 
 func upstreamStateParam(
 	authorizeRequester fosite.AuthorizeRequester,
+	upstreamName string,
 	nonceValue nonce.Nonce,
 	csrfValue csrftoken.CSRFToken,
 	pkceValue pkce.Code,
@@ -195,6 +203,7 @@ func upstreamStateParam(
 ) (string, error) {
 	stateParamData := oidc.UpstreamStateParamData{
 		AuthParams:    authorizeRequester.GetRequestForm().Encode(),
+		UpstreamName:  upstreamName,
 		Nonce:         nonceValue,
 		CSRFToken:     csrfValue,
 		PKCECode:      pkceValue,

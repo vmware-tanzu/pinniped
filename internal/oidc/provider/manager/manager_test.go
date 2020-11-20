@@ -12,8 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	"go.pinniped.dev/internal/testutil"
-
 	"github.com/sclevine/spec"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
@@ -22,6 +20,7 @@ import (
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/discovery"
 	"go.pinniped.dev/internal/oidc/jwks"
+	"go.pinniped.dev/internal/oidc/oidctestutil"
 	"go.pinniped.dev/internal/oidc/provider"
 )
 
@@ -109,7 +108,7 @@ func TestManager(t *testing.T) {
 
 			parsedUpstreamIDPAuthorizationURL, err := url.Parse(upstreamIDPAuthorizationURL)
 			r.NoError(err)
-			idpListGetter := testutil.NewIDPListGetter(&testutil.TestUpstreamOIDCIdentityProvider{
+			idpListGetter := oidctestutil.NewIDPListGetter(&oidctestutil.TestUpstreamOIDCIdentityProvider{
 				Name:             "test-idp",
 				ClientID:         "test-client-id",
 				AuthorizationURL: *parsedUpstreamIDPAuthorizationURL,

@@ -20,10 +20,10 @@ import (
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/csrftoken"
+	"go.pinniped.dev/internal/oidc/oidctestutil"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidcclient/nonce"
 	"go.pinniped.dev/internal/oidcclient/pkce"
-	"go.pinniped.dev/internal/testutil"
 )
 
 func TestAuthorizationEndpoint(t *testing.T) {
@@ -114,7 +114,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	upstreamAuthURL, err := url.Parse("https://some-upstream-idp:8443/auth")
 	require.NoError(t, err)
 
-	upstreamOIDCIdentityProvider := testutil.TestUpstreamOIDCIdentityProvider{
+	upstreamOIDCIdentityProvider := oidctestutil.TestUpstreamOIDCIdentityProvider{
 		Name:             "some-idp",
 		ClientID:         "some-client-id",
 		AuthorizationURL: *upstreamAuthURL,
@@ -210,7 +210,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			csrf = csrfValueOverride
 		}
 		encoded, err := happyStateEncoder.Encode("s",
-			testutil.ExpectedUpstreamStateParamFormat{
+			oidctestutil.ExpectedUpstreamStateParamFormat{
 				P: encodeQuery(modifiedHappyGetRequestQueryMap(queryOverrides)),
 				N: happyNonce,
 				C: csrf,
@@ -270,7 +270,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:                                   "happy path using GET without a CSRF cookie",
 			issuer:                                 downstreamIssuer,
-			idpListGetter:                          testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:                          oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
 			generateNonce:                          happyNonceGenerator,
@@ -288,7 +288,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:                                   "happy path using GET with a CSRF cookie",
 			issuer:                                 downstreamIssuer,
-			idpListGetter:                          testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:                          oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
 			generateNonce:                          happyNonceGenerator,
@@ -306,7 +306,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:                                   "happy path using POST",
 			issuer:                                 downstreamIssuer,
-			idpListGetter:                          testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:                          oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
 			generateNonce:                          happyNonceGenerator,
@@ -326,7 +326,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:          "happy path when downstream redirect uri matches what is configured for client except for the port number",
 			issuer:        downstreamIssuer,
-			idpListGetter: testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter: oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:  happyCSRFGenerator,
 			generatePKCE:  happyPKCEGenerator,
 			generateNonce: happyNonceGenerator,
@@ -348,7 +348,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:          "downstream redirect uri does not match what is configured for client",
 			issuer:        downstreamIssuer,
-			idpListGetter: testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter: oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:  happyCSRFGenerator,
 			generatePKCE:  happyPKCEGenerator,
 			generateNonce: happyNonceGenerator,
@@ -365,7 +365,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:            "downstream client does not exist",
 			issuer:          downstreamIssuer,
-			idpListGetter:   testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:   oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
@@ -380,7 +380,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:               "response type is unsupported",
 			issuer:             downstreamIssuer,
-			idpListGetter:      testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:      oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -396,7 +396,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:               "downstream scopes do not match what is configured for client",
 			issuer:             downstreamIssuer,
-			idpListGetter:      testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:      oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -412,7 +412,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:               "missing response type in request",
 			issuer:             downstreamIssuer,
-			idpListGetter:      testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:      oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -428,7 +428,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:            "missing client id in request",
 			issuer:          downstreamIssuer,
-			idpListGetter:   testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:   oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
@@ -443,7 +443,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:               "missing PKCE code_challenge in request", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
 			issuer:             downstreamIssuer,
-			idpListGetter:      testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:      oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -459,7 +459,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:               "invalid value for PKCE code_challenge_method in request", // https://tools.ietf.org/html/rfc7636#section-4.3
 			issuer:             downstreamIssuer,
-			idpListGetter:      testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:      oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -475,7 +475,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:               "when PKCE code_challenge_method in request is `plain`", // https://tools.ietf.org/html/rfc7636#section-4.3
 			issuer:             downstreamIssuer,
-			idpListGetter:      testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:      oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -491,7 +491,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:               "missing PKCE code_challenge_method in request", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
 			issuer:             downstreamIssuer,
-			idpListGetter:      testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:      oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -509,7 +509,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			// through that part of the fosite library.
 			name:               "prompt param is not allowed to have none and another legal value at the same time",
 			issuer:             downstreamIssuer,
-			idpListGetter:      testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:      oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -525,7 +525,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:          "OIDC validations are skipped when the openid scope was not requested",
 			issuer:        downstreamIssuer,
-			idpListGetter: testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter: oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:  happyCSRFGenerator,
 			generatePKCE:  happyPKCEGenerator,
 			generateNonce: happyNonceGenerator,
@@ -546,7 +546,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:               "state does not have enough entropy",
 			issuer:             downstreamIssuer,
-			idpListGetter:      testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:      oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -562,7 +562,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:            "error while encoding upstream state param",
 			issuer:          downstreamIssuer,
-			idpListGetter:   testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:   oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
@@ -577,7 +577,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:            "error while encoding CSRF cookie value for new cookie",
 			issuer:          downstreamIssuer,
-			idpListGetter:   testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:   oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
@@ -592,7 +592,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:            "error while generating CSRF token",
 			issuer:          downstreamIssuer,
-			idpListGetter:   testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:   oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:    func() (csrftoken.CSRFToken, error) { return "", fmt.Errorf("some csrf generator error") },
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
@@ -607,7 +607,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:            "error while generating nonce",
 			issuer:          downstreamIssuer,
-			idpListGetter:   testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:   oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   func() (nonce.Nonce, error) { return "", fmt.Errorf("some nonce generator error") },
@@ -622,7 +622,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:            "error while generating PKCE",
 			issuer:          downstreamIssuer,
-			idpListGetter:   testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:   oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    func() (pkce.Code, error) { return "", fmt.Errorf("some PKCE generator error") },
 			generateNonce:   happyNonceGenerator,
@@ -637,7 +637,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:            "error while decoding CSRF cookie",
 			issuer:          downstreamIssuer,
-			idpListGetter:   testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:   oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
@@ -653,7 +653,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:            "no upstream providers are configured",
 			issuer:          downstreamIssuer,
-			idpListGetter:   testutil.NewIDPListGetter(), // empty
+			idpListGetter:   oidctestutil.NewIDPListGetter(), // empty
 			method:          http.MethodGet,
 			path:            happyGetRequestPath,
 			wantStatus:      http.StatusUnprocessableEntity,
@@ -663,7 +663,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:            "too many upstream providers are configured",
 			issuer:          downstreamIssuer,
-			idpListGetter:   testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider, &upstreamOIDCIdentityProvider), // more than one not allowed
+			idpListGetter:   oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider, &upstreamOIDCIdentityProvider), // more than one not allowed
 			method:          http.MethodGet,
 			path:            happyGetRequestPath,
 			wantStatus:      http.StatusUnprocessableEntity,
@@ -673,7 +673,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:            "PUT is a bad method",
 			issuer:          downstreamIssuer,
-			idpListGetter:   testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:   oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			method:          http.MethodPut,
 			path:            "/some/path",
 			wantStatus:      http.StatusMethodNotAllowed,
@@ -683,7 +683,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:            "PATCH is a bad method",
 			issuer:          downstreamIssuer,
-			idpListGetter:   testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:   oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			method:          http.MethodPatch,
 			path:            "/some/path",
 			wantStatus:      http.StatusMethodNotAllowed,
@@ -693,7 +693,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			name:            "DELETE is a bad method",
 			issuer:          downstreamIssuer,
-			idpListGetter:   testutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			idpListGetter:   oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
 			method:          http.MethodDelete,
 			path:            "/some/path",
 			wantStatus:      http.StatusMethodNotAllowed,
@@ -772,7 +772,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		runOneTestCase(t, test, subject)
 
 		// Call the setter to change the upstream IDP settings.
-		newProviderSettings := testutil.TestUpstreamOIDCIdentityProvider{
+		newProviderSettings := oidctestutil.TestUpstreamOIDCIdentityProvider{
 			Name:             "some-other-idp",
 			ClientID:         "some-other-client-id",
 			AuthorizationURL: *upstreamAuthURL,
@@ -840,13 +840,13 @@ func requireEqualDecodedStateParams(t *testing.T, actualURL string, expectedURL 
 
 	expectedQueryStateParam := expectedLocationURL.Query().Get("state")
 	require.NotEmpty(t, expectedQueryStateParam)
-	var expectedDecodedStateParam testutil.ExpectedUpstreamStateParamFormat
+	var expectedDecodedStateParam oidctestutil.ExpectedUpstreamStateParamFormat
 	err = stateParamDecoder.Decode("s", expectedQueryStateParam, &expectedDecodedStateParam)
 	require.NoError(t, err)
 
 	actualQueryStateParam := actualLocationURL.Query().Get("state")
 	require.NotEmpty(t, actualQueryStateParam)
-	var actualDecodedStateParam testutil.ExpectedUpstreamStateParamFormat
+	var actualDecodedStateParam oidctestutil.ExpectedUpstreamStateParamFormat
 	err = stateParamDecoder.Decode("s", actualQueryStateParam, &actualDecodedStateParam)
 	require.NoError(t, err)
 

@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/securecookie"
 	"github.com/ory/fosite"
@@ -21,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/oidctestutil"
 	"go.pinniped.dev/internal/oidcclient"
 	"go.pinniped.dev/internal/oidcclient/nonce"
 	"go.pinniped.dev/internal/oidcclient/pkce"
@@ -30,26 +32,46 @@ import (
 const (
 	happyUpstreamIDPName = "upstream-idp-name"
 
+	upstreamIssuer   = "https://my-upstream-issuer.com"
 	upstreamSubject  = "abc123-some-guid"
 	upstreamUsername = "test-pinniped-username"
 
 	upstreamUsernameClaim = "the-user-claim"
 	upstreamGroupsClaim   = "the-groups-claim"
+
+	happyDownstreamState = "some-downstream-state"
+	happyCSRF            = "test-csrf"
+	happyPKCE            = "test-pkce"
+	happyNonce           = "test-nonce"
+	happyStateVersion    = "1"
+
+	downstreamIssuer      = "https://my-downstream-issuer.com/path"
+	happyUpstreamAuthcode = "upstream-auth-code"
+	downstreamRedirectURI = "http://127.0.0.1/callback"
+	downstreamClientID    = "pinniped-cli"
+
+	timeComparisonFudgeFactor = time.Second * 15
 )
 
 var (
-	upstreamGroupMembership = []string{"test-pinniped-group-0", "test-pinniped-group-1"}
+	upstreamGroupMembership        = []string{"test-pinniped-group-0", "test-pinniped-group-1"}
+	happyDownstreamScopesRequested = []string{"openid", "profile", "email"}
+
+	happyOriginalRequestParamsQuery = url.Values{
+		"response_type":         []string{"code"},
+		"scope":                 []string{strings.Join(happyDownstreamScopesRequested, " ")},
+		"client_id":             []string{downstreamClientID},
+		"state":                 []string{happyDownstreamState},
+		"nonce":                 []string{"some-nonce-value"},
+		"code_challenge":        []string{"some-challenge"},
+		"code_challenge_method": []string{"S256"},
+		"redirect_uri":          []string{downstreamRedirectURI},
+	}
+	happyOriginalRequestParams = happyOriginalRequestParamsQuery.Encode()
 )
 
 func TestCallbackEndpoint(t *testing.T) {
-	const (
-		downstreamIssuer      = "https://my-downstream-issuer.com/path"
-		downstreamRedirectURI = "http://127.0.0.1/callback"
-		happyUpstreamAuthcode = "upstream-auth-code"
-		downstreamClientID    = "pinniped-cli"
-	)
-
-	otherUpstreamOIDCIdentityProvider := testutil.TestUpstreamOIDCIdentityProvider{
+	otherUpstreamOIDCIdentityProvider := oidctestutil.TestUpstreamOIDCIdentityProvider{
 		Name:     "other-upstream-idp-name",
 		ClientID: "other-some-client-id",
 		Scopes:   []string{"other-scope1", "other-scope2"},
@@ -67,95 +89,13 @@ func TestCallbackEndpoint(t *testing.T) {
 	var happyCookieCodec = securecookie.New(cookieEncoderHashKey, cookieEncoderBlockKey)
 	happyCookieCodec.SetSerializer(securecookie.JSONEncoder{})
 
-	happyDownstreamState := "some-downstream-state"
-
-	happyOriginalRequestParamsQuery := url.Values{
-		"response_type":         []string{"code"},
-		"scope":                 []string{"openid profile email"},
-		"client_id":             []string{downstreamClientID},
-		"state":                 []string{happyDownstreamState},
-		"nonce":                 []string{"some-nonce-value"},
-		"code_challenge":        []string{"some-challenge"},
-		"code_challenge_method": []string{"S256"},
-		"redirect_uri":          []string{downstreamRedirectURI},
-	}
-	happyOriginalRequestParams := happyOriginalRequestParamsQuery.Encode()
-	happyCSRF := "test-csrf"
-	happyPKCE := "test-pkce"
-	happyNonce := "test-nonce"
-	happyStateVersion := "1"
-
-	happyState, err := happyStateCodec.Encode("s",
-		testutil.ExpectedUpstreamStateParamFormat{
-			P: happyOriginalRequestParams,
-			N: happyNonce,
-			C: happyCSRF,
-			K: happyPKCE,
-			V: happyStateVersion,
-		},
-	)
-	require.NoError(t, err)
-
-	wrongCSRFValueState, err := happyStateCodec.Encode("s",
-		testutil.ExpectedUpstreamStateParamFormat{
-			P: happyOriginalRequestParams,
-			N: happyNonce,
-			C: "wrong-csrf-value",
-			K: happyPKCE,
-			V: happyStateVersion,
-		},
-	)
-	require.NoError(t, err)
-
-	wrongVersionState, err := happyStateCodec.Encode("s",
-		testutil.ExpectedUpstreamStateParamFormat{
-			P: happyOriginalRequestParams,
-			N: happyNonce,
-			C: happyCSRF,
-			K: happyPKCE,
-			V: "wrong-state-version",
-		},
-	)
-	require.NoError(t, err)
-
-	wrongDownstreamAuthParamsState, err := happyStateCodec.Encode("s",
-		testutil.ExpectedUpstreamStateParamFormat{
-			P: "these-is-not-a-valid-url-query-%z",
-			N: happyNonce,
-			C: happyCSRF,
-			K: happyPKCE,
-			V: happyStateVersion,
-		},
-	)
-	require.NoError(t, err)
-
-	missingClientIDState, err := happyStateCodec.Encode("s",
-		testutil.ExpectedUpstreamStateParamFormat{
-			P: shallowCopyAndModifyQuery(happyOriginalRequestParamsQuery, map[string]string{"client_id": ""}).Encode(),
-			N: happyNonce,
-			C: happyCSRF,
-			K: happyPKCE,
-			V: happyStateVersion,
-		},
-	)
-	require.NoError(t, err)
-
-	noOpenidScopeState, err := happyStateCodec.Encode("s",
-		testutil.ExpectedUpstreamStateParamFormat{
-			P: shallowCopyAndModifyQuery(happyOriginalRequestParamsQuery, map[string]string{"scope": "profile email"}).Encode(),
-			N: happyNonce,
-			C: happyCSRF,
-			K: happyPKCE,
-			V: happyStateVersion,
-		},
-	)
-	require.NoError(t, err)
+	happyState := happyUpstreamStateParam().Build(t, happyStateCodec)
 
 	encodedIncomingCookieCSRFValue, err := happyCookieCodec.Encode("csrf", happyCSRF)
 	require.NoError(t, err)
 	happyCSRFCookie := "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue
 
-	happyExchangeAndValidateTokensArgs := &testutil.ExchangeAuthcodeAndValidateTokenArgs{
+	happyExchangeAndValidateTokensArgs := &oidctestutil.ExchangeAuthcodeAndValidateTokenArgs{
 		Authcode:             happyUpstreamAuthcode,
 		PKCECodeVerifier:     pkce.Code(happyPKCE),
 		ExpectedIDTokenNonce: nonce.Nonce(happyNonce),
@@ -167,25 +107,26 @@ func TestCallbackEndpoint(t *testing.T) {
 	tests := []struct {
 		name string
 
-		idp        testutil.TestUpstreamOIDCIdentityProvider
+		idp        oidctestutil.TestUpstreamOIDCIdentityProvider
 		method     string
 		path       string
 		csrfCookie string
 
-		wantStatus                   int
-		wantBody                     string
-		wantRedirectLocationRegexp   string
-		wantGrantedOpenidScope       bool
-		wantDownstreamIDTokenSubject string
-		wantDownstreamIDTokenGroups  []string
+		wantStatus                    int
+		wantBody                      string
+		wantRedirectLocationRegexp    string
+		wantGrantedOpenidScope        bool
+		wantDownstreamIDTokenSubject  string
+		wantDownstreamIDTokenGroups   []string
+		wantDownstreamRequestedScopes []string
 
-		wantExchangeAndValidateTokensCall *testutil.ExchangeAuthcodeAndValidateTokenArgs
+		wantExchangeAndValidateTokensCall *oidctestutil.ExchangeAuthcodeAndValidateTokenArgs
 	}{
 		{
 			name:                              "GET with good state and cookie and successful upstream token exchange returns 302 to downstream client callback with its state and code",
 			idp:                               happyUpstream().Build(),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).WithCode(happyUpstreamAuthcode).String(),
+			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyRedirectLocationRegexp,
@@ -193,22 +134,39 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantBody:                          "",
 			wantDownstreamIDTokenSubject:      upstreamUsername,
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 		{
-			name:                              "upstream IDP provides no username or group claim, so we use default username claim and skip groups",
+			name:                              "upstream IDP provides no username or group claim configuration, so we use default username claim and skip groups",
 			idp:                               happyUpstream().WithoutUsernameClaim().WithoutGroupsClaim().Build(),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).WithCode(happyUpstreamAuthcode).String(),
+			path:                              newRequestPath().WithState(happyState).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusFound,
+			wantRedirectLocationRegexp:        happyRedirectLocationRegexp,
+			wantGrantedOpenidScope:            true,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenGroups:       nil,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
+			name:                              "upstream IDP provides username claim configuration as `sub`, so the downstream token subject should be exactly what they asked for",
+			idp:                               happyUpstream().WithUsernameClaim("sub").Build(),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyRedirectLocationRegexp,
 			wantGrantedOpenidScope:            true,
 			wantBody:                          "",
 			wantDownstreamIDTokenSubject:      upstreamSubject,
+			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
-		// TODO: when we call the callback twice in a row, we get two different auth codes (to prove we are using an RNG for auth codes)
 
 		// Pre-upstream-exchange verification
 		{
@@ -265,41 +223,69 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantBody:   "Bad Request: error reading state\n",
 		},
 		{
+			// This shouldn't happen in practice because the authorize endpoint should have already run the same
+			// validations, but we would like to test the error handling in this endpoint anyway.
+			name:   "state param contains authorization request params which fail validation",
+			idp:    happyUpstream().Build(),
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().
+					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyOriginalRequestParamsQuery, map[string]string{"prompt": "none login"}).Encode()).
+					Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			wantStatus:                        http.StatusInternalServerError,
+			wantBody:                          "Internal Server Error: error while generating and saving authcode\n",
+		},
+		{
 			name:       "state's internal version does not match what we want",
 			idp:        happyUpstream().Build(),
 			method:     http.MethodGet,
-			path:       newRequestPath().WithState(wrongVersionState).String(),
+			path:       newRequestPath().WithState(happyUpstreamStateParam().WithStateVersion("wrong-state-version").Build(t, happyStateCodec)).String(),
 			csrfCookie: happyCSRFCookie,
 			wantStatus: http.StatusUnprocessableEntity,
 			wantBody:   "Unprocessable Entity: state format version is invalid\n",
 		},
 		{
-			name:       "state's downstream auth params element is invalid",
-			idp:        happyUpstream().Build(),
-			method:     http.MethodGet,
-			path:       newRequestPath().WithState(wrongDownstreamAuthParamsState).String(),
+			name:   "state's downstream auth params element is invalid",
+			idp:    happyUpstream().Build(),
+			method: http.MethodGet,
+			path: newRequestPath().WithState(happyUpstreamStateParam().
+				WithAuthorizeRequestParams("the following is an invalid url encoding token, and therefore this is an invalid param: %z").
+				Build(t, happyStateCodec)).String(),
 			csrfCookie: happyCSRFCookie,
 			wantStatus: http.StatusBadRequest,
 			wantBody:   "Bad Request: error reading state downstream auth params\n",
 		},
 		{
-			name:       "state's downstream auth params are missing required value (e.g., client_id)",
-			idp:        happyUpstream().Build(),
-			method:     http.MethodGet,
-			path:       newRequestPath().WithState(missingClientIDState).String(),
+			name:   "state's downstream auth params are missing required value (e.g., client_id)",
+			idp:    happyUpstream().Build(),
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().
+					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyOriginalRequestParamsQuery, map[string]string{"client_id": ""}).Encode()).
+					Build(t, happyStateCodec),
+			).String(),
 			csrfCookie: happyCSRFCookie,
 			wantStatus: http.StatusBadRequest,
 			wantBody:   "Bad Request: error using state downstream auth params\n",
 		},
 		{
-			name:                              "state's downstream auth params does not contain openid scope",
-			idp:                               happyUpstream().Build(),
-			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(noOpenidScopeState).WithCode(happyUpstreamAuthcode).String(),
+			name:   "state's downstream auth params does not contain openid scope",
+			idp:    happyUpstream().Build(),
+			method: http.MethodGet,
+			path: newRequestPath().
+				WithState(
+					happyUpstreamStateParam().
+						WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyOriginalRequestParamsQuery, map[string]string{"scope": "profile email"}).Encode()).
+						Build(t, happyStateCodec),
+				).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyDownstreamState,
 			wantDownstreamIDTokenSubject:      upstreamUsername,
+			wantDownstreamRequestedScopes:     []string{"profile", "email"},
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
@@ -333,7 +319,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:       "cookie csrf value does not match state csrf value",
 			idp:        happyUpstream().Build(),
 			method:     http.MethodGet,
-			path:       newRequestPath().WithState(wrongCSRFValueState).String(),
+			path:       newRequestPath().WithState(happyUpstreamStateParam().WithCSRF("wrong-csrf-value").Build(t, happyStateCodec)).String(),
 			csrfCookie: happyCSRFCookie,
 			wantStatus: http.StatusForbidden,
 			wantBody:   "Forbidden: CSRF value does not match\n",
@@ -344,7 +330,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:                              "upstream auth code exchange fails",
 			idp:                               happyUpstream().WithoutUpstreamAuthcodeExchangeError(errors.New("some error")).Build(),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).WithCode(happyUpstreamAuthcode).String(),
+			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusBadGateway,
 			wantBody:                          "Bad Gateway: error exchanging and validating upstream tokens\n",
@@ -354,7 +340,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:                              "upstream ID token does not contain requested username claim",
 			idp:                               happyUpstream().WithoutIDTokenClaim(upstreamUsernameClaim).Build(),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).WithCode(happyUpstreamAuthcode).String(),
+			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusUnprocessableEntity,
 			wantBody:                          "Unprocessable Entity: no username claim in upstream ID token\n",
@@ -364,7 +350,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:                              "upstream ID token does not contain requested groups claim",
 			idp:                               happyUpstream().WithoutIDTokenClaim(upstreamGroupsClaim).Build(),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).WithCode(happyUpstreamAuthcode).String(),
+			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusUnprocessableEntity,
 			wantBody:                          "Unprocessable Entity: no groups claim in upstream ID token\n",
@@ -374,17 +360,37 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:                              "upstream ID token contains username claim with weird format",
 			idp:                               happyUpstream().WithIDTokenClaim(upstreamUsernameClaim, 42).Build(),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).WithCode(happyUpstreamAuthcode).String(),
+			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusUnprocessableEntity,
 			wantBody:                          "Unprocessable Entity: username claim in upstream ID token has invalid format\n",
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 		{
+			name:                              "upstream ID token does not contain iss claim when using default username claim config",
+			idp:                               happyUpstream().WithIDTokenClaim("iss", "").WithoutUsernameClaim().Build(),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusUnprocessableEntity,
+			wantBody:                          "Unprocessable Entity: issuer claim in upstream ID token missing\n",
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
+			name:                              "upstream ID token has an non-string iss claim when using default username claim config",
+			idp:                               happyUpstream().WithIDTokenClaim("iss", 42).WithoutUsernameClaim().Build(),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusUnprocessableEntity,
+			wantBody:                          "Unprocessable Entity: issuer claim in upstream ID token has invalid format\n",
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
 			name:                              "upstream ID token contains groups claim with weird format",
 			idp:                               happyUpstream().WithIDTokenClaim(upstreamGroupsClaim, 42).Build(),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).WithCode(happyUpstreamAuthcode).String(),
+			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusUnprocessableEntity,
 			wantBody:                          "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
@@ -393,6 +399,7 @@ func TestCallbackEndpoint(t *testing.T) {
 	}
 	for _, test := range tests {
 		test := test
+
 		t.Run(test.name, func(t *testing.T) {
 			// Configure fosite the same way that the production code would, except use in-memory storage.
 			// Inject this into our test subject at the last second so we get a fresh storage for every test.
@@ -406,7 +413,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
 			oauthHelper := oidc.FositeOauth2Helper(oauthStore, hmacSecret)
 
-			idpListGetter := testutil.NewIDPListGetter(&test.idp)
+			idpListGetter := oidctestutil.NewIDPListGetter(&test.idp)
 			subject := NewHandler(downstreamIssuer, idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec)
 			req := httptest.NewRequest(test.method, test.path, nil)
 			if test.csrfCookie != "" {
@@ -433,7 +440,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				require.Empty(t, rsp.Body.String())
 			}
 
-			if test.wantRedirectLocationRegexp != "" {
+			if test.wantRedirectLocationRegexp != "" { //nolint:nestif // don't mind have several sequential if statements in this test
 				// Assert that Location header matches regular expression.
 				require.Len(t, rsp.Header().Values("Location"), 1)
 				actualLocation := rsp.Header().Get("Location")
@@ -459,20 +466,63 @@ func TestCallbackEndpoint(t *testing.T) {
 				storedSession, ok := storedAuthorizeRequest.GetSession().(*openid.DefaultSession)
 				require.True(t, ok)
 
-				// Check various fields of the stored data.
+				// Check which scopes were granted.
 				if test.wantGrantedOpenidScope {
 					require.Contains(t, storedRequest.GetGrantedScopes(), "openid")
 				} else {
 					require.NotContains(t, storedRequest.GetGrantedScopes(), "openid")
 				}
-				require.Equal(t, downstreamIssuer, storedSession.Claims.Issuer)
-				require.Equal(t, test.wantDownstreamIDTokenSubject, storedSession.Claims.Subject)
-				require.Equal(t, []string{downstreamClientID}, storedSession.Claims.Audience)
+
+				// Check all the other fields of the stored request.
+				require.NotEmpty(t, storedRequest.ID)
+				require.Equal(t, downstreamClientID, storedRequest.Client.GetID())
+				require.ElementsMatch(t, test.wantDownstreamRequestedScopes, storedRequest.RequestedScope)
+				require.Nil(t, storedRequest.RequestedAudience)
+				require.Empty(t, storedRequest.GrantedAudience)
+				require.Equal(t, url.Values{"redirect_uri": []string{downstreamRedirectURI}}, storedRequest.Form)
+				testutil.RequireTimeInDelta(t, time.Now(), storedRequest.RequestedAt, timeComparisonFudgeFactor)
+
+				// We're not using these fields yet, so confirm that we did not set them (for now).
+				require.Empty(t, storedSession.Subject)
+				require.Empty(t, storedSession.Username)
+				require.Empty(t, storedSession.Headers)
+
+				// The authcode that we are issuing should be good for 15 minutes, which is default for fosite.
+				testutil.RequireTimeInDelta(t, time.Now().Add(time.Minute*15), storedSession.ExpiresAt[fosite.AuthorizeCode], timeComparisonFudgeFactor)
+				require.Len(t, storedSession.ExpiresAt, 1)
+
+				// Now confirm the ID token claims.
+				actualClaims := storedSession.Claims
+
+				// Check the user's identity, which are put into the downstream ID token's subject and groups claims.
+				require.Equal(t, test.wantDownstreamIDTokenSubject, actualClaims.Subject)
 				if test.wantDownstreamIDTokenGroups != nil {
-					require.Equal(t, test.wantDownstreamIDTokenGroups, storedSession.Claims.Extra["groups"])
+					require.Len(t, actualClaims.Extra, 1)
+					require.Equal(t, test.wantDownstreamIDTokenGroups, actualClaims.Extra["groups"])
 				} else {
-					require.NotContains(t, storedSession.Claims.Extra, "groups")
+					require.Empty(t, actualClaims.Extra)
+					require.NotContains(t, actualClaims.Extra, "groups")
 				}
+
+				// Check the rest of the downstream ID token's claims.
+				require.Equal(t, downstreamIssuer, actualClaims.Issuer)
+				require.Equal(t, []string{downstreamClientID}, actualClaims.Audience)
+				testutil.RequireTimeInDelta(t, time.Now().Add(time.Minute*5), actualClaims.ExpiresAt, timeComparisonFudgeFactor)
+				testutil.RequireTimeInDelta(t, time.Now(), actualClaims.IssuedAt, timeComparisonFudgeFactor)
+				testutil.RequireTimeInDelta(t, time.Now(), actualClaims.RequestedAt, timeComparisonFudgeFactor)
+				testutil.RequireTimeInDelta(t, time.Now(), actualClaims.AuthTime, timeComparisonFudgeFactor)
+
+				// These are not needed yet.
+				require.Empty(t, actualClaims.JTI)
+				require.Empty(t, actualClaims.CodeHash)
+				require.Empty(t, actualClaims.AccessTokenHash)
+				require.Empty(t, actualClaims.AuthenticationContextClassReference)
+				require.Empty(t, actualClaims.AuthenticationMethodsReference)
+
+				// TODO we should put the downstream request's nonce into the ID token, but maybe the token endpoint is responsible for that?
+				require.Empty(t, actualClaims.Nonce)
+
+				// TODO add thorough tests about what should be stored for PKCES and IDSessions
 			} else {
 				require.Empty(t, rsp.Header().Values("Location"))
 			}
@@ -486,7 +536,7 @@ type requestPath struct {
 
 func newRequestPath() *requestPath {
 	n := happyUpstreamIDPName
-	c := "1234"
+	c := happyUpstreamAuthcode
 	s := "4321"
 	return &requestPath{
 		upstreamIDPName: &n,
@@ -532,6 +582,49 @@ func (r *requestPath) String() string {
 	return path + params.Encode()
 }
 
+type upstreamStateParamBuilder oidctestutil.ExpectedUpstreamStateParamFormat
+
+func happyUpstreamStateParam() *upstreamStateParamBuilder {
+	return &upstreamStateParamBuilder{
+		P: happyOriginalRequestParams,
+		N: happyNonce,
+		C: happyCSRF,
+		K: happyPKCE,
+		V: happyStateVersion,
+	}
+}
+
+func (b upstreamStateParamBuilder) Build(t *testing.T, stateEncoder *securecookie.SecureCookie) string {
+	state, err := stateEncoder.Encode("s", b)
+	require.NoError(t, err)
+	return state
+}
+
+func (b *upstreamStateParamBuilder) WithAuthorizeRequestParams(params string) *upstreamStateParamBuilder {
+	b.P = params
+	return b
+}
+
+func (b *upstreamStateParamBuilder) WithNonce(nonce string) *upstreamStateParamBuilder {
+	b.N = nonce
+	return b
+}
+
+func (b *upstreamStateParamBuilder) WithCSRF(csrf string) *upstreamStateParamBuilder {
+	b.C = csrf
+	return b
+}
+
+func (b *upstreamStateParamBuilder) WithPKCVE(pkce string) *upstreamStateParamBuilder {
+	b.K = pkce
+	return b
+}
+
+func (b *upstreamStateParamBuilder) WithStateVersion(version string) *upstreamStateParamBuilder {
+	b.V = version
+	return b
+}
+
 type upstreamOIDCIdentityProviderBuilder struct {
 	idToken                    map[string]interface{}
 	usernameClaim, groupsClaim string
@@ -543,12 +636,18 @@ func happyUpstream() *upstreamOIDCIdentityProviderBuilder {
 		usernameClaim: upstreamUsernameClaim,
 		groupsClaim:   upstreamGroupsClaim,
 		idToken: map[string]interface{}{
+			"iss":                 upstreamIssuer,
 			"sub":                 upstreamSubject,
 			upstreamUsernameClaim: upstreamUsername,
 			upstreamGroupsClaim:   upstreamGroupMembership,
 			"other-claim":         "should be ignored",
 		},
 	}
+}
+
+func (u *upstreamOIDCIdentityProviderBuilder) WithUsernameClaim(claim string) *upstreamOIDCIdentityProviderBuilder {
+	u.usernameClaim = claim
+	return u
 }
 
 func (u *upstreamOIDCIdentityProviderBuilder) WithoutUsernameClaim() *upstreamOIDCIdentityProviderBuilder {
@@ -576,8 +675,8 @@ func (u *upstreamOIDCIdentityProviderBuilder) WithoutUpstreamAuthcodeExchangeErr
 	return u
 }
 
-func (u *upstreamOIDCIdentityProviderBuilder) Build() testutil.TestUpstreamOIDCIdentityProvider {
-	return testutil.TestUpstreamOIDCIdentityProvider{
+func (u *upstreamOIDCIdentityProviderBuilder) Build() oidctestutil.TestUpstreamOIDCIdentityProvider {
+	return oidctestutil.TestUpstreamOIDCIdentityProvider{
 		Name:          happyUpstreamIDPName,
 		ClientID:      "some-client-id",
 		UsernameClaim: u.usernameClaim,
@@ -592,12 +691,13 @@ func (u *upstreamOIDCIdentityProviderBuilder) Build() testutil.TestUpstreamOIDCI
 func shallowCopyAndModifyQuery(query url.Values, modifications map[string]string) url.Values {
 	copied := url.Values{}
 	for key, value := range query {
-		if modification, ok := modifications[key]; ok {
-			if modification != "" {
-				copied[key] = []string{modification}
-			}
+		copied[key] = value
+	}
+	for key, value := range modifications {
+		if value == "" {
+			copied.Del(key)
 		} else {
-			copied[key] = value
+			copied[key] = []string{value}
 		}
 	}
 	return copied

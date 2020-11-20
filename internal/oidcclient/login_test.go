@@ -26,6 +26,7 @@ import (
 	"go.pinniped.dev/internal/oidcclient/nonce"
 	"go.pinniped.dev/internal/oidcclient/pkce"
 	"go.pinniped.dev/internal/oidcclient/state"
+	"go.pinniped.dev/internal/testutil"
 )
 
 // mockSessionCache exists to avoid an import cycle if we generate mocks into another package.
@@ -481,7 +482,7 @@ func TestLogin(t *testing.T) {
 				require.NotNil(t, tok.AccessToken)
 				require.Equal(t, want.Token, tok.AccessToken.Token)
 				require.Equal(t, want.Type, tok.AccessToken.Type)
-				requireTimeInDelta(t, want.Expiry.Time, tok.AccessToken.Expiry.Time, 5*time.Second)
+				testutil.RequireTimeInDelta(t, want.Expiry.Time, tok.AccessToken.Expiry.Time, 5*time.Second)
 			} else {
 				assert.Nil(t, tok.AccessToken)
 			}
@@ -489,7 +490,7 @@ func TestLogin(t *testing.T) {
 			if want := tt.wantToken.IDToken; want != nil {
 				require.NotNil(t, tok.IDToken)
 				require.Equal(t, want.Token, tok.IDToken.Token)
-				requireTimeInDelta(t, want.Expiry.Time, tok.IDToken.Expiry.Time, 5*time.Second)
+				testutil.RequireTimeInDelta(t, want.Expiry.Time, tok.IDToken.Expiry.Time, 5*time.Second)
 			} else {
 				assert.Nil(t, tok.IDToken)
 			}
@@ -682,16 +683,3 @@ type mockDiscovery struct{ provider *oidc.Provider }
 func (m *mockDiscovery) Endpoint() oauth2.Endpoint { return m.provider.Endpoint() }
 
 func (m *mockDiscovery) Verifier(config *oidc.Config) *oidc.IDTokenVerifier { return mockVerifier() }
-
-func requireTimeInDelta(t *testing.T, t1 time.Time, t2 time.Time, delta time.Duration) {
-	require.InDeltaf(t,
-		float64(t1.UnixNano()),
-		float64(t2.UnixNano()),
-		float64(delta.Nanoseconds()),
-		"expected %s and %s to be < %s apart, but they are %s apart",
-		t1.Format(time.RFC3339Nano),
-		t2.Format(time.RFC3339Nano),
-		delta.String(),
-		t1.Sub(t2).String(),
-	)
-}

@@ -5,6 +5,7 @@
 package callback
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"path"
@@ -22,13 +23,22 @@ import (
 )
 
 const (
+	// The name of the issuer claim specified in the OIDC spec.
+	idTokenIssuerClaim = "iss"
+
+	// The name of the subject claim specified in the OIDC spec.
+	idTokenSubjectClaim = "sub"
+
 	// defaultUpstreamUsernameClaim is what we will use to extract the username from an upstream OIDC
 	// ID token if the upstream OIDC IDP did not tell us to use another claim.
-	defaultUpstreamUsernameClaim = "sub"
+	defaultUpstreamUsernameClaim = idTokenSubjectClaim
 
 	// downstreamGroupsClaim is what we will use to encode the groups in the downstream OIDC ID token
 	// information.
 	downstreamGroupsClaim = "groups"
+
+	// The lifetime of an issued downstream ID token.
+	downstreamIDTokenLifetime = time.Minute * 5
 )
 
 func NewHandler(
@@ -90,7 +100,8 @@ func NewHandler(
 		openIDSession := makeDownstreamSession(downstreamIssuer, downstreamAuthParams.Get("client_id"), username, groups)
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 		if err != nil {
-			panic(err) // TODO
+			plog.WarningErr("error while generating and saving authcode", err, "upstreamName", upstreamIDPConfig.GetName())
+			return httperr.Wrap(http.StatusInternalServerError, "error while generating and saving authcode", err)
 		}
 
 		oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
@@ -194,9 +205,30 @@ func getUsernameFromUpstreamIDToken(
 	idTokenClaims map[string]interface{},
 ) (string, error) {
 	usernameClaim := upstreamIDPConfig.GetUsernameClaim()
+
+	user := ""
 	if usernameClaim == "" {
-		// TODO: if we use the default "sub" claim, maybe we should create the username with the issuer
-		// since the spec says the "sub" claim is only unique per issuer.
+		// The spec says the "sub" claim is only unique per issuer, so by default when there is
+		// no specific username claim configured we will prepend the issuer string to make it globally unique.
+		upstreamIssuer := idTokenClaims[idTokenIssuerClaim]
+		if upstreamIssuer == "" {
+			plog.Warning(
+				"issuer claim in upstream ID token missing",
+				"upstreamName", upstreamIDPConfig.GetName(),
+				"issClaim", upstreamIssuer,
+			)
+			return "", httperr.New(http.StatusUnprocessableEntity, "issuer claim in upstream ID token missing")
+		}
+		upstreamIssuerAsString, ok := upstreamIssuer.(string)
+		if !ok {
+			plog.Warning(
+				"issuer claim in upstream ID token has invalid format",
+				"upstreamName", upstreamIDPConfig.GetName(),
+				"issClaim", upstreamIssuer,
+			)
+			return "", httperr.New(http.StatusUnprocessableEntity, "issuer claim in upstream ID token has invalid format")
+		}
+		user = fmt.Sprintf("%s?%s=", upstreamIssuerAsString, idTokenSubjectClaim)
 		usernameClaim = defaultUpstreamUsernameClaim
 	}
 
@@ -222,7 +254,7 @@ func getUsernameFromUpstreamIDToken(
 		return "", httperr.New(http.StatusUnprocessableEntity, "username claim in upstream ID token has invalid format")
 	}
 
-	return username, nil
+	return fmt.Sprintf("%s%s", user, username), nil
 }
 
 func getGroupsFromUpstreamIDToken(
@@ -266,10 +298,10 @@ func makeDownstreamSession(issuer, clientID, username string, groups []string) *
 			Issuer:      issuer,
 			Subject:     username,
 			Audience:    []string{clientID},
-			ExpiresAt:   now.Add(time.Minute * 30), // TODO use the right value here
-			IssuedAt:    now,                       // TODO test this
-			RequestedAt: now,                       // TODO test this
-			AuthTime:    now,                       // TODO test this
+			ExpiresAt:   now.Add(downstreamIDTokenLifetime),
+			IssuedAt:    now,
+			RequestedAt: now,
+			AuthTime:    now,
 		},
 	}
 	if groups != nil {

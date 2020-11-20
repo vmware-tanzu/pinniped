@@ -6,7 +6,6 @@ package callback
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -507,23 +506,16 @@ func TestCallbackEndpoint(t *testing.T) {
 }
 
 type requestPath struct {
-	upstreamIDPName, code, state *string
+	code, state *string
 }
 
 func newRequestPath() *requestPath {
-	n := happyUpstreamIDPName
 	c := happyUpstreamAuthcode
 	s := "4321"
 	return &requestPath{
-		upstreamIDPName: &n,
-		code:            &c,
-		state:           &s,
+		code:  &c,
+		state: &s,
 	}
-}
-
-func (r *requestPath) WithUpstreamIDPName(name string) *requestPath {
-	r.upstreamIDPName = &name
-	return r
 }
 
 func (r *requestPath) WithCode(code string) *requestPath {
@@ -547,7 +539,7 @@ func (r *requestPath) WithoutState() *requestPath {
 }
 
 func (r *requestPath) String() string {
-	path := fmt.Sprintf("/downstream-provider-name/callback/%s?", *r.upstreamIDPName)
+	path := "/downstream-provider-name/callback?"
 	params := url.Values{}
 	if r.code != nil {
 		params.Add("code", *r.code)
@@ -562,6 +554,7 @@ type upstreamStateParamBuilder oidctestutil.ExpectedUpstreamStateParamFormat
 
 func happyUpstreamStateParam() *upstreamStateParamBuilder {
 	return &upstreamStateParamBuilder{
+		U: happyUpstreamIDPName,
 		P: happyDownstreamRequestParams,
 		N: happyDownstreamNonce,
 		C: happyDownstreamCSRF,

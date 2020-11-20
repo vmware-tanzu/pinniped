@@ -5,10 +5,10 @@
 package callback
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"net/url"
-	"path"
 	"time"
 
 	"github.com/ory/fosite"
@@ -49,7 +49,7 @@ func NewHandler(
 			return err
 		}
 
-		upstreamIDPConfig := findUpstreamIDPConfig(r, idpListGetter)
+		upstreamIDPConfig := findUpstreamIDPConfig(state.UpstreamName, idpListGetter)
 		if upstreamIDPConfig == nil {
 			plog.Warning("upstream provider not found")
 			return httperr.New(http.StatusUnprocessableEntity, "upstream provider not found")
@@ -137,7 +137,7 @@ func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) 
 		return nil, err
 	}
 
-	if state.CSRFToken != csrfValue {
+	if subtle.ConstantTimeCompare([]byte(state.CSRFToken), []byte(csrfValue)) != 1 {
 		plog.InfoErr("CSRF value does not match", err)
 		return nil, httperr.Wrap(http.StatusForbidden, "CSRF value does not match", err)
 	}
@@ -145,10 +145,9 @@ func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) 
 	return state, nil
 }
 
-func findUpstreamIDPConfig(r *http.Request, idpListGetter oidc.IDPListGetter) provider.UpstreamOIDCIdentityProviderI {
-	_, lastPathComponent := path.Split(r.URL.Path)
+func findUpstreamIDPConfig(upstreamName string, idpListGetter oidc.IDPListGetter) provider.UpstreamOIDCIdentityProviderI {
 	for _, p := range idpListGetter.GetIDPList() {
-		if p.GetName() == lastPathComponent {
+		if p.GetName() == upstreamName {
 			return p
 		}
 	}

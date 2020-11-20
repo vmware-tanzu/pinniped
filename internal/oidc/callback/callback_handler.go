@@ -304,11 +304,11 @@ func makeDownstreamSession(issuer, clientID, nonce, username string, groups []st
 			Issuer:      issuer,
 			Subject:     username,
 			Audience:    []string{clientID},
+			Nonce:       nonce,
 			ExpiresAt:   now.Add(downstreamIDTokenLifetime),
 			IssuedAt:    now,
 			RequestedAt: now,
 			AuthTime:    now,
-			Nonce:       nonce,
 		},
 	}
 	if groups != nil {

@@ -39,17 +39,20 @@ const (
 	upstreamUsernameClaim = "the-user-claim"
 	upstreamGroupsClaim   = "the-groups-claim"
 
-	happyDownstreamState = "some-downstream-state"
-	happyCSRF            = "test-csrf"
-	happyPKCE            = "test-pkce"
-	happyNonce           = "test-nonce"
-	happyStateVersion    = "1"
-
-	downstreamIssuer      = "https://my-downstream-issuer.com/path"
 	happyUpstreamAuthcode = "upstream-auth-code"
-	downstreamRedirectURI = "http://127.0.0.1/callback"
-	downstreamClientID    = "pinniped-cli"
-	downstreamNonce       = "some-nonce-value"
+
+	happyDownstreamState        = "some-downstream-state"
+	happyDownstreamCSRF         = "test-csrf"
+	happyDownstreamPKCE         = "test-pkce"
+	happyDownstreamNonce        = "test-nonce"
+	happyDownstreamStateVersion = "1"
+
+	downstreamIssuer              = "https://my-downstream-issuer.com/path"
+	downstreamRedirectURI         = "http://127.0.0.1/callback"
+	downstreamClientID            = "pinniped-cli"
+	downstreamNonce               = "some-nonce-value"
+	downstreamPKCEChallenge       = "some-challenge"
+	downstreamPKCEChallengeMethod = "S256"
 
 	timeComparisonFudgeFactor = time.Second * 15
 )
@@ -58,17 +61,17 @@ var (
 	upstreamGroupMembership        = []string{"test-pinniped-group-0", "test-pinniped-group-1"}
 	happyDownstreamScopesRequested = []string{"openid", "profile", "email"}
 
-	happyOriginalRequestParamsQuery = url.Values{
+	happyDownstreamRequestParamsQuery = url.Values{
 		"response_type":         []string{"code"},
 		"scope":                 []string{strings.Join(happyDownstreamScopesRequested, " ")},
 		"client_id":             []string{downstreamClientID},
 		"state":                 []string{happyDownstreamState},
 		"nonce":                 []string{downstreamNonce},
-		"code_challenge":        []string{"some-challenge"},
-		"code_challenge_method": []string{"S256"},
+		"code_challenge":        []string{downstreamPKCEChallenge},
+		"code_challenge_method": []string{downstreamPKCEChallengeMethod},
 		"redirect_uri":          []string{downstreamRedirectURI},
 	}
-	happyOriginalRequestParams = happyOriginalRequestParamsQuery.Encode()
+	happyDownstreamRequestParams = happyDownstreamRequestParamsQuery.Encode()
 )
 
 func TestCallbackEndpoint(t *testing.T) {
@@ -92,18 +95,18 @@ func TestCallbackEndpoint(t *testing.T) {
 
 	happyState := happyUpstreamStateParam().Build(t, happyStateCodec)
 
-	encodedIncomingCookieCSRFValue, err := happyCookieCodec.Encode("csrf", happyCSRF)
+	encodedIncomingCookieCSRFValue, err := happyCookieCodec.Encode("csrf", happyDownstreamCSRF)
 	require.NoError(t, err)
 	happyCSRFCookie := "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue
 
 	happyExchangeAndValidateTokensArgs := &oidctestutil.ExchangeAuthcodeAndValidateTokenArgs{
 		Authcode:             happyUpstreamAuthcode,
-		PKCECodeVerifier:     pkce.Code(happyPKCE),
-		ExpectedIDTokenNonce: nonce.Nonce(happyNonce),
+		PKCECodeVerifier:     pkce.Code(happyDownstreamPKCE),
+		ExpectedIDTokenNonce: nonce.Nonce(happyDownstreamNonce),
 	}
 
 	// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
-	happyRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid&state=` + happyDownstreamState
+	happyDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid&state=` + happyDownstreamState
 
 	tests := []struct {
 		name string
@@ -113,14 +116,16 @@ func TestCallbackEndpoint(t *testing.T) {
 		path       string
 		csrfCookie string
 
-		wantStatus                    int
-		wantBody                      string
-		wantRedirectLocationRegexp    string
-		wantGrantedOpenidScope        bool
-		wantDownstreamIDTokenSubject  string
-		wantDownstreamIDTokenGroups   []string
-		wantDownstreamRequestedScopes []string
-		wantDownstreamNonce           string
+		wantStatus                        int
+		wantBody                          string
+		wantRedirectLocationRegexp        string
+		wantGrantedOpenidScope            bool
+		wantDownstreamIDTokenSubject      string
+		wantDownstreamIDTokenGroups       []string
+		wantDownstreamRequestedScopes     []string
+		wantDownstreamNonce               string
+		wantDownstreamPKCEChallenge       string
+		wantDownstreamPKCEChallengeMethod string
 
 		wantExchangeAndValidateTokensCall *oidctestutil.ExchangeAuthcodeAndValidateTokenArgs
 	}{
@@ -131,13 +136,15 @@ func TestCallbackEndpoint(t *testing.T) {
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
-			wantRedirectLocationRegexp:        happyRedirectLocationRegexp,
+			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantGrantedOpenidScope:            true,
 			wantBody:                          "",
 			wantDownstreamIDTokenSubject:      upstreamUsername,
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 		{
@@ -147,13 +154,15 @@ func TestCallbackEndpoint(t *testing.T) {
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
-			wantRedirectLocationRegexp:        happyRedirectLocationRegexp,
+			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantGrantedOpenidScope:            true,
 			wantBody:                          "",
 			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
 			wantDownstreamIDTokenGroups:       nil,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 		{
@@ -163,13 +172,15 @@ func TestCallbackEndpoint(t *testing.T) {
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
-			wantRedirectLocationRegexp:        happyRedirectLocationRegexp,
+			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantGrantedOpenidScope:            true,
 			wantBody:                          "",
 			wantDownstreamIDTokenSubject:      upstreamSubject,
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 
@@ -235,7 +246,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			method: http.MethodGet,
 			path: newRequestPath().WithState(
 				happyUpstreamStateParam().
-					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyOriginalRequestParamsQuery, map[string]string{"prompt": "none login"}).Encode()).
+					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery, map[string]string{"prompt": "none login"}).Encode()).
 					Build(t, happyStateCodec),
 			).String(),
 			csrfCookie:                        happyCSRFCookie,
@@ -269,7 +280,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			method: http.MethodGet,
 			path: newRequestPath().WithState(
 				happyUpstreamStateParam().
-					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyOriginalRequestParamsQuery, map[string]string{"client_id": ""}).Encode()).
+					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery, map[string]string{"client_id": ""}).Encode()).
 					Build(t, happyStateCodec),
 			).String(),
 			csrfCookie: happyCSRFCookie,
@@ -283,7 +294,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			path: newRequestPath().
 				WithState(
 					happyUpstreamStateParam().
-						WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyOriginalRequestParamsQuery, map[string]string{"scope": "profile email"}).Encode()).
+						WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery, map[string]string{"scope": "profile email"}).Encode()).
 						Build(t, happyStateCodec),
 				).String(),
 			csrfCookie:                        happyCSRFCookie,
@@ -293,6 +304,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamRequestedScopes:     []string{"profile", "email"},
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 		{
@@ -455,80 +468,40 @@ func TestCallbackEndpoint(t *testing.T) {
 				require.Lenf(t, submatches, 2, "no regexp match in actualLocation: %q", actualLocation)
 				capturedAuthCode := submatches[1]
 
-				// One authcode should have been stored.
-				require.Len(t, oauthStore.AuthorizeCodes, 1)
-
 				// fosite authcodes are in the format `data.signature`, so grab the signature part, which is the lookup key in the storage interface
 				authcodeDataAndSignature := strings.Split(capturedAuthCode, ".")
 				require.Len(t, authcodeDataAndSignature, 2)
 
-				// Get the authcode session back from storage so we can require that it was stored correctly.
-				storedAuthorizeRequest, err := oauthStore.GetAuthorizeCodeSession(context.Background(), authcodeDataAndSignature[1], nil)
-				require.NoError(t, err)
+				storedRequestFromAuthcode, storedSessionFromAuthcode := validateAuthcodeStorage(
+					t,
+					oauthStore,
+					authcodeDataAndSignature[1], // Authcode store key is authcode signature
+					test.wantGrantedOpenidScope,
+					test.wantDownstreamIDTokenSubject,
+					test.wantDownstreamIDTokenGroups,
+					test.wantDownstreamRequestedScopes,
+					test.wantDownstreamNonce,
+				)
 
-				// Check that storage returned the expected concrete data types.
-				storedRequest, ok := storedAuthorizeRequest.(*fosite.Request)
-				require.True(t, ok)
-				storedSession, ok := storedAuthorizeRequest.GetSession().(*openid.DefaultSession)
-				require.True(t, ok)
+				validatePKCEStorage(
+					t,
+					oauthStore,
+					authcodeDataAndSignature[1], // PKCE store key is authcode signature
+					storedRequestFromAuthcode,
+					storedSessionFromAuthcode,
+					test.wantDownstreamPKCEChallenge,
+					test.wantDownstreamPKCEChallengeMethod,
+				)
 
-				// Check which scopes were granted.
-				if test.wantGrantedOpenidScope {
-					require.Contains(t, storedRequest.GetGrantedScopes(), "openid")
-				} else {
-					require.NotContains(t, storedRequest.GetGrantedScopes(), "openid")
-				}
-
-				// Check all the other fields of the stored request.
-				require.NotEmpty(t, storedRequest.ID)
-				require.Equal(t, downstreamClientID, storedRequest.Client.GetID())
-				require.ElementsMatch(t, test.wantDownstreamRequestedScopes, storedRequest.RequestedScope)
-				require.Nil(t, storedRequest.RequestedAudience)
-				require.Empty(t, storedRequest.GrantedAudience)
-				require.Equal(t, url.Values{"redirect_uri": []string{downstreamRedirectURI}}, storedRequest.Form)
-				testutil.RequireTimeInDelta(t, time.Now(), storedRequest.RequestedAt, timeComparisonFudgeFactor)
-
-				// We're not using these fields yet, so confirm that we did not set them (for now).
-				require.Empty(t, storedSession.Subject)
-				require.Empty(t, storedSession.Username)
-				require.Empty(t, storedSession.Headers)
-
-				// The authcode that we are issuing should be good for 15 minutes, which is default for fosite.
-				testutil.RequireTimeInDelta(t, time.Now().Add(time.Minute*15), storedSession.ExpiresAt[fosite.AuthorizeCode], timeComparisonFudgeFactor)
-				require.Len(t, storedSession.ExpiresAt, 1)
-
-				// Now confirm the ID token claims.
-				actualClaims := storedSession.Claims
-
-				// Check the user's identity, which are put into the downstream ID token's subject and groups claims.
-				require.Equal(t, test.wantDownstreamIDTokenSubject, actualClaims.Subject)
-				if test.wantDownstreamIDTokenGroups != nil {
-					require.Len(t, actualClaims.Extra, 1)
-					require.Equal(t, test.wantDownstreamIDTokenGroups, actualClaims.Extra["groups"])
-				} else {
-					require.Empty(t, actualClaims.Extra)
-					require.NotContains(t, actualClaims.Extra, "groups")
-				}
-
-				// Check the rest of the downstream ID token's claims.
-				require.Equal(t, downstreamIssuer, actualClaims.Issuer)
-				require.Equal(t, []string{downstreamClientID}, actualClaims.Audience)
-				require.Equal(t, test.wantDownstreamNonce, actualClaims.Nonce)
-				testutil.RequireTimeInDelta(t, time.Now().Add(time.Minute*5), actualClaims.ExpiresAt, timeComparisonFudgeFactor)
-				testutil.RequireTimeInDelta(t, time.Now(), actualClaims.IssuedAt, timeComparisonFudgeFactor)
-				testutil.RequireTimeInDelta(t, time.Now(), actualClaims.RequestedAt, timeComparisonFudgeFactor)
-				testutil.RequireTimeInDelta(t, time.Now(), actualClaims.AuthTime, timeComparisonFudgeFactor)
-
-				// These are not needed yet.
-				require.Empty(t, actualClaims.JTI)
-				require.Empty(t, actualClaims.CodeHash)
-				require.Empty(t, actualClaims.AccessTokenHash)
-				require.Empty(t, actualClaims.AuthenticationContextClassReference)
-				require.Empty(t, actualClaims.AuthenticationMethodsReference)
-
-				// TODO add thorough tests about what should be stored for PKCES and IDSessions
-			} else {
-				require.Empty(t, rsp.Header().Values("Location"))
+				validateIDSessionStorage(
+					t,
+					oauthStore,
+					capturedAuthCode, // IDSession store key is full authcode
+					storedRequestFromAuthcode,
+					storedSessionFromAuthcode,
+					test.wantGrantedOpenidScope,
+					test.wantDownstreamNonce,
+				)
 			}
 		})
 	}
@@ -590,11 +563,11 @@ type upstreamStateParamBuilder oidctestutil.ExpectedUpstreamStateParamFormat
 
 func happyUpstreamStateParam() *upstreamStateParamBuilder {
 	return &upstreamStateParamBuilder{
-		P: happyOriginalRequestParams,
-		N: happyNonce,
-		C: happyCSRF,
-		K: happyPKCE,
-		V: happyStateVersion,
+		P: happyDownstreamRequestParams,
+		N: happyDownstreamNonce,
+		C: happyDownstreamCSRF,
+		K: happyDownstreamPKCE,
+		V: happyDownstreamStateVersion,
 	}
 }
 
@@ -705,4 +678,152 @@ func shallowCopyAndModifyQuery(query url.Values, modifications map[string]string
 		}
 	}
 	return copied
+}
+
+func validateAuthcodeStorage(
+	t *testing.T,
+	oauthStore *storage.MemoryStore,
+	storeKey string,
+	wantGrantedOpenidScope bool,
+	wantDownstreamIDTokenSubject string,
+	wantDownstreamIDTokenGroups []string,
+	wantDownstreamRequestedScopes []string,
+	wantDownstreamNonce string,
+) (*fosite.Request, *openid.DefaultSession) {
+	t.Helper()
+
+	// One authcode should have been stored.
+	require.Len(t, oauthStore.AuthorizeCodes, 1)
+
+	// Get the authcode session back from storage so we can require that it was stored correctly.
+	storedAuthorizeRequestFromAuthcode, err := oauthStore.GetAuthorizeCodeSession(context.Background(), storeKey, nil)
+	require.NoError(t, err)
+
+	// Check that storage returned the expected concrete data types.
+	storedRequestFromAuthcode, storedSessionFromAuthcode := castStoredAuthorizeRequest(t, storedAuthorizeRequestFromAuthcode)
+
+	// Check which scopes were granted.
+	if wantGrantedOpenidScope {
+		require.Contains(t, storedRequestFromAuthcode.GetGrantedScopes(), "openid")
+	} else {
+		require.NotContains(t, storedRequestFromAuthcode.GetGrantedScopes(), "openid")
+	}
+
+	// Check all the other fields of the stored request.
+	require.NotEmpty(t, storedRequestFromAuthcode.ID)
+	require.Equal(t, downstreamClientID, storedRequestFromAuthcode.Client.GetID())
+	require.ElementsMatch(t, wantDownstreamRequestedScopes, storedRequestFromAuthcode.RequestedScope)
+	require.Nil(t, storedRequestFromAuthcode.RequestedAudience)
+	require.Empty(t, storedRequestFromAuthcode.GrantedAudience)
+	require.Equal(t, url.Values{"redirect_uri": []string{downstreamRedirectURI}}, storedRequestFromAuthcode.Form)
+	testutil.RequireTimeInDelta(t, time.Now(), storedRequestFromAuthcode.RequestedAt, timeComparisonFudgeFactor)
+
+	// We're not using these fields yet, so confirm that we did not set them (for now).
+	require.Empty(t, storedSessionFromAuthcode.Subject)
+	require.Empty(t, storedSessionFromAuthcode.Username)
+	require.Empty(t, storedSessionFromAuthcode.Headers)
+
+	// The authcode that we are issuing should be good for 15 minutes, which is default for fosite.
+	testutil.RequireTimeInDelta(t, time.Now().Add(time.Minute*15), storedSessionFromAuthcode.ExpiresAt[fosite.AuthorizeCode], timeComparisonFudgeFactor)
+	require.Len(t, storedSessionFromAuthcode.ExpiresAt, 1)
+
+	// Now confirm the ID token claims.
+	actualClaims := storedSessionFromAuthcode.Claims
+
+	// Check the user's identity, which are put into the downstream ID token's subject and groups claims.
+	require.Equal(t, wantDownstreamIDTokenSubject, actualClaims.Subject)
+	if wantDownstreamIDTokenGroups != nil {
+		require.Len(t, actualClaims.Extra, 1)
+		require.Equal(t, wantDownstreamIDTokenGroups, actualClaims.Extra["groups"])
+	} else {
+		require.Empty(t, actualClaims.Extra)
+		require.NotContains(t, actualClaims.Extra, "groups")
+	}
+
+	// Check the rest of the downstream ID token's claims.
+	require.Equal(t, downstreamIssuer, actualClaims.Issuer)
+	require.Equal(t, []string{downstreamClientID}, actualClaims.Audience)
+	require.Equal(t, wantDownstreamNonce, actualClaims.Nonce)
+	testutil.RequireTimeInDelta(t, time.Now().Add(time.Minute*5), actualClaims.ExpiresAt, timeComparisonFudgeFactor)
+	testutil.RequireTimeInDelta(t, time.Now(), actualClaims.IssuedAt, timeComparisonFudgeFactor)
+	testutil.RequireTimeInDelta(t, time.Now(), actualClaims.RequestedAt, timeComparisonFudgeFactor)
+	testutil.RequireTimeInDelta(t, time.Now(), actualClaims.AuthTime, timeComparisonFudgeFactor)
+
+	// These are not needed yet.
+	require.Empty(t, actualClaims.JTI)
+	require.Empty(t, actualClaims.CodeHash)
+	require.Empty(t, actualClaims.AccessTokenHash)
+	require.Empty(t, actualClaims.AuthenticationContextClassReference)
+	require.Empty(t, actualClaims.AuthenticationMethodsReference)
+
+	return storedRequestFromAuthcode, storedSessionFromAuthcode
+}
+
+func validatePKCEStorage(
+	t *testing.T,
+	oauthStore *storage.MemoryStore,
+	storeKey string,
+	storedRequestFromAuthcode *fosite.Request,
+	storedSessionFromAuthcode *openid.DefaultSession,
+	wantDownstreamPKCEChallenge, wantDownstreamPKCEChallengeMethod string,
+) {
+	t.Helper()
+
+	// One PKCE should have been stored.
+	require.Len(t, oauthStore.PKCES, 1)
+	storedAuthorizeRequestFromPKCE, err := oauthStore.GetPKCERequestSession(context.Background(), storeKey, nil)
+	require.NoError(t, err)
+
+	// Check that storage returned the expected concrete data types.
+	storedRequestFromPKCE, storedSessionFromPKCE := castStoredAuthorizeRequest(t, storedAuthorizeRequestFromPKCE)
+
+	// The stored PKCE request should be the same as the stored authcode request.
+	require.Equal(t, storedRequestFromAuthcode.ID, storedRequestFromPKCE.ID)
+	require.Equal(t, storedSessionFromAuthcode, storedSessionFromPKCE)
+
+	// The stored PKCE request should also contain the PKCE challenge that the downstream sent us.
+	require.Equal(t, wantDownstreamPKCEChallenge, storedRequestFromPKCE.Form.Get("code_challenge"))
+	require.Equal(t, wantDownstreamPKCEChallengeMethod, storedRequestFromPKCE.Form.Get("code_challenge_method"))
+}
+
+func validateIDSessionStorage(
+	t *testing.T,
+	oauthStore *storage.MemoryStore,
+	storeKey string,
+	storedRequestFromAuthcode *fosite.Request,
+	storedSessionFromAuthcode *openid.DefaultSession,
+	wantGrantedOpenidScope bool,
+	wantDownstreamNonce string,
+) {
+	t.Helper()
+
+	// One IDSession should have been stored, if the downstream actually requested the "openid" scope..
+	if wantGrantedOpenidScope {
+		require.Len(t, oauthStore.IDSessions, 1)
+		storedAuthorizeRequestFromIDSession, err := oauthStore.GetOpenIDConnectSession(context.Background(), storeKey, nil)
+		require.NoError(t, err)
+
+		// Check that storage returned the expected concrete data types.
+		storedRequestFromIDSession, storedSessionFromIDSession := castStoredAuthorizeRequest(t, storedAuthorizeRequestFromIDSession)
+
+		// The stored IDSession request should be the same as the stored authcode request.
+		require.Equal(t, storedRequestFromAuthcode.ID, storedRequestFromIDSession.ID)
+		require.Equal(t, storedSessionFromAuthcode, storedSessionFromIDSession)
+
+		// The stored IDSession request should also contain the nonce that the downstream sent us.
+		require.Equal(t, wantDownstreamNonce, storedRequestFromIDSession.Form.Get("nonce"))
+	} else {
+		require.Len(t, oauthStore.IDSessions, 0)
+	}
+}
+
+func castStoredAuthorizeRequest(t *testing.T, storedAuthorizeRequest fosite.Requester) (*fosite.Request, *openid.DefaultSession) {
+	t.Helper()
+
+	storedRequest, ok := storedAuthorizeRequest.(*fosite.Request)
+	require.Truef(t, ok, "could not cast %T to %T", storedAuthorizeRequest, &fosite.Request{})
+	storedSession, ok := storedAuthorizeRequest.GetSession().(*openid.DefaultSession)
+	require.Truef(t, ok, "could not cast %T to %T", storedAuthorizeRequest.GetSession(), &openid.DefaultSession{})
+
+	return storedRequest, storedSession
 }

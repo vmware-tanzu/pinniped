@@ -54,50 +54,50 @@ func TestAuthorizationEndpoint(t *testing.T) {
 
 		fositePromptHasNoneAndOtherValueErrorQuery = map[string]string{
 			"error":             "invalid_request",
-			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nParameter \"prompt\" was set to \"none\", but contains other values as well which is not allowed.",
-			"error_hint":        "Parameter \"prompt\" was set to \"none\", but contains other values as well which is not allowed.",
-			"state":             "some-state-value",
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nUsed unknown value \"[none login]\" for prompt parameter",
+			"error_hint":        "Used unknown value \"[none login]\" for prompt parameter",
+			"state":             "some-state-value-that-is-32-byte",
 		}
 
 		fositeMissingCodeChallengeErrorQuery = map[string]string{
 			"error":             "invalid_request",
-			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nThis client must include a code_challenge when performing the authorize code flow, but it is missing.",
-			"error_hint":        "This client must include a code_challenge when performing the authorize code flow, but it is missing.",
-			"state":             "some-state-value",
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nClients must include a code_challenge when performing the authorize code flow, but it is missing.",
+			"error_hint":        "Clients must include a code_challenge when performing the authorize code flow, but it is missing.",
+			"state":             "some-state-value-that-is-32-byte",
 		}
 
 		fositeMissingCodeChallengeMethodErrorQuery = map[string]string{
 			"error":             "invalid_request",
 			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nClients must use code_challenge_method=S256, plain is not allowed.",
 			"error_hint":        "Clients must use code_challenge_method=S256, plain is not allowed.",
-			"state":             "some-state-value",
+			"state":             "some-state-value-that-is-32-byte",
 		}
 
 		fositeInvalidCodeChallengeErrorQuery = map[string]string{
 			"error":             "invalid_request",
 			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nThe code_challenge_method is not supported, use S256 instead.",
 			"error_hint":        "The code_challenge_method is not supported, use S256 instead.",
-			"state":             "some-state-value",
+			"state":             "some-state-value-that-is-32-byte",
 		}
 
 		fositeUnsupportedResponseTypeErrorQuery = map[string]string{
 			"error":             "unsupported_response_type",
 			"error_description": "The authorization server does not support obtaining a token using this method\n\nThe client is not allowed to request response_type \"unsupported\".",
 			"error_hint":        `The client is not allowed to request response_type "unsupported".`,
-			"state":             "some-state-value",
+			"state":             "some-state-value-that-is-32-byte",
 		}
 
 		fositeInvalidScopeErrorQuery = map[string]string{
 			"error":             "invalid_scope",
 			"error_description": "The requested scope is invalid, unknown, or malformed\n\nThe OAuth 2.0 Client is not allowed to request scope \"tuna\".",
 			"error_hint":        `The OAuth 2.0 Client is not allowed to request scope "tuna".`,
-			"state":             "some-state-value",
+			"state":             "some-state-value-that-is-32-byte",
 		}
 
 		fositeInvalidStateErrorQuery = map[string]string{
 			"error":             "invalid_state",
-			"error_description": "The state is missing or does not have enough characters and is therefore considered too weak\n\nRequest parameter \"state\" must be at least be 8 characters long to ensure sufficient entropy.",
-			"error_hint":        `Request parameter "state" must be at least be 8 characters long to ensure sufficient entropy.`,
+			"error_description": "The state is missing or does not have enough characters and is therefore considered too weak\n\nRequest parameter \"state\" must be at least be 32 characters long to ensure sufficient entropy.",
+			"error_hint":        `Request parameter "state" must be at least be 32 characters long to ensure sufficient entropy.`,
 			"state":             "short",
 		}
 
@@ -105,7 +105,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			"error":             "unsupported_response_type",
 			"error_description": "The authorization server does not support obtaining a token using this method\n\nThe request is missing the \"response_type\"\" parameter.",
 			"error_hint":        `The request is missing the "response_type"" parameter.`,
-			"state":             "some-state-value",
+			"state":             "some-state-value-that-is-32-byte",
 		}
 	)
 
@@ -125,11 +125,11 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	oauthStore := oidc.NullStorage{}
 	hmacSecret := []byte("some secret - must have at least 32 bytes")
 	require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
-	oauthHelper := oidc.FositeOauth2Helper(oauthStore, hmacSecret)
+	oauthHelper := oidc.FositeOauth2Helper(issuer, oauthStore, hmacSecret)
 
 	happyCSRF := "test-csrf"
 	happyPKCE := "test-pkce"
-	happyNonce := "test-nonce"
+	happyNonce := "test-nonce-that-is-32-bytes-long"
 	happyCSRFGenerator := func() (csrftoken.CSRFToken, error) { return csrftoken.CSRFToken(happyCSRF), nil }
 	happyPKCEGenerator := func() (pkce.Code, error) { return pkce.Code(happyPKCE), nil }
 	happyNonceGenerator := func() (nonce.Nonce, error) { return nonce.Nonce(happyNonce), nil }
@@ -175,7 +175,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		"response_type":         "code",
 		"scope":                 "openid profile email",
 		"client_id":             "pinniped-cli",
-		"state":                 "some-state-value",
+		"state":                 "some-state-value-that-is-32-byte",
 		"nonce":                 "some-nonce-value",
 		"code_challenge":        "some-challenge",
 		"code_challenge_method": "S256",

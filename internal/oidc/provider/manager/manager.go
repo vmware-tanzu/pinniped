@@ -70,7 +70,7 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 
 		// Use NullStorage for the authorize endpoint because we do not actually want to store anything until
 		// the upstream callback endpoint is called later.
-		oauthHelper := oidc.FositeOauth2Helper(oidc.NullStorage{}, []byte("some secret - must have at least 32 bytes")) // TODO replace this secret
+		oauthHelper := oidc.FositeOauth2Helper(incomingProvider.Issuer(), oidc.NullStorage{}, []byte("some secret - must have at least 32 bytes")) // TODO replace this secret
 
 		// TODO use different codecs for the state and the cookie, because:
 		//  1. we would like to state to have an embedded expiration date while the cookie does not need that

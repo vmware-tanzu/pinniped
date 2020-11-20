@@ -5,6 +5,8 @@
 package oidc
 
 import (
+	"time"
+
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 )
@@ -29,9 +31,25 @@ func PinnipedCLIOIDCClient() *fosite.DefaultOpenIDConnectClient {
 	}
 }
 
-func FositeOauth2Helper(oauthStore interface{}, hmacSecretOfLengthAtLeast32 []byte) fosite.OAuth2Provider {
+func FositeOauth2Helper(issuerURL string, oauthStore fosite.Storage, hmacSecretOfLengthAtLeast32 []byte) fosite.OAuth2Provider {
 	oauthConfig := &compose.Config{
-		EnforcePKCEForPublicClients: true,
+		AuthorizeCodeLifespan: 3 * time.Minute, // seems more than long enough to exchange a code
+
+		IDTokenLifespan:     5 * time.Minute, // match clientCertificateTTL since it has similar properties to this token
+		AccessTokenLifespan: 5 * time.Minute, // match clientCertificateTTL since it has similar properties to this token
+
+		RefreshTokenLifespan: 16 * time.Hour, // long enough for a single workday
+
+		IDTokenIssuer: issuerURL,
+		TokenURL:      "", // TODO set once we have this endpoint written
+
+		ScopeStrategy:            fosite.ExactScopeStrategy, // be careful and only support exact string matching for scopes
+		AudienceMatchingStrategy: nil,                       // I believe the default is fine
+		EnforcePKCE:              true,                      // follow current set of best practices and always require PKCE
+		AllowedPromptValues:      []string{"none"},          // TODO unclear what we should set here
+
+		RefreshTokenScopes:  nil, // TODO decide what makes sense when we add refresh token support
+		MinParameterEntropy: 32,  // 256 bits seems about right
 	}
 
 	return compose.Compose(

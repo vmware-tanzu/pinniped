@@ -122,7 +122,7 @@ as the identity provider.
 1. Create a `WebhookAuthenticator` object to configure Pinniped to authenticate using local-user-authenticator.
 
     ```bash
-    cat <<EOF | kubectl create --namespace pinniped -f -
+    cat <<EOF | kubectl create --namespace pinniped-concierge -f -
     apiVersion: authentication.concierge.pinniped.dev/v1alpha1
     kind: WebhookAuthenticator
     metadata:

@@ -169,7 +169,7 @@ func TestManager(t *testing.T) {
 				"response_type":         []string{"code"},
 				"scope":                 []string{"openid profile email"},
 				"client_id":             []string{"pinniped-cli"},
-				"state":                 []string{"some-state-value"},
+				"state":                 []string{"some-state-value-that-is-32-byte"},
 				"nonce":                 []string{"some-nonce-value"},
 				"code_challenge":        []string{"some-challenge"},
 				"code_challenge_method": []string{"S256"},

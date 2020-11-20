@@ -22,8 +22,8 @@ import (
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/oidctestutil"
 	"go.pinniped.dev/internal/oidc/provider"
-	"go.pinniped.dev/internal/oidcclient/nonce"
-	"go.pinniped.dev/internal/oidcclient/pkce"
+	"go.pinniped.dev/pkg/oidcclient/nonce"
+	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
 func TestAuthorizationEndpoint(t *testing.T) {

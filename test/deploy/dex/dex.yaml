@@ -24,6 +24,12 @@ staticClients:
   redirectURIs:
   - #@ "http://127.0.0.1:" + str(data.values.ports.cli) + "/callback"
   - #@ "http://[::1]:" + str(data.values.ports.cli) + "/callback"
+- id: pinniped-supervisor
+  name: 'Pinniped Supervisor'
+  secret: pinniped-supervisor-secret
+  redirectURIs:
+    - #@ "http://127.0.0.1:" + str(data.values.ports.cli) + "/callback"
+    - #@ "http://[::1]:" + str(data.values.ports.cli) + "/callback"
 enablePasswordDB: true
 staticPasswords:
 - username: "pinny"
@@ -69,36 +75,6 @@ spec:
       annotations:
         dexConfigHash: #@ sha256.sum(yaml.encode(dexConfig()))
     spec:
-      initContainers:
-      - name: generate-certs
-        image: cfssl/cfssl:1.5.0
-        imagePullPolicy: IfNotPresent
-        command: ["/bin/bash"]
-        args:
-        - -c
-        - |
-          cd /var/certs
-          cfssl print-defaults config > /tmp/cfssl-default.json
-          echo '{"CN": "Pinniped Test","hosts": [],"key": {"algo": "ecdsa","size": 256},"names": [{}]}' > csr.json
-
-          echo "generating CA key..."
-          cfssl genkey \
-            -config /tmp/cfssl-default.json \
-            -initca csr.json \
-            | cfssljson -bare ca
-
-          echo "generating Dex server certificate..."
-          cfssl gencert \
-            -ca ca.pem -ca-key ca-key.pem \
-            -config /tmp/cfssl-default.json \
-            -profile www \
-            -cn "dex.dex.svc.cluster.local" \
-            -hostname "dex.dex.svc.cluster.local" \
-            csr.json \
-            | cfssljson -bare dex
-        volumeMounts:
-          - name: certs
-            mountPath: /var/certs
       containers:
       - name: dex
         image: quay.io/dexidp/dex:v2.10.0
@@ -121,7 +97,8 @@ spec:
         configMap:
           name: dex-config
       - name: certs
-        emptyDir: {}
+        secret:
+          secretName: certs
 ---
 apiVersion: v1
 kind: Service

@@ -22,10 +22,10 @@ import (
 
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/oidctestutil"
-	"go.pinniped.dev/internal/oidcclient"
-	"go.pinniped.dev/internal/oidcclient/nonce"
-	"go.pinniped.dev/internal/oidcclient/pkce"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/pkg/oidcclient"
+	"go.pinniped.dev/pkg/oidcclient/nonce"
+	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
 const (

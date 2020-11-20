@@ -8,9 +8,9 @@ import (
 	"net/url"
 	"sync"
 
-	"go.pinniped.dev/internal/oidcclient"
-	"go.pinniped.dev/internal/oidcclient/nonce"
-	"go.pinniped.dev/internal/oidcclient/pkce"
+	"go.pinniped.dev/pkg/oidcclient"
+	"go.pinniped.dev/pkg/oidcclient/nonce"
+	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
 type UpstreamOIDCIdentityProviderI interface {

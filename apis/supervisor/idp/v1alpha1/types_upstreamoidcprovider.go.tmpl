@@ -41,7 +41,7 @@ type OIDCAuthorizationConfig struct {
 	// AdditionalScopes are the scopes in addition to "openid" that will be requested as part of the authorization
 	// request flow with an OIDC identity provider. By default only the "openid" scope will be requested.
 	// +optional
-	AdditionalScopes []string `json:"additionalScopes"`
+	AdditionalScopes []string `json:"additionalScopes,omitempty"`
 }
 
 // OIDCClaims provides a mapping from upstream claims into identities.
@@ -82,7 +82,7 @@ type UpstreamOIDCProviderSpec struct {
 	// AuthorizationConfig holds information about how to form the OAuth2 authorization request
 	// parameters to be used with this OIDC identity provider.
 	// +optional
-	AuthorizationConfig OIDCAuthorizationConfig `json:"authorizationConfig"`
+	AuthorizationConfig OIDCAuthorizationConfig `json:"authorizationConfig,omitempty"`
 
 	// Claims provides the names of token claims that will be used when inspecting an identity from
 	// this OIDC identity provider.

@@ -35,7 +35,7 @@ var (
 		  -h, --help                        help for get-kubeconfig
 			  --kubeconfig string           Path to the kubeconfig file
 			  --kubeconfig-context string   Kubeconfig context override
-			  --pinniped-namespace string   Namespace in which Pinniped was installed (default "pinniped")
+			  --pinniped-namespace string   Namespace in which Pinniped was installed (default "pinniped-concierge")
 			  --token string                Credential to include in the resulting kubeconfig output (Required)
 
 		`)
@@ -66,7 +66,7 @@ var (
 		  -h, --help                        help for get-kubeconfig
 			  --kubeconfig string           Path to the kubeconfig file
 			  --kubeconfig-context string   Kubeconfig context override
-			  --pinniped-namespace string   Namespace in which Pinniped was installed (default "pinniped")
+			  --pinniped-namespace string   Namespace in which Pinniped was installed (default "pinniped-concierge")
 			  --token string                Credential to include in the resulting kubeconfig output (Required)
 		`)
 )

@@ -18,6 +18,7 @@ const (
 	WellKnownEndpointPath     = "/.well-known/openid-configuration"
 	AuthorizationEndpointPath = "/oauth2/authorize"
 	TokenEndpointPath         = "/oauth2/token" //nolint:gosec // ignore lint warning that this is a credential
+	CallbackEndpointPath      = "/callback"
 	JWKSEndpointPath          = "/jwks.json"
 )
 

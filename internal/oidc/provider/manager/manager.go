@@ -12,6 +12,7 @@ import (
 
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/auth"
+	"go.pinniped.dev/internal/oidc/callback"
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/discovery"
 	"go.pinniped.dev/internal/oidc/jwks"
@@ -83,6 +84,9 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 
 		authURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.AuthorizationEndpointPath
 		m.providerHandlers[authURL] = auth.NewHandler(incomingProvider.Issuer(), m.idpListGetter, oauthHelper, csrftoken.Generate, pkce.Generate, nonce.Generate, encoder, encoder)
+
+		callbackURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.CallbackEndpointPath
+		m.providerHandlers[callbackURL] = callback.NewHandler(incomingProvider.Issuer(), m.idpListGetter, oauthHelper, encoder, encoder)
 
 		plog.Debug("oidc provider manager added or updated issuer", "issuer", incomingProvider.Issuer())
 	}

@@ -42,6 +42,7 @@ func TestManager(t *testing.T) {
 			issuer2DifferentCaseHostname = "https://exAmPlE.Com/some/path/more/deeply/nested/path"
 			issuer2KeyID                 = "issuer2-key"
 			upstreamIDPAuthorizationURL  = "https://test-upstream.com/auth"
+			downstreamRedirectURL        = "http://127.0.0.1:12345/callback"
 		)
 
 		newGetRequest := func(url string) *http.Request {
@@ -80,6 +81,18 @@ func TestManager(t *testing.T) {
 				"actual location %s did not start with expected prefix %s",
 				actualLocation, expectedRedirectLocationPrefix,
 			)
+		}
+
+		requireCallbackRequestToBeHandled := func(requestIssuer, requestURLSuffix string) {
+			recorder := httptest.NewRecorder()
+
+			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.CallbackEndpointPath+requestURLSuffix))
+
+			r.False(fallbackHandlerWasCalled)
+
+			// Minimal check to ensure that the right endpoint was called - when we don't send a CSRF
+			// cookie to the callback endpoint, the callback endpoint responds with a 403.
+			r.Equal(http.StatusForbidden, recorder.Code)
 		}
 
 		requireJWKSRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedJWKKeyID string) {
@@ -162,7 +175,6 @@ func TestManager(t *testing.T) {
 			requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2KeyID)
 			requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2KeyID)
 
-			authRedirectURI := "http://127.0.0.1/callback"
 			authRequestParams := "?" + url.Values{
 				"response_type":         []string{"code"},
 				"scope":                 []string{"openid profile email"},
@@ -171,7 +183,7 @@ func TestManager(t *testing.T) {
 				"nonce":                 []string{"some-nonce-value"},
 				"code_challenge":        []string{"some-challenge"},
 				"code_challenge_method": []string{"S256"},
-				"redirect_uri":          []string{authRedirectURI},
+				"redirect_uri":          []string{downstreamRedirectURL},
 			}.Encode()
 
 			requireAuthorizationRequestToBeHandled(issuer1, authRequestParams, upstreamIDPAuthorizationURL)
@@ -180,6 +192,18 @@ func TestManager(t *testing.T) {
 			// Hostnames are case-insensitive, so test that we can handle that.
 			requireAuthorizationRequestToBeHandled(issuer1DifferentCaseHostname, authRequestParams, upstreamIDPAuthorizationURL)
 			requireAuthorizationRequestToBeHandled(issuer2DifferentCaseHostname, authRequestParams, upstreamIDPAuthorizationURL)
+
+			callbackRequestParams := "?" + url.Values{
+				"code":  []string{"some-code"},
+				"state": []string{"some-state-value"},
+			}.Encode()
+
+			requireCallbackRequestToBeHandled(issuer1, callbackRequestParams)
+			requireCallbackRequestToBeHandled(issuer2, callbackRequestParams)
+
+			// // Hostnames are case-insensitive, so test that we can handle that.
+			requireCallbackRequestToBeHandled(issuer1DifferentCaseHostname, callbackRequestParams)
+			requireCallbackRequestToBeHandled(issuer2DifferentCaseHostname, callbackRequestParams)
 		}
 
 		when("given some valid providers via SetProviders()", func() {

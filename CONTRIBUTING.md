@@ -8,7 +8,7 @@ Please see the [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## Project Scope
 
-Learn about the [scope](doc/scope.md) of the project.
+Learn about the [scope](https://pinniped.dev/docs/scope/) of the project.
 
 ## Meeting with the Maintainers
 

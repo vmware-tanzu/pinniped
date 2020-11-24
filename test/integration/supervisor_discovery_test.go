@@ -231,7 +231,8 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	if len(hostAndPortSegments) > 1 {
 		port = hostAndPortSegments[1]
 	}
-	ips, err := net.DefaultResolver.LookupIP(ctx, "ip4", hostname)
+
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, hostname)
 	require.NoError(t, err)
 	ip := ips[0]
 	ipAsString := ip.String()
@@ -248,7 +249,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuerUsingIPAddress)
 
 	// Create a Secret at the special name which represents the default TLS cert.
-	defaultCA := createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", []net.IP{ip}, defaultTLSCertSecretName(env), kubeClient)
+	defaultCA := createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", []net.IP{ip.IP}, defaultTLSCertSecretName(env), kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by IP address using the CA.
 	_ = requireDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)

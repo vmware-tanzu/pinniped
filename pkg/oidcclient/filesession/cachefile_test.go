@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient"
 )
 
@@ -111,7 +112,7 @@ func TestWriteTo(t *testing.T) {
 	t.Parallel()
 	t.Run("io error", func(t *testing.T) {
 		t.Parallel()
-		tmp := t.TempDir() + "/sessions.yaml"
+		tmp := testutil.TempDir(t) + "/sessions.yaml"
 		require.NoError(t, os.Mkdir(tmp, 0700))
 		err := validSession.writeTo(tmp)
 		require.EqualError(t, err, "open "+tmp+": is a directory")
@@ -119,7 +120,7 @@ func TestWriteTo(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
-		require.NoError(t, validSession.writeTo(t.TempDir()+"/sessions.yaml"))
+		require.NoError(t, validSession.writeTo(testutil.TempDir(t)+"/sessions.yaml"))
 	})
 }
 

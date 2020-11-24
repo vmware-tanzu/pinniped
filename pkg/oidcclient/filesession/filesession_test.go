@@ -15,12 +15,13 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient"
 )
 
 func TestNew(t *testing.T) {
 	t.Parallel()
-	tmp := t.TempDir() + "/sessions.yaml"
+	tmp := testutil.TempDir(t) + "/sessions.yaml"
 	c := New(tmp)
 	require.NotNil(t, c)
 	require.Equal(t, tmp, c.path)
@@ -186,7 +187,7 @@ func TestGetToken(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			tmp := t.TempDir() + "/sessions.yaml"
+			tmp := testutil.TempDir(t) + "/sessions.yaml"
 			if tt.makeTestFile != nil {
 				tt.makeTestFile(t, tmp)
 			}
@@ -417,7 +418,7 @@ func TestPutToken(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			tmp := t.TempDir() + "/sessiondir/sessions.yaml"
+			tmp := testutil.TempDir(t) + "/sessiondir/sessions.yaml"
 			if tt.makeTestFile != nil {
 				tt.makeTestFile(t, tmp)
 			}

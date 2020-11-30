@@ -26,6 +26,7 @@ import (
 	"gopkg.in/square/go-jose.v2"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/filesession"
 	"go.pinniped.dev/test/library"
@@ -187,7 +188,7 @@ func TestCLILoginOIDC(t *testing.T) {
 	pinnipedExe := buildPinnipedCLI(t)
 
 	// Make a temp directory to hold the session cache for this test.
-	sessionCachePath := t.TempDir() + "/sessions.yaml"
+	sessionCachePath := testutil.TempDir(t) + "/sessions.yaml"
 
 	// Start the CLI running the "alpha login oidc [...]" command with stdout/stderr connected to pipes.
 	cmd := oidcLoginCommand(ctx, t, pinnipedExe, sessionCachePath)
@@ -433,7 +434,7 @@ func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, ses
 
 	// If there is a custom CA bundle, pass it via --ca-bundle and a temporary file.
 	if env.CLITestUpstream.CABundle != "" {
-		path := filepath.Join(t.TempDir(), "test-ca.pem")
+		path := filepath.Join(testutil.TempDir(t), "test-ca.pem")
 		require.NoError(t, ioutil.WriteFile(path, []byte(env.CLITestUpstream.CABundle), 0600))
 		cmd.Args = append(cmd.Args, "--ca-bundle", path)
 	}

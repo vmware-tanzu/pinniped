@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -52,7 +54,7 @@ func TestSupervisorLogin(t *testing.T) {
 		}
 
 		// Create downstream OIDC provider (i.e., update supervisor with OIDC provider).
-		path := "/some/path"
+		path := getDownstreamIssuerPathFromUpstreamRedirectURI(t, env.SupervisorTestUpstream.CallbackURL)
 		issuer := fmt.Sprintf("https://%s%s", addr, path)
 		_, _ = requireCreatingOIDCProviderCausesDiscoveryEndpointsToAppear(
 			ctx,
@@ -95,8 +97,6 @@ func TestSupervisorLogin(t *testing.T) {
 		}
 		upstream := makeTestUpstream(t, spec, idpv1alpha1.PhaseReady)
 
-		upstreamRedirectURI := fmt.Sprintf("https://%s/some/path/callback/%s", env.SupervisorHTTPAddress, upstream.Name)
-
 		// Make request to authorize endpoint - should pass, since we now have an upstream.
 		req, err = http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthURL, nil)
 		require.NoError(t, err)
@@ -109,10 +109,37 @@ func TestSupervisorLogin(t *testing.T) {
 			t,
 			upstream.Spec.Issuer,
 			env.SupervisorTestUpstream.ClientID,
-			upstreamRedirectURI,
+			env.SupervisorTestUpstream.CallbackURL,
 			rsp.Header.Get("Location"),
 		)
 	}
+}
+
+func getDownstreamIssuerPathFromUpstreamRedirectURI(t *testing.T, upstreamRedirectURI string) string {
+	// We need to construct the downstream issuer path from the upstream redirect URI since the two
+	// are related, and the upstream redirect URI is supplied via a static test environment
+	// variable. The upstream redirect URI should be something like
+	//   https://supervisor.com/some/supervisor/path/callback
+	// and therefore the downstream issuer should be something like
+	//   https://supervisor.com/some/supervisor/path
+	// since the /callback endpoint is placed at the root of the downstream issuer path.
+	upstreamRedirectURL, err := url.Parse(upstreamRedirectURI)
+	require.NoError(t, err)
+
+	redirectURIPathWithoutLastSegment, lastUpstreamRedirectURIPathSegment := path.Split(upstreamRedirectURL.Path)
+	require.Equalf(
+		t,
+		"callback",
+		lastUpstreamRedirectURIPathSegment,
+		"expected upstream redirect URI (%q) to follow supervisor callback path conventions (i.e., end in /callback)",
+		upstreamRedirectURI,
+	)
+
+	if strings.HasSuffix(redirectURIPathWithoutLastSegment, "/") {
+		redirectURIPathWithoutLastSegment = redirectURIPathWithoutLastSegment[:len(redirectURIPathWithoutLastSegment)-1]
+	}
+
+	return redirectURIPathWithoutLastSegment
 }
 
 func makeDownstreamAuthURL(t *testing.T, scheme, addr, path string) string {

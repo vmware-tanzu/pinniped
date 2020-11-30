@@ -21,6 +21,7 @@ import (
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 	"go.pinniped.dev/pkg/oidcclient/state"
 )
@@ -68,7 +69,7 @@ type handlerState struct {
 }
 
 type callbackResult struct {
-	token *Token
+	token *oidctypes.Token
 	err   error
 }
 
@@ -116,6 +117,19 @@ func WithBrowserOpen(openURL func(url string) error) Option {
 	}
 }
 
+// SessionCacheKey contains the data used to select a valid session cache entry.
+type SessionCacheKey struct {
+	Issuer      string   `json:"issuer"`
+	ClientID    string   `json:"clientID"`
+	Scopes      []string `json:"scopes"`
+	RedirectURI string   `json:"redirect_uri"`
+}
+
+type SessionCache interface {
+	GetToken(SessionCacheKey) *oidctypes.Token
+	PutToken(SessionCacheKey, *oidctypes.Token)
+}
+
 // WithSessionCache sets the session cache backend for storing and retrieving previously-issued ID tokens and refresh tokens.
 func WithSessionCache(cache SessionCache) Option {
 	return func(h *handlerState) error {
@@ -135,8 +149,8 @@ func WithClient(httpClient *http.Client) Option {
 // nopCache is a SessionCache that doesn't actually do anything.
 type nopCache struct{}
 
-func (*nopCache) GetToken(SessionCacheKey) *Token  { return nil }
-func (*nopCache) PutToken(SessionCacheKey, *Token) {}
+func (*nopCache) GetToken(SessionCacheKey) *oidctypes.Token  { return nil }
+func (*nopCache) PutToken(SessionCacheKey, *oidctypes.Token) {}
 
 type discoveryI interface {
 	Endpoint() oauth2.Endpoint
@@ -144,7 +158,7 @@ type discoveryI interface {
 }
 
 // Login performs an OAuth2/OIDC authorization code login using a localhost listener.
-func Login(issuer string, clientID string, opts ...Option) (*Token, error) {
+func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, error) {
 	h := handlerState{
 		issuer:       issuer,
 		clientID:     clientID,
@@ -274,7 +288,7 @@ func Login(issuer string, clientID string, opts ...Option) (*Token, error) {
 	}
 }
 
-func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *RefreshToken) (*Token, error) {
+func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *oidctypes.RefreshToken) (*oidctypes.Token, error) {
 	ctx, cancel := context.WithTimeout(ctx, refreshTimeout)
 	defer cancel()
 	refreshSource := h.oauth2Config.TokenSource(ctx, &oauth2.Token{RefreshToken: refreshToken.Token})
@@ -331,7 +345,7 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 	return nil
 }
 
-func (h *handlerState) validateToken(ctx context.Context, tok *oauth2.Token, checkNonce bool) (*Token, error) {
+func (h *handlerState) validateToken(ctx context.Context, tok *oauth2.Token, checkNonce bool) (*oidctypes.Token, error) {
 	idTok, hasIDTok := tok.Extra("id_token").(string)
 	if !hasIDTok {
 		return nil, httperr.New(http.StatusBadRequest, "received response missing ID token")
@@ -350,16 +364,16 @@ func (h *handlerState) validateToken(ctx context.Context, tok *oauth2.Token, che
 			return nil, httperr.Wrap(http.StatusBadRequest, "received ID token with invalid nonce", err)
 		}
 	}
-	return &Token{
-		AccessToken: &AccessToken{
+	return &oidctypes.Token{
+		AccessToken: &oidctypes.AccessToken{
 			Token:  tok.AccessToken,
 			Type:   tok.TokenType,
 			Expiry: metav1.NewTime(tok.Expiry),
 		},
-		RefreshToken: &RefreshToken{
+		RefreshToken: &oidctypes.RefreshToken{
 			Token: tok.RefreshToken,
 		},
-		IDToken: &IDToken{
+		IDToken: &oidctypes.IDToken{
 			Token:  idTok,
 			Expiry: metav1.NewTime(validated.Expiry),
 		},

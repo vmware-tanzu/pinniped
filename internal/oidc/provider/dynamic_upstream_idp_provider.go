@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"sync"
 
-	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
@@ -40,7 +40,7 @@ type UpstreamOIDCIdentityProviderI interface {
 		authcode string,
 		pkceCodeVerifier pkce.Code,
 		expectedIDTokenNonce nonce.Nonce,
-	) (tokens oidcclient.Token, parsedIDTokenClaims map[string]interface{}, err error)
+	) (tokens oidctypes.Token, parsedIDTokenClaims map[string]interface{}, err error)
 }
 
 type DynamicUpstreamIDPProvider interface {

@@ -23,8 +23,8 @@ import (
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/oidctestutil"
 	"go.pinniped.dev/internal/testutil"
-	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
@@ -651,8 +651,8 @@ func (u *upstreamOIDCIdentityProviderBuilder) Build() oidctestutil.TestUpstreamO
 		UsernameClaim: u.usernameClaim,
 		GroupsClaim:   u.groupsClaim,
 		Scopes:        []string{"scope1", "scope2"},
-		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (oidcclient.Token, map[string]interface{}, error) {
-			return oidcclient.Token{}, u.idToken, u.authcodeExchangeErr
+		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (oidctypes.Token, map[string]interface{}, error) {
+			return oidctypes.Token{}, u.idToken, u.authcodeExchangeErr
 		},
 	}
 }

@@ -8,8 +8,8 @@ import (
 	"net/url"
 
 	"go.pinniped.dev/internal/oidc/provider"
-	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
@@ -36,7 +36,7 @@ type TestUpstreamOIDCIdentityProvider struct {
 		authcode string,
 		pkceCodeVerifier pkce.Code,
 		expectedIDTokenNonce nonce.Nonce,
-	) (oidcclient.Token, map[string]interface{}, error)
+	) (oidctypes.Token, map[string]interface{}, error)
 
 	exchangeAuthcodeAndValidateTokensCallCount int
 	exchangeAuthcodeAndValidateTokensArgs      []*ExchangeAuthcodeAndValidateTokenArgs
@@ -71,7 +71,7 @@ func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokens(
 	authcode string,
 	pkceCodeVerifier pkce.Code,
 	expectedIDTokenNonce nonce.Nonce,
-) (oidcclient.Token, map[string]interface{}, error) {
+) (oidctypes.Token, map[string]interface{}, error) {
 	if u.exchangeAuthcodeAndValidateTokensArgs == nil {
 		u.exchangeAuthcodeAndValidateTokensArgs = make([]*ExchangeAuthcodeAndValidateTokenArgs, 0)
 	}

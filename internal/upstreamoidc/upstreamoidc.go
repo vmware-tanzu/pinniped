@@ -15,8 +15,8 @@ import (
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc/provider"
-	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
@@ -59,46 +59,46 @@ func (p *ProviderConfig) GetGroupsClaim() string {
 	return p.GroupsClaim
 }
 
-func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (oidcclient.Token, map[string]interface{}, error) {
+func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (oidctypes.Token, map[string]interface{}, error) {
 	tok, err := p.Config.Exchange(ctx, authcode, pkceCodeVerifier.Verifier())
 	if err != nil {
-		return oidcclient.Token{}, nil, err
+		return oidctypes.Token{}, nil, err
 	}
 
 	idTok, hasIDTok := tok.Extra("id_token").(string)
 	if !hasIDTok {
-		return oidcclient.Token{}, nil, httperr.New(http.StatusBadRequest, "received response missing ID token")
+		return oidctypes.Token{}, nil, httperr.New(http.StatusBadRequest, "received response missing ID token")
 	}
 	validated, err := p.Provider.Verifier(&oidc.Config{ClientID: p.GetClientID()}).Verify(ctx, idTok)
 	if err != nil {
-		return oidcclient.Token{}, nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
+		return oidctypes.Token{}, nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
 	}
 	if validated.AccessTokenHash != "" {
 		if err := validated.VerifyAccessToken(tok.AccessToken); err != nil {
-			return oidcclient.Token{}, nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
+			return oidctypes.Token{}, nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
 		}
 	}
 	if expectedIDTokenNonce != "" {
 		if err := expectedIDTokenNonce.Validate(validated); err != nil {
-			return oidcclient.Token{}, nil, httperr.Wrap(http.StatusBadRequest, "received ID token with invalid nonce", err)
+			return oidctypes.Token{}, nil, httperr.Wrap(http.StatusBadRequest, "received ID token with invalid nonce", err)
 		}
 	}
 
 	var validatedClaims map[string]interface{}
 	if err := validated.Claims(&validatedClaims); err != nil {
-		return oidcclient.Token{}, nil, httperr.Wrap(http.StatusInternalServerError, "could not unmarshal claims", err)
+		return oidctypes.Token{}, nil, httperr.Wrap(http.StatusInternalServerError, "could not unmarshal claims", err)
 	}
 
-	return oidcclient.Token{
-		AccessToken: &oidcclient.AccessToken{
+	return oidctypes.Token{
+		AccessToken: &oidctypes.AccessToken{
 			Token:  tok.AccessToken,
 			Type:   tok.TokenType,
 			Expiry: metav1.NewTime(tok.Expiry),
 		},
-		RefreshToken: &oidcclient.RefreshToken{
+		RefreshToken: &oidctypes.RefreshToken{
 			Token: tok.RefreshToken,
 		},
-		IDToken: &oidcclient.IDToken{
+		IDToken: &oidctypes.IDToken{
 			Token:  idTok,
 			Expiry: metav1.NewTime(validated.Expiry),
 		},

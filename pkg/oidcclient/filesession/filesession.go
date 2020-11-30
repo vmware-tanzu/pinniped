@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/pkg/oidcclient"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
 const (
@@ -65,14 +66,14 @@ type Cache struct {
 }
 
 // GetToken looks up the cached data for the given parameters. It may return nil if no valid matching session is cached.
-func (c *Cache) GetToken(key oidcclient.SessionCacheKey) *oidcclient.Token {
+func (c *Cache) GetToken(key oidcclient.SessionCacheKey) *oidctypes.Token {
 	// If the cache file does not exist, exit immediately with no error log
 	if _, err := os.Stat(c.path); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 
 	// Read the cache and lookup the matching entry. If one exists, update its last used timestamp and return it.
-	var result *oidcclient.Token
+	var result *oidctypes.Token
 	c.withCache(func(cache *sessionCache) {
 		if entry := cache.lookup(key); entry != nil {
 			result = &entry.Tokens
@@ -84,7 +85,7 @@ func (c *Cache) GetToken(key oidcclient.SessionCacheKey) *oidcclient.Token {
 
 // PutToken stores the provided token into the session cache under the given parameters. It does not return an error
 // but may silently fail to update the session cache.
-func (c *Cache) PutToken(key oidcclient.SessionCacheKey, token *oidcclient.Token) {
+func (c *Cache) PutToken(key oidcclient.SessionCacheKey, token *oidctypes.Token) {
 	// Create the cache directory if it does not exist.
 	if err := os.MkdirAll(filepath.Dir(c.path), 0700); err != nil && !errors.Is(err, os.ErrExist) {
 		c.errReporter(fmt.Errorf("could not create session cache directory: %w", err))

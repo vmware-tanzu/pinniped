@@ -19,8 +19,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/mocks/mockkeyset"
-	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
 func TestProviderConfig(t *testing.T) {
@@ -62,7 +62,7 @@ func TestProviderConfig(t *testing.T) {
 		expectNonce nonce.Nonce
 		returnIDTok string
 		wantErr     string
-		wantToken   oidcclient.Token
+		wantToken   oidctypes.Token
 		wantClaims  map[string]interface{}
 	}{
 		{
@@ -99,15 +99,15 @@ func TestProviderConfig(t *testing.T) {
 			authCode:    "valid",
 			expectNonce: "",
 			returnIDTok: invalidNonceIDToken,
-			wantToken: oidcclient.Token{
-				AccessToken: &oidcclient.AccessToken{
+			wantToken: oidctypes.Token{
+				AccessToken: &oidctypes.AccessToken{
 					Token:  "test-access-token",
 					Expiry: metav1.Time{},
 				},
-				RefreshToken: &oidcclient.RefreshToken{
+				RefreshToken: &oidctypes.RefreshToken{
 					Token: "test-refresh-token",
 				},
-				IDToken: &oidcclient.IDToken{
+				IDToken: &oidctypes.IDToken{
 					Token:  invalidNonceIDToken,
 					Expiry: metav1.Time{},
 				},
@@ -117,15 +117,15 @@ func TestProviderConfig(t *testing.T) {
 			name:        "valid",
 			authCode:    "valid",
 			returnIDTok: validIDToken,
-			wantToken: oidcclient.Token{
-				AccessToken: &oidcclient.AccessToken{
+			wantToken: oidctypes.Token{
+				AccessToken: &oidctypes.AccessToken{
 					Token:  "test-access-token",
 					Expiry: metav1.Time{},
 				},
-				RefreshToken: &oidcclient.RefreshToken{
+				RefreshToken: &oidctypes.RefreshToken{
 					Token: "test-refresh-token",
 				},
-				IDToken: &oidcclient.IDToken{
+				IDToken: &oidctypes.IDToken{
 					Token:  validIDToken,
 					Expiry: metav1.Time{},
 				},
@@ -184,7 +184,7 @@ func TestProviderConfig(t *testing.T) {
 			tok, claims, err := p.ExchangeAuthcodeAndValidateTokens(ctx, tt.authCode, "test-pkce", tt.expectNonce)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
-				require.Equal(t, oidcclient.Token{}, tok)
+				require.Equal(t, oidctypes.Token{}, tok)
 				require.Nil(t, claims)
 				return
 			}

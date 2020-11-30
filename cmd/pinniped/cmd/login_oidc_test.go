@@ -13,6 +13,7 @@ import (
 
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/pkg/oidcclient"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
 func TestLoginOIDCCommand(t *testing.T) {
@@ -92,12 +93,12 @@ func TestLoginOIDCCommand(t *testing.T) {
 				gotClientID string
 				gotOptions  []oidcclient.Option
 			)
-			cmd := oidcLoginCommand(func(issuer string, clientID string, opts ...oidcclient.Option) (*oidcclient.Token, error) {
+			cmd := oidcLoginCommand(func(issuer string, clientID string, opts ...oidcclient.Option) (*oidctypes.Token, error) {
 				gotIssuer = issuer
 				gotClientID = clientID
 				gotOptions = opts
-				return &oidcclient.Token{
-					IDToken: &oidcclient.IDToken{
+				return &oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
 						Token:  "test-id-token",
 						Expiry: metav1.NewTime(time1),
 					},

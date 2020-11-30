@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/pkg/oidcclient"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
 func TestNew(t *testing.T) {
@@ -37,7 +38,7 @@ func TestGetToken(t *testing.T) {
 		trylockFunc  func(*testing.T) error
 		unlockFunc   func(*testing.T) error
 		key          oidcclient.SessionCacheKey
-		want         *oidcclient.Token
+		want         *oidctypes.Token
 		wantErrors   []string
 		wantTestFile func(t *testing.T, tmp string)
 	}{
@@ -98,17 +99,17 @@ func TestGetToken(t *testing.T) {
 					},
 					CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
 					LastUsedTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
-					Tokens: oidcclient.Token{
-						AccessToken: &oidcclient.AccessToken{
+					Tokens: oidctypes.Token{
+						AccessToken: &oidctypes.AccessToken{
 							Token:  "test-access-token",
 							Type:   "Bearer",
 							Expiry: metav1.NewTime(now.Add(1 * time.Hour)),
 						},
-						IDToken: &oidcclient.IDToken{
+						IDToken: &oidctypes.IDToken{
 							Token:  "test-id-token",
 							Expiry: metav1.NewTime(now.Add(1 * time.Hour)),
 						},
-						RefreshToken: &oidcclient.RefreshToken{
+						RefreshToken: &oidctypes.RefreshToken{
 							Token: "test-refresh-token",
 						},
 					},
@@ -136,17 +137,17 @@ func TestGetToken(t *testing.T) {
 					},
 					CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
 					LastUsedTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
-					Tokens: oidcclient.Token{
-						AccessToken: &oidcclient.AccessToken{
+					Tokens: oidctypes.Token{
+						AccessToken: &oidctypes.AccessToken{
 							Token:  "test-access-token",
 							Type:   "Bearer",
 							Expiry: metav1.NewTime(now.Add(1 * time.Hour)),
 						},
-						IDToken: &oidcclient.IDToken{
+						IDToken: &oidctypes.IDToken{
 							Token:  "test-id-token",
 							Expiry: metav1.NewTime(now.Add(1 * time.Hour)),
 						},
-						RefreshToken: &oidcclient.RefreshToken{
+						RefreshToken: &oidctypes.RefreshToken{
 							Token: "test-refresh-token",
 						},
 					},
@@ -160,17 +161,17 @@ func TestGetToken(t *testing.T) {
 				RedirectURI: "http://localhost:0/callback",
 			},
 			wantErrors: []string{},
-			want: &oidcclient.Token{
-				AccessToken: &oidcclient.AccessToken{
+			want: &oidctypes.Token{
+				AccessToken: &oidctypes.AccessToken{
 					Token:  "test-access-token",
 					Type:   "Bearer",
 					Expiry: metav1.NewTime(now.Add(1 * time.Hour).Local()),
 				},
-				IDToken: &oidcclient.IDToken{
+				IDToken: &oidctypes.IDToken{
 					Token:  "test-id-token",
 					Expiry: metav1.NewTime(now.Add(1 * time.Hour).Local()),
 				},
-				RefreshToken: &oidcclient.RefreshToken{
+				RefreshToken: &oidctypes.RefreshToken{
 					Token: "test-refresh-token",
 				},
 			},
@@ -218,7 +219,7 @@ func TestPutToken(t *testing.T) {
 		name         string
 		makeTestFile func(t *testing.T, tmp string)
 		key          oidcclient.SessionCacheKey
-		token        *oidcclient.Token
+		token        *oidctypes.Token
 		wantErrors   []string
 		wantTestFile func(t *testing.T, tmp string)
 	}{
@@ -244,17 +245,17 @@ func TestPutToken(t *testing.T) {
 					},
 					CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
 					LastUsedTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
-					Tokens: oidcclient.Token{
-						AccessToken: &oidcclient.AccessToken{
+					Tokens: oidctypes.Token{
+						AccessToken: &oidctypes.AccessToken{
 							Token:  "old-access-token",
 							Type:   "Bearer",
 							Expiry: metav1.NewTime(now.Add(1 * time.Hour)),
 						},
-						IDToken: &oidcclient.IDToken{
+						IDToken: &oidctypes.IDToken{
 							Token:  "old-id-token",
 							Expiry: metav1.NewTime(now.Add(1 * time.Hour)),
 						},
-						RefreshToken: &oidcclient.RefreshToken{
+						RefreshToken: &oidctypes.RefreshToken{
 							Token: "old-refresh-token",
 						},
 					},
@@ -268,17 +269,17 @@ func TestPutToken(t *testing.T) {
 				Scopes:      []string{"email", "offline_access", "openid", "profile"},
 				RedirectURI: "http://localhost:0/callback",
 			},
-			token: &oidcclient.Token{
-				AccessToken: &oidcclient.AccessToken{
+			token: &oidctypes.Token{
+				AccessToken: &oidctypes.AccessToken{
 					Token:  "new-access-token",
 					Type:   "Bearer",
 					Expiry: metav1.NewTime(now.Add(2 * time.Hour).Local()),
 				},
-				IDToken: &oidcclient.IDToken{
+				IDToken: &oidctypes.IDToken{
 					Token:  "new-id-token",
 					Expiry: metav1.NewTime(now.Add(2 * time.Hour).Local()),
 				},
-				RefreshToken: &oidcclient.RefreshToken{
+				RefreshToken: &oidctypes.RefreshToken{
 					Token: "new-refresh-token",
 				},
 			},
@@ -287,17 +288,17 @@ func TestPutToken(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, cache.Sessions, 1)
 				require.Less(t, time.Since(cache.Sessions[0].LastUsedTimestamp.Time).Nanoseconds(), (5 * time.Second).Nanoseconds())
-				require.Equal(t, oidcclient.Token{
-					AccessToken: &oidcclient.AccessToken{
+				require.Equal(t, oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
 						Token:  "new-access-token",
 						Type:   "Bearer",
 						Expiry: metav1.NewTime(now.Add(2 * time.Hour).Local()),
 					},
-					IDToken: &oidcclient.IDToken{
+					IDToken: &oidctypes.IDToken{
 						Token:  "new-id-token",
 						Expiry: metav1.NewTime(now.Add(2 * time.Hour).Local()),
 					},
-					RefreshToken: &oidcclient.RefreshToken{
+					RefreshToken: &oidctypes.RefreshToken{
 						Token: "new-refresh-token",
 					},
 				}, cache.Sessions[0].Tokens)
@@ -316,17 +317,17 @@ func TestPutToken(t *testing.T) {
 					},
 					CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
 					LastUsedTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
-					Tokens: oidcclient.Token{
-						AccessToken: &oidcclient.AccessToken{
+					Tokens: oidctypes.Token{
+						AccessToken: &oidctypes.AccessToken{
 							Token:  "old-access-token",
 							Type:   "Bearer",
 							Expiry: metav1.NewTime(now.Add(1 * time.Hour)),
 						},
-						IDToken: &oidcclient.IDToken{
+						IDToken: &oidctypes.IDToken{
 							Token:  "old-id-token",
 							Expiry: metav1.NewTime(now.Add(1 * time.Hour)),
 						},
-						RefreshToken: &oidcclient.RefreshToken{
+						RefreshToken: &oidctypes.RefreshToken{
 							Token: "old-refresh-token",
 						},
 					},
@@ -340,17 +341,17 @@ func TestPutToken(t *testing.T) {
 				Scopes:      []string{"email", "offline_access", "openid", "profile"},
 				RedirectURI: "http://localhost:0/callback",
 			},
-			token: &oidcclient.Token{
-				AccessToken: &oidcclient.AccessToken{
+			token: &oidctypes.Token{
+				AccessToken: &oidctypes.AccessToken{
 					Token:  "new-access-token",
 					Type:   "Bearer",
 					Expiry: metav1.NewTime(now.Add(2 * time.Hour).Local()),
 				},
-				IDToken: &oidcclient.IDToken{
+				IDToken: &oidctypes.IDToken{
 					Token:  "new-id-token",
 					Expiry: metav1.NewTime(now.Add(2 * time.Hour).Local()),
 				},
-				RefreshToken: &oidcclient.RefreshToken{
+				RefreshToken: &oidctypes.RefreshToken{
 					Token: "new-refresh-token",
 				},
 			},
@@ -359,17 +360,17 @@ func TestPutToken(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, cache.Sessions, 2)
 				require.Less(t, time.Since(cache.Sessions[1].LastUsedTimestamp.Time).Nanoseconds(), (5 * time.Second).Nanoseconds())
-				require.Equal(t, oidcclient.Token{
-					AccessToken: &oidcclient.AccessToken{
+				require.Equal(t, oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
 						Token:  "new-access-token",
 						Type:   "Bearer",
 						Expiry: metav1.NewTime(now.Add(2 * time.Hour).Local()),
 					},
-					IDToken: &oidcclient.IDToken{
+					IDToken: &oidctypes.IDToken{
 						Token:  "new-id-token",
 						Expiry: metav1.NewTime(now.Add(2 * time.Hour).Local()),
 					},
-					RefreshToken: &oidcclient.RefreshToken{
+					RefreshToken: &oidctypes.RefreshToken{
 						Token: "new-refresh-token",
 					},
 				}, cache.Sessions[1].Tokens)
@@ -388,17 +389,17 @@ func TestPutToken(t *testing.T) {
 				Scopes:      []string{"email", "offline_access", "openid", "profile"},
 				RedirectURI: "http://localhost:0/callback",
 			},
-			token: &oidcclient.Token{
-				AccessToken: &oidcclient.AccessToken{
+			token: &oidctypes.Token{
+				AccessToken: &oidctypes.AccessToken{
 					Token:  "new-access-token",
 					Type:   "Bearer",
 					Expiry: metav1.NewTime(now.Add(2 * time.Hour).Local()),
 				},
-				IDToken: &oidcclient.IDToken{
+				IDToken: &oidctypes.IDToken{
 					Token:  "new-id-token",
 					Expiry: metav1.NewTime(now.Add(2 * time.Hour).Local()),
 				},
-				RefreshToken: &oidcclient.RefreshToken{
+				RefreshToken: &oidctypes.RefreshToken{
 					Token: "new-refresh-token",
 				},
 			},

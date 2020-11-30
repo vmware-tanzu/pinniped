@@ -28,8 +28,6 @@ import (
 )
 
 func TestSupervisorLogin(t *testing.T) {
-	t.Skip("waiting on new callback path logic to get merged in from the callback endpoint work")
-
 	env := library.IntegrationEnv(t)
 	client := library.NewSupervisorClientset(t)
 
@@ -117,7 +115,6 @@ func TestSupervisorLogin(t *testing.T) {
 	}
 }
 
-//nolint:unused
 func getDownstreamIssuerPathFromUpstreamRedirectURI(t *testing.T, upstreamRedirectURI string) string {
 	// We need to construct the downstream issuer path from the upstream redirect URI since the two
 	// are related, and the upstream redirect URI is supplied via a static test environment
@@ -145,7 +142,6 @@ func getDownstreamIssuerPathFromUpstreamRedirectURI(t *testing.T, upstreamRedire
 	return redirectURIPathWithoutLastSegment
 }
 
-//nolint:unused
 func makeDownstreamAuthURL(t *testing.T, scheme, addr, path string) string {
 	t.Helper()
 	downstreamOAuth2Config := oauth2.Config{
@@ -167,7 +163,6 @@ func makeDownstreamAuthURL(t *testing.T, scheme, addr, path string) string {
 	)
 }
 
-//nolint:unused
 func generateAuthRequestParams(t *testing.T) (state.State, nonce.Nonce, pkce.Code) {
 	t.Helper()
 	state, err := state.Generate()
@@ -179,7 +174,6 @@ func generateAuthRequestParams(t *testing.T) (state.State, nonce.Nonce, pkce.Cod
 	return state, nonce, pkce
 }
 
-//nolint:unused
 func requireValidRedirectLocation(
 	ctx context.Context,
 	t *testing.T,

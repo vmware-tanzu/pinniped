@@ -16,10 +16,11 @@ import (
 	"github.com/coreos/go-oidc"
 	"github.com/pkg/browser"
 	"golang.org/x/oauth2"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
+	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/upstreamoidc"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -52,18 +53,18 @@ type handlerState struct {
 	callbackPath string
 
 	// Generated parameters of a login flow.
-	idTokenVerifier *oidc.IDTokenVerifier
-	oauth2Config    *oauth2.Config
-	state           state.State
-	nonce           nonce.Nonce
-	pkce            pkce.Code
+	provider     *oidc.Provider
+	oauth2Config *oauth2.Config
+	state        state.State
+	nonce        nonce.Nonce
+	pkce         pkce.Code
 
 	// External calls for things.
 	generateState func() (state.State, error)
 	generatePKCE  func() (pkce.Code, error)
 	generateNonce func() (nonce.Nonce, error)
 	openURL       func(string) error
-	oidcDiscover  func(context.Context, string) (discoveryI, error)
+	getProvider   func(*oauth2.Config, *oidc.Provider) provider.UpstreamOIDCIdentityProviderI
 
 	callbacks chan callbackResult
 }
@@ -152,11 +153,6 @@ type nopCache struct{}
 func (*nopCache) GetToken(SessionCacheKey) *oidctypes.Token  { return nil }
 func (*nopCache) PutToken(SessionCacheKey, *oidctypes.Token) {}
 
-type discoveryI interface {
-	Endpoint() oauth2.Endpoint
-	Verifier(*oidc.Config) *oidc.IDTokenVerifier
-}
-
 // Login performs an OAuth2/OIDC authorization code login using a localhost listener.
 func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, error) {
 	h := handlerState{
@@ -175,9 +171,7 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		generateNonce: nonce.Generate,
 		generatePKCE:  pkce.Generate,
 		openURL:       browser.OpenURL,
-		oidcDiscover: func(ctx context.Context, iss string) (discoveryI, error) {
-			return oidc.NewProvider(ctx, iss)
-		},
+		getProvider:   upstreamoidc.New,
 	}
 	for _, opt := range opts {
 		if err := opt(&h); err != nil {
@@ -222,16 +216,15 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 	}
 
 	// Perform OIDC discovery.
-	discovered, err := h.oidcDiscover(h.ctx, h.issuer)
+	h.provider, err = oidc.NewProvider(h.ctx, h.issuer)
 	if err != nil {
 		return nil, fmt.Errorf("could not perform OIDC discovery for %q: %w", h.issuer, err)
 	}
-	h.idTokenVerifier = discovered.Verifier(&oidc.Config{ClientID: h.clientID})
 
 	// Build an OAuth2 configuration based on the OIDC discovery data and our callback endpoint.
 	h.oauth2Config = &oauth2.Config{
 		ClientID: h.clientID,
-		Endpoint: discovered.Endpoint(),
+		Endpoint: h.provider.Endpoint(),
 		Scopes:   h.scopes,
 	}
 
@@ -301,7 +294,11 @@ func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *oidctype
 
 	// The spec is not 100% clear about whether an ID token from the refresh flow should include a nonce, and at least
 	// some providers do not include one, so we skip the nonce validation here (but not other validations).
-	return h.validateToken(ctx, refreshed, false)
+	token, _, err := h.getProvider(h.oauth2Config, h.provider).ValidateToken(ctx, refreshed, "")
+	if err != nil {
+		return nil, err
+	}
+	return &token, nil
 }
 
 func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Request) (err error) {
@@ -328,56 +325,16 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 		return httperr.Newf(http.StatusBadRequest, "login failed with code %q", errorParam)
 	}
 
-	// Exchange the authorization code for access, ID, and refresh tokens.
-	oauth2Tok, err := h.oauth2Config.Exchange(r.Context(), params.Get("code"), h.pkce.Verifier())
+	// Exchange the authorization code for access, ID, and refresh tokens and perform required
+	// validations on the returned ID token.
+	token, _, err := h.getProvider(h.oauth2Config, h.provider).ExchangeAuthcodeAndValidateTokens(r.Context(), params.Get("code"), h.pkce, h.nonce)
 	if err != nil {
 		return httperr.Wrap(http.StatusBadRequest, "could not complete code exchange", err)
 	}
 
-	// Perform required validations on the returned ID token.
-	token, err := h.validateToken(r.Context(), oauth2Tok, true)
-	if err != nil {
-		return err
-	}
-
-	h.callbacks <- callbackResult{token: token}
+	h.callbacks <- callbackResult{token: &token}
 	_, _ = w.Write([]byte("you have been logged in and may now close this tab"))
 	return nil
-}
-
-func (h *handlerState) validateToken(ctx context.Context, tok *oauth2.Token, checkNonce bool) (*oidctypes.Token, error) {
-	idTok, hasIDTok := tok.Extra("id_token").(string)
-	if !hasIDTok {
-		return nil, httperr.New(http.StatusBadRequest, "received response missing ID token")
-	}
-	validated, err := h.idTokenVerifier.Verify(ctx, idTok)
-	if err != nil {
-		return nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
-	}
-	if validated.AccessTokenHash != "" {
-		if err := validated.VerifyAccessToken(tok.AccessToken); err != nil {
-			return nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
-		}
-	}
-	if checkNonce {
-		if err := h.nonce.Validate(validated); err != nil {
-			return nil, httperr.Wrap(http.StatusBadRequest, "received ID token with invalid nonce", err)
-		}
-	}
-	return &oidctypes.Token{
-		AccessToken: &oidctypes.AccessToken{
-			Token:  tok.AccessToken,
-			Type:   tok.TokenType,
-			Expiry: metav1.NewTime(tok.Expiry),
-		},
-		RefreshToken: &oidctypes.RefreshToken{
-			Token: tok.RefreshToken,
-		},
-		IDToken: &oidctypes.IDToken{
-			Token:  idTok,
-			Expiry: metav1.NewTime(validated.Expiry),
-		},
-	}, nil
 }
 
 func (h *handlerState) serve(listener net.Listener) func() {

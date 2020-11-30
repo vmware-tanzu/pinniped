@@ -20,6 +20,10 @@ import (
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
+func New(config *oauth2.Config, provider *oidc.Provider) provider.UpstreamOIDCIdentityProviderI {
+	return &ProviderConfig{Config: config, Provider: provider}
+}
+
 // ProviderConfig holds the active configuration of an upstream OIDC provider.
 type ProviderConfig struct {
 	Name          string
@@ -30,9 +34,6 @@ type ProviderConfig struct {
 		Verifier(*oidc.Config) *oidc.IDTokenVerifier
 	}
 }
-
-// *ProviderConfig should implement provider.UpstreamOIDCIdentityProviderI.
-var _ provider.UpstreamOIDCIdentityProviderI = (*ProviderConfig)(nil)
 
 func (p *ProviderConfig) GetName() string {
 	return p.Name

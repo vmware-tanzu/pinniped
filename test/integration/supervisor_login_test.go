@@ -32,70 +32,87 @@ func TestSupervisorLogin(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Create downstream OIDC provider (i.e., update supervisor with OIDC provider).
-	scheme := "http"
-	addr := env.SupervisorHTTPAddress
-	caBundle := ""
-	path := "/some/path"
-	issuer := fmt.Sprintf("https://%s%s", addr, path)
-	_, _ = requireCreatingOIDCProviderCausesDiscoveryEndpointsToAppear(
-		ctx,
-		t,
-		scheme,
-		addr,
-		caBundle,
-		issuer,
-		client,
-	)
-
-	// Create HTTP client.
-	httpClient := newHTTPClient(t, caBundle, nil)
-	httpClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
-		// Don't follow any redirects right now, since we simply want to validate that our auth endpoint
-		// redirects us.
-		return http.ErrUseLastResponse
+	tests := []struct {
+		Scheme   string
+		Address  string
+		CABundle string
+	}{
+		{Scheme: "http", Address: env.SupervisorHTTPAddress},
+		{Scheme: "https", Address: env.SupervisorHTTPSIngressAddress, CABundle: env.SupervisorHTTPSIngressCABundle},
 	}
 
-	// Declare the downstream auth endpoint url we will use.
-	downstreamAuthURL := makeDownstreamAuthURL(t, scheme, addr, path)
+	for _, test := range tests {
+		scheme := test.Scheme
+		addr := test.Address
+		caBundle := test.CABundle
 
-	// Make request to auth endpoint - should fail, since we have no upstreams.
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthURL, nil)
-	require.NoError(t, err)
-	rsp, err := httpClient.Do(req)
-	require.NoError(t, err)
-	defer rsp.Body.Close()
-	require.Equal(t, http.StatusUnprocessableEntity, rsp.StatusCode)
+		if addr == "" {
+			// Both cases are not required, so when one is empty skip it.
+			continue
+		}
 
-	// Create upstream OIDC provider.
-	spec := idpv1alpha1.UpstreamOIDCProviderSpec{
-		Issuer: env.SupervisorTestUpstream.Issuer,
-		TLS: &idpv1alpha1.TLSSpec{
-			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
-		},
-		Client: idpv1alpha1.OIDCClient{
-			SecretName: makeTestClientCredsSecret(t, env.SupervisorTestUpstream.ClientID, env.SupervisorTestUpstream.ClientSecret).Name,
-		},
+		// Create downstream OIDC provider (i.e., update supervisor with OIDC provider).
+		path := "/some/path"
+		issuer := fmt.Sprintf("https://%s%s", addr, path)
+		_, _ = requireCreatingOIDCProviderCausesDiscoveryEndpointsToAppear(
+			ctx,
+			t,
+			scheme,
+			addr,
+			caBundle,
+			issuer,
+			client,
+		)
+
+		// Create HTTP client.
+		httpClient := newHTTPClient(t, caBundle, nil)
+		httpClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+			// Don't follow any redirects right now, since we simply want to validate that our auth endpoint
+			// redirects us.
+			return http.ErrUseLastResponse
+		}
+
+		// Declare the downstream auth endpoint url we will use.
+		downstreamAuthURL := makeDownstreamAuthURL(t, scheme, addr, path)
+
+		// Make request to auth endpoint - should fail, since we have no upstreams.
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthURL, nil)
+		require.NoError(t, err)
+		rsp, err := httpClient.Do(req)
+		require.NoError(t, err)
+		defer rsp.Body.Close()
+		require.Equal(t, http.StatusUnprocessableEntity, rsp.StatusCode)
+
+		// Create upstream OIDC provider.
+		spec := idpv1alpha1.UpstreamOIDCProviderSpec{
+			Issuer: env.SupervisorTestUpstream.Issuer,
+			TLS: &idpv1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
+			},
+			Client: idpv1alpha1.OIDCClient{
+				SecretName: makeTestClientCredsSecret(t, env.SupervisorTestUpstream.ClientID, env.SupervisorTestUpstream.ClientSecret).Name,
+			},
+		}
+		upstream := makeTestUpstream(t, spec, idpv1alpha1.PhaseReady)
+
+		upstreamRedirectURI := fmt.Sprintf("https://%s/some/path/callback/%s", env.SupervisorHTTPAddress, upstream.Name)
+
+		// Make request to authorize endpoint - should pass, since we now have an upstream.
+		req, err = http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthURL, nil)
+		require.NoError(t, err)
+		rsp, err = httpClient.Do(req)
+		require.NoError(t, err)
+		defer rsp.Body.Close()
+		require.Equal(t, http.StatusFound, rsp.StatusCode)
+		requireValidRedirectLocation(
+			ctx,
+			t,
+			upstream.Spec.Issuer,
+			env.SupervisorTestUpstream.ClientID,
+			upstreamRedirectURI,
+			rsp.Header.Get("Location"),
+		)
 	}
-	upstream := makeTestUpstream(t, spec, idpv1alpha1.PhaseReady)
-
-	upstreamRedirectURI := fmt.Sprintf("https://%s/some/path/callback/%s", env.SupervisorHTTPAddress, upstream.Name)
-
-	// Make request to authorize endpoint - should pass, since we now have an upstream.
-	req, err = http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthURL, nil)
-	require.NoError(t, err)
-	rsp, err = httpClient.Do(req)
-	require.NoError(t, err)
-	defer rsp.Body.Close()
-	require.Equal(t, http.StatusFound, rsp.StatusCode)
-	requireValidRedirectLocation(
-		ctx,
-		t,
-		upstream.Spec.Issuer,
-		env.SupervisorTestUpstream.ClientID,
-		upstreamRedirectURI,
-		rsp.Header.Get("Location"),
-	)
 }
 
 func makeDownstreamAuthURL(t *testing.T, scheme, addr, path string) string {

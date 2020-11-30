@@ -33,60 +33,14 @@ type UpstreamOIDCIdentityProviderI interface {
 	// ID Token groups claim name. May return empty string, in which case we won't try to read groups from the upstream provider.
 	GetGroupsClaim() string
 
-	AuthcodeExchanger
-}
-
-// Performs upstream OIDC authorization code exchange and token validation.
-// Returns the validated raw tokens as well as the parsed claims of the ID token.
-type AuthcodeExchanger interface {
+	// Performs upstream OIDC authorization code exchange and token validation.
+	// Returns the validated raw tokens as well as the parsed claims of the ID token.
 	ExchangeAuthcodeAndValidateTokens(
 		ctx context.Context,
 		authcode string,
 		pkceCodeVerifier pkce.Code,
 		expectedIDTokenNonce nonce.Nonce,
 	) (tokens oidcclient.Token, parsedIDTokenClaims map[string]interface{}, err error)
-}
-
-type UpstreamOIDCIdentityProvider struct {
-	Name             string
-	ClientID         string
-	AuthorizationURL url.URL
-	UsernameClaim    string
-	GroupsClaim      string
-	Scopes           []string
-}
-
-func (u *UpstreamOIDCIdentityProvider) GetName() string {
-	return u.Name
-}
-
-func (u *UpstreamOIDCIdentityProvider) GetClientID() string {
-	return u.ClientID
-}
-
-func (u *UpstreamOIDCIdentityProvider) GetAuthorizationURL() *url.URL {
-	return &u.AuthorizationURL
-}
-
-func (u *UpstreamOIDCIdentityProvider) GetScopes() []string {
-	return u.Scopes
-}
-
-func (u *UpstreamOIDCIdentityProvider) GetUsernameClaim() string {
-	return u.UsernameClaim
-}
-
-func (u *UpstreamOIDCIdentityProvider) GetGroupsClaim() string {
-	return u.GroupsClaim
-}
-
-func (u *UpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokens(
-	ctx context.Context,
-	authcode string,
-	pkceCodeVerifier pkce.Code,
-	expectedIDTokenNonce nonce.Nonce,
-) (oidcclient.Token, map[string]interface{}, error) {
-	panic("TODO implement me") // TODO
 }
 
 type DynamicUpstreamIDPProvider interface {

@@ -17,6 +17,7 @@ import (
 
 	"github.com/coreos/go-oidc"
 	"github.com/go-logr/logr"
+	"golang.org/x/oauth2"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -30,6 +31,7 @@ import (
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/upstreamoidc"
 )
 
 const (
@@ -150,10 +152,14 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 
 // validateUpstream validates the provided v1alpha1.UpstreamOIDCProvider and returns the validated configuration as a
 // provider.UpstreamOIDCIdentityProvider. As a side effect, it also updates the status of the v1alpha1.UpstreamOIDCProvider.
-func (c *controller) validateUpstream(ctx controllerlib.Context, upstream *v1alpha1.UpstreamOIDCProvider) *provider.UpstreamOIDCIdentityProvider {
-	result := provider.UpstreamOIDCIdentityProvider{
-		Name:   upstream.Name,
-		Scopes: computeScopes(upstream.Spec.AuthorizationConfig.AdditionalScopes),
+func (c *controller) validateUpstream(ctx controllerlib.Context, upstream *v1alpha1.UpstreamOIDCProvider) *upstreamoidc.ProviderConfig {
+	result := upstreamoidc.ProviderConfig{
+		Name: upstream.Name,
+		Config: &oauth2.Config{
+			Scopes: computeScopes(upstream.Spec.AuthorizationConfig.AdditionalScopes),
+		},
+		UsernameClaim: upstream.Spec.Claims.Username,
+		GroupsClaim:   upstream.Spec.Claims.Groups,
 	}
 	conditions := []*v1alpha1.Condition{
 		c.validateSecret(upstream, &result),
@@ -180,7 +186,7 @@ func (c *controller) validateUpstream(ctx controllerlib.Context, upstream *v1alp
 }
 
 // validateSecret validates the .spec.client.secretName field and returns the appropriate ClientCredentialsValid condition.
-func (c *controller) validateSecret(upstream *v1alpha1.UpstreamOIDCProvider, result *provider.UpstreamOIDCIdentityProvider) *v1alpha1.Condition {
+func (c *controller) validateSecret(upstream *v1alpha1.UpstreamOIDCProvider, result *upstreamoidc.ProviderConfig) *v1alpha1.Condition {
 	secretName := upstream.Spec.Client.SecretName
 
 	// Fetch the Secret from informer cache.
@@ -217,7 +223,7 @@ func (c *controller) validateSecret(upstream *v1alpha1.UpstreamOIDCProvider, res
 	}
 
 	// If everything is valid, update the result and set the condition to true.
-	result.ClientID = string(clientID)
+	result.Config.ClientID = string(clientID)
 	return &v1alpha1.Condition{
 		Type:    typeClientCredsValid,
 		Status:  v1alpha1.ConditionTrue,
@@ -227,7 +233,7 @@ func (c *controller) validateSecret(upstream *v1alpha1.UpstreamOIDCProvider, res
 }
 
 // validateIssuer validates the .spec.issuer field, performs OIDC discovery, and returns the appropriate OIDCDiscoverySucceeded condition.
-func (c *controller) validateIssuer(ctx context.Context, upstream *v1alpha1.UpstreamOIDCProvider, result *provider.UpstreamOIDCIdentityProvider) *v1alpha1.Condition {
+func (c *controller) validateIssuer(ctx context.Context, upstream *v1alpha1.UpstreamOIDCProvider, result *upstreamoidc.ProviderConfig) *v1alpha1.Condition {
 	// Get the provider (from cache if possible).
 	discoveredProvider := c.validatorCache.getProvider(&upstream.Spec)
 
@@ -258,8 +264,6 @@ func (c *controller) validateIssuer(ctx context.Context, upstream *v1alpha1.Upst
 		c.validatorCache.putProvider(&upstream.Spec, discoveredProvider)
 	}
 
-	// TODO also parse the token endpoint from the discovery info and put it onto the `result`
-
 	// Parse out and validate the discovered authorize endpoint.
 	authURL, err := url.Parse(discoveredProvider.Endpoint().AuthURL)
 	if err != nil {
@@ -280,7 +284,8 @@ func (c *controller) validateIssuer(ctx context.Context, upstream *v1alpha1.Upst
 	}
 
 	// If everything is valid, update the result and set the condition to true.
-	result.AuthorizationURL = *authURL
+	result.Config.Endpoint = discoveredProvider.Endpoint()
+	result.Provider = discoveredProvider
 	return &v1alpha1.Condition{
 		Type:    typeOIDCDiscoverySucceeded,
 		Status:  v1alpha1.ConditionTrue,

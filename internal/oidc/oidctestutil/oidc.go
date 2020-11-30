@@ -7,6 +7,8 @@ import (
 	"context"
 	"net/url"
 
+	"golang.org/x/oauth2"
+
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -94,6 +96,10 @@ func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokensArgs
 		u.exchangeAuthcodeAndValidateTokensArgs = make([]*ExchangeAuthcodeAndValidateTokenArgs, 0)
 	}
 	return u.exchangeAuthcodeAndValidateTokensArgs[call]
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (oidctypes.Token, map[string]interface{}, error) {
+	panic("implement me")
 }
 
 func NewIDPListGetter(upstreamOIDCIdentityProviders ...*TestUpstreamOIDCIdentityProvider) provider.DynamicUpstreamIDPProvider {

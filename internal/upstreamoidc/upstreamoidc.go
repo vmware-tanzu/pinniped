@@ -65,6 +65,10 @@ func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, 
 		return oidctypes.Token{}, nil, err
 	}
 
+	return p.ValidateToken(ctx, tok, expectedIDTokenNonce)
+}
+
+func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (oidctypes.Token, map[string]interface{}, error) {
 	idTok, hasIDTok := tok.Extra("id_token").(string)
 	if !hasIDTok {
 		return oidctypes.Token{}, nil, httperr.New(http.StatusBadRequest, "received response missing ID token")

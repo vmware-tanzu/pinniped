@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"sync"
 
+	"golang.org/x/oauth2"
+
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -41,6 +43,8 @@ type UpstreamOIDCIdentityProviderI interface {
 		pkceCodeVerifier pkce.Code,
 		expectedIDTokenNonce nonce.Nonce,
 	) (tokens oidctypes.Token, parsedIDTokenClaims map[string]interface{}, err error)
+
+	ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (oidctypes.Token, map[string]interface{}, error)
 }
 
 type DynamicUpstreamIDPProvider interface {

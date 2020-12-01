@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	ErrInvalidAuthorizeRequestType    = constable.Error("authorization request must be of type fosite.AuthorizeRequest")
+	ErrInvalidAuthorizeRequestType    = constable.Error("authorization request must be of type fosite.Request")
 	ErrInvalidAuthorizeRequestData    = constable.Error("authorization request data must not be nil")
 	ErrInvalidAuthorizeRequestVersion = constable.Error("authorization request data has wrong version")
 
@@ -33,26 +33,25 @@ type authorizeCodeStorage struct {
 }
 
 type AuthorizeCodeSession struct {
-	Active  bool                     `json:"active"`
-	Request *fosite.AuthorizeRequest `json:"request"`
-	Version string                   `json:"version"`
+	Active  bool            `json:"active"`
+	Request *fosite.Request `json:"request"`
+	Version string          `json:"version"`
 }
 
 func New(secrets corev1client.SecretInterface) oauth2.AuthorizeCodeStorage {
-	return &authorizeCodeStorage{storage: crud.New("authorization-codes", secrets)}
+	return &authorizeCodeStorage{storage: crud.New("authcode", secrets)}
 }
 
 func (a *authorizeCodeStorage) CreateAuthorizeCodeSession(ctx context.Context, signature string, requester fosite.Requester) error {
-	// this conversion assumes that we do not wrap the default type in any way
+	// This conversion assumes that we do not wrap the default type in any way
 	// i.e. we use the default fosite.OAuth2Provider.NewAuthorizeRequest implementation
 	// note that because this type is serialized and stored in Kube, we cannot easily change the implementation later
-	// TODO hydra uses the fosite.Request struct and ignores the extra fields in fosite.AuthorizeRequest
 	request, err := validateAndExtractAuthorizeRequest(requester)
 	if err != nil {
 		return err
 	}
 
-	// TODO hydra stores specific fields from the requester
+	// Note, in case it is helpful, that Hydra stores specific fields from the requester:
 	//  request ID
 	//  requestedAt
 	//  OAuth client ID
@@ -70,12 +69,11 @@ func (a *authorizeCodeStorage) CreateAuthorizeCodeSession(ctx context.Context, s
 }
 
 func (a *authorizeCodeStorage) GetAuthorizeCodeSession(ctx context.Context, signature string, _ fosite.Session) (fosite.Requester, error) {
-	// TODO hydra uses the incoming fosite.Session to provide the type needed to json.Unmarshal their session bytes
-
-	// TODO hydra gets the client from its DB as a concrete type via client ID,
-	//  the hydra memory client just validates that the client ID exists
-
-	// TODO hydra uses the sha512.Sum384 hash of signature when using JWT as access token to reduce length
+	// Note, in case it is helpful, that Hydra:
+	//  - uses the incoming fosite.Session to provide the type needed to json.Unmarshal their session bytes
+	//  - gets the client from its DB as a concrete type via client ID, the hydra memory client just validates that the
+	//    client ID exists
+	//  - hydra uses the sha512.Sum384 hash of signature when using JWT as access token to reduce length
 
 	session, _, err := a.getSession(ctx, signature)
 
@@ -88,8 +86,6 @@ func (a *authorizeCodeStorage) GetAuthorizeCodeSession(ctx context.Context, sign
 }
 
 func (a *authorizeCodeStorage) InvalidateAuthorizeCodeSession(ctx context.Context, signature string) error {
-	// TODO write garbage collector for these codes
-
 	session, rv, err := a.getSession(ctx, signature)
 	if err != nil {
 		return err
@@ -137,17 +133,15 @@ func (a *authorizeCodeStorage) getSession(ctx context.Context, signature string)
 
 func NewValidEmptyAuthorizeCodeSession() *AuthorizeCodeSession {
 	return &AuthorizeCodeSession{
-		Request: &fosite.AuthorizeRequest{
-			Request: fosite.Request{
-				Client:  &fosite.DefaultOpenIDConnectClient{},
-				Session: &openid.DefaultSession{},
-			},
+		Request: &fosite.Request{
+			Client:  &fosite.DefaultOpenIDConnectClient{},
+			Session: &openid.DefaultSession{},
 		},
 	}
 }
 
-func validateAndExtractAuthorizeRequest(requester fosite.Requester) (*fosite.AuthorizeRequest, error) {
-	request, ok1 := requester.(*fosite.AuthorizeRequest)
+func validateAndExtractAuthorizeRequest(requester fosite.Requester) (*fosite.Request, error) {
+	request, ok1 := requester.(*fosite.Request)
 	if !ok1 {
 		return nil, ErrInvalidAuthorizeRequestType
 	}
@@ -189,59 +183,37 @@ func (e *errSerializationFailureWithCause) Error() string {
 const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 	"active": true,
 	"request": {
-		"responseTypes": [
-			"¥Îʒ襧.ɕ7崛瀇莒AȒ[ɠ牐7#$ɭ",
-			".5ȿEǈ9ûF済(D疻翋膗",
-			"螤Yɫüeɯ紤邥翔勋\\RBʒ;-"
-		],
-		"redirectUri": {
-			"Scheme": "ħesƻU赒M喦_ģ",
-			"Opaque": "Ġ/_章Ņ缘T蝟Ǌ儱礹燃ɢ",
-			"User": {},
-			"Host": "ȳ4螘Wo",
-			"Path": "}i{",
-			"RawPath": "5ǅa丝eF0eė鱊hǒx蔼Q",
-			"ForceQuery": true,
-			"RawQuery": "熤1bbWV",
-			"Fragment": "ȋc剠鏯ɽÿ¸",
-			"RawFragment": "qƤ"
-		},
-		"state": "@n,x竘Şǥ嗾稀'ã击漰怼禝穞梠Ǫs",
-		"handledResponseTypes": [
-			"m\"e尚鬞ƻɼ抹d誉y鿜Ķ"
-		],
-		"id": "ō澩ć|3U2Ǜl霨ǦǵpƉ",
-		"requestedAt": "1989-11-05T22:02:31.105295894Z",
+		"id": "嫎l蟲aƖ啘艿",
+		"requestedAt": "2082-11-10T18:36:11.627253638Z",
 		"client": {
-			"id": "[:c顎疻紵D",
-			"client_secret": "mQ==",
+			"id": "!ſɄĈp[述齛ʘUȻ.5ȿE",
+			"client_secret": "UQ==",
 			"redirect_uris": [
-				"恣S@T嵇ǇV,Æ櫔袆鋹奘菲",
-				"ãƻʚ肈ą8O+a駣Ʉɼk瘸'鴵y"
+				"ǣ珑 ʑ飶畛Ȳ螤Yɫüeɯ紤邥翔勋\\",
+				"Bʒ;",
+				"鿃攴Ųęʍ鎾ʦ©cÏN,Ġ/_"
 			],
 			"grant_types": [
-				".湆ê\"唐",
-				"曎餄FxD溪躲珫ÈşɜȨû臓嬣\"ǃŤz"
+				"憉sHĒ尥窘挼Ŀŉ"
 			],
 			"response_types": [
-				"Ņʘʟ車sʊ儓JǐŪɺǣy|耑ʄ"
+				"4",
+				"ʄÔ@}i{絧遗Ū^ȝĸ谋Vʋ鱴閇T"
 			],
 			"scopes": [
-				"Ą",
-				"萙Į(潶饏熞ĝƌĆ1",
-				"əȤ4Į筦p煖鵄$睱奐耡q"
+				"R鴝順諲ŮŚ节ȭŀȋc剠鏯ɽÿ¸"
 			],
 			"audience": [
-				"Ʃǣ鿫/Ò敫ƤV"
+				"Ƥ"
 			],
 			"public": true,
-			"jwks_uri": "ȩđ[嬧鱒Ȁ彆媚杨嶒ĤG",
+			"jwks_uri": "BA瘪囷ɫCʄɢ雐譄uée'",
 			"jwks": {
 				"keys": [
 					{
 						"kty": "OKP",
 						"crv": "Ed25519",
-						"x": "JmA-6KpjzqKu0lq9OiB6ORL4s2UzBFPsE1hm6vESeXM",
+						"x": "nK9xgX_iN7u3u_i8YOO7ZRT_WK028Vd_nhtsUu7Eo6E",
 						"x5u": {
 							"Scheme": "",
 							"Opaque": "",
@@ -258,24 +230,7 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 					{
 						"kty": "OKP",
 						"crv": "Ed25519",
-						"x": "LbRC1_3HEe5o7Japk9jFp3_7Ou7Gi2gpqrVrIi0eLDQ",
-						"x5u": {
-							"Scheme": "",
-							"Opaque": "",
-							"User": null,
-							"Host": "",
-							"Path": "",
-							"RawPath": "",
-							"ForceQuery": false,
-							"RawQuery": "",
-							"Fragment": "",
-							"RawFragment": ""
-						}
-					},
-					{
-						"kty": "OKP",
-						"crv": "Ed25519",
-						"x": "Ovk4DF8Yn3mkULuTqnlGJxFnKGu9EL6Xcf2Nql9lK3c",
+						"x": "UbbswQgzWhfGCRlwQmMp6fw_HoIoqkIaKT-2XN2fuYU",
 						"x5u": {
 							"Scheme": "",
 							"Opaque": "",
@@ -291,91 +246,95 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 					}
 				]
 			},
-			"token_endpoint_auth_method": "\u0026(K鵢Kj ŏ9Q韉Ķ%嶑輫ǘ(",
+			"token_endpoint_auth_method": "ŚǗƳȕ暭Q0ņP羾,塐",
 			"request_uris": [
-				":",
-				"6ě#嫀^xz Ū胧r"
+				"ǉ翻LH^俤µǲɹ@©|\u003eɃ",
+				"[:c顎疻紵D"
 			],
-			"request_object_signing_alg": "^¡!犃ĹĐJí¿ō擫ų懫砰¿",
-			"token_endpoint_auth_signing_alg": "ƈŮå"
+			"request_object_signing_alg": "m1Ì恣S@T嵇ǇV,Æ櫔袆鋹奘",
+			"token_endpoint_auth_signing_alg": "Fãƻʚ肈ą8O+a駣"
 		},
 		"scopes": [
-			"阃.Ù頀ʌGa皶竇瞍涘¹",
-			"ȽŮ切衖庀ŰŒ矠",
-			"楓)馻řĝǕ菸Tĕ1伞柲\u003c\"ʗȆ\\雤"
+			"ɼk瘸'鴵yſǮŁ±\u003eFA曎餄FxD溪",
+			"綻N镪p赌h%桙dĽ"
 		],
 		"grantedScopes": [
-			"ơ鮫R嫁ɍUƞ9+u!Ȱ",
-			"}Ă岜"
+			"癗E]Ņʘʟ車s"
 		],
 		"form": {
-			"旸Ť/Õ薝隧;綡,鼞纂=": [
-				"[滮]憀",
-				"3\u003eÙœ蓄UK嗤眇疟Țƒ1v¸KĶ"
+			"蹬器ķ8ŷ萒寎廭#疶昄Ą-Ƃƞ轵": [
+				"熞ĝƌĆ1ȇyǴ濎=Tʉȼʁŀ\u003c",
+				"耡q戨稞R÷mȵg釽[ƞ@",
+				"đ[嬧鱒Ȁ彆媚杨嶒ĤGÀ吧Lŷ"
+			],
+			"餟": [
+				"蒍z\u0026(K鵢Kj ŏ9Q韉Ķ%",
+				"輫ǘ(¨Ƞ亱6ě#嫀^xz ",
+				"@耢ɝ^¡!犃ĹĐJí¿ō擫"
 			]
 		},
 		"session": {
 			"Claims": {
-				"JTI": "};Ų斻遟a衪荖舃",
-				"Issuer": "芠顋敀拲h蝺$!",
-				"Subject": "}j%(=ſ氆]垲莲顇",
+				"JTI": "懫砰¿C筽娴ƓaPu镈賆ŗɰ",
+				"Issuer": "皶竇瞍涘¹焕iǢǽɽĺŧ",
+				"Subject": "矠M6ɡǜg炾ʙ$%o6肿Ȫ",
 				"Audience": [
-					"彑V\\廳蟕Țǡ蔯ʠ浵Ī龉磈螖畭5",
-					"渇Ȯʕc"
+					"ƌÙ鯆GQơ鮫R嫁ɍUƞ9+u!Ȱ踾$"
 				],
-				"Nonce": "Ǖ=rlƆ褡{ǏS",
-				"ExpiresAt": "1975-11-17T14:21:34.205609651Z",
-				"IssuedAt": "2104-07-03T15:40:03.66710966Z",
-				"RequestedAt": "2031-05-18T05:14:19.449350555Z",
-				"AuthTime": "2018-01-27T07:55:06.056862114Z",
-				"AccessTokenHash": "鹰肁躧",
-				"AuthenticationContextClassReference": "}Ɇ",
-				"AuthenticationMethodsReference": "DQh:uȣ",
-				"CodeHash": "ɘȏıȒ諃龟",
+				"Nonce": "us旸Ť/Õ薝隧;綡,鼞",
+				"ExpiresAt": "2065-11-30T13:47:03.613000626Z",
+				"IssuedAt": "1976-02-22T09:57:20.479850437Z",
+				"RequestedAt": "2016-04-13T04:18:53.648949323Z",
+				"AuthTime": "2098-07-12T04:38:54.034043015Z",
+				"AccessTokenHash": "滮]",
+				"AuthenticationContextClassReference": "°3\u003eÙ",
+				"AuthenticationMethodsReference": "k?µ鱔ǤÂ",
+				"CodeHash": "Țƒ1v¸KĶ跭};",
 				"Extra": {
-					"a": {
-						"^i臏f恡ƨ彮": {
-							"DĘ敨ýÏʥZq7烱藌\\": null,
-							"V": {
-								"őŧQĝ微'X焌襱ǭɕņ殥!_n": false
-							}
-						},
-						"Ż猁": [
-							1706822246
-						]
+					"=ſ氆": {
+						"Ƿī,廖ʡ彑V\\廳蟕Ț": [
+							843216989
+						],
+						"蔯ʠ浵Ī": {
+							"H\"nǕ=rlƆ褡{ǏSȳŅ": {
+								"Žg": false
+							},
+							"枱鰧ɛ鸁A渇": null
+						}
 					},
-					"Ò椪)ɫqň2搞Ŀ高摠鲒鿮禗O": 1233332227
+					"斻遟a衪荖舃9闄岈锘肺ńʥƕU}j%": 2520197933
 				}
 			},
 			"Headers": {
 				"Extra": {
-					"?戋璖$9\u0026": {
-						"µcɕ餦ÑEǰ哤癨浦浏1R": [
-							3761201123
-						],
-						"頓ć§蚲6rǦ\u003cqċ": {
-							"Łʀ§ȏœɽǲ斡冭ȸěaʜD捛?½ʀ+": null,
-							"ɒúĲ誠ƉyÖ.峷1藍殙菥趏": {
-								"jHȬȆ#)\u003cX": true
+					"熒ɘȏıȒ諃龟ŴŠ'耐Ƭ扵ƹ玄ɕwL": {
+						"ýÏʥZq7烱藌\\捀¿őŧQ": {
+							"微'X焌襱ǭɕņ殥!_": null,
+							"荇届UȚ?戋璖$9\u00269舋": {
+								"ɕ餦ÑEǰ哤癨浦浏1Rk頓ć§蚲6": true
 							}
-						}
+						},
+						"鲒鿮禗O暒aJP鐜?ĮV嫎h譭ȉ]DĘ": [
+							954647573
+						]
 					},
-					"U": 1354158262
+					"皩Ƭ}Ɇ.雬Ɨ´唁": 1572524915
 				}
 			},
 			"ExpiresAt": {
-				"\"嘬ȹĹaó剺撱Ȱ": "1985-09-09T04:35:40.533197189Z",
-				"ʆ\u003e": "1998-08-07T05:37:11.759718906Z",
-				"柏ʒ鴙*鸆偡Ȓ肯Ûx": "2036-12-19T06:36:14.414805124Z"
+				"\u003cqċ譈8ŪɎP绿MÅ": "2031-10-18T22:07:34.950803105Z",
+				"ȸěaʜD捛?½ʀ+Ċ偢镳ʬÍɷȓ\u003c": "2049-05-13T15:27:20.968432454Z"
 			},
-			"Username": "qmʎaðƠ绗ʢ緦Hū",
-			"Subject": "屾Ê窢ɋ鄊qɠ谫ǯǵƕ牀1鞊\\ȹ)"
+			"Username": "1藍殙菥趏酱Nʎ\u0026^横懋ƶ峦Fïȫƅw",
+			"Subject": "檾ĩĆ爨4犹|v炩f柏ʒ鴙*鸆偡"
 		},
 		"requestedAudience": [
-			"鉍商OɄƣ圔,xĪɏV鵅砍"
+			"肯Ûx穞Ƀ",
+			"ź蕴3ǐ薝Ƅ腲=ʐ诂鱰屾Ê窢ɋ鄊qɠ谫"
 		],
 		"grantedAudience": [
-			"C笜嚯\u003cǐšɚĀĥʋ6鉅\\þc涎漄Ɨ腼"
+			"ǵƕ牀1鞊\\ȹ)}鉍商OɄƣ圔,xĪ",
+			"悾xn冏裻摼0Ʈ蚵Ȼ塕»£#稏扟X"
 		]
 	},
 	"version": "1"

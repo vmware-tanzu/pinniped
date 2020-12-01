@@ -17,7 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"go.pinniped.dev/internal/fosite/authorizationcode"
+	"go.pinniped.dev/internal/fositestorage/authorizationcode"
 	"go.pinniped.dev/test/library"
 )
 
@@ -29,7 +29,7 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 		// randomly generated HMAC authorization code (see below)
 		code = "TQ72B8YjdEOZyxridYbTLE-pzoK4hpdkZxym5j4EmSc.TKRTgQG41IBQ16FDKTthRdhXfLlNaErcMd9Fy47uXAw"
 		// name of the secret that will be created in Kube
-		name = "pinniped-storage-authorization-codes-jssfhaibxdkiaugxufbsso3bixmfo7fzjvuevxbr35c4xdxolqga"
+		name = "pinniped-storage-authcode-jssfhaibxdkiaugxufbsso3bixmfo7fzjvuevxbr35c4xdxolqga"
 	)
 
 	hmac := compose.NewOAuth2HMACStrategy(&compose.Config{}, []byte("super-secret-32-byte-for-testing"), nil)

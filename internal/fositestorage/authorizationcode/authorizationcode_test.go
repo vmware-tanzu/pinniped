@@ -55,56 +55,39 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 			name:  "create, get, invalidate standard flow",
 			mocks: nil,
 			run: func(t *testing.T, storage oauth2.AuthorizeCodeStorage) error {
-				request := &fosite.AuthorizeRequest{
-					ResponseTypes: fosite.Arguments{"not-code"},
-					RedirectURI: &url.URL{
-						Scheme:      "",
-						Opaque:      "weee",
-						User:        &url.Userinfo{},
-						Host:        "",
-						Path:        "/callback",
-						RawPath:     "",
-						ForceQuery:  false,
-						RawQuery:    "",
-						Fragment:    "",
-						RawFragment: "",
-					},
-					State:                "stated",
-					HandledResponseTypes: fosite.Arguments{"not-type"},
-					Request: fosite.Request{
-						ID:          "abcd-1",
-						RequestedAt: time.Time{},
-						Client: &fosite.DefaultOpenIDConnectClient{
-							DefaultClient: &fosite.DefaultClient{
-								ID:            "pinny",
-								Secret:        nil,
-								RedirectURIs:  nil,
-								GrantTypes:    nil,
-								ResponseTypes: nil,
-								Scopes:        nil,
-								Audience:      nil,
-								Public:        true,
-							},
-							JSONWebKeysURI:                    "where",
-							JSONWebKeys:                       nil,
-							TokenEndpointAuthMethod:           "something",
-							RequestURIs:                       nil,
-							RequestObjectSigningAlgorithm:     "",
-							TokenEndpointAuthSigningAlgorithm: "",
+				request := &fosite.Request{
+					ID:          "abcd-1",
+					RequestedAt: time.Time{},
+					Client: &fosite.DefaultOpenIDConnectClient{
+						DefaultClient: &fosite.DefaultClient{
+							ID:            "pinny",
+							Secret:        nil,
+							RedirectURIs:  nil,
+							GrantTypes:    nil,
+							ResponseTypes: nil,
+							Scopes:        nil,
+							Audience:      nil,
+							Public:        true,
 						},
-						RequestedScope: nil,
-						GrantedScope:   nil,
-						Form:           url.Values{"key": []string{"val"}},
-						Session: &openid.DefaultSession{
-							Claims:    nil,
-							Headers:   nil,
-							ExpiresAt: nil,
-							Username:  "snorlax",
-							Subject:   "panda",
-						},
-						RequestedAudience: nil,
-						GrantedAudience:   nil,
+						JSONWebKeysURI:                    "where",
+						JSONWebKeys:                       nil,
+						TokenEndpointAuthMethod:           "something",
+						RequestURIs:                       nil,
+						RequestObjectSigningAlgorithm:     "",
+						TokenEndpointAuthSigningAlgorithm: "",
 					},
+					RequestedScope: nil,
+					GrantedScope:   nil,
+					Form:           url.Values{"key": []string{"val"}},
+					Session: &openid.DefaultSession{
+						Claims:    nil,
+						Headers:   nil,
+						ExpiresAt: nil,
+						Username:  "snorlax",
+						Subject:   "panda",
+					},
+					RequestedAudience: nil,
+					GrantedAudience:   nil,
 				}
 				err := storage.CreateAuthorizeCodeSession(ctx, "fancy-signature", request)
 				require.NoError(t, err)
@@ -118,50 +101,50 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 			wantActions: []coretesting.Action{
 				coretesting.NewCreateAction(secretsGVR, namespace, &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:            "pinniped-storage-authorization-codes-pwu5zs7lekbhnln2w4",
+						Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "authorization-codes",
+							"storage.pinniped.dev": "authcode",
 						},
 					},
 					Data: map[string][]byte{
-						"pinniped-storage-data":    []byte(`{"active":true,"request":{"responseTypes":["not-code"],"redirectUri":{"Scheme":"","Opaque":"weee","User":{},"Host":"","Path":"/callback","RawPath":"","ForceQuery":false,"RawQuery":"","Fragment":"","RawFragment":""},"state":"stated","handledResponseTypes":["not-type"],"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
+						"pinniped-storage-data":    []byte(`{"active":true,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
 						"pinniped-storage-version": []byte("1"),
 					},
-					Type: "storage.pinniped.dev/authorization-codes",
+					Type: "storage.pinniped.dev/authcode",
 				}),
-				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authorization-codes-pwu5zs7lekbhnln2w4"),
-				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authorization-codes-pwu5zs7lekbhnln2w4"),
+				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authcode-pwu5zs7lekbhnln2w4"),
+				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authcode-pwu5zs7lekbhnln2w4"),
 				coretesting.NewUpdateAction(secretsGVR, namespace, &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:            "pinniped-storage-authorization-codes-pwu5zs7lekbhnln2w4",
+						Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "authorization-codes",
+							"storage.pinniped.dev": "authcode",
 						},
 					},
 					Data: map[string][]byte{
-						"pinniped-storage-data":    []byte(`{"active":false,"request":{"responseTypes":["not-code"],"redirectUri":{"Scheme":"","Opaque":"weee","User":{},"Host":"","Path":"/callback","RawPath":"","ForceQuery":false,"RawQuery":"","Fragment":"","RawFragment":""},"state":"stated","handledResponseTypes":["not-type"],"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
+						"pinniped-storage-data":    []byte(`{"active":false,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
 						"pinniped-storage-version": []byte("1"),
 					},
-					Type: "storage.pinniped.dev/authorization-codes",
+					Type: "storage.pinniped.dev/authcode",
 				}),
 			},
 			wantSecrets: []corev1.Secret{
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:            "pinniped-storage-authorization-codes-pwu5zs7lekbhnln2w4",
+						Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "authorization-codes",
+							"storage.pinniped.dev": "authcode",
 						},
 					},
 					Data: map[string][]byte{
-						"pinniped-storage-data":    []byte(`{"active":false,"request":{"responseTypes":["not-code"],"redirectUri":{"Scheme":"","Opaque":"weee","User":{},"Host":"","Path":"/callback","RawPath":"","ForceQuery":false,"RawQuery":"","Fragment":"","RawFragment":""},"state":"stated","handledResponseTypes":["not-type"],"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
+						"pinniped-storage-data":    []byte(`{"active":false,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
 						"pinniped-storage-version": []byte("1"),
 					},
-					Type: "storage.pinniped.dev/authorization-codes",
+					Type: "storage.pinniped.dev/authcode",
 				},
 			},
 			wantErr: "",
@@ -210,8 +193,8 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 	require.Equal(t, validSession.Request, extractedRequest)
 
 	// checked above
-	defaultClient := validSession.Request.Request.Client.(*fosite.DefaultOpenIDConnectClient)
-	defaultSession := validSession.Request.Request.Session.(*openid.DefaultSession)
+	defaultClient := validSession.Request.Client.(*fosite.DefaultOpenIDConnectClient)
+	defaultSession := validSession.Request.Session.(*openid.DefaultSession)
 
 	// makes it easier to use a raw string
 	replacer := strings.NewReplacer("`", "a")
@@ -225,10 +208,10 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 		}
 	}
 
-	// deterministic fuzzing of fosite.AuthorizeRequest
+	// deterministic fuzzing of fosite.Request
 	f := fuzz.New().RandSource(rand.NewSource(1)).NilChance(0).NumElements(1, 3).Funcs(
 		// these functions guarantee that these are the only interface types we need to fill out
-		// if fosite.AuthorizeRequest changes to add more, the fuzzer will panic
+		// if fosite.Request changes to add more, the fuzzer will panic
 		func(fc *fosite.Client, c fuzz.Continue) {
 			c.Fuzz(defaultClient)
 			*fc = defaultClient

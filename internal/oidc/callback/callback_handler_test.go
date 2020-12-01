@@ -17,8 +17,11 @@ import (
 	"github.com/gorilla/securecookie"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/storage"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes/fake"
+	kubetesting "k8s.io/client-go/testing"
 
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/oidctestutil"
@@ -419,14 +422,12 @@ func TestCallbackEndpoint(t *testing.T) {
 		test := test
 
 		t.Run(test.name, func(t *testing.T) {
-			// Configure fosite the same way that the production code would, except use in-memory storage.
+			client := fake.NewSimpleClientset()
+			secrets := client.CoreV1().Secrets("some-namespace")
+
+			// Configure fosite the same way that the production code would.
 			// Inject this into our test subject at the last second so we get a fresh storage for every test.
-			oauthStore := &storage.MemoryStore{
-				Clients:        map[string]fosite.Client{oidc.PinnipedCLIOIDCClient().ID: oidc.PinnipedCLIOIDCClient()},
-				AuthorizeCodes: map[string]storage.StoreAuthorizeCode{},
-				PKCES:          map[string]fosite.Requester{},
-				IDSessions:     map[string]fosite.Requester{},
-			}
+			oauthStore := oidc.NewKubeStorage(secrets)
 			hmacSecret := []byte("some secret - must have at least 32 bytes")
 			require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
 			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecret)
@@ -471,6 +472,21 @@ func TestCallbackEndpoint(t *testing.T) {
 				authcodeDataAndSignature := strings.Split(capturedAuthCode, ".")
 				require.Len(t, authcodeDataAndSignature, 2)
 
+				// Several Secrets should have been created
+				expectedNumberOfCreatedSecrets := 2
+				if test.wantGrantedOpenidScope {
+					expectedNumberOfCreatedSecrets++
+				}
+				require.Len(t, client.Actions(), expectedNumberOfCreatedSecrets)
+
+				// One authcode should have been stored.
+				actualAction := client.Actions()[0].(kubetesting.CreateActionImpl)
+				require.Equal(t, "create", actualAction.GetVerb())
+				require.Equal(t, schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, actualAction.GetResource())
+				actualSecret := actualAction.GetObject().(*corev1.Secret)
+				require.True(t, strings.HasPrefix(actualSecret.Name, "pinniped-storage-authcode-"))
+				require.Empty(t, actualSecret.Namespace) // because the secrets client is already scoped to a namespace
+
 				storedRequestFromAuthcode, storedSessionFromAuthcode := validateAuthcodeStorage(
 					t,
 					oauthStore,
@@ -480,6 +496,14 @@ func TestCallbackEndpoint(t *testing.T) {
 					test.wantDownstreamIDTokenGroups,
 					test.wantDownstreamRequestedScopes,
 				)
+
+				// One PKCE should have been stored.
+				actualAction = client.Actions()[1].(kubetesting.CreateActionImpl)
+				require.Equal(t, "create", actualAction.GetVerb())
+				require.Equal(t, schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, actualAction.GetResource())
+				actualSecret = actualAction.GetObject().(*corev1.Secret)
+				require.True(t, strings.HasPrefix(actualSecret.Name, "pinniped-storage-pkce-"))
+				require.Empty(t, actualSecret.Namespace) // because the secrets client is already scoped to a namespace
 
 				validatePKCEStorage(
 					t,
@@ -491,15 +515,24 @@ func TestCallbackEndpoint(t *testing.T) {
 					test.wantDownstreamPKCEChallengeMethod,
 				)
 
-				validateIDSessionStorage(
-					t,
-					oauthStore,
-					capturedAuthCode, // IDSession store key is full authcode
-					storedRequestFromAuthcode,
-					storedSessionFromAuthcode,
-					test.wantGrantedOpenidScope,
-					test.wantDownstreamNonce,
-				)
+				// One IDSession should have been stored, if the downstream actually requested the "openid" scope
+				if test.wantGrantedOpenidScope {
+					actualAction = client.Actions()[2].(kubetesting.CreateActionImpl)
+					require.Equal(t, "create", actualAction.GetVerb())
+					require.Equal(t, schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, actualAction.GetResource())
+					actualSecret = actualAction.GetObject().(*corev1.Secret)
+					require.True(t, strings.HasPrefix(actualSecret.Name, "pinniped-storage-idsession-"))
+					require.Empty(t, actualSecret.Namespace) // because the secrets client is already scoped to a namespace
+
+					validateIDSessionStorage(
+						t,
+						oauthStore,
+						capturedAuthCode, // IDSession store key is full authcode
+						storedRequestFromAuthcode,
+						storedSessionFromAuthcode,
+						test.wantDownstreamNonce,
+					)
+				}
 			}
 		})
 	}
@@ -674,7 +707,7 @@ func shallowCopyAndModifyQuery(query url.Values, modifications map[string]string
 
 func validateAuthcodeStorage(
 	t *testing.T,
-	oauthStore *storage.MemoryStore,
+	oauthStore *oidc.KubeStorage,
 	storeKey string,
 	wantGrantedOpenidScope bool,
 	wantDownstreamIDTokenSubject string,
@@ -682,9 +715,6 @@ func validateAuthcodeStorage(
 	wantDownstreamRequestedScopes []string,
 ) (*fosite.Request, *openid.DefaultSession) {
 	t.Helper()
-
-	// One authcode should have been stored.
-	require.Len(t, oauthStore.AuthorizeCodes, 1)
 
 	// Get the authcode session back from storage so we can require that it was stored correctly.
 	storedAuthorizeRequestFromAuthcode, err := oauthStore.GetAuthorizeCodeSession(context.Background(), storeKey, nil)
@@ -725,7 +755,7 @@ func validateAuthcodeStorage(
 	require.Equal(t, wantDownstreamIDTokenSubject, actualClaims.Subject)
 	if wantDownstreamIDTokenGroups != nil {
 		require.Len(t, actualClaims.Extra, 1)
-		require.Equal(t, wantDownstreamIDTokenGroups, actualClaims.Extra["groups"])
+		require.ElementsMatch(t, wantDownstreamIDTokenGroups, actualClaims.Extra["groups"])
 	} else {
 		require.Empty(t, actualClaims.Extra)
 		require.NotContains(t, actualClaims.Extra, "groups")
@@ -760,7 +790,7 @@ func validateAuthcodeStorage(
 
 func validatePKCEStorage(
 	t *testing.T,
-	oauthStore *storage.MemoryStore,
+	oauthStore *oidc.KubeStorage,
 	storeKey string,
 	storedRequestFromAuthcode *fosite.Request,
 	storedSessionFromAuthcode *openid.DefaultSession,
@@ -768,8 +798,6 @@ func validatePKCEStorage(
 ) {
 	t.Helper()
 
-	// One PKCE should have been stored.
-	require.Len(t, oauthStore.PKCES, 1)
 	storedAuthorizeRequestFromPKCE, err := oauthStore.GetPKCERequestSession(context.Background(), storeKey, nil)
 	require.NoError(t, err)
 
@@ -787,33 +815,26 @@ func validatePKCEStorage(
 
 func validateIDSessionStorage(
 	t *testing.T,
-	oauthStore *storage.MemoryStore,
+	oauthStore *oidc.KubeStorage,
 	storeKey string,
 	storedRequestFromAuthcode *fosite.Request,
 	storedSessionFromAuthcode *openid.DefaultSession,
-	wantGrantedOpenidScope bool,
 	wantDownstreamNonce string,
 ) {
 	t.Helper()
 
-	// One IDSession should have been stored, if the downstream actually requested the "openid" scope..
-	if wantGrantedOpenidScope {
-		require.Len(t, oauthStore.IDSessions, 1)
-		storedAuthorizeRequestFromIDSession, err := oauthStore.GetOpenIDConnectSession(context.Background(), storeKey, nil)
-		require.NoError(t, err)
+	storedAuthorizeRequestFromIDSession, err := oauthStore.GetOpenIDConnectSession(context.Background(), storeKey, nil)
+	require.NoError(t, err)
 
-		// Check that storage returned the expected concrete data types.
-		storedRequestFromIDSession, storedSessionFromIDSession := castStoredAuthorizeRequest(t, storedAuthorizeRequestFromIDSession)
+	// Check that storage returned the expected concrete data types.
+	storedRequestFromIDSession, storedSessionFromIDSession := castStoredAuthorizeRequest(t, storedAuthorizeRequestFromIDSession)
 
-		// The stored IDSession request should be the same as the stored authcode request.
-		require.Equal(t, storedRequestFromAuthcode.ID, storedRequestFromIDSession.ID)
-		require.Equal(t, storedSessionFromAuthcode, storedSessionFromIDSession)
+	// The stored IDSession request should be the same as the stored authcode request.
+	require.Equal(t, storedRequestFromAuthcode.ID, storedRequestFromIDSession.ID)
+	require.Equal(t, storedSessionFromAuthcode, storedSessionFromIDSession)
 
-		// The stored IDSession request should also contain the nonce that the downstream sent us.
-		require.Equal(t, wantDownstreamNonce, storedRequestFromIDSession.Form.Get("nonce"))
-	} else {
-		require.Len(t, oauthStore.IDSessions, 0)
-	}
+	// The stored IDSession request should also contain the nonce that the downstream sent us.
+	require.Equal(t, wantDownstreamNonce, storedRequestFromIDSession.Form.Get("nonce"))
 }
 
 func castStoredAuthorizeRequest(t *testing.T, storedAuthorizeRequest fosite.Requester) (*fosite.Request, *openid.DefaultSession) {

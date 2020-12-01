@@ -301,7 +301,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
 			path:                                   happyGetRequestPath,
-			csrfCookie:                             "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue,
+			csrfCookie:                             "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue + " ",
 			wantStatus:                             http.StatusFound,
 			wantContentType:                        "text/html; charset=utf-8",
 			wantLocationHeader:                     expectedRedirectLocation(expectedUpstreamStateParam(nil, incomingCookieCSRFValue, "")),
@@ -751,7 +751,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		if test.wantCSRFValueInCookieHeader != "" {
 			require.Len(t, rsp.Header().Values("Set-Cookie"), 1)
 			actualCookie := rsp.Header().Get("Set-Cookie")
-			regex := regexp.MustCompile("__Host-pinniped-csrf=([^;]+); HttpOnly; Secure; SameSite=Strict")
+			regex := regexp.MustCompile("__Host-pinniped-csrf=([^;]+); Path=/; HttpOnly; Secure; SameSite=Strict")
 			submatches := regex.FindStringSubmatch(actualCookie)
 			require.Len(t, submatches, 2)
 			captured := submatches[1]

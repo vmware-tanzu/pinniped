@@ -25,6 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
+
+	"go.pinniped.dev/internal/fositestorage"
 )
 
 func TestAuthorizeCodeStorage(t *testing.T) {
@@ -188,7 +190,7 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 	validSession := NewValidEmptyAuthorizeCodeSession()
 
 	// sanity check our valid session
-	extractedRequest, err := validateAndExtractAuthorizeRequest(validSession.Request)
+	extractedRequest, err := fositestorage.ValidateAndExtractAuthorizeRequest(validSession.Request)
 	require.NoError(t, err)
 	require.Equal(t, validSession.Request, extractedRequest)
 

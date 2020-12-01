@@ -10,14 +10,17 @@ import (
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/handler/pkce"
+	"k8s.io/apimachinery/pkg/api/errors"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/crud"
+	"go.pinniped.dev/internal/fositestorage"
 )
 
 const (
-	ErrInvalidPKCERequestType = constable.Error("requester must be of type fosite.Request")
+	ErrInvalidPKCERequestVersion = constable.Error("pkce request data has wrong version")
+	ErrInvalidPKCERequestData    = constable.Error("pkce request data must be present")
 
 	pkceStorageVersion = "1"
 )
@@ -37,9 +40,8 @@ func New(secrets corev1client.SecretInterface) pkce.PKCERequestStorage {
 	return &pkceStorage{storage: crud.New("pkce", secrets)}
 }
 
-// TODO test what happens when we pass nil as the requester.
 func (a *pkceStorage) CreatePKCERequestSession(ctx context.Context, signature string, requester fosite.Requester) error {
-	request, err := validateAndExtractAuthorizeRequest(requester)
+	request, err := fositestorage.ValidateAndExtractAuthorizeRequest(requester)
 	if err != nil {
 		return err
 	}
@@ -66,25 +68,22 @@ func (a *pkceStorage) getSession(ctx context.Context, signature string) (*sessio
 	session := newValidEmptyPKCESession()
 	rv, err := a.storage.Get(ctx, signature, session)
 
-	// TODO we do want this
-	// if errors.IsNotFound(err) {
-	// 	return nil, "", fosite.ErrNotFound.WithCause(err).WithDebug(err.Error())
-	// }
-
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to get authorization code session for %s: %w", signature, err)
+	if errors.IsNotFound(err) {
+		return nil, "", fosite.ErrNotFound.WithCause(err).WithDebug(err.Error())
 	}
 
-	// TODO we probably want this
-	// if version := session.Version; version != pkceStorageVersion {
-	// 	return nil, "", fmt.Errorf("%w: authorization code session for %s has version %s instead of %s",
-	// 		ErrInvalidAuthorizeRequestVersion, signature, version, pkceStorageVersion)
-	// }
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get pkce session for %s: %w", signature, err)
+	}
 
-	// TODO maybe we want this. it would only apply when a human has edited the secret.
-	// if session.Request == nil {
-	// 	return nil, "", fmt.Errorf("malformed authorization code session for %s: %w", signature, ErrInvalidAuthorizeRequestData)
-	// }
+	if version := session.Version; version != pkceStorageVersion {
+		return nil, "", fmt.Errorf("%w: pkce session for %s has version %s instead of %s",
+			ErrInvalidPKCERequestVersion, signature, version, pkceStorageVersion)
+	}
+
+	if session.Request.ID == "" {
+		return nil, "", fmt.Errorf("malformed pkce session for %s: %w", signature, ErrInvalidPKCERequestData)
+	}
 
 	return session, rv, nil
 }
@@ -96,20 +95,4 @@ func newValidEmptyPKCESession() *session {
 			Session: &openid.DefaultSession{},
 		},
 	}
-}
-
-func validateAndExtractAuthorizeRequest(requester fosite.Requester) (*fosite.Request, error) {
-	request, ok1 := requester.(*fosite.Request)
-	if !ok1 {
-		return nil, ErrInvalidPKCERequestType
-	}
-	_, ok2 := request.Client.(*fosite.DefaultOpenIDConnectClient)
-	_, ok3 := request.Session.(*openid.DefaultSession)
-
-	valid := ok2 && ok3
-	if !valid {
-		return nil, ErrInvalidPKCERequestType
-	}
-
-	return request, nil
 }

@@ -16,10 +16,10 @@ import (
 
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/crud"
+	"go.pinniped.dev/internal/fositestorage"
 )
 
 const (
-	ErrInvalidAuthorizeRequestType    = constable.Error("authorization request must be of type fosite.Request")
 	ErrInvalidAuthorizeRequestData    = constable.Error("authorization request data must not be nil")
 	ErrInvalidAuthorizeRequestVersion = constable.Error("authorization request data has wrong version")
 
@@ -46,7 +46,7 @@ func (a *authorizeCodeStorage) CreateAuthorizeCodeSession(ctx context.Context, s
 	// This conversion assumes that we do not wrap the default type in any way
 	// i.e. we use the default fosite.OAuth2Provider.NewAuthorizeRequest implementation
 	// note that because this type is serialized and stored in Kube, we cannot easily change the implementation later
-	request, err := validateAndExtractAuthorizeRequest(requester)
+	request, err := fositestorage.ValidateAndExtractAuthorizeRequest(requester)
 	if err != nil {
 		return err
 	}
@@ -138,22 +138,6 @@ func NewValidEmptyAuthorizeCodeSession() *AuthorizeCodeSession {
 			Session: &openid.DefaultSession{},
 		},
 	}
-}
-
-func validateAndExtractAuthorizeRequest(requester fosite.Requester) (*fosite.Request, error) {
-	request, ok1 := requester.(*fosite.Request)
-	if !ok1 {
-		return nil, ErrInvalidAuthorizeRequestType
-	}
-	_, ok2 := request.Client.(*fosite.DefaultOpenIDConnectClient)
-	_, ok3 := request.Session.(*openid.DefaultSession)
-
-	valid := ok2 && ok3
-	if !valid {
-		return nil, ErrInvalidAuthorizeRequestType
-	}
-
-	return request, nil
 }
 
 var _ interface {

@@ -7,6 +7,10 @@ import (
 	"context"
 	"time"
 
+	fositepkce "github.com/ory/fosite/handler/pkce"
+
+	"go.pinniped.dev/internal/fositestorage/pkce"
+
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/oauth2"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -19,10 +23,14 @@ const errKubeStorageNotImplemented = constable.Error("KubeStorage does not imple
 
 type KubeStorage struct {
 	authorizationCodeStorage oauth2.AuthorizeCodeStorage
+	pkceStorage              fositepkce.PKCERequestStorage
 }
 
 func NewKubeStorage(secrets corev1client.SecretInterface) *KubeStorage {
-	return &KubeStorage{authorizationCodeStorage: authorizationcode.New(secrets)}
+	return &KubeStorage{
+		authorizationCodeStorage: authorizationcode.New(secrets),
+		pkceStorage:              pkce.New(secrets),
+	}
 }
 
 func (KubeStorage) RevokeRefreshToken(_ context.Context, _ string) error {
@@ -69,16 +77,16 @@ func (KubeStorage) DeleteOpenIDConnectSession(_ context.Context, _ string) error
 	return errKubeStorageNotImplemented
 }
 
-func (KubeStorage) GetPKCERequestSession(_ context.Context, _ string, _ fosite.Session) (fosite.Requester, error) {
-	return nil, errKubeStorageNotImplemented
+func (k KubeStorage) GetPKCERequestSession(ctx context.Context, signature string, session fosite.Session) (fosite.Requester, error) {
+	return k.pkceStorage.GetPKCERequestSession(ctx, signature, session)
 }
 
-func (KubeStorage) CreatePKCERequestSession(_ context.Context, _ string, _ fosite.Requester) error {
-	return nil
+func (k KubeStorage) CreatePKCERequestSession(ctx context.Context, signature string, requester fosite.Requester) error {
+	return k.pkceStorage.CreatePKCERequestSession(ctx, signature, requester)
 }
 
-func (KubeStorage) DeletePKCERequestSession(_ context.Context, _ string) error {
-	return errKubeStorageNotImplemented
+func (k KubeStorage) DeletePKCERequestSession(ctx context.Context, signature string) error {
+	return k.pkceStorage.DeletePKCERequestSession(ctx, signature)
 }
 
 func (k KubeStorage) CreateAuthorizeCodeSession(ctx context.Context, signature string, r fosite.Requester) (err error) {

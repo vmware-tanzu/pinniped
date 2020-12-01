@@ -89,10 +89,11 @@ func WithContext(ctx context.Context) Option {
 // WithListenPort specifies a TCP listen port on localhost, which will be used for the redirect_uri and to handle the
 // authorization code callback. By default, a random high port will be chosen which requires the authorization server
 // to support wildcard port numbers as described by https://tools.ietf.org/html/rfc8252:
-//    The authorization server MUST allow any port to be specified at the
-//    time of the request for loopback IP redirect URIs, to accommodate
-//    clients that obtain an available ephemeral port from the operating
-//    system at the time of the request.
+//
+// The authorization server MUST allow any port to be specified at the
+// time of the request for loopback IP redirect URIs, to accommodate
+// clients that obtain an available ephemeral port from the operating
+// system at the time of the request.
 func WithListenPort(port uint16) Option {
 	return func(h *handlerState) error {
 		h.listenAddr = fmt.Sprintf("localhost:%d", port)

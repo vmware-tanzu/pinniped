@@ -35,7 +35,7 @@ const (
 	UpstreamStateParamEncodingName = "s"
 
 	// CSRFCookieName is the name of the browser cookie which shall hold our CSRF value.
-	// The `__Host` prefix has a special meaning. See
+	// The `__Host` prefix has a special meaning. See:
 	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#Cookie_prefixes.
 	CSRFCookieName = "__Host-pinniped-csrf"
 

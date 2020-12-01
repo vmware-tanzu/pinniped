@@ -33,7 +33,6 @@ func (l *testlogReader) Read(p []byte) (n int, err error) {
 	return
 }
 
-//nolint: gochecknoglobals
 var tokenLike = regexp.MustCompile(`(?mi)[a-zA-Z0-9._-]{30,}|[a-zA-Z0-9]{20,}`)
 
 func maskTokens(in []byte) string {

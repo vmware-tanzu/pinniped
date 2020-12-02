@@ -20,8 +20,8 @@ import (
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
-func New(config *oauth2.Config, provider *oidc.Provider) provider.UpstreamOIDCIdentityProviderI {
-	return &ProviderConfig{Config: config, Provider: provider}
+func New(config *oauth2.Config, provider *oidc.Provider, client *http.Client) provider.UpstreamOIDCIdentityProviderI {
+	return &ProviderConfig{Config: config, Provider: provider, Client: client}
 }
 
 // ProviderConfig holds the active configuration of an upstream OIDC provider.
@@ -33,6 +33,7 @@ type ProviderConfig struct {
 	Provider      interface {
 		Verifier(*oidc.Config) *oidc.IDTokenVerifier
 	}
+	Client *http.Client
 }
 
 func (p *ProviderConfig) GetName() string {
@@ -61,7 +62,7 @@ func (p *ProviderConfig) GetGroupsClaim() string {
 }
 
 func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (oidctypes.Token, map[string]interface{}, error) {
-	tok, err := p.Config.Exchange(ctx, authcode, pkceCodeVerifier.Verifier())
+	tok, err := p.Config.Exchange(oidc.ClientContext(ctx, p.Client), authcode, pkceCodeVerifier.Verifier())
 	if err != nil {
 		return oidctypes.Token{}, nil, err
 	}
@@ -74,7 +75,7 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 	if !hasIDTok {
 		return oidctypes.Token{}, nil, httperr.New(http.StatusBadRequest, "received response missing ID token")
 	}
-	validated, err := p.Provider.Verifier(&oidc.Config{ClientID: p.GetClientID()}).Verify(ctx, idTok)
+	validated, err := p.Provider.Verifier(&oidc.Config{ClientID: p.GetClientID()}).Verify(oidc.ClientContext(ctx, p.Client), idTok)
 	if err != nil {
 		return oidctypes.Token{}, nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
 	}

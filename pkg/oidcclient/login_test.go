@@ -238,7 +238,7 @@ func TestLogin(t *testing.T) {
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.getProvider = func(config *oauth2.Config, o *oidc.Provider) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ValidateToken(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce("")).
@@ -277,7 +277,7 @@ func TestLogin(t *testing.T) {
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.getProvider = func(config *oauth2.Config, o *oidc.Provider) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ValidateToken(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce("")).
@@ -522,7 +522,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			wantHTTPStatus: http.StatusBadRequest,
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "invalid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce")).
@@ -538,7 +538,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			query: "state=test-state&code=valid",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.getProvider = func(config *oauth2.Config, provider *oidc.Provider) provider.UpstreamOIDCIdentityProviderI {
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce")).

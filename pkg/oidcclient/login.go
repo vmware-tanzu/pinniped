@@ -64,7 +64,7 @@ type handlerState struct {
 	generatePKCE  func() (pkce.Code, error)
 	generateNonce func() (nonce.Nonce, error)
 	openURL       func(string) error
-	getProvider   func(*oauth2.Config, *oidc.Provider) provider.UpstreamOIDCIdentityProviderI
+	getProvider   func(*oauth2.Config, *oidc.Provider, *http.Client) provider.UpstreamOIDCIdentityProviderI
 
 	callbacks chan callbackResult
 }
@@ -295,7 +295,7 @@ func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *oidctype
 
 	// The spec is not 100% clear about whether an ID token from the refresh flow should include a nonce, and at least
 	// some providers do not include one, so we skip the nonce validation here (but not other validations).
-	token, _, err := h.getProvider(h.oauth2Config, h.provider).ValidateToken(ctx, refreshed, "")
+	token, _, err := h.getProvider(h.oauth2Config, h.provider, h.httpClient).ValidateToken(ctx, refreshed, "")
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +328,7 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 
 	// Exchange the authorization code for access, ID, and refresh tokens and perform required
 	// validations on the returned ID token.
-	token, _, err := h.getProvider(h.oauth2Config, h.provider).ExchangeAuthcodeAndValidateTokens(r.Context(), params.Get("code"), h.pkce, h.nonce)
+	token, _, err := h.getProvider(h.oauth2Config, h.provider, h.httpClient).ExchangeAuthcodeAndValidateTokens(r.Context(), params.Get("code"), h.pkce, h.nonce)
 	if err != nil {
 		return httperr.Wrap(http.StatusBadRequest, "could not complete code exchange", err)
 	}

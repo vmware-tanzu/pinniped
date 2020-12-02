@@ -156,7 +156,7 @@ func startLocalCallbackServer(t *testing.T) *localCallbackServer {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callbacks <- r
 	}))
-	server.URL = server.URL + "/callback"
+	server.URL += "/callback"
 	t.Cleanup(server.Close)
 	t.Cleanup(func() { close(callbacks) })
 	return &localCallbackServer{Server: server, t: t, callbacks: callbacks}

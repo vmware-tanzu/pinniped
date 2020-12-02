@@ -479,13 +479,18 @@ func TestCallbackEndpoint(t *testing.T) {
 				}
 				require.Len(t, client.Actions(), expectedNumberOfCreatedSecrets)
 
+				actualSecretNames := []string{}
+				for i := range client.Actions() {
+					actualAction := client.Actions()[i].(kubetesting.CreateActionImpl)
+					require.Equal(t, "create", actualAction.GetVerb())
+					require.Equal(t, schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, actualAction.GetResource())
+					actualSecret := actualAction.GetObject().(*corev1.Secret)
+					require.Empty(t, actualSecret.Namespace) // because the secrets client is already scoped to a namespace
+					actualSecretNames = append(actualSecretNames, actualSecret.Name)
+				}
+
 				// One authcode should have been stored.
-				actualAction := client.Actions()[0].(kubetesting.CreateActionImpl)
-				require.Equal(t, "create", actualAction.GetVerb())
-				require.Equal(t, schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, actualAction.GetResource())
-				actualSecret := actualAction.GetObject().(*corev1.Secret)
-				require.True(t, strings.HasPrefix(actualSecret.Name, "pinniped-storage-authcode-"))
-				require.Empty(t, actualSecret.Namespace) // because the secrets client is already scoped to a namespace
+				requireAnyStringHasPrefix(t, actualSecretNames, "pinniped-storage-authcode-")
 
 				storedRequestFromAuthcode, storedSessionFromAuthcode := validateAuthcodeStorage(
 					t,
@@ -498,12 +503,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				)
 
 				// One PKCE should have been stored.
-				actualAction = client.Actions()[1].(kubetesting.CreateActionImpl)
-				require.Equal(t, "create", actualAction.GetVerb())
-				require.Equal(t, schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, actualAction.GetResource())
-				actualSecret = actualAction.GetObject().(*corev1.Secret)
-				require.True(t, strings.HasPrefix(actualSecret.Name, "pinniped-storage-pkce-"))
-				require.Empty(t, actualSecret.Namespace) // because the secrets client is already scoped to a namespace
+				requireAnyStringHasPrefix(t, actualSecretNames, "pinniped-storage-pkce-")
 
 				validatePKCEStorage(
 					t,
@@ -517,12 +517,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 				// One IDSession should have been stored, if the downstream actually requested the "openid" scope
 				if test.wantGrantedOpenidScope {
-					actualAction = client.Actions()[2].(kubetesting.CreateActionImpl)
-					require.Equal(t, "create", actualAction.GetVerb())
-					require.Equal(t, schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, actualAction.GetResource())
-					actualSecret = actualAction.GetObject().(*corev1.Secret)
-					require.True(t, strings.HasPrefix(actualSecret.Name, "pinniped-storage-idsession-"))
-					require.Empty(t, actualSecret.Namespace) // because the secrets client is already scoped to a namespace
+					requireAnyStringHasPrefix(t, actualSecretNames, "pinniped-storage-oidc")
 
 					validateIDSessionStorage(
 						t,
@@ -846,4 +841,16 @@ func castStoredAuthorizeRequest(t *testing.T, storedAuthorizeRequest fosite.Requ
 	require.Truef(t, ok, "could not cast %T to %T", storedAuthorizeRequest.GetSession(), &openid.DefaultSession{})
 
 	return storedRequest, storedSession
+}
+
+func requireAnyStringHasPrefix(t *testing.T, stringList []string, prefix string) {
+	t.Helper()
+
+	containsPrefix := false
+	for i := range stringList {
+		if strings.HasPrefix(stringList[i], prefix) {
+			containsPrefix = true
+		}
+	}
+	require.Truef(t, containsPrefix, "list %v did not contain any strings with prefix %s", stringList, prefix)
 }

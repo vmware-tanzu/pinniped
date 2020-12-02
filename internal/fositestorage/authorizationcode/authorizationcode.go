@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	ErrInvalidAuthorizeRequestData    = constable.Error("authorization request data must not be nil")
+	ErrInvalidAuthorizeRequestData    = constable.Error("authorization request data must be present")
 	ErrInvalidAuthorizeRequestVersion = constable.Error("authorization request data has wrong version")
 
 	authorizeCodeStorageVersion = "1"
@@ -119,7 +119,7 @@ func (a *authorizeCodeStorage) getSession(ctx context.Context, signature string)
 			ErrInvalidAuthorizeRequestVersion, signature, version, authorizeCodeStorageVersion)
 	}
 
-	if session.Request == nil {
+	if session.Request.ID == "" {
 		return nil, "", fmt.Errorf("malformed authorization code session for %s: %w", signature, ErrInvalidAuthorizeRequestData)
 	}
 

@@ -16,8 +16,8 @@ import (
 
 	fuzz "github.com/google/gofuzz"
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
 	corev1 "k8s.io/api/core/v1"
@@ -29,7 +29,9 @@ import (
 	"go.pinniped.dev/internal/fositestorage"
 )
 
-func TestAuthorizeCodeStorage(t *testing.T) {
+const namespace = "test-ns"
+
+func TestAuthorizationCodeStorage(t *testing.T) {
 	ctx := context.Background()
 	secretsGVR := schema.GroupVersionResource{
 		Group:    "",
@@ -37,151 +39,186 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 		Resource: "secrets",
 	}
 
-	const namespace = "test-ns"
-
-	type mocker interface {
-		AddReactor(verb, resource string, reaction coretesting.ReactionFunc)
-		PrependReactor(verb, resource string, reaction coretesting.ReactionFunc)
-		Tracker() coretesting.ObjectTracker
-	}
-
-	tests := []struct {
-		name        string
-		mocks       func(*testing.T, mocker)
-		run         func(*testing.T, oauth2.AuthorizeCodeStorage) error
-		wantActions []coretesting.Action
-		wantSecrets []corev1.Secret
-		wantErr     string
-	}{
-		{
-			name:  "create, get, invalidate standard flow",
-			mocks: nil,
-			run: func(t *testing.T, storage oauth2.AuthorizeCodeStorage) error {
-				request := &fosite.Request{
-					ID:          "abcd-1",
-					RequestedAt: time.Time{},
-					Client: &fosite.DefaultOpenIDConnectClient{
-						DefaultClient: &fosite.DefaultClient{
-							ID:            "pinny",
-							Secret:        nil,
-							RedirectURIs:  nil,
-							GrantTypes:    nil,
-							ResponseTypes: nil,
-							Scopes:        nil,
-							Audience:      nil,
-							Public:        true,
-						},
-						JSONWebKeysURI:                    "where",
-						JSONWebKeys:                       nil,
-						TokenEndpointAuthMethod:           "something",
-						RequestURIs:                       nil,
-						RequestObjectSigningAlgorithm:     "",
-						TokenEndpointAuthSigningAlgorithm: "",
-					},
-					RequestedScope: nil,
-					GrantedScope:   nil,
-					Form:           url.Values{"key": []string{"val"}},
-					Session: &openid.DefaultSession{
-						Claims:    nil,
-						Headers:   nil,
-						ExpiresAt: nil,
-						Username:  "snorlax",
-						Subject:   "panda",
-					},
-					RequestedAudience: nil,
-					GrantedAudience:   nil,
-				}
-				err := storage.CreateAuthorizeCodeSession(ctx, "fancy-signature", request)
-				require.NoError(t, err)
-
-				newRequest, err := storage.GetAuthorizeCodeSession(ctx, "fancy-signature", nil)
-				require.NoError(t, err)
-				require.Equal(t, request, newRequest)
-
-				return storage.InvalidateAuthorizeCodeSession(ctx, "fancy-signature")
-			},
-			wantActions: []coretesting.Action{
-				coretesting.NewCreateAction(secretsGVR, namespace, &corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
-						ResourceVersion: "",
-						Labels: map[string]string{
-							"storage.pinniped.dev": "authcode",
-						},
-					},
-					Data: map[string][]byte{
-						"pinniped-storage-data":    []byte(`{"active":true,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
-						"pinniped-storage-version": []byte("1"),
-					},
-					Type: "storage.pinniped.dev/authcode",
-				}),
-				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authcode-pwu5zs7lekbhnln2w4"),
-				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authcode-pwu5zs7lekbhnln2w4"),
-				coretesting.NewUpdateAction(secretsGVR, namespace, &corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
-						ResourceVersion: "",
-						Labels: map[string]string{
-							"storage.pinniped.dev": "authcode",
-						},
-					},
-					Data: map[string][]byte{
-						"pinniped-storage-data":    []byte(`{"active":false,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
-						"pinniped-storage-version": []byte("1"),
-					},
-					Type: "storage.pinniped.dev/authcode",
-				}),
-			},
-			wantSecrets: []corev1.Secret{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
-						Namespace:       namespace,
-						ResourceVersion: "",
-						Labels: map[string]string{
-							"storage.pinniped.dev": "authcode",
-						},
-					},
-					Data: map[string][]byte{
-						"pinniped-storage-data":    []byte(`{"active":false,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
-						"pinniped-storage-version": []byte("1"),
-					},
-					Type: "storage.pinniped.dev/authcode",
+	wantActions := []coretesting.Action{
+		coretesting.NewCreateAction(secretsGVR, namespace, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
+				ResourceVersion: "",
+				Labels: map[string]string{
+					"storage.pinniped.dev": "authcode",
 				},
 			},
-			wantErr: "",
+			Data: map[string][]byte{
+				"pinniped-storage-data":    []byte(`{"active":true,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
+				"pinniped-storage-version": []byte("1"),
+			},
+			Type: "storage.pinniped.dev/authcode",
+		}),
+		coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authcode-pwu5zs7lekbhnln2w4"),
+		coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authcode-pwu5zs7lekbhnln2w4"),
+		coretesting.NewUpdateAction(secretsGVR, namespace, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
+				ResourceVersion: "",
+				Labels: map[string]string{
+					"storage.pinniped.dev": "authcode",
+				},
+			},
+			Data: map[string][]byte{
+				"pinniped-storage-data":    []byte(`{"active":false,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
+				"pinniped-storage-version": []byte("1"),
+			},
+			Type: "storage.pinniped.dev/authcode",
+		}),
+	}
+
+	client := fake.NewSimpleClientset()
+	secrets := client.CoreV1().Secrets(namespace)
+	storage := New(secrets)
+
+	request := &fosite.Request{
+		ID:          "abcd-1",
+		RequestedAt: time.Time{},
+		Client: &fosite.DefaultOpenIDConnectClient{
+			DefaultClient: &fosite.DefaultClient{
+				ID:            "pinny",
+				Secret:        nil,
+				RedirectURIs:  nil,
+				GrantTypes:    nil,
+				ResponseTypes: nil,
+				Scopes:        nil,
+				Audience:      nil,
+				Public:        true,
+			},
+			JSONWebKeysURI:                    "where",
+			JSONWebKeys:                       nil,
+			TokenEndpointAuthMethod:           "something",
+			RequestURIs:                       nil,
+			RequestObjectSigningAlgorithm:     "",
+			TokenEndpointAuthSigningAlgorithm: "",
 		},
+		RequestedScope: nil,
+		GrantedScope:   nil,
+		Form:           url.Values{"key": []string{"val"}},
+		Session: &openid.DefaultSession{
+			Claims:    nil,
+			Headers:   nil,
+			ExpiresAt: nil,
+			Username:  "snorlax",
+			Subject:   "panda",
+		},
+		RequestedAudience: nil,
+		GrantedAudience:   nil,
 	}
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	err := storage.CreateAuthorizeCodeSession(ctx, "fancy-signature", request)
+	require.NoError(t, err)
 
-			client := fake.NewSimpleClientset()
-			if tt.mocks != nil {
-				tt.mocks(t, client)
-			}
-			secrets := client.CoreV1().Secrets(namespace)
-			storage := New(secrets)
+	newRequest, err := storage.GetAuthorizeCodeSession(ctx, "fancy-signature", nil)
+	require.NoError(t, err)
+	require.Equal(t, request, newRequest)
 
-			err := tt.run(t, storage)
+	err = storage.InvalidateAuthorizeCodeSession(ctx, "fancy-signature")
+	require.NoError(t, err)
 
-			require.Equal(t, tt.wantErr, errString(err))
-			require.Equal(t, tt.wantActions, client.Actions())
-
-			actualSecrets, err := secrets.List(ctx, metav1.ListOptions{})
-			require.NoError(t, err)
-			require.Equal(t, tt.wantSecrets, actualSecrets.Items)
-		})
-	}
+	require.Equal(t, wantActions, client.Actions())
 }
 
-func errString(err error) string {
-	if err == nil {
-		return ""
+func TestGetNotFound(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	secrets := client.CoreV1().Secrets(namespace)
+	storage := New(secrets)
+
+	_, notFoundErr := storage.GetAuthorizeCodeSession(ctx, "non-existent-signature", nil)
+	require.EqualError(t, notFoundErr, "not_found")
+	require.True(t, errors.Is(notFoundErr, fosite.ErrNotFound))
+}
+
+func TestWrongVersion(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	secrets := client.CoreV1().Secrets(namespace)
+	storage := New(secrets)
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
+			ResourceVersion: "",
+			Labels: map[string]string{
+				"storage.pinniped.dev": "authcode",
+			},
+		},
+		Data: map[string][]byte{
+			"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"not-the-right-version", "active": true}`),
+			"pinniped-storage-version": []byte("1"),
+		},
+		Type: "storage.pinniped.dev/authcode",
+	}
+	_, err := secrets.Create(ctx, secret, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	_, err = storage.GetAuthorizeCodeSession(ctx, "fancy-signature", nil)
+
+	require.EqualError(t, err, "authorization request data has wrong version: authorization code session for fancy-signature has version not-the-right-version instead of 1")
+}
+
+func TestNilSessionRequest(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	secrets := client.CoreV1().Secrets(namespace)
+	storage := New(secrets)
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
+			ResourceVersion: "",
+			Labels: map[string]string{
+				"storage.pinniped.dev": "authcode",
+			},
+		},
+		Data: map[string][]byte{
+			"pinniped-storage-data":    []byte(`{"nonsense-key": "nonsense-value", "version":"1", "active": true}`),
+			"pinniped-storage-version": []byte("1"),
+		},
+		Type: "storage.pinniped.dev/authcode",
 	}
 
-	return err.Error()
+	_, err := secrets.Create(ctx, secret, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	_, err = storage.GetAuthorizeCodeSession(ctx, "fancy-signature", nil)
+	require.EqualError(t, err, "malformed authorization code session for fancy-signature: authorization request data must be present")
+}
+
+func TestCreateWithNilRequester(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	secrets := client.CoreV1().Secrets(namespace)
+	storage := New(secrets)
+
+	err := storage.CreateAuthorizeCodeSession(ctx, "signature-doesnt-matter", nil)
+	require.EqualError(t, err, "requester must be of type fosite.Request")
+}
+
+func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	secrets := client.CoreV1().Secrets(namespace)
+	storage := New(secrets)
+
+	request := &fosite.Request{
+		Session: nil,
+		Client:  &fosite.DefaultOpenIDConnectClient{},
+	}
+	err := storage.CreateAuthorizeCodeSession(ctx, "signature-doesnt-matter", request)
+	require.EqualError(t, err, "requester's session must be of type openid.DefaultSession")
+
+	request = &fosite.Request{
+		Session: &openid.DefaultSession{},
+		Client:  nil,
+	}
+	err = storage.CreateAuthorizeCodeSession(ctx, "signature-doesnt-matter", request)
+	require.EqualError(t, err, "requester's client must be of type fosite.DefaultOpenIDConnectClient")
 }
 
 // TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession asserts that we can correctly round trip our authorize code session.

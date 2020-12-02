@@ -7,16 +7,16 @@ import (
 	"context"
 	"time"
 
-	fositepkce "github.com/ory/fosite/handler/pkce"
-
-	"go.pinniped.dev/internal/fositestorage/pkce"
-
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/oauth2"
+	"github.com/ory/fosite/handler/openid"
+	fositepkce "github.com/ory/fosite/handler/pkce"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
+	"go.pinniped.dev/internal/fositestorage/openidconnect"
+	"go.pinniped.dev/internal/fositestorage/pkce"
 )
 
 const errKubeStorageNotImplemented = constable.Error("KubeStorage does not implement this method. It should not have been called.")
@@ -24,12 +24,14 @@ const errKubeStorageNotImplemented = constable.Error("KubeStorage does not imple
 type KubeStorage struct {
 	authorizationCodeStorage oauth2.AuthorizeCodeStorage
 	pkceStorage              fositepkce.PKCERequestStorage
+	oidcStorage              openid.OpenIDConnectRequestStorage
 }
 
 func NewKubeStorage(secrets corev1client.SecretInterface) *KubeStorage {
 	return &KubeStorage{
 		authorizationCodeStorage: authorizationcode.New(secrets),
 		pkceStorage:              pkce.New(secrets),
+		oidcStorage:              openidconnect.New(secrets),
 	}
 }
 
@@ -65,16 +67,16 @@ func (KubeStorage) DeleteAccessTokenSession(_ context.Context, _ string) (err er
 	return errKubeStorageNotImplemented
 }
 
-func (KubeStorage) CreateOpenIDConnectSession(_ context.Context, _ string, _ fosite.Requester) error {
-	return nil
+func (k KubeStorage) CreateOpenIDConnectSession(ctx context.Context, authcode string, requester fosite.Requester) error {
+	return k.oidcStorage.CreateOpenIDConnectSession(ctx, authcode, requester)
 }
 
-func (KubeStorage) GetOpenIDConnectSession(_ context.Context, _ string, _ fosite.Requester) (fosite.Requester, error) {
-	return nil, errKubeStorageNotImplemented
+func (k KubeStorage) GetOpenIDConnectSession(ctx context.Context, authcode string, requester fosite.Requester) (fosite.Requester, error) {
+	return k.oidcStorage.GetOpenIDConnectSession(ctx, authcode, requester)
 }
 
-func (KubeStorage) DeleteOpenIDConnectSession(_ context.Context, _ string) error {
-	return errKubeStorageNotImplemented
+func (k KubeStorage) DeleteOpenIDConnectSession(ctx context.Context, authcode string) error {
+	return k.oidcStorage.DeleteOpenIDConnectSession(ctx, authcode)
 }
 
 func (k KubeStorage) GetPKCERequestSession(ctx context.Context, signature string, session fosite.Session) (fosite.Requester, error) {

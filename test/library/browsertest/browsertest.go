@@ -15,6 +15,11 @@ import (
 	"go.pinniped.dev/test/library"
 )
 
+const (
+	operationTimeout         = 10 * time.Second
+	operationPollingInterval = 100 * time.Millisecond
+)
+
 // Open a webdriver-driven browser and returns an *agouti.Page to control it. The browser  will be automatically
 // closed at the end of the current test. It is configured for test purposes with the correct HTTP proxy and
 // in a mode that ignore certificate errors.
@@ -53,7 +58,8 @@ func Open(t *testing.T) *agouti.Page {
 // to occur and times out, failing the test, if they never appear.
 func WaitForVisibleElements(t *testing.T, page *agouti.Page, selectors ...string) {
 	t.Helper()
-	require.Eventually(t,
+
+	require.Eventuallyf(t,
 		func() bool {
 			for _, sel := range selectors {
 				vis, err := page.First(sel).Visible()
@@ -63,8 +69,10 @@ func WaitForVisibleElements(t *testing.T, page *agouti.Page, selectors ...string
 			}
 			return true
 		},
-		10*time.Second,
-		100*time.Millisecond,
+		operationTimeout,
+		operationPollingInterval,
+		"expected to have a page with selectors %v, but it never loaded",
+		selectors,
 	)
 }
 
@@ -84,8 +92,8 @@ func WaitForURL(t *testing.T, page *agouti.Page, pat *regexp.Regexp) {
 			}
 			return false
 		},
-		10*time.Second,
-		100*time.Millisecond,
+		operationTimeout,
+		operationPollingInterval,
 		"expected to browse to %s, but never got there",
 		pat,
 	)

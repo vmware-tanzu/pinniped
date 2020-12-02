@@ -230,6 +230,7 @@ if ! tilt_mode; then
     --data-value-yaml 'service_http_nodeport_nodeport=31234' \
     --data-value-yaml 'service_https_nodeport_port=443' \
     --data-value-yaml 'service_https_nodeport_nodeport=31243' \
+    --data-value-yaml 'service_https_clusterip_port=443' \
     >"$manifest"
 
   kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
@@ -302,7 +303,7 @@ export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER=https://dex.dex.svc.cluster
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER_CA_BUNDLE="${test_ca_bundle_pem}"
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CLIENT_ID=pinniped-supervisor
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CLIENT_SECRET=pinniped-supervisor-secret
-export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CALLBACK_URL=https://127.0.0.1:12345/some/path/callback
+export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CALLBACK_URL=https://pinniped-supervisor-clusterip.supervisor.svc.cluster.local/some/path/callback
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME=pinny@example.com
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD=password
 

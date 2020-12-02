@@ -28,8 +28,7 @@ staticClients:
   name: 'Pinniped Supervisor'
   secret: pinniped-supervisor-secret
   redirectURIs:
-    - #@ "http://127.0.0.1:" + str(data.values.ports.cli) + "/callback"
-    - #@ "http://[::1]:" + str(data.values.ports.cli) + "/callback"
+  - https://pinniped-supervisor-clusterip.supervisor.svc.cluster.local/some/path/callback
 enablePasswordDB: true
 staticPasswords:
 - username: "pinny"

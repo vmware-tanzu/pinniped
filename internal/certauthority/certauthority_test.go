@@ -182,6 +182,16 @@ func TestBundle(t *testing.T) {
 	})
 }
 
+func TestPool(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		ca, err := New(pkix.Name{CommonName: "test"}, 1*time.Hour)
+		require.NoError(t, err)
+
+		got := ca.Pool()
+		require.Len(t, got.Subjects(), 1)
+	})
+}
+
 type errSigner struct {
 	pubkey crypto.PublicKey
 	err    error

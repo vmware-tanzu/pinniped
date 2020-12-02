@@ -92,10 +92,10 @@ func TestSupervisorLogin(t *testing.T) {
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
 			},
 			Client: idpv1alpha1.OIDCClient{
-				SecretName: makeTestClientCredsSecret(t, env.SupervisorTestUpstream.ClientID, env.SupervisorTestUpstream.ClientSecret).Name,
+				SecretName: library.CreateClientCredsSecret(t, env.SupervisorTestUpstream.ClientID, env.SupervisorTestUpstream.ClientSecret).Name,
 			},
 		}
-		upstream := makeTestUpstream(t, spec, idpv1alpha1.PhaseReady)
+		upstream := library.CreateTestUpstreamOIDCProvider(t, spec, idpv1alpha1.PhaseReady)
 
 		// Make request to authorize endpoint - should pass, since we now have an upstream.
 		req, err = http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthURL, nil)

@@ -30,6 +30,7 @@ func TestNullStorage_GetClient(t *testing.T) {
 				GrantTypes:    []string{"authorization_code"},
 				Scopes:        []string{"openid", "profile", "email"},
 			},
+			TokenEndpointAuthMethod: "none",
 		},
 		client,
 	)

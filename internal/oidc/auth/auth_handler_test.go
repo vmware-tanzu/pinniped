@@ -4,6 +4,7 @@
 package auth
 
 import (
+	"crypto/ecdsa"
 	"fmt"
 	"html"
 	"mime"
@@ -124,8 +125,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	// Configure fosite the same way that the production code would, except use in-memory storage.
 	oauthStore := oidc.NullStorage{}
 	hmacSecret := []byte("some secret - must have at least 32 bytes")
+	var signingKeyIsUnused *ecdsa.PrivateKey
 	require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
-	oauthHelper := oidc.FositeOauth2Helper(issuer, oauthStore, hmacSecret)
+	oauthHelper := oidc.FositeOauth2Helper(issuer, oauthStore, hmacSecret, signingKeyIsUnused)
 
 	happyCSRF := "test-csrf"
 	happyPKCE := "test-pkce"

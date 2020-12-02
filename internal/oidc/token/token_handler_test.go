@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	coreosoidc "github.com/coreos/go-oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/storage"
@@ -360,7 +361,7 @@ func TestTokenEndpoint(t *testing.T) {
 			}
 
 			oauthStore := storage.NewMemoryStore()
-			oauthHelper, authCode := makeHappyOauthHelper(t, authRequest, oauthStore)
+			oauthHelper, authCode, jwtSigningKey := makeHappyOauthHelper(t, authRequest, oauthStore)
 			if test.storage != nil {
 				test.storage(t, oauthStore, authCode)
 			}
@@ -390,6 +391,10 @@ func TestTokenEndpoint(t *testing.T) {
 				requireValidAccessTokenStorage(t, m, oauthStore, wantOpenidScope)
 				requireInvalidPKCEStorage(t, code, oauthStore)
 				requireValidOIDCStorage(t, m, code, oauthStore, wantOpenidScope)
+
+				if wantOpenidScope {
+					requireValidIDToken(t, m, jwtSigningKey)
+				}
 			} else {
 				require.JSONEq(t, test.wantExactBody, rsp.Body.String())
 			}
@@ -399,7 +404,7 @@ func TestTokenEndpoint(t *testing.T) {
 	t.Run("auth code is used twice", func(t *testing.T) {
 		authRequest := deepCopyRequestForm(happyAuthRequest)
 		oauthStore := storage.NewMemoryStore()
-		oauthHelper, authCode := makeHappyOauthHelper(t, authRequest, oauthStore)
+		oauthHelper, authCode, jwtSigningKey := makeHappyOauthHelper(t, authRequest, oauthStore)
 		subject := NewHandler(oauthHelper)
 
 		req := httptest.NewRequest("POST", "/path/shouldn't/matter", happyBody(authCode).ReadCloser())
@@ -425,6 +430,7 @@ func TestTokenEndpoint(t *testing.T) {
 		requireValidAccessTokenStorage(t, m, oauthStore, wantOpenidScope)
 		requireInvalidPKCEStorage(t, code, oauthStore)
 		requireValidOIDCStorage(t, m, code, oauthStore, wantOpenidScope)
+		requireValidIDToken(t, m, jwtSigningKey)
 
 		// Second call - should be unsuccessful since auth code was already used.
 		//
@@ -503,7 +509,7 @@ func makeHappyOauthHelper(
 	t *testing.T,
 	authRequest *http.Request,
 	store *storage.MemoryStore,
-) (fosite.OAuth2Provider, string) {
+) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
 	t.Helper()
 
 	jwtSigningKey := generateJWTSigningKey(t)
@@ -533,7 +539,7 @@ func makeHappyOauthHelper(
 	authResponder, err := oauthHelper.NewAuthorizeResponse(ctx, authRequester, session)
 	require.NoError(t, err)
 
-	return oauthHelper, authResponder.GetCode()
+	return oauthHelper, authResponder.GetCode(), jwtSigningKey
 }
 
 func generateJWTSigningKey(t *testing.T) *ecdsa.PrivateKey {
@@ -763,6 +769,23 @@ func requireValidAuthRequest(
 	// Assert that the session's username and subject are correct.
 	require.Equal(t, goodUsername, session.Username)
 	require.Equal(t, goodSubject, session.Subject)
+}
+
+func requireValidIDToken(t *testing.T, body map[string]interface{}, jwtSigningKey *ecdsa.PrivateKey) {
+	idToken, ok := body["id_token"]
+	require.Truef(t, ok, "body did not contain 'id_token': %s", body)
+	idTokenString, ok := idToken.(string)
+	require.Truef(t, ok, "wanted id_token to be a string, but got %T", idToken)
+
+	// The go-oidc library will validate the signature and the client claim in the ID token.
+	keySet := newStaticKeySet(jwtSigningKey) // TODO: implement this static key set
+	verifyConfig := coreosoidc.Config{ClientID: goodClient, SupportedSigningAlgs: []string{coreosoidc.ES256}}
+	verifier := coreosoidc.NewVerifier(goodIssuer, keySet, &verifyConfig)
+	token, err := verifier.Verify(context.Background(), idTokenString)
+	require.NoError(t, err)
+
+	// TODO: we will need to validate all of the other claims!
+	_ = token
 }
 
 // TODO: de-dup me.

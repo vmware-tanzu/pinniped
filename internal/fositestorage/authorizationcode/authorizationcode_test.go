@@ -8,11 +8,15 @@ import (
 	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	fuzz "github.com/google/gofuzz"
 	"github.com/ory/fosite"
@@ -24,7 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
-	coretesting "k8s.io/client-go/testing"
+	kubetesting "k8s.io/client-go/testing"
 
 	"go.pinniped.dev/internal/fositestorage"
 )
@@ -39,8 +43,8 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 		Resource: "secrets",
 	}
 
-	wantActions := []coretesting.Action{
-		coretesting.NewCreateAction(secretsGVR, namespace, &corev1.Secret{
+	wantActions := []kubetesting.Action{
+		kubetesting.NewCreateAction(secretsGVR, namespace, &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
 				ResourceVersion: "",
@@ -54,9 +58,9 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 			},
 			Type: "storage.pinniped.dev/authcode",
 		}),
-		coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authcode-pwu5zs7lekbhnln2w4"),
-		coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authcode-pwu5zs7lekbhnln2w4"),
-		coretesting.NewUpdateAction(secretsGVR, namespace, &corev1.Secret{
+		kubetesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authcode-pwu5zs7lekbhnln2w4"),
+		kubetesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authcode-pwu5zs7lekbhnln2w4"),
+		kubetesting.NewUpdateAction(secretsGVR, namespace, &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
 				ResourceVersion: "",
@@ -121,6 +125,11 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, wantActions, client.Actions())
+
+	// Doing a Get on an invalidated session should still return the session, but also return an error.
+	invalidatedRequest, err := storage.GetAuthorizeCodeSession(ctx, "fancy-signature", nil)
+	require.EqualError(t, err, "authorization code session for fancy-signature has already been used: Authorization code has ben invalidated")
+	require.Equal(t, "abcd-1", invalidatedRequest.GetID())
 }
 
 func TestGetNotFound(t *testing.T) {
@@ -132,6 +141,41 @@ func TestGetNotFound(t *testing.T) {
 	_, notFoundErr := storage.GetAuthorizeCodeSession(ctx, "non-existent-signature", nil)
 	require.EqualError(t, notFoundErr, "not_found")
 	require.True(t, errors.Is(notFoundErr, fosite.ErrNotFound))
+}
+
+func TestInvalidateWhenNotFound(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	secrets := client.CoreV1().Secrets(namespace)
+	storage := New(secrets)
+
+	notFoundErr := storage.InvalidateAuthorizeCodeSession(ctx, "non-existent-signature")
+	require.EqualError(t, notFoundErr, "not_found")
+	require.True(t, errors.Is(notFoundErr, fosite.ErrNotFound))
+}
+
+func TestInvalidateWhenConflictOnUpdateHappens(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	secrets := client.CoreV1().Secrets(namespace)
+	storage := New(secrets)
+
+	client.PrependReactor("update", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewConflict(schema.GroupResource{
+			Group:    "",
+			Resource: "secrets",
+		}, "some-secret-name", fmt.Errorf("there was a conflict"))
+	})
+
+	request := &fosite.Request{
+		ID:      "some-request-id",
+		Client:  &fosite.DefaultOpenIDConnectClient{},
+		Session: &openid.DefaultSession{},
+	}
+	err := storage.CreateAuthorizeCodeSession(ctx, "fancy-signature", request)
+	require.NoError(t, err)
+	err = storage.InvalidateAuthorizeCodeSession(ctx, "fancy-signature")
+	require.EqualError(t, err, `The request could not be completed due to concurrent access: failed to update authcode for signature fancy-signature at resource version : Operation cannot be fulfilled on secrets "some-secret-name": there was a conflict`)
 }
 
 func TestWrongVersion(t *testing.T) {

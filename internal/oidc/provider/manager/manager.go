@@ -83,10 +83,25 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 		encoder.SetSerializer(securecookie.JSONEncoder{})
 
 		authURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.AuthorizationEndpointPath
-		m.providerHandlers[authURL] = auth.NewHandler(incomingProvider.Issuer(), m.idpListGetter, oauthHelper, csrftoken.Generate, pkce.Generate, nonce.Generate, encoder, encoder)
+		m.providerHandlers[authURL] = auth.NewHandler(
+			incomingProvider.Issuer(),
+			m.idpListGetter,
+			oauthHelper,
+			csrftoken.Generate,
+			pkce.Generate,
+			nonce.Generate,
+			encoder,
+			encoder,
+		)
 
 		callbackURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.CallbackEndpointPath
-		m.providerHandlers[callbackURL] = callback.NewHandler(m.idpListGetter, oauthHelper, encoder, encoder)
+		m.providerHandlers[callbackURL] = callback.NewHandler(
+			m.idpListGetter,
+			oauthHelper,
+			encoder,
+			encoder,
+			incomingProvider.Issuer()+oidc.CallbackEndpointPath,
+		)
 
 		plog.Debug("oidc provider manager added or updated issuer", "issuer", incomingProvider.Issuer())
 	}

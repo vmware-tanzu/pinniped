@@ -328,7 +328,14 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 
 	// Exchange the authorization code for access, ID, and refresh tokens and perform required
 	// validations on the returned ID token.
-	token, _, err := h.getProvider(h.oauth2Config, h.provider, h.httpClient).ExchangeAuthcodeAndValidateTokens(r.Context(), params.Get("code"), h.pkce, h.nonce)
+	token, _, err := h.getProvider(h.oauth2Config, h.provider, h.httpClient).
+		ExchangeAuthcodeAndValidateTokens(
+			r.Context(),
+			params.Get("code"),
+			h.pkce,
+			h.nonce,
+			h.oauth2Config.RedirectURL,
+		)
 	if err != nil {
 		return httperr.Wrap(http.StatusBadRequest, "could not complete code exchange", err)
 	}

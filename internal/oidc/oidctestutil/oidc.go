@@ -24,6 +24,7 @@ type ExchangeAuthcodeAndValidateTokenArgs struct {
 	Authcode             string
 	PKCECodeVerifier     pkce.Code
 	ExpectedIDTokenNonce nonce.Nonce
+	RedirectURI          string
 }
 
 type TestUpstreamOIDCIdentityProvider struct {
@@ -73,6 +74,7 @@ func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokens(
 	authcode string,
 	pkceCodeVerifier pkce.Code,
 	expectedIDTokenNonce nonce.Nonce,
+	redirectURI string,
 ) (oidctypes.Token, map[string]interface{}, error) {
 	if u.exchangeAuthcodeAndValidateTokensArgs == nil {
 		u.exchangeAuthcodeAndValidateTokensArgs = make([]*ExchangeAuthcodeAndValidateTokenArgs, 0)
@@ -83,6 +85,7 @@ func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokens(
 		Authcode:             authcode,
 		PKCECodeVerifier:     pkceCodeVerifier,
 		ExpectedIDTokenNonce: expectedIDTokenNonce,
+		RedirectURI:          redirectURI,
 	})
 	return u.ExchangeAuthcodeAndValidateTokensFunc(ctx, authcode, pkceCodeVerifier, expectedIDTokenNonce)
 }

@@ -42,6 +42,7 @@ type UpstreamOIDCIdentityProviderI interface {
 		authcode string,
 		pkceCodeVerifier pkce.Code,
 		expectedIDTokenNonce nonce.Nonce,
+		redirectURI string,
 	) (tokens oidctypes.Token, parsedIDTokenClaims map[string]interface{}, err error)
 
 	ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (oidctypes.Token, map[string]interface{}, error)

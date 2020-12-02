@@ -488,6 +488,8 @@ func TestLogin(t *testing.T) {
 }
 
 func TestHandleAuthCodeCallback(t *testing.T) {
+	const testRedirectURI = "http://127.0.0.1:12324/callback"
+
 	tests := []struct {
 		name           string
 		method         string
@@ -522,10 +524,11 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			wantHTTPStatus: http.StatusBadRequest,
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
+					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
 					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
-							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "invalid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce")).
+							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "invalid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
 							Return(oidctypes.Token{}, nil, fmt.Errorf("some exchange error"))
 						return mock
 					}
@@ -538,10 +541,11 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			query: "state=test-state&code=valid",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
+					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
 					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
 						mock := mockUpstream(t)
 						mock.EXPECT().
-							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce")).
+							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
 							Return(oidctypes.Token{IDToken: &oidctypes.IDToken{Token: "test-id-token"}}, nil, nil)
 						return mock
 					}

@@ -61,8 +61,13 @@ func (p *ProviderConfig) GetGroupsClaim() string {
 	return p.GroupsClaim
 }
 
-func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (oidctypes.Token, map[string]interface{}, error) {
-	tok, err := p.Config.Exchange(oidc.ClientContext(ctx, p.Client), authcode, pkceCodeVerifier.Verifier())
+func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce, redirectURI string) (oidctypes.Token, map[string]interface{}, error) {
+	tok, err := p.Config.Exchange(
+		oidc.ClientContext(ctx, p.Client),
+		authcode,
+		pkceCodeVerifier.Verifier(),
+		oauth2.SetAuthURLParam("redirect_uri", redirectURI),
+	)
 	if err != nil {
 		return oidctypes.Token{}, nil, err
 	}

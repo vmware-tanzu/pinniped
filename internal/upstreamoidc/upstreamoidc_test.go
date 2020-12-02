@@ -181,7 +181,7 @@ func TestProviderConfig(t *testing.T) {
 
 			ctx := context.Background()
 
-			tok, claims, err := p.ExchangeAuthcodeAndValidateTokens(ctx, tt.authCode, "test-pkce", tt.expectNonce)
+			tok, claims, err := p.ExchangeAuthcodeAndValidateTokens(ctx, tt.authCode, "test-pkce", tt.expectNonce, "https://example.com/callback")
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				require.Equal(t, oidctypes.Token{}, tok)

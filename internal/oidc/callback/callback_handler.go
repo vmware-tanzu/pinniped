@@ -42,6 +42,7 @@ func NewHandler(
 	idpListGetter oidc.IDPListGetter,
 	oauthHelper fosite.OAuth2Provider,
 	stateDecoder, cookieDecoder oidc.Decoder,
+	redirectURI string,
 ) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		state, err := validateRequest(r, stateDecoder, cookieDecoder)
@@ -77,6 +78,7 @@ func NewHandler(
 			authcode(r),
 			state.PKCECode,
 			state.Nonce,
+			redirectURI,
 		)
 		if err != nil {
 			plog.WarningErr("error exchanging and validating upstream tokens", err, "upstreamName", upstreamIDPConfig.GetName())

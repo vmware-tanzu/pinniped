@@ -43,6 +43,8 @@ const (
 
 	happyUpstreamAuthcode = "upstream-auth-code"
 
+	happyUpstreamRedirectURI = "https://example.com/callback"
+
 	happyDownstreamState        = "some-downstream-state-with-at-least-32-bytes"
 	happyDownstreamCSRF         = "test-csrf"
 	happyDownstreamPKCE         = "test-pkce"
@@ -105,6 +107,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		Authcode:             happyUpstreamAuthcode,
 		PKCECodeVerifier:     pkce.Code(happyDownstreamPKCE),
 		ExpectedIDTokenNonce: nonce.Nonce(happyDownstreamNonce),
+		RedirectURI:          happyUpstreamRedirectURI,
 	}
 
 	// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
@@ -433,7 +436,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecret)
 
 			idpListGetter := oidctestutil.NewIDPListGetter(&test.idp)
-			subject := NewHandler(idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec)
+			subject := NewHandler(idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec, happyUpstreamRedirectURI)
 			req := httptest.NewRequest(test.method, test.path, nil)
 			if test.csrfCookie != "" {
 				req.Header.Set("Cookie", test.csrfCookie)

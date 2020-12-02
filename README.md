@@ -1,4 +1,4 @@
-<img src="doc/img/pinniped_logo.svg" alt="Pinniped Logo" width="100%"/>
+<img src="site/content/docs/img/pinniped_logo.svg" alt="Pinniped Logo" width="100%"/>
 
 ## Overview
 
@@ -30,7 +30,7 @@ distributions to make authentication possible.
 
 To learn more, see [architecture](https://pinniped.dev/docs/architecture/).
 
-<img src="doc/img/pinniped_architecture.svg" alt="Pinniped Architecture Sketch" width="300px"/>
+<img src="site/content/docs/img/pinniped_architecture.svg" alt="Pinniped Architecture Sketch" width="300px"/>
 
 ## Trying Pinniped
 

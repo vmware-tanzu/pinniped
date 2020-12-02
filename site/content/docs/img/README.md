@@ -1,4 +1,4 @@
-# doc/img README
+# site/content/docs/img README
 
 ## How to Update these Images
 

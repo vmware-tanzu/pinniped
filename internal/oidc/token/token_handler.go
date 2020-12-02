@@ -18,8 +18,6 @@ func NewHandler(
 	oauthHelper fosite.OAuth2Provider,
 ) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		// check csrf cookie?
-
 		var session openid.DefaultSession
 		accessRequest, err := oauthHelper.NewAccessRequest(r.Context(), r, &session)
 		if err != nil {
@@ -27,8 +25,6 @@ func NewHandler(
 			oauthHelper.WriteAccessError(w, accessRequest, err)
 			return nil
 		}
-
-		// TODO: do we need to grant the openid scope here? Or should it be already granted?
 
 		accessResponse, err := oauthHelper.NewAccessResponse(r.Context(), accessRequest)
 		if err != nil {

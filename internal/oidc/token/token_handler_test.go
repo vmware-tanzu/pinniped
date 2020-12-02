@@ -50,6 +50,9 @@ const (
 )
 
 var (
+	goodAuthTime        = time.Date(1, 2, 3, 4, 5, 6, 7, time.Local)
+	goodRequestedAtTime = time.Date(7, 6, 5, 4, 3, 2, 1, time.Local)
+
 	fositeInvalidMethodErrorBody = func(actual string) string {
 		return here.Docf(`
 			{
@@ -172,7 +175,7 @@ var (
 )
 
 func TestTokenEndpoint(t *testing.T) {
-	happyAuthRequest := http.Request{
+	happyAuthRequest := &http.Request{
 		Form: url.Values{
 			"response_type":         {"code"},
 			"scope":                 {"openid profile email"},
@@ -236,7 +239,6 @@ func TestTokenEndpoint(t *testing.T) {
 			wantStatus:    http.StatusBadRequest,
 			wantExactBody: fositeInvalidMethodErrorBody("DELETE"),
 		},
-		// TODO: add test for when csrf cookie is invalid...maybe?
 		{
 			name:          "content type is invalid",
 			request:       func(r *http.Request, authCode string) { r.Header.Set("Content-Type", "text/plain") },
@@ -352,13 +354,13 @@ func TestTokenEndpoint(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			authRequest := happyAuthRequest
+			authRequest := deepCopyRequestForm(happyAuthRequest)
 			if test.authRequest != nil {
-				test.authRequest(&authRequest)
+				test.authRequest(authRequest)
 			}
 
 			oauthStore := storage.NewMemoryStore()
-			oauthHelper, authCode := makeHappyOauthHelper(t, &authRequest, oauthStore)
+			oauthHelper, authCode := makeHappyOauthHelper(t, authRequest, oauthStore)
 			if test.storage != nil {
 				test.storage(t, oauthStore, authCode)
 			}
@@ -369,9 +371,6 @@ func TestTokenEndpoint(t *testing.T) {
 			if test.request != nil {
 				test.request(req, authCode)
 			}
-			// if test.csrfCookie != "" {
-			// 	req.Header.Set("Cookie", test.csrfCookie)
-			// }
 			rsp := httptest.NewRecorder()
 
 			subject.ServeHTTP(rsp, req)
@@ -387,9 +386,9 @@ func TestTokenEndpoint(t *testing.T) {
 
 				code := req.PostForm.Get("code")
 				wantOpenidScope := contains(test.wantBodyFields, "id_token")
-				requireValidAuthCodeStorage(t, code, oauthStore)
+				requireInvalidAuthCodeStorage(t, code, oauthStore)
 				requireValidAccessTokenStorage(t, m, oauthStore, wantOpenidScope)
-				requireValidPKCEStorage(t, code, oauthStore)
+				requireInvalidPKCEStorage(t, code, oauthStore)
 				requireValidOIDCStorage(t, m, code, oauthStore, wantOpenidScope)
 			} else {
 				require.JSONEq(t, test.wantExactBody, rsp.Body.String())
@@ -398,25 +397,39 @@ func TestTokenEndpoint(t *testing.T) {
 	}
 
 	t.Run("auth code is used twice", func(t *testing.T) {
-		authRequest := happyAuthRequest
+		authRequest := deepCopyRequestForm(happyAuthRequest)
 		oauthStore := storage.NewMemoryStore()
-		oauthHelper, authCode := makeHappyOauthHelper(t, &authRequest, oauthStore)
+		oauthHelper, authCode := makeHappyOauthHelper(t, authRequest, oauthStore)
 		subject := NewHandler(oauthHelper)
 
 		req := httptest.NewRequest("POST", "/path/shouldn't/matter", happyBody(authCode).ReadCloser())
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		// if test.csrfCookie != "" {
-		// 	req.Header.Set("Cookie", test.csrfCookie)
-		// }
 
 		// First call - should be successful.
 		rsp0 := httptest.NewRecorder()
 		subject.ServeHTTP(rsp0, req)
 		t.Logf("response 0: %#v", rsp0)
 		t.Logf("response 0 body: %q", rsp0.Body.String())
+		requireEqualContentType(t, rsp0.Header().Get("Content-Type"), "application/json")
 		require.Equal(t, http.StatusOK, rsp0.Code)
 
+		var m map[string]interface{}
+		require.NoError(t, json.Unmarshal(rsp0.Body.Bytes(), &m))
+
+		wantBodyFields := []string{"id_token", "access_token", "token_type", "expires_in", "scope"}
+		require.ElementsMatch(t, wantBodyFields, getMapKeys(m))
+
+		code := req.PostForm.Get("code")
+		wantOpenidScope := true
+		requireInvalidAuthCodeStorage(t, code, oauthStore)
+		requireValidAccessTokenStorage(t, m, oauthStore, wantOpenidScope)
+		requireInvalidPKCEStorage(t, code, oauthStore)
+		requireValidOIDCStorage(t, m, code, oauthStore, wantOpenidScope)
+
 		// Second call - should be unsuccessful since auth code was already used.
+		//
+		// Fosite will also revoke the access token as is recommended by the OIDC spec. Currently, we don't
+		// delete the OIDC storage...but we probably should.
 		rsp1 := httptest.NewRecorder()
 		subject.ServeHTTP(rsp1, req)
 		t.Logf("response 1: %#v", rsp1)
@@ -424,6 +437,11 @@ func TestTokenEndpoint(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, rsp1.Code)
 		requireEqualContentType(t, rsp1.Header().Get("Content-Type"), "application/json")
 		require.JSONEq(t, fositeReusedAuthCodeErrorBody, rsp1.Body.String())
+
+		requireInvalidAuthCodeStorage(t, code, oauthStore)
+		requireInvalidAccessTokenStorage(t, m, oauthStore)
+		requireInvalidPKCEStorage(t, code, oauthStore)
+		requireValidOIDCStorage(t, m, code, oauthStore, wantOpenidScope)
 	})
 }
 
@@ -495,10 +513,14 @@ func makeHappyOauthHelper(
 	store.Clients[goodClient] = oidc.PinnipedCLIOIDCClient()
 
 	// Simulate the auth endpoint running so Fosite code will fill the store with realistic values.
+	//
+	// We only set the fields in the session that Fosite wants us to set.
 	ctx := context.Background()
 	session := &openid.DefaultSession{
 		Claims: &jwt.IDTokenClaims{
-			Subject: goodSubject,
+			Subject:     goodSubject,
+			AuthTime:    goodAuthTime,
+			RequestedAt: goodRequestedAtTime,
 		},
 		Subject:  goodSubject,
 		Username: goodUsername,
@@ -536,7 +558,7 @@ func doSHA256(s string) string {
 	return base64.RawURLEncoding.EncodeToString(b[:])
 }
 
-func requireValidAuthCodeStorage(
+func requireInvalidAuthCodeStorage(
 	t *testing.T,
 	code string,
 	storage *storage.MemoryStore,
@@ -585,7 +607,7 @@ func requireValidAccessTokenStorage(
 	if wantGrantedOpenidScope {
 		wantScopes += "openid"
 	}
-	require.Equal(t, wantScopes, scopesString) // TODO: do we need that extra scope that mo put forth?
+	require.Equal(t, wantScopes, scopesString)
 
 	// Fosite stores access tokens without any of the original request form pararmeters.
 	requireValidAuthRequest(
@@ -597,7 +619,23 @@ func requireValidAccessTokenStorage(
 	)
 }
 
-func requireValidPKCEStorage(
+func requireInvalidAccessTokenStorage(
+	t *testing.T,
+	body map[string]interface{},
+	storage *storage.MemoryStore,
+) {
+	t.Helper()
+
+	// Get the access token, and make sure we can use it to perform a lookup on the storage.
+	accessToken, ok := body["access_token"]
+	require.True(t, ok)
+	accessTokenString, ok := accessToken.(string)
+	require.Truef(t, ok, "wanted access_token to be a string, but got %T", accessToken)
+	_, err := storage.GetAccessTokenSession(context.Background(), getFositeDataSignature(t, accessTokenString), nil)
+	require.Equal(t, fosite.ErrNotFound, err)
+}
+
+func requireInvalidPKCEStorage(
 	t *testing.T,
 	code string,
 	storage *storage.MemoryStore,
@@ -674,7 +712,7 @@ func requireValidAuthRequest(
 	// Assert that the session claims are what we think they should be, but only if we are doing OIDC.
 	if wantGrantedOpenidScope {
 		claims := session.Claims
-		// require.NotEmpty(t, claims.JTI) // TODO: why is this not passing?
+		require.Empty(t, claims.JTI) // When claims.JTI is empty, Fosite will generate a UUID for this field.
 		require.Equal(t, goodIssuer, claims.Issuer)
 		require.Equal(t, goodSubject, claims.Subject)
 		require.Equal(t, []string{goodClient}, claims.Audience)
@@ -686,13 +724,18 @@ func requireValidAuthRequest(
 			timeComparisonFudgeSeconds*time.Second,
 		)
 		requireTimeInDelta(t, time.Now().UTC(), claims.IssuedAt, timeComparisonFudgeSeconds*time.Second)
-		// requireTimeInDelta(t, time.Now().UTC(), claims.RequestedAt, timeComparisonFudgeSeconds*time.Second) // TODO: why is this not passing?
-		requireTimeInDelta(t, time.Now().UTC(), claims.AuthTime, timeComparisonFudgeSeconds*time.Second)
 		require.Equal(t, wantAccessTokenHash, claims.AccessTokenHash)
-		require.Empty(t, claims.AuthenticationContextClassReference) // TODO: huh?
-		require.Empty(t, claims.AuthenticationMethodsReference)      // TODO: huh?
-		require.Empty(t, claims.CodeHash)                            // TODO: huh?
-		require.Empty(t, claims.Extra)                               // TODO: huh?
+
+		// We are in charge of setting these fields. For the purpose of testing, we ensure that the
+		// sentinel test value is set correctly.
+		require.Equal(t, goodRequestedAtTime, claims.RequestedAt)
+		require.Equal(t, goodAuthTime, claims.AuthTime)
+
+		// At this time, we don't use any of these optional (per the OIDC spec) fields.
+		require.Empty(t, claims.AuthenticationContextClassReference)
+		require.Empty(t, claims.AuthenticationMethodsReference)
+		require.Empty(t, claims.CodeHash)
+		require.Empty(t, claims.Extra)
 	}
 
 	// Assert that the session headers are what we think they should be.
@@ -716,14 +759,6 @@ func requireValidAuthRequest(
 		accessTokenExpiresAt,
 		timeComparisonFudgeSeconds*time.Second,
 	)
-	// idTokenExpiresAt, ok := session.ExpiresAt[fosite.IDToken] // TODO: why is this failing?
-	// require.True(t, ok, "expected session to hold expiration time for id token")
-	// requireTimeInDelta(
-	// 	 t,
-	// 	 time.Now().UTC().Add(idTokenExpirationSeconds*time.Second),
-	// 	 idTokenExpiresAt,
-	// 	 timeComparisonFudgeSeconds*time.Second,
-	// )
 
 	// Assert that the session's username and subject are correct.
 	require.Equal(t, goodUsername, session.Username)
@@ -761,6 +796,14 @@ func requireTimeInDelta(t *testing.T, t1 time.Time, t2 time.Time, delta time.Dur
 		delta.String(),
 		t1.Sub(t2).String(),
 	)
+}
+
+func deepCopyRequestForm(r *http.Request) *http.Request {
+	copied := url.Values{}
+	for k, v := range r.Form {
+		copied[k] = v
+	}
+	return &http.Request{Form: copied}
 }
 
 func getMapKeys(m map[string]interface{}) []string {

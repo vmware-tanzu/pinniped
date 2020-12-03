@@ -79,7 +79,7 @@ kubectl get secret local-user-authenticator-tls-serving-certificate --namespace 
 
 When installing Pinniped on the same cluster, configure local-user-authenticator as an Identity Provider for Pinniped
 using the webhook URL `https://local-user-authenticator.local-user-authenticator.svc/authenticate`
-along with the CA bundle fetched by the above command. See [doc/demo.md](../../doc/demo.md) for an example.
+along with the CA bundle fetched by the above command. See [demo](https://pinniped.dev/docs/demo/) for an example.
 
 ## Optional: Manually Testing the Webhook Endpoint After Installing
 

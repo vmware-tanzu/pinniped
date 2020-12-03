@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
@@ -100,7 +101,11 @@ func TestSupervisorLogin(t *testing.T) {
 	}, idpv1alpha1.PhaseReady)
 
 	// Perform OIDC discovery for our downstream.
-	discovery, err := oidc.NewProvider(oidc.ClientContext(ctx, httpClient), downstream.Spec.Issuer)
+	var discovery *oidc.Provider
+	assert.Eventually(t, func() bool {
+		discovery, err = oidc.NewProvider(oidc.ClientContext(ctx, httpClient), downstream.Spec.Issuer)
+		return err == nil
+	}, 60*time.Second, 1*time.Second)
 	require.NoError(t, err)
 
 	// Start a callback server on localhost.

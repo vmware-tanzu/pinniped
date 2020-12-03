@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/gorilla/securecookie"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/auth"
@@ -32,18 +33,25 @@ type Manager struct {
 	nextHandler         http.Handler             // the next handler in a chain, called when this manager didn't know how to handle a request
 	dynamicJWKSProvider jwks.DynamicJWKSProvider // in-memory cache of per-issuer JWKS data
 	idpListGetter       oidc.IDPListGetter       // in-memory cache of upstream IDPs
+	secretsClient       corev1client.SecretInterface
 }
 
 // NewManager returns an empty Manager.
 // nextHandler will be invoked for any requests that could not be handled by this manager's providers.
 // dynamicJWKSProvider will be used as an in-memory cache for per-issuer JWKS data.
 // idpListGetter will be used as an in-memory cache of currently configured upstream IDPs.
-func NewManager(nextHandler http.Handler, dynamicJWKSProvider jwks.DynamicJWKSProvider, idpListGetter oidc.IDPListGetter) *Manager {
+func NewManager(
+	nextHandler http.Handler,
+	dynamicJWKSProvider jwks.DynamicJWKSProvider,
+	idpListGetter oidc.IDPListGetter,
+	secretsClient corev1client.SecretInterface,
+) *Manager {
 	return &Manager{
 		providerHandlers:    make(map[string]http.Handler),
 		nextHandler:         nextHandler,
 		dynamicJWKSProvider: dynamicJWKSProvider,
 		idpListGetter:       idpListGetter,
+		secretsClient:       secretsClient,
 	}
 }
 
@@ -63,15 +71,17 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 	m.providerHandlers = make(map[string]http.Handler)
 
 	for _, incomingProvider := range oidcProviders {
-		wellKnownURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.WellKnownEndpointPath
-		m.providerHandlers[wellKnownURL] = discovery.NewHandler(incomingProvider.Issuer())
+		issuer := incomingProvider.Issuer()
+		issuerHostWithPath := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath()
 
-		jwksURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.JWKSEndpointPath
-		m.providerHandlers[jwksURL] = jwks.NewHandler(incomingProvider.Issuer(), m.dynamicJWKSProvider)
+		fositeHMACSecretForThisProvider := []byte("some secret - must have at least 32 bytes") // TODO replace this secret
 
 		// Use NullStorage for the authorize endpoint because we do not actually want to store anything until
 		// the upstream callback endpoint is called later.
-		oauthHelper := oidc.FositeOauth2Helper(oidc.NullStorage{}, incomingProvider.Issuer(), []byte("some secret - must have at least 32 bytes")) // TODO replace this secret
+		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(oidc.NullStorage{}, issuer, fositeHMACSecretForThisProvider)
+
+		// For all the other endpoints, make another oauth helper with exactly the same settings except use real storage.
+		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(oidc.NewKubeStorage(m.secretsClient), issuer, fositeHMACSecretForThisProvider)
 
 		// TODO use different codecs for the state and the cookie, because:
 		//  1. we would like to state to have an embedded expiration date while the cookie does not need that
@@ -82,11 +92,14 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 		var encoder = securecookie.New(encoderHashKey, encoderBlockKey)
 		encoder.SetSerializer(securecookie.JSONEncoder{})
 
-		authURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.AuthorizationEndpointPath
-		m.providerHandlers[authURL] = auth.NewHandler(
-			incomingProvider.Issuer(),
+		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuer)
+
+		m.providerHandlers[(issuerHostWithPath + oidc.JWKSEndpointPath)] = jwks.NewHandler(issuer, m.dynamicJWKSProvider)
+
+		m.providerHandlers[(issuerHostWithPath + oidc.AuthorizationEndpointPath)] = auth.NewHandler(
+			issuer,
 			m.idpListGetter,
-			oauthHelper,
+			oauthHelperWithNullStorage,
 			csrftoken.Generate,
 			pkce.Generate,
 			nonce.Generate,
@@ -94,16 +107,15 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 			encoder,
 		)
 
-		callbackURL := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath() + oidc.CallbackEndpointPath
-		m.providerHandlers[callbackURL] = callback.NewHandler(
+		m.providerHandlers[(issuerHostWithPath + oidc.CallbackEndpointPath)] = callback.NewHandler(
 			m.idpListGetter,
-			oauthHelper,
+			oauthHelperWithKubeStorage,
 			encoder,
 			encoder,
-			incomingProvider.Issuer()+oidc.CallbackEndpointPath,
+			issuer+oidc.CallbackEndpointPath,
 		)
 
-		plog.Debug("oidc provider manager added or updated issuer", "issuer", incomingProvider.Issuer())
+		plog.Debug("oidc provider manager added or updated issuer", "issuer", issuer)
 	}
 }
 

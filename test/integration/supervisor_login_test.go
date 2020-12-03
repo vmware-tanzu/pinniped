@@ -57,9 +57,13 @@ func TestSupervisorLogin(t *testing.T) {
 		TLSClientConfig: &tls.Config{RootCAs: ca.Pool()},
 		Proxy: func(req *http.Request) (*url.URL, error) {
 			if env.Proxy == "" {
+				t.Logf("passing request for %s with no proxy", req.URL)
 				return nil, nil
 			}
-			return url.Parse(env.Proxy)
+			proxyURL, err := url.Parse(env.Proxy)
+			require.NoError(t, err)
+			t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
+			return proxyURL, nil
 		},
 	}}
 

@@ -184,6 +184,10 @@ if ! tilt_mode; then
 
   log_note "Deploying Dex to the cluster..."
   ytt --file . >"$manifest"
+  ytt --file . \
+    --data-value "supervisor_redirect_uri=https://pinniped-supervisor-clusterip.supervisor.svc.cluster.local/some/path/callback" \
+    >"$manifest"
+
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
   kapp deploy --yes --app dex --diff-changes --file "$manifest"
 

@@ -23,7 +23,10 @@ local_resource(
 #
 
 # Render the IDP installation manifest using ytt.
-k8s_yaml(local(['ytt','--file', '../../../test/deploy/dex']))
+k8s_yaml(local(['ytt',
+    '--file', '../../../test/deploy/dex',
+    '--data-value', 'supervisor_redirect_uri=https://pinniped-supervisor-clusterip.supervisor.svc.cluster.local/some/path/callback',
+]))
 # Tell tilt to watch all of those files for changes.
 watch_file('../../../test/deploy/dex')
 

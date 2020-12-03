@@ -15,3 +15,5 @@ ports:
   #! External port where the proxy ends up exposed on localhost during tests. This value comes from
   #! our Kind configuration which maps 127.0.0.1:12346 to port 31235 on the Kind worker node.
   local: 12346
+
+supervisor_redirect_uri: ""

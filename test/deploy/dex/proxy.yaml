@@ -20,6 +20,9 @@ spec:
       labels:
         app: proxy
     spec:
+      volumes:
+        - name: log-dir
+          emptyDir: {}
       containers:
         - name: proxy
           image: docker.io/getpinniped/test-forward-proxy
@@ -34,6 +37,9 @@ spec:
             limits:
               cpu: "10m"
               memory: "64Mi"
+          volumeMounts:
+            - name: log-dir
+              mountPath: "/var/log/squid/"
           readinessProbe:
             tcpSocket:
               port: http
@@ -41,6 +47,16 @@ spec:
             timeoutSeconds: 5
             periodSeconds: 5
             failureThreshold: 2
+        - name: accesslogs
+          image: debian:10.6-slim
+          command:
+            - "/bin/sh"
+            - "-c"
+          args:
+            - tail -F /var/log/squid/access.log
+          volumeMounts:
+            - name: log-dir
+              mountPath: "/var/log/squid/"
 ---
 apiVersion: v1
 kind: Service

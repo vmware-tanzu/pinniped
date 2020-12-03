@@ -1,11 +1,10 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package oidcclient
+// Package oidctypes provides core data types for OIDC token structures.
+package oidctypes
 
-import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
+import v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 // AccessToken is an OAuth2 access token.
 type AccessToken struct {
@@ -16,7 +15,7 @@ type AccessToken struct {
 	Type string `json:"type,omitempty"`
 
 	// Expiry is the optional expiration time of the access token.
-	Expiry metav1.Time `json:"expiryTimestamp,omitempty"`
+	Expiry v1.Time `json:"expiryTimestamp,omitempty"`
 }
 
 // RefreshToken is an OAuth2 refresh token.
@@ -31,7 +30,7 @@ type IDToken struct {
 	Token string `json:"token"`
 
 	// Expiry is the optional expiration time of the ID token.
-	Expiry metav1.Time `json:"expiryTimestamp,omitempty"`
+	Expiry v1.Time `json:"expiryTimestamp,omitempty"`
 }
 
 // Token contains the elements of an OIDC session.
@@ -46,17 +45,4 @@ type Token struct {
 
 	// IDToken is an OpenID Connect ID token.
 	IDToken *IDToken `json:"id,omitempty"`
-}
-
-// SessionCacheKey contains the data used to select a valid session cache entry.
-type SessionCacheKey struct {
-	Issuer      string   `json:"issuer"`
-	ClientID    string   `json:"clientID"`
-	Scopes      []string `json:"scopes"`
-	RedirectURI string   `json:"redirect_uri"`
-}
-
-type SessionCache interface {
-	GetToken(SessionCacheKey) *Token
-	PutToken(SessionCacheKey, *Token)
 }

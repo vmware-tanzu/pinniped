@@ -62,17 +62,17 @@ func TestStorage(t *testing.T) {
 	}{
 		{
 			name:     "get non-existent",
-			resource: "authorization-codes",
+			resource: "authcode",
 			mocks:    nil,
 			run: func(t *testing.T, storage Storage) error {
 				_, err := storage.Get(ctx, "not-exists", nil)
 				return err
 			},
 			wantActions: []coretesting.Action{
-				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authorization-codes-t2fx46yyvs3a"),
+				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-authcode-t2fx46yyvs3a"),
 			},
 			wantSecrets: nil,
-			wantErr:     `failed to get authorization-codes for signature not-exists: secrets "pinniped-storage-authorization-codes-t2fx46yyvs3a" not found`,
+			wantErr:     `failed to get authcode for signature not-exists: secrets "pinniped-storage-authcode-t2fx46yyvs3a" not found`,
 		},
 		{
 			name:     "delete non-existent",

@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"go.pinniped.dev/pkg/oidcclient"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
 var (
@@ -48,7 +49,7 @@ type (
 		Key               oidcclient.SessionCacheKey `json:"key"`
 		CreationTimestamp metav1.Time                `json:"creationTimestamp"`
 		LastUsedTimestamp metav1.Time                `json:"lastUsedTimestamp"`
-		Tokens            oidcclient.Token           `json:"tokens"`
+		Tokens            oidctypes.Token            `json:"tokens"`
 	}
 )
 

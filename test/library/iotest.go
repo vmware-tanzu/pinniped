@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -26,18 +27,22 @@ func (l *testlogReader) Read(p []byte) (n int, err error) {
 	l.t.Helper()
 	n, err = l.r.Read(p)
 	if err != nil {
-		l.t.Logf("%s > %q: %v", l.name, maskTokens(p[0:n]), err)
+		l.t.Logf("%s > %q: %v", l.name, MaskTokens(string(p[0:n])), err)
 	} else {
-		l.t.Logf("%s > %q", l.name, maskTokens(p[0:n]))
+		l.t.Logf("%s > %q", l.name, MaskTokens(string(p[0:n])))
 	}
 	return
 }
 
-//nolint: gochecknoglobals
-var tokenLike = regexp.MustCompile(`(?mi)[a-zA-Z0-9._-]{30,}|[a-zA-Z0-9]{20,}`)
-
-func maskTokens(in []byte) string {
-	return tokenLike.ReplaceAllStringFunc(string(in), func(t string) string {
+// MaskTokens makes a best-effort attempt to mask out things that look like secret tokens in test output.
+// The goal is more to have readable test output than for any security reason.
+func MaskTokens(in string) string {
+	var tokenLike = regexp.MustCompile(`(?mi)[a-zA-Z0-9._-]{30,}|[a-zA-Z0-9]{20,}`)
+	return tokenLike.ReplaceAllStringFunc(in, func(t string) string {
+		// This is a silly heuristic, but things with multiple dots are more likely hostnames that we don't want masked.
+		if strings.Count(t, ".") >= 4 {
+			return t
+		}
 		return fmt.Sprintf("[...%d bytes...]", len(t))
 	})
 }

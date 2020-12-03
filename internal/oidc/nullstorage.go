@@ -12,16 +12,16 @@ import (
 	"go.pinniped.dev/internal/constable"
 )
 
-const errNotImplemented = constable.Error("NullStorage does not implement this method. It should not have been called.")
+const errNullStorageNotImplemented = constable.Error("NullStorage does not implement this method. It should not have been called.")
 
 type NullStorage struct{}
 
 func (NullStorage) RevokeRefreshToken(_ context.Context, _ string) error {
-	return errNotImplemented
+	return errNullStorageNotImplemented
 }
 
 func (NullStorage) RevokeAccessToken(_ context.Context, _ string) error {
-	return errNotImplemented
+	return errNullStorageNotImplemented
 }
 
 func (NullStorage) CreateRefreshTokenSession(_ context.Context, _ string, _ fosite.Requester) (err error) {
@@ -29,11 +29,11 @@ func (NullStorage) CreateRefreshTokenSession(_ context.Context, _ string, _ fosi
 }
 
 func (NullStorage) GetRefreshTokenSession(_ context.Context, _ string, _ fosite.Session) (request fosite.Requester, err error) {
-	return nil, errNotImplemented
+	return nil, errNullStorageNotImplemented
 }
 
 func (NullStorage) DeleteRefreshTokenSession(_ context.Context, _ string) (err error) {
-	return errNotImplemented
+	return errNullStorageNotImplemented
 }
 
 func (NullStorage) CreateAccessTokenSession(_ context.Context, _ string, _ fosite.Requester) (err error) {
@@ -41,11 +41,11 @@ func (NullStorage) CreateAccessTokenSession(_ context.Context, _ string, _ fosit
 }
 
 func (NullStorage) GetAccessTokenSession(_ context.Context, _ string, _ fosite.Session) (request fosite.Requester, err error) {
-	return nil, errNotImplemented
+	return nil, errNullStorageNotImplemented
 }
 
 func (NullStorage) DeleteAccessTokenSession(_ context.Context, _ string) (err error) {
-	return errNotImplemented
+	return errNullStorageNotImplemented
 }
 
 func (NullStorage) CreateOpenIDConnectSession(_ context.Context, _ string, _ fosite.Requester) error {
@@ -53,15 +53,15 @@ func (NullStorage) CreateOpenIDConnectSession(_ context.Context, _ string, _ fos
 }
 
 func (NullStorage) GetOpenIDConnectSession(_ context.Context, _ string, _ fosite.Requester) (fosite.Requester, error) {
-	return nil, errNotImplemented
+	return nil, errNullStorageNotImplemented
 }
 
 func (NullStorage) DeleteOpenIDConnectSession(_ context.Context, _ string) error {
-	return errNotImplemented
+	return errNullStorageNotImplemented
 }
 
 func (NullStorage) GetPKCERequestSession(_ context.Context, _ string, _ fosite.Session) (fosite.Requester, error) {
-	return nil, errNotImplemented
+	return nil, errNullStorageNotImplemented
 }
 
 func (NullStorage) CreatePKCERequestSession(_ context.Context, _ string, _ fosite.Requester) error {
@@ -69,7 +69,7 @@ func (NullStorage) CreatePKCERequestSession(_ context.Context, _ string, _ fosit
 }
 
 func (NullStorage) DeletePKCERequestSession(_ context.Context, _ string) error {
-	return errNotImplemented
+	return errNullStorageNotImplemented
 }
 
 func (NullStorage) CreateAuthorizeCodeSession(_ context.Context, _ string, _ fosite.Requester) (err error) {
@@ -77,11 +77,11 @@ func (NullStorage) CreateAuthorizeCodeSession(_ context.Context, _ string, _ fos
 }
 
 func (NullStorage) GetAuthorizeCodeSession(_ context.Context, _ string, _ fosite.Session) (request fosite.Requester, err error) {
-	return nil, errNotImplemented
+	return nil, errNullStorageNotImplemented
 }
 
 func (NullStorage) InvalidateAuthorizeCodeSession(_ context.Context, _ string) (err error) {
-	return errNotImplemented
+	return errNullStorageNotImplemented
 }
 
 func (NullStorage) GetClient(_ context.Context, id string) (fosite.Client, error) {
@@ -93,9 +93,9 @@ func (NullStorage) GetClient(_ context.Context, id string) (fosite.Client, error
 }
 
 func (NullStorage) ClientAssertionJWTValid(_ context.Context, _ string) error {
-	return errNotImplemented
+	return errNullStorageNotImplemented
 }
 
 func (NullStorage) SetClientAssertionJWT(_ context.Context, _ string, _ time.Time) error {
-	return errNotImplemented
+	return errNullStorageNotImplemented
 }

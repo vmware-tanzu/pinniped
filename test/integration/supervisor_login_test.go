@@ -6,236 +6,185 @@ package integration
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
-	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
-	"path"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/coreos/go-oidc"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/idp/v1alpha1"
+	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 	"go.pinniped.dev/pkg/oidcclient/state"
 	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/library/browsertest"
 )
 
 func TestSupervisorLogin(t *testing.T) {
-	t.Skip("waiting on new callback path logic to get merged in from the callback endpoint work")
-
 	env := library.IntegrationEnv(t)
-	client := library.NewSupervisorClientset(t)
+
+	// If anything in this test crashes, dump out the supervisor and proxy pod logs.
+	defer library.DumpLogs(t, env.SupervisorNamespace, "")
+	defer library.DumpLogs(t, "dex", "app=proxy")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	tests := []struct {
-		Scheme   string
-		Address  string
-		CABundle string
-	}{
-		{Scheme: "http", Address: env.SupervisorHTTPAddress},
-		{Scheme: "https", Address: env.SupervisorHTTPSIngressAddress, CABundle: env.SupervisorHTTPSIngressCABundle},
-	}
+	// Infer the downstream issuer URL from the callback associated with the upstream test client registration.
+	issuerURL, err := url.Parse(env.SupervisorTestUpstream.CallbackURL)
+	require.NoError(t, err)
+	require.True(t, strings.HasSuffix(issuerURL.Path, "/callback"))
+	issuerURL.Path = strings.TrimSuffix(issuerURL.Path, "/callback")
+	t.Logf("testing with downstream issuer URL %s", issuerURL.String())
 
-	for _, test := range tests {
-		scheme := test.Scheme
-		addr := test.Address
-		caBundle := test.CABundle
-
-		if addr == "" {
-			// Both cases are not required, so when one is empty skip it.
-			continue
-		}
-
-		// Create downstream OIDC provider (i.e., update supervisor with OIDC provider).
-		path := getDownstreamIssuerPathFromUpstreamRedirectURI(t, env.SupervisorTestUpstream.CallbackURL)
-		issuer := fmt.Sprintf("https://%s%s", addr, path)
-		_, _ = requireCreatingOIDCProviderCausesDiscoveryEndpointsToAppear(
-			ctx,
-			t,
-			scheme,
-			addr,
-			caBundle,
-			issuer,
-			client,
-		)
-
-		// Create HTTP client.
-		httpClient := newHTTPClient(t, caBundle, nil)
-		httpClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
-			// Don't follow any redirects right now, since we simply want to validate that our auth endpoint
-			// redirects us.
-			return http.ErrUseLastResponse
-		}
-
-		// Declare the downstream auth endpoint url we will use.
-		downstreamAuthURL := makeDownstreamAuthURL(t, scheme, addr, path)
-
-		// Make request to auth endpoint - should fail, since we have no upstreams.
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthURL, nil)
-		require.NoError(t, err)
-		rsp, err := httpClient.Do(req)
-		require.NoError(t, err)
-		defer rsp.Body.Close()
-		require.Equal(t, http.StatusUnprocessableEntity, rsp.StatusCode)
-
-		// Create upstream OIDC provider.
-		spec := idpv1alpha1.UpstreamOIDCProviderSpec{
-			Issuer: env.SupervisorTestUpstream.Issuer,
-			TLS: &idpv1alpha1.TLSSpec{
-				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
-			},
-			Client: idpv1alpha1.OIDCClient{
-				SecretName: makeTestClientCredsSecret(t, env.SupervisorTestUpstream.ClientID, env.SupervisorTestUpstream.ClientSecret).Name,
-			},
-		}
-		upstream := makeTestUpstream(t, spec, idpv1alpha1.PhaseReady)
-
-		// Make request to authorize endpoint - should pass, since we now have an upstream.
-		req, err = http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthURL, nil)
-		require.NoError(t, err)
-		rsp, err = httpClient.Do(req)
-		require.NoError(t, err)
-		defer rsp.Body.Close()
-		require.Equal(t, http.StatusFound, rsp.StatusCode)
-		requireValidRedirectLocation(
-			ctx,
-			t,
-			upstream.Spec.Issuer,
-			env.SupervisorTestUpstream.ClientID,
-			env.SupervisorTestUpstream.CallbackURL,
-			rsp.Header.Get("Location"),
-		)
-	}
-}
-
-//nolint:unused
-func getDownstreamIssuerPathFromUpstreamRedirectURI(t *testing.T, upstreamRedirectURI string) string {
-	// We need to construct the downstream issuer path from the upstream redirect URI since the two
-	// are related, and the upstream redirect URI is supplied via a static test environment
-	// variable. The upstream redirect URI should be something like
-	//   https://supervisor.com/some/supervisor/path/callback
-	// and therefore the downstream issuer should be something like
-	//   https://supervisor.com/some/supervisor/path
-	// since the /callback endpoint is placed at the root of the downstream issuer path.
-	upstreamRedirectURL, err := url.Parse(upstreamRedirectURI)
+	// Generate a CA bundle with which to serve this provider.
+	t.Logf("generating test CA")
+	ca, err := certauthority.New(pkix.Name{CommonName: "Downstream Test CA"}, 1*time.Hour)
 	require.NoError(t, err)
 
-	redirectURIPathWithoutLastSegment, lastUpstreamRedirectURIPathSegment := path.Split(upstreamRedirectURL.Path)
-	require.Equalf(
-		t,
-		"callback",
-		lastUpstreamRedirectURIPathSegment,
-		"expected upstream redirect URI (%q) to follow supervisor callback path conventions (i.e., end in /callback)",
-		upstreamRedirectURI,
+	// Create an HTTP client that can reach the downstream discovery endpoint using the CA certs.
+	httpClient := &http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{RootCAs: ca.Pool()},
+		Proxy: func(req *http.Request) (*url.URL, error) {
+			if env.Proxy == "" {
+				t.Logf("passing request for %s with no proxy", req.URL)
+				return nil, nil
+			}
+			proxyURL, err := url.Parse(env.Proxy)
+			require.NoError(t, err)
+			t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
+			return proxyURL, nil
+		},
+	}}
+
+	// Use the CA to issue a TLS server cert.
+	t.Logf("issuing test certificate")
+	tlsCert, err := ca.Issue(
+		pkix.Name{CommonName: issuerURL.Hostname()},
+		[]string{issuerURL.Hostname()},
+		nil,
+		1*time.Hour,
+	)
+	require.NoError(t, err)
+	certPEM, keyPEM, err := certauthority.ToPEM(tlsCert)
+	require.NoError(t, err)
+
+	// Write the serving cert to a secret.
+	certSecret := library.CreateTestSecret(t,
+		env.SupervisorNamespace,
+		"oidc-provider-tls",
+		"kubernetes.io/tls",
+		map[string]string{"tls.crt": string(certPEM), "tls.key": string(keyPEM)},
 	)
 
-	if strings.HasSuffix(redirectURIPathWithoutLastSegment, "/") {
-		redirectURIPathWithoutLastSegment = redirectURIPathWithoutLastSegment[:len(redirectURIPathWithoutLastSegment)-1]
-	}
+	// Create the downstream OIDCProvider and expect it to go into the success status condition.
+	downstream := library.CreateTestOIDCProvider(ctx, t,
+		issuerURL.String(),
+		certSecret.Name,
+		configv1alpha1.SuccessOIDCProviderStatusCondition,
+	)
 
-	return redirectURIPathWithoutLastSegment
-}
+	// Create upstream OIDC provider and wait for it to become ready.
+	library.CreateTestUpstreamOIDCProvider(t, idpv1alpha1.UpstreamOIDCProviderSpec{
+		Issuer: env.SupervisorTestUpstream.Issuer,
+		TLS: &idpv1alpha1.TLSSpec{
+			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
+		},
+		Client: idpv1alpha1.OIDCClient{
+			SecretName: library.CreateClientCredsSecret(t, env.SupervisorTestUpstream.ClientID, env.SupervisorTestUpstream.ClientSecret).Name,
+		},
+	}, idpv1alpha1.PhaseReady)
 
-//nolint:unused
-func makeDownstreamAuthURL(t *testing.T, scheme, addr, path string) string {
-	t.Helper()
+	// Perform OIDC discovery for our downstream.
+	var discovery *oidc.Provider
+	assert.Eventually(t, func() bool {
+		discovery, err = oidc.NewProvider(oidc.ClientContext(ctx, httpClient), downstream.Spec.Issuer)
+		return err == nil
+	}, 30*time.Second, 200*time.Millisecond)
+	require.NoError(t, err)
+
+	// Start a callback server on localhost.
+	localCallbackServer := startLocalCallbackServer(t)
+
+	// Form the OAuth2 configuration corresponding to our CLI client.
 	downstreamOAuth2Config := oauth2.Config{
 		// This is the hardcoded public client that the supervisor supports.
-		ClientID: "pinniped-cli",
-		Endpoint: oauth2.Endpoint{
-			AuthURL: fmt.Sprintf("%s://%s%s/oauth2/authorize", scheme, addr, path),
-		},
-		// This is the hardcoded downstream redirect URI that the supervisor supports.
-		RedirectURL: "http://127.0.0.1/callback",
+		ClientID:    "pinniped-cli",
+		Endpoint:    discovery.Endpoint(),
+		RedirectURL: localCallbackServer.URL,
 		Scopes:      []string{"openid"},
 	}
-	state, nonce, pkce := generateAuthRequestParams(t)
-	return downstreamOAuth2Config.AuthCodeURL(
-		state.String(),
-		nonce.Param(),
-		pkce.Challenge(),
-		pkce.Method(),
+
+	// Build a valid downstream authorize URL for the supervisor.
+	stateParam, err := state.Generate()
+	require.NoError(t, err)
+	nonceParam, err := nonce.Generate()
+	require.NoError(t, err)
+	pkceParam, err := pkce.Generate()
+	require.NoError(t, err)
+	downstreamAuthorizeURL := downstreamOAuth2Config.AuthCodeURL(
+		stateParam.String(),
+		nonceParam.Param(),
+		pkceParam.Challenge(),
+		pkceParam.Method(),
 	)
+
+	// Open the web browser and navigate to the downstream authorize URL.
+	page := browsertest.Open(t)
+	t.Logf("opening browser to downstream authorize URL %s", library.MaskTokens(downstreamAuthorizeURL))
+	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
+
+	// Expect to be redirected to the upstream provider and log in.
+	browsertest.LoginToUpstream(t, page, env.SupervisorTestUpstream)
+
+	// Wait for the login to happen and us be redirected back to a localhost callback.
+	t.Logf("waiting for redirect to callback")
+	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(localCallbackServer.URL) + `\?.+\z`)
+	browsertest.WaitForURL(t, page, callbackURLPattern)
+
+	// Expect that our callback handler was invoked.
+	callback := localCallbackServer.waitForCallback(10 * time.Second)
+	t.Logf("got callback request: %s", library.MaskTokens(callback.URL.String()))
+	require.Equal(t, stateParam.String(), callback.URL.Query().Get("state"))
+	require.Equal(t, "openid", callback.URL.Query().Get("scope"))
+	require.NotEmpty(t, callback.URL.Query().Get("code"))
 }
 
-//nolint:unused
-func generateAuthRequestParams(t *testing.T) (state.State, nonce.Nonce, pkce.Code) {
-	t.Helper()
-	state, err := state.Generate()
-	require.NoError(t, err)
-	nonce, err := nonce.Generate()
-	require.NoError(t, err)
-	pkce, err := pkce.Generate()
-	require.NoError(t, err)
-	return state, nonce, pkce
+func startLocalCallbackServer(t *testing.T) *localCallbackServer {
+	// Handle the callback by sending the *http.Request object back through a channel.
+	callbacks := make(chan *http.Request, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callbacks <- r
+	}))
+	server.URL += "/callback"
+	t.Cleanup(server.Close)
+	t.Cleanup(func() { close(callbacks) })
+	return &localCallbackServer{Server: server, t: t, callbacks: callbacks}
 }
 
-//nolint:unused
-func requireValidRedirectLocation(
-	ctx context.Context,
-	t *testing.T,
-	issuer, clientID, redirectURI, actualLocation string,
-) {
-	t.Helper()
-	env := library.IntegrationEnv(t)
+type localCallbackServer struct {
+	*httptest.Server
+	t         *testing.T
+	callbacks <-chan *http.Request
+}
 
-	// Do OIDC discovery on our test issuer to get auth endpoint.
-	transport := http.Transport{}
-	if env.Proxy != "" {
-		transport.Proxy = func(_ *http.Request) (*url.URL, error) {
-			return url.Parse(env.Proxy)
-		}
+func (s *localCallbackServer) waitForCallback(timeout time.Duration) *http.Request {
+	select {
+	case callback := <-s.callbacks:
+		return callback
+	case <-time.After(timeout):
+		require.Fail(s.t, "timed out waiting for callback request")
+		return nil
 	}
-	if env.SupervisorTestUpstream.CABundle != "" {
-		transport.TLSClientConfig = &tls.Config{RootCAs: x509.NewCertPool()}
-		transport.TLSClientConfig.RootCAs.AppendCertsFromPEM([]byte(env.SupervisorTestUpstream.CABundle))
-	}
-
-	ctx = oidc.ClientContext(ctx, &http.Client{Transport: &transport})
-	upstreamProvider, err := oidc.NewProvider(ctx, issuer)
-	require.NoError(t, err)
-
-	// Parse expected upstream auth URL.
-	expectedLocationURL, err := url.Parse(
-		(&oauth2.Config{
-			ClientID:    clientID,
-			Endpoint:    upstreamProvider.Endpoint(),
-			RedirectURL: redirectURI,
-			Scopes:      []string{"openid"},
-		}).AuthCodeURL("", oauth2.AccessTypeOffline),
-	)
-	require.NoError(t, err)
-
-	// Parse actual upstream auth URL.
-	actualLocationURL, err := url.Parse(actualLocation)
-	require.NoError(t, err)
-
-	// First make some assertions on the query values. Note that we will not be able to know what
-	// certain query values are since they may be random (e.g., state, pkce, nonce).
-	expectedLocationQuery := expectedLocationURL.Query()
-	actualLocationQuery := actualLocationURL.Query()
-	require.NotEmpty(t, actualLocationQuery.Get("state"))
-	actualLocationQuery.Del("state")
-	require.NotEmpty(t, actualLocationQuery.Get("code_challenge"))
-	actualLocationQuery.Del("code_challenge")
-	require.NotEmpty(t, actualLocationQuery.Get("code_challenge_method"))
-	actualLocationQuery.Del("code_challenge_method")
-	require.NotEmpty(t, actualLocationQuery.Get("nonce"))
-	actualLocationQuery.Del("nonce")
-	require.Equal(t, expectedLocationQuery, actualLocationQuery)
-
-	// Zero-out query values, since we made specific assertions about those above, and assert that the
-	// URL's are equal otherwise.
-	expectedLocationURL.RawQuery = ""
-	actualLocationURL.RawQuery = ""
-	require.Equal(t, expectedLocationURL, actualLocationURL)
 }

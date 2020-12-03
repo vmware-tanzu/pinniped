@@ -55,14 +55,6 @@ const (
 	timeComparisonFudgeSeconds = 15
 )
 
-type CombinedStorage interface {
-	oauth2.TokenRevocationStorage
-	oauth2.CoreStorage
-	openid.OpenIDConnectRequestStorage
-	pkce.PKCERequestStorage
-	fosite.ClientManager
-}
-
 var (
 	goodAuthTime        = time.Date(1, 2, 3, 4, 5, 6, 7, time.Local)
 	goodRequestedAtTime = time.Date(7, 6, 5, 4, 3, 2, 1, time.Local)
@@ -206,8 +198,18 @@ func TestTokenEndpoint(t *testing.T) {
 		name string
 
 		authRequest func(authRequest *http.Request)
-		storage     func(t *testing.T, s CombinedStorage, authCode string)
-		request     func(r *http.Request, authCode string)
+		storage     func(
+			t *testing.T,
+			s interface {
+				oauth2.TokenRevocationStorage
+				oauth2.CoreStorage
+				openid.OpenIDConnectRequestStorage
+				pkce.PKCERequestStorage
+				fosite.ClientManager
+			},
+			authCode string,
+		)
+		request func(r *http.Request, authCode string)
 
 		wantStatus     int
 		wantBodyFields []string
@@ -323,7 +325,17 @@ func TestTokenEndpoint(t *testing.T) {
 		},
 		{
 			name: "auth code is invalidated",
-			storage: func(t *testing.T, s CombinedStorage, authCode string) {
+			storage: func(
+				t *testing.T,
+				s interface {
+					oauth2.TokenRevocationStorage
+					oauth2.CoreStorage
+					openid.OpenIDConnectRequestStorage
+					pkce.PKCERequestStorage
+					fosite.ClientManager
+				},
+				authCode string,
+			) {
 				err := s.InvalidateAuthorizeCodeSession(context.Background(), getFositeDataSignature(t, authCode))
 				require.NoError(t, err)
 			},
@@ -525,7 +537,13 @@ func getFositeDataSignature(t *testing.T, data string) string {
 func makeHappyOauthHelper(
 	t *testing.T,
 	authRequest *http.Request,
-	store CombinedStorage,
+	store interface {
+		oauth2.TokenRevocationStorage
+		oauth2.CoreStorage
+		openid.OpenIDConnectRequestStorage
+		pkce.PKCERequestStorage
+		fosite.ClientManager
+	},
 ) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
 	t.Helper()
 
@@ -581,7 +599,7 @@ func doSHA256(s string) string {
 func requireInvalidAuthCodeStorage(
 	t *testing.T,
 	code string,
-	storage CombinedStorage,
+	storage oauth2.CoreStorage,
 ) {
 	t.Helper()
 
@@ -593,7 +611,7 @@ func requireInvalidAuthCodeStorage(
 func requireValidAccessTokenStorage(
 	t *testing.T,
 	body map[string]interface{},
-	storage CombinedStorage,
+	storage oauth2.CoreStorage,
 	wantGrantedOpenidScope bool,
 ) {
 	t.Helper()
@@ -642,7 +660,7 @@ func requireValidAccessTokenStorage(
 func requireInvalidAccessTokenStorage(
 	t *testing.T,
 	body map[string]interface{},
-	storage CombinedStorage,
+	storage oauth2.CoreStorage,
 ) {
 	t.Helper()
 
@@ -658,7 +676,7 @@ func requireInvalidAccessTokenStorage(
 func requireInvalidPKCEStorage(
 	t *testing.T,
 	code string,
-	storage CombinedStorage,
+	storage pkce.PKCERequestStorage,
 ) {
 	t.Helper()
 
@@ -672,7 +690,7 @@ func requireValidOIDCStorage(
 	t *testing.T,
 	body map[string]interface{},
 	code string,
-	storage CombinedStorage,
+	storage openid.OpenIDConnectRequestStorage,
 	wantGrantedOpenidScope bool,
 ) {
 	t.Helper()

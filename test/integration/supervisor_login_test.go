@@ -33,6 +33,10 @@ import (
 
 func TestSupervisorLogin(t *testing.T) {
 	env := library.IntegrationEnv(t)
+
+	// If anything in this test crashes, dump out the supervisor pod logs.
+	defer library.DumpLogs(t, env.SupervisorNamespace)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
@@ -91,9 +95,6 @@ func TestSupervisorLogin(t *testing.T) {
 		Issuer: env.SupervisorTestUpstream.Issuer,
 		TLS: &idpv1alpha1.TLSSpec{
 			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
-		},
-		AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
-			AdditionalScopes: []string{"email", "profile"},
 		},
 		Client: idpv1alpha1.OIDCClient{
 			SecretName: library.CreateClientCredsSecret(t, env.SupervisorTestUpstream.ClientID, env.SupervisorTestUpstream.ClientSecret).Name,

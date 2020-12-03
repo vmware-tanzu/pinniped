@@ -111,7 +111,7 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 
 		// When the same issuer is added twice, both issuers are marked as duplicates, and neither provider is serving.
 		config6Duplicate1, _ := requireCreatingOIDCProviderCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer6, client)
-		config6Duplicate2 := library.CreateTestOIDCProvider(ctx, t, issuer6, "")
+		config6Duplicate2 := library.CreateTestOIDCProvider(ctx, t, issuer6, "", "")
 		requireStatus(t, client, ns, config6Duplicate1.Name, v1alpha1.DuplicateOIDCProviderStatusCondition)
 		requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.DuplicateOIDCProviderStatusCondition)
 		requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer6)
@@ -136,7 +136,7 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 		}
 
 		// When we create a provider with an invalid issuer, the status is set to invalid.
-		badConfig := library.CreateTestOIDCProvider(ctx, t, badIssuer, "")
+		badConfig := library.CreateTestOIDCProvider(ctx, t, badIssuer, "", "")
 		requireStatus(t, client, ns, badConfig.Name, v1alpha1.InvalidOIDCProviderStatusCondition)
 		requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, badIssuer)
 		requireDeletingOIDCProviderCausesDiscoveryEndpointsToDisappear(t, badConfig, client, ns, scheme, addr, caBundle, badIssuer)
@@ -162,7 +162,7 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	certSecretName1 := "integration-test-cert-1"
 
 	// Create an OIDCProvider with a spec.tls.secretName.
-	oidcProvider1 := library.CreateTestOIDCProvider(ctx, t, issuer1, certSecretName1)
+	oidcProvider1 := library.CreateTestOIDCProvider(ctx, t, issuer1, certSecretName1, "")
 	requireStatus(t, pinnipedClient, oidcProvider1.Namespace, oidcProvider1.Name, v1alpha1.SuccessOIDCProviderStatusCondition)
 
 	// The spec.tls.secretName Secret does not exist, so the endpoints should fail with TLS errors.
@@ -198,7 +198,7 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	certSecretName2 := "integration-test-cert-2"
 
 	// Create an OIDCProvider with a spec.tls.secretName.
-	oidcProvider2 := library.CreateTestOIDCProvider(ctx, t, issuer2, certSecretName2)
+	oidcProvider2 := library.CreateTestOIDCProvider(ctx, t, issuer2, certSecretName2, "")
 	requireStatus(t, pinnipedClient, oidcProvider2.Namespace, oidcProvider2.Name, v1alpha1.SuccessOIDCProviderStatusCondition)
 
 	// Create the Secret.
@@ -232,31 +232,30 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 		port = hostAndPortSegments[1]
 	}
 
-	ips, err := net.DefaultResolver.LookupIPAddr(ctx, hostname)
+	ips, err := library.LookupIP(ctx, hostname)
 	require.NoError(t, err)
-	ip := ips[0]
-	ipAsString := ip.String()
-	ipWithPort := ipAsString + ":" + port
+	require.NotEmpty(t, ips)
+	ipWithPort := ips[0].String() + ":" + port
 
 	issuerUsingIPAddress := fmt.Sprintf("%s://%s/issuer1", scheme, ipWithPort)
 	issuerUsingHostname := fmt.Sprintf("%s://%s/issuer1", scheme, address)
 
 	// Create an OIDCProvider without a spec.tls.secretName.
-	oidcProvider1 := library.CreateTestOIDCProvider(ctx, t, issuerUsingIPAddress, "")
+	oidcProvider1 := library.CreateTestOIDCProvider(ctx, t, issuerUsingIPAddress, "", "")
 	requireStatus(t, pinnipedClient, oidcProvider1.Namespace, oidcProvider1.Name, v1alpha1.SuccessOIDCProviderStatusCondition)
 
 	// There is no default TLS cert and the spec.tls.secretName was not set, so the endpoints should fail with TLS errors.
 	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuerUsingIPAddress)
 
 	// Create a Secret at the special name which represents the default TLS cert.
-	defaultCA := createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", []net.IP{ip.IP}, defaultTLSCertSecretName(env), kubeClient)
+	defaultCA := createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", []net.IP{ips[0]}, defaultTLSCertSecretName(env), kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by IP address using the CA.
 	_ = requireDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
 
 	// Create an OIDCProvider with a spec.tls.secretName.
 	certSecretName := "integration-test-cert-1"
-	oidcProvider2 := library.CreateTestOIDCProvider(ctx, t, issuerUsingHostname, certSecretName)
+	oidcProvider2 := library.CreateTestOIDCProvider(ctx, t, issuerUsingHostname, certSecretName, "")
 	requireStatus(t, pinnipedClient, oidcProvider2.Namespace, oidcProvider2.Name, v1alpha1.SuccessOIDCProviderStatusCondition)
 
 	// Create the Secret.
@@ -429,7 +428,7 @@ func requireCreatingOIDCProviderCausesDiscoveryEndpointsToAppear(
 	client pinnipedclientset.Interface,
 ) (*v1alpha1.OIDCProvider, *ExpectedJWKSResponseFormat) {
 	t.Helper()
-	newOIDCProvider := library.CreateTestOIDCProvider(ctx, t, issuerName, "")
+	newOIDCProvider := library.CreateTestOIDCProvider(ctx, t, issuerName, "", "")
 	jwksResult := requireDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, nil)
 	requireStatus(t, client, newOIDCProvider.Namespace, newOIDCProvider.Name, v1alpha1.SuccessOIDCProviderStatusCondition)
 	return newOIDCProvider, jwksResult

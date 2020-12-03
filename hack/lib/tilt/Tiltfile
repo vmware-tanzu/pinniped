@@ -103,6 +103,7 @@ k8s_yaml(local([
     '--data-value-yaml', 'service_http_nodeport_nodeport=31234',
     '--data-value-yaml', 'service_https_nodeport_port=443',
     '--data-value-yaml', 'service_https_nodeport_nodeport=31243',
+    '--data-value-yaml', 'service_https_clusterip_port=443',
     '--data-value-yaml', 'custom_labels={mySupervisorCustomLabelName: mySupervisorCustomLabelValue}',
 ]))
 # Tell tilt to watch all of those files for changes.

@@ -30,7 +30,7 @@ const (
 
 	ErrSecretTypeMismatch    = constable.Error("secret storage data has incorrect type")
 	ErrSecretLabelMismatch   = constable.Error("secret storage data has incorrect label")
-	ErrSecretVersionMismatch = constable.Error("secret storage data has incorrect version") // TODO do we need this?
+	ErrSecretVersionMismatch = constable.Error("secret storage data has incorrect version")
 )
 
 type Storage interface {
@@ -139,7 +139,7 @@ func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON) 
 			Labels: map[string]string{
 				secretLabelKey: s.resource, // make it easier to find this stuff via kubectl
 			},
-			OwnerReferences: nil, // TODO we should set this to make sure stuff gets clean up
+			OwnerReferences: nil,
 		},
 		Data: map[string][]byte{
 			secretDataKey:    buf,

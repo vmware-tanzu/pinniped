@@ -20,6 +20,7 @@ import (
 
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/filesession"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
 //nolint: gochecknoinits
@@ -27,7 +28,7 @@ func init() {
 	loginCmd.AddCommand(oidcLoginCommand(oidcclient.Login))
 }
 
-func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...oidcclient.Option) (*oidcclient.Token, error)) *cobra.Command {
+func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...oidcclient.Option) (*oidctypes.Token, error)) *cobra.Command {
 	var (
 		cmd = cobra.Command{
 			Args:         cobra.NoArgs,

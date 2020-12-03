@@ -196,7 +196,12 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 	dynamicUpstreamIDPProvider := provider.NewDynamicUpstreamIDPProvider()
 
 	// OIDC endpoints will be served by the oidProvidersManager, and any non-OIDC paths will fallback to the healthMux.
-	oidProvidersManager := manager.NewManager(healthMux, dynamicJWKSProvider, dynamicUpstreamIDPProvider)
+	oidProvidersManager := manager.NewManager(
+		healthMux,
+		dynamicJWKSProvider,
+		dynamicUpstreamIDPProvider,
+		kubeClient.CoreV1().Secrets(serverInstallationNamespace),
+	)
 
 	startControllers(
 		ctx,

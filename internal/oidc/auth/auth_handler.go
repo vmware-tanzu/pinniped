@@ -9,14 +9,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/securecookie"
-
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
 	"golang.org/x/oauth2"
 
 	"go.pinniped.dev/internal/httputil/httperr"
+	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
@@ -24,42 +23,15 @@ import (
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
-const (
-	// Just in case we need to make a breaking change to the format of the upstream state param,
-	// we are including a format version number. This gives the opportunity for a future version of Pinniped
-	// to have the consumer of this format decide to reject versions that it doesn't understand.
-	upstreamStateParamFormatVersion = "1"
-
-	// The `name` passed to the encoder for encoding the upstream state param value. This name is short
-	// because it will be encoded into the upstream state param value and we're trying to keep that small.
-	upstreamStateParamEncodingName = "s"
-
-	// The name of the browser cookie which shall hold our CSRF value.
-	// `__Host` prefix has a special meaning. See https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#Cookie_prefixes
-	csrfCookieName = "__Host-pinniped-csrf"
-
-	// The `name` passed to the encoder for encoding and decoding the CSRF cookie contents.
-	csrfCookieEncodingName = "csrf"
-)
-
-type IDPListGetter interface {
-	GetIDPList() []provider.UpstreamOIDCIdentityProvider
-}
-
-// This is the encoding side of the securecookie.Codec interface.
-type Encoder interface {
-	Encode(name string, value interface{}) (string, error)
-}
-
 func NewHandler(
-	issuer string,
-	idpListGetter IDPListGetter,
+	downstreamIssuer string,
+	idpListGetter oidc.IDPListGetter,
 	oauthHelper fosite.OAuth2Provider,
 	generateCSRF func() (csrftoken.CSRFToken, error),
 	generatePKCE func() (pkce.Code, error),
 	generateNonce func() (nonce.Nonce, error),
-	upstreamStateEncoder Encoder,
-	cookieCodec securecookie.Codec,
+	upstreamStateEncoder oidc.Encoder,
+	cookieCodec oidc.Codec,
 ) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		if r.Method != http.MethodPost && r.Method != http.MethodGet {
@@ -69,11 +41,7 @@ func NewHandler(
 			return httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET or POST)", r.Method)
 		}
 
-		csrfFromCookie, err := readCSRFCookie(r, cookieCodec)
-		if err != nil {
-			plog.InfoErr("error reading CSRF cookie", err)
-			return err
-		}
+		csrfFromCookie := readCSRFCookie(r, cookieCodec)
 
 		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), r)
 		if err != nil {
@@ -116,15 +84,22 @@ func NewHandler(
 		}
 
 		upstreamOAuthConfig := oauth2.Config{
-			ClientID: upstreamIDP.ClientID,
+			ClientID: upstreamIDP.GetClientID(),
 			Endpoint: oauth2.Endpoint{
-				AuthURL: upstreamIDP.AuthorizationURL.String(),
+				AuthURL: upstreamIDP.GetAuthorizationURL().String(),
 			},
-			RedirectURL: fmt.Sprintf("%s/callback/%s", issuer, upstreamIDP.Name),
-			Scopes:      upstreamIDP.Scopes,
+			RedirectURL: fmt.Sprintf("%s/callback", downstreamIssuer),
+			Scopes:      upstreamIDP.GetScopes(),
 		}
 
-		encodedStateParamValue, err := upstreamStateParam(authorizeRequester, nonceValue, csrfValue, pkceValue, upstreamStateEncoder)
+		encodedStateParamValue, err := upstreamStateParam(
+			authorizeRequester,
+			upstreamIDP.GetName(),
+			nonceValue,
+			csrfValue,
+			pkceValue,
+			upstreamStateEncoder,
+		)
 		if err != nil {
 			plog.Error("authorize upstream state param error", err)
 			return err
@@ -154,20 +129,23 @@ func NewHandler(
 	})
 }
 
-func readCSRFCookie(r *http.Request, codec securecookie.Codec) (csrftoken.CSRFToken, error) {
-	receivedCSRFCookie, err := r.Cookie(csrfCookieName)
+func readCSRFCookie(r *http.Request, codec oidc.Codec) csrftoken.CSRFToken {
+	receivedCSRFCookie, err := r.Cookie(oidc.CSRFCookieName)
 	if err != nil {
 		// Error means that the cookie was not found
-		return "", nil
+		return ""
 	}
 
 	var csrfFromCookie csrftoken.CSRFToken
-	err = codec.Decode(csrfCookieEncodingName, receivedCSRFCookie.Value, &csrfFromCookie)
+	err = codec.Decode(oidc.CSRFCookieEncodingName, receivedCSRFCookie.Value, &csrfFromCookie)
 	if err != nil {
-		return "", httperr.Wrap(http.StatusUnprocessableEntity, "error reading CSRF cookie", err)
+		// We can ignore any errors and just make a new cookie. Hopefully this will
+		// make the user experience better if, for example, the server rotated
+		// cookie signing keys and then a user submitted a very old cookie.
+		return ""
 	}
 
-	return csrfFromCookie, nil
+	return csrfFromCookie
 }
 
 func grantOpenIDScopeIfRequested(authorizeRequester fosite.AuthorizeRequester) {
@@ -178,7 +156,7 @@ func grantOpenIDScopeIfRequested(authorizeRequester fosite.AuthorizeRequester) {
 	}
 }
 
-func chooseUpstreamIDP(idpListGetter IDPListGetter) (*provider.UpstreamOIDCIdentityProvider, error) {
+func chooseUpstreamIDP(idpListGetter oidc.IDPListGetter) (provider.UpstreamOIDCIdentityProviderI, error) {
 	allUpstreamIDPs := idpListGetter.GetIDPList()
 	if len(allUpstreamIDPs) == 0 {
 		return nil, httperr.New(
@@ -191,7 +169,7 @@ func chooseUpstreamIDP(idpListGetter IDPListGetter) (*provider.UpstreamOIDCIdent
 			"Too many upstream providers are configured (support for multiple upstreams is not yet implemented)",
 		)
 	}
-	return &allUpstreamIDPs[0], nil
+	return allUpstreamIDPs[0], nil
 }
 
 func generateValues(
@@ -214,48 +192,42 @@ func generateValues(
 	return csrfValue, nonceValue, pkceValue, nil
 }
 
-// Keep the JSON to a minimal size because the upstream provider could impose size limitations on the state param.
-type upstreamStateParamData struct {
-	AuthParams              string              `json:"p"`
-	Nonce                   nonce.Nonce         `json:"n"`
-	CSRFToken               csrftoken.CSRFToken `json:"c"`
-	PKCECode                pkce.Code           `json:"k"`
-	StateParamFormatVersion string              `json:"v"`
-}
-
 func upstreamStateParam(
 	authorizeRequester fosite.AuthorizeRequester,
+	upstreamName string,
 	nonceValue nonce.Nonce,
 	csrfValue csrftoken.CSRFToken,
 	pkceValue pkce.Code,
-	encoder Encoder,
+	encoder oidc.Encoder,
 ) (string, error) {
-	stateParamData := upstreamStateParamData{
-		AuthParams:              authorizeRequester.GetRequestForm().Encode(),
-		Nonce:                   nonceValue,
-		CSRFToken:               csrfValue,
-		PKCECode:                pkceValue,
-		StateParamFormatVersion: upstreamStateParamFormatVersion,
+	stateParamData := oidc.UpstreamStateParamData{
+		AuthParams:    authorizeRequester.GetRequestForm().Encode(),
+		UpstreamName:  upstreamName,
+		Nonce:         nonceValue,
+		CSRFToken:     csrfValue,
+		PKCECode:      pkceValue,
+		FormatVersion: oidc.UpstreamStateParamFormatVersion,
 	}
-	encodedStateParamValue, err := encoder.Encode(upstreamStateParamEncodingName, stateParamData)
+	encodedStateParamValue, err := encoder.Encode(oidc.UpstreamStateParamEncodingName, stateParamData)
 	if err != nil {
 		return "", httperr.Wrap(http.StatusInternalServerError, "error encoding upstream state param", err)
 	}
 	return encodedStateParamValue, nil
 }
 
-func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken, codec securecookie.Codec) error {
-	encodedCSRFValue, err := codec.Encode(csrfCookieEncodingName, csrfValue)
+func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken, codec oidc.Codec) error {
+	encodedCSRFValue, err := codec.Encode(oidc.CSRFCookieEncodingName, csrfValue)
 	if err != nil {
 		return httperr.Wrap(http.StatusInternalServerError, "error encoding CSRF cookie", err)
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     csrfCookieName,
+		Name:     oidc.CSRFCookieName,
 		Value:    encodedCSRFValue,
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 		Secure:   true,
+		Path:     "/",
 	})
 
 	return nil

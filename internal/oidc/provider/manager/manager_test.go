@@ -4,6 +4,7 @@
 package manager
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -15,12 +16,17 @@ import (
 	"github.com/sclevine/spec"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
+	"k8s.io/client-go/kubernetes/fake"
 
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/discovery"
 	"go.pinniped.dev/internal/oidc/jwks"
+	"go.pinniped.dev/internal/oidc/oidctestutil"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/pkg/oidcclient/nonce"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
+	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
 func TestManager(t *testing.T) {
@@ -31,6 +37,7 @@ func TestManager(t *testing.T) {
 			nextHandler              http.HandlerFunc
 			fallbackHandlerWasCalled bool
 			dynamicJWKSProvider      jwks.DynamicJWKSProvider
+			kubeClient               *fake.Clientset
 		)
 
 		const (
@@ -41,6 +48,7 @@ func TestManager(t *testing.T) {
 			issuer2DifferentCaseHostname = "https://exAmPlE.Com/some/path/more/deeply/nested/path"
 			issuer2KeyID                 = "issuer2-key"
 			upstreamIDPAuthorizationURL  = "https://test-upstream.com/auth"
+			downstreamRedirectURL        = "http://127.0.0.1:12345/callback"
 		)
 
 		newGetRequest := func(url string) *http.Request {
@@ -64,7 +72,7 @@ func TestManager(t *testing.T) {
 			r.Equal(expectedIssuerInResponse, parsedDiscoveryResult.Issuer)
 		}
 
-		requireAuthorizationRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedRedirectLocationPrefix string) {
+		requireAuthorizationRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedRedirectLocationPrefix string) (string, string) {
 			recorder := httptest.NewRecorder()
 
 			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.AuthorizationEndpointPath+requestURLSuffix))
@@ -79,6 +87,58 @@ func TestManager(t *testing.T) {
 				"actual location %s did not start with expected prefix %s",
 				actualLocation, expectedRedirectLocationPrefix,
 			)
+
+			parsedLocation, err := url.Parse(actualLocation)
+			r.NoError(err)
+			redirectStateParam := parsedLocation.Query().Get("state")
+			r.NotEmpty(redirectStateParam)
+
+			cookieValueAndDirectivesSplit := strings.SplitN(recorder.Header().Get("Set-Cookie"), ";", 2)
+			r.Len(cookieValueAndDirectivesSplit, 2)
+			cookieKeyValueSplit := strings.Split(cookieValueAndDirectivesSplit[0], "=")
+			r.Len(cookieKeyValueSplit, 2)
+			csrfCookieName := cookieKeyValueSplit[0]
+			r.Equal("__Host-pinniped-csrf", csrfCookieName)
+			csrfCookieValue := cookieKeyValueSplit[1]
+			r.NotEmpty(csrfCookieValue)
+
+			// Return the important parts of the response so we can use them in our next request to the callback endpoint
+			return csrfCookieValue, redirectStateParam
+		}
+
+		requireCallbackRequestToBeHandled := func(requestIssuer, requestURLSuffix, csrfCookieValue string) {
+			recorder := httptest.NewRecorder()
+
+			numberOfKubeActionsBeforeThisRequest := len(kubeClient.Actions())
+
+			getRequest := newGetRequest(requestIssuer + oidc.CallbackEndpointPath + requestURLSuffix)
+			getRequest.AddCookie(&http.Cookie{
+				Name:  "__Host-pinniped-csrf",
+				Value: csrfCookieValue,
+			})
+			subject.ServeHTTP(recorder, getRequest)
+
+			r.False(fallbackHandlerWasCalled)
+
+			// Check just enough of the response to ensure that we wired up the callback endpoint correctly.
+			// The endpoint's own unit tests cover everything else.
+			r.Equal(http.StatusFound, recorder.Code)
+			actualLocation := recorder.Header().Get("Location")
+			r.True(
+				strings.HasPrefix(actualLocation, downstreamRedirectURL),
+				"actual location %s did not start with expected prefix %s",
+				actualLocation, downstreamRedirectURL,
+			)
+			parsedLocation, err := url.Parse(actualLocation)
+			r.NoError(err)
+			actualLocationQueryParams := parsedLocation.Query()
+			r.Contains(actualLocationQueryParams, "code")
+			r.Equal("openid", actualLocationQueryParams.Get("scope"))
+			r.Equal("some-state-value-that-is-32-byte", actualLocationQueryParams.Get("state"))
+
+			// Make sure that we wired up the callback endpoint to use kube storage for fosite sessions.
+			r.Equal(len(kubeClient.Actions()), numberOfKubeActionsBeforeThisRequest+3,
+				"did not perform any kube actions during the callback request, but should have")
 		}
 
 		requireJWKSRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedJWKKeyID string) {
@@ -107,17 +167,27 @@ func TestManager(t *testing.T) {
 
 			parsedUpstreamIDPAuthorizationURL, err := url.Parse(upstreamIDPAuthorizationURL)
 			r.NoError(err)
-			idpListGetter := provider.NewDynamicUpstreamIDPProvider()
-			idpListGetter.SetIDPList([]provider.UpstreamOIDCIdentityProvider{
-				{
-					Name:             "test-idp",
-					ClientID:         "test-client-id",
-					AuthorizationURL: *parsedUpstreamIDPAuthorizationURL,
-					Scopes:           []string{"test-scope"},
+			idpListGetter := oidctestutil.NewIDPListGetter(&oidctestutil.TestUpstreamOIDCIdentityProvider{
+				Name:             "test-idp",
+				ClientID:         "test-client-id",
+				AuthorizationURL: *parsedUpstreamIDPAuthorizationURL,
+				Scopes:           []string{"test-scope"},
+				ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (oidctypes.Token, map[string]interface{}, error) {
+					return oidctypes.Token{},
+						map[string]interface{}{
+							"iss":      "https://some-issuer.com",
+							"sub":      "some-subject",
+							"username": "test-username",
+							"groups":   "test-group1",
+						},
+						nil
 				},
 			})
 
-			subject = NewManager(nextHandler, dynamicJWKSProvider, idpListGetter)
+			kubeClient = fake.NewSimpleClientset()
+			secretsClient := kubeClient.CoreV1().Secrets("some-namespace")
+
+			subject = NewManager(nextHandler, dynamicJWKSProvider, idpListGetter, secretsClient)
 		})
 
 		when("given no providers via SetProviders()", func() {
@@ -164,7 +234,6 @@ func TestManager(t *testing.T) {
 			requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2KeyID)
 			requireJWKSRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2KeyID)
 
-			authRedirectURI := "http://127.0.0.1/callback"
 			authRequestParams := "?" + url.Values{
 				"response_type":         []string{"code"},
 				"scope":                 []string{"openid profile email"},
@@ -173,7 +242,7 @@ func TestManager(t *testing.T) {
 				"nonce":                 []string{"some-nonce-value"},
 				"code_challenge":        []string{"some-challenge"},
 				"code_challenge_method": []string{"S256"},
-				"redirect_uri":          []string{authRedirectURI},
+				"redirect_uri":          []string{downstreamRedirectURL},
 			}.Encode()
 
 			requireAuthorizationRequestToBeHandled(issuer1, authRequestParams, upstreamIDPAuthorizationURL)
@@ -181,7 +250,20 @@ func TestManager(t *testing.T) {
 
 			// Hostnames are case-insensitive, so test that we can handle that.
 			requireAuthorizationRequestToBeHandled(issuer1DifferentCaseHostname, authRequestParams, upstreamIDPAuthorizationURL)
-			requireAuthorizationRequestToBeHandled(issuer2DifferentCaseHostname, authRequestParams, upstreamIDPAuthorizationURL)
+			csrfCookieValue, upstreamStateParam :=
+				requireAuthorizationRequestToBeHandled(issuer2DifferentCaseHostname, authRequestParams, upstreamIDPAuthorizationURL)
+
+			callbackRequestParams := "?" + url.Values{
+				"code":  []string{"some-fake-code"},
+				"state": []string{upstreamStateParam},
+			}.Encode()
+
+			requireCallbackRequestToBeHandled(issuer1, callbackRequestParams, csrfCookieValue)
+			requireCallbackRequestToBeHandled(issuer2, callbackRequestParams, csrfCookieValue)
+
+			// // Hostnames are case-insensitive, so test that we can handle that.
+			requireCallbackRequestToBeHandled(issuer1DifferentCaseHostname, callbackRequestParams, csrfCookieValue)
+			requireCallbackRequestToBeHandled(issuer2DifferentCaseHostname, callbackRequestParams, csrfCookieValue)
 		}
 
 		when("given some valid providers via SetProviders()", func() {

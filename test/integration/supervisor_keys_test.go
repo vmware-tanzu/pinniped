@@ -27,7 +27,7 @@ func TestSupervisorOIDCKeys(t *testing.T) {
 	defer cancel()
 
 	// Create our OPC under test.
-	opc := library.CreateTestOIDCProvider(ctx, t, "", "")
+	opc := library.CreateTestOIDCProvider(ctx, t, "", "", "")
 
 	// Ensure a secret is created with the OPC's JWKS.
 	var updatedOPC *configv1alpha1.OIDCProvider

@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sclevine/agouti"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/square/go-jose.v2"
@@ -30,6 +29,7 @@ import (
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/filesession"
 	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/library/browsertest"
 )
 
 func TestCLIGetKubeconfig(t *testing.T) {
@@ -108,80 +108,14 @@ func runPinnipedCLIGetKubeconfig(t *testing.T, pinnipedExe, token, namespaceName
 	return string(output)
 }
 
-type loginProviderPatterns struct {
-	Name                string
-	IssuerPattern       *regexp.Regexp
-	LoginPagePattern    *regexp.Regexp
-	UsernameSelector    string
-	PasswordSelector    string
-	LoginButtonSelector string
-}
-
-func getLoginProvider(t *testing.T) *loginProviderPatterns {
-	t.Helper()
-	issuer := library.IntegrationEnv(t).CLITestUpstream.Issuer
-	for _, p := range []loginProviderPatterns{
-		{
-			Name:                "Okta",
-			IssuerPattern:       regexp.MustCompile(`\Ahttps://.+\.okta\.com/.+\z`),
-			LoginPagePattern:    regexp.MustCompile(`\Ahttps://.+\.okta\.com/.+\z`),
-			UsernameSelector:    "input#okta-signin-username",
-			PasswordSelector:    "input#okta-signin-password",
-			LoginButtonSelector: "input#okta-signin-submit",
-		},
-		{
-			Name:                "Dex",
-			IssuerPattern:       regexp.MustCompile(`\Ahttps://dex\.dex\.svc\.cluster\.local/dex.*\z`),
-			LoginPagePattern:    regexp.MustCompile(`\Ahttps://dex\.dex\.svc\.cluster\.local/dex/auth/local.+\z`),
-			UsernameSelector:    "input#login",
-			PasswordSelector:    "input#password",
-			LoginButtonSelector: "button#submit-login",
-		},
-	} {
-		if p.IssuerPattern.MatchString(issuer) {
-			return &p
-		}
-	}
-	require.Failf(t, "could not find login provider for issuer %q", issuer)
-	return nil
-}
-
 func TestCLILoginOIDC(t *testing.T) {
 	env := library.IntegrationEnv(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Find the login CSS selectors for the test issuer, or fail fast.
-	loginProvider := getLoginProvider(t)
-
 	// Start the browser driver.
-	t.Logf("opening browser driver")
-	caps := agouti.NewCapabilities()
-	if env.Proxy != "" {
-		t.Logf("configuring Chrome to use proxy %q", env.Proxy)
-		caps = caps.Proxy(agouti.ProxyConfig{
-			ProxyType: "manual",
-			HTTPProxy: env.Proxy,
-			SSLProxy:  env.Proxy,
-			NoProxy:   "127.0.0.1",
-		})
-	}
-	agoutiDriver := agouti.ChromeDriver(
-		agouti.Desired(caps),
-		agouti.ChromeOptions("args", []string{
-			"--no-sandbox",
-			"--ignore-certificate-errors",
-			"--headless", // Comment out this line to see the tests happen in a visible browser window.
-		}),
-		// Uncomment this to see stdout/stderr from chromedriver.
-		// agouti.Debug,
-	)
-	require.NoError(t, agoutiDriver.Start())
-	t.Cleanup(func() { require.NoError(t, agoutiDriver.Stop()) })
-	page, err := agoutiDriver.NewPage(agouti.Browser("chrome"))
-	require.NoError(t, err)
-	require.NoError(t, page.Reset())
+	page := browsertest.Open(t)
 
 	// Build pinniped CLI.
 	t.Logf("building CLI binary")
@@ -262,28 +196,18 @@ func TestCLILoginOIDC(t *testing.T) {
 	t.Logf("navigating to login page")
 	require.NoError(t, page.Navigate(loginURL))
 
-	// Expect to be redirected to the login page.
-	t.Logf("waiting for redirect to %s login page", loginProvider.Name)
-	waitForURL(t, page, loginProvider.LoginPagePattern)
+	// Expect to be redirected to the upstream provider and log in.
+	browsertest.LoginToUpstream(t, page, env.CLITestUpstream)
 
-	// Wait for the login page to be rendered.
-	waitForVisibleElements(t, page, loginProvider.UsernameSelector, loginProvider.PasswordSelector, loginProvider.LoginButtonSelector)
-
-	// Fill in the username and password and click "submit".
-	t.Logf("logging into %s", loginProvider.Name)
-	require.NoError(t, page.First(loginProvider.UsernameSelector).Fill(env.CLITestUpstream.Username))
-	require.NoError(t, page.First(loginProvider.PasswordSelector).Fill(env.CLITestUpstream.Password))
-	require.NoError(t, page.First(loginProvider.LoginButtonSelector).Click())
-
-	// Wait for the login to happen and us be redirected back to a localhost callback.
-	t.Logf("waiting for redirect to localhost callback")
+	// Expect to be redirected to the localhost callback.
+	t.Logf("waiting for redirect to callback")
 	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(env.CLITestUpstream.CallbackURL) + `\?.+\z`)
-	waitForURL(t, page, callbackURLPattern)
+	browsertest.WaitForURL(t, page, callbackURLPattern)
 
 	// Wait for the "pre" element that gets rendered for a `text/plain` page, and
 	// assert that it contains the success message.
 	t.Logf("verifying success page")
-	waitForVisibleElements(t, page, "pre")
+	browsertest.WaitForVisibleElements(t, page, "pre")
 	msg, err := page.First("pre").Text()
 	require.NoError(t, err)
 	require.Equal(t, "you have been logged in and may now close this tab", msg)
@@ -359,44 +283,6 @@ func TestCLILoginOIDC(t *testing.T) {
 	require.NoErrorf(t, json.Unmarshal(cmd3Output, &credOutput3),
 		"command returned something other than an ExecCredential:\n%s", string(cmd2Output))
 	require.NotEqual(t, credOutput2.Status.Token, credOutput3.Status.Token)
-}
-
-func waitForVisibleElements(t *testing.T, page *agouti.Page, selectors ...string) {
-	t.Helper()
-	require.Eventually(t,
-		func() bool {
-			for _, sel := range selectors {
-				vis, err := page.First(sel).Visible()
-				if !(err == nil && vis) {
-					return false
-				}
-			}
-			return true
-		},
-		10*time.Second,
-		100*time.Millisecond,
-	)
-}
-
-func waitForURL(t *testing.T, page *agouti.Page, pat *regexp.Regexp) {
-	var lastURL string
-	require.Eventuallyf(t,
-		func() bool {
-			url, err := page.URL()
-			if err == nil && pat.MatchString(url) {
-				return true
-			}
-			if url != lastURL {
-				t.Logf("saw URL %s", url)
-				lastURL = url
-			}
-			return false
-		},
-		10*time.Second,
-		100*time.Millisecond,
-		"expected to browse to %s, but never got there",
-		pat,
-	)
 }
 
 func readAndExpectEmpty(r io.Reader) (err error) {

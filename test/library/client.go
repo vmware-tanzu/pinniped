@@ -25,6 +25,7 @@ import (
 
 	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/idp/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
 	supervisorclientset "go.pinniped.dev/generated/1.19/client/supervisor/clientset/versioned"
 
@@ -140,12 +141,8 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 	defer cancel()
 
 	webhook, err := webhooks.Create(createContext, &auth1alpha1.WebhookAuthenticator{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "test-webhook-",
-			Labels:       map[string]string{"pinniped.dev/test": ""},
-			Annotations:  map[string]string{"pinniped.dev/testName": t.Name()},
-		},
-		Spec: testEnv.TestWebhook,
+		ObjectMeta: testObjectMeta(t, "webhook"),
+		Spec:       testEnv.TestWebhook,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test WebhookAuthenticator")
 	t.Logf("created test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
@@ -172,7 +169,7 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 //
 // If the provided issuer is not the empty string, then it will be used for the
 // OIDCProvider.Spec.Issuer field. Else, a random issuer will be generated.
-func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer, certSecretName string) *configv1alpha1.OIDCProvider {
+func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer string, certSecretName string, expectStatus configv1alpha1.OIDCProviderStatusCondition) *configv1alpha1.OIDCProvider {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
@@ -180,18 +177,12 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer, certSecre
 	defer cancel()
 
 	if issuer == "" {
-		var err error
-		issuer, err = randomIssuer()
-		require.NoError(t, err)
+		issuer = randomIssuer(t)
 	}
 
 	opcs := NewSupervisorClientset(t).ConfigV1alpha1().OIDCProviders(testEnv.SupervisorNamespace)
 	opc, err := opcs.Create(createContext, &configv1alpha1.OIDCProvider{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "test-oidc-provider-",
-			Labels:       map[string]string{"pinniped.dev/test": ""},
-			Annotations:  map[string]string{"pinniped.dev/testName": t.Name()},
-		},
+		ObjectMeta: testObjectMeta(t, "oidc-provider"),
 		Spec: configv1alpha1.OIDCProviderSpec{
 			Issuer: issuer,
 			TLS:    &configv1alpha1.OIDCProviderTLSSpec{SecretName: certSecretName},
@@ -213,13 +204,103 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer, certSecre
 		}
 	})
 
+	// If we're not expecting any particular status, just return the new OIDCProvider immediately.
+	if expectStatus == "" {
+		return opc
+	}
+
+	// Wait for the OIDCProvider to enter the expected phase (or time out).
+	var result *configv1alpha1.OIDCProvider
+	require.Eventuallyf(t, func() bool {
+		var err error
+		result, err = opcs.Get(ctx, opc.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		return result.Status.Status == expectStatus
+	}, 60*time.Second, 1*time.Second, "expected the UpstreamOIDCProvider to go into phase %s", expectStatus)
+
 	return opc
 }
 
-func randomIssuer() (string, error) {
+func randomIssuer(t *testing.T) string {
 	var buf [8]byte
-	if _, err := io.ReadFull(rand.Reader, buf[:]); err != nil {
-		return "", fmt.Errorf("could not generate random state: %w", err)
+	_, err := io.ReadFull(rand.Reader, buf[:])
+	require.NoError(t, err)
+	return fmt.Sprintf("http://test-issuer-%s.pinniped.dev", hex.EncodeToString(buf[:]))
+}
+
+func CreateTestSecret(t *testing.T, namespace string, baseName string, secretType string, stringData map[string]string) *corev1.Secret {
+	t.Helper()
+	client := NewClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	created, err := client.CoreV1().Secrets(namespace).Create(ctx, &corev1.Secret{
+		ObjectMeta: testObjectMeta(t, baseName),
+		Type:       corev1.SecretType(secretType),
+		StringData: stringData,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		err := client.CoreV1().Secrets(namespace).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+	t.Logf("created test Secret %s", created.Name)
+	return created
+}
+
+func CreateClientCredsSecret(t *testing.T, clientID string, clientSecret string) *corev1.Secret {
+	t.Helper()
+	env := IntegrationEnv(t)
+	return CreateTestSecret(t,
+		env.SupervisorNamespace,
+		"test-client-creds-",
+		"secrets.pinniped.dev/oidc-client",
+		map[string]string{
+			"clientID":     clientID,
+			"clientSecret": clientSecret,
+		},
+	)
+}
+
+func CreateTestUpstreamOIDCProvider(t *testing.T, spec idpv1alpha1.UpstreamOIDCProviderSpec, expectedPhase idpv1alpha1.UpstreamOIDCProviderPhase) *idpv1alpha1.UpstreamOIDCProvider {
+	t.Helper()
+	env := IntegrationEnv(t)
+	client := NewSupervisorClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// Create the UpstreamOIDCProvider using GenerateName to get a random name.
+	upstreams := client.IDPV1alpha1().UpstreamOIDCProviders(env.SupervisorNamespace)
+
+	created, err := upstreams.Create(ctx, &idpv1alpha1.UpstreamOIDCProvider{
+		ObjectMeta: testObjectMeta(t, "upstream"),
+		Spec:       spec,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Always clean this up after this point.
+	t.Cleanup(func() {
+		err := upstreams.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+	t.Logf("created test UpstreamOIDCProvider %s", created.Name)
+
+	// Wait for the UpstreamOIDCProvider to enter the expected phase (or time out).
+	var result *idpv1alpha1.UpstreamOIDCProvider
+	require.Eventuallyf(t, func() bool {
+		var err error
+		result, err = upstreams.Get(ctx, created.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		return result.Status.Phase == expectedPhase
+	}, 60*time.Second, 1*time.Second, "expected the UpstreamOIDCProvider to go into phase %s", expectedPhase)
+	return result
+}
+
+func testObjectMeta(t *testing.T, baseName string) metav1.ObjectMeta {
+	return metav1.ObjectMeta{
+		GenerateName: fmt.Sprintf("test-%s-", baseName),
+		Labels:       map[string]string{"pinniped.dev/test": ""},
+		Annotations:  map[string]string{"pinniped.dev/testName": t.Name()},
 	}
-	return fmt.Sprintf("http://test-issuer-%s.pinniped.dev", hex.EncodeToString(buf[:])), nil
 }

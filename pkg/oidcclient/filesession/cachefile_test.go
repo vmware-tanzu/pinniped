@@ -13,6 +13,7 @@ import (
 
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
 // validSession should be the same data as `testdata/valid.yaml`.
@@ -28,17 +29,17 @@ var validSession = sessionCache{
 			},
 			CreationTimestamp: metav1.NewTime(time.Date(2020, 10, 20, 18, 42, 7, 0, time.UTC).Local()),
 			LastUsedTimestamp: metav1.NewTime(time.Date(2020, 10, 20, 18, 45, 31, 0, time.UTC).Local()),
-			Tokens: oidcclient.Token{
-				AccessToken: &oidcclient.AccessToken{
+			Tokens: oidctypes.Token{
+				AccessToken: &oidctypes.AccessToken{
 					Token:  "test-access-token",
 					Type:   "Bearer",
 					Expiry: metav1.NewTime(time.Date(2020, 10, 20, 19, 46, 30, 0, time.UTC).Local()),
 				},
-				IDToken: &oidcclient.IDToken{
+				IDToken: &oidctypes.IDToken{
 					Token:  "test-id-token",
 					Expiry: metav1.NewTime(time.Date(2020, 10, 20, 19, 42, 07, 0, time.UTC).Local()),
 				},
-				RefreshToken: &oidcclient.RefreshToken{
+				RefreshToken: &oidctypes.RefreshToken{
 					Token: "test-refresh-token",
 				},
 			},
@@ -140,8 +141,8 @@ func TestNormalized(t *testing.T) {
 			// ID token is empty, but not nil.
 			{
 				LastUsedTimestamp: metav1.NewTime(now),
-				Tokens: oidcclient.Token{
-					IDToken: &oidcclient.IDToken{
+				Tokens: oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
 						Token:  "",
 						Expiry: metav1.NewTime(now.Add(1 * time.Minute)),
 					},
@@ -150,8 +151,8 @@ func TestNormalized(t *testing.T) {
 			// ID token is expired.
 			{
 				LastUsedTimestamp: metav1.NewTime(now),
-				Tokens: oidcclient.Token{
-					IDToken: &oidcclient.IDToken{
+				Tokens: oidctypes.Token{
+					IDToken: &oidctypes.IDToken{
 						Token:  "test-id-token",
 						Expiry: metav1.NewTime(now.Add(-1 * time.Minute)),
 					},
@@ -160,8 +161,8 @@ func TestNormalized(t *testing.T) {
 			// Access token is empty, but not nil.
 			{
 				LastUsedTimestamp: metav1.NewTime(now),
-				Tokens: oidcclient.Token{
-					AccessToken: &oidcclient.AccessToken{
+				Tokens: oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
 						Token:  "",
 						Expiry: metav1.NewTime(now.Add(1 * time.Minute)),
 					},
@@ -170,8 +171,8 @@ func TestNormalized(t *testing.T) {
 			// Access token is expired.
 			{
 				LastUsedTimestamp: metav1.NewTime(now),
-				Tokens: oidcclient.Token{
-					AccessToken: &oidcclient.AccessToken{
+				Tokens: oidctypes.Token{
+					AccessToken: &oidctypes.AccessToken{
 						Token:  "test-access-token",
 						Expiry: metav1.NewTime(now.Add(-1 * time.Minute)),
 					},
@@ -180,8 +181,8 @@ func TestNormalized(t *testing.T) {
 			// Refresh token is empty, but not nil.
 			{
 				LastUsedTimestamp: metav1.NewTime(now),
-				Tokens: oidcclient.Token{
-					RefreshToken: &oidcclient.RefreshToken{
+				Tokens: oidctypes.Token{
+					RefreshToken: &oidctypes.RefreshToken{
 						Token: "",
 					},
 				},
@@ -189,8 +190,8 @@ func TestNormalized(t *testing.T) {
 			// Session has a refresh token but it hasn't been used in >90 days.
 			{
 				LastUsedTimestamp: metav1.NewTime(now.AddDate(-1, 0, 0)),
-				Tokens: oidcclient.Token{
-					RefreshToken: &oidcclient.RefreshToken{
+				Tokens: oidctypes.Token{
+					RefreshToken: &oidctypes.RefreshToken{
 						Token: "test-refresh-token",
 					},
 				},
@@ -199,8 +200,8 @@ func TestNormalized(t *testing.T) {
 			{
 				CreationTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
 				LastUsedTimestamp: metav1.NewTime(now),
-				Tokens: oidcclient.Token{
-					RefreshToken: &oidcclient.RefreshToken{
+				Tokens: oidctypes.Token{
+					RefreshToken: &oidctypes.RefreshToken{
 						Token: "test-refresh-token2",
 					},
 				},
@@ -208,8 +209,8 @@ func TestNormalized(t *testing.T) {
 			{
 				CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
 				LastUsedTimestamp: metav1.NewTime(now),
-				Tokens: oidcclient.Token{
-					RefreshToken: &oidcclient.RefreshToken{
+				Tokens: oidctypes.Token{
+					RefreshToken: &oidctypes.RefreshToken{
 						Token: "test-refresh-token1",
 					},
 				},
@@ -223,8 +224,8 @@ func TestNormalized(t *testing.T) {
 				{
 					CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
 					LastUsedTimestamp: metav1.NewTime(now),
-					Tokens: oidcclient.Token{
-						RefreshToken: &oidcclient.RefreshToken{
+					Tokens: oidctypes.Token{
+						RefreshToken: &oidctypes.RefreshToken{
 							Token: "test-refresh-token1",
 						},
 					},
@@ -232,8 +233,8 @@ func TestNormalized(t *testing.T) {
 				{
 					CreationTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
 					LastUsedTimestamp: metav1.NewTime(now),
-					Tokens: oidcclient.Token{
-						RefreshToken: &oidcclient.RefreshToken{
+					Tokens: oidctypes.Token{
+						RefreshToken: &oidctypes.RefreshToken{
 							Token: "test-refresh-token2",
 						},
 					},

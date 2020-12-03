@@ -18,12 +18,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
-	"gopkg.in/square/go-jose.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/httputil/httperr"
-	"go.pinniped.dev/internal/mocks/mockkeyset"
+	"go.pinniped.dev/internal/mocks/mockupstreamoidcidentityprovider"
+	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 	"go.pinniped.dev/pkg/oidcclient/state"
 )
@@ -31,19 +33,19 @@ import (
 // mockSessionCache exists to avoid an import cycle if we generate mocks into another package.
 type mockSessionCache struct {
 	t               *testing.T
-	getReturnsToken *Token
+	getReturnsToken *oidctypes.Token
 	sawGetKeys      []SessionCacheKey
 	sawPutKeys      []SessionCacheKey
-	sawPutTokens    []*Token
+	sawPutTokens    []*oidctypes.Token
 }
 
-func (m *mockSessionCache) GetToken(key SessionCacheKey) *Token {
+func (m *mockSessionCache) GetToken(key SessionCacheKey) *oidctypes.Token {
 	m.t.Logf("saw mock session cache GetToken() with client ID %s", key.ClientID)
 	m.sawGetKeys = append(m.sawGetKeys, key)
 	return m.getReturnsToken
 }
 
-func (m *mockSessionCache) PutToken(key SessionCacheKey, token *Token) {
+func (m *mockSessionCache) PutToken(key SessionCacheKey, token *oidctypes.Token) {
 	m.t.Logf("saw mock session cache PutToken() with client ID %s and ID token %s", key.ClientID, token.IDToken.Token)
 	m.sawPutKeys = append(m.sawPutKeys, key)
 	m.sawPutTokens = append(m.sawPutTokens, token)
@@ -54,20 +56,10 @@ func TestLogin(t *testing.T) {
 	time1Unix := int64(2075807775)
 	require.Equal(t, time1Unix, time1.Add(2*time.Minute).Unix())
 
-	testToken := Token{
-		AccessToken: &AccessToken{
-			Token:  "test-access-token",
-			Expiry: metav1.NewTime(time1.Add(1 * time.Minute)),
-		},
-		RefreshToken: &RefreshToken{
-			Token: "test-refresh-token",
-		},
-		IDToken: &IDToken{
-			// Test JWT generated with https://smallstep.com/docs/cli/crypto/jwt/ (using time1Unix from above):
-			// step crypto keypair key.pub key.priv --kty RSA --no-password --insecure --force && echo '{}' | step crypto jwt sign --key key.priv --aud test-client-id --sub test-user --subtle --kid="test-kid" --jti="test-jti" --exp 2075807775
-			Token:  "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJhdWQiOiJ0ZXN0LWNsaWVudC1pZCIsImV4cCI6MjA3NTgwNzc3NSwiaWF0IjoxNjAzMzk5NTY4LCJpc3MiOiJ0ZXN0LWlzc3VlciIsImp0aSI6InRlc3QtanRpIiwibmJmIjoxNjAzMzk5NTY4LCJzdWIiOiJ0ZXN0LXVzZXIifQ.CdwUWQb6xELeFlC4u84K4rzks7YiDJiXxIo_SaRvCHBijxtil812RBRfPuAyYKJlGwFx1g-JYvkUg69X5NmvmLXkaOdHIKUAT7Nqa7yqd1xOAP9IlFj9qZM3Q7s8gWWW9da-_ryagzN4fyGfNfYeGhzIriSMaVpuBGz1eg6f-6VuuulnoiOpl8A0l50u0MdRjjsxRHuiR2loIhUxoIQQ9xN8w53UiP0R1uz8_uV0_K93RSq37aPjsnCXRLwUUb3azkRVe6B9EUW1ihthQ-KfRaU1iq2rY1m5UqNzf0NqDXCrN5SF-GVxOhKXJTsN4-PABfJBjqxg6dGUGeIa2JhFcA",
-			Expiry: metav1.NewTime(time1.Add(2 * time.Minute)),
-		},
+	testToken := oidctypes.Token{
+		AccessToken:  &oidctypes.AccessToken{Token: "test-access-token", Expiry: metav1.NewTime(time1.Add(1 * time.Minute))},
+		RefreshToken: &oidctypes.RefreshToken{Token: "test-refresh-token"},
+		IDToken:      &oidctypes.IDToken{Token: "test-id-token", Expiry: metav1.NewTime(time1.Add(2 * time.Minute))},
 	}
 
 	// Start a test server that returns 500 errors
@@ -76,7 +68,7 @@ func TestLogin(t *testing.T) {
 	}))
 	t.Cleanup(errorServer.Close)
 
-	// Start a test server that returns a real keyset and answers refresh requests.
+	// Start a test server that returns a real discovery document and answers refresh requests.
 	providerMux := http.NewServeMux()
 	successServer := httptest.NewServer(providerMux)
 	t.Cleanup(successServer.Close)
@@ -144,7 +136,7 @@ func TestLogin(t *testing.T) {
 		issuer    string
 		clientID  string
 		wantErr   string
-		wantToken *Token
+		wantToken *oidctypes.Token
 	}{
 		{
 			name: "option error",
@@ -191,8 +183,8 @@ func TestLogin(t *testing.T) {
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					cache := &mockSessionCache{t: t, getReturnsToken: &Token{
-						IDToken: &IDToken{
+					cache := &mockSessionCache{t: t, getReturnsToken: &oidctypes.Token{
+						IDToken: &oidctypes.IDToken{
 							Token:  "test-id-token",
 							Expiry: metav1.NewTime(time.Now()), // less than Now() + minIDTokenValidity
 						},
@@ -246,12 +238,20 @@ func TestLogin(t *testing.T) {
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					cache := &mockSessionCache{t: t, getReturnsToken: &Token{
-						IDToken: &IDToken{
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+						mock := mockUpstream(t)
+						mock.EXPECT().
+							ValidateToken(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce("")).
+							Return(testToken, nil, nil)
+						return mock
+					}
+
+					cache := &mockSessionCache{t: t, getReturnsToken: &oidctypes.Token{
+						IDToken: &oidctypes.IDToken{
 							Token:  "expired-test-id-token",
 							Expiry: metav1.Now(), // less than Now() + minIDTokenValidity
 						},
-						RefreshToken: &RefreshToken{Token: "test-refresh-token"},
+						RefreshToken: &oidctypes.RefreshToken{Token: "test-refresh-token"},
 					}}
 					t.Cleanup(func() {
 						cacheKey := SessionCacheKey{
@@ -266,12 +266,6 @@ func TestLogin(t *testing.T) {
 						require.Equal(t, testToken.IDToken.Token, cache.sawPutTokens[0].IDToken.Token)
 					})
 					h.cache = cache
-
-					h.oidcDiscover = func(ctx context.Context, iss string) (discoveryI, error) {
-						provider, err := oidc.NewProvider(ctx, iss)
-						require.NoError(t, err)
-						return &mockDiscovery{provider: provider}, nil
-					}
 					return nil
 				}
 			},
@@ -283,12 +277,20 @@ func TestLogin(t *testing.T) {
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					cache := &mockSessionCache{t: t, getReturnsToken: &Token{
-						IDToken: &IDToken{
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+						mock := mockUpstream(t)
+						mock.EXPECT().
+							ValidateToken(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce("")).
+							Return(oidctypes.Token{}, nil, fmt.Errorf("some validation error"))
+						return mock
+					}
+
+					cache := &mockSessionCache{t: t, getReturnsToken: &oidctypes.Token{
+						IDToken: &oidctypes.IDToken{
 							Token:  "expired-test-id-token",
 							Expiry: metav1.Now(), // less than Now() + minIDTokenValidity
 						},
-						RefreshToken: &RefreshToken{Token: "test-refresh-token-returning-invalid-id-token"},
+						RefreshToken: &oidctypes.RefreshToken{Token: "test-refresh-token-returning-invalid-id-token"},
 					}}
 					t.Cleanup(func() {
 						require.Empty(t, cache.sawPutKeys)
@@ -296,16 +298,10 @@ func TestLogin(t *testing.T) {
 					})
 					h.cache = cache
 
-					h.oidcDiscover = func(ctx context.Context, iss string) (discoveryI, error) {
-						provider, err := oidc.NewProvider(ctx, iss)
-						require.NoError(t, err)
-						return &mockDiscovery{provider: provider}, nil
-					}
-
 					return nil
 				}
 			},
-			wantErr: "received invalid ID token: oidc: malformed jwt: square/go-jose: compact JWS format must have three parts",
+			wantErr: "some validation error",
 		},
 		{
 			name:     "session cache hit but refresh fails",
@@ -313,24 +309,18 @@ func TestLogin(t *testing.T) {
 			clientID: "not-the-test-client-id",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					cache := &mockSessionCache{t: t, getReturnsToken: &Token{
-						IDToken: &IDToken{
+					cache := &mockSessionCache{t: t, getReturnsToken: &oidctypes.Token{
+						IDToken: &oidctypes.IDToken{
 							Token:  "expired-test-id-token",
 							Expiry: metav1.Now(), // less than Now() + minIDTokenValidity
 						},
-						RefreshToken: &RefreshToken{Token: "test-refresh-token"},
+						RefreshToken: &oidctypes.RefreshToken{Token: "test-refresh-token"},
 					}}
 					t.Cleanup(func() {
 						require.Empty(t, cache.sawPutKeys)
 						require.Empty(t, cache.sawPutTokens)
 					})
 					h.cache = cache
-
-					h.oidcDiscover = func(ctx context.Context, iss string) (discoveryI, error) {
-						provider, err := oidc.NewProvider(ctx, iss)
-						require.NoError(t, err)
-						return &mockDiscovery{provider: provider}, nil
-					}
 
 					h.listenAddr = "invalid-listen-address"
 
@@ -413,7 +403,7 @@ func TestLogin(t *testing.T) {
 					t.Cleanup(func() {
 						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
 						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawPutKeys)
-						require.Equal(t, []*Token{&testToken}, cache.sawPutTokens)
+						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
 					})
 					require.NoError(t, WithSessionCache(cache)(h))
 					require.NoError(t, WithClient(&http.Client{Timeout: 10 * time.Second})(h))
@@ -481,7 +471,7 @@ func TestLogin(t *testing.T) {
 				require.NotNil(t, tok.AccessToken)
 				require.Equal(t, want.Token, tok.AccessToken.Token)
 				require.Equal(t, want.Type, tok.AccessToken.Type)
-				requireTimeInDelta(t, want.Expiry.Time, tok.AccessToken.Expiry.Time, 5*time.Second)
+				testutil.RequireTimeInDelta(t, want.Expiry.Time, tok.AccessToken.Expiry.Time, 5*time.Second)
 			} else {
 				assert.Nil(t, tok.AccessToken)
 			}
@@ -489,7 +479,7 @@ func TestLogin(t *testing.T) {
 			if want := tt.wantToken.IDToken; want != nil {
 				require.NotNil(t, tok.IDToken)
 				require.Equal(t, want.Token, tok.IDToken.Token)
-				requireTimeInDelta(t, want.Expiry.Time, tok.IDToken.Expiry.Time, 5*time.Second)
+				testutil.RequireTimeInDelta(t, want.Expiry.Time, tok.IDToken.Expiry.Time, 5*time.Second)
 			} else {
 				assert.Nil(t, tok.IDToken)
 			}
@@ -498,11 +488,13 @@ func TestLogin(t *testing.T) {
 }
 
 func TestHandleAuthCodeCallback(t *testing.T) {
+	const testRedirectURI = "http://127.0.0.1:12324/callback"
+
 	tests := []struct {
 		name           string
 		method         string
 		query          string
-		returnIDTok    string
+		opt            func(t *testing.T) Option
 		wantErr        string
 		wantHTTPStatus int
 	}{
@@ -528,94 +520,51 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 		{
 			name:           "invalid code",
 			query:          "state=test-state&code=invalid",
-			wantErr:        "could not complete code exchange: oauth2: cannot fetch token: 403 Forbidden\nResponse: invalid authorization code\n",
+			wantErr:        "could not complete code exchange: some exchange error",
 			wantHTTPStatus: http.StatusBadRequest,
-		},
-		{
-			name:           "missing ID token",
-			query:          "state=test-state&code=valid",
-			returnIDTok:    "",
-			wantErr:        "received response missing ID token",
-			wantHTTPStatus: http.StatusBadRequest,
-		},
-		{
-			name:           "invalid ID token",
-			query:          "state=test-state&code=valid",
-			returnIDTok:    "invalid-jwt",
-			wantErr:        "received invalid ID token: oidc: malformed jwt: square/go-jose: compact JWS format must have three parts",
-			wantHTTPStatus: http.StatusBadRequest,
-		},
-		{
-			name:  "invalid access token hash",
-			query: "state=test-state&code=valid",
-
-			// Test JWT generated with https://smallstep.com/docs/cli/crypto/jwt/:
-			// step crypto keypair key.pub key.priv --kty RSA --no-password --insecure --force && echo '{"at_hash": "invalid-at-hash"}' | step crypto jwt sign --key key.priv --aud test-client-id --sub test-user --subtle --kid="test-kid" --jti="test-jti"
-			returnIDTok: "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJhdF9oYXNoIjoiaW52YWxpZC1hdC1oYXNoIiwiYXVkIjoidGVzdC1jbGllbnQtaWQiLCJpYXQiOjE2MDIyODM3OTEsImp0aSI6InRlc3QtanRpIiwibmJmIjoxNjAyMjgzNzkxLCJzdWIiOiJ0ZXN0LXVzZXIifQ.jryXr4jiwcf79wBLaHpjdclEYHoUFGhvTu95QyA6Hnk9NQ0x1vsWYurtj7a8uKydNPryC_HNZi9QTAE_tRIJjycseog3695-5y4B4EZlqL-a94rdOtffuF2O_lnPbKvoja9EKNrp0kLBCftFRHhLAEwuP0N9E5padZwPpIGK0yE_JqljnYgCySvzsQu7tasR38yaULny13h3mtp2WRHPG5DrLyuBuF8Z01hSgRi5hGcVpgzTwBgV5-eMaSUCUo-ZDkqUsLQI6dVlaikCSKYZRb53HeexH0tB_R9PJJHY7mIr-rS76kkQEx9pLuVnheIH9Oc6zbdYWg-zWMijopA8Pg",
-
-			wantErr:        "received invalid ID token: access token hash does not match value in ID token",
-			wantHTTPStatus: http.StatusBadRequest,
-		},
-		{
-			name:  "invalid nonce",
-			query: "state=test-state&code=valid",
-
-			// Test JWT generated with https://smallstep.com/docs/cli/crypto/jwt/:
-			// step crypto keypair key.pub key.priv --kty RSA --no-password --insecure --force && echo '{"nonce": "invalid-nonce"}' | step crypto jwt sign --key key.priv --aud test-client-id --sub test-user --subtle --kid="test-kid" --jti="test-jti"
-			returnIDTok: "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJhdWQiOiJ0ZXN0LWNsaWVudC1pZCIsImlhdCI6MTYwMjI4Mzc0MSwianRpIjoidGVzdC1qdGkiLCJuYmYiOjE2MDIyODM3NDEsIm5vbmNlIjoiaW52YWxpZC1ub25jZSIsInN1YiI6InRlc3QtdXNlciJ9.PRpq-7j5djaIAkraL-8t8ad9Xm4hM8RW67gyD1VIe0BecWeBFxsTuh3SZVKM9zmcwTgjudsyn8kQOwipDa49IN4PV8FcJA_uUJZi2wiqGJUSTG2K5I89doV_7e0RM1ZYIDDW1G2heKJNW7MbKkX7iEPr7u4MyEzswcPcupbyDA-CQFeL95vgwawoqa6yO94ympTbozqiNfj6Xyw_nHtThQnstjWsJZ9s2mUgppZezZv4HZYTQ7c3e_bzwhWgCzh2CSDJn9_Ra_n_4GcVkpHbsHTP35dFsnf0vactPx6CAu6A1-Apk-BruCktpZ3B4Ercf1UnUOHdGqzQKJtqvB03xQ",
-
-			wantHTTPStatus: http.StatusBadRequest,
-			wantErr:        `received ID token with invalid nonce: invalid nonce (expected "test-nonce", got "invalid-nonce")`,
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+						mock := mockUpstream(t)
+						mock.EXPECT().
+							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "invalid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
+							Return(oidctypes.Token{}, nil, fmt.Errorf("some exchange error"))
+						return mock
+					}
+					return nil
+				}
+			},
 		},
 		{
 			name:  "valid",
 			query: "state=test-state&code=valid",
-
-			// Test JWT generated with https://smallstep.com/docs/cli/crypto/jwt/:
-			// step crypto keypair key.pub key.priv --kty RSA --no-password --insecure --force && echo '{"nonce": "test-nonce"}' | step crypto jwt sign --key key.priv --aud test-client-id --sub test-user --subtle --kid="test-kid" --jti="test-jti"
-			returnIDTok: "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJhdWQiOiJ0ZXN0LWNsaWVudC1pZCIsImlhdCI6MTYwMjUzMTU2NywianRpIjoidGVzdC1qdGkiLCJuYmYiOjE2MDI1MzE1NjcsIm5vbmNlIjoidGVzdC1ub25jZSIsInN1YiI6InRlc3QtdXNlciJ9.LbOA31iwJZBM4ayY5Oud-HArLXbmtAIhZv_LazDqbzA2Iw87RxoBemfiPUJeAesdnO1LKSjBwbltZwtjvbLWHp1R5tqrSMr_hl2OyZv1cpEX-9QaTcQILJ5qR00riRLz34ZCQFyF-FfQpP1r4dNqFrxHuiBwKuPE7zogc83ZYJgAQM5Fao9rIRY9JStL_3pURa9JnnSHFlkLvFYv3TKEUyvnW4pWvYZcsGI7mys43vuSjpG7ZSrW3vCxovuIpXYqAhamZL_XexWUsXvi3ej9HNlhnhOFhN4fuPSc0PWDWaN0CLWmoo8gvOdQWo5A4GD4bNGBzjYOd-pYqsDfseRt1Q",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+						mock := mockUpstream(t)
+						mock.EXPECT().
+							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
+							Return(oidctypes.Token{IDToken: &oidctypes.IDToken{Token: "test-id-token"}}, nil, nil)
+						return mock
+					}
+					return nil
+				}
+			},
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				require.Equal(t, http.MethodPost, r.Method)
-				require.NoError(t, r.ParseForm())
-				require.Equal(t, "test-client-id", r.Form.Get("client_id"))
-				require.Equal(t, "test-pkce", r.Form.Get("code_verifier"))
-				require.Equal(t, "authorization_code", r.Form.Get("grant_type"))
-				require.NotEmpty(t, r.Form.Get("code"))
-				if r.Form.Get("code") != "valid" {
-					http.Error(w, "invalid authorization code", http.StatusForbidden)
-					return
-				}
-				var response struct {
-					oauth2.Token
-					IDToken string `json:"id_token,omitempty"`
-				}
-				response.AccessToken = "test-access-token"
-				response.Expiry = time.Now().Add(time.Hour)
-				response.IDToken = tt.returnIDTok
-				w.Header().Set("content-type", "application/json")
-				require.NoError(t, json.NewEncoder(w).Encode(&response))
-			}))
-			t.Cleanup(tokenServer.Close)
-
 			h := &handlerState{
 				callbacks: make(chan callbackResult, 1),
 				state:     state.State("test-state"),
 				pkce:      pkce.Code("test-pkce"),
 				nonce:     nonce.Nonce("test-nonce"),
-				oauth2Config: &oauth2.Config{
-					ClientID:    "test-client-id",
-					RedirectURL: "http://localhost:12345/callback",
-					Endpoint: oauth2.Endpoint{
-						TokenURL:  tokenServer.URL,
-						AuthStyle: oauth2.AuthStyleInParams,
-					},
-				},
-				idTokenVerifier: mockVerifier(),
+			}
+			if tt.opt != nil {
+				require.NoError(t, tt.opt(t)(h))
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -651,47 +600,34 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				}
 				require.NoError(t, result.err)
 				require.NotNil(t, result.token)
-				require.Equal(t, result.token.IDToken.Token, tt.returnIDTok)
+				require.Equal(t, result.token.IDToken.Token, "test-id-token")
 			}
 		})
 	}
 }
 
-// mockVerifier returns an *oidc.IDTokenVerifier that validates any correctly serialized JWT without doing much else.
-func mockVerifier() *oidc.IDTokenVerifier {
-	mockKeySet := mockkeyset.NewMockKeySet(gomock.NewController(nil))
-	mockKeySet.EXPECT().VerifySignature(gomock.Any(), gomock.Any()).
-		AnyTimes().
-		DoAndReturn(func(ctx context.Context, jwt string) ([]byte, error) {
-			jws, err := jose.ParseSigned(jwt)
-			if err != nil {
-				return nil, err
-			}
-			return jws.UnsafePayloadWithoutVerification(), nil
-		})
-
-	return oidc.NewVerifier("", mockKeySet, &oidc.Config{
-		SkipIssuerCheck:   true,
-		SkipExpiryCheck:   true,
-		SkipClientIDCheck: true,
-	})
+func mockUpstream(t *testing.T) *mockupstreamoidcidentityprovider.MockUpstreamOIDCIdentityProviderI {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	return mockupstreamoidcidentityprovider.NewMockUpstreamOIDCIdentityProviderI(ctrl)
 }
 
-type mockDiscovery struct{ provider *oidc.Provider }
+// hasAccessTokenMatcher is a gomock.Matcher that expects an *oauth2.Token with a particular access token.
+type hasAccessTokenMatcher struct{ expected string }
 
-func (m *mockDiscovery) Endpoint() oauth2.Endpoint { return m.provider.Endpoint() }
+func (m hasAccessTokenMatcher) Matches(arg interface{}) bool {
+	return arg.(*oauth2.Token).AccessToken == m.expected
+}
 
-func (m *mockDiscovery) Verifier(config *oidc.Config) *oidc.IDTokenVerifier { return mockVerifier() }
+func (m hasAccessTokenMatcher) Got(got interface{}) string {
+	return got.(*oauth2.Token).AccessToken
+}
 
-func requireTimeInDelta(t *testing.T, t1 time.Time, t2 time.Time, delta time.Duration) {
-	require.InDeltaf(t,
-		float64(t1.UnixNano()),
-		float64(t2.UnixNano()),
-		float64(delta.Nanoseconds()),
-		"expected %s and %s to be < %s apart, but they are %s apart",
-		t1.Format(time.RFC3339Nano),
-		t2.Format(time.RFC3339Nano),
-		delta.String(),
-		t1.Sub(t2).String(),
-	)
+func (m hasAccessTokenMatcher) String() string {
+	return m.expected
+}
+
+func HasAccessToken(expected string) gomock.Matcher {
+	return hasAccessTokenMatcher{expected: expected}
 }

@@ -25,7 +25,9 @@ import (
 
 	coreosoidc "github.com/coreos/go-oidc"
 	"github.com/ory/fosite"
+	"github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
+	"github.com/ory/fosite/handler/pkce"
 	"github.com/ory/fosite/storage"
 	"github.com/ory/fosite/token/jwt"
 	"github.com/stretchr/testify/require"
@@ -52,6 +54,14 @@ const (
 
 	timeComparisonFudgeSeconds = 15
 )
+
+type CombinedStorage interface {
+	oauth2.TokenRevocationStorage
+	oauth2.CoreStorage
+	openid.OpenIDConnectRequestStorage
+	pkce.PKCERequestStorage
+	fosite.ClientManager
+}
 
 var (
 	goodAuthTime        = time.Date(1, 2, 3, 4, 5, 6, 7, time.Local)
@@ -196,7 +206,7 @@ func TestTokenEndpoint(t *testing.T) {
 		name string
 
 		authRequest func(authRequest *http.Request)
-		storage     func(t *testing.T, s *storage.MemoryStore, authCode string)
+		storage     func(t *testing.T, s CombinedStorage, authCode string)
 		request     func(r *http.Request, authCode string)
 
 		wantStatus     int
@@ -313,7 +323,7 @@ func TestTokenEndpoint(t *testing.T) {
 		},
 		{
 			name: "auth code is invalidated",
-			storage: func(t *testing.T, s *storage.MemoryStore, authCode string) {
+			storage: func(t *testing.T, s CombinedStorage, authCode string) {
 				err := s.InvalidateAuthorizeCodeSession(context.Background(), getFositeDataSignature(t, authCode))
 				require.NoError(t, err)
 			},
@@ -364,6 +374,8 @@ func TestTokenEndpoint(t *testing.T) {
 			}
 
 			oauthStore := storage.NewMemoryStore()
+			// Add the Pinniped CLI client.
+			oauthStore.Clients[goodClient] = oidc.PinnipedCLIOIDCClient()
 			oauthHelper, authCode, jwtSigningKey := makeHappyOauthHelper(t, authRequest, oauthStore)
 			if test.storage != nil {
 				test.storage(t, oauthStore, authCode)
@@ -407,6 +419,8 @@ func TestTokenEndpoint(t *testing.T) {
 	t.Run("auth code is used twice", func(t *testing.T) {
 		authRequest := deepCopyRequestForm(happyAuthRequest)
 		oauthStore := storage.NewMemoryStore()
+		// Add the Pinniped CLI client.
+		oauthStore.Clients[goodClient] = oidc.PinnipedCLIOIDCClient()
 		oauthHelper, authCode, jwtSigningKey := makeHappyOauthHelper(t, authRequest, oauthStore)
 		subject := NewHandler(oauthHelper)
 
@@ -511,15 +525,12 @@ func getFositeDataSignature(t *testing.T, data string) string {
 func makeHappyOauthHelper(
 	t *testing.T,
 	authRequest *http.Request,
-	store *storage.MemoryStore,
+	store CombinedStorage,
 ) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
 	t.Helper()
 
 	jwtSigningKey := generateJWTSigningKey(t)
-	oauthHelper := oidc.FositeOauth2Helper(goodIssuer, store, []byte(hmacSecret), jwtSigningKey)
-
-	// Add the Pinniped CLI client.
-	store.Clients[goodClient] = oidc.PinnipedCLIOIDCClient()
+	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), jwtSigningKey)
 
 	// Simulate the auth endpoint running so Fosite code will fill the store with realistic values.
 	//
@@ -570,7 +581,7 @@ func doSHA256(s string) string {
 func requireInvalidAuthCodeStorage(
 	t *testing.T,
 	code string,
-	storage *storage.MemoryStore,
+	storage CombinedStorage,
 ) {
 	t.Helper()
 
@@ -582,7 +593,7 @@ func requireInvalidAuthCodeStorage(
 func requireValidAccessTokenStorage(
 	t *testing.T,
 	body map[string]interface{},
-	storage *storage.MemoryStore,
+	storage CombinedStorage,
 	wantGrantedOpenidScope bool,
 ) {
 	t.Helper()
@@ -631,7 +642,7 @@ func requireValidAccessTokenStorage(
 func requireInvalidAccessTokenStorage(
 	t *testing.T,
 	body map[string]interface{},
-	storage *storage.MemoryStore,
+	storage CombinedStorage,
 ) {
 	t.Helper()
 
@@ -647,7 +658,7 @@ func requireInvalidAccessTokenStorage(
 func requireInvalidPKCEStorage(
 	t *testing.T,
 	code string,
-	storage *storage.MemoryStore,
+	storage CombinedStorage,
 ) {
 	t.Helper()
 
@@ -661,7 +672,7 @@ func requireValidOIDCStorage(
 	t *testing.T,
 	body map[string]interface{},
 	code string,
-	storage *storage.MemoryStore,
+	storage CombinedStorage,
 	wantGrantedOpenidScope bool,
 ) {
 	t.Helper()

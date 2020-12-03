@@ -591,6 +591,7 @@ func hashAccessToken(accessToken string) string {
 	return base64.RawURLEncoding.EncodeToString(b[:len(b)/2])
 }
 
+// TODO: de-dup me (manager test).
 func doSHA256(s string) string {
 	b := sha256.Sum256([]byte(s))
 	return base64.RawURLEncoding.EncodeToString(b[:])
@@ -856,6 +857,7 @@ func requireValidIDToken(t *testing.T, body map[string]interface{}, jwtSigningKe
 	requireTimeInDelta(t, goodAuthTime, authTime, timeComparisonFudgeSeconds*time.Second)
 }
 
+// TODO: de-dup me (manager test).
 func newStaticKeySet(publicKey crypto.PublicKey) coreosoidc.KeySet {
 	return &staticKeySet{publicKey}
 }

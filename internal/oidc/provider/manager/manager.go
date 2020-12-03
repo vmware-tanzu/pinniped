@@ -18,6 +18,7 @@ import (
 	"go.pinniped.dev/internal/oidc/discovery"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/token"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -113,6 +114,10 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 			encoder,
 			encoder,
 			issuer+oidc.CallbackEndpointPath,
+		)
+
+		m.providerHandlers[(issuerHostWithPath + oidc.TokenEndpointPath)] = token.NewHandler(
+			oauthHelperWithKubeStorage,
 		)
 
 		plog.Debug("oidc provider manager added or updated issuer", "issuer", issuer)

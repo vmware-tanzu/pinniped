@@ -10,29 +10,38 @@ import (
 )
 
 type DynamicJWKSProvider interface {
-	SetIssuerToJWKSMap(issuerToJWKSMap map[string]*jose.JSONWebKeySet)
-	GetJWKS(issuerName string) *jose.JSONWebKeySet
+	SetIssuerToJWKSMap(
+		issuerToJWKSMap map[string]*jose.JSONWebKeySet,
+		issuerToActiveJWKMap map[string]*jose.JSONWebKey,
+	)
+	GetJWKS(issuerName string) (jwks *jose.JSONWebKeySet, activeJWK *jose.JSONWebKey)
 }
 
 type dynamicJWKSProvider struct {
-	issuerToJWKSMap map[string]*jose.JSONWebKeySet
-	mutex           sync.RWMutex
+	issuerToJWKSMap      map[string]*jose.JSONWebKeySet
+	issuerToActiveJWKMap map[string]*jose.JSONWebKey
+	mutex                sync.RWMutex
 }
 
 func NewDynamicJWKSProvider() DynamicJWKSProvider {
 	return &dynamicJWKSProvider{
-		issuerToJWKSMap: map[string]*jose.JSONWebKeySet{},
+		issuerToJWKSMap:      map[string]*jose.JSONWebKeySet{},
+		issuerToActiveJWKMap: map[string]*jose.JSONWebKey{},
 	}
 }
 
-func (p *dynamicJWKSProvider) SetIssuerToJWKSMap(issuerToJWKSMap map[string]*jose.JSONWebKeySet) {
+func (p *dynamicJWKSProvider) SetIssuerToJWKSMap(
+	issuerToJWKSMap map[string]*jose.JSONWebKeySet,
+	issuerToActiveJWKMap map[string]*jose.JSONWebKey,
+) {
 	p.mutex.Lock() // acquire a write lock
 	defer p.mutex.Unlock()
 	p.issuerToJWKSMap = issuerToJWKSMap
+	p.issuerToActiveJWKMap = issuerToActiveJWKMap
 }
 
-func (p *dynamicJWKSProvider) GetJWKS(issuerName string) *jose.JSONWebKeySet {
+func (p *dynamicJWKSProvider) GetJWKS(issuerName string) (*jose.JSONWebKeySet, *jose.JSONWebKey) {
 	p.mutex.RLock() // acquire a read lock
 	defer p.mutex.RUnlock()
-	return p.issuerToJWKSMap[issuerName]
+	return p.issuerToJWKSMap[issuerName], p.issuerToActiveJWKMap[issuerName]
 }

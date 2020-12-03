@@ -5,13 +5,13 @@
 package oidc
 
 import (
-	"crypto/ecdsa"
 	"time"
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 
 	"go.pinniped.dev/internal/oidc/csrftoken"
+	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -94,7 +94,7 @@ func FositeOauth2Helper(
 	oauthStore interface{},
 	issuer string,
 	hmacSecretOfLengthAtLeast32 []byte,
-	jwtSigningKey *ecdsa.PrivateKey,
+	jwksProvider jwks.DynamicJWKSProvider,
 ) fosite.OAuth2Provider {
 	oauthConfig := &compose.Config{
 		AuthorizeCodeLifespan: 3 * time.Minute, // seems more than long enough to exchange a code
@@ -122,7 +122,8 @@ func FositeOauth2Helper(
 		&compose.CommonStrategy{
 			// Note that Fosite requires the HMAC secret to be at least 32 bytes.
 			CoreStrategy:               compose.NewOAuth2HMACStrategy(oauthConfig, hmacSecretOfLengthAtLeast32, nil),
-			OpenIDConnectTokenStrategy: compose.NewOpenIDConnectECDSAStrategy(oauthConfig, jwtSigningKey),
+			OpenIDConnectTokenStrategy: newDynamicOpenIDConnectECDSAStrategy(issuer, oauthConfig, jwksProvider),
+			// OpenIDConnectTokenStrategy: compose.NewOpenIDConnectECDSAStrategy(oauthConfig, jwtSigningKey),
 		},
 		nil, // hasher, defaults to using BCrypt when nil. Used for hashing client secrets.
 		compose.OAuth2AuthorizeExplicitFactory,

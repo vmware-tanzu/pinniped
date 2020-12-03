@@ -1,4 +1,4 @@
-<img src="doc/img/pinniped_logo.svg" alt="Pinniped Logo" width="100%"/>
+<img src="site/content/docs/img/pinniped_logo.svg" alt="Pinniped Logo" width="100%"/>
 
 ## Overview
 
@@ -28,13 +28,13 @@ credential for a short-lived, cluster-specific credential. Pinniped supports var
 IDP types and implements different integration strategies for various Kubernetes
 distributions to make authentication possible.
 
-To learn more, see [doc/architecture.md](doc/architecture.md).
+To learn more, see [architecture](https://pinniped.dev/docs/architecture/).
 
-<img src="doc/img/pinniped_architecture.svg" alt="Pinniped Architecture Sketch" width="300px"/>
+<img src="site/content/docs/img/pinniped_architecture.svg" alt="Pinniped Architecture Sketch" width="300px"/>
 
 ## Trying Pinniped
 
-Care to kick the tires? It's easy to [install and try Pinniped](doc/demo.md).
+Care to kick the tires? It's easy to [install and try Pinniped](https://pinniped.dev/docs/demo/).
 
 ## Discussion
 

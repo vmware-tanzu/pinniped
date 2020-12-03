@@ -111,7 +111,7 @@ func TestSupervisorLogin(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		discovery, err = oidc.NewProvider(oidc.ClientContext(ctx, httpClient), downstream.Spec.Issuer)
 		return err == nil
-	}, 60*time.Second, 1*time.Second)
+	}, 30*time.Second, 200*time.Millisecond)
 	require.NoError(t, err)
 
 	// Start a callback server on localhost.

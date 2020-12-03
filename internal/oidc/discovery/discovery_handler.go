@@ -56,7 +56,7 @@ func NewHandler(issuerURL string) http.Handler {
 			JWKSURI:                           issuerURL + oidc.JWKSEndpointPath,
 			ResponseTypesSupported:            []string{"code"},
 			SubjectTypesSupported:             []string{"public"},
-			IDTokenSigningAlgValuesSupported:  []string{"RS256"},
+			IDTokenSigningAlgValuesSupported:  []string{"ES256"},
 			TokenEndpointAuthMethodsSupported: []string{"client_secret_basic"},
 			TokenEndpointAuthSigningAlgoValuesSupported: []string{"RS256"},
 			ScopesSupported: []string{"openid", "offline"},

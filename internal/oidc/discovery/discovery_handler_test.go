@@ -41,7 +41,7 @@ func TestDiscovery(t *testing.T) {
 				JWKSURI:                           "https://some-issuer.com/some/path/jwks.json",
 				ResponseTypesSupported:            []string{"code"},
 				SubjectTypesSupported:             []string{"public"},
-				IDTokenSigningAlgValuesSupported:  []string{"RS256"},
+				IDTokenSigningAlgValuesSupported:  []string{"ES256"},
 				TokenEndpointAuthMethodsSupported: []string{"client_secret_basic"},
 				TokenEndpointAuthSigningAlgoValuesSupported: []string{"RS256"},
 				ScopesSupported: []string{"openid", "offline"},

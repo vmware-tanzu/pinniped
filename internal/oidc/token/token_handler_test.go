@@ -5,12 +5,14 @@ package token
 
 import (
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -27,6 +29,7 @@ import (
 	"github.com/ory/fosite/storage"
 	"github.com/ory/fosite/token/jwt"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/square/go-jose.v2"
 
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
@@ -778,14 +781,66 @@ func requireValidIDToken(t *testing.T, body map[string]interface{}, jwtSigningKe
 	require.Truef(t, ok, "wanted id_token to be a string, but got %T", idToken)
 
 	// The go-oidc library will validate the signature and the client claim in the ID token.
-	keySet := newStaticKeySet(jwtSigningKey) // TODO: implement this static key set
+	keySet := newStaticKeySet(jwtSigningKey.Public())
 	verifyConfig := coreosoidc.Config{ClientID: goodClient, SupportedSigningAlgs: []string{coreosoidc.ES256}}
 	verifier := coreosoidc.NewVerifier(goodIssuer, keySet, &verifyConfig)
 	token, err := verifier.Verify(context.Background(), idTokenString)
 	require.NoError(t, err)
 
-	// TODO: we will need to validate all of the other claims!
-	_ = token
+	var claims struct {
+		Subject         string   `json:"sub"`
+		Audience        []string `json:"aud"`
+		Issuer          string   `json:"iss"`
+		JTI             string   `json:"jti"`
+		Nonce           string   `json:"nonce"`
+		AccessTokenHash string   `json:"at_hash"`
+		ExpiresAt       int64    `json:"exp"`
+		IssuedAt        int64    `json:"iat"`
+		RequestedAt     int64    `json:"rat"`
+		AuthTime        int64    `json:"auth_time"`
+	}
+	idTokenFields := []string{"sub", "aud", "iss", "jti", "nonce", "auth_time", "at_hash", "exp", "iat", "rat"}
+
+	// make sure that these are the only fields in the token
+	var m map[string]interface{}
+	require.NoError(t, token.Claims(&m))
+	require.ElementsMatch(t, idTokenFields, getMapKeys(m))
+
+	// verify each of the claims
+	err = token.Claims(&claims)
+	require.NoError(t, err)
+	require.Equal(t, goodSubject, claims.Subject)
+	require.Len(t, claims.Audience, 1)
+	require.Equal(t, goodClient, claims.Audience[0])
+	require.Equal(t, goodIssuer, claims.Issuer)
+	require.NotEmpty(t, claims.JTI)
+	require.Equal(t, goodNonce, claims.Nonce)
+	require.NotEmpty(t, claims.AccessTokenHash)
+
+	expiresAt := time.Unix(claims.ExpiresAt, 0)
+	issuedAt := time.Unix(claims.IssuedAt, 0)
+	requestedAt := time.Unix(claims.RequestedAt, 0)
+	authTime := time.Unix(claims.AuthTime, 0)
+	requireTimeInDelta(t, time.Now().UTC().Add(idTokenExpirationSeconds*time.Second), expiresAt, timeComparisonFudgeSeconds*time.Second)
+	requireTimeInDelta(t, time.Now().UTC(), issuedAt, timeComparisonFudgeSeconds*time.Second)
+	requireTimeInDelta(t, goodRequestedAtTime, requestedAt, timeComparisonFudgeSeconds*time.Second)
+	requireTimeInDelta(t, goodAuthTime, authTime, timeComparisonFudgeSeconds*time.Second)
+}
+
+func newStaticKeySet(publicKey crypto.PublicKey) coreosoidc.KeySet {
+	return &staticKeySet{publicKey}
+}
+
+type staticKeySet struct {
+	publicKey crypto.PublicKey
+}
+
+func (s *staticKeySet) VerifySignature(ctx context.Context, jwt string) ([]byte, error) {
+	jws, err := jose.ParseSigned(jwt)
+	if err != nil {
+		return nil, fmt.Errorf("oidc: malformed jwt: %v", err)
+	}
+	return jws.Verify(s.publicKey)
 }
 
 // TODO: de-dup me.

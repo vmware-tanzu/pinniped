@@ -225,7 +225,7 @@ func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken
 		Name:     oidc.CSRFCookieName,
 		Value:    encodedCSRFValue,
 		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 		Secure:   true,
 		Path:     "/",
 	})

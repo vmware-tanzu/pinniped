@@ -20,5 +20,10 @@ sessions:
       id:
         expiryTimestamp: "2020-10-20T19:42:07Z"
         token: test-id-token
+        claims:
+          foo: bar
+          nested:
+            key1: value1
+            key2: value2
       refresh:
         token: test-refresh-token

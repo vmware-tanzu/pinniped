@@ -5,6 +5,9 @@ package oidc
 
 import (
 	"context"
+	"crypto/ecdsa"
+
+	"go.pinniped.dev/internal/constable"
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
@@ -15,7 +18,6 @@ import (
 
 // TODO: doc me.
 type dynamicOpenIDConnectECDSAStrategy struct {
-	issuer       string
 	fositeConfig *compose.Config
 	jwksProvider jwks.DynamicJWKSProvider
 }
@@ -23,12 +25,10 @@ type dynamicOpenIDConnectECDSAStrategy struct {
 var _ openid.OpenIDConnectTokenStrategy = &dynamicOpenIDConnectECDSAStrategy{}
 
 func newDynamicOpenIDConnectECDSAStrategy(
-	issuer string,
 	fositeConfig *compose.Config,
 	jwksProvider jwks.DynamicJWKSProvider,
 ) *dynamicOpenIDConnectECDSAStrategy {
 	return &dynamicOpenIDConnectECDSAStrategy{
-		issuer:       issuer,
 		fositeConfig: fositeConfig,
 		jwksProvider: jwksProvider,
 	}
@@ -38,5 +38,15 @@ func (s *dynamicOpenIDConnectECDSAStrategy) GenerateIDToken(
 	ctx context.Context,
 	requester fosite.Requester,
 ) (string, error) {
-	return "", nil
+	_, activeJwk := s.jwksProvider.GetJWKS(s.fositeConfig.IDTokenIssuer)
+	if activeJwk == nil {
+		return "", constable.Error("No JWK found for issuer")
+	}
+	key, ok := activeJwk.Key.(*ecdsa.PrivateKey)
+	if !ok {
+		return "", constable.Error("JWK must be of type ecdsa")
+	}
+
+	// todo write story/issue about caching this strategy
+	return compose.NewOpenIDConnectECDSAStrategy(s.fositeConfig, key).GenerateIDToken(ctx, requester)
 }

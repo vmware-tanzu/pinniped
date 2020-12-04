@@ -159,7 +159,7 @@ func TestManager(t *testing.T) {
 			return actualLocationQueryParams.Get("code")
 		}
 
-		requireTokenRequestToBeHandled := func(requestIssuer, authCode string, jwks *jose.JSONWebKeySet) {
+		requireTokenRequestToBeHandled := func(requestIssuer, authCode string, jwks *jose.JSONWebKeySet, jwkIssuer string) {
 			recorder := httptest.NewRecorder()
 
 			numberOfKubeActionsBeforeThisRequest := len(kubeClient.Actions())
@@ -194,7 +194,7 @@ func TestManager(t *testing.T) {
 
 			keySet := newStaticKeySet(privateKey.Public())
 			verifyConfig := coreosoidc.Config{ClientID: downstreamClientID, SupportedSigningAlgs: []string{coreosoidc.ES256}}
-			verifier := coreosoidc.NewVerifier(requestIssuer, keySet, &verifyConfig)
+			verifier := coreosoidc.NewVerifier(jwkIssuer, keySet, &verifyConfig)
 			_, err := verifier.Verify(context.Background(), idToken)
 			r.NoError(err)
 
@@ -326,16 +326,16 @@ func TestManager(t *testing.T) {
 			downstreamAuthCode1 := requireCallbackRequestToBeHandled(issuer1, callbackRequestParams, csrfCookieValue)
 			downstreamAuthCode2 := requireCallbackRequestToBeHandled(issuer2, callbackRequestParams, csrfCookieValue)
 
-			// // Hostnames are case-insensitive, so test that we can handle that.
+			// Hostnames are case-insensitive, so test that we can handle that.
 			downstreamAuthCode3 := requireCallbackRequestToBeHandled(issuer1DifferentCaseHostname, callbackRequestParams, csrfCookieValue)
 			downstreamAuthCode4 := requireCallbackRequestToBeHandled(issuer2DifferentCaseHostname, callbackRequestParams, csrfCookieValue)
 
-			requireTokenRequestToBeHandled(issuer1, downstreamAuthCode1, issuer1JWKS)
-			requireTokenRequestToBeHandled(issuer2, downstreamAuthCode2, issuer2JWKS)
+			requireTokenRequestToBeHandled(issuer1, downstreamAuthCode1, issuer1JWKS, issuer1)
+			requireTokenRequestToBeHandled(issuer2, downstreamAuthCode2, issuer2JWKS, issuer2)
 
 			// Hostnames are case-insensitive, so test that we can handle that.
-			requireTokenRequestToBeHandled(issuer1DifferentCaseHostname, downstreamAuthCode3, issuer1JWKS)
-			requireTokenRequestToBeHandled(issuer2DifferentCaseHostname, downstreamAuthCode4, issuer2JWKS)
+			requireTokenRequestToBeHandled(issuer1DifferentCaseHostname, downstreamAuthCode3, issuer1JWKS, issuer1)
+			requireTokenRequestToBeHandled(issuer2DifferentCaseHostname, downstreamAuthCode4, issuer2JWKS, issuer2)
 		}
 
 		when("given some valid providers via SetProviders()", func() {

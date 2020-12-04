@@ -16,15 +16,20 @@ import (
 	coreosoidc "github.com/coreos/go-oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
+	"github.com/ory/fosite/handler/openid"
+	"github.com/ory/fosite/token/jwt"
 	"github.com/stretchr/testify/require"
-	"go.pinniped.dev/internal/oidc/jwks"
 	"gopkg.in/square/go-jose.v2"
+
+	"go.pinniped.dev/internal/oidc/jwks"
 )
 
 func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 	const (
-		goodIssuer = "https://some-good-issuer.com"
-		clientID   = "some-client-id"
+		goodIssuer   = "https://some-good-issuer.com"
+		clientID     = "some-client-id"
+		goodSubject  = "some-subject"
+		goodUsername = "some-username"
 	)
 
 	ecPrivateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -60,7 +65,7 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 		{
 			name:      "jwks provider does not contain signing key for issuer",
 			issuer:    goodIssuer,
-			wantError: "some unkonwn key error",
+			wantError: "No JWK found for issuer",
 		},
 		{
 			name:   "jwks provider contains signing key of wrong type for issuer",
@@ -75,7 +80,7 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 					},
 				)
 			},
-			wantError: "some invalid key type error",
+			wantError: "JWK must be of type ecdsa",
 		},
 	}
 	for _, test := range tests {
@@ -85,13 +90,22 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 			if test.jwksProvider != nil {
 				test.jwksProvider(jwksProvider)
 			}
-			s := newDynamicOpenIDConnectECDSAStrategy(test.issuer, &compose.Config{}, jwksProvider)
+			s := newDynamicOpenIDConnectECDSAStrategy(
+				&compose.Config{IDTokenIssuer: test.issuer},
+				jwksProvider,
+			)
 
 			requester := &fosite.Request{
 				Client: &fosite.DefaultClient{
 					ID: clientID,
 				},
-				// Session: fositeopenid.DefaultSession{},
+				Session: &openid.DefaultSession{
+					Claims: &jwt.IDTokenClaims{
+						Subject: goodSubject,
+					},
+					Subject:  goodSubject,
+					Username: goodUsername,
+				},
 			}
 			idToken, err := s.GenerateIDToken(context.Background(), requester)
 			if test.wantError != "" {

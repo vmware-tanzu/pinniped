@@ -122,7 +122,7 @@ func FositeOauth2Helper(
 		&compose.CommonStrategy{
 			// Note that Fosite requires the HMAC secret to be at least 32 bytes.
 			CoreStrategy:               compose.NewOAuth2HMACStrategy(oauthConfig, hmacSecretOfLengthAtLeast32, nil),
-			OpenIDConnectTokenStrategy: newDynamicOpenIDConnectECDSAStrategy(issuer, oauthConfig, jwksProvider),
+			OpenIDConnectTokenStrategy: newDynamicOpenIDConnectECDSAStrategy(oauthConfig, jwksProvider),
 			// OpenIDConnectTokenStrategy: compose.NewOpenIDConnectECDSAStrategy(oauthConfig, jwtSigningKey),
 		},
 		nil, // hasher, defaults to using BCrypt when nil. Used for hashing client secrets.

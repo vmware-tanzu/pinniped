@@ -46,7 +46,7 @@ func (a *pkceStorage) CreatePKCERequestSession(ctx context.Context, signature st
 		return err
 	}
 
-	_, err = a.storage.Create(ctx, signature, &session{Request: request, Version: pkceStorageVersion})
+	_, err = a.storage.Create(ctx, signature, &session{Request: request, Version: pkceStorageVersion}, nil)
 	return err
 }
 

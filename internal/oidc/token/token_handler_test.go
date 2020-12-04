@@ -8,8 +8,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -24,10 +22,11 @@ import (
 	"github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/handler/pkce"
-	"github.com/ory/fosite/storage"
 	"github.com/ory/fosite/token/jwt"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
+	"k8s.io/client-go/kubernetes/fake"
 
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
@@ -55,8 +54,8 @@ const (
 )
 
 var (
-	goodAuthTime        = time.Date(1, 2, 3, 4, 5, 6, 7, time.Local)
-	goodRequestedAtTime = time.Date(7, 6, 5, 4, 3, 2, 1, time.Local)
+	goodAuthTime        = time.Date(1, 2, 3, 4, 5, 6, 7, time.UTC)
+	goodRequestedAtTime = time.Date(7, 6, 5, 4, 3, 2, 1, time.UTC)
 
 	fositeInvalidMethodErrorBody = func(actual string) string {
 		return here.Docf(`
@@ -384,14 +383,18 @@ func TestTokenEndpoint(t *testing.T) {
 				test.authRequest(authRequest)
 			}
 
-			oauthStore := storage.NewMemoryStore()
-			// Add the Pinniped CLI client.
-			oauthStore.Clients[goodClient] = oidc.PinnipedCLIOIDCClient()
+			client := fake.NewSimpleClientset()
+			secrets := client.CoreV1().Secrets("some-namespace")
+
+			oauthStore := oidc.NewKubeStorage(secrets)
 			oauthHelper, authCode, jwtSigningKey := makeHappyOauthHelper(t, authRequest, oauthStore)
+
 			if test.storage != nil {
 				test.storage(t, oauthStore, authCode)
 			}
 			subject := NewHandler(oauthHelper)
+
+			// TODO add assertions about how many of each storage type exist at this point as a pre-condition
 
 			req := httptest.NewRequest("POST", "/path/shouldn't/matter", happyBody(authCode).ReadCloser())
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -421,6 +424,8 @@ func TestTokenEndpoint(t *testing.T) {
 				if wantOpenidScope {
 					requireValidIDToken(t, m, jwtSigningKey)
 				}
+
+				// TODO add assertions about how many of each storage type are remaining at this point
 			} else {
 				require.JSONEq(t, test.wantExactBody, rsp.Body.String())
 			}
@@ -429,11 +434,15 @@ func TestTokenEndpoint(t *testing.T) {
 
 	t.Run("auth code is used twice", func(t *testing.T) {
 		authRequest := deepCopyRequestForm(happyAuthRequest)
-		oauthStore := storage.NewMemoryStore()
-		// Add the Pinniped CLI client.
-		oauthStore.Clients[goodClient] = oidc.PinnipedCLIOIDCClient()
+
+		client := fake.NewSimpleClientset()
+		secrets := client.CoreV1().Secrets("some-namespace")
+
+		oauthStore := oidc.NewKubeStorage(secrets)
 		oauthHelper, authCode, jwtSigningKey := makeHappyOauthHelper(t, authRequest, oauthStore)
 		subject := NewHandler(oauthHelper)
+
+		// TODO add assertions about how many of each storage type exist at this point as a pre-condition
 
 		req := httptest.NewRequest("POST", "/path/shouldn't/matter", happyBody(authCode).ReadCloser())
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -460,6 +469,8 @@ func TestTokenEndpoint(t *testing.T) {
 		requireValidOIDCStorage(t, m, code, oauthStore, wantOpenidScope)
 		requireValidIDToken(t, m, jwtSigningKey)
 
+		// TODO add assertions about how many of each storage type are remaining at this point
+
 		// Second call - should be unsuccessful since auth code was already used.
 		//
 		// Fosite will also revoke the access token as is recommended by the OIDC spec. Currently, we don't
@@ -476,6 +487,8 @@ func TestTokenEndpoint(t *testing.T) {
 		requireInvalidAccessTokenStorage(t, m, oauthStore)
 		requireInvalidPKCEStorage(t, code, oauthStore)
 		requireValidOIDCStorage(t, m, code, oauthStore, wantOpenidScope)
+
+		// TODO add assertions about how many of each storage type are remaining at this point
 	})
 }
 
@@ -590,16 +603,6 @@ func generateJWTSigningKeyAndJWKSProvider(t *testing.T, issuer string) (*ecdsa.P
 	return key, jwksProvider
 }
 
-func hashAccessToken(accessToken string) string {
-	// See https://openid.net/specs/openid-connect-core-1_0.html#CodeIDToken.
-	// "Access Token hash value. Its value is the base64url encoding of the left-most half of
-	// the hash of the octets of the ASCII representation of the access_token value, where the
-	// hash algorithm used is the hash algorithm used in the alg Header Parameter of the ID
-	// Token's JOSE Header."
-	b := sha256.Sum256([]byte(accessToken))
-	return base64.RawURLEncoding.EncodeToString(b[:len(b)/2])
-}
-
 func requireInvalidAuthCodeStorage(
 	t *testing.T,
 	code string,
@@ -609,7 +612,7 @@ func requireInvalidAuthCodeStorage(
 
 	// Make sure we have invalidated this auth code.
 	_, err := storage.GetAuthorizeCodeSession(context.Background(), getFositeDataSignature(t, code), nil)
-	require.Equal(t, fosite.ErrInvalidatedAuthorizeCode, err)
+	require.True(t, errors.Is(err, fosite.ErrInvalidatedAuthorizeCode))
 }
 
 func requireValidAccessTokenStorage(
@@ -656,8 +659,8 @@ func requireValidAccessTokenStorage(
 		t,
 		authRequest,
 		authRequest.Sanitize([]string{}).GetRequestForm(),
-		hashAccessToken(accessTokenString),
 		wantGrantedOpenidScope,
+		true,
 	)
 }
 
@@ -674,7 +677,7 @@ func requireInvalidAccessTokenStorage(
 	accessTokenString, ok := accessToken.(string)
 	require.Truef(t, ok, "wanted access_token to be a string, but got %T", accessToken)
 	_, err := storage.GetAccessTokenSession(context.Background(), getFositeDataSignature(t, accessTokenString), nil)
-	require.Equal(t, fosite.ErrNotFound, err)
+	require.True(t, errors.Is(err, fosite.ErrNotFound))
 }
 
 func requireInvalidPKCEStorage(
@@ -687,7 +690,7 @@ func requireInvalidPKCEStorage(
 	// Make sure the PKCE session has been deleted. Note that Fosite stores PKCE codes using the auth code signature
 	// as a key.
 	_, err := storage.GetPKCERequestSession(context.Background(), getFositeDataSignature(t, code), nil)
-	require.Equal(t, fosite.ErrNotFound, err)
+	require.True(t, errors.Is(err, fosite.ErrNotFound))
 }
 
 func requireValidOIDCStorage(
@@ -709,16 +712,18 @@ func requireValidOIDCStorage(
 		require.True(t, ok)
 		accessTokenString, ok := accessToken.(string)
 		require.Truef(t, ok, "wanted access_token to be a string, but got %T", accessToken)
+		require.NotEmpty(t, accessTokenString)
+
 		requireValidAuthRequest(
 			t,
 			authRequest,
 			authRequest.Sanitize([]string{"nonce"}).GetRequestForm(),
-			hashAccessToken(accessTokenString),
 			true,
+			false,
 		)
 	} else {
 		_, err := storage.GetOpenIDConnectSession(context.Background(), code, nil)
-		require.Equal(t, fosite.ErrNotFound, err)
+		require.True(t, errors.Is(err, fosite.ErrNotFound))
 	}
 }
 
@@ -726,8 +731,8 @@ func requireValidAuthRequest(
 	t *testing.T,
 	authRequest fosite.Requester,
 	wantRequestForm url.Values,
-	wantAccessTokenHash string,
 	wantGrantedOpenidScope bool,
+	wantAccessTokenExpiresAt bool,
 ) {
 	t.Helper()
 
@@ -755,23 +760,27 @@ func requireValidAuthRequest(
 	if wantGrantedOpenidScope {
 		claims := session.Claims
 		require.Empty(t, claims.JTI) // When claims.JTI is empty, Fosite will generate a UUID for this field.
-		require.Equal(t, goodIssuer, claims.Issuer)
 		require.Equal(t, goodSubject, claims.Subject)
-		require.Equal(t, []string{goodClient}, claims.Audience)
-		require.Equal(t, goodNonce, claims.Nonce)
-		testutil.RequireTimeInDelta(
-			t,
-			time.Now().UTC().Add(idTokenExpirationSeconds*time.Second),
-			claims.ExpiresAt,
-			timeComparisonFudgeSeconds*time.Second,
-		)
-		testutil.RequireTimeInDelta(t, time.Now().UTC(), claims.IssuedAt, timeComparisonFudgeSeconds*time.Second)
-		require.Equal(t, wantAccessTokenHash, claims.AccessTokenHash)
 
 		// We are in charge of setting these fields. For the purpose of testing, we ensure that the
 		// sentinel test value is set correctly.
 		require.Equal(t, goodRequestedAtTime, claims.RequestedAt)
 		require.Equal(t, goodAuthTime, claims.AuthTime)
+
+		// These fields will all be given good defaults by fosite at runtime and we only need to use them
+		// if we want to override the default behaviors. We currently don't need to override these defaults,
+		// so they do not end up being stored. Fosite sets its defaults at runtime in openid.DefaultSession's
+		// GenerateIDToken() method.
+		require.Empty(t, claims.Issuer)
+		require.Empty(t, claims.Audience)
+		require.Empty(t, claims.Nonce)
+		require.Zero(t, claims.ExpiresAt)
+		require.Zero(t, claims.IssuedAt)
+
+		// Fosite unconditionally overwrites claims.AccessTokenHash at runtime in openid.OpenIDConnectExplicitHandler's
+		// PopulateTokenEndpointResponse() method, just before it calls the same GenerateIDToken() mentioned above,
+		// so it does not end up saved in storage.
+		require.Empty(t, claims.AccessTokenHash)
 
 		// At this time, we don't use any of these optional (per the OIDC spec) fields.
 		require.Empty(t, claims.AuthenticationContextClassReference)
@@ -793,14 +802,20 @@ func requireValidAuthRequest(
 		authCodeExpiresAt,
 		timeComparisonFudgeSeconds*time.Second,
 	)
+
+	// OpenID Connect sessions do not store access token expiration information.
 	accessTokenExpiresAt, ok := session.ExpiresAt[fosite.AccessToken]
-	require.True(t, ok, "expected session to hold expiration time for access token")
-	testutil.RequireTimeInDelta(
-		t,
-		time.Now().UTC().Add(accessTokenExpirationSeconds*time.Second),
-		accessTokenExpiresAt,
-		timeComparisonFudgeSeconds*time.Second,
-	)
+	if wantAccessTokenExpiresAt {
+		require.True(t, ok, "expected session to hold expiration time for access token")
+		testutil.RequireTimeInDelta(
+			t,
+			time.Now().UTC().Add(accessTokenExpirationSeconds*time.Second),
+			accessTokenExpiresAt,
+			timeComparisonFudgeSeconds*time.Second,
+		)
+	} else {
+		require.False(t, ok, "expected session to not hold expiration time for access token, but it did")
+	}
 
 	// Assert that the session's username and subject are correct.
 	require.Equal(t, goodUsername, session.Username)
@@ -830,7 +845,10 @@ func requireValidIDToken(t *testing.T, body map[string]interface{}, jwtSigningKe
 		RequestedAt     int64    `json:"rat"`
 		AuthTime        int64    `json:"auth_time"`
 	}
-	idTokenFields := []string{"sub", "aud", "iss", "jti", "nonce", "auth_time", "at_hash", "exp", "iat", "rat"}
+
+	// Note that there is a bug in fosite which prevents the `at_hash` claim from appearing in this ID token.
+	// We can add a workaround for this later.
+	idTokenFields := []string{"sub", "aud", "iss", "jti", "nonce", "auth_time", "exp", "iat", "rat"}
 
 	// make sure that these are the only fields in the token
 	var m map[string]interface{}
@@ -846,7 +864,6 @@ func requireValidIDToken(t *testing.T, body map[string]interface{}, jwtSigningKe
 	require.Equal(t, goodIssuer, claims.Issuer)
 	require.NotEmpty(t, claims.JTI)
 	require.Equal(t, goodNonce, claims.Nonce)
-	require.NotEmpty(t, claims.AccessTokenHash)
 
 	expiresAt := time.Unix(claims.ExpiresAt, 0)
 	issuedAt := time.Unix(claims.IssuedAt, 0)

@@ -52,7 +52,7 @@ func (a *openIDConnectRequestStorage) CreateOpenIDConnectSession(ctx context.Con
 		return err
 	}
 
-	_, err = a.storage.Create(ctx, signature, &session{Request: request, Version: oidcStorageVersion})
+	_, err = a.storage.Create(ctx, signature, &session{Request: request, Version: oidcStorageVersion}, nil)
 	return err
 }
 

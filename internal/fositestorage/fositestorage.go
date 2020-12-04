@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	ErrInvalidRequestType = constable.Error("requester must be of type fosite.Request")
-	ErrInvalidClientType  = constable.Error("requester's client must be of type fosite.DefaultOpenIDConnectClient")
-	ErrInvalidSessionType = constable.Error("requester's session must be of type openid.DefaultSession")
+	ErrInvalidRequestType     = constable.Error("requester must be of type fosite.Request")
+	ErrInvalidClientType      = constable.Error("requester's client must be of type fosite.DefaultOpenIDConnectClient")
+	ErrInvalidSessionType     = constable.Error("requester's session must be of type openid.DefaultSession")
+	StorageRequestIDLabelName = "storage.pinniped.dev/request-id" //nolint:gosec // this is not a credential
 )
 
 func ValidateAndExtractAuthorizeRequest(requester fosite.Requester) (*fosite.Request, error) {

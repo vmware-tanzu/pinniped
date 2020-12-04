@@ -63,7 +63,6 @@ func TestProviderConfig(t *testing.T) {
 		returnIDTok string
 		wantErr     string
 		wantToken   oidctypes.Token
-		wantClaims  map[string]interface{}
 	}{
 		{
 			name:     "exchange fails with network error",
@@ -110,6 +109,14 @@ func TestProviderConfig(t *testing.T) {
 				IDToken: &oidctypes.IDToken{
 					Token:  invalidNonceIDToken,
 					Expiry: metav1.Time{},
+					Claims: map[string]interface{}{
+						"aud":   "test-client-id",
+						"iat":   1.602283741e+09,
+						"jti":   "test-jti",
+						"nbf":   1.602283741e+09,
+						"nonce": "invalid-nonce",
+						"sub":   "test-user",
+					},
 				},
 			},
 		},
@@ -128,11 +135,16 @@ func TestProviderConfig(t *testing.T) {
 				IDToken: &oidctypes.IDToken{
 					Token:  validIDToken,
 					Expiry: metav1.Time{},
+					Claims: map[string]interface{}{
+						"foo": "bar",
+						"bat": "baz",
+						"aud": "test-client-id",
+						"iat": 1.606768593e+09,
+						"jti": "test-jti",
+						"nbf": 1.606768593e+09,
+						"sub": "test-user",
+					},
 				},
-			},
-			wantClaims: map[string]interface{}{
-				"foo": "bar",
-				"bat": "baz",
 			},
 		},
 	}
@@ -181,19 +193,14 @@ func TestProviderConfig(t *testing.T) {
 
 			ctx := context.Background()
 
-			tok, claims, err := p.ExchangeAuthcodeAndValidateTokens(ctx, tt.authCode, "test-pkce", tt.expectNonce, "https://example.com/callback")
+			tok, err := p.ExchangeAuthcodeAndValidateTokens(ctx, tt.authCode, "test-pkce", tt.expectNonce, "https://example.com/callback")
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
-				require.Equal(t, oidctypes.Token{}, tok)
-				require.Nil(t, claims)
+				require.Nil(t, tok)
 				return
 			}
 			require.NoError(t, err)
-			require.Equal(t, tt.wantToken, tok)
-
-			for k, v := range tt.wantClaims {
-				require.Equal(t, v, claims[k])
-			}
+			require.Equal(t, &tt.wantToken, tok)
 		})
 	}
 }

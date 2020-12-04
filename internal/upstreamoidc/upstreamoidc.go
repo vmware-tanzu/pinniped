@@ -61,7 +61,7 @@ func (p *ProviderConfig) GetGroupsClaim() string {
 	return p.GroupsClaim
 }
 
-func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce, redirectURI string) (oidctypes.Token, map[string]interface{}, error) {
+func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce, redirectURI string) (*oidctypes.Token, error) {
 	tok, err := p.Config.Exchange(
 		oidc.ClientContext(ctx, p.Client),
 		authcode,
@@ -69,38 +69,38 @@ func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, 
 		oauth2.SetAuthURLParam("redirect_uri", redirectURI),
 	)
 	if err != nil {
-		return oidctypes.Token{}, nil, err
+		return nil, err
 	}
 
 	return p.ValidateToken(ctx, tok, expectedIDTokenNonce)
 }
 
-func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (oidctypes.Token, map[string]interface{}, error) {
+func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
 	idTok, hasIDTok := tok.Extra("id_token").(string)
 	if !hasIDTok {
-		return oidctypes.Token{}, nil, httperr.New(http.StatusBadRequest, "received response missing ID token")
+		return nil, httperr.New(http.StatusBadRequest, "received response missing ID token")
 	}
 	validated, err := p.Provider.Verifier(&oidc.Config{ClientID: p.GetClientID()}).Verify(oidc.ClientContext(ctx, p.Client), idTok)
 	if err != nil {
-		return oidctypes.Token{}, nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
+		return nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
 	}
 	if validated.AccessTokenHash != "" {
 		if err := validated.VerifyAccessToken(tok.AccessToken); err != nil {
-			return oidctypes.Token{}, nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
+			return nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
 		}
 	}
 	if expectedIDTokenNonce != "" {
 		if err := expectedIDTokenNonce.Validate(validated); err != nil {
-			return oidctypes.Token{}, nil, httperr.Wrap(http.StatusBadRequest, "received ID token with invalid nonce", err)
+			return nil, httperr.Wrap(http.StatusBadRequest, "received ID token with invalid nonce", err)
 		}
 	}
 
 	var validatedClaims map[string]interface{}
 	if err := validated.Claims(&validatedClaims); err != nil {
-		return oidctypes.Token{}, nil, httperr.Wrap(http.StatusInternalServerError, "could not unmarshal claims", err)
+		return nil, httperr.Wrap(http.StatusInternalServerError, "could not unmarshal claims", err)
 	}
 
-	return oidctypes.Token{
+	return &oidctypes.Token{
 		AccessToken: &oidctypes.AccessToken{
 			Token:  tok.AccessToken,
 			Type:   tok.TokenType,
@@ -112,6 +112,7 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 		IDToken: &oidctypes.IDToken{
 			Token:  idTok,
 			Expiry: metav1.NewTime(validated.Expiry),
+			Claims: validatedClaims,
 		},
-	}, validatedClaims, nil
+	}, nil
 }

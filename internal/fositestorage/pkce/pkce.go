@@ -19,6 +19,8 @@ import (
 )
 
 const (
+	TypeLabelValue = "pkce"
+
 	ErrInvalidPKCERequestVersion = constable.Error("pkce request data has wrong version")
 	ErrInvalidPKCERequestData    = constable.Error("pkce request data must be present")
 
@@ -37,7 +39,7 @@ type session struct {
 }
 
 func New(secrets corev1client.SecretInterface) pkce.PKCERequestStorage {
-	return &pkceStorage{storage: crud.New("pkce", secrets)}
+	return &pkceStorage{storage: crud.New(TypeLabelValue, secrets)}
 }
 
 func (a *pkceStorage) CreatePKCERequestSession(ctx context.Context, signature string, requester fosite.Requester) error {

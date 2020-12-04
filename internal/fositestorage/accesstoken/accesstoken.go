@@ -19,6 +19,8 @@ import (
 )
 
 const (
+	TypeLabelValue = "access-token"
+
 	ErrInvalidAccessTokenRequestVersion = constable.Error("access token request data has wrong version")
 	ErrInvalidAccessTokenRequestData    = constable.Error("access token request data must be present")
 
@@ -42,7 +44,7 @@ type session struct {
 }
 
 func New(secrets corev1client.SecretInterface) RevocationStorage {
-	return &accessTokenStorage{storage: crud.New("access-token", secrets)}
+	return &accessTokenStorage{storage: crud.New(TypeLabelValue, secrets)}
 }
 
 func (a *accessTokenStorage) RevokeAccessToken(ctx context.Context, requestID string) error {

@@ -22,8 +22,9 @@ import (
 
 //nolint:gosec // ignore lint warnings that these are credentials
 const (
+	SecretLabelKey = "storage.pinniped.dev/type"
+
 	secretNameFormat = "pinniped-storage-%s-%s"
-	secretLabelKey   = "storage.pinniped.dev/type"
 	secretTypeFormat = "storage.pinniped.dev/%s"
 	secretVersion    = "1"
 	secretDataKey    = "pinniped-storage-data"
@@ -90,7 +91,7 @@ func (s *secretsStorage) validateSecret(secret *corev1.Secret) error {
 	if secret.Type != s.secretType {
 		return fmt.Errorf("%w: %s must equal %s", ErrSecretTypeMismatch, secret.Type, s.secretType)
 	}
-	if labelResource := secret.Labels[secretLabelKey]; labelResource != s.resource {
+	if labelResource := secret.Labels[SecretLabelKey]; labelResource != s.resource {
 		return fmt.Errorf("%w: %s must equal %s", ErrSecretLabelMismatch, labelResource, s.resource)
 	}
 	if !bytes.Equal(secret.Data[secretVersionKey], s.secretVersion) {
@@ -121,7 +122,7 @@ func (s *secretsStorage) Delete(ctx context.Context, signature string) error {
 func (s *secretsStorage) DeleteByLabel(ctx context.Context, labelName string, labelValue string) error {
 	list, err := s.secrets.List(ctx, metav1.ListOptions{
 		LabelSelector: labels.Set{
-			secretLabelKey: s.resource,
+			SecretLabelKey: s.resource,
 			labelName:      labelValue,
 		}.String(),
 	})
@@ -158,7 +159,7 @@ func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, 
 	}
 
 	labels := map[string]string{
-		secretLabelKey: s.resource, // make it easier to find this stuff via kubectl
+		SecretLabelKey: s.resource, // make it easier to find this stuff via kubectl
 	}
 	for labelName, labelValue := range additionalLabels {
 		labels[labelName] = labelValue

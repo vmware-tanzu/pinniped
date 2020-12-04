@@ -19,6 +19,8 @@ import (
 )
 
 const (
+	TypeLabelValue = "refresh-token"
+
 	ErrInvalidRefreshTokenRequestVersion = constable.Error("refresh token request data has wrong version")
 	ErrInvalidRefreshTokenRequestData    = constable.Error("refresh token request data must be present")
 
@@ -42,7 +44,7 @@ type session struct {
 }
 
 func New(secrets corev1client.SecretInterface) RevocationStorage {
-	return &refreshTokenStorage{storage: crud.New("refresh-token", secrets)}
+	return &refreshTokenStorage{storage: crud.New(TypeLabelValue, secrets)}
 }
 
 func (a *refreshTokenStorage) RevokeRefreshToken(ctx context.Context, requestID string) error {

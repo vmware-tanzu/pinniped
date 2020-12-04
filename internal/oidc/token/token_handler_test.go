@@ -26,8 +26,15 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"go.pinniped.dev/internal/crud"
+	"go.pinniped.dev/internal/fositestorage/accesstoken"
+	"go.pinniped.dev/internal/fositestorage/authorizationcode"
+	"go.pinniped.dev/internal/fositestorage/openidconnect"
+	storagepkce "go.pinniped.dev/internal/fositestorage/pkce"
+	"go.pinniped.dev/internal/fositestorage/refreshtoken"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/jwks"
@@ -394,7 +401,14 @@ func TestTokenEndpoint(t *testing.T) {
 			}
 			subject := NewHandler(oauthHelper)
 
-			// TODO add assertions about how many of each storage type exist at this point as a pre-condition
+			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
+			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 1)
+			if strings.Contains(authRequest.Form.Get("scope"), "openid") {
+				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
+				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 3)
+			} else {
+				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 2)
+			}
 
 			req := httptest.NewRequest("POST", "/path/shouldn't/matter", happyBody(authCode).ReadCloser())
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -421,11 +435,18 @@ func TestTokenEndpoint(t *testing.T) {
 				requireInvalidPKCEStorage(t, code, oauthStore)
 				requireValidOIDCStorage(t, m, code, oauthStore, wantOpenidScope)
 
+				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
+				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: accesstoken.TypeLabelValue}, 1)
+				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: refreshtoken.TypeLabelValue}, 0)
+				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 0)
+
 				if wantOpenidScope {
 					requireValidIDToken(t, m, jwtSigningKey)
+					testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
+					testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 3)
+				} else {
+					testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 2)
 				}
-
-				// TODO add assertions about how many of each storage type are remaining at this point
 			} else {
 				require.JSONEq(t, test.wantExactBody, rsp.Body.String())
 			}
@@ -442,7 +463,10 @@ func TestTokenEndpoint(t *testing.T) {
 		oauthHelper, authCode, jwtSigningKey := makeHappyOauthHelper(t, authRequest, oauthStore)
 		subject := NewHandler(oauthHelper)
 
-		// TODO add assertions about how many of each storage type exist at this point as a pre-condition
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 1)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 3)
 
 		req := httptest.NewRequest("POST", "/path/shouldn't/matter", happyBody(authCode).ReadCloser())
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -469,7 +493,12 @@ func TestTokenEndpoint(t *testing.T) {
 		requireValidOIDCStorage(t, m, code, oauthStore, wantOpenidScope)
 		requireValidIDToken(t, m, jwtSigningKey)
 
-		// TODO add assertions about how many of each storage type are remaining at this point
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: accesstoken.TypeLabelValue}, 1)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: refreshtoken.TypeLabelValue}, 0)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 0)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 3)
 
 		// Second call - should be unsuccessful since auth code was already used.
 		//
@@ -488,7 +517,12 @@ func TestTokenEndpoint(t *testing.T) {
 		requireInvalidPKCEStorage(t, code, oauthStore)
 		requireValidOIDCStorage(t, m, code, oauthStore, wantOpenidScope)
 
-		// TODO add assertions about how many of each storage type are remaining at this point
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: accesstoken.TypeLabelValue}, 0)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: refreshtoken.TypeLabelValue}, 0)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 0)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 2)
 	})
 }
 

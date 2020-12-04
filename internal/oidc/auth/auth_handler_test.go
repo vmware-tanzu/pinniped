@@ -753,7 +753,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		if test.wantCSRFValueInCookieHeader != "" {
 			require.Len(t, rsp.Header().Values("Set-Cookie"), 1)
 			actualCookie := rsp.Header().Get("Set-Cookie")
-			regex := regexp.MustCompile("__Host-pinniped-csrf=([^;]+); Path=/; HttpOnly; Secure; SameSite=Strict")
+			regex := regexp.MustCompile("__Host-pinniped-csrf=([^;]+); Path=/; HttpOnly; Secure; SameSite=Lax")
 			submatches := regex.FindStringSubmatch(actualCookie)
 			require.Len(t, submatches, 2)
 			captured := submatches[1]

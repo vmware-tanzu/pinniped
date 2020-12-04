@@ -254,7 +254,7 @@ func CreateClientCredsSecret(t *testing.T, clientID string, clientSecret string)
 	env := IntegrationEnv(t)
 	return CreateTestSecret(t,
 		env.SupervisorNamespace,
-		"test-client-creds-",
+		"test-client-creds",
 		"secrets.pinniped.dev/oidc-client",
 		map[string]string{
 			"clientID":     clientID,

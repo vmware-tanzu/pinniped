@@ -34,8 +34,9 @@ import (
 func TestSupervisorLogin(t *testing.T) {
 	env := library.IntegrationEnv(t)
 
-	// If anything in this test crashes, dump out the supervisor pod logs.
-	defer library.DumpLogs(t, env.SupervisorNamespace)
+	// If anything in this test crashes, dump out the supervisor and proxy pod logs.
+	defer library.DumpLogs(t, env.SupervisorNamespace, "")
+	defer library.DumpLogs(t, "dex", "app=proxy")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -57,9 +58,13 @@ func TestSupervisorLogin(t *testing.T) {
 		TLSClientConfig: &tls.Config{RootCAs: ca.Pool()},
 		Proxy: func(req *http.Request) (*url.URL, error) {
 			if env.Proxy == "" {
+				t.Logf("passing request for %s with no proxy", req.URL)
 				return nil, nil
 			}
-			return url.Parse(env.Proxy)
+			proxyURL, err := url.Parse(env.Proxy)
+			require.NoError(t, err)
+			t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
+			return proxyURL, nil
 		},
 	}}
 
@@ -106,7 +111,7 @@ func TestSupervisorLogin(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		discovery, err = oidc.NewProvider(oidc.ClientContext(ctx, httpClient), downstream.Spec.Issuer)
 		return err == nil
-	}, 60*time.Second, 1*time.Second)
+	}, 30*time.Second, 200*time.Millisecond)
 	require.NoError(t, err)
 
 	// Start a callback server on localhost.

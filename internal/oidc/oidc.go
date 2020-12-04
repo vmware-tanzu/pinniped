@@ -105,7 +105,6 @@ func FositeOauth2Helper(
 		RefreshTokenLifespan: 16 * time.Hour, // long enough for a single workday
 
 		IDTokenIssuer: issuer,
-		TokenURL:      "", // TODO set once we have this endpoint written
 
 		ScopeStrategy:            fosite.ExactScopeStrategy, // be careful and only support exact string matching for scopes
 		AudienceMatchingStrategy: nil,                       // I believe the default is fine

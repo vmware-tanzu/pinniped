@@ -39,7 +39,7 @@ type TestUpstreamOIDCIdentityProvider struct {
 		authcode string,
 		pkceCodeVerifier pkce.Code,
 		expectedIDTokenNonce nonce.Nonce,
-	) (oidctypes.Token, map[string]interface{}, error)
+	) (*oidctypes.Token, error)
 
 	exchangeAuthcodeAndValidateTokensCallCount int
 	exchangeAuthcodeAndValidateTokensArgs      []*ExchangeAuthcodeAndValidateTokenArgs
@@ -75,7 +75,7 @@ func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokens(
 	pkceCodeVerifier pkce.Code,
 	expectedIDTokenNonce nonce.Nonce,
 	redirectURI string,
-) (oidctypes.Token, map[string]interface{}, error) {
+) (*oidctypes.Token, error) {
 	if u.exchangeAuthcodeAndValidateTokensArgs == nil {
 		u.exchangeAuthcodeAndValidateTokensArgs = make([]*ExchangeAuthcodeAndValidateTokenArgs, 0)
 	}
@@ -101,7 +101,7 @@ func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokensArgs
 	return u.exchangeAuthcodeAndValidateTokensArgs[call]
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (oidctypes.Token, map[string]interface{}, error) {
+func (u *TestUpstreamOIDCIdentityProvider) ValidateToken(_ context.Context, _ *oauth2.Token, _ nonce.Nonce) (*oidctypes.Token, error) {
 	panic("implement me")
 }
 

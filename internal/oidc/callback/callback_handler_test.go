@@ -682,8 +682,11 @@ func (u *upstreamOIDCIdentityProviderBuilder) Build() oidctestutil.TestUpstreamO
 		UsernameClaim: u.usernameClaim,
 		GroupsClaim:   u.groupsClaim,
 		Scopes:        []string{"scope1", "scope2"},
-		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (oidctypes.Token, map[string]interface{}, error) {
-			return oidctypes.Token{}, u.idToken, u.authcodeExchangeErr
+		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
+			if u.authcodeExchangeErr != nil {
+				return nil, u.authcodeExchangeErr
+			}
+			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}}, nil
 		},
 	}
 }

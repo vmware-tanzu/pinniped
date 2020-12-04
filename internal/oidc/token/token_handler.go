@@ -11,6 +11,7 @@ import (
 	"github.com/ory/fosite/handler/openid"
 
 	"go.pinniped.dev/internal/httputil/httperr"
+	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -21,14 +22,14 @@ func NewHandler(
 		var session openid.DefaultSession
 		accessRequest, err := oauthHelper.NewAccessRequest(r.Context(), r, &session)
 		if err != nil {
-			plog.Info("token request error", fositeErrorForLog(err)...)
+			plog.Info("token request error", oidc.FositeErrorForLog(err)...)
 			oauthHelper.WriteAccessError(w, accessRequest, err)
 			return nil
 		}
 
 		accessResponse, err := oauthHelper.NewAccessResponse(r.Context(), accessRequest)
 		if err != nil {
-			plog.Info("token response error", fositeErrorForLog(err)...)
+			plog.Info("token response error", oidc.FositeErrorForLog(err)...)
 			oauthHelper.WriteAccessError(w, accessRequest, err)
 			return nil
 		}
@@ -37,17 +38,4 @@ func NewHandler(
 
 		return nil
 	})
-}
-
-// TODO: de-dup me.
-func fositeErrorForLog(err error) []interface{} {
-	rfc6749Error := fosite.ErrorToRFC6749Error(err)
-	keysAndValues := make([]interface{}, 0)
-	keysAndValues = append(keysAndValues, "name")
-	keysAndValues = append(keysAndValues, rfc6749Error.Name)
-	keysAndValues = append(keysAndValues, "status")
-	keysAndValues = append(keysAndValues, rfc6749Error.Status())
-	keysAndValues = append(keysAndValues, "description")
-	keysAndValues = append(keysAndValues, rfc6749Error.Description)
-	return keysAndValues
 }

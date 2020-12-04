@@ -5,15 +5,13 @@ package oidc
 
 import (
 	"context"
-	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
-	"fmt"
+	"net/url"
 	"testing"
 
-	coreosoidc "github.com/coreos/go-oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 	"github.com/ory/fosite/handler/openid"
@@ -22,6 +20,7 @@ import (
 	"gopkg.in/square/go-jose.v2"
 
 	"go.pinniped.dev/internal/oidc/jwks"
+	"go.pinniped.dev/internal/oidc/oidctestutil"
 )
 
 func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
@@ -30,6 +29,7 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 		clientID     = "some-client-id"
 		goodSubject  = "some-subject"
 		goodUsername = "some-username"
+		goodNonce    = "some-nonce-that-is-at-least-32-characters-to-meet-entropy-requirements"
 	)
 
 	ecPrivateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -106,6 +106,9 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 					Subject:  goodSubject,
 					Username: goodUsername,
 				},
+				Form: url.Values{
+					"nonce": {goodNonce},
+				},
 			}
 			idToken, err := s.GenerateIDToken(context.Background(), requester)
 			if test.wantError != "" {
@@ -113,38 +116,16 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 
-				// TODO: common-ize this code with token endpoint test.
-				// TODO: make more assertions about ID token
-
 				privateKey, ok := test.wantSigningJWK.Key.(*ecdsa.PrivateKey)
 				require.True(t, ok, "wanted private key to be *ecdsa.PrivateKey, but was %T", test.wantSigningJWK)
 
-				keySet := newStaticKeySet(privateKey.Public())
-				verifyConfig := coreosoidc.Config{
-					ClientID:             clientID,
-					SupportedSigningAlgs: []string{coreosoidc.ES256},
-				}
-				verifier := coreosoidc.NewVerifier(test.issuer, keySet, &verifyConfig)
-				_, err := verifier.Verify(context.Background(), idToken)
-				require.NoError(t, err)
+				// Perform a light validation on the token to make sure 1) we passed through the correct
+				// signing key and 2) we forwarded the fosite.Requester correctly. Token generation is
+				// tested more expansively in the token endpoint.
+				token := oidctestutil.VerifyECDSAIDToken(t, goodIssuer, clientID, privateKey, idToken)
+				require.Equal(t, goodSubject, token.Subject)
+				require.Equal(t, goodNonce, token.Nonce)
 			}
 		})
 	}
-}
-
-// TODO: de-dep me.
-func newStaticKeySet(publicKey crypto.PublicKey) coreosoidc.KeySet {
-	return &staticKeySet{publicKey}
-}
-
-type staticKeySet struct {
-	publicKey crypto.PublicKey
-}
-
-func (s *staticKeySet) VerifySignature(ctx context.Context, jwt string) ([]byte, error) {
-	jws, err := jose.ParseSigned(jwt)
-	if err != nil {
-		return nil, fmt.Errorf("oidc: malformed jwt: %v", err)
-	}
-	return jws.Verify(s.publicKey)
 }

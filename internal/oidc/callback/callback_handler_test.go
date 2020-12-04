@@ -24,6 +24,7 @@ import (
 	kubetesting "k8s.io/client-go/testing"
 
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/oidctestutil"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -433,7 +434,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			oauthStore := oidc.NewKubeStorage(secrets)
 			hmacSecret := []byte("some secret - must have at least 32 bytes")
 			require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
-			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecret)
+			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
+			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecret, jwksProviderIsUnused)
 
 			idpListGetter := oidctestutil.NewIDPListGetter(&test.idp)
 			subject := NewHandler(idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec, happyUpstreamRedirectURI)

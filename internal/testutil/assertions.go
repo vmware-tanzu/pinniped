@@ -4,6 +4,7 @@
 package testutil
 
 import (
+	"mime"
 	"testing"
 	"time"
 
@@ -21,4 +22,20 @@ func RequireTimeInDelta(t *testing.T, t1 time.Time, t2 time.Time, delta time.Dur
 		delta.String(),
 		t1.Sub(t2).String(),
 	)
+}
+
+func RequireEqualContentType(t *testing.T, actual string, expected string) {
+	t.Helper()
+
+	if expected == "" {
+		require.Empty(t, actual)
+		return
+	}
+
+	actualContentType, actualContentTypeParams, err := mime.ParseMediaType(expected)
+	require.NoError(t, err)
+	expectedContentType, expectedContentTypeParams, err := mime.ParseMediaType(expected)
+	require.NoError(t, err)
+	require.Equal(t, actualContentType, expectedContentType)
+	require.Equal(t, actualContentTypeParams, expectedContentTypeParams)
 }

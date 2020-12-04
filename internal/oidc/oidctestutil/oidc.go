@@ -5,9 +5,16 @@ package oidctestutil
 
 import (
 	"context"
+	"crypto"
+	"crypto/ecdsa"
+	"fmt"
 	"net/url"
+	"testing"
 
+	coreosoidc "github.com/coreos/go-oidc"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
+	"gopkg.in/square/go-jose.v2"
 
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -126,4 +133,42 @@ type ExpectedUpstreamStateParamFormat struct {
 	C string `json:"c"`
 	K string `json:"k"`
 	V string `json:"v"`
+}
+
+type staticKeySet struct {
+	publicKey crypto.PublicKey
+}
+
+func newStaticKeySet(publicKey crypto.PublicKey) coreosoidc.KeySet {
+	return &staticKeySet{publicKey}
+}
+
+func (s *staticKeySet) VerifySignature(ctx context.Context, jwt string) ([]byte, error) {
+	jws, err := jose.ParseSigned(jwt)
+	if err != nil {
+		return nil, fmt.Errorf("oidc: malformed jwt: %w", err)
+	}
+	return jws.Verify(s.publicKey)
+}
+
+// VerifyECDSAIDToken verifies that the provided idToken was issued via the provided jwtSigningKey.
+// It also performs some light validation on the claims, i.e., it makes sure the provided idToken
+// has the provided  issuer and clientID.
+//
+// Further validation can be done via callers via the returned coreosoidc.IDToken.
+func VerifyECDSAIDToken(
+	t *testing.T,
+	issuer, clientID string,
+	jwtSigningKey *ecdsa.PrivateKey,
+	idToken string,
+) *coreosoidc.IDToken {
+	t.Helper()
+
+	keySet := newStaticKeySet(jwtSigningKey.Public())
+	verifyConfig := coreosoidc.Config{ClientID: clientID, SupportedSigningAlgs: []string{coreosoidc.ES256}}
+	verifier := coreosoidc.NewVerifier(issuer, keySet, &verifyConfig)
+	token, err := verifier.Verify(context.Background(), idToken)
+	require.NoError(t, err)
+
+	return token
 }

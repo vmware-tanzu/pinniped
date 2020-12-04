@@ -134,6 +134,27 @@ func FositeOauth2Helper(
 	)
 }
 
+// FositeErrorForLog generates a list of information about the provided Fosite error that can be
+// passed to a plog function (e.g., plog.Info()).
+//
+// Sample usage:
+//   err := someFositeLibraryFunction()
+//   if err != nil {
+//     	plog.Info("some error", FositeErrorForLog(err)...)
+//      ...
+//    }
+func FositeErrorForLog(err error) []interface{} {
+	rfc6749Error := fosite.ErrorToRFC6749Error(err)
+	keysAndValues := make([]interface{}, 0)
+	keysAndValues = append(keysAndValues, "name")
+	keysAndValues = append(keysAndValues, rfc6749Error.Name)
+	keysAndValues = append(keysAndValues, "status")
+	keysAndValues = append(keysAndValues, rfc6749Error.Status())
+	keysAndValues = append(keysAndValues, "description")
+	keysAndValues = append(keysAndValues, rfc6749Error.Description)
+	return keysAndValues
+}
+
 type IDPListGetter interface {
 	GetIDPList() []provider.UpstreamOIDCIdentityProviderI
 }

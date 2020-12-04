@@ -5,12 +5,8 @@ package manager
 
 import (
 	"context"
-	"crypto"
 	"crypto/ecdsa"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -18,7 +14,6 @@ import (
 	"strings"
 	"testing"
 
-	coreosoidc "github.com/coreos/go-oidc"
 	"github.com/sclevine/spec"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
@@ -30,6 +25,7 @@ import (
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/oidctestutil"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -184,7 +180,6 @@ func TestManager(t *testing.T) {
 
 			// Validate ID token is signed by the correct JWK to make sure we wired the token endpoint
 			// signing key correctly.
-			// TODO: common-ize this code with token endpoint test.
 			idToken, ok := body["id_token"].(string)
 			r.True(ok, "wanted id_token type to be string, but was %T", body["id_token"])
 
@@ -192,11 +187,7 @@ func TestManager(t *testing.T) {
 			privateKey, ok := jwks.Keys[0].Key.(*ecdsa.PrivateKey)
 			r.True(ok, "wanted private key to be *ecdsa.PrivateKey, but was %T", jwks.Keys[0].Key)
 
-			keySet := newStaticKeySet(privateKey.Public())
-			verifyConfig := coreosoidc.Config{ClientID: downstreamClientID, SupportedSigningAlgs: []string{coreosoidc.ES256}}
-			verifier := coreosoidc.NewVerifier(jwkIssuer, keySet, &verifyConfig)
-			_, err := verifier.Verify(context.Background(), idToken)
-			r.NoError(err)
+			oidctestutil.VerifyECDSAIDToken(t, jwkIssuer, downstreamClientID, privateKey, idToken)
 
 			// Make sure that we wired up the callback endpoint to use kube storage for fosite sessions.
 			r.Equal(len(kubeClient.Actions()), numberOfKubeActionsBeforeThisRequest+7,
@@ -305,7 +296,7 @@ func TestManager(t *testing.T) {
 				"client_id":             []string{downstreamClientID},
 				"state":                 []string{"some-state-value-that-is-32-byte"},
 				"nonce":                 []string{"some-nonce-value-that-is-at-least-32-bytes"},
-				"code_challenge":        []string{doSHA256(downstreamPKCECodeVerifier)},
+				"code_challenge":        []string{testutil.SHA256(downstreamPKCECodeVerifier)},
 				"code_challenge_method": []string{"S256"},
 				"redirect_uri":          []string{downstreamRedirectURL},
 			}.Encode()
@@ -405,25 +396,4 @@ func TestManager(t *testing.T) {
 			})
 		})
 	})
-}
-
-func doSHA256(s string) string {
-	b := sha256.Sum256([]byte(s))
-	return base64.RawURLEncoding.EncodeToString(b[:])
-}
-
-func newStaticKeySet(publicKey crypto.PublicKey) coreosoidc.KeySet {
-	return &staticKeySet{publicKey}
-}
-
-type staticKeySet struct {
-	publicKey crypto.PublicKey
-}
-
-func (s *staticKeySet) VerifySignature(ctx context.Context, jwt string) ([]byte, error) {
-	jws, err := jose.ParseSigned(jwt)
-	if err != nil {
-		return nil, fmt.Errorf("oidc: malformed jwt: %v", err)
-	}
-	return jws.Verify(s.publicKey)
 }

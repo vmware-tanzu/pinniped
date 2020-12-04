@@ -5,17 +5,14 @@ package token
 
 import (
 	"context"
-	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
-	"mime"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -23,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	coreosoidc "github.com/coreos/go-oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
@@ -35,6 +31,9 @@ import (
 
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/jwks"
+	"go.pinniped.dev/internal/oidc/oidctestutil"
+	"go.pinniped.dev/internal/testutil"
 )
 
 const (
@@ -188,7 +187,7 @@ func TestTokenEndpoint(t *testing.T) {
 			"client_id":             {goodClient},
 			"state":                 {"some-state-value-that-is-32-byte"},
 			"nonce":                 {goodNonce},
-			"code_challenge":        {doSHA256(goodPKCECodeVerifier)},
+			"code_challenge":        {testutil.SHA256(goodPKCECodeVerifier)},
 			"code_challenge_method": {"S256"},
 			"redirect_uri":          {goodRedirectURI},
 		},
@@ -406,7 +405,7 @@ func TestTokenEndpoint(t *testing.T) {
 			t.Logf("response body: %q", rsp.Body.String())
 
 			require.Equal(t, test.wantStatus, rsp.Code)
-			requireEqualContentType(t, rsp.Header().Get("Content-Type"), "application/json")
+			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), "application/json")
 			if test.wantBodyFields != nil {
 				var m map[string]interface{}
 				require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &m))
@@ -444,7 +443,7 @@ func TestTokenEndpoint(t *testing.T) {
 		subject.ServeHTTP(rsp0, req)
 		t.Logf("response 0: %#v", rsp0)
 		t.Logf("response 0 body: %q", rsp0.Body.String())
-		requireEqualContentType(t, rsp0.Header().Get("Content-Type"), "application/json")
+		testutil.RequireEqualContentType(t, rsp0.Header().Get("Content-Type"), "application/json")
 		require.Equal(t, http.StatusOK, rsp0.Code)
 
 		var m map[string]interface{}
@@ -470,7 +469,7 @@ func TestTokenEndpoint(t *testing.T) {
 		t.Logf("response 1: %#v", rsp1)
 		t.Logf("response 1 body: %q", rsp1.Body.String())
 		require.Equal(t, http.StatusBadRequest, rsp1.Code)
-		requireEqualContentType(t, rsp1.Header().Get("Content-Type"), "application/json")
+		testutil.RequireEqualContentType(t, rsp1.Header().Get("Content-Type"), "application/json")
 		require.JSONEq(t, fositeReusedAuthCodeErrorBody, rsp1.Body.String())
 
 		requireInvalidAuthCodeStorage(t, code, oauthStore)
@@ -547,8 +546,8 @@ func makeHappyOauthHelper(
 ) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
 	t.Helper()
 
-	jwtSigningKey := generateJWTSigningKey(t)
-	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), jwtSigningKey)
+	jwtSigningKey, jwkProvider := generateJWTSigningKeyAndJWKSProvider(t, goodIssuer)
+	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), jwkProvider)
 
 	// Simulate the auth endpoint running so Fosite code will fill the store with realistic values.
 	//
@@ -574,11 +573,21 @@ func makeHappyOauthHelper(
 	return oauthHelper, authResponder.GetCode(), jwtSigningKey
 }
 
-func generateJWTSigningKey(t *testing.T) *ecdsa.PrivateKey {
+func generateJWTSigningKeyAndJWKSProvider(t *testing.T, issuer string) (*ecdsa.PrivateKey, jwks.DynamicJWKSProvider) {
 	t.Helper()
+
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
-	return key
+
+	jwksProvider := jwks.NewDynamicJWKSProvider()
+	jwksProvider.SetIssuerToJWKSMap(
+		nil, // public JWKS unused
+		map[string]*jose.JSONWebKey{
+			issuer: {Key: key},
+		},
+	)
+
+	return key, jwksProvider
 }
 
 func hashAccessToken(accessToken string) string {
@@ -589,12 +598,6 @@ func hashAccessToken(accessToken string) string {
 	// Token's JOSE Header."
 	b := sha256.Sum256([]byte(accessToken))
 	return base64.RawURLEncoding.EncodeToString(b[:len(b)/2])
-}
-
-// TODO: de-dup me (manager test).
-func doSHA256(s string) string {
-	b := sha256.Sum256([]byte(s))
-	return base64.RawURLEncoding.EncodeToString(b[:])
 }
 
 func requireInvalidAuthCodeStorage(
@@ -736,7 +739,7 @@ func requireValidAuthRequest(
 		wantGrantedScopes = append([]string{"openid"}, wantGrantedScopes...)
 	}
 	require.NotEmpty(t, authRequest.GetID())
-	requireTimeInDelta(t, authRequest.GetRequestedAt(), time.Now().UTC(), timeComparisonFudgeSeconds*time.Second)
+	testutil.RequireTimeInDelta(t, authRequest.GetRequestedAt(), time.Now().UTC(), timeComparisonFudgeSeconds*time.Second)
 	require.Equal(t, goodClient, authRequest.GetClient().GetID())
 	require.Equal(t, fosite.Arguments(wantRequestedScopes), authRequest.GetRequestedScopes())
 	require.Equal(t, fosite.Arguments(wantGrantedScopes), authRequest.GetGrantedScopes())
@@ -756,13 +759,13 @@ func requireValidAuthRequest(
 		require.Equal(t, goodSubject, claims.Subject)
 		require.Equal(t, []string{goodClient}, claims.Audience)
 		require.Equal(t, goodNonce, claims.Nonce)
-		requireTimeInDelta(
+		testutil.RequireTimeInDelta(
 			t,
 			time.Now().UTC().Add(idTokenExpirationSeconds*time.Second),
 			claims.ExpiresAt,
 			timeComparisonFudgeSeconds*time.Second,
 		)
-		requireTimeInDelta(t, time.Now().UTC(), claims.IssuedAt, timeComparisonFudgeSeconds*time.Second)
+		testutil.RequireTimeInDelta(t, time.Now().UTC(), claims.IssuedAt, timeComparisonFudgeSeconds*time.Second)
 		require.Equal(t, wantAccessTokenHash, claims.AccessTokenHash)
 
 		// We are in charge of setting these fields. For the purpose of testing, we ensure that the
@@ -784,7 +787,7 @@ func requireValidAuthRequest(
 	// Assert that the token expirations are what we think they should be.
 	authCodeExpiresAt, ok := session.ExpiresAt[fosite.AuthorizeCode]
 	require.True(t, ok, "expected session to hold expiration time for auth code")
-	requireTimeInDelta(
+	testutil.RequireTimeInDelta(
 		t,
 		time.Now().UTC().Add(authCodeExpirationSeconds*time.Second),
 		authCodeExpiresAt,
@@ -792,7 +795,7 @@ func requireValidAuthRequest(
 	)
 	accessTokenExpiresAt, ok := session.ExpiresAt[fosite.AccessToken]
 	require.True(t, ok, "expected session to hold expiration time for access token")
-	requireTimeInDelta(
+	testutil.RequireTimeInDelta(
 		t,
 		time.Now().UTC().Add(accessTokenExpirationSeconds*time.Second),
 		accessTokenExpiresAt,
@@ -805,17 +808,15 @@ func requireValidAuthRequest(
 }
 
 func requireValidIDToken(t *testing.T, body map[string]interface{}, jwtSigningKey *ecdsa.PrivateKey) {
+	t.Helper()
+
 	idToken, ok := body["id_token"]
 	require.Truef(t, ok, "body did not contain 'id_token': %s", body)
 	idTokenString, ok := idToken.(string)
 	require.Truef(t, ok, "wanted id_token to be a string, but got %T", idToken)
 
 	// The go-oidc library will validate the signature and the client claim in the ID token.
-	keySet := newStaticKeySet(jwtSigningKey.Public())
-	verifyConfig := coreosoidc.Config{ClientID: goodClient, SupportedSigningAlgs: []string{coreosoidc.ES256}}
-	verifier := coreosoidc.NewVerifier(goodIssuer, keySet, &verifyConfig)
-	token, err := verifier.Verify(context.Background(), idTokenString)
-	require.NoError(t, err)
+	token := oidctestutil.VerifyECDSAIDToken(t, goodIssuer, goodClient, jwtSigningKey, idTokenString)
 
 	var claims struct {
 		Subject         string   `json:"sub"`
@@ -837,7 +838,7 @@ func requireValidIDToken(t *testing.T, body map[string]interface{}, jwtSigningKe
 	require.ElementsMatch(t, idTokenFields, getMapKeys(m))
 
 	// verify each of the claims
-	err = token.Claims(&claims)
+	err := token.Claims(&claims)
 	require.NoError(t, err)
 	require.Equal(t, goodSubject, claims.Subject)
 	require.Len(t, claims.Audience, 1)
@@ -851,60 +852,10 @@ func requireValidIDToken(t *testing.T, body map[string]interface{}, jwtSigningKe
 	issuedAt := time.Unix(claims.IssuedAt, 0)
 	requestedAt := time.Unix(claims.RequestedAt, 0)
 	authTime := time.Unix(claims.AuthTime, 0)
-	requireTimeInDelta(t, time.Now().UTC().Add(idTokenExpirationSeconds*time.Second), expiresAt, timeComparisonFudgeSeconds*time.Second)
-	requireTimeInDelta(t, time.Now().UTC(), issuedAt, timeComparisonFudgeSeconds*time.Second)
-	requireTimeInDelta(t, goodRequestedAtTime, requestedAt, timeComparisonFudgeSeconds*time.Second)
-	requireTimeInDelta(t, goodAuthTime, authTime, timeComparisonFudgeSeconds*time.Second)
-}
-
-// TODO: de-dup me (manager test).
-func newStaticKeySet(publicKey crypto.PublicKey) coreosoidc.KeySet {
-	return &staticKeySet{publicKey}
-}
-
-type staticKeySet struct {
-	publicKey crypto.PublicKey
-}
-
-func (s *staticKeySet) VerifySignature(ctx context.Context, jwt string) ([]byte, error) {
-	jws, err := jose.ParseSigned(jwt)
-	if err != nil {
-		return nil, fmt.Errorf("oidc: malformed jwt: %v", err)
-	}
-	return jws.Verify(s.publicKey)
-}
-
-// TODO: de-dup me.
-func requireEqualContentType(t *testing.T, actual string, expected string) {
-	t.Helper()
-
-	if expected == "" {
-		require.Empty(t, actual)
-		return
-	}
-
-	actualContentType, actualContentTypeParams, err := mime.ParseMediaType(expected)
-	require.NoError(t, err)
-	expectedContentType, expectedContentTypeParams, err := mime.ParseMediaType(expected)
-	require.NoError(t, err)
-	require.Equal(t, actualContentType, expectedContentType)
-	require.Equal(t, actualContentTypeParams, expectedContentTypeParams)
-}
-
-// TODO: use actual testutil function.
-//nolint:unparam
-func requireTimeInDelta(t *testing.T, t1 time.Time, t2 time.Time, delta time.Duration) {
-	t.Helper()
-	require.InDeltaf(t,
-		float64(t1.UnixNano()),
-		float64(t2.UnixNano()),
-		float64(delta.Nanoseconds()),
-		"expected %s and %s to be < %s apart, but they are %s apart",
-		t1.Format(time.RFC3339Nano),
-		t2.Format(time.RFC3339Nano),
-		delta.String(),
-		t1.Sub(t2).String(),
-	)
+	testutil.RequireTimeInDelta(t, time.Now().UTC().Add(idTokenExpirationSeconds*time.Second), expiresAt, timeComparisonFudgeSeconds*time.Second)
+	testutil.RequireTimeInDelta(t, time.Now().UTC(), issuedAt, timeComparisonFudgeSeconds*time.Second)
+	testutil.RequireTimeInDelta(t, goodRequestedAtTime, requestedAt, timeComparisonFudgeSeconds*time.Second)
+	testutil.RequireTimeInDelta(t, goodAuthTime, authTime, timeComparisonFudgeSeconds*time.Second)
 }
 
 func deepCopyRequestForm(r *http.Request) *http.Request {

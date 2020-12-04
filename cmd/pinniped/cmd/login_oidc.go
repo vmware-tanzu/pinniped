@@ -44,6 +44,7 @@ func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...oid
 		sessionCachePath  string
 		caBundlePaths     []string
 		debugSessionCache bool
+		requestAudience   string
 	)
 	cmd.Flags().StringVar(&issuer, "issuer", "", "OpenID Connect issuer URL.")
 	cmd.Flags().StringVar(&clientID, "client-id", "", "OpenID Connect client ID.")
@@ -53,6 +54,7 @@ func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...oid
 	cmd.Flags().StringVar(&sessionCachePath, "session-cache", filepath.Join(mustGetConfigDir(), "sessions.yaml"), "Path to session cache file.")
 	cmd.Flags().StringSliceVar(&caBundlePaths, "ca-bundle", nil, "Path to TLS certificate authority bundle (PEM format, optional, can be repeated).")
 	cmd.Flags().BoolVar(&debugSessionCache, "debug-session-cache", false, "Print debug logs related to the session cache.")
+	cmd.Flags().StringVar(&requestAudience, "request-audience", "", "Request a token with an alternate audience using RF8693 token exchange.")
 	mustMarkHidden(&cmd, "debug-session-cache")
 	mustMarkRequired(&cmd, "issuer", "client-id")
 
@@ -78,6 +80,10 @@ func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...oid
 
 		if listenPort != 0 {
 			opts = append(opts, oidcclient.WithListenPort(listenPort))
+		}
+
+		if requestAudience != "" {
+			opts = append(opts, oidcclient.WithRequestAudience(requestAudience))
 		}
 
 		// --skip-browser replaces the default "browser open" function with one that prints to stderr.

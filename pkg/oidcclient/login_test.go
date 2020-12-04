@@ -62,11 +62,35 @@ func TestLogin(t *testing.T) {
 		IDToken:      &oidctypes.IDToken{Token: "test-id-token", Expiry: metav1.NewTime(time1.Add(2 * time.Minute))},
 	}
 
+	testExchangedToken := oidctypes.Token{
+		IDToken: &oidctypes.IDToken{Token: "test-id-token-with-requested-audience", Expiry: metav1.NewTime(time1.Add(3 * time.Minute))},
+	}
+
 	// Start a test server that returns 500 errors
 	errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "some discovery error", http.StatusInternalServerError)
 	}))
 	t.Cleanup(errorServer.Close)
+
+	// Start a test server that returns discovery data with a broken token URL
+	brokenTokenURLMux := http.NewServeMux()
+	brokenTokenURLServer := httptest.NewServer(brokenTokenURLMux)
+	brokenTokenURLMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		type providerJSON struct {
+			Issuer   string `json:"issuer"`
+			AuthURL  string `json:"authorization_endpoint"`
+			TokenURL string `json:"token_endpoint"`
+			JWKSURL  string `json:"jwks_uri"`
+		}
+		_ = json.NewEncoder(w).Encode(&providerJSON{
+			Issuer:   brokenTokenURLServer.URL,
+			AuthURL:  brokenTokenURLServer.URL + "/authorize",
+			TokenURL: "%",
+			JWKSURL:  brokenTokenURLServer.URL + "/keys",
+		})
+	})
+	t.Cleanup(brokenTokenURLServer.Close)
 
 	// Start a test server that returns a real discovery document and answers refresh requests.
 	providerMux := http.NewServeMux()
@@ -100,29 +124,65 @@ func TestLogin(t *testing.T) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if r.Form.Get("client_id") != "test-client-id" {
-			http.Error(w, "expected client_id 'test-client-id'", http.StatusBadRequest)
-			return
-		}
-		if r.Form.Get("grant_type") != "refresh_token" {
-			http.Error(w, "expected refresh_token grant type", http.StatusBadRequest)
-			return
-		}
 
 		var response struct {
 			oauth2.Token
-			IDToken   string `json:"id_token,omitempty"`
-			ExpiresIn int64  `json:"expires_in"`
+			IDToken         string `json:"id_token,omitempty"`
+			ExpiresIn       int64  `json:"expires_in"`
+			IssuedTokenType string `json:"issued_token_type,omitempty"`
 		}
-		response.AccessToken = testToken.AccessToken.Token
-		response.ExpiresIn = int64(time.Until(testToken.AccessToken.Expiry.Time).Seconds())
-		response.RefreshToken = testToken.RefreshToken.Token
-		response.IDToken = testToken.IDToken.Token
 
-		if r.Form.Get("refresh_token") == "test-refresh-token-returning-invalid-id-token" {
-			response.IDToken = "not a valid JWT"
-		} else if r.Form.Get("refresh_token") != "test-refresh-token" {
-			http.Error(w, "expected refresh_token to be 'test-refresh-token'", http.StatusBadRequest)
+		switch r.Form.Get("grant_type") {
+		case "refresh_token":
+			if r.Form.Get("client_id") != "test-client-id" {
+				http.Error(w, "expected client_id 'test-client-id'", http.StatusBadRequest)
+				return
+			}
+
+			response.AccessToken = testToken.AccessToken.Token
+			response.ExpiresIn = int64(time.Until(testToken.AccessToken.Expiry.Time).Seconds())
+			response.RefreshToken = testToken.RefreshToken.Token
+			response.IDToken = testToken.IDToken.Token
+
+			if r.Form.Get("refresh_token") == "test-refresh-token-returning-invalid-id-token" {
+				response.IDToken = "not a valid JWT"
+			} else if r.Form.Get("refresh_token") != "test-refresh-token" {
+				http.Error(w, "expected refresh_token to be 'test-refresh-token'", http.StatusBadRequest)
+				return
+			}
+
+		case "urn:ietf:params:oauth:grant-type:token-exchange":
+			switch r.Form.Get("audience") {
+			case "test-audience-produce-invalid-http-response":
+				http.Redirect(w, r, "%", http.StatusTemporaryRedirect)
+				return
+			case "test-audience-produce-http-400":
+				http.Error(w, "some server error", http.StatusBadRequest)
+				return
+			case "test-audience-produce-wrong-content-type":
+				w.Header().Set("content-type", "invalid")
+				return
+			case "test-audience-produce-invalid-json":
+				w.Header().Set("content-type", "application/json")
+				_, _ = w.Write([]byte(`{`))
+				return
+			case "test-audience-produce-invalid-tokentype":
+				response.TokenType = "invalid"
+			case "test-audience-produce-invalid-issuedtokentype":
+				response.TokenType = "N_A"
+				response.IssuedTokenType = "invalid"
+			case "test-audience-produce-invalid-jwt":
+				response.TokenType = "N_A"
+				response.IssuedTokenType = "urn:ietf:params:oauth:token-type:jwt"
+				response.AccessToken = "not-a-valid-jwt"
+			default:
+				response.TokenType = "N_A"
+				response.IssuedTokenType = "urn:ietf:params:oauth:token-type:jwt"
+				response.AccessToken = testExchangedToken.IDToken.Token
+			}
+
+		default:
+			http.Error(w, fmt.Sprintf("invalid grant_type %q", r.Form.Get("grant_type")), http.StatusBadRequest)
 			return
 		}
 
@@ -443,6 +503,289 @@ func TestLogin(t *testing.T) {
 			},
 			issuer:    successServer.URL,
 			wantToken: &testToken,
+		},
+		{
+			name:     "with requested audience, session cache hit with valid token, but discovery fails",
+			clientID: "test-client-id",
+			issuer:   errorServer.URL,
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &testToken}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{{
+							Issuer:      errorServer.URL,
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}}, cache.sawGetKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithRequestAudience("cluster-1234")(h))
+					return nil
+				}
+			},
+			wantErr: fmt.Sprintf("failed to exchange token: could not perform OIDC discovery for %q: 500 Internal Server Error: some discovery error\n", errorServer.URL),
+		},
+		{
+			name:     "with requested audience, session cache hit with valid token, but token URL is invalid",
+			issuer:   brokenTokenURLServer.URL,
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &testToken}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{{
+							Issuer:      brokenTokenURLServer.URL,
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}}, cache.sawGetKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithRequestAudience("cluster-1234")(h))
+					return nil
+				}
+			},
+			wantErr: `failed to exchange token: could not build RFC8693 request: parse "%": invalid URL escape "%"`,
+		},
+		{
+			name:     "with requested audience, session cache hit with valid token, but token exchange request fails",
+			issuer:   successServer.URL,
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &testToken}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{{
+							Issuer:      successServer.URL,
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}}, cache.sawGetKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-http-response")(h))
+					return nil
+				}
+			},
+			wantErr: fmt.Sprintf(`failed to exchange token: Post "%s/token": failed to parse Location header "%%": parse "%%": invalid URL escape "%%"`, successServer.URL),
+		},
+		{
+			name:     "with requested audience, session cache hit with valid token, but token exchange request returns non-200",
+			issuer:   successServer.URL,
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &testToken}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{{
+							Issuer:      successServer.URL,
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}}, cache.sawGetKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithRequestAudience("test-audience-produce-http-400")(h))
+					return nil
+				}
+			},
+			wantErr: `failed to exchange token: unexpected HTTP response status 400`,
+		},
+		{
+			name:     "with requested audience, session cache hit with valid token, but token exchange request returns wrong content-type",
+			issuer:   successServer.URL,
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &testToken}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{{
+							Issuer:      successServer.URL,
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}}, cache.sawGetKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithRequestAudience("test-audience-produce-wrong-content-type")(h))
+					return nil
+				}
+			},
+			wantErr: `failed to exchange token: unexpected HTTP response content type "invalid"`,
+		},
+		{
+			name:     "with requested audience, session cache hit with valid token, but token exchange request returns invalid JSON",
+			issuer:   successServer.URL,
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &testToken}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{{
+							Issuer:      successServer.URL,
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}}, cache.sawGetKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-json")(h))
+					return nil
+				}
+			},
+			wantErr: `failed to exchange token: failed to decode response: unexpected EOF`,
+		},
+		{
+			name:     "with requested audience, session cache hit with valid token, but token exchange request returns invalid token_type",
+			issuer:   successServer.URL,
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &testToken}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{{
+							Issuer:      successServer.URL,
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}}, cache.sawGetKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-tokentype")(h))
+					return nil
+				}
+			},
+			wantErr: `failed to exchange token: got unexpected token_type "invalid"`,
+		},
+		{
+			name:     "with requested audience, session cache hit with valid token, but token exchange request returns invalid issued_token_type",
+			issuer:   successServer.URL,
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &testToken}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{{
+							Issuer:      successServer.URL,
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}}, cache.sawGetKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-issuedtokentype")(h))
+					return nil
+				}
+			},
+			wantErr: `failed to exchange token: got unexpected issued_token_type "invalid"`,
+		},
+		{
+			name:     "with requested audience, session cache hit with valid token, but token exchange request returns invalid JWT",
+			issuer:   successServer.URL,
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &testToken}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{{
+							Issuer:      successServer.URL,
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}}, cache.sawGetKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-jwt")(h))
+					return nil
+				}
+			},
+			wantErr: `failed to exchange token: received invalid JWT: oidc: malformed jwt: square/go-jose: compact JWS format must have three parts`,
+		},
+		{
+			name:     "with requested audience, session cache hit with valid token, and token exchange request succeeds",
+			issuer:   successServer.URL,
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &testToken}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{{
+							Issuer:      successServer.URL,
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}}, cache.sawGetKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithRequestAudience("test-audience")(h))
+
+					h.validateIDToken = func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error) {
+						require.Equal(t, "test-audience", audience)
+						require.Equal(t, "test-id-token-with-requested-audience", token)
+						return &oidc.IDToken{Expiry: testExchangedToken.IDToken.Expiry.Time}, nil
+					}
+					return nil
+				}
+			},
+			wantToken: &testExchangedToken,
+		},
+		{
+			name:     "with requested audience, session cache hit with valid refresh token, and token exchange request succeeds",
+			issuer:   successServer.URL,
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &oidctypes.Token{
+						IDToken: &oidctypes.IDToken{
+							Token:  "expired-test-id-token",
+							Expiry: metav1.Now(), // less than Now() + minIDTokenValidity
+						},
+						RefreshToken: &oidctypes.RefreshToken{Token: "test-refresh-token"},
+					}}
+					t.Cleanup(func() {
+						cacheKey := SessionCacheKey{
+							Issuer:      successServer.URL,
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawPutKeys)
+						require.Len(t, cache.sawPutTokens, 1)
+						require.Equal(t, testToken.IDToken.Token, cache.sawPutTokens[0].IDToken.Token)
+					})
+					h.cache = cache
+
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+						mock := mockUpstream(t)
+						mock.EXPECT().
+							ValidateToken(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce("")).
+							Return(&testToken, nil)
+						return mock
+					}
+
+					require.NoError(t, WithRequestAudience("test-audience")(h))
+
+					h.validateIDToken = func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error) {
+						require.Equal(t, "test-audience", audience)
+						require.Equal(t, "test-id-token-with-requested-audience", token)
+						return &oidc.IDToken{Expiry: testExchangedToken.IDToken.Expiry.Time}, nil
+					}
+					return nil
+				}
+			},
+			wantToken: &testExchangedToken,
 		},
 	}
 	for _, tt := range tests {

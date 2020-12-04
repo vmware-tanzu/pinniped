@@ -23,7 +23,7 @@ import (
 //nolint:gosec // ignore lint warnings that these are credentials
 const (
 	secretNameFormat = "pinniped-storage-%s-%s"
-	secretLabelKey   = "storage.pinniped.dev"
+	secretLabelKey   = "storage.pinniped.dev/type"
 	secretTypeFormat = "storage.pinniped.dev/%s"
 	secretVersion    = "1"
 	secretDataKey    = "pinniped-storage-data"

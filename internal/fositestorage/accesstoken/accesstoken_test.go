@@ -37,7 +37,7 @@ func TestAccessTokenStorage(t *testing.T) {
 				Name:            "pinniped-storage-access-token-pwu5zs7lekbhnln2w4",
 				ResourceVersion: "",
 				Labels: map[string]string{
-					"storage.pinniped.dev":            "access-token",
+					"storage.pinniped.dev/type":       "access-token",
 					"storage.pinniped.dev/request-id": "abcd-1",
 				},
 			},
@@ -111,7 +111,7 @@ func TestAccessTokenStorageRevocation(t *testing.T) {
 				Name:            "pinniped-storage-access-token-pwu5zs7lekbhnln2w4",
 				ResourceVersion: "",
 				Labels: map[string]string{
-					"storage.pinniped.dev":            "access-token",
+					"storage.pinniped.dev/type":       "access-token",
 					"storage.pinniped.dev/request-id": "abcd-1",
 				},
 			},
@@ -122,7 +122,7 @@ func TestAccessTokenStorageRevocation(t *testing.T) {
 			Type: "storage.pinniped.dev/access-token",
 		}),
 		coretesting.NewListAction(secretsGVR, schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}, namespace, metav1.ListOptions{
-			LabelSelector: "storage.pinniped.dev=access-token,storage.pinniped.dev/request-id=abcd-1",
+			LabelSelector: "storage.pinniped.dev/type=access-token,storage.pinniped.dev/request-id=abcd-1",
 		}),
 		coretesting.NewDeleteAction(secretsGVR, namespace, "pinniped-storage-access-token-pwu5zs7lekbhnln2w4"),
 	}
@@ -180,7 +180,7 @@ func TestWrongVersion(t *testing.T) {
 			Name:            "pinniped-storage-access-token-pwu5zs7lekbhnln2w4",
 			ResourceVersion: "",
 			Labels: map[string]string{
-				"storage.pinniped.dev": "access-token",
+				"storage.pinniped.dev/type": "access-token",
 			},
 		},
 		Data: map[string][]byte{
@@ -208,7 +208,7 @@ func TestNilSessionRequest(t *testing.T) {
 			Name:            "pinniped-storage-access-token-pwu5zs7lekbhnln2w4",
 			ResourceVersion: "",
 			Labels: map[string]string{
-				"storage.pinniped.dev": "access-token",
+				"storage.pinniped.dev/type": "access-token",
 			},
 		},
 		Data: map[string][]byte{

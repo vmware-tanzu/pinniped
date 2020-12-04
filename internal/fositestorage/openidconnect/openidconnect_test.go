@@ -36,7 +36,7 @@ func TestOpenIdConnectStorage(t *testing.T) {
 				Name:            "pinniped-storage-oidc-pwu5zs7lekbhnln2w4",
 				ResourceVersion: "",
 				Labels: map[string]string{
-					"storage.pinniped.dev": "oidc",
+					"storage.pinniped.dev/type": "oidc",
 				},
 			},
 			Data: map[string][]byte{
@@ -122,7 +122,7 @@ func TestWrongVersion(t *testing.T) {
 			Name:            "pinniped-storage-oidc-pwu5zs7lekbhnln2w4",
 			ResourceVersion: "",
 			Labels: map[string]string{
-				"storage.pinniped.dev": "oidc",
+				"storage.pinniped.dev/type": "oidc",
 			},
 		},
 		Data: map[string][]byte{
@@ -150,7 +150,7 @@ func TestNilSessionRequest(t *testing.T) {
 			Name:            "pinniped-storage-oidc-pwu5zs7lekbhnln2w4",
 			ResourceVersion: "",
 			Labels: map[string]string{
-				"storage.pinniped.dev": "oidc",
+				"storage.pinniped.dev/type": "oidc",
 			},
 		},
 		Data: map[string][]byte{

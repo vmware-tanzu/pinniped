@@ -36,7 +36,7 @@ func TestPKCEStorage(t *testing.T) {
 				Name:            "pinniped-storage-pkce-pwu5zs7lekbhnln2w4",
 				ResourceVersion: "",
 				Labels: map[string]string{
-					"storage.pinniped.dev": "pkce",
+					"storage.pinniped.dev/type": "pkce",
 				},
 			},
 			Data: map[string][]byte{
@@ -122,7 +122,7 @@ func TestWrongVersion(t *testing.T) {
 			Name:            "pinniped-storage-pkce-pwu5zs7lekbhnln2w4",
 			ResourceVersion: "",
 			Labels: map[string]string{
-				"storage.pinniped.dev": "pkce",
+				"storage.pinniped.dev/type": "pkce",
 			},
 		},
 		Data: map[string][]byte{
@@ -150,7 +150,7 @@ func TestNilSessionRequest(t *testing.T) {
 			Name:            "pinniped-storage-pkce-pwu5zs7lekbhnln2w4",
 			ResourceVersion: "",
 			Labels: map[string]string{
-				"storage.pinniped.dev": "pkce",
+				"storage.pinniped.dev/type": "pkce",
 			},
 		},
 		Data: map[string][]byte{

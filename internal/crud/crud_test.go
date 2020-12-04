@@ -117,7 +117,7 @@ func TestStorage(t *testing.T) {
 						Name:            "pinniped-storage-access-tokens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq",
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "access-tokens",
+							"storage.pinniped.dev/type": "access-tokens",
 						},
 					},
 					Data: map[string][]byte{
@@ -135,7 +135,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "access-tokens",
+							"storage.pinniped.dev/type": "access-tokens",
 						},
 					},
 					Data: map[string][]byte{
@@ -175,9 +175,9 @@ func TestStorage(t *testing.T) {
 						Name:            "pinniped-storage-access-tokens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq",
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "access-tokens",
-							"label1":               "value1",
-							"label2":               "value2",
+							"storage.pinniped.dev/type": "access-tokens",
+							"label1":                    "value1",
+							"label2":                    "value2",
 						},
 					},
 					Data: map[string][]byte{
@@ -195,9 +195,9 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "access-tokens",
-							"label1":               "value1",
-							"label2":               "value2",
+							"storage.pinniped.dev/type": "access-tokens",
+							"label1":                    "value1",
+							"label2":                    "value2",
 						},
 					},
 					Data: map[string][]byte{
@@ -219,7 +219,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "pandas-are-best",
+							"storage.pinniped.dev/type": "pandas-are-best",
 						},
 					},
 					Data: map[string][]byte{
@@ -254,7 +254,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "pandas-are-best",
+							"storage.pinniped.dev/type": "pandas-are-best",
 						},
 					},
 					Data: map[string][]byte{
@@ -276,7 +276,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "35",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "stores",
+							"storage.pinniped.dev/type": "stores",
 						},
 					},
 					Data: map[string][]byte{
@@ -325,7 +325,7 @@ func TestStorage(t *testing.T) {
 						Name:            "pinniped-storage-stores-4wssc5gzt5mlln6iux6gl7hzz3klsirisydaxn7indnpvdnrs5ba",
 						ResourceVersion: "35", // update at initial RV
 						Labels: map[string]string{
-							"storage.pinniped.dev": "stores",
+							"storage.pinniped.dev/type": "stores",
 						},
 					},
 					Data: map[string][]byte{
@@ -343,7 +343,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "45", // final list at new RV
 						Labels: map[string]string{
-							"storage.pinniped.dev": "stores",
+							"storage.pinniped.dev/type": "stores",
 						},
 					},
 					Data: map[string][]byte{
@@ -365,7 +365,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "seals",
+							"storage.pinniped.dev/type": "seals",
 						},
 					},
 					Data: map[string][]byte{
@@ -399,8 +399,8 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "seals",
-							"additionalLabel":      "matching-value",
+							"storage.pinniped.dev/type": "seals",
+							"additionalLabel":           "matching-value",
 						},
 					},
 					Data: map[string][]byte{
@@ -415,8 +415,8 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "seals",
-							"additionalLabel":      "matching-value",
+							"storage.pinniped.dev/type": "seals",
+							"additionalLabel":           "matching-value",
 						},
 					},
 					Data: map[string][]byte{
@@ -431,8 +431,8 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "seals",              // same type as above
-							"additionalLabel":      "non-matching-value", // different value for the same label
+							"storage.pinniped.dev/type": "seals",              // same type as above
+							"additionalLabel":           "non-matching-value", // different value for the same label
 						},
 					},
 					Data: map[string][]byte{
@@ -447,8 +447,8 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "walruses",       // different type from above
-							"additionalLabel":      "matching-value", // same value for the same label as above
+							"storage.pinniped.dev/type": "walruses",       // different type from above
+							"additionalLabel":           "matching-value", // same value for the same label as above
 						},
 					},
 					Data: map[string][]byte{
@@ -463,7 +463,7 @@ func TestStorage(t *testing.T) {
 			},
 			wantActions: []coretesting.Action{
 				coretesting.NewListAction(secretsGVR, schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}, namespace, metav1.ListOptions{
-					LabelSelector: "storage.pinniped.dev=seals,additionalLabel=matching-value",
+					LabelSelector: "storage.pinniped.dev/type=seals,additionalLabel=matching-value",
 				}),
 				coretesting.NewDeleteAction(secretsGVR, namespace, "pinniped-storage-seals-abcdywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq"),
 				coretesting.NewDeleteAction(secretsGVR, namespace, "pinniped-storage-seals-lvzgyywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq"),
@@ -476,8 +476,8 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "seals",              // same type as above
-							"additionalLabel":      "non-matching-value", // different value for the same label
+							"storage.pinniped.dev/type": "seals",              // same type as above
+							"additionalLabel":           "non-matching-value", // different value for the same label
 						},
 					},
 					Data: map[string][]byte{
@@ -493,8 +493,8 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "walruses",       // different type from above
-							"additionalLabel":      "matching-value", // same value for the same label as above
+							"storage.pinniped.dev/type": "walruses",       // different type from above
+							"additionalLabel":           "matching-value", // same value for the same label as above
 						},
 					},
 					Data: map[string][]byte{
@@ -516,8 +516,8 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "seals",
-							"additionalLabel":      "matching-value",
+							"storage.pinniped.dev/type": "seals",
+							"additionalLabel":           "matching-value",
 						},
 					},
 					Data: map[string][]byte{
@@ -535,7 +535,7 @@ func TestStorage(t *testing.T) {
 			},
 			wantActions: []coretesting.Action{
 				coretesting.NewListAction(secretsGVR, schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}, namespace, metav1.ListOptions{
-					LabelSelector: "storage.pinniped.dev=seals,additionalLabel=matching-value",
+					LabelSelector: "storage.pinniped.dev/type=seals,additionalLabel=matching-value",
 				}),
 				coretesting.NewDeleteAction(secretsGVR, namespace, "pinniped-storage-seals-lvzgyywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq"),
 			},
@@ -546,8 +546,8 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "seals",
-							"additionalLabel":      "matching-value",
+							"storage.pinniped.dev/type": "seals",
+							"additionalLabel":           "matching-value",
 						},
 					},
 					Data: map[string][]byte{
@@ -571,9 +571,9 @@ func TestStorage(t *testing.T) {
 						// this list action did not use label selector additionalLabel=matching-value, so allow it to proceed without intervention
 						return false, nil, nil
 					}
-					requiresExactMatch, found = labelRestrictions.RequiresExactMatch("storage.pinniped.dev")
+					requiresExactMatch, found = labelRestrictions.RequiresExactMatch("storage.pinniped.dev/type")
 					if !found || requiresExactMatch != "seals" {
-						// this list action did not use label selector storage.pinniped.dev=seals, so allow it to proceed without intervention
+						// this list action did not use label selector storage.pinniped.dev/type=seals, so allow it to proceed without intervention
 						return false, nil, nil
 					}
 					// this list action was the one that did use the expected label selectors so cause it to error
@@ -585,7 +585,7 @@ func TestStorage(t *testing.T) {
 			},
 			wantActions: []coretesting.Action{
 				coretesting.NewListAction(secretsGVR, schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}, namespace, metav1.ListOptions{
-					LabelSelector: "storage.pinniped.dev=seals,additionalLabel=matching-value",
+					LabelSelector: "storage.pinniped.dev/type=seals,additionalLabel=matching-value",
 				}),
 			},
 			wantErr: `failed to list secrets for resource "seals" matching label "additionalLabel=matching-value": some listing error`,
@@ -600,7 +600,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies",
+							"storage.pinniped.dev/type": "candies",
 						},
 					},
 					Data: map[string][]byte{
@@ -635,7 +635,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies",
+							"storage.pinniped.dev/type": "candies",
 						},
 					},
 					Data: map[string][]byte{
@@ -657,7 +657,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies-are-bad",
+							"storage.pinniped.dev/type": "candies-are-bad",
 						},
 					},
 					Data: map[string][]byte{
@@ -692,7 +692,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies-are-bad",
+							"storage.pinniped.dev/type": "candies-are-bad",
 						},
 					},
 					Data: map[string][]byte{
@@ -714,7 +714,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies",
+							"storage.pinniped.dev/type": "candies",
 						},
 					},
 					Data: map[string][]byte{
@@ -749,7 +749,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies",
+							"storage.pinniped.dev/type": "candies",
 						},
 					},
 					Data: map[string][]byte{
@@ -771,7 +771,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies",
+							"storage.pinniped.dev/type": "candies",
 						},
 					},
 					Data: map[string][]byte{
@@ -805,7 +805,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies",
+							"storage.pinniped.dev/type": "candies",
 						},
 					},
 					Data: map[string][]byte{

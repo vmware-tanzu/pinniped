@@ -49,7 +49,7 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 				Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
 				ResourceVersion: "",
 				Labels: map[string]string{
-					"storage.pinniped.dev": "authcode",
+					"storage.pinniped.dev/type": "authcode",
 				},
 			},
 			Data: map[string][]byte{
@@ -65,7 +65,7 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 				Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
 				ResourceVersion: "",
 				Labels: map[string]string{
-					"storage.pinniped.dev": "authcode",
+					"storage.pinniped.dev/type": "authcode",
 				},
 			},
 			Data: map[string][]byte{
@@ -189,7 +189,7 @@ func TestWrongVersion(t *testing.T) {
 			Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
 			ResourceVersion: "",
 			Labels: map[string]string{
-				"storage.pinniped.dev": "authcode",
+				"storage.pinniped.dev/type": "authcode",
 			},
 		},
 		Data: map[string][]byte{
@@ -217,7 +217,7 @@ func TestNilSessionRequest(t *testing.T) {
 			Name:            "pinniped-storage-authcode-pwu5zs7lekbhnln2w4",
 			ResourceVersion: "",
 			Labels: map[string]string{
-				"storage.pinniped.dev": "authcode",
+				"storage.pinniped.dev/type": "authcode",
 			},
 		},
 		Data: map[string][]byte{

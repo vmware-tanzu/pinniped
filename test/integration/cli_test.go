@@ -313,6 +313,7 @@ func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, ses
 	cmd := exec.CommandContext(ctx, pinnipedExe, "login", "oidc",
 		"--issuer", env.CLITestUpstream.Issuer,
 		"--client-id", env.CLITestUpstream.ClientID,
+		"--scopes", "offline_access,openid,email,profile",
 		"--listen-port", callbackURL.Port(),
 		"--session-cache", sessionCachePath,
 		"--skip-browser",

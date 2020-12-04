@@ -6,8 +6,10 @@ package oidc
 import (
 	"context"
 	"crypto/ecdsa"
+	"reflect"
 
 	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/plog"
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
@@ -40,10 +42,22 @@ func (s *dynamicOpenIDConnectECDSAStrategy) GenerateIDToken(
 ) (string, error) {
 	_, activeJwk := s.jwksProvider.GetJWKS(s.fositeConfig.IDTokenIssuer)
 	if activeJwk == nil {
-		return "", constable.Error("No JWK found for issuer")
+		plog.Debug("no JWK found for issuer", "issuer", s.fositeConfig.IDTokenIssuer)
+		return "", constable.Error("no JWK found for issuer")
 	}
 	key, ok := activeJwk.Key.(*ecdsa.PrivateKey)
 	if !ok {
+		actualType := "nil"
+		if t := reflect.TypeOf(activeJwk.Key); t != nil {
+			actualType = t.String()
+		}
+		plog.Debug(
+			"JWK must be of type ecdsa",
+			"issuer",
+			s.fositeConfig.IDTokenIssuer,
+			"actualType",
+			actualType,
+		)
 		return "", constable.Error("JWK must be of type ecdsa")
 	}
 

@@ -65,7 +65,7 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 		{
 			name:      "jwks provider does not contain signing key for issuer",
 			issuer:    goodIssuer,
-			wantError: "No JWK found for issuer",
+			wantError: "no JWK found for issuer",
 		},
 		{
 			name:   "jwks provider contains signing key of wrong type for issuer",

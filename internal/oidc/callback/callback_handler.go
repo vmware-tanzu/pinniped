@@ -73,7 +73,7 @@ func NewHandler(
 		// Grant the openid scope only if it was requested.
 		grantOpenIDScopeIfRequested(authorizeRequester)
 
-		_, idTokenClaims, err := upstreamIDPConfig.ExchangeAuthcodeAndValidateTokens(
+		token, err := upstreamIDPConfig.ExchangeAuthcodeAndValidateTokens(
 			r.Context(),
 			authcode(r),
 			state.PKCECode,
@@ -85,12 +85,12 @@ func NewHandler(
 			return httperr.New(http.StatusBadGateway, "error exchanging and validating upstream tokens")
 		}
 
-		username, err := getUsernameFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims)
+		username, err := getUsernameFromUpstreamIDToken(upstreamIDPConfig, token.IDToken.Claims)
 		if err != nil {
 			return err
 		}
 
-		groups, err := getGroupsFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims)
+		groups, err := getGroupsFromUpstreamIDToken(upstreamIDPConfig, token.IDToken.Claims)
 		if err != nil {
 			return err
 		}

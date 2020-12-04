@@ -31,6 +31,9 @@ type IDToken struct {
 
 	// Expiry is the optional expiration time of the ID token.
 	Expiry v1.Time `json:"expiryTimestamp,omitempty"`
+
+	// Claims are the claims expressed by the Token.
+	Claims map[string]interface{} `json:"claims,omitempty"`
 }
 
 // Token contains the elements of an OIDC session.

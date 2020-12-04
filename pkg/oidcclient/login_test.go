@@ -242,7 +242,7 @@ func TestLogin(t *testing.T) {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ValidateToken(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce("")).
-							Return(testToken, nil, nil)
+							Return(&testToken, nil)
 						return mock
 					}
 
@@ -281,7 +281,7 @@ func TestLogin(t *testing.T) {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ValidateToken(gomock.Any(), HasAccessToken(testToken.AccessToken.Token), nonce.Nonce("")).
-							Return(oidctypes.Token{}, nil, fmt.Errorf("some validation error"))
+							Return(nil, fmt.Errorf("some validation error"))
 						return mock
 					}
 
@@ -529,7 +529,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "invalid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
-							Return(oidctypes.Token{}, nil, fmt.Errorf("some exchange error"))
+							Return(nil, fmt.Errorf("some exchange error"))
 						return mock
 					}
 					return nil
@@ -546,7 +546,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 						mock := mockUpstream(t)
 						mock.EXPECT().
 							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
-							Return(oidctypes.Token{IDToken: &oidctypes.IDToken{Token: "test-id-token"}}, nil, nil)
+							Return(&oidctypes.Token{IDToken: &oidctypes.IDToken{Token: "test-id-token"}}, nil)
 						return mock
 					}
 					return nil

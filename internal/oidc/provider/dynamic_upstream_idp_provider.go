@@ -43,9 +43,9 @@ type UpstreamOIDCIdentityProviderI interface {
 		pkceCodeVerifier pkce.Code,
 		expectedIDTokenNonce nonce.Nonce,
 		redirectURI string,
-	) (tokens oidctypes.Token, parsedIDTokenClaims map[string]interface{}, err error)
+	) (*oidctypes.Token, error)
 
-	ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (oidctypes.Token, map[string]interface{}, error)
+	ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error)
 }
 
 type DynamicUpstreamIDPProvider interface {

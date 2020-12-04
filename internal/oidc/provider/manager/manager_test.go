@@ -227,15 +227,17 @@ func TestManager(t *testing.T) {
 				ClientID:         "test-client-id",
 				AuthorizationURL: *parsedUpstreamIDPAuthorizationURL,
 				Scopes:           []string{"test-scope"},
-				ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (oidctypes.Token, map[string]interface{}, error) {
-					return oidctypes.Token{},
-						map[string]interface{}{
-							"iss":      "https://some-issuer.com",
-							"sub":      "some-subject",
-							"username": "test-username",
-							"groups":   "test-group1",
+				ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
+					return &oidctypes.Token{
+						IDToken: &oidctypes.IDToken{
+							Claims: map[string]interface{}{
+								"iss":      "https://some-issuer.com",
+								"sub":      "some-subject",
+								"username": "test-username",
+								"groups":   "test-group1",
+							},
 						},
-						nil
+					}, nil
 				},
 			})
 

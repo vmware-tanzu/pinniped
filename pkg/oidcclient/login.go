@@ -295,11 +295,7 @@ func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *oidctype
 
 	// The spec is not 100% clear about whether an ID token from the refresh flow should include a nonce, and at least
 	// some providers do not include one, so we skip the nonce validation here (but not other validations).
-	token, _, err := h.getProvider(h.oauth2Config, h.provider, h.httpClient).ValidateToken(ctx, refreshed, "")
-	if err != nil {
-		return nil, err
-	}
-	return &token, nil
+	return h.getProvider(h.oauth2Config, h.provider, h.httpClient).ValidateToken(ctx, refreshed, "")
 }
 
 func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Request) (err error) {
@@ -328,7 +324,7 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 
 	// Exchange the authorization code for access, ID, and refresh tokens and perform required
 	// validations on the returned ID token.
-	token, _, err := h.getProvider(h.oauth2Config, h.provider, h.httpClient).
+	token, err := h.getProvider(h.oauth2Config, h.provider, h.httpClient).
 		ExchangeAuthcodeAndValidateTokens(
 			r.Context(),
 			params.Get("code"),
@@ -340,7 +336,7 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 		return httperr.Wrap(http.StatusBadRequest, "could not complete code exchange", err)
 	}
 
-	h.callbacks <- callbackResult{token: &token}
+	h.callbacks <- callbackResult{token: token}
 	_, _ = w.Write([]byte("you have been logged in and may now close this tab"))
 	return nil
 }

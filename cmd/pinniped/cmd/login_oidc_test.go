@@ -46,7 +46,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				  -h, --help                   help for oidc
 					  --issuer string          OpenID Connect issuer URL.
 					  --listen-port uint16     TCP port for localhost listener (authorization code flow only).
-					  --scopes strings         OIDC scopes to request during login. (default [offline_access,openid,email,profile])
+					  --scopes strings         OIDC scopes to request during login. (default [offline_access,openid])
 					  --session-cache string   Path to session cache file. (default "` + cfgDir + `/sessions.yaml")
 					  --skip-browser           Skip opening the browser (just print the URL).
 			`),

@@ -91,13 +91,11 @@ func WithInformer(getter InformerGetter, filter Filter, opt InformerOption) Opti
 				if err != nil {
 					tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 					if !ok {
-						//nolint: goerr113
 						utilruntime.HandleError(fmt.Errorf("%s: could not get object from tombstone: %+v", c.Name(), obj))
 						return
 					}
 					accessor, err = meta.Accessor(tombstone.Obj)
 					if err != nil {
-						//nolint: goerr113
 						utilruntime.HandleError(fmt.Errorf("%s: tombstone contained object that is not an accessor: %+v", c.Name(), obj))
 						return
 					}

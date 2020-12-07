@@ -30,7 +30,6 @@ linters:
   - gocritic
   - gocyclo
   - godot
-  - goerr113
   - goheader
   - goimports
   - golint
@@ -56,7 +55,6 @@ issues:
     linters:
     - funlen
     - gochecknoglobals
-    - goerr113
 
 linters-settings:
   funlen:

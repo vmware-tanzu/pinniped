@@ -96,13 +96,18 @@ func TestJWKSObserverControllerInformerFilters(t *testing.T) {
 }
 
 type fakeIssuerToJWKSMapSetter struct {
-	setIssuerToJWKSMapWasCalled bool
-	issuerToJWKSMapReceived     map[string]*jose.JSONWebKeySet
+	setIssuerToJWKSMapWasCalled  bool
+	issuerToJWKSMapReceived      map[string]*jose.JSONWebKeySet
+	issuerToActiveJWKMapReceived map[string]*jose.JSONWebKey
 }
 
-func (f *fakeIssuerToJWKSMapSetter) SetIssuerToJWKSMap(issuerToJWKSMap map[string]*jose.JSONWebKeySet) {
+func (f *fakeIssuerToJWKSMapSetter) SetIssuerToJWKSMap(
+	issuerToJWKSMap map[string]*jose.JSONWebKeySet,
+	issuerToActiveJWKMap map[string]*jose.JSONWebKey,
+) {
 	f.setIssuerToJWKSMapWasCalled = true
 	f.issuerToJWKSMapReceived = issuerToJWKSMap
+	f.issuerToActiveJWKMapReceived = issuerToActiveJWKMap
 }
 
 func TestJWKSObserverControllerSync(t *testing.T) {
@@ -181,6 +186,7 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 
 				r.True(issuerToJWKSSetter.setIssuerToJWKSMapWasCalled)
 				r.Empty(issuerToJWKSSetter.issuerToJWKSMapReceived)
+				r.Empty(issuerToJWKSSetter.issuerToActiveJWKMapReceived)
 			})
 		})
 
@@ -213,7 +219,27 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 					},
 					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://bad-secret-issuer.com"},
 					Status: v1alpha1.OIDCProviderStatus{
+						JWKSSecret: corev1.LocalObjectReference{Name: "bad-secret-name"},
+					},
+				}
+				oidcProviderWithBadJWKSSecret := &v1alpha1.OIDCProvider{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "bad-jwks-secret-oidcprovider",
+						Namespace: installedInNamespace,
+					},
+					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://bad-jwks-secret-issuer.com"},
+					Status: v1alpha1.OIDCProviderStatus{
 						JWKSSecret: corev1.LocalObjectReference{Name: "bad-jwks-secret-name"},
+					},
+				}
+				oidcProviderWithBadActiveJWKSecret := &v1alpha1.OIDCProvider{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "bad-active-jwk-secret-oidcprovider",
+						Namespace: installedInNamespace,
+					},
+					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://bad-active-jwk-secret-issuer.com"},
+					Status: v1alpha1.OIDCProviderStatus{
+						JWKSSecret: corev1.LocalObjectReference{Name: "bad-active-jwk-secret-name"},
 					},
 				}
 				oidcProviderWithGoodSecret1 := &v1alpha1.OIDCProvider{
@@ -260,27 +286,58 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 						"jwks":      []byte(`{"keys": [` + expectedJWK2 + `]}`),
 					},
 				}
+				badSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "bad-secret-name",
+						Namespace: installedInNamespace,
+					},
+					Data: map[string][]byte{"junk": nil},
+				}
 				badJWKSSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "bad-jwks-secret-name",
 						Namespace: installedInNamespace,
 					},
-					Data: map[string][]byte{"junk": nil},
+					Data: map[string][]byte{
+						"activeJWK": []byte(expectedJWK2),
+						"jwks":      []byte("bad"),
+					},
+				}
+				badActiveJWKSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "bad-active-jwk-secret-name",
+						Namespace: installedInNamespace,
+					},
+					Data: map[string][]byte{
+						"activeJWK": []byte("bad"),
+						"jwks":      []byte(`{"keys": [` + expectedJWK2 + `]}`),
+					},
 				}
 				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithoutSecret1))
 				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithoutSecret2))
 				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithBadSecret))
+				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithBadJWKSSecret))
+				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithBadActiveJWKSecret))
 				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithGoodSecret1))
 				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithGoodSecret2))
 				r.NoError(kubeInformerClient.Tracker().Add(goodJWKSSecret1))
 				r.NoError(kubeInformerClient.Tracker().Add(goodJWKSSecret2))
+				r.NoError(kubeInformerClient.Tracker().Add(badSecret))
 				r.NoError(kubeInformerClient.Tracker().Add(badJWKSSecret))
+				r.NoError(kubeInformerClient.Tracker().Add(badActiveJWKSecret))
 			})
 
-			requireJWKJSON := func(expectedJWKJSON string, actualJWKS *jose.JSONWebKeySet) {
+			requireJWKSJSON := func(expectedJWKJSON string, actualJWKS *jose.JSONWebKeySet) {
 				r.NotNil(actualJWKS)
 				r.Len(actualJWKS.Keys, 1)
 				actualJWK := actualJWKS.Keys[0]
+				actualJWKJSON, err := json.Marshal(actualJWK)
+				r.NoError(err)
+				r.JSONEq(expectedJWKJSON, string(actualJWKJSON))
+			}
+
+			requireJWKJSON := func(expectedJWKJSON string, actualJWK *jose.JSONWebKey) {
+				r.NotNil(actualJWK)
 				actualJWKJSON, err := json.Marshal(actualJWK)
 				r.NoError(err)
 				r.JSONEq(expectedJWKJSON, string(actualJWKJSON))
@@ -292,10 +349,13 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 
 				r.True(issuerToJWKSSetter.setIssuerToJWKSMapWasCalled)
 				r.Len(issuerToJWKSSetter.issuerToJWKSMapReceived, 2)
+				r.Len(issuerToJWKSSetter.issuerToActiveJWKMapReceived, 2)
 
 				// the actual JWK should match the one from the test fixture that was put into the secret
-				requireJWKJSON(expectedJWK1, issuerToJWKSSetter.issuerToJWKSMapReceived["https://issuer-with-good-secret1.com"])
-				requireJWKJSON(expectedJWK2, issuerToJWKSSetter.issuerToJWKSMapReceived["https://issuer-with-good-secret2.com"])
+				requireJWKSJSON(expectedJWK1, issuerToJWKSSetter.issuerToJWKSMapReceived["https://issuer-with-good-secret1.com"])
+				requireJWKJSON(expectedJWK1, issuerToJWKSSetter.issuerToActiveJWKMapReceived["https://issuer-with-good-secret1.com"])
+				requireJWKSJSON(expectedJWK2, issuerToJWKSSetter.issuerToJWKSMapReceived["https://issuer-with-good-secret2.com"])
+				requireJWKJSON(expectedJWK2, issuerToJWKSSetter.issuerToActiveJWKMapReceived["https://issuer-with-good-secret2.com"])
 			})
 		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))

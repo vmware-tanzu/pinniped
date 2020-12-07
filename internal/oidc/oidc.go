@@ -11,6 +11,7 @@ import (
 	"github.com/ory/fosite/compose"
 
 	"go.pinniped.dev/internal/oidc/csrftoken"
+	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -85,10 +86,16 @@ func PinnipedCLIOIDCClient() *fosite.DefaultOpenIDConnectClient {
 			GrantTypes:    []string{"authorization_code"},
 			Scopes:        []string{"openid", "profile", "email"},
 		},
+		TokenEndpointAuthMethod: "none",
 	}
 }
 
-func FositeOauth2Helper(oauthStore interface{}, issuer string, hmacSecretOfLengthAtLeast32 []byte) fosite.OAuth2Provider {
+func FositeOauth2Helper(
+	oauthStore interface{},
+	issuer string,
+	hmacSecretOfLengthAtLeast32 []byte,
+	jwksProvider jwks.DynamicJWKSProvider,
+) fosite.OAuth2Provider {
 	oauthConfig := &compose.Config{
 		AuthorizeCodeLifespan: 3 * time.Minute, // seems more than long enough to exchange a code
 
@@ -98,7 +105,6 @@ func FositeOauth2Helper(oauthStore interface{}, issuer string, hmacSecretOfLengt
 		RefreshTokenLifespan: 16 * time.Hour, // long enough for a single workday
 
 		IDTokenIssuer: issuer,
-		TokenURL:      "", // TODO set once we have this endpoint written
 
 		ScopeStrategy:            fosite.ExactScopeStrategy, // be careful and only support exact string matching for scopes
 		AudienceMatchingStrategy: nil,                       // I believe the default is fine
@@ -114,7 +120,8 @@ func FositeOauth2Helper(oauthStore interface{}, issuer string, hmacSecretOfLengt
 		oauthStore,
 		&compose.CommonStrategy{
 			// Note that Fosite requires the HMAC secret to be at least 32 bytes.
-			CoreStrategy: compose.NewOAuth2HMACStrategy(oauthConfig, hmacSecretOfLengthAtLeast32, nil),
+			CoreStrategy:               compose.NewOAuth2HMACStrategy(oauthConfig, hmacSecretOfLengthAtLeast32, nil),
+			OpenIDConnectTokenStrategy: newDynamicOpenIDConnectECDSAStrategy(oauthConfig, jwksProvider),
 		},
 		nil, // hasher, defaults to using BCrypt when nil. Used for hashing client secrets.
 		compose.OAuth2AuthorizeExplicitFactory,
@@ -123,6 +130,27 @@ func FositeOauth2Helper(oauthStore interface{}, issuer string, hmacSecretOfLengt
 		// compose.OpenIDConnectRefreshFactory,
 		compose.OAuth2PKCEFactory,
 	)
+}
+
+// FositeErrorForLog generates a list of information about the provided Fosite error that can be
+// passed to a plog function (e.g., plog.Info()).
+//
+// Sample usage:
+//   err := someFositeLibraryFunction()
+//   if err != nil {
+//     	plog.Info("some error", FositeErrorForLog(err)...)
+//      ...
+//    }
+func FositeErrorForLog(err error) []interface{} {
+	rfc6749Error := fosite.ErrorToRFC6749Error(err)
+	keysAndValues := make([]interface{}, 0)
+	keysAndValues = append(keysAndValues, "name")
+	keysAndValues = append(keysAndValues, rfc6749Error.Name)
+	keysAndValues = append(keysAndValues, "status")
+	keysAndValues = append(keysAndValues, rfc6749Error.Status())
+	keysAndValues = append(keysAndValues, "description")
+	keysAndValues = append(keysAndValues, rfc6749Error.Description)
+	return keysAndValues
 }
 
 type IDPListGetter interface {

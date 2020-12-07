@@ -24,7 +24,10 @@ type jwksObserverController struct {
 }
 
 type IssuerToJWKSMapSetter interface {
-	SetIssuerToJWKSMap(issuerToJWKSMap map[string]*jose.JSONWebKeySet)
+	SetIssuerToJWKSMap(
+		issuerToJWKSMap map[string]*jose.JSONWebKeySet,
+		issuerToActiveJWKMap map[string]*jose.JSONWebKey,
+	)
 }
 
 // Returns a controller which watches all of the OIDCProviders and their corresponding Secrets
@@ -70,6 +73,7 @@ func (c *jwksObserverController) Sync(ctx controllerlib.Context) error {
 	// Rebuild the whole map on any change to any Secret or OIDCProvider, because either can have changes that
 	// can cause the map to need to be updated.
 	issuerToJWKSMap := map[string]*jose.JSONWebKeySet{}
+	issuerToActiveJWKMap := map[string]*jose.JSONWebKey{}
 
 	for _, provider := range allProviders {
 		secretRef := provider.Status.JWKSSecret
@@ -78,17 +82,33 @@ func (c *jwksObserverController) Sync(ctx controllerlib.Context) error {
 			plog.Debug("jwksObserverController Sync could not find JWKS secret", "namespace", ns, "secretName", secretRef.Name)
 			continue
 		}
-		jwkFromSecret := jose.JSONWebKeySet{}
-		err = json.Unmarshal(jwksSecret.Data[jwksKey], &jwkFromSecret)
+
+		jwksFromSecret := jose.JSONWebKeySet{}
+		err = json.Unmarshal(jwksSecret.Data[jwksKey], &jwksFromSecret)
 		if err != nil {
 			plog.Debug("jwksObserverController Sync found a JWKS secret with Data in an unexpected format", "namespace", ns, "secretName", secretRef.Name)
 			continue
 		}
-		issuerToJWKSMap[provider.Spec.Issuer] = &jwkFromSecret
+
+		activeJWKFromSecret := jose.JSONWebKey{}
+		err = json.Unmarshal(jwksSecret.Data[activeJWKKey], &activeJWKFromSecret)
+		if err != nil {
+			plog.Debug("jwksObserverController Sync found an active JWK secret with Data in an unexpected format", "namespace", ns, "secretName", secretRef.Name)
+			continue
+		}
+
+		issuerToJWKSMap[provider.Spec.Issuer] = &jwksFromSecret
+		issuerToActiveJWKMap[provider.Spec.Issuer] = &activeJWKFromSecret
 	}
 
-	plog.Debug("jwksObserverController Sync updated the JWKS cache", "issuerCount", len(issuerToJWKSMap))
-	c.issuerToJWKSSetter.SetIssuerToJWKSMap(issuerToJWKSMap)
+	plog.Debug(
+		"jwksObserverController Sync updated the JWKS cache",
+		"issuerJWKSCount",
+		len(issuerToJWKSMap),
+		"issuerActiveJWKCount",
+		len(issuerToActiveJWKMap),
+	)
+	c.issuerToJWKSSetter.SetIssuerToJWKSMap(issuerToJWKSMap, issuerToActiveJWKMap)
 
 	return nil
 }

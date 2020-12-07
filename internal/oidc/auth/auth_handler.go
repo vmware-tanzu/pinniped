@@ -45,7 +45,7 @@ func NewHandler(
 
 		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), r)
 		if err != nil {
-			plog.Info("authorize request error", fositeErrorForLog(err)...)
+			plog.Info("authorize request error", oidc.FositeErrorForLog(err)...)
 			oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
 			return nil
 		}
@@ -69,7 +69,7 @@ func NewHandler(
 			},
 		})
 		if err != nil {
-			plog.Info("authorize response error", fositeErrorForLog(err)...)
+			plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
 			oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
 			return nil
 		}
@@ -231,16 +231,4 @@ func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken
 	})
 
 	return nil
-}
-
-func fositeErrorForLog(err error) []interface{} {
-	rfc6749Error := fosite.ErrorToRFC6749Error(err)
-	keysAndValues := make([]interface{}, 0)
-	keysAndValues = append(keysAndValues, "name")
-	keysAndValues = append(keysAndValues, rfc6749Error.Name)
-	keysAndValues = append(keysAndValues, "status")
-	keysAndValues = append(keysAndValues, rfc6749Error.Status())
-	keysAndValues = append(keysAndValues, "description")
-	keysAndValues = append(keysAndValues, rfc6749Error.Description)
-	return keysAndValues
 }

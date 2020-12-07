@@ -6,7 +6,6 @@ package auth
 import (
 	"fmt"
 	"html"
-	"mime"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -20,8 +19,10 @@ import (
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/csrftoken"
+	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/oidctestutil"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
@@ -125,7 +126,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	oauthStore := oidc.NullStorage{}
 	hmacSecret := []byte("some secret - must have at least 32 bytes")
 	require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
-	oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecret)
+	jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
+	oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecret, jwksProviderIsUnused)
 
 	happyCSRF := "test-csrf"
 	happyPKCE := "test-pkce"
@@ -723,7 +725,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		t.Logf("response body: %q", rsp.Body.String())
 
 		require.Equal(t, test.wantStatus, rsp.Code)
-		requireEqualContentType(t, rsp.Header().Get("Content-Type"), test.wantContentType)
+		testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), test.wantContentType)
 
 		actualLocation := rsp.Header().Get("Location")
 		if test.wantLocationHeader != "" {
@@ -822,22 +824,6 @@ type errorReturningEncoder struct {
 
 func (*errorReturningEncoder) Encode(_ string, _ interface{}) (string, error) {
 	return "", fmt.Errorf("some encoding error")
-}
-
-func requireEqualContentType(t *testing.T, actual string, expected string) {
-	t.Helper()
-
-	if expected == "" {
-		require.Empty(t, actual)
-		return
-	}
-
-	actualContentType, actualContentTypeParams, err := mime.ParseMediaType(expected)
-	require.NoError(t, err)
-	expectedContentType, expectedContentTypeParams, err := mime.ParseMediaType(expected)
-	require.NoError(t, err)
-	require.Equal(t, actualContentType, expectedContentType)
-	require.Equal(t, actualContentTypeParams, expectedContentTypeParams)
 }
 
 func requireEqualDecodedStateParams(t *testing.T, actualURL string, expectedURL string, stateParamDecoder oidc.Codec) {

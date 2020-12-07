@@ -105,8 +105,12 @@ func newDynamicJWKSProvider(t *testing.T, issuer string, jwksJSON string) Dynami
 	var keySet jose.JSONWebKeySet
 	err := json.Unmarshal([]byte(jwksJSON), &keySet)
 	require.NoError(t, err)
-	jwksProvider.SetIssuerToJWKSMap(map[string]*jose.JSONWebKeySet{
+	issuerToJWKSMap := map[string]*jose.JSONWebKeySet{
 		issuer: &keySet,
-	})
+	}
+	issuerToActiveJWKMap := map[string]*jose.JSONWebKey{
+		issuer: &keySet.Keys[0],
+	}
+	jwksProvider.SetIssuerToJWKSMap(issuerToJWKSMap, issuerToActiveJWKMap)
 	return jwksProvider
 }

@@ -31,10 +31,9 @@ type Metadata struct {
 
 	// vvv Optional vvv
 
-	TokenEndpointAuthMethodsSupported           []string `json:"token_endpoint_auth_methods_supported"`
-	TokenEndpointAuthSigningAlgoValuesSupported []string `json:"token_endpoint_auth_signing_alg_values_supported"`
-	ScopesSupported                             []string `json:"scopes_supported"`
-	ClaimsSupported                             []string `json:"claims_supported"`
+	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
+	ScopesSupported                   []string `json:"scopes_supported"`
+	ClaimsSupported                   []string `json:"claims_supported"`
 
 	// ^^^ Optional ^^^
 }
@@ -56,11 +55,10 @@ func NewHandler(issuerURL string) http.Handler {
 			JWKSURI:                           issuerURL + oidc.JWKSEndpointPath,
 			ResponseTypesSupported:            []string{"code"},
 			SubjectTypesSupported:             []string{"public"},
-			IDTokenSigningAlgValuesSupported:  []string{"RS256"},
+			IDTokenSigningAlgValuesSupported:  []string{"ES256"},
 			TokenEndpointAuthMethodsSupported: []string{"client_secret_basic"},
-			TokenEndpointAuthSigningAlgoValuesSupported: []string{"RS256"},
-			ScopesSupported: []string{"openid", "offline"},
-			ClaimsSupported: []string{"groups"},
+			ScopesSupported:                   []string{"openid", "offline"},
+			ClaimsSupported:                   []string{"groups"},
 		}
 		if err := json.NewEncoder(w).Encode(&oidcConfig); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

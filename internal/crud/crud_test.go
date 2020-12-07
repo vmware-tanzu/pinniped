@@ -6,6 +6,7 @@ package crud
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/ory/fosite/compose"
@@ -87,6 +88,7 @@ func TestStorage(t *testing.T) {
 			wantSecrets: nil,
 			wantErr:     `failed to delete tokens for signature not-a-token: secrets "pinniped-storage-tokens-t2fx427lnci6s" not found`,
 		},
+		// TODO make a delete non-existent test for DeleteByLabel
 		{
 			name:     "create and get",
 			resource: "access-tokens",
@@ -97,7 +99,7 @@ func TestStorage(t *testing.T) {
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
 
 				data := &testJSON{Data: "create-and-get"}
-				rv1, err := storage.Create(ctx, signature, data)
+				rv1, err := storage.Create(ctx, signature, data, nil)
 				require.Empty(t, rv1) // fake client does not set this
 				require.NoError(t, err)
 
@@ -115,7 +117,7 @@ func TestStorage(t *testing.T) {
 						Name:            "pinniped-storage-access-tokens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq",
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "access-tokens",
+							"storage.pinniped.dev/type": "access-tokens",
 						},
 					},
 					Data: map[string][]byte{
@@ -133,7 +135,69 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "access-tokens",
+							"storage.pinniped.dev/type": "access-tokens",
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"create-and-get"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/access-tokens",
+				},
+			},
+			wantErr: "",
+		},
+		{
+			name:     "create and get with additional labels",
+			resource: "access-tokens",
+			mocks:    nil,
+			run: func(t *testing.T, storage Storage) error {
+				signature := hmac.AuthorizeCodeSignature(authorizationCode1)
+				require.NotEmpty(t, signature)
+				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
+
+				data := &testJSON{Data: "create-and-get"}
+				rv1, err := storage.Create(ctx, signature, data, map[string]string{"label1": "value1", "label2": "value2"})
+				require.Empty(t, rv1) // fake client does not set this
+				require.NoError(t, err)
+
+				out := &testJSON{}
+				rv2, err := storage.Get(ctx, signature, out)
+				require.Empty(t, rv2) // fake client does not set this
+				require.NoError(t, err)
+				require.Equal(t, data, out)
+
+				return nil
+			},
+			wantActions: []coretesting.Action{
+				coretesting.NewCreateAction(secretsGVR, namespace, &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-access-tokens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq",
+						ResourceVersion: "",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "access-tokens",
+							"label1":                    "value1",
+							"label2":                    "value2",
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"create-and-get"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/access-tokens",
+				}),
+				coretesting.NewGetAction(secretsGVR, namespace, "pinniped-storage-access-tokens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq"),
+			},
+			wantSecrets: []corev1.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-access-tokens-i6mhp4azwdxshgsy3s2mvedxpxuh3nudh3ot3m4xamlugj4e6qoq",
+						Namespace:       namespace,
+						ResourceVersion: "",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "access-tokens",
+							"label1":                    "value1",
+							"label2":                    "value2",
 						},
 					},
 					Data: map[string][]byte{
@@ -155,7 +219,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "pandas-are-best",
+							"storage.pinniped.dev/type": "pandas-are-best",
 						},
 					},
 					Data: map[string][]byte{
@@ -190,7 +254,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "pandas-are-best",
+							"storage.pinniped.dev/type": "pandas-are-best",
 						},
 					},
 					Data: map[string][]byte{
@@ -212,7 +276,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "35",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "stores",
+							"storage.pinniped.dev/type": "stores",
 						},
 					},
 					Data: map[string][]byte{
@@ -261,7 +325,7 @@ func TestStorage(t *testing.T) {
 						Name:            "pinniped-storage-stores-4wssc5gzt5mlln6iux6gl7hzz3klsirisydaxn7indnpvdnrs5ba",
 						ResourceVersion: "35", // update at initial RV
 						Labels: map[string]string{
-							"storage.pinniped.dev": "stores",
+							"storage.pinniped.dev/type": "stores",
 						},
 					},
 					Data: map[string][]byte{
@@ -279,7 +343,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "45", // final list at new RV
 						Labels: map[string]string{
-							"storage.pinniped.dev": "stores",
+							"storage.pinniped.dev/type": "stores",
 						},
 					},
 					Data: map[string][]byte{
@@ -301,7 +365,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "seals",
+							"storage.pinniped.dev/type": "seals",
 						},
 					},
 					Data: map[string][]byte{
@@ -326,6 +390,207 @@ func TestStorage(t *testing.T) {
 			wantErr:     "",
 		},
 		{
+			name:     "delete existing by label",
+			resource: "seals",
+			mocks: func(t *testing.T, mock mocker) {
+				require.NoError(t, mock.Tracker().Add(&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-seals-lvzgyywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq",
+						Namespace:       namespace,
+						ResourceVersion: "",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "seals",
+							"additionalLabel":           "matching-value",
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"sad-seal"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/seals",
+				}))
+				require.NoError(t, mock.Tracker().Add(&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-seals-abcdywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq",
+						Namespace:       namespace,
+						ResourceVersion: "",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "seals",
+							"additionalLabel":           "matching-value",
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"happy-seal"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/seals",
+				}))
+				require.NoError(t, mock.Tracker().Add(&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-seals-12345wdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq",
+						Namespace:       namespace,
+						ResourceVersion: "",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "seals",              // same type as above
+							"additionalLabel":           "non-matching-value", // different value for the same label
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"sad-seal2"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/seals",
+				}))
+				require.NoError(t, mock.Tracker().Add(&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-seals-54321wdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq",
+						Namespace:       namespace,
+						ResourceVersion: "",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "walruses",       // different type from above
+							"additionalLabel":           "matching-value", // same value for the same label as above
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"sad-seal3"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/walruses",
+				}))
+			},
+			run: func(t *testing.T, storage Storage) error {
+				return storage.DeleteByLabel(ctx, "additionalLabel", "matching-value")
+			},
+			wantActions: []coretesting.Action{
+				coretesting.NewListAction(secretsGVR, schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}, namespace, metav1.ListOptions{
+					LabelSelector: "storage.pinniped.dev/type=seals,additionalLabel=matching-value",
+				}),
+				coretesting.NewDeleteAction(secretsGVR, namespace, "pinniped-storage-seals-abcdywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq"),
+				coretesting.NewDeleteAction(secretsGVR, namespace, "pinniped-storage-seals-lvzgyywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq"),
+			},
+			wantSecrets: []corev1.Secret{
+				// the secret of the same type whose label did not match is not deleted
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-seals-12345wdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq",
+						Namespace:       namespace,
+						ResourceVersion: "",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "seals",              // same type as above
+							"additionalLabel":           "non-matching-value", // different value for the same label
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"sad-seal2"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/seals",
+				},
+				// the secrets of other types are not deleted, even if they have a matching label
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-seals-54321wdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq",
+						Namespace:       namespace,
+						ResourceVersion: "",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "walruses",       // different type from above
+							"additionalLabel":           "matching-value", // same value for the same label as above
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"sad-seal3"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/walruses",
+				},
+			},
+			wantErr: "",
+		},
+		{
+			name:     "when there is an error performing the delete while deleting by label",
+			resource: "seals",
+			mocks: func(t *testing.T, mock mocker) {
+				require.NoError(t, mock.Tracker().Add(&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-seals-lvzgyywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq",
+						Namespace:       namespace,
+						ResourceVersion: "",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "seals",
+							"additionalLabel":           "matching-value",
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"sad-seal"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/seals",
+				}))
+				mock.PrependReactor("delete", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, fmt.Errorf("some delete error")
+				})
+			},
+			run: func(t *testing.T, storage Storage) error {
+				return storage.DeleteByLabel(ctx, "additionalLabel", "matching-value")
+			},
+			wantActions: []coretesting.Action{
+				coretesting.NewListAction(secretsGVR, schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}, namespace, metav1.ListOptions{
+					LabelSelector: "storage.pinniped.dev/type=seals,additionalLabel=matching-value",
+				}),
+				coretesting.NewDeleteAction(secretsGVR, namespace, "pinniped-storage-seals-lvzgyywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq"),
+			},
+			wantSecrets: []corev1.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-seals-lvzgyywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq",
+						Namespace:       namespace,
+						ResourceVersion: "",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "seals",
+							"additionalLabel":           "matching-value",
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"sad-seal"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/seals",
+				},
+			},
+			wantErr: `failed to delete secrets for resource "seals" matching label "additionalLabel=matching-value" with name pinniped-storage-seals-lvzgyywdc2dhjdbgf5jvzfyphosigvhnsh6qlse3blumogoqhqhq: some delete error`,
+		},
+		{
+			name:     "when there is an error listing secrets during a delete by label operation",
+			resource: "seals",
+			mocks: func(t *testing.T, mock mocker) {
+				mock.PrependReactor("list", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					listAction := action.(coretesting.ListActionImpl)
+					labelRestrictions := listAction.GetListRestrictions().Labels
+					requiresExactMatch, found := labelRestrictions.RequiresExactMatch("additionalLabel")
+					if !found || requiresExactMatch != "matching-value" {
+						// this list action did not use label selector additionalLabel=matching-value, so allow it to proceed without intervention
+						return false, nil, nil
+					}
+					requiresExactMatch, found = labelRestrictions.RequiresExactMatch("storage.pinniped.dev/type")
+					if !found || requiresExactMatch != "seals" {
+						// this list action did not use label selector storage.pinniped.dev/type=seals, so allow it to proceed without intervention
+						return false, nil, nil
+					}
+					// this list action was the one that did use the expected label selectors so cause it to error
+					return true, nil, fmt.Errorf("some listing error")
+				})
+			},
+			run: func(t *testing.T, storage Storage) error {
+				return storage.DeleteByLabel(ctx, "additionalLabel", "matching-value")
+			},
+			wantActions: []coretesting.Action{
+				coretesting.NewListAction(secretsGVR, schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}, namespace, metav1.ListOptions{
+					LabelSelector: "storage.pinniped.dev/type=seals,additionalLabel=matching-value",
+				}),
+			},
+			wantErr: `failed to list secrets for resource "seals" matching label "additionalLabel=matching-value": some listing error`,
+		},
+		{
 			name:     "invalid exiting secret type",
 			resource: "candies",
 			mocks: func(t *testing.T, mock mocker) {
@@ -335,7 +600,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies",
+							"storage.pinniped.dev/type": "candies",
 						},
 					},
 					Data: map[string][]byte{
@@ -370,7 +635,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies",
+							"storage.pinniped.dev/type": "candies",
 						},
 					},
 					Data: map[string][]byte{
@@ -392,7 +657,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies-are-bad",
+							"storage.pinniped.dev/type": "candies-are-bad",
 						},
 					},
 					Data: map[string][]byte{
@@ -427,7 +692,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies-are-bad",
+							"storage.pinniped.dev/type": "candies-are-bad",
 						},
 					},
 					Data: map[string][]byte{
@@ -449,7 +714,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies",
+							"storage.pinniped.dev/type": "candies",
 						},
 					},
 					Data: map[string][]byte{
@@ -484,7 +749,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies",
+							"storage.pinniped.dev/type": "candies",
 						},
 					},
 					Data: map[string][]byte{
@@ -506,7 +771,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies",
+							"storage.pinniped.dev/type": "candies",
 						},
 					},
 					Data: map[string][]byte{
@@ -540,7 +805,7 @@ func TestStorage(t *testing.T) {
 						Namespace:       namespace,
 						ResourceVersion: "55",
 						Labels: map[string]string{
-							"storage.pinniped.dev": "candies",
+							"storage.pinniped.dev/type": "candies",
 						},
 					},
 					Data: map[string][]byte{
@@ -582,8 +847,11 @@ func checkSecretActionNames(t *testing.T, actions []coretesting.Action) {
 	t.Helper()
 
 	for _, action := range actions {
-		name := getName(t, action)
-		assertValidName(t, name)
+		_, ok := action.(coretesting.ListActionImpl)
+		if !ok { // list action don't have names, so skip these assertions for list actions
+			name := getName(t, action)
+			assertValidName(t, name)
+		}
 	}
 }
 

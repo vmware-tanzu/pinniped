@@ -19,6 +19,8 @@ import (
 )
 
 const (
+	TypeLabelValue = "oidc"
+
 	ErrInvalidOIDCRequestVersion  = constable.Error("oidc request data has wrong version")
 	ErrInvalidOIDCRequestData     = constable.Error("oidc request data must be present")
 	ErrMalformedAuthorizationCode = constable.Error("malformed authorization code")
@@ -38,7 +40,7 @@ type session struct {
 }
 
 func New(secrets corev1client.SecretInterface) openid.OpenIDConnectRequestStorage {
-	return &openIDConnectRequestStorage{storage: crud.New("oidc", secrets)}
+	return &openIDConnectRequestStorage{storage: crud.New(TypeLabelValue, secrets)}
 }
 
 func (a *openIDConnectRequestStorage) CreateOpenIDConnectSession(ctx context.Context, authcode string, requester fosite.Requester) error {
@@ -52,7 +54,7 @@ func (a *openIDConnectRequestStorage) CreateOpenIDConnectSession(ctx context.Con
 		return err
 	}
 
-	_, err = a.storage.Create(ctx, signature, &session{Request: request, Version: oidcStorageVersion})
+	_, err = a.storage.Create(ctx, signature, &session{Request: request, Version: oidcStorageVersion}, nil)
 	return err
 }
 

@@ -24,6 +24,7 @@ import (
 	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 	"go.pinniped.dev/pkg/oidcclient/state"
@@ -67,6 +68,7 @@ func TestSupervisorLogin(t *testing.T) {
 			return proxyURL, nil
 		},
 	}}
+	oidcHTTPClientContext := oidc.ClientContext(ctx, httpClient)
 
 	// Use the CA to issue a TLS server cert.
 	t.Logf("issuing test certificate")
@@ -109,7 +111,7 @@ func TestSupervisorLogin(t *testing.T) {
 	// Perform OIDC discovery for our downstream.
 	var discovery *oidc.Provider
 	assert.Eventually(t, func() bool {
-		discovery, err = oidc.NewProvider(oidc.ClientContext(ctx, httpClient), downstream.Spec.Issuer)
+		discovery, err = oidc.NewProvider(oidcHTTPClientContext, downstream.Spec.Issuer)
 		return err == nil
 	}, 30*time.Second, 200*time.Millisecond)
 	require.NoError(t, err)
@@ -158,7 +160,43 @@ func TestSupervisorLogin(t *testing.T) {
 	t.Logf("got callback request: %s", library.MaskTokens(callback.URL.String()))
 	require.Equal(t, stateParam.String(), callback.URL.Query().Get("state"))
 	require.Equal(t, "openid", callback.URL.Query().Get("scope"))
-	require.NotEmpty(t, callback.URL.Query().Get("code"))
+	authcode := callback.URL.Query().Get("code")
+	require.NotEmpty(t, authcode)
+
+	// Call the token endpoint to get tokens.
+	tokenResponse, err := downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
+	require.NoError(t, err)
+
+	// Verify the ID Token.
+	rawIDToken, ok := tokenResponse.Extra("id_token").(string)
+	require.True(t, ok, "expected to get an ID token but did not")
+	var verifier = discovery.Verifier(&oidc.Config{ClientID: downstreamOAuth2Config.ClientID})
+	idToken, err := verifier.Verify(ctx, rawIDToken)
+	require.NoError(t, err)
+
+	// Check the claims of the ID token.
+	expectedSubjectPrefix := env.SupervisorTestUpstream.Issuer + "?sub="
+	require.True(t, strings.HasPrefix(idToken.Subject, expectedSubjectPrefix))
+	require.Greater(t, len(idToken.Subject), len(expectedSubjectPrefix),
+		"the ID token Subject should include the upstream user ID after the upstream issuer name")
+	require.NoError(t, nonceParam.Validate(idToken))
+	testutil.RequireTimeInDelta(t, time.Now().UTC().Add(time.Minute*5), idToken.Expiry, time.Second*30)
+	idTokenClaims := map[string]interface{}{}
+	err = idToken.Claims(&idTokenClaims)
+	require.NoError(t, err)
+	idTokenClaimNames := []string{}
+	for k := range idTokenClaims {
+		idTokenClaimNames = append(idTokenClaimNames, k)
+	}
+	require.ElementsMatch(t, []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat"}, idTokenClaimNames)
+
+	// Some light verification of the other tokens that were returned.
+	require.NotEmpty(t, tokenResponse.AccessToken)
+	require.Equal(t, "bearer", tokenResponse.TokenType)
+	require.NotZero(t, tokenResponse.Expiry)
+	testutil.RequireTimeInDelta(t, time.Now().UTC().Add(time.Minute*5), tokenResponse.Expiry, time.Second*30)
+
+	require.Empty(t, tokenResponse.RefreshToken) // for now, until the next user story :)
 }
 
 func startLocalCallbackServer(t *testing.T) *localCallbackServer {

@@ -19,7 +19,7 @@ func NewHandler(issuerName string, provider DynamicJWKSProvider) http.Handler {
 			return
 		}
 
-		jwks := provider.GetJWKS(issuerName)
+		jwks, _ := provider.GetJWKS(issuerName)
 
 		if jwks == nil {
 			http.Error(w, "JWKS not found for requested issuer", http.StatusNotFound)

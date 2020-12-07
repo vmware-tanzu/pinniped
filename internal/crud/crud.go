@@ -14,6 +14,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/internal/constable"
@@ -21,8 +22,9 @@ import (
 
 //nolint:gosec // ignore lint warnings that these are credentials
 const (
+	SecretLabelKey = "storage.pinniped.dev/type"
+
 	secretNameFormat = "pinniped-storage-%s-%s"
-	secretLabelKey   = "storage.pinniped.dev"
 	secretTypeFormat = "storage.pinniped.dev/%s"
 	secretVersion    = "1"
 	secretDataKey    = "pinniped-storage-data"
@@ -34,10 +36,11 @@ const (
 )
 
 type Storage interface {
-	Create(ctx context.Context, signature string, data JSON) (resourceVersion string, err error)
+	Create(ctx context.Context, signature string, data JSON, additionalLabels map[string]string) (resourceVersion string, err error)
 	Get(ctx context.Context, signature string, data JSON) (resourceVersion string, err error)
 	Update(ctx context.Context, signature, resourceVersion string, data JSON) (newResourceVersion string, err error)
 	Delete(ctx context.Context, signature string) error
+	DeleteByLabel(ctx context.Context, labelName string, labelValue string) error
 }
 
 type JSON interface{} // document that we need valid JSON types
@@ -58,8 +61,8 @@ type secretsStorage struct {
 	secrets       corev1client.SecretInterface
 }
 
-func (s *secretsStorage) Create(ctx context.Context, signature string, data JSON) (string, error) {
-	secret, err := s.toSecret(signature, "", data)
+func (s *secretsStorage) Create(ctx context.Context, signature string, data JSON, additionalLabels map[string]string) (string, error) {
+	secret, err := s.toSecret(signature, "", data, additionalLabels)
 	if err != nil {
 		return "", err
 	}
@@ -88,7 +91,7 @@ func (s *secretsStorage) validateSecret(secret *corev1.Secret) error {
 	if secret.Type != s.secretType {
 		return fmt.Errorf("%w: %s must equal %s", ErrSecretTypeMismatch, secret.Type, s.secretType)
 	}
-	if labelResource := secret.Labels[secretLabelKey]; labelResource != s.resource {
+	if labelResource := secret.Labels[SecretLabelKey]; labelResource != s.resource {
 		return fmt.Errorf("%w: %s must equal %s", ErrSecretLabelMismatch, labelResource, s.resource)
 	}
 	if !bytes.Equal(secret.Data[secretVersionKey], s.secretVersion) {
@@ -98,7 +101,7 @@ func (s *secretsStorage) validateSecret(secret *corev1.Secret) error {
 }
 
 func (s *secretsStorage) Update(ctx context.Context, signature, resourceVersion string, data JSON) (string, error) {
-	secret, err := s.toSecret(signature, resourceVersion, data)
+	secret, err := s.toSecret(signature, resourceVersion, data, nil)
 	if err != nil {
 		return "", err
 	}
@@ -116,6 +119,28 @@ func (s *secretsStorage) Delete(ctx context.Context, signature string) error {
 	return nil
 }
 
+func (s *secretsStorage) DeleteByLabel(ctx context.Context, labelName string, labelValue string) error {
+	list, err := s.secrets.List(ctx, metav1.ListOptions{
+		LabelSelector: labels.Set{
+			SecretLabelKey: s.resource,
+			labelName:      labelValue,
+		}.String(),
+	})
+	if err != nil {
+		//nolint:err113 // there's nothing wrong with this error
+		return fmt.Errorf(`failed to list secrets for resource "%s" matching label "%s=%s": %w`, s.resource, labelName, labelValue, err)
+	}
+	// TODO try to delete all of the items and consolidate all of the errors and return them all
+	for _, secret := range list.Items {
+		err = s.secrets.Delete(ctx, secret.Name, metav1.DeleteOptions{})
+		if err != nil {
+			//nolint:err113 // there's nothing wrong with this error
+			return fmt.Errorf(`failed to delete secrets for resource "%s" matching label "%s=%s" with name %s: %w`, s.resource, labelName, labelValue, secret.Name, err)
+		}
+	}
+	return nil
+}
+
 //nolint: gochecknoglobals
 var b32 = base32.StdEncoding.WithPadding(base32.NoPadding)
 
@@ -127,18 +152,24 @@ func (s *secretsStorage) getName(signature string) string {
 	return fmt.Sprintf(secretNameFormat, s.resource, signatureAsValidName)
 }
 
-func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON) (*corev1.Secret, error) {
+func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, additionalLabels map[string]string) (*corev1.Secret, error) {
 	buf, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode secret data for %s: %w", s.getName(signature), err)
 	}
+
+	labels := map[string]string{
+		SecretLabelKey: s.resource, // make it easier to find this stuff via kubectl
+	}
+	for labelName, labelValue := range additionalLabels {
+		labels[labelName] = labelValue
+	}
+
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            s.getName(signature),
 			ResourceVersion: resourceVersion,
-			Labels: map[string]string{
-				secretLabelKey: s.resource, // make it easier to find this stuff via kubectl
-			},
+			Labels:          labels,
 			OwnerReferences: nil,
 		},
 		Data: map[string][]byte{

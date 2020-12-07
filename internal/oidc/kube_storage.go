@@ -14,9 +14,11 @@ import (
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/fositestorage/accesstoken"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
 	"go.pinniped.dev/internal/fositestorage/openidconnect"
 	"go.pinniped.dev/internal/fositestorage/pkce"
+	"go.pinniped.dev/internal/fositestorage/refreshtoken"
 )
 
 const errKubeStorageNotImplemented = constable.Error("KubeStorage does not implement this method. It should not have been called.")
@@ -25,6 +27,8 @@ type KubeStorage struct {
 	authorizationCodeStorage oauth2.AuthorizeCodeStorage
 	pkceStorage              fositepkce.PKCERequestStorage
 	oidcStorage              openid.OpenIDConnectRequestStorage
+	accessTokenStorage       accesstoken.RevocationStorage
+	refreshTokenStorage      refreshtoken.RevocationStorage
 }
 
 func NewKubeStorage(secrets corev1client.SecretInterface) *KubeStorage {
@@ -32,39 +36,41 @@ func NewKubeStorage(secrets corev1client.SecretInterface) *KubeStorage {
 		authorizationCodeStorage: authorizationcode.New(secrets),
 		pkceStorage:              pkce.New(secrets),
 		oidcStorage:              openidconnect.New(secrets),
+		accessTokenStorage:       accesstoken.New(secrets),
+		refreshTokenStorage:      refreshtoken.New(secrets),
 	}
 }
 
-func (KubeStorage) RevokeRefreshToken(_ context.Context, _ string) error {
-	return errKubeStorageNotImplemented
+func (k KubeStorage) RevokeRefreshToken(ctx context.Context, requestID string) error {
+	return k.refreshTokenStorage.RevokeRefreshToken(ctx, requestID)
 }
 
-func (KubeStorage) RevokeAccessToken(_ context.Context, _ string) error {
-	return errKubeStorageNotImplemented
+func (k KubeStorage) RevokeAccessToken(ctx context.Context, requestID string) error {
+	return k.accessTokenStorage.RevokeAccessToken(ctx, requestID)
 }
 
-func (KubeStorage) CreateRefreshTokenSession(_ context.Context, _ string, _ fosite.Requester) (err error) {
-	return nil
+func (k KubeStorage) CreateRefreshTokenSession(ctx context.Context, signature string, request fosite.Requester) (err error) {
+	return k.refreshTokenStorage.CreateRefreshTokenSession(ctx, signature, request)
 }
 
-func (KubeStorage) GetRefreshTokenSession(_ context.Context, _ string, _ fosite.Session) (request fosite.Requester, err error) {
-	return nil, errKubeStorageNotImplemented
+func (k KubeStorage) GetRefreshTokenSession(ctx context.Context, signature string, session fosite.Session) (request fosite.Requester, err error) {
+	return k.refreshTokenStorage.GetRefreshTokenSession(ctx, signature, session)
 }
 
-func (KubeStorage) DeleteRefreshTokenSession(_ context.Context, _ string) (err error) {
-	return errKubeStorageNotImplemented
+func (k KubeStorage) DeleteRefreshTokenSession(ctx context.Context, signature string) (err error) {
+	return k.refreshTokenStorage.DeleteRefreshTokenSession(ctx, signature)
 }
 
-func (KubeStorage) CreateAccessTokenSession(_ context.Context, _ string, _ fosite.Requester) (err error) {
-	return nil
+func (k KubeStorage) CreateAccessTokenSession(ctx context.Context, signature string, requester fosite.Requester) (err error) {
+	return k.accessTokenStorage.CreateAccessTokenSession(ctx, signature, requester)
 }
 
-func (KubeStorage) GetAccessTokenSession(_ context.Context, _ string, _ fosite.Session) (request fosite.Requester, err error) {
-	return nil, errKubeStorageNotImplemented
+func (k KubeStorage) GetAccessTokenSession(ctx context.Context, signature string, session fosite.Session) (request fosite.Requester, err error) {
+	return k.accessTokenStorage.GetAccessTokenSession(ctx, signature, session)
 }
 
-func (KubeStorage) DeleteAccessTokenSession(_ context.Context, _ string) (err error) {
-	return errKubeStorageNotImplemented
+func (k KubeStorage) DeleteAccessTokenSession(ctx context.Context, signature string) (err error) {
+	return k.accessTokenStorage.DeleteAccessTokenSession(ctx, signature)
 }
 
 func (k KubeStorage) CreateOpenIDConnectSession(ctx context.Context, authcode string, requester fosite.Requester) error {

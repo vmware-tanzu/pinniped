@@ -4,10 +4,15 @@
 package testutil
 
 import (
+	"context"
+	"mime"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 func RequireTimeInDelta(t *testing.T, t1 time.Time, t2 time.Time, delta time.Duration) {
@@ -21,4 +26,29 @@ func RequireTimeInDelta(t *testing.T, t1 time.Time, t2 time.Time, delta time.Dur
 		delta.String(),
 		t1.Sub(t2).String(),
 	)
+}
+
+func RequireEqualContentType(t *testing.T, actual string, expected string) {
+	t.Helper()
+
+	if expected == "" {
+		require.Empty(t, actual)
+		return
+	}
+
+	actualContentType, actualContentTypeParams, err := mime.ParseMediaType(expected)
+	require.NoError(t, err)
+	expectedContentType, expectedContentTypeParams, err := mime.ParseMediaType(expected)
+	require.NoError(t, err)
+	require.Equal(t, actualContentType, expectedContentType)
+	require.Equal(t, actualContentTypeParams, expectedContentTypeParams)
+}
+
+func RequireNumberOfSecretsMatchingLabelSelector(t *testing.T, secrets v1.SecretInterface, labelSet labels.Set, expectedNumberOfSecrets int) {
+	t.Helper()
+	storedAuthcodeSecrets, err := secrets.List(context.Background(), v12.ListOptions{
+		LabelSelector: labelSet.String(),
+	})
+	require.NoError(t, err)
+	require.Len(t, storedAuthcodeSecrets.Items, expectedNumberOfSecrets)
 }

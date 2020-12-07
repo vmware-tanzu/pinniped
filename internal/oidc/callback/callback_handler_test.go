@@ -18,17 +18,20 @@ import (
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/fake"
-	kubetesting "k8s.io/client-go/testing"
 
+	"go.pinniped.dev/internal/crud"
+	"go.pinniped.dev/internal/fositestorage/authorizationcode"
+	"go.pinniped.dev/internal/fositestorage/openidconnect"
+	"go.pinniped.dev/internal/fositestorage/pkce"
 	"go.pinniped.dev/internal/oidc"
+	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/oidctestutil"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
-	"go.pinniped.dev/pkg/oidcclient/pkce"
+	oidcpkce "go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
 const (
@@ -105,7 +108,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 	happyExchangeAndValidateTokensArgs := &oidctestutil.ExchangeAuthcodeAndValidateTokenArgs{
 		Authcode:             happyUpstreamAuthcode,
-		PKCECodeVerifier:     pkce.Code(happyDownstreamPKCE),
+		PKCECodeVerifier:     oidcpkce.Code(happyDownstreamPKCE),
 		ExpectedIDTokenNonce: nonce.Nonce(happyDownstreamNonce),
 		RedirectURI:          happyUpstreamRedirectURI,
 	}
@@ -433,7 +436,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			oauthStore := oidc.NewKubeStorage(secrets)
 			hmacSecret := []byte("some secret - must have at least 32 bytes")
 			require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
-			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecret)
+			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
+			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecret, jwksProviderIsUnused)
 
 			idpListGetter := oidctestutil.NewIDPListGetter(&test.idp)
 			subject := NewHandler(idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec, happyUpstreamRedirectURI)
@@ -482,18 +486,8 @@ func TestCallbackEndpoint(t *testing.T) {
 				}
 				require.Len(t, client.Actions(), expectedNumberOfCreatedSecrets)
 
-				actualSecretNames := []string{}
-				for i := range client.Actions() {
-					actualAction := client.Actions()[i].(kubetesting.CreateActionImpl)
-					require.Equal(t, "create", actualAction.GetVerb())
-					require.Equal(t, schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, actualAction.GetResource())
-					actualSecret := actualAction.GetObject().(*corev1.Secret)
-					require.Empty(t, actualSecret.Namespace) // because the secrets client is already scoped to a namespace
-					actualSecretNames = append(actualSecretNames, actualSecret.Name)
-				}
-
 				// One authcode should have been stored.
-				requireAnyStringHasPrefix(t, actualSecretNames, "pinniped-storage-authcode-")
+				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
 
 				storedRequestFromAuthcode, storedSessionFromAuthcode := validateAuthcodeStorage(
 					t,
@@ -506,7 +500,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				)
 
 				// One PKCE should have been stored.
-				requireAnyStringHasPrefix(t, actualSecretNames, "pinniped-storage-pkce-")
+				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: pkce.TypeLabelValue}, 1)
 
 				validatePKCEStorage(
 					t,
@@ -520,7 +514,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 				// One IDSession should have been stored, if the downstream actually requested the "openid" scope
 				if test.wantGrantedOpenidScope {
-					requireAnyStringHasPrefix(t, actualSecretNames, "pinniped-storage-oidc")
+					testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
 
 					validateIDSessionStorage(
 						t,
@@ -682,7 +676,7 @@ func (u *upstreamOIDCIdentityProviderBuilder) Build() oidctestutil.TestUpstreamO
 		UsernameClaim: u.usernameClaim,
 		GroupsClaim:   u.groupsClaim,
 		Scopes:        []string{"scope1", "scope2"},
-		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
+		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier oidcpkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
 			if u.authcodeExchangeErr != nil {
 				return nil, u.authcodeExchangeErr
 			}
@@ -847,16 +841,4 @@ func castStoredAuthorizeRequest(t *testing.T, storedAuthorizeRequest fosite.Requ
 	require.Truef(t, ok, "could not cast %T to %T", storedAuthorizeRequest.GetSession(), &openid.DefaultSession{})
 
 	return storedRequest, storedSession
-}
-
-func requireAnyStringHasPrefix(t *testing.T, stringList []string, prefix string) {
-	t.Helper()
-
-	containsPrefix := false
-	for i := range stringList {
-		if strings.HasPrefix(stringList[i], prefix) {
-			containsPrefix = true
-		}
-	}
-	require.Truef(t, containsPrefix, "list %v did not contain any strings with prefix %s", stringList, prefix)
 }

@@ -20,6 +20,8 @@ import (
 )
 
 const (
+	TypeLabelValue = "authcode"
+
 	ErrInvalidAuthorizeRequestData    = constable.Error("authorization request data must be present")
 	ErrInvalidAuthorizeRequestVersion = constable.Error("authorization request data has wrong version")
 
@@ -39,7 +41,7 @@ type AuthorizeCodeSession struct {
 }
 
 func New(secrets corev1client.SecretInterface) oauth2.AuthorizeCodeStorage {
-	return &authorizeCodeStorage{storage: crud.New("authcode", secrets)}
+	return &authorizeCodeStorage{storage: crud.New(TypeLabelValue, secrets)}
 }
 
 func (a *authorizeCodeStorage) CreateAuthorizeCodeSession(ctx context.Context, signature string, requester fosite.Requester) error {
@@ -64,7 +66,7 @@ func (a *authorizeCodeStorage) CreateAuthorizeCodeSession(ctx context.Context, s
 	//      of the consent authorization request. It is used to identify the session.
 	//  signature for lookup in the DB
 
-	_, err = a.storage.Create(ctx, signature, &AuthorizeCodeSession{Active: true, Request: request, Version: authorizeCodeStorageVersion})
+	_, err = a.storage.Create(ctx, signature, &AuthorizeCodeSession{Active: true, Request: request, Version: authorizeCodeStorageVersion}, nil)
 	return err
 }
 

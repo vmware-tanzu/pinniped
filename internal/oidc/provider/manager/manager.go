@@ -18,6 +18,7 @@ import (
 	"go.pinniped.dev/internal/oidc/discovery"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/token"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -78,10 +79,10 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 
 		// Use NullStorage for the authorize endpoint because we do not actually want to store anything until
 		// the upstream callback endpoint is called later.
-		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(oidc.NullStorage{}, issuer, fositeHMACSecretForThisProvider)
+		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(oidc.NullStorage{}, issuer, fositeHMACSecretForThisProvider, nil)
 
 		// For all the other endpoints, make another oauth helper with exactly the same settings except use real storage.
-		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(oidc.NewKubeStorage(m.secretsClient), issuer, fositeHMACSecretForThisProvider)
+		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(oidc.NewKubeStorage(m.secretsClient), issuer, fositeHMACSecretForThisProvider, m.dynamicJWKSProvider)
 
 		// TODO use different codecs for the state and the cookie, because:
 		//  1. we would like to state to have an embedded expiration date while the cookie does not need that
@@ -113,6 +114,10 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 			encoder,
 			encoder,
 			issuer+oidc.CallbackEndpointPath,
+		)
+
+		m.providerHandlers[(issuerHostWithPath + oidc.TokenEndpointPath)] = token.NewHandler(
+			oauthHelperWithKubeStorage,
 		)
 
 		plog.Debug("oidc provider manager added or updated issuer", "issuer", issuer)

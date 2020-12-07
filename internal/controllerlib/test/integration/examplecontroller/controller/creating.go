@@ -93,7 +93,6 @@ func NewExampleCreatingController(
 			}
 
 			if actualSecret.Annotations[api.ServiceUIDAnnotation] != string(service.UID) {
-				//nolint: goerr113
 				utilruntime.HandleError(fmt.Errorf("secret %s/%s does not have corresponding service UID %v", actualSecret.Namespace, actualSecret.Name, service.UID))
 				return nil // drop from queue because we cannot safely update this secret
 			}

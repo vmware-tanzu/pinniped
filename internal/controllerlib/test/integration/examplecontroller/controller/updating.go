@@ -105,7 +105,6 @@ func NewExampleUpdatingController(
 		}
 
 		if !isSecretValidForService(service, secret) {
-			//nolint: goerr113
 			utilruntime.HandleError(fmt.Errorf("secret %s/%s does not have corresponding service UID %v", secret.Namespace, secret.Name, service.UID))
 			return nil
 		}

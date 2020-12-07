@@ -43,9 +43,8 @@ func TestDiscovery(t *testing.T) {
 				SubjectTypesSupported:             []string{"public"},
 				IDTokenSigningAlgValuesSupported:  []string{"ES256"},
 				TokenEndpointAuthMethodsSupported: []string{"client_secret_basic"},
-				TokenEndpointAuthSigningAlgoValuesSupported: []string{"RS256"},
-				ScopesSupported: []string{"openid", "offline"},
-				ClaimsSupported: []string{"groups"},
+				ScopesSupported:                   []string{"openid", "offline"},
+				ClaimsSupported:                   []string{"groups"},
 			},
 		},
 		{

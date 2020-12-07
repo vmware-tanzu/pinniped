@@ -183,6 +183,15 @@ var (
 			"status_code":       400
 		}
 	`)
+
+	fositeTemporarilyUnavailableErrorBody = here.Doc(`
+		{
+		  "error": "temporarily_unavailable",
+		  "error_description": "The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server",
+		  "error_verbose": "The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server",
+		  "status_code": 503
+		}
+	`)
 )
 
 func TestTokenEndpoint(t *testing.T) {
@@ -214,7 +223,18 @@ func TestTokenEndpoint(t *testing.T) {
 			},
 			authCode string,
 		)
-		request func(r *http.Request, authCode string)
+		request        func(r *http.Request, authCode string)
+		makeOathHelper func(
+			t *testing.T,
+			authRequest *http.Request,
+			store interface {
+				oauth2.TokenRevocationStorage
+				oauth2.CoreStorage
+				openid.OpenIDConnectRequestStorage
+				pkce.PKCERequestStorage
+				fosite.ClientManager
+			},
+		) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey)
 
 		wantStatus     int
 		wantBodyFields []string
@@ -381,6 +401,12 @@ func TestTokenEndpoint(t *testing.T) {
 			wantStatus:    http.StatusBadRequest,
 			wantExactBody: fositeWrongPKCEVerifierErrorBody,
 		},
+		{
+			name:           "private signing key for JWTs has not yet been provided by the controller who is responsible for dynamically providing it",
+			makeOathHelper: makeOauthHelperWithNilPrivateJWTSigningKey,
+			wantStatus:     http.StatusServiceUnavailable,
+			wantExactBody:  fositeTemporarilyUnavailableErrorBody,
+		},
 	}
 	for _, test := range tests {
 		test := test
@@ -393,8 +419,16 @@ func TestTokenEndpoint(t *testing.T) {
 			client := fake.NewSimpleClientset()
 			secrets := client.CoreV1().Secrets("some-namespace")
 
+			var oauthHelper fosite.OAuth2Provider
+			var authCode string
+			var jwtSigningKey *ecdsa.PrivateKey
+
 			oauthStore := oidc.NewKubeStorage(secrets)
-			oauthHelper, authCode, jwtSigningKey := makeHappyOauthHelper(t, authRequest, oauthStore)
+			if test.makeOathHelper != nil {
+				oauthHelper, authCode, jwtSigningKey = test.makeOathHelper(t, authRequest, oauthStore)
+			} else {
+				oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore)
+			}
 
 			if test.storage != nil {
 				test.storage(t, oauthStore, authCode)
@@ -595,7 +629,30 @@ func makeHappyOauthHelper(
 
 	jwtSigningKey, jwkProvider := generateJWTSigningKeyAndJWKSProvider(t, goodIssuer)
 	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), jwkProvider)
+	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper)
+	return oauthHelper, authResponder.GetCode(), jwtSigningKey
+}
 
+func makeOauthHelperWithNilPrivateJWTSigningKey(
+	t *testing.T,
+	authRequest *http.Request,
+	store interface {
+		oauth2.TokenRevocationStorage
+		oauth2.CoreStorage
+		openid.OpenIDConnectRequestStorage
+		pkce.PKCERequestStorage
+		fosite.ClientManager
+	},
+) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
+	t.Helper()
+
+	jwkProvider := jwks.NewDynamicJWKSProvider() // empty provider which contains no signing key for this issuer
+	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), jwkProvider)
+	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper)
+	return oauthHelper, authResponder.GetCode(), nil
+}
+
+func simulateAuthEndpointHavingAlreadyRun(t *testing.T, authRequest *http.Request, oauthHelper fosite.OAuth2Provider) fosite.AuthorizeResponder {
 	// Simulate the auth endpoint running so Fosite code will fill the store with realistic values.
 	//
 	// We only set the fields in the session that Fosite wants us to set.
@@ -616,8 +673,7 @@ func makeHappyOauthHelper(
 	}
 	authResponder, err := oauthHelper.NewAuthorizeResponse(ctx, authRequester, session)
 	require.NoError(t, err)
-
-	return oauthHelper, authResponder.GetCode(), jwtSigningKey
+	return authResponder
 }
 
 func generateJWTSigningKeyAndJWKSProvider(t *testing.T, issuer string) (*ecdsa.PrivateKey, jwks.DynamicJWKSProvider) {

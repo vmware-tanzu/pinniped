@@ -68,7 +68,7 @@ func TestSupervisorLogin(t *testing.T) {
 			return proxyURL, nil
 		},
 	}}
-	oidcHttpClientContext := oidc.ClientContext(ctx, httpClient)
+	oidcHTTPClientContext := oidc.ClientContext(ctx, httpClient)
 
 	// Use the CA to issue a TLS server cert.
 	t.Logf("issuing test certificate")
@@ -111,7 +111,7 @@ func TestSupervisorLogin(t *testing.T) {
 	// Perform OIDC discovery for our downstream.
 	var discovery *oidc.Provider
 	assert.Eventually(t, func() bool {
-		discovery, err = oidc.NewProvider(oidcHttpClientContext, downstream.Spec.Issuer)
+		discovery, err = oidc.NewProvider(oidcHTTPClientContext, downstream.Spec.Issuer)
 		return err == nil
 	}, 30*time.Second, 200*time.Millisecond)
 	require.NoError(t, err)
@@ -164,7 +164,7 @@ func TestSupervisorLogin(t *testing.T) {
 	require.NotEmpty(t, authcode)
 
 	// Call the token endpoint to get tokens.
-	tokenResponse, err := downstreamOAuth2Config.Exchange(oidcHttpClientContext, authcode, pkceParam.Verifier())
+	tokenResponse, err := downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
 	require.NoError(t, err)
 
 	// Verify the ID Token.

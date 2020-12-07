@@ -9,6 +9,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"errors"
 	"net/url"
 	"testing"
 
@@ -42,7 +43,8 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 		name           string
 		issuer         string
 		jwksProvider   func(jwks.DynamicJWKSProvider)
-		wantError      string
+		wantErrorType  *fosite.RFC6749Error
+		wantErrorCause string
 		wantSigningJWK *jose.JSONWebKey
 	}{
 		{
@@ -63,9 +65,10 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 			},
 		},
 		{
-			name:      "jwks provider does not contain signing key for issuer",
-			issuer:    goodIssuer,
-			wantError: "no JWK found for issuer",
+			name:           "jwks provider does not contain signing key for issuer",
+			issuer:         goodIssuer,
+			wantErrorType:  fosite.ErrTemporarilyUnavailable,
+			wantErrorCause: "no JWK found for issuer",
 		},
 		{
 			name:   "jwks provider contains signing key of wrong type for issuer",
@@ -80,7 +83,8 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 					},
 				)
 			},
-			wantError: "JWK must be of type ecdsa",
+			wantErrorType:  fosite.ErrServerError,
+			wantErrorCause: "JWK must be of type ecdsa",
 		},
 	}
 	for _, test := range tests {
@@ -111,8 +115,9 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 				},
 			}
 			idToken, err := s.GenerateIDToken(context.Background(), requester)
-			if test.wantError != "" {
-				require.EqualError(t, err, test.wantError)
+			if test.wantErrorType != nil {
+				require.True(t, errors.Is(err, test.wantErrorType))
+				require.EqualError(t, err.(*fosite.RFC6749Error).Cause(), test.wantErrorCause)
 			} else {
 				require.NoError(t, err)
 

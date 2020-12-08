@@ -28,7 +28,7 @@ func TestNullStorage_GetClient(t *testing.T) {
 				RedirectURIs:  []string{"http://127.0.0.1/callback"},
 				ResponseTypes: []string{"code"},
 				GrantTypes:    []string{"authorization_code"},
-				Scopes:        []string{"openid", "profile", "email"},
+				Scopes:        []string{"openid", "offline_access", "profile", "email"},
 			},
 			TokenEndpointAuthMethod: "none",
 		},

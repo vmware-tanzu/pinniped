@@ -7,6 +7,7 @@ package oidc
 import (
 	"time"
 
+	coreosoidc "github.com/coreos/go-oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 
@@ -84,7 +85,7 @@ func PinnipedCLIOIDCClient() *fosite.DefaultOpenIDConnectClient {
 			RedirectURIs:  []string{"http://127.0.0.1/callback"},
 			ResponseTypes: []string{"code"},
 			GrantTypes:    []string{"authorization_code"},
-			Scopes:        []string{"openid", "profile", "email"},
+			Scopes:        []string{coreosoidc.ScopeOpenID, coreosoidc.ScopeOfflineAccess, "profile", "email"},
 		},
 		TokenEndpointAuthMethod: "none",
 	}
@@ -155,4 +156,12 @@ func FositeErrorForLog(err error) []interface{} {
 
 type IDPListGetter interface {
 	GetIDPList() []provider.UpstreamOIDCIdentityProviderI
+}
+
+func GrantScopeIfRequested(authorizeRequester fosite.AuthorizeRequester, scopeName string) {
+	for _, scope := range authorizeRequester.GetRequestedScopes() {
+		if scope == scopeName {
+			authorizeRequester.GrantScope(scope)
+		}
+	}
 }

@@ -174,7 +174,7 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		issuer:       issuer,
 		clientID:     clientID,
 		listenAddr:   "localhost:0",
-		scopes:       []string{"offline_access", "openid", "email", "profile"},
+		scopes:       []string{oidc.ScopeOfflineAccess, oidc.ScopeOpenID, "email", "profile"},
 		cache:        &nopCache{},
 		callbackPath: "/callback",
 		ctx:          context.Background(),

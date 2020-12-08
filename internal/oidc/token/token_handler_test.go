@@ -520,9 +520,13 @@ func TestTokenEndpoint(t *testing.T) {
 	}
 
 	t.Run("auth code is used twice", func(t *testing.T) {
-		// TODO upgrade this test to use offline_access so we can be sure that the refresh token was also revoked
 		authRequest := deepCopyRequestForm(happyAuthRequest)
-		wantRequestedScopes := []string{"openid", "profile", "email"}
+		authRequest.Form.Set("scope", "openid offline_access profile email")
+
+		wantRequestedScopes := []string{"openid", "offline_access", "profile", "email"}
+		wantBodyFields := []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"}
+		wantGrantedOpenidScope := true
+		wantGrantedOfflineAccessScope := true
 
 		client := fake.NewSimpleClientset()
 		secrets := client.CoreV1().Secrets("some-namespace")
@@ -550,14 +554,11 @@ func TestTokenEndpoint(t *testing.T) {
 		var parsedResponseBody map[string]interface{}
 		require.NoError(t, json.Unmarshal(rsp0.Body.Bytes(), &parsedResponseBody))
 
-		wantBodyFields := []string{"id_token", "access_token", "token_type", "expires_in", "scope"}
 		require.ElementsMatch(t, wantBodyFields, getMapKeys(parsedResponseBody))
 
 		requireValidIDToken(t, parsedResponseBody, jwtSigningKey)
 
 		code := req.PostForm.Get("code")
-		wantGrantedOpenidScope := true
-		wantGrantedOfflineAccessScope := false
 		requireInvalidAuthCodeStorage(t, code, oauthStore)
 		requireValidAccessTokenStorage(t, parsedResponseBody, oauthStore, wantRequestedScopes, wantGrantedOpenidScope, wantGrantedOfflineAccessScope)
 		requireInvalidPKCEStorage(t, code, oauthStore)
@@ -566,9 +567,9 @@ func TestTokenEndpoint(t *testing.T) {
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: accesstoken.TypeLabelValue}, 1)
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: refreshtoken.TypeLabelValue}, 0)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: refreshtoken.TypeLabelValue}, 1)
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 0)
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 3)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 4)
 
 		// Second call - should be unsuccessful since auth code was already used.
 		//
@@ -582,16 +583,16 @@ func TestTokenEndpoint(t *testing.T) {
 		testutil.RequireEqualContentType(t, rsp1.Header().Get("Content-Type"), "application/json")
 		require.JSONEq(t, fositeReusedAuthCodeErrorBody, rsp1.Body.String())
 
-		// this was previously invalidated by the first request, so it remains invalidated
+		// This was previously invalidated by the first request, so it remains invalidated
 		requireInvalidAuthCodeStorage(t, code, oauthStore)
-		// now invalidated the access token that was previously handed out by the first request
+		// Has now invalidated the access token that was previously handed out by the first request
 		requireInvalidAccessTokenStorage(t, parsedResponseBody, oauthStore)
-		// this was previously invalidated by the first request, so it remains invalidated
+		// This was previously invalidated by the first request, so it remains invalidated
 		requireInvalidPKCEStorage(t, code, oauthStore)
-		// fosite never cleans these up, so it is still there
+		// Fosite never cleans up OpenID Connect session storage, so it is still there
 		requireValidOIDCStorage(t, parsedResponseBody, code, oauthStore, wantRequestedScopes, wantGrantedOpenidScope, wantGrantedOfflineAccessScope)
 
-		// Check that the access token storage was deleted, and the number of other storage objects did not change.
+		// Check that the access token and refresh token storage were both deleted, and the number of other storage objects did not change.
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: accesstoken.TypeLabelValue}, 0)

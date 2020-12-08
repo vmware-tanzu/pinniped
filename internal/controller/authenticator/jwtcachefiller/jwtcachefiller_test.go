@@ -41,9 +41,30 @@ import (
 func TestController(t *testing.T) {
 	t.Parallel()
 
+	someJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
+		Issuer:   "https://some-issuer.com",
+		Audience: "some-audience",
+		TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURVVENDQWptZ0F3SUJBZ0lWQUpzNStTbVRtaTJXeUI0bGJJRXBXaUs5a1RkUE1BMEdDU3FHU0liM0RRRUIKQ3dVQU1COHhDekFKQmdOVkJBWVRBbFZUTVJBd0RnWURWUVFLREFkUWFYWnZkR0ZzTUI0WERUSXdNRFV3TkRFMgpNamMxT0ZvWERUSTBNRFV3TlRFMk1qYzFPRm93SHpFTE1Ba0dBMVVFQmhNQ1ZWTXhFREFPQmdOVkJBb01CMUJwCmRtOTBZV3d3Z2dFaU1BMEdDU3FHU0liM0RRRUJBUVVBQTRJQkR3QXdnZ0VLQW9JQkFRRERZWmZvWGR4Z2NXTEMKZEJtbHB5a0tBaG9JMlBuUWtsVFNXMno1cGcwaXJjOGFRL1E3MXZzMTRZYStmdWtFTGlvOTRZYWw4R01DdVFrbApMZ3AvUEE5N1VYelhQNDBpK25iNXcwRGpwWWd2dU9KQXJXMno2MFRnWE5NSFh3VHk4ME1SZEhpUFVWZ0VZd0JpCmtkNThzdEFVS1Y1MnBQTU1reTJjNy9BcFhJNmRXR2xjalUvaFBsNmtpRzZ5dEw2REtGYjJQRWV3MmdJM3pHZ2IKOFVVbnA1V05DZDd2WjNVY0ZHNXlsZEd3aGc3cnZ4U1ZLWi9WOEhCMGJmbjlxamlrSVcxWFM4dzdpUUNlQmdQMApYZWhKZmVITlZJaTJtZlczNlVQbWpMdnVKaGpqNDIrdFBQWndvdDkzdWtlcEgvbWpHcFJEVm9wamJyWGlpTUYrCkYxdnlPNGMxQWdNQkFBR2pnWU13Z1lBd0hRWURWUjBPQkJZRUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1IKTUI4R0ExVWRJd1FZTUJhQUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1JNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQ0JnZ3JCZ0VGQlFjREFUQVBCZ05WSFJNQkFmOEVCVEFEQVFIL01BNEdBMVVkRHdFQi93UUVBd0lCCkJqQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFYbEh4M2tIMDZwY2NDTDlEVE5qTnBCYnlVSytGd2R6T2IwWFYKcmpNaGtxdHVmdEpUUnR5T3hKZ0ZKNXhUR3pCdEtKamcrVU1pczBOV0t0VDBNWThVMU45U2c5SDl0RFpHRHBjVQpxMlVRU0Y4dXRQMVR3dnJIUzIrdzB2MUoxdHgrTEFiU0lmWmJCV0xXQ21EODUzRlVoWlFZekkvYXpFM28vd0p1CmlPUklMdUpNUk5vNlBXY3VLZmRFVkhaS1RTWnk3a25FcHNidGtsN3EwRE91eUFWdG9HVnlkb3VUR0FOdFhXK2YKczNUSTJjKzErZXg3L2RZOEJGQTFzNWFUOG5vZnU3T1RTTzdiS1kzSkRBUHZOeFQzKzVZUXJwNGR1Nmh0YUFMbAppOHNaRkhidmxpd2EzdlhxL3p1Y2JEaHEzQzBhZnAzV2ZwRGxwSlpvLy9QUUFKaTZLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"},
+	}
+	otherJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
+		Issuer:   "https://some-other-issuer.com",
+		Audience: "some-audience",
+		TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURVVENDQWptZ0F3SUJBZ0lWQUpzNStTbVRtaTJXeUI0bGJJRXBXaUs5a1RkUE1BMEdDU3FHU0liM0RRRUIKQ3dVQU1COHhDekFKQmdOVkJBWVRBbFZUTVJBd0RnWURWUVFLREFkUWFYWnZkR0ZzTUI0WERUSXdNRFV3TkRFMgpNamMxT0ZvWERUSTBNRFV3TlRFMk1qYzFPRm93SHpFTE1Ba0dBMVVFQmhNQ1ZWTXhFREFPQmdOVkJBb01CMUJwCmRtOTBZV3d3Z2dFaU1BMEdDU3FHU0liM0RRRUJBUVVBQTRJQkR3QXdnZ0VLQW9JQkFRRERZWmZvWGR4Z2NXTEMKZEJtbHB5a0tBaG9JMlBuUWtsVFNXMno1cGcwaXJjOGFRL1E3MXZzMTRZYStmdWtFTGlvOTRZYWw4R01DdVFrbApMZ3AvUEE5N1VYelhQNDBpK25iNXcwRGpwWWd2dU9KQXJXMno2MFRnWE5NSFh3VHk4ME1SZEhpUFVWZ0VZd0JpCmtkNThzdEFVS1Y1MnBQTU1reTJjNy9BcFhJNmRXR2xjalUvaFBsNmtpRzZ5dEw2REtGYjJQRWV3MmdJM3pHZ2IKOFVVbnA1V05DZDd2WjNVY0ZHNXlsZEd3aGc3cnZ4U1ZLWi9WOEhCMGJmbjlxamlrSVcxWFM4dzdpUUNlQmdQMApYZWhKZmVITlZJaTJtZlczNlVQbWpMdnVKaGpqNDIrdFBQWndvdDkzdWtlcEgvbWpHcFJEVm9wamJyWGlpTUYrCkYxdnlPNGMxQWdNQkFBR2pnWU13Z1lBd0hRWURWUjBPQkJZRUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1IKTUI4R0ExVWRJd1FZTUJhQUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1JNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQ0JnZ3JCZ0VGQlFjREFUQVBCZ05WSFJNQkFmOEVCVEFEQVFIL01BNEdBMVVkRHdFQi93UUVBd0lCCkJqQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFYbEh4M2tIMDZwY2NDTDlEVE5qTnBCYnlVSytGd2R6T2IwWFYKcmpNaGtxdHVmdEpUUnR5T3hKZ0ZKNXhUR3pCdEtKamcrVU1pczBOV0t0VDBNWThVMU45U2c5SDl0RFpHRHBjVQpxMlVRU0Y4dXRQMVR3dnJIUzIrdzB2MUoxdHgrTEFiU0lmWmJCV0xXQ21EODUzRlVoWlFZekkvYXpFM28vd0p1CmlPUklMdUpNUk5vNlBXY3VLZmRFVkhaS1RTWnk3a25FcHNidGtsN3EwRE91eUFWdG9HVnlkb3VUR0FOdFhXK2YKczNUSTJjKzErZXg3L2RZOEJGQTFzNWFUOG5vZnU3T1RTTzdiS1kzSkRBUHZOeFQzKzVZUXJwNGR1Nmh0YUFMbAppOHNaRkhidmxpd2EzdlhxL3p1Y2JEaHEzQzBhZnAzV2ZwRGxwSlpvLy9QUUFKaTZLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"},
+	}
+	missingTLSJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
+		Issuer:   "https://some-issuer.com",
+		Audience: "some-audience",
+	}
+	invalidTLSJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
+		Issuer:   "https://some-other-issuer.com",
+		Audience: "some-audience",
+		TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: "invalid base64-encoded data"},
+	}
+
 	tests := []struct {
 		name              string
-		cache             func(*authncache.Cache)
+		cache             func(*testing.T, *authncache.Cache, bool)
+		wantClose         bool
 		syncKey           controllerlib.Key
 		jwtAuthenticators []runtime.Object
 		wantErr           string
@@ -66,11 +87,7 @@ func TestController(t *testing.T) {
 						Namespace: "test-namespace",
 						Name:      "test-name",
 					},
-					Spec: auth1alpha1.JWTAuthenticatorSpec{
-						Issuer:   "https://some-issuer.com",
-						Audience: "some-audience",
-						TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURVVENDQWptZ0F3SUJBZ0lWQUpzNStTbVRtaTJXeUI0bGJJRXBXaUs5a1RkUE1BMEdDU3FHU0liM0RRRUIKQ3dVQU1COHhDekFKQmdOVkJBWVRBbFZUTVJBd0RnWURWUVFLREFkUWFYWnZkR0ZzTUI0WERUSXdNRFV3TkRFMgpNamMxT0ZvWERUSTBNRFV3TlRFMk1qYzFPRm93SHpFTE1Ba0dBMVVFQmhNQ1ZWTXhFREFPQmdOVkJBb01CMUJwCmRtOTBZV3d3Z2dFaU1BMEdDU3FHU0liM0RRRUJBUVVBQTRJQkR3QXdnZ0VLQW9JQkFRRERZWmZvWGR4Z2NXTEMKZEJtbHB5a0tBaG9JMlBuUWtsVFNXMno1cGcwaXJjOGFRL1E3MXZzMTRZYStmdWtFTGlvOTRZYWw4R01DdVFrbApMZ3AvUEE5N1VYelhQNDBpK25iNXcwRGpwWWd2dU9KQXJXMno2MFRnWE5NSFh3VHk4ME1SZEhpUFVWZ0VZd0JpCmtkNThzdEFVS1Y1MnBQTU1reTJjNy9BcFhJNmRXR2xjalUvaFBsNmtpRzZ5dEw2REtGYjJQRWV3MmdJM3pHZ2IKOFVVbnA1V05DZDd2WjNVY0ZHNXlsZEd3aGc3cnZ4U1ZLWi9WOEhCMGJmbjlxamlrSVcxWFM4dzdpUUNlQmdQMApYZWhKZmVITlZJaTJtZlczNlVQbWpMdnVKaGpqNDIrdFBQWndvdDkzdWtlcEgvbWpHcFJEVm9wamJyWGlpTUYrCkYxdnlPNGMxQWdNQkFBR2pnWU13Z1lBd0hRWURWUjBPQkJZRUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1IKTUI4R0ExVWRJd1FZTUJhQUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1JNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQ0JnZ3JCZ0VGQlFjREFUQVBCZ05WSFJNQkFmOEVCVEFEQVFIL01BNEdBMVVkRHdFQi93UUVBd0lCCkJqQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFYbEh4M2tIMDZwY2NDTDlEVE5qTnBCYnlVSytGd2R6T2IwWFYKcmpNaGtxdHVmdEpUUnR5T3hKZ0ZKNXhUR3pCdEtKamcrVU1pczBOV0t0VDBNWThVMU45U2c5SDl0RFpHRHBjVQpxMlVRU0Y4dXRQMVR3dnJIUzIrdzB2MUoxdHgrTEFiU0lmWmJCV0xXQ21EODUzRlVoWlFZekkvYXpFM28vd0p1CmlPUklMdUpNUk5vNlBXY3VLZmRFVkhaS1RTWnk3a25FcHNidGtsN3EwRE91eUFWdG9HVnlkb3VUR0FOdFhXK2YKczNUSTJjKzErZXg3L2RZOEJGQTFzNWFUOG5vZnU3T1RTTzdiS1kzSkRBUHZOeFQzKzVZUXJwNGR1Nmh0YUFMbAppOHNaRkhidmxpd2EzdlhxL3p1Y2JEaHEzQzBhZnAzV2ZwRGxwSlpvLy9QUUFKaTZLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"},
-					},
+					Spec: *someJWTAuthenticatorSpec,
 				},
 			},
 			wantLogs: []string{
@@ -79,8 +96,8 @@ func TestController(t *testing.T) {
 			wantCacheEntries: 1,
 		},
 		{
-			name: "updating jwt authenticator closes previous instance",
-			cache: func(cache *authncache.Cache) {
+			name: "updating jwt authenticator with new fields closes previous instance",
+			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
 				cache.Store(
 					authncache.Key{
 						Name:      "test-name",
@@ -88,7 +105,65 @@ func TestController(t *testing.T) {
 						Kind:      "JWTAuthenticator",
 						APIGroup:  auth1alpha1.SchemeGroupVersion.Group,
 					},
-					newClosableCacheValue(t, 1),
+					newCacheValue(t, *otherJWTAuthenticatorSpec, wantClose),
+				)
+			},
+			wantClose: true,
+			syncKey:   controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			jwtAuthenticators: []runtime.Object{
+				&auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "test-namespace",
+						Name:      "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+				},
+			},
+			wantLogs: []string{
+				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="https://some-issuer.com" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
+			},
+			wantCacheEntries: 1,
+		},
+		{
+			name: "updating jwt authenticator with the same value does nothing",
+			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
+				cache.Store(
+					authncache.Key{
+						Name:      "test-name",
+						Namespace: "test-namespace",
+						Kind:      "JWTAuthenticator",
+						APIGroup:  auth1alpha1.SchemeGroupVersion.Group,
+					},
+					newCacheValue(t, *someJWTAuthenticatorSpec, wantClose),
+				)
+			},
+			wantClose: false,
+			syncKey:   controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			jwtAuthenticators: []runtime.Object{
+				&auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "test-namespace",
+						Name:      "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+				},
+			},
+			wantLogs: []string{
+				`jwtcachefiller-controller "level"=0 "msg"="actual jwt authenticator and desired jwt authenticator are the same" "issuer"="https://some-issuer.com" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
+			},
+			wantCacheEntries: 1,
+		},
+		{
+			name: "updating jwt authenticator when cache value is wrong type",
+			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
+				cache.Store(
+					authncache.Key{
+						Name:      "test-name",
+						Namespace: "test-namespace",
+						Kind:      "JWTAuthenticator",
+						APIGroup:  auth1alpha1.SchemeGroupVersion.Group,
+					},
+					struct{ authenticator.Token }{},
 				)
 			},
 			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
@@ -98,14 +173,11 @@ func TestController(t *testing.T) {
 						Namespace: "test-namespace",
 						Name:      "test-name",
 					},
-					Spec: auth1alpha1.JWTAuthenticatorSpec{
-						Issuer:   "https://some-issuer.com",
-						Audience: "some-audience",
-						TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURVVENDQWptZ0F3SUJBZ0lWQUpzNStTbVRtaTJXeUI0bGJJRXBXaUs5a1RkUE1BMEdDU3FHU0liM0RRRUIKQ3dVQU1COHhDekFKQmdOVkJBWVRBbFZUTVJBd0RnWURWUVFLREFkUWFYWnZkR0ZzTUI0WERUSXdNRFV3TkRFMgpNamMxT0ZvWERUSTBNRFV3TlRFMk1qYzFPRm93SHpFTE1Ba0dBMVVFQmhNQ1ZWTXhFREFPQmdOVkJBb01CMUJwCmRtOTBZV3d3Z2dFaU1BMEdDU3FHU0liM0RRRUJBUVVBQTRJQkR3QXdnZ0VLQW9JQkFRRERZWmZvWGR4Z2NXTEMKZEJtbHB5a0tBaG9JMlBuUWtsVFNXMno1cGcwaXJjOGFRL1E3MXZzMTRZYStmdWtFTGlvOTRZYWw4R01DdVFrbApMZ3AvUEE5N1VYelhQNDBpK25iNXcwRGpwWWd2dU9KQXJXMno2MFRnWE5NSFh3VHk4ME1SZEhpUFVWZ0VZd0JpCmtkNThzdEFVS1Y1MnBQTU1reTJjNy9BcFhJNmRXR2xjalUvaFBsNmtpRzZ5dEw2REtGYjJQRWV3MmdJM3pHZ2IKOFVVbnA1V05DZDd2WjNVY0ZHNXlsZEd3aGc3cnZ4U1ZLWi9WOEhCMGJmbjlxamlrSVcxWFM4dzdpUUNlQmdQMApYZWhKZmVITlZJaTJtZlczNlVQbWpMdnVKaGpqNDIrdFBQWndvdDkzdWtlcEgvbWpHcFJEVm9wamJyWGlpTUYrCkYxdnlPNGMxQWdNQkFBR2pnWU13Z1lBd0hRWURWUjBPQkJZRUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1IKTUI4R0ExVWRJd1FZTUJhQUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1JNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQ0JnZ3JCZ0VGQlFjREFUQVBCZ05WSFJNQkFmOEVCVEFEQVFIL01BNEdBMVVkRHdFQi93UUVBd0lCCkJqQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFYbEh4M2tIMDZwY2NDTDlEVE5qTnBCYnlVSytGd2R6T2IwWFYKcmpNaGtxdHVmdEpUUnR5T3hKZ0ZKNXhUR3pCdEtKamcrVU1pczBOV0t0VDBNWThVMU45U2c5SDl0RFpHRHBjVQpxMlVRU0Y4dXRQMVR3dnJIUzIrdzB2MUoxdHgrTEFiU0lmWmJCV0xXQ21EODUzRlVoWlFZekkvYXpFM28vd0p1CmlPUklMdUpNUk5vNlBXY3VLZmRFVkhaS1RTWnk3a25FcHNidGtsN3EwRE91eUFWdG9HVnlkb3VUR0FOdFhXK2YKczNUSTJjKzErZXg3L2RZOEJGQTFzNWFUOG5vZnU3T1RTTzdiS1kzSkRBUHZOeFQzKzVZUXJwNGR1Nmh0YUFMbAppOHNaRkhidmxpd2EzdlhxL3p1Y2JEaHEzQzBhZnAzV2ZwRGxwSlpvLy9QUUFKaTZLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"},
-					},
+					Spec: *someJWTAuthenticatorSpec,
 				},
 			},
 			wantLogs: []string{
+				`jwtcachefiller-controller "level"=0 "msg"="wrong JWT authenticator type in cache" "actualType"="struct { authenticator.Token }"`,
 				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="https://some-issuer.com" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
 			},
 			wantCacheEntries: 1,
@@ -119,10 +191,7 @@ func TestController(t *testing.T) {
 						Namespace: "test-namespace",
 						Name:      "test-name",
 					},
-					Spec: auth1alpha1.JWTAuthenticatorSpec{
-						Issuer:   "https://some-issuer.com",
-						Audience: "some-audience",
-					},
+					Spec: *missingTLSJWTAuthenticatorSpec,
 				},
 			},
 			wantLogs: []string{
@@ -139,14 +208,10 @@ func TestController(t *testing.T) {
 						Namespace: "test-namespace",
 						Name:      "test-name",
 					},
-					Spec: auth1alpha1.JWTAuthenticatorSpec{
-						Issuer:   "https://some-issuer.com",
-						Audience: "some-audience",
-						TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: "not base64-encoded"},
-					},
+					Spec: *invalidTLSJWTAuthenticatorSpec,
 				},
 			},
-			wantErr: "failed to build jwt authenticator: invalid TLS configuration: illegal base64 data at input byte 3",
+			wantErr: "failed to build jwt authenticator: invalid TLS configuration: illegal base64 data at input byte 7",
 		},
 	}
 	for _, tt := range tests {
@@ -160,7 +225,7 @@ func TestController(t *testing.T) {
 			testLog := testlogger.New(t)
 
 			if tt.cache != nil {
-				tt.cache(cache)
+				tt.cache(t, cache, tt.wantClose)
 			}
 
 			controller := New(cache, informers.Authentication().V1alpha1().JWTAuthenticators(), testLog)
@@ -474,10 +539,19 @@ func createJWT(
 	return jwt
 }
 
-func newClosableCacheValue(t *testing.T, wantCloses int) authncache.Value {
+func newCacheValue(t *testing.T, spec auth1alpha1.JWTAuthenticatorSpec, wantClose bool) authncache.Value {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
-	tac := mocktokenauthenticatorcloser.NewMockTokenAuthenticatorCloser(ctrl)
-	tac.EXPECT().Close().Times(wantCloses)
-	return tac
+	tokenAuthenticatorCloser := mocktokenauthenticatorcloser.NewMockTokenAuthenticatorCloser(ctrl)
+
+	wantCloses := 0
+	if wantClose {
+		wantCloses++
+	}
+	tokenAuthenticatorCloser.EXPECT().Close().Times(wantCloses)
+
+	return &jwtAuthenticator{
+		tokenAuthenticatorCloser: tokenAuthenticatorCloser,
+		spec:                     &spec,
+	}
 }

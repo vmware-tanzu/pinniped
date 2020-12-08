@@ -9,17 +9,19 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
 
 	"github.com/go-logr/logr"
 	"gopkg.in/square/go-jose.v2"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/klog/v2"
 
 	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 	authinformers "go.pinniped.dev/generated/1.19/client/concierge/informers/externalversions/authentication/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
-	"go.pinniped.dev/internal/controller/authenticator"
+	pinnipedauthenticator "go.pinniped.dev/internal/controller/authenticator"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
 )
@@ -43,6 +45,16 @@ func defaultSupportedSigningAlgos() []string {
 		// to be as seamless as possible, so we include this algorithm by default.
 		string(jose.ES256),
 	}
+}
+
+type tokenAuthenticatorCloser interface {
+	authenticator.Token
+	pinnipedauthenticator.Closer
+}
+
+type jwtAuthenticator struct {
+	tokenAuthenticatorCloser
+	spec *auth1alpha1.JWTAuthenticatorSpec
 }
 
 // New instantiates a new controllerlib.Controller which will populate the provided authncache.Cache.
@@ -92,15 +104,25 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 		Name:      ctx.Key.Name,
 	}
 
-	// If this authenticator already exists, then we gotta make sure we close the old authenticator so
-	// we don't leak goroutines.
+	// If this authenticator already exists, then only recreate it if is different from the desired
+	// authenticator. We don't want to be creating a new authenticator for every resync period.
+	//
+	// If we do need to recreate the authenticator, then make sure we close the old one to avoid
+	// goroutine leaks.
 	if value := c.cache.Get(cacheKey); value != nil {
-		if closer, ok := value.(authenticator.Closer); ok {
-			closer.Close()
+		jwtAuthenticator := c.extractValueAsJWTAuthenticator(value)
+		if jwtAuthenticator != nil {
+			if reflect.DeepEqual(jwtAuthenticator.spec, &obj.Spec) {
+				c.log.WithValues("jwtAuthenticator", klog.KObj(obj), "issuer", obj.Spec.Issuer).Info("actual jwt authenticator and desired jwt authenticator are the same")
+				return nil
+			}
+			jwtAuthenticator.Close()
 		}
 	}
 
-	jwtAuthenticator, err := newJWTAuthenticator(&obj.Spec)
+	// Make a deep copy of the spec so we aren't storing pointers to something that the informer cache
+	// may mutate!
+	jwtAuthenticator, err := newJWTAuthenticator(obj.Spec.DeepCopy())
 	if err != nil {
 		return fmt.Errorf("failed to build jwt authenticator: %w", err)
 	}
@@ -110,9 +132,22 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 	return nil
 }
 
+func (c *controller) extractValueAsJWTAuthenticator(value authncache.Value) *jwtAuthenticator {
+	jwtAuthenticator, ok := value.(*jwtAuthenticator)
+	if !ok {
+		actualType := "<nil>"
+		if t := reflect.TypeOf(value); t != nil {
+			actualType = t.String()
+		}
+		c.log.WithValues("actualType", actualType).Info("wrong JWT authenticator type in cache")
+		return nil
+	}
+	return jwtAuthenticator
+}
+
 // newJWTAuthenticator creates a jwt authenticator from the provided spec.
-func newJWTAuthenticator(spec *auth1alpha1.JWTAuthenticatorSpec) (*oidc.Authenticator, error) {
-	caBundle, err := authenticator.CABundle(spec.TLS)
+func newJWTAuthenticator(spec *auth1alpha1.JWTAuthenticatorSpec) (*jwtAuthenticator, error) {
+	caBundle, err := pinnipedauthenticator.CABundle(spec.TLS)
 	if err != nil {
 		return nil, fmt.Errorf("invalid TLS configuration: %w", err)
 	}
@@ -135,7 +170,7 @@ func newJWTAuthenticator(spec *auth1alpha1.JWTAuthenticatorSpec) (*oidc.Authenti
 		caFile = temp.Name()
 	}
 
-	return oidc.New(oidc.Options{
+	authenticator, err := oidc.New(oidc.Options{
 		IssuerURL:            spec.Issuer,
 		ClientID:             spec.Audience,
 		UsernameClaim:        defaultUsernameClaim,
@@ -143,4 +178,12 @@ func newJWTAuthenticator(spec *auth1alpha1.JWTAuthenticatorSpec) (*oidc.Authenti
 		SupportedSigningAlgs: defaultSupportedSigningAlgos(),
 		CAFile:               caFile,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("could not initialize authenticator: %w", err)
+	}
+
+	return &jwtAuthenticator{
+		tokenAuthenticatorCloser: authenticator,
+		spec:                     spec,
+	}, nil
 }

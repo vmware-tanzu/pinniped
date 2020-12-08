@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/coreos/go-oidc"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
@@ -49,7 +50,7 @@ func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...oid
 	cmd.Flags().StringVar(&issuer, "issuer", "", "OpenID Connect issuer URL.")
 	cmd.Flags().StringVar(&clientID, "client-id", "", "OpenID Connect client ID.")
 	cmd.Flags().Uint16Var(&listenPort, "listen-port", 0, "TCP port for localhost listener (authorization code flow only).")
-	cmd.Flags().StringSliceVar(&scopes, "scopes", []string{"offline_access", "openid"}, "OIDC scopes to request during login.")
+	cmd.Flags().StringSliceVar(&scopes, "scopes", []string{oidc.ScopeOfflineAccess, oidc.ScopeOpenID}, "OIDC scopes to request during login.")
 	cmd.Flags().BoolVar(&skipBrowser, "skip-browser", false, "Skip opening the browser (just print the URL).")
 	cmd.Flags().StringVar(&sessionCachePath, "session-cache", filepath.Join(mustGetConfigDir(), "sessions.yaml"), "Path to session cache file.")
 	cmd.Flags().StringSliceVar(&caBundlePaths, "ca-bundle", nil, "Path to TLS certificate authority bundle (PEM format, optional, can be repeated).")

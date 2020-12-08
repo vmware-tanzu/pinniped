@@ -66,7 +66,8 @@ const (
 
 var (
 	upstreamGroupMembership        = []string{"test-pinniped-group-0", "test-pinniped-group-1"}
-	happyDownstreamScopesRequested = []string{"openid", "profile", "email"}
+	happyDownstreamScopesRequested = []string{"openid"}
+	happyDownstreamScopesGranted   = []string{"openid"}
 
 	happyDownstreamRequestParamsQuery = url.Values{
 		"response_type":         []string{"code"},
@@ -127,7 +128,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantStatus                        int
 		wantBody                          string
 		wantRedirectLocationRegexp        string
-		wantGrantedOpenidScope            bool
+		wantDownstreamGrantedScopes       []string
 		wantDownstreamIDTokenSubject      string
 		wantDownstreamIDTokenGroups       []string
 		wantDownstreamRequestedScopes     []string
@@ -145,11 +146,11 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
-			wantGrantedOpenidScope:            true,
 			wantBody:                          "",
 			wantDownstreamIDTokenSubject:      upstreamUsername,
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
@@ -163,11 +164,11 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
-			wantGrantedOpenidScope:            true,
 			wantBody:                          "",
 			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
 			wantDownstreamIDTokenGroups:       nil,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
@@ -181,11 +182,11 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
-			wantGrantedOpenidScope:            true,
 			wantBody:                          "",
 			wantDownstreamIDTokenSubject:      upstreamSubject,
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
@@ -310,6 +311,28 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyDownstreamState,
 			wantDownstreamIDTokenSubject:      upstreamUsername,
 			wantDownstreamRequestedScopes:     []string{"profile", "email"},
+			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
+			name:   "state's downstream auth params also included offline_access scope",
+			idp:    happyUpstream().Build(),
+			method: http.MethodGet,
+			path: newRequestPath().
+				WithState(
+					happyUpstreamStateParam().
+						WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery, map[string]string{"scope": "openid offline_access"}).Encode()).
+						Build(t, happyStateCodec),
+				).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusFound,
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid%20offline_access&state=` + happyDownstreamState,
+			wantDownstreamIDTokenSubject:      upstreamUsername,
+			wantDownstreamRequestedScopes:     []string{"openid", "offline_access"},
+			wantDownstreamGrantedScopes:       []string{"openid", "offline_access"},
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
@@ -481,7 +504,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 				// Several Secrets should have been created
 				expectedNumberOfCreatedSecrets := 2
-				if test.wantGrantedOpenidScope {
+				if includesOpenIDScope(test.wantDownstreamGrantedScopes) {
 					expectedNumberOfCreatedSecrets++
 				}
 				require.Len(t, client.Actions(), expectedNumberOfCreatedSecrets)
@@ -493,7 +516,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					t,
 					oauthStore,
 					authcodeDataAndSignature[1], // Authcode store key is authcode signature
-					test.wantGrantedOpenidScope,
+					test.wantDownstreamGrantedScopes,
 					test.wantDownstreamIDTokenSubject,
 					test.wantDownstreamIDTokenGroups,
 					test.wantDownstreamRequestedScopes,
@@ -513,7 +536,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				)
 
 				// One IDSession should have been stored, if the downstream actually requested the "openid" scope
-				if test.wantGrantedOpenidScope {
+				if includesOpenIDScope(test.wantDownstreamGrantedScopes) {
 					testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
 
 					validateIDSessionStorage(
@@ -528,6 +551,15 @@ func TestCallbackEndpoint(t *testing.T) {
 			}
 		})
 	}
+}
+
+func includesOpenIDScope(scopes []string) bool {
+	for _, scope := range scopes {
+		if scope == "openid" {
+			return true
+		}
+	}
+	return false
 }
 
 type requestPath struct {
@@ -704,7 +736,7 @@ func validateAuthcodeStorage(
 	t *testing.T,
 	oauthStore *oidc.KubeStorage,
 	storeKey string,
-	wantGrantedOpenidScope bool,
+	wantDownstreamGrantedScopes []string,
 	wantDownstreamIDTokenSubject string,
 	wantDownstreamIDTokenGroups []string,
 	wantDownstreamRequestedScopes []string,
@@ -719,11 +751,7 @@ func validateAuthcodeStorage(
 	storedRequestFromAuthcode, storedSessionFromAuthcode := castStoredAuthorizeRequest(t, storedAuthorizeRequestFromAuthcode)
 
 	// Check which scopes were granted.
-	if wantGrantedOpenidScope {
-		require.Contains(t, storedRequestFromAuthcode.GetGrantedScopes(), "openid")
-	} else {
-		require.NotContains(t, storedRequestFromAuthcode.GetGrantedScopes(), "openid")
-	}
+	require.ElementsMatch(t, wantDownstreamGrantedScopes, storedRequestFromAuthcode.GetGrantedScopes())
 
 	// Check all the other fields of the stored request.
 	require.NotEmpty(t, storedRequestFromAuthcode.ID)

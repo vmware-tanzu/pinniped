@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"time"
 
+	coreosoidc "github.com/coreos/go-oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
@@ -70,8 +71,9 @@ func NewHandler(
 			return httperr.New(http.StatusBadRequest, "error using state downstream auth params")
 		}
 
-		// Grant the openid scope only if it was requested.
-		grantOpenIDScopeIfRequested(authorizeRequester)
+		// Automatically grant the openid and offline_access scopes, but only if they were requested.
+		oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOpenID)
+		oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOfflineAccess)
 
 		token, err := upstreamIDPConfig.ExchangeAuthcodeAndValidateTokens(
 			r.Context(),
@@ -187,14 +189,6 @@ func readState(r *http.Request, stateDecoder oidc.Decoder) (*oidc.UpstreamStateP
 	}
 
 	return &state, nil
-}
-
-func grantOpenIDScopeIfRequested(authorizeRequester fosite.AuthorizeRequester) {
-	for _, scope := range authorizeRequester.GetRequestedScopes() {
-		if scope == "openid" {
-			authorizeRequester.GrantScope(scope)
-		}
-	}
 }
 
 func getUsernameFromUpstreamIDToken(

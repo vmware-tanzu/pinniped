@@ -119,7 +119,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		Name:             "some-idp",
 		ClientID:         "some-client-id",
 		AuthorizationURL: *upstreamAuthURL,
-		Scopes:           []string{"scope1", "scope2"},
+		Scopes:           []string{"scope1", "scope2"}, // the scopes to request when starting the upstream authorization flow
 	}
 
 	// Configure fosite the same way that the production code would, using NullStorage to turn off storage.
@@ -368,6 +368,26 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantCSRFValueInCookieHeader: happyCSRF,
 			wantLocationHeader: expectedRedirectLocation(expectedUpstreamStateParam(map[string]string{
 				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
+			}, "", "")),
+			wantUpstreamStateParamInLocationHeader: true,
+			wantBodyStringWithLocationInHref:       true,
+		},
+		{
+			name:                        "happy path when downstream requested scopes include offline_access",
+			issuer:                      downstreamIssuer,
+			idpListGetter:               oidctestutil.NewIDPListGetter(&upstreamOIDCIdentityProvider),
+			generateCSRF:                happyCSRFGenerator,
+			generatePKCE:                happyPKCEGenerator,
+			generateNonce:               happyNonceGenerator,
+			stateEncoder:                happyStateEncoder,
+			cookieEncoder:               happyCookieEncoder,
+			method:                      http.MethodGet,
+			path:                        modifiedHappyGetRequestPath(map[string]string{"scope": "openid offline_access"}),
+			wantStatus:                  http.StatusFound,
+			wantContentType:             "text/html; charset=utf-8",
+			wantCSRFValueInCookieHeader: happyCSRF,
+			wantLocationHeader: expectedRedirectLocation(expectedUpstreamStateParam(map[string]string{
+				"scope": "openid offline_access",
 			}, "", "")),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,

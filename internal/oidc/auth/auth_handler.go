@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	coreosoidc "github.com/coreos/go-oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
@@ -57,7 +58,10 @@ func NewHandler(
 		}
 
 		// Grant the openid scope (for now) if they asked for it so that `NewAuthorizeResponse` will perform its OIDC validations.
-		grantOpenIDScopeIfRequested(authorizeRequester)
+		oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOpenID)
+		// There don't seem to be any validations inside `NewAuthorizeResponse` related to the offline_access scope
+		// at this time, however we will temporarily grant the scope just in case that changes in a future release of fosite.
+		oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOfflineAccess)
 
 		now := time.Now()
 		_, err = oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &openid.DefaultSession{
@@ -146,14 +150,6 @@ func readCSRFCookie(r *http.Request, codec oidc.Codec) csrftoken.CSRFToken {
 	}
 
 	return csrfFromCookie
-}
-
-func grantOpenIDScopeIfRequested(authorizeRequester fosite.AuthorizeRequester) {
-	for _, scope := range authorizeRequester.GetRequestedScopes() {
-		if scope == "openid" {
-			authorizeRequester.GrantScope(scope)
-		}
-	}
 }
 
 func chooseUpstreamIDP(idpListGetter oidc.IDPListGetter) (provider.UpstreamOIDCIdentityProviderI, error) {

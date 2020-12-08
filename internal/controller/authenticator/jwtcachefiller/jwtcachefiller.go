@@ -85,17 +85,27 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("failed to get JWTAuthenticator %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
 	}
 
+	cacheKey := authncache.Key{
+		APIGroup:  auth1alpha1.GroupName,
+		Kind:      "JWTAuthenticator",
+		Namespace: ctx.Key.Namespace,
+		Name:      ctx.Key.Name,
+	}
+
+	// If this authenticator already exists, then we gotta make sure we close the old authenticator so
+	// we don't leak goroutines.
+	if value := c.cache.Get(cacheKey); value != nil {
+		if closer, ok := value.(authenticator.Closer); ok {
+			closer.Close()
+		}
+	}
+
 	jwtAuthenticator, err := newJWTAuthenticator(&obj.Spec)
 	if err != nil {
 		return fmt.Errorf("failed to build jwt authenticator: %w", err)
 	}
 
-	c.cache.Store(authncache.Key{
-		APIGroup:  auth1alpha1.GroupName,
-		Kind:      "JWTAuthenticator",
-		Namespace: ctx.Key.Namespace,
-		Name:      ctx.Key.Name,
-	}, jwtAuthenticator)
+	c.cache.Store(cacheKey, jwtAuthenticator)
 	c.log.WithValues("jwtAuthenticator", klog.KObj(obj), "issuer", obj.Spec.Issuer).Info("added new jwt authenticator")
 	return nil
 }

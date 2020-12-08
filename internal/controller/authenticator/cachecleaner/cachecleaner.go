@@ -14,15 +14,10 @@ import (
 	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 	authinformers "go.pinniped.dev/generated/1.19/client/concierge/informers/externalversions/authentication/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	"go.pinniped.dev/internal/controller/authenticator"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
 )
-
-// closable is used to detect when a cache value has a Close() method on it. We use this to
-// determine if we should call the Close() method on a cache value upon deleting it from the cache.
-type closable interface {
-	Close()
-}
 
 // New instantiates a new controllerlib.Controller which will garbage collect authenticators from the provided Cache.
 func New(
@@ -108,8 +103,8 @@ func (c *controller) Sync(_ controllerlib.Context) error {
 			).Info("deleting authenticator from cache")
 
 			value := c.cache.Get(key)
-			if closable, ok := value.(closable); ok {
-				closable.Close()
+			if closer, ok := value.(authenticator.Closer); ok {
+				closer.Close()
 			}
 
 			c.cache.Delete(key)

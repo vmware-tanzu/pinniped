@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,6 +18,7 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/mocks/mocktokenauthenticatorcloser"
 	"go.pinniped.dev/internal/testutil/testlogger"
 )
 
@@ -57,16 +59,16 @@ func TestController(t *testing.T) {
 	tests := []struct {
 		name          string
 		objects       []runtime.Object
-		initialCache  map[authncache.Key]authncache.Value
+		initialCache  func(t *testing.T, cache *authncache.Cache)
 		wantErr       string
 		wantLogs      []string
 		wantCacheKeys []authncache.Key
 	}{
 		{
 			name: "no change",
-			initialCache: map[authncache.Key]authncache.Value{
-				testWebhookKey1:          nil,
-				testJWTAuthenticatorKey1: nil,
+			initialCache: func(t *testing.T, cache *authncache.Cache) {
+				cache.Store(testWebhookKey1, nil)
+				cache.Store(testJWTAuthenticatorKey1, nil)
 			},
 			objects: []runtime.Object{
 				&authv1alpha.WebhookAuthenticator{
@@ -85,8 +87,7 @@ func TestController(t *testing.T) {
 			wantCacheKeys: []authncache.Key{testWebhookKey1, testJWTAuthenticatorKey1},
 		},
 		{
-			name:         "authenticators not yet added",
-			initialCache: nil,
+			name: "authenticators not yet added",
 			objects: []runtime.Object{
 				&authv1alpha.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -117,12 +118,12 @@ func TestController(t *testing.T) {
 		},
 		{
 			name: "successful cleanup",
-			initialCache: map[authncache.Key]authncache.Value{
-				testWebhookKey1:          nil,
-				testWebhookKey2:          nil,
-				testJWTAuthenticatorKey1: newClosableCacheValue(t, "closable1", 0),
-				testJWTAuthenticatorKey2: newClosableCacheValue(t, "closable2", 1),
-				testKeyUnknownType:       nil,
+			initialCache: func(t *testing.T, cache *authncache.Cache) {
+				cache.Store(testWebhookKey1, nil)
+				cache.Store(testWebhookKey2, nil)
+				cache.Store(testJWTAuthenticatorKey1, newClosableCacheValue(t, 0))
+				cache.Store(testJWTAuthenticatorKey2, newClosableCacheValue(t, 1))
+				cache.Store(testKeyUnknownType, nil)
 			},
 			objects: []runtime.Object{
 				&authv1alpha.WebhookAuthenticator{
@@ -153,8 +154,8 @@ func TestController(t *testing.T) {
 			fakeClient := pinnipedfake.NewSimpleClientset(tt.objects...)
 			informers := pinnipedinformers.NewSharedInformerFactory(fakeClient, 0)
 			cache := authncache.New()
-			for k, v := range tt.initialCache {
-				cache.Store(k, v)
+			if tt.initialCache != nil {
+				tt.initialCache(t, cache)
 			}
 			testLog := testlogger.New(t)
 
@@ -188,20 +189,10 @@ func TestController(t *testing.T) {
 	}
 }
 
-func newClosableCacheValue(t *testing.T, name string, wantCloses int) authncache.Value {
-	t.Helper()
-	c := &closableCacheValue{}
-	t.Cleanup(func() {
-		require.Equalf(t, wantCloses, c.closeCallCount, "expected %s.Close() to be called %d times", name, wantCloses)
-	})
-	return c
-}
-
-type closableCacheValue struct {
-	authncache.Value
-	closeCallCount int
-}
-
-func (c *closableCacheValue) Close() {
-	c.closeCallCount++
+func newClosableCacheValue(t *testing.T, wantCloses int) authncache.Value {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	tac := mocktokenauthenticatorcloser.NewMockTokenAuthenticatorCloser(ctrl)
+	tac.EXPECT().Close().Times(wantCloses)
+	return tac
 }

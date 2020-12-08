@@ -21,6 +21,7 @@ import (
 
 	"gopkg.in/square/go-jose.v2/jwt"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,6 +34,7 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/mocks/mocktokenauthenticatorcloser"
 	"go.pinniped.dev/internal/testutil/testlogger"
 )
 
@@ -41,6 +43,7 @@ func TestController(t *testing.T) {
 
 	tests := []struct {
 		name              string
+		cache             func(*authncache.Cache)
 		syncKey           controllerlib.Key
 		jwtAuthenticators []runtime.Object
 		wantErr           string
@@ -56,6 +59,38 @@ func TestController(t *testing.T) {
 		},
 		{
 			name:    "valid jwt authenticator with CA",
+			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			jwtAuthenticators: []runtime.Object{
+				&auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "test-namespace",
+						Name:      "test-name",
+					},
+					Spec: auth1alpha1.JWTAuthenticatorSpec{
+						Issuer:   "https://some-issuer.com",
+						Audience: "some-audience",
+						TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURVVENDQWptZ0F3SUJBZ0lWQUpzNStTbVRtaTJXeUI0bGJJRXBXaUs5a1RkUE1BMEdDU3FHU0liM0RRRUIKQ3dVQU1COHhDekFKQmdOVkJBWVRBbFZUTVJBd0RnWURWUVFLREFkUWFYWnZkR0ZzTUI0WERUSXdNRFV3TkRFMgpNamMxT0ZvWERUSTBNRFV3TlRFMk1qYzFPRm93SHpFTE1Ba0dBMVVFQmhNQ1ZWTXhFREFPQmdOVkJBb01CMUJwCmRtOTBZV3d3Z2dFaU1BMEdDU3FHU0liM0RRRUJBUVVBQTRJQkR3QXdnZ0VLQW9JQkFRRERZWmZvWGR4Z2NXTEMKZEJtbHB5a0tBaG9JMlBuUWtsVFNXMno1cGcwaXJjOGFRL1E3MXZzMTRZYStmdWtFTGlvOTRZYWw4R01DdVFrbApMZ3AvUEE5N1VYelhQNDBpK25iNXcwRGpwWWd2dU9KQXJXMno2MFRnWE5NSFh3VHk4ME1SZEhpUFVWZ0VZd0JpCmtkNThzdEFVS1Y1MnBQTU1reTJjNy9BcFhJNmRXR2xjalUvaFBsNmtpRzZ5dEw2REtGYjJQRWV3MmdJM3pHZ2IKOFVVbnA1V05DZDd2WjNVY0ZHNXlsZEd3aGc3cnZ4U1ZLWi9WOEhCMGJmbjlxamlrSVcxWFM4dzdpUUNlQmdQMApYZWhKZmVITlZJaTJtZlczNlVQbWpMdnVKaGpqNDIrdFBQWndvdDkzdWtlcEgvbWpHcFJEVm9wamJyWGlpTUYrCkYxdnlPNGMxQWdNQkFBR2pnWU13Z1lBd0hRWURWUjBPQkJZRUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1IKTUI4R0ExVWRJd1FZTUJhQUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1JNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQ0JnZ3JCZ0VGQlFjREFUQVBCZ05WSFJNQkFmOEVCVEFEQVFIL01BNEdBMVVkRHdFQi93UUVBd0lCCkJqQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFYbEh4M2tIMDZwY2NDTDlEVE5qTnBCYnlVSytGd2R6T2IwWFYKcmpNaGtxdHVmdEpUUnR5T3hKZ0ZKNXhUR3pCdEtKamcrVU1pczBOV0t0VDBNWThVMU45U2c5SDl0RFpHRHBjVQpxMlVRU0Y4dXRQMVR3dnJIUzIrdzB2MUoxdHgrTEFiU0lmWmJCV0xXQ21EODUzRlVoWlFZekkvYXpFM28vd0p1CmlPUklMdUpNUk5vNlBXY3VLZmRFVkhaS1RTWnk3a25FcHNidGtsN3EwRE91eUFWdG9HVnlkb3VUR0FOdFhXK2YKczNUSTJjKzErZXg3L2RZOEJGQTFzNWFUOG5vZnU3T1RTTzdiS1kzSkRBUHZOeFQzKzVZUXJwNGR1Nmh0YUFMbAppOHNaRkhidmxpd2EzdlhxL3p1Y2JEaHEzQzBhZnAzV2ZwRGxwSlpvLy9QUUFKaTZLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"},
+					},
+				},
+			},
+			wantLogs: []string{
+				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="https://some-issuer.com" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
+			},
+			wantCacheEntries: 1,
+		},
+		{
+			name: "updating jwt authenticator closes previous instance",
+			cache: func(cache *authncache.Cache) {
+				cache.Store(
+					authncache.Key{
+						Name:      "test-name",
+						Namespace: "test-namespace",
+						Kind:      "JWTAuthenticator",
+						APIGroup:  auth1alpha1.SchemeGroupVersion.Group,
+					},
+					newClosableCacheValue(t, 1),
+				)
+			},
 			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
@@ -123,6 +158,10 @@ func TestController(t *testing.T) {
 			informers := pinnipedinformers.NewSharedInformerFactory(fakeClient, 0)
 			cache := authncache.New()
 			testLog := testlogger.New(t)
+
+			if tt.cache != nil {
+				tt.cache(cache)
+			}
 
 			controller := New(cache, informers.Authentication().V1alpha1().JWTAuthenticators(), testLog)
 
@@ -432,7 +471,13 @@ func createJWT(
 	jwt, err := builder.CompactSerialize()
 	require.NoError(t, err)
 
-	t.Log("andrew:", jwt)
-
 	return jwt
+}
+
+func newClosableCacheValue(t *testing.T, wantCloses int) authncache.Value {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	tac := mocktokenauthenticatorcloser.NewMockTokenAuthenticatorCloser(ctrl)
+	tac.EXPECT().Close().Times(wantCloses)
+	return tac
 }

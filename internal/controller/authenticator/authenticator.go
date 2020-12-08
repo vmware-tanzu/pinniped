@@ -10,6 +10,14 @@ import (
 	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 )
 
+// Closer is a type that can be closed impotently.
+//
+// This type is slightly different from io.Closer, because io.Closer can return an error and is not
+// necessarily idempotent.
+type Closer interface {
+	Close()
+}
+
 // CABundle returns a PEM-encoded CA bundle from the provided spec. If the provided spec is nil, a
 // nil CA bundle will be returned. If the provided spec contains a CA bundle that is not properly
 // encoded, an error will be returned.

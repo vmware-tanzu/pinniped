@@ -6,16 +6,19 @@ package oidcclient
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc"
 	"github.com/pkg/browser"
 	"golang.org/x/oauth2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
@@ -46,6 +49,8 @@ type handlerState struct {
 	scopes   []string
 	cache    SessionCache
 
+	requestedAudience string
+
 	httpClient *http.Client
 
 	// Parameters of the localhost listener.
@@ -60,11 +65,12 @@ type handlerState struct {
 	pkce         pkce.Code
 
 	// External calls for things.
-	generateState func() (state.State, error)
-	generatePKCE  func() (pkce.Code, error)
-	generateNonce func() (nonce.Nonce, error)
-	openURL       func(string) error
-	getProvider   func(*oauth2.Config, *oidc.Provider, *http.Client) provider.UpstreamOIDCIdentityProviderI
+	generateState   func() (state.State, error)
+	generatePKCE    func() (pkce.Code, error)
+	generateNonce   func() (nonce.Nonce, error)
+	openURL         func(string) error
+	getProvider     func(*oauth2.Config, *oidc.Provider, *http.Client) provider.UpstreamOIDCIdentityProviderI
+	validateIDToken func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error)
 
 	callbacks chan callbackResult
 }
@@ -148,6 +154,14 @@ func WithClient(httpClient *http.Client) Option {
 	}
 }
 
+// WithRequestAudience causes the login flow to perform an additional token exchange using the RFC8693 STS flow.
+func WithRequestAudience(audience string) Option {
+	return func(h *handlerState) error {
+		h.requestedAudience = audience
+		return nil
+	}
+}
+
 // nopCache is a SessionCache that doesn't actually do anything.
 type nopCache struct{}
 
@@ -173,6 +187,9 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		generatePKCE:  pkce.Generate,
 		openURL:       browser.OpenURL,
 		getProvider:   upstreamoidc.New,
+		validateIDToken: func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error) {
+			return provider.Verifier(&oidc.Config{ClientID: audience}).Verify(ctx, token)
+		},
 	}
 	for _, opt := range opts {
 		if err := opt(&h); err != nil {
@@ -201,6 +218,26 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		return nil, err
 	}
 
+	// Do the basic login to get an access and ID token issued to our main client ID.
+	baseToken, err := h.baseLogin()
+	if err != nil {
+		return nil, err
+	}
+
+	// If there is no requested audience, or the requested audience matches the one we got, we're done.
+	if h.requestedAudience == "" || (baseToken.IDToken != nil && h.requestedAudience == baseToken.IDToken.Claims["aud"]) {
+		return baseToken, err
+	}
+
+	// Perform the RFC8693 token exchange.
+	exchangedToken, err := h.tokenExchangeRFC8693(baseToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to exchange token: %w", err)
+	}
+	return exchangedToken, nil
+}
+
+func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 	// Check the cache for a previous session issued with the same parameters.
 	sort.Strings(h.scopes)
 	cacheKey := SessionCacheKey{
@@ -217,21 +254,13 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 	}
 
 	// Perform OIDC discovery.
-	h.provider, err = oidc.NewProvider(h.ctx, h.issuer)
-	if err != nil {
-		return nil, fmt.Errorf("could not perform OIDC discovery for %q: %w", h.issuer, err)
-	}
-
-	// Build an OAuth2 configuration based on the OIDC discovery data and our callback endpoint.
-	h.oauth2Config = &oauth2.Config{
-		ClientID: h.clientID,
-		Endpoint: h.provider.Endpoint(),
-		Scopes:   h.scopes,
+	if err := h.initOIDCDiscovery(); err != nil {
+		return nil, err
 	}
 
 	// If there was a cached refresh token, attempt to use the refresh flow instead of a fresh login.
 	if cached != nil && cached.RefreshToken != nil && cached.RefreshToken.Token != "" {
-		freshToken, err := h.handleRefresh(ctx, cached.RefreshToken)
+		freshToken, err := h.handleRefresh(h.ctx, cached.RefreshToken)
 		if err != nil {
 			return nil, err
 		}
@@ -280,6 +309,95 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		h.cache.PutToken(cacheKey, callback.token)
 		return callback.token, nil
 	}
+}
+
+func (h *handlerState) initOIDCDiscovery() error {
+	// Make this method idempotent so it can be called in multiple cases with no extra network requests.
+	if h.provider != nil {
+		return nil
+	}
+
+	var err error
+	h.provider, err = oidc.NewProvider(h.ctx, h.issuer)
+	if err != nil {
+		return fmt.Errorf("could not perform OIDC discovery for %q: %w", h.issuer, err)
+	}
+
+	// Build an OAuth2 configuration based on the OIDC discovery data and our callback endpoint.
+	h.oauth2Config = &oauth2.Config{
+		ClientID: h.clientID,
+		Endpoint: h.provider.Endpoint(),
+		Scopes:   h.scopes,
+	}
+	return nil
+}
+
+func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidctypes.Token, error) {
+	// Perform OIDC discovery. This may have already been performed if there was not a cached base token.
+	if err := h.initOIDCDiscovery(); err != nil {
+		return nil, err
+	}
+
+	// Use the base access token to authenticate our request. This will populate the "authorization" header.
+	client := oauth2.NewClient(h.ctx, oauth2.StaticTokenSource(&oauth2.Token{AccessToken: baseToken.AccessToken.Token}))
+
+	// Form the HTTP POST request with the parameters specified by RFC8693.
+	reqBody := strings.NewReader(url.Values{
+		"grant_type":           []string{"urn:ietf:params:oauth:grant-type:token-exchange"},
+		"audience":             []string{h.requestedAudience},
+		"subject_token":        []string{baseToken.AccessToken.Token},
+		"subject_token_type":   []string{"urn:ietf:params:oauth:token-type:access_token"},
+		"requested_token_type": []string{"urn:ietf:params:oauth:token-type:jwt"},
+	}.Encode())
+	req, err := http.NewRequestWithContext(h.ctx, http.MethodPost, h.oauth2Config.Endpoint.TokenURL, reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("could not build RFC8693 request: %w", err)
+	}
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+
+	// Perform the request.
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Expect an HTTP 200 response with "application/json" content type.
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected HTTP response status %d", resp.StatusCode)
+	}
+	if contentType := resp.Header.Get("content-type"); contentType != "application/json" {
+		return nil, fmt.Errorf("unexpected HTTP response content type %q", contentType)
+	}
+
+	// Decode the JSON response body.
+	var respBody struct {
+		AccessToken     string `json:"access_token"`
+		IssuedTokenType string `json:"issued_token_type"`
+		TokenType       string `json:"token_type"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Expect the token_type and issued_token_type response parameters to have some known values.
+	if respBody.TokenType != "N_A" {
+		return nil, fmt.Errorf("got unexpected token_type %q", respBody.TokenType)
+	}
+	if respBody.IssuedTokenType != "urn:ietf:params:oauth:token-type:jwt" {
+		return nil, fmt.Errorf("got unexpected issued_token_type %q", respBody.IssuedTokenType)
+	}
+
+	// Validate the returned JWT to make sure we got the audience we wanted and extract the expiration time.
+	stsToken, err := h.validateIDToken(h.ctx, h.provider, h.requestedAudience, respBody.AccessToken)
+	if err != nil {
+		return nil, fmt.Errorf("received invalid JWT: %w", err)
+	}
+
+	return &oidctypes.Token{IDToken: &oidctypes.IDToken{
+		Token:  respBody.AccessToken,
+		Expiry: metav1.NewTime(stsToken.Expiry),
+	}}, nil
 }
 
 func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *oidctypes.RefreshToken) (*oidctypes.Token, error) {

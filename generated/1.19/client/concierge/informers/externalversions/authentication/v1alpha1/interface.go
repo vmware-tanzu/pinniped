@@ -11,6 +11,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// JWTAuthenticators returns a JWTAuthenticatorInformer.
+	JWTAuthenticators() JWTAuthenticatorInformer
 	// WebhookAuthenticators returns a WebhookAuthenticatorInformer.
 	WebhookAuthenticators() WebhookAuthenticatorInformer
 }
@@ -24,6 +26,11 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// JWTAuthenticators returns a JWTAuthenticatorInformer.
+func (v *version) JWTAuthenticators() JWTAuthenticatorInformer {
+	return &jWTAuthenticatorInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // WebhookAuthenticators returns a WebhookAuthenticatorInformer.

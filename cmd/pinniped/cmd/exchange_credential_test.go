@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
+	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -46,7 +47,7 @@ var (
 		  - PINNIPED_NAMESPACE: the namespace of the authenticator to authenticate
 		    against
 		  - PINNIPED_AUTHENTICATOR_TYPE: the type of authenticator to authenticate
-		    against (e.g., "webhook")
+		    against (e.g., "webhook", "jwt")
 		  - PINNIPED_AUTHENTICATOR_NAME: the name of the authenticator to authenticate
 		    against
 		  - PINNIPED_CA_BUNDLE: the CA bundle to trust when calling
@@ -193,7 +194,7 @@ func TestExchangeCredential(t *testing.T) {
 			it("returns an error when PINNIPED_AUTHENTICATOR_TYPE is missing", func() {
 				fakeEnv["PINNIPED_AUTHENTICATOR_TYPE"] = "invalid"
 				err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
-				r.EqualError(err, `invalid authenticator type: "invalid", supported values are "webhook"`)
+				r.EqualError(err, `invalid authenticator type: "invalid", supported values are "webhook" and "jwt"`)
 			})
 		})
 
@@ -290,6 +291,51 @@ func TestExchangeCredential(t *testing.T) {
 				  }
 				}`
 				r.JSONEq(expected, buffer.String())
+			})
+		})
+
+		when("the authenticator info is passed", func() {
+			var actualAuthenticator corev1.TypedLocalObjectReference
+
+			it.Before(func() {
+				tokenExchanger = func(ctx context.Context, namespace string, authenticator corev1.TypedLocalObjectReference, token, caBundle, apiEndpoint string) (*clientauthenticationv1beta1.ExecCredential, error) {
+					actualAuthenticator = authenticator
+					return nil, nil
+				}
+			})
+
+			when("the authenticator is of type webhook", func() {
+				it.Before(func() {
+					fakeEnv["PINNIPED_AUTHENTICATOR_TYPE"] = "webhook"
+					fakeEnv["PINNIPED_AUTHENTICATOR_NAME"] = "some-webhook-name"
+				})
+
+				it("passes the correct authenticator type to the token exchanger", func() {
+					err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
+					r.NoError(err)
+					require.Equal(t, corev1.TypedLocalObjectReference{
+						APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
+						Kind:     "WebhookAuthenticator",
+						Name:     "some-webhook-name",
+					}, actualAuthenticator)
+				})
+			})
+
+			when("the authenticator is of type jwt", func() {
+				it.Before(func() {
+					fakeEnv["PINNIPED_AUTHENTICATOR_TYPE"] = "jwt"
+					fakeEnv["PINNIPED_AUTHENTICATOR_NAME"] = "some-jwt-authenticator-name"
+				})
+
+				it("passes the correct authenticator type to the token exchanger", func() {
+					err := exchangeCredential(envGetter, tokenExchanger, buffer, 30*time.Second)
+					r.NoError(err)
+					require.Equal(t, corev1.TypedLocalObjectReference{
+						APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
+						Kind:     "JWTAuthenticator",
+						Name:     "some-jwt-authenticator-name",
+					}, actualAuthenticator)
+				})
 			})
 		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))

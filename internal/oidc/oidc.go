@@ -84,7 +84,7 @@ func PinnipedCLIOIDCClient() *fosite.DefaultOpenIDConnectClient {
 			Public:        true,
 			RedirectURIs:  []string{"http://127.0.0.1/callback"},
 			ResponseTypes: []string{"code"},
-			GrantTypes:    []string{"authorization_code"},
+			GrantTypes:    []string{"authorization_code", "refresh_token"},
 			Scopes:        []string{coreosoidc.ScopeOpenID, coreosoidc.ScopeOfflineAccess, "profile", "email"},
 		},
 		TokenEndpointAuthMethod: "none",
@@ -112,8 +112,9 @@ func FositeOauth2Helper(
 		EnforcePKCE:              true,                      // follow current set of best practices and always require PKCE
 		AllowedPromptValues:      []string{"none"},          // TODO unclear what we should set here
 
-		RefreshTokenScopes:  nil, // TODO decide what makes sense when we add refresh token support
-		MinParameterEntropy: 32,  // 256 bits seems about right
+		RefreshTokenScopes: []string{coreosoidc.ScopeOfflineAccess}, // as per https://openid.net/specs/openid-connect-core-1_0.html#OfflineAccess
+
+		MinParameterEntropy: 32, // 256 bits seems about right
 	}
 
 	return compose.Compose(

@@ -10,7 +10,7 @@ import (
 	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 )
 
-// Closer is a type that can be closed impotently.
+// Closer is a type that can be closed idempotently.
 //
 // This type is slightly different from io.Closer, because io.Closer can return an error and is not
 // necessarily idempotent.

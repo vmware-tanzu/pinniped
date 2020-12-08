@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	jwtpkg "gopkg.in/square/go-jose.v2/jwt"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,48 +45,89 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 
-	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
+	tests := []struct {
+		name          string
+		authenticator func(t *testing.T) corev1.TypedLocalObjectReference
+		token         func(t *testing.T) (token string, username string, groups []string)
+	}{
+		{
+			name: "webhook",
+			authenticator: func(t *testing.T) corev1.TypedLocalObjectReference {
+				return library.CreateTestWebhookAuthenticator(ctx, t)
+			},
+			token: func(t *testing.T) (string, string, []string) {
+				return library.IntegrationEnv(t).TestUser.Token, env.TestUser.ExpectedUsername, env.TestUser.ExpectedGroups
+			},
+		},
+		{
+			name: "jwt authenticator",
+			authenticator: func(t *testing.T) corev1.TypedLocalObjectReference {
+				return library.CreateTestJWTAuthenticator(ctx, t)
+			},
+			token: func(t *testing.T) (string, string, []string) {
+				pinnipedExe := buildPinnipedCLI(t)
+				credOutput, _ := runPinniedLoginOIDC(ctx, t, pinnipedExe)
+				token := credOutput.Status.Token
 
-	var response *loginv1alpha1.TokenCredentialRequest
-	successfulResponse := func() bool {
-		var err error
-		response, err = makeRequest(ctx, t, validCredentialRequestSpecWithRealToken(t, testWebhook))
-		require.NoError(t, err, "the request should never fail at the HTTP level")
-		return response.Status.Credential != nil
+				// By default, the JWTAuthenticator expects the username to be in the "sub" claim and the
+				// groups to be in the "groups" claim.
+				username, groups := getJWTSubAndGroupsClaims(t, token)
+
+				return credOutput.Status.Token, username, groups
+			},
+		},
 	}
-	assert.Eventually(t, successfulResponse, 10*time.Second, 500*time.Millisecond)
-	require.NotNil(t, response)
-	require.NotNil(t, response.Status.Credential)
-	require.Empty(t, response.Status.Message)
-	require.Empty(t, response.Spec)
-	require.Empty(t, response.Status.Credential.Token)
-	require.NotEmpty(t, response.Status.Credential.ClientCertificateData)
-	require.Equal(t, env.TestUser.ExpectedUsername, getCommonName(t, response.Status.Credential.ClientCertificateData))
-	require.ElementsMatch(t, env.TestUser.ExpectedGroups, getOrganizations(t, response.Status.Credential.ClientCertificateData))
-	require.NotEmpty(t, response.Status.Credential.ClientKeyData)
-	require.NotNil(t, response.Status.Credential.ExpirationTimestamp)
-	require.InDelta(t, 5*time.Minute, time.Until(response.Status.Credential.ExpirationTimestamp.Time), float64(time.Minute))
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			authenticator := test.authenticator(t)
+			token, username, groups := test.token(t)
 
-	// Create a client using the admin kubeconfig.
-	adminClient := library.NewClientset(t)
+			var response *loginv1alpha1.TokenCredentialRequest
+			successfulResponse := func() bool {
+				var err error
+				response, err = makeRequest(ctx, t, loginv1alpha1.TokenCredentialRequestSpec{
+					Token:         token,
+					Authenticator: authenticator,
+				})
+				require.NoError(t, err, "the request should never fail at the HTTP level")
+				return response.Status.Credential != nil
+			}
+			assert.Eventually(t, successfulResponse, 10*time.Second, 500*time.Millisecond)
+			require.NotNil(t, response)
+			require.Emptyf(t, response.Status.Message, "value is: %q", safeDerefStringPtr(response.Status.Message))
+			require.NotNil(t, response.Status.Credential)
+			require.Empty(t, response.Spec)
+			require.Empty(t, response.Status.Credential.Token)
+			require.NotEmpty(t, response.Status.Credential.ClientCertificateData)
+			require.Equal(t, username, getCommonName(t, response.Status.Credential.ClientCertificateData))
+			require.ElementsMatch(t, groups, getOrganizations(t, response.Status.Credential.ClientCertificateData))
+			require.NotEmpty(t, response.Status.Credential.ClientKeyData)
+			require.NotNil(t, response.Status.Credential.ExpirationTimestamp)
+			require.InDelta(t, 5*time.Minute, time.Until(response.Status.Credential.ExpirationTimestamp.Time), float64(time.Minute))
 
-	// Create a client using the certificate from the CredentialRequest.
-	clientWithCertFromCredentialRequest := library.NewClientsetWithCertAndKey(
-		t,
-		response.Status.Credential.ClientCertificateData,
-		response.Status.Credential.ClientKeyData,
-	)
+			// Create a client using the admin kubeconfig.
+			adminClient := library.NewClientset(t)
 
-	t.Run(
-		"access as user",
-		library.AccessAsUserTest(ctx, adminClient, env.TestUser.ExpectedUsername, clientWithCertFromCredentialRequest),
-	)
-	for _, group := range env.TestUser.ExpectedGroups {
-		group := group
-		t.Run(
-			"access as group "+group,
-			library.AccessAsGroupTest(ctx, adminClient, group, clientWithCertFromCredentialRequest),
-		)
+			// Create a client using the certificate from the CredentialRequest.
+			clientWithCertFromCredentialRequest := library.NewClientsetWithCertAndKey(
+				t,
+				response.Status.Credential.ClientCertificateData,
+				response.Status.Credential.ClientKeyData,
+			)
+
+			t.Run(
+				"access as user",
+				library.AccessAsUserTest(ctx, adminClient, username, clientWithCertFromCredentialRequest),
+			)
+			for _, group := range groups {
+				group := group
+				t.Run(
+					"access as group "+group,
+					library.AccessAsGroupTest(ctx, adminClient, group, clientWithCertFromCredentialRequest),
+				)
+			}
+		})
 	}
 }
 
@@ -182,4 +224,27 @@ func getOrganizations(t *testing.T, certPEM string) []string {
 	require.NoError(t, err)
 
 	return cert.Subject.Organization
+}
+
+func safeDerefStringPtr(s *string) string {
+	if s == nil {
+		return "<nil>"
+	}
+	return *s
+}
+
+func getJWTSubAndGroupsClaims(t *testing.T, jwt string) (string, []string) {
+	t.Helper()
+
+	token, err := jwtpkg.ParseSigned(jwt)
+	require.NoError(t, err)
+
+	var claims struct {
+		Sub    string   `json:"sub"`
+		Groups []string `json:"groups"`
+	}
+	err = token.UnsafeClaimsWithoutVerification(&claims)
+	require.NoError(t, err)
+
+	return claims.Sub, claims.Groups
 }

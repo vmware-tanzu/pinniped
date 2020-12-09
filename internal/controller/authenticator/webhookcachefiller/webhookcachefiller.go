@@ -5,7 +5,6 @@
 package webhookcachefiller
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -23,6 +22,7 @@ import (
 	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
 	authinformers "go.pinniped.dev/generated/1.19/client/concierge/informers/externalversions/authentication/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	pinnipedauthenticator "go.pinniped.dev/internal/controller/authenticator"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
 )
@@ -92,7 +92,7 @@ func newWebhookAuthenticator(
 	defer func() { _ = os.Remove(temp.Name()) }()
 
 	cluster := &clientcmdapi.Cluster{Server: spec.Endpoint}
-	cluster.CertificateAuthorityData, err = getCABundle(spec.TLS)
+	cluster.CertificateAuthorityData, err = pinnipedauthenticator.CABundle(spec.TLS)
 	if err != nil {
 		return nil, fmt.Errorf("invalid TLS configuration: %w", err)
 	}
@@ -120,11 +120,4 @@ func newWebhookAuthenticator(
 	var customDial net.DialFunc
 
 	return webhook.New(temp.Name(), version, implicitAuds, customDial)
-}
-
-func getCABundle(spec *auth1alpha1.TLSSpec) ([]byte, error) {
-	if spec == nil {
-		return nil, nil
-	}
-	return base64.StdEncoding.DecodeString(spec.CertificateAuthorityData)
 }

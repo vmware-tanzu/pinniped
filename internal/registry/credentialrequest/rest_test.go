@@ -145,7 +145,7 @@ func TestCreate(t *testing.T) {
 			response, err := callCreate(context.Background(), storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			requireOneLogStatement(r, logger, `"failure" failureType:webhook authentication,msg:some webhook error`)
+			requireOneLogStatement(r, logger, `"failure" failureType:token authentication,msg:some webhook error`)
 		})
 
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsAnEmptyUsername", func() {

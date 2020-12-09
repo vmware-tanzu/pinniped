@@ -12,8 +12,10 @@ import (
 
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/klog/v2"
 
 	loginapi "go.pinniped.dev/generated/1.19/apis/concierge/login"
+	"go.pinniped.dev/internal/plog"
 )
 
 var (
@@ -93,6 +95,12 @@ func (c *Cache) AuthenticateTokenCredentialRequest(ctx context.Context, req *log
 
 	val := c.Get(key)
 	if val == nil {
+		plog.Debug(
+			"authenticator does not exist",
+			"authenticator", klog.KRef(key.Namespace, key.Name),
+			"kind", key.Kind,
+			"apiGroup", key.APIGroup,
+		)
 		return nil, ErrNoSuchAuthenticator
 	}
 

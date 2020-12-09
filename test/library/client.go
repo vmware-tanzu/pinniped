@@ -6,6 +6,7 @@ package library
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -160,6 +161,51 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
 		Kind:     "WebhookAuthenticator",
 		Name:     webhook.Name,
+	}
+}
+
+// CreateTestJWTAuthenticator creates and returns a test JWTAuthenticator in
+// $PINNIPED_TEST_CONCIERGE_NAMESPACE, which will be automatically deleted at the end of the current
+// test's lifetime. It returns a corev1.TypedLocalObjectReference which describes the test JWT
+// authenticator within the test namespace.
+//
+// CreateTestJWTAuthenticator gets the OIDC issuer info from IntegrationEnv().CLITestUpstream.
+func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T) corev1.TypedLocalObjectReference {
+	t.Helper()
+	testEnv := IntegrationEnv(t)
+
+	client := NewConciergeClientset(t)
+	jwtAuthenticators := client.AuthenticationV1alpha1().JWTAuthenticators(testEnv.ConciergeNamespace)
+
+	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	jwtAuthenticator, err := jwtAuthenticators.Create(createContext, &auth1alpha1.JWTAuthenticator{
+		ObjectMeta: testObjectMeta(t, "jwt-authenticator"),
+		Spec: auth1alpha1.JWTAuthenticatorSpec{
+			Issuer:   testEnv.CLITestUpstream.Issuer,
+			Audience: testEnv.CLITestUpstream.ClientID,
+			TLS: &auth1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(testEnv.CLITestUpstream.CABundle)),
+			},
+		},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err, "could not create test JWTAuthenticator")
+	t.Logf("created test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
+
+	t.Cleanup(func() {
+		t.Helper()
+		t.Logf("cleaning up test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
+		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		err := jwtAuthenticators.Delete(deleteCtx, jwtAuthenticator.Name, metav1.DeleteOptions{})
+		require.NoErrorf(t, err, "could not cleanup test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
+	})
+
+	return corev1.TypedLocalObjectReference{
+		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
+		Kind:     "JWTAuthenticator",
+		Name:     jwtAuthenticator.Name,
 	}
 }
 

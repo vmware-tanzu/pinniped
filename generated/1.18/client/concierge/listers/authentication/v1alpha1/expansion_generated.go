@@ -5,6 +5,14 @@
 
 package v1alpha1
 
+// JWTAuthenticatorListerExpansion allows custom methods to be added to
+// JWTAuthenticatorLister.
+type JWTAuthenticatorListerExpansion interface{}
+
+// JWTAuthenticatorNamespaceListerExpansion allows custom methods to be added to
+// JWTAuthenticatorNamespaceLister.
+type JWTAuthenticatorNamespaceListerExpansion interface{}
+
 // WebhookAuthenticatorListerExpansion allows custom methods to be added to
 // WebhookAuthenticatorLister.
 type WebhookAuthenticatorListerExpansion interface{}

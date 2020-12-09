@@ -63,6 +63,9 @@ func NewHandler(
 		// at this time, however we will temporarily grant the scope just in case that changes in a future release of fosite.
 		oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOfflineAccess)
 
+		// Grant the Pinniped STS scope if requested.
+		oidc.GrantScopeIfRequested(authorizeRequester, "pinniped.sts.unrestricted")
+
 		now := time.Now()
 		_, err = oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &openid.DefaultSession{
 			Claims: &jwt.IDTokenClaims{

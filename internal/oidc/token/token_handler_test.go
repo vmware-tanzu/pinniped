@@ -667,6 +667,19 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 }
 
 func TestTokenExchange(t *testing.T) {
+	successfulAuthCodeExchange := tokenEndpointResponseExpectedValues{
+		wantStatus:            http.StatusOK,
+		wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
+		wantRequestedScopes:   []string{"openid", "pinniped.sts.unrestricted"},
+		wantGrantedScopes:     []string{"openid", "pinniped.sts.unrestricted"},
+	}
+
+	doValidAuthCodeExchange := authcodeExchangeInputs{
+		modifyAuthRequest: func(authRequest *http.Request) {
+			authRequest.Form.Set("scope", "openid pinniped.sts.unrestricted")
+		},
+		want: successfulAuthCodeExchange,
+	}
 	tests := []struct {
 		name string
 
@@ -679,51 +692,21 @@ func TestTokenExchange(t *testing.T) {
 		wantResponseBodyContains string
 	}{
 		{
-			name: "happy path",
-			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(authRequest *http.Request) {
-					authRequest.Form.Set("scope", "openid pinniped.sts.unrestricted")
-				},
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "pinniped.sts.unrestricted"},
-					wantGrantedScopes:     []string{"openid", "pinniped.sts.unrestricted"},
-				},
-			},
+			name:              "happy path",
+			authcodeExchange:  doValidAuthCodeExchange,
 			requestedAudience: "some-workload-cluster",
 			wantStatus:        http.StatusOK,
 		},
 		{
-			name: "missing audience",
-			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(authRequest *http.Request) {
-					authRequest.Form.Set("scope", "openid pinniped.sts.unrestricted")
-				},
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "pinniped.sts.unrestricted"},
-					wantGrantedScopes:     []string{"openid", "pinniped.sts.unrestricted"},
-				},
-			},
+			name:                     "missing audience",
+			authcodeExchange:         doValidAuthCodeExchange,
 			requestedAudience:        "",
 			wantStatus:               http.StatusBadRequest,
 			wantResponseBodyContains: "missing audience parameter",
 		},
 		{
-			name: "missing subject_token",
-			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(authRequest *http.Request) {
-					authRequest.Form.Set("scope", "openid pinniped.sts.unrestricted")
-				},
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "pinniped.sts.unrestricted"},
-					wantGrantedScopes:     []string{"openid", "pinniped.sts.unrestricted"},
-				},
-			},
+			name:              "missing subject_token",
+			authcodeExchange:  doValidAuthCodeExchange,
 			requestedAudience: "some-workload-cluster",
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Del("subject_token")
@@ -732,18 +715,8 @@ func TestTokenExchange(t *testing.T) {
 			wantResponseBodyContains: "missing subject_token parameter",
 		},
 		{
-			name: "wrong subject_token_type",
-			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(authRequest *http.Request) {
-					authRequest.Form.Set("scope", "openid pinniped.sts.unrestricted")
-				},
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "pinniped.sts.unrestricted"},
-					wantGrantedScopes:     []string{"openid", "pinniped.sts.unrestricted"},
-				},
-			},
+			name:              "wrong subject_token_type",
+			authcodeExchange:  doValidAuthCodeExchange,
 			requestedAudience: "some-workload-cluster",
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Set("subject_token_type", "invalid")
@@ -752,18 +725,8 @@ func TestTokenExchange(t *testing.T) {
 			wantResponseBodyContains: `unsupported subject_token_type parameter value`,
 		},
 		{
-			name: "wrong requested_token_type",
-			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(authRequest *http.Request) {
-					authRequest.Form.Set("scope", "openid pinniped.sts.unrestricted")
-				},
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "pinniped.sts.unrestricted"},
-					wantGrantedScopes:     []string{"openid", "pinniped.sts.unrestricted"},
-				},
-			},
+			name:              "wrong requested_token_type",
+			authcodeExchange:  doValidAuthCodeExchange,
 			requestedAudience: "some-workload-cluster",
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Set("requested_token_type", "invalid")
@@ -772,18 +735,8 @@ func TestTokenExchange(t *testing.T) {
 			wantResponseBodyContains: `unsupported requested_token_type parameter value`,
 		},
 		{
-			name: "unsupported RFC8693 parameter",
-			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(authRequest *http.Request) {
-					authRequest.Form.Set("scope", "openid pinniped.sts.unrestricted")
-				},
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "pinniped.sts.unrestricted"},
-					wantGrantedScopes:     []string{"openid", "pinniped.sts.unrestricted"},
-				},
-			},
+			name:              "unsupported RFC8693 parameter",
+			authcodeExchange:  doValidAuthCodeExchange,
 			requestedAudience: "some-workload-cluster",
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Set("resource", "some-resource-parameter-value")
@@ -792,18 +745,8 @@ func TestTokenExchange(t *testing.T) {
 			wantResponseBodyContains: `unsupported parameter resource`,
 		},
 		{
-			name: "bogus access token",
-			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(authRequest *http.Request) {
-					authRequest.Form.Set("scope", "openid pinniped.sts.unrestricted")
-				},
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "pinniped.sts.unrestricted"},
-					wantGrantedScopes:     []string{"openid", "pinniped.sts.unrestricted"},
-				},
-			},
+			name:              "bogus access token",
+			authcodeExchange:  doValidAuthCodeExchange,
 			requestedAudience: "some-workload-cluster",
 			modifyRequestParams: func(t *testing.T, params url.Values) {
 				params.Set("subject_token", "some-bogus-value")
@@ -812,18 +755,8 @@ func TestTokenExchange(t *testing.T) {
 			wantResponseBodyContains: `Invalid token format`,
 		},
 		{
-			name: "valid access token, but deleted from storage",
-			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(authRequest *http.Request) {
-					authRequest.Form.Set("scope", "openid pinniped.sts.unrestricted")
-				},
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "pinniped.sts.unrestricted"},
-					wantGrantedScopes:     []string{"openid", "pinniped.sts.unrestricted"},
-				},
-			},
+			name:              "valid access token, but deleted from storage",
+			authcodeExchange:  doValidAuthCodeExchange,
 			requestedAudience: "some-workload-cluster",
 			modifyStorage: func(t *testing.T, storage *oidc.KubeStorage, pendingRequest *http.Request) {
 				parts := strings.Split(pendingRequest.Form.Get("subject_token"), ".")
@@ -858,12 +791,7 @@ func TestTokenExchange(t *testing.T) {
 				},
 				// Fail to fetch a JWK signing key after the authcode exchange has happened.
 				makeOathHelper: makeOauthHelperWithJWTKeyThatWorksOnlyOnce,
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusOK,
-					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "pinniped.sts.unrestricted"},
-					wantGrantedScopes:     []string{"openid", "pinniped.sts.unrestricted"},
-				},
+				want:           successfulAuthCodeExchange,
 			},
 			requestedAudience:        "some-workload-cluster",
 			wantStatus:               http.StatusServiceUnavailable,

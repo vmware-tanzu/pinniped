@@ -15,3 +15,9 @@ metadata:
 metadata:
   #@overlay/match missing_ok=True
   labels: #@ labels()
+
+#@overlay/match by=overlay.subset({"kind": "CustomResourceDefinition", "metadata":{"name":"jwtauthenticators.authentication.concierge.pinniped.dev"}}), expects=1
+---
+metadata:
+  #@overlay/match missing_ok=True
+  labels: #@ labels()

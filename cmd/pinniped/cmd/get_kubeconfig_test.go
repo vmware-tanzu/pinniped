@@ -31,7 +31,7 @@ var (
 
 		Flags:
 			  --authenticator-name string   Authenticator name
-			  --authenticator-type string   Authenticator type (e.g., 'webhook')
+			  --authenticator-type string   Authenticator type (e.g., 'webhook', 'jwt')
 		  -h, --help                        help for get-kubeconfig
 			  --kubeconfig string           Path to the kubeconfig file
 			  --kubeconfig-context string   Kubeconfig context override
@@ -62,7 +62,7 @@ var (
 
 		Flags:
 			  --authenticator-name string   Authenticator name
-			  --authenticator-type string   Authenticator type (e.g., 'webhook')
+			  --authenticator-type string   Authenticator type (e.g., 'webhook', 'jwt')
 		  -h, --help                        help for get-kubeconfig
 			  --kubeconfig string           Path to the kubeconfig file
 			  --kubeconfig-context string   Kubeconfig context override

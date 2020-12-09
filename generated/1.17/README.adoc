@@ -22,10 +22,11 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped concierge authenticatio
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-condition"]
 ==== Condition 
 
-Condition status of a resource (mirrored from the metav1.Condition type added in Kubernetes 1.19). In a future API version we can switch to using the upstream type. See https://github.com/kubernetes/apimachinery/blob/v0.19.0/pkg/apis/meta/v1/types.go#L1353-L1413.
+
 
 .Appears In:
 ****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-jwtauthenticatorstatus[$$JWTAuthenticatorStatus$$]
 - xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-webhookauthenticatorstatus[$$WebhookAuthenticatorStatus$$]
 ****
 
@@ -41,13 +42,85 @@ Condition status of a resource (mirrored from the metav1.Condition type added in
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-tlsspec"]
-==== TLSSpec 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-conditionstatus"]
+==== ConditionStatus (string) 
 
-Configuration for configuring TLS on various authenticators.
+
 
 .Appears In:
 ****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-condition[$$Condition$$]
+****
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-jwtauthenticator"]
+==== JWTAuthenticator 
+
+JWTAuthenticator describes the configuration of a JWT authenticator. 
+ Upon receiving a signed JWT, a JWTAuthenticator will performs some validation on it (e.g., valid signature, existence of claims, etc.) and extract the username and groups from the token.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-jwtauthenticatorlist[$$JWTAuthenticatorList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]__ | Spec for configuring the authenticator.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-jwtauthenticatorstatus[$$JWTAuthenticatorStatus$$]__ | Status of the authenticator.
+|===
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec"]
+==== JWTAuthenticatorSpec 
+
+Spec for configuring a JWT authenticator.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-jwtauthenticator[$$JWTAuthenticator$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`issuer`* __string__ | Issuer is the OIDC issuer URL that will be used to discover public signing keys. Issuer is also used to validate the "iss" JWT claim.
+| *`audience`* __string__ | Audience is the required value of the "aud" JWT claim.
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration for communicating with the OIDC provider.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-jwtauthenticatorstatus"]
+==== JWTAuthenticatorStatus 
+
+Status of a JWT authenticator.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-jwtauthenticator[$$JWTAuthenticator$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-condition[$$Condition$$] array__ | Represents the observations of the authenticator's current state.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-tlsspec"]
+==== TLSSpec 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]
 - xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-webhookauthenticatorspec[$$WebhookAuthenticatorSpec$$]
 ****
 
@@ -111,7 +184,7 @@ Status of a webhook authenticator.
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-condition[$$Condition$$]__ | Represents the observations of the authenticator's current state.
+| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-authentication-v1alpha1-condition[$$Condition$$] array__ | Represents the observations of the authenticator's current state.
 |===
 
 

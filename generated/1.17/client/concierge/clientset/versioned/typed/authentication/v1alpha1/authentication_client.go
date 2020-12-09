@@ -13,12 +13,17 @@ import (
 
 type AuthenticationV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	JWTAuthenticatorsGetter
 	WebhookAuthenticatorsGetter
 }
 
 // AuthenticationV1alpha1Client is used to interact with features provided by the authentication.concierge.pinniped.dev group.
 type AuthenticationV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *AuthenticationV1alpha1Client) JWTAuthenticators(namespace string) JWTAuthenticatorInterface {
+	return newJWTAuthenticators(c, namespace)
 }
 
 func (c *AuthenticationV1alpha1Client) WebhookAuthenticators(namespace string) WebhookAuthenticatorInterface {

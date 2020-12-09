@@ -64,7 +64,7 @@ func newExchangeCredentialCmd(args []string, stdout, stderr io.Writer) *exchange
 			  - PINNIPED_NAMESPACE: the namespace of the authenticator to authenticate
 			    against
 			  - PINNIPED_AUTHENTICATOR_TYPE: the type of authenticator to authenticate
-			    against (e.g., "webhook")
+			    against (e.g., "webhook", "jwt")
 			  - PINNIPED_AUTHENTICATOR_NAME: the name of the authenticator to authenticate
 			    against
 			  - PINNIPED_CA_BUNDLE: the CA bundle to trust when calling
@@ -148,8 +148,11 @@ func exchangeCredential(envGetter envGetter, tokenExchanger tokenExchanger, outp
 	case "webhook":
 		authenticator.APIGroup = &auth1alpha1.SchemeGroupVersion.Group
 		authenticator.Kind = "WebhookAuthenticator"
+	case "jwt":
+		authenticator.APIGroup = &auth1alpha1.SchemeGroupVersion.Group
+		authenticator.Kind = "JWTAuthenticator"
 	default:
-		return fmt.Errorf(`%w: %q, supported values are "webhook"`, ErrInvalidAuthenticatorType, authenticatorType)
+		return fmt.Errorf(`%w: %q, supported values are "webhook" and "jwt"`, ErrInvalidAuthenticatorType, authenticatorType)
 	}
 
 	cred, err := tokenExchanger(ctx, namespace, authenticator, token, caBundle, apiEndpoint)

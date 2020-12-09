@@ -5,4 +5,6 @@
 
 package v1alpha1
 
+type JWTAuthenticatorExpansion interface{}
+
 type WebhookAuthenticatorExpansion interface{}

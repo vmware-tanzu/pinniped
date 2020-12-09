@@ -15,6 +15,10 @@ type FakeAuthenticationV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeAuthenticationV1alpha1) JWTAuthenticators(namespace string) v1alpha1.JWTAuthenticatorInterface {
+	return &FakeJWTAuthenticators{c, namespace}
+}
+
 func (c *FakeAuthenticationV1alpha1) WebhookAuthenticators(namespace string) v1alpha1.WebhookAuthenticatorInterface {
 	return &FakeWebhookAuthenticators{c, namespace}
 }

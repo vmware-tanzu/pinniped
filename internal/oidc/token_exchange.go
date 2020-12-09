@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	tokenTypeAccessToken = "urn:ietf:params:oauth:token-type:access_token"
-	tokenTypeJWT         = "urn:ietf:params:oauth:token-type:jwt"
+	tokenTypeAccessToken = "urn:ietf:params:oauth:token-type:access_token" //nolint: gosec
+	tokenTypeJWT         = "urn:ietf:params:oauth:token-type:jwt"          //nolint: gosec
 )
 
 type stsParams struct {

@@ -27,7 +27,7 @@ func TestNullStorage_GetClient(t *testing.T) {
 				Public:        true,
 				RedirectURIs:  []string{"http://127.0.0.1/callback"},
 				ResponseTypes: []string{"code"},
-				GrantTypes:    []string{"authorization_code", "refresh_token"},
+				GrantTypes:    []string{"authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:token-exchange"},
 				Scopes:        []string{"openid", "offline_access", "profile", "email"},
 			},
 			TokenEndpointAuthMethod: "none",

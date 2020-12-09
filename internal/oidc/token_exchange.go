@@ -1,3 +1,6 @@
+// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package oidc
 
 import (
@@ -35,6 +38,9 @@ func (t *TokenExchangeHandler) HandleTokenEndpointRequest(ctx context.Context, r
 }
 
 func (t *TokenExchangeHandler) PopulateTokenEndpointResponse(ctx context.Context, requester fosite.AccessRequester, responder fosite.AccessResponder) error {
+	if !(requester.GetGrantTypes().ExactOne("urn:ietf:params:oauth:grant-type:token-exchange")) {
+		return errors.WithStack(fosite.ErrUnknownRequest)
+	}
 	params := requester.GetRequestForm()
 	accessToken := params.Get("subject_token")
 	if err := t.accessTokenStrategy.ValidateAccessToken(ctx, requester, accessToken); err != nil {
@@ -49,7 +55,7 @@ func (t *TokenExchangeHandler) PopulateTokenEndpointResponse(ctx context.Context
 		return errors.WithStack(fosite.ErrScopeNotGranted)
 	}
 	// TODO check the other requester fields
-	scopedDownRequester := fosite.NewAccessRequest(requester.GetSession())
+	scopedDownRequester := fosite.NewAccessRequest(accessTokenSession.GetSession())
 	scopedDownRequester.GrantedAudience = []string{params.Get("audience")}
 	newToken, err := t.idTokenStrategy.GenerateIDToken(ctx, scopedDownRequester)
 	if err != nil {

@@ -206,6 +206,19 @@ var (
 			"redirect_uri":          {goodRedirectURI},
 		},
 	}
+
+	happyTokenExchangeRequest = func(audience string, subjectToken string) *http.Request {
+		return &http.Request{
+			Form: url.Values{
+				"grant_type":           {"urn:ietf:params:oauth:grant-type:token-exchange"},
+				"audience":             {audience},
+				"subject_token":        {subjectToken},
+				"subject_token_type":   {"urn:ietf:params:oauth:token-type:access_token"},
+				"requested_token_type": {"urn:ietf:params:oauth:token-type:jwt"},
+				"client_id":            {goodClient},
+			},
+		}
+	}
 )
 
 type authcodeExchangeInputs struct {
@@ -550,6 +563,55 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 	}
 }
 
+func TestTokenExchange(t *testing.T) {
+	// TODO write this test
+	t.Skip()
+	tests := []struct {
+		name                       string
+		authcodeExchange           authcodeExchangeInputs
+		wantStatus                 int
+		requestedAudience          string
+		modifyTokenExchangeRequest func(r *http.Request)
+	}{
+		{
+			name: "token exchange happy path",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(authRequest *http.Request) {
+					authRequest.Form.Set("scope", "openid pinniped.sts.unrestricted")
+				},
+				wantStatus:          http.StatusOK,
+				wantBodyFields:      []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
+				wantRequestedScopes: []string{"openid", "pinniped.sts.unrestricted"},
+			},
+			wantStatus: http.StatusOK,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			subject, rsp, _, _, _ := exchangeAuthcodeForTokens(t, test.authcodeExchange)
+			var parsedResponseBody map[string]interface{}
+			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedResponseBody))
+
+			request := happyTokenExchangeRequest("foo-cluster", parsedResponseBody["access_token"].(string))
+
+			req := httptest.NewRequest("POST", "/path/shouldn't/matter", body(request.Form).ReadCloser())
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			if test.modifyTokenExchangeRequest != nil {
+				test.modifyTokenExchangeRequest(req)
+			}
+			rsp = httptest.NewRecorder()
+
+			subject.ServeHTTP(rsp, req)
+			t.Logf("response: %#v", rsp)
+			t.Logf("response body: %q", rsp.Body.String())
+
+			require.Equal(t, test.wantStatus, rsp.Code)
+			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), "application/json")
+		})
+	}
+}
+
 func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs) (
 	subject http.Handler,
 	rsp *httptest.ResponseRecorder,
@@ -757,6 +819,9 @@ func simulateAuthEndpointHavingAlreadyRun(t *testing.T, authRequest *http.Reques
 	}
 	if strings.Contains(authRequest.Form.Get("scope"), "offline_access") {
 		authRequester.GrantScope("offline_access")
+	}
+	if strings.Contains(authRequest.Form.Get("scope"), "pinniped.sts.unrestricted") {
+		authRequester.GrantScope("pinniped.sts.unrestricted")
 	}
 	authResponder, err := oauthHelper.NewAuthorizeResponse(ctx, authRequester, session)
 	require.NoError(t, err)

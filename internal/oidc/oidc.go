@@ -84,8 +84,8 @@ func PinnipedCLIOIDCClient() *fosite.DefaultOpenIDConnectClient {
 			Public:        true,
 			RedirectURIs:  []string{"http://127.0.0.1/callback"},
 			ResponseTypes: []string{"code"},
-			GrantTypes:    []string{"authorization_code", "urn:ietf:params:oauth:grant-type:token-exchange"},
-			Scopes:        []string{coreosoidc.ScopeOpenID, coreosoidc.ScopeOfflineAccess, "profile", "email"},
+			GrantTypes:    []string{"authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:token-exchange"},
+			Scopes:        []string{coreosoidc.ScopeOpenID, coreosoidc.ScopeOfflineAccess, "profile", "email", "pinniped.sts.unrestricted"},
 		},
 		TokenEndpointAuthMethod: "none",
 	}
@@ -126,12 +126,12 @@ func FositeOauth2Helper(
 			OpenIDConnectTokenStrategy: newDynamicOpenIDConnectECDSAStrategy(oauthConfig, jwksProvider),
 		},
 		nil, // hasher, defaults to using BCrypt when nil. Used for hashing client secrets.
-		TokenExchangeFactory,
 		compose.OAuth2AuthorizeExplicitFactory,
 		// compose.OAuth2RefreshTokenGrantFactory,
 		compose.OpenIDConnectExplicitFactory,
 		// compose.OpenIDConnectRefreshFactory,
 		compose.OAuth2PKCEFactory,
+		TokenExchangeFactory,
 	)
 }
 

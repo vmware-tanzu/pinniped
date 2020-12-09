@@ -180,14 +180,22 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T) corev1.TypedL
 	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
+	// If the test upstream does not have a CA bundle specified, then don't configure one in the
+	// JWTAuthenticator. Leaving TLSSpec set to nil will result in OIDC discovery using the OS's root
+	// CA store.
+	tlsSpec := &auth1alpha1.TLSSpec{
+		CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(testEnv.CLITestUpstream.CABundle)),
+	}
+	if testEnv.CLITestUpstream.CABundle == "" {
+		tlsSpec = nil
+	}
+
 	jwtAuthenticator, err := jwtAuthenticators.Create(createContext, &auth1alpha1.JWTAuthenticator{
 		ObjectMeta: testObjectMeta(t, "jwt-authenticator"),
 		Spec: auth1alpha1.JWTAuthenticatorSpec{
 			Issuer:   testEnv.CLITestUpstream.Issuer,
 			Audience: testEnv.CLITestUpstream.ClientID,
-			TLS: &auth1alpha1.TLSSpec{
-				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(testEnv.CLITestUpstream.CABundle)),
-			},
+			TLS:      tlsSpec,
 		},
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test JWTAuthenticator")

@@ -123,7 +123,7 @@ if ! tilt_mode; then
     # Our kind config exposes node port 31234 as 127.0.0.1:12345, 31243 as 127.0.0.1:12344, and 31235 as 127.0.0.1:12346
     ./hack/kind-up.sh
   else
-    if ! kubectl cluster-info | grep master | grep -q 127.0.0.1; then
+    if ! kubectl cluster-info | grep -E '(master|control plane)' | grep -q 127.0.0.1; then
       log_error "Seems like your kubeconfig is not targeting a local cluster."
       log_error "Exiting to avoid accidentally running tests against a real cluster."
       exit 1
@@ -249,7 +249,7 @@ concierge_app_name="pinniped-concierge"
 concierge_namespace="concierge"
 webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
 webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-certificate --namespace local-user-authenticator -o 'jsonpath={.data.caCertificate}')"
-discovery_url="$(TERM=dumb kubectl cluster-info | awk '/Kubernetes master/ {print $NF}')"
+discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"
 concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
 
 if ! tilt_mode; then

@@ -8,6 +8,8 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -26,8 +28,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
+	josejwt "gopkg.in/square/go-jose.v2/jwt"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/fake"
+	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/fositestorage/accesstoken"
@@ -116,6 +120,16 @@ var (
 		}
 	`)
 
+	fositeInvalidRequestMissingGrantTypeErrorBody = here.Doc(`
+		{
+		  "error": "invalid_request",
+		  "error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nRequest parameter \"grant_type\"\" is missing",
+		  "error_hint": "Request parameter \"grant_type\"\" is missing",
+		  "error_verbose": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed",
+		  "status_code": 400
+		}
+	`)
+
 	fositeMissingClientErrorBody = here.Doc(`
 		{
 			"error":             "invalid_request",
@@ -192,10 +206,8 @@ var (
 		  "status_code": 503
 		}
 	`)
-)
 
-func TestTokenEndpoint(t *testing.T) {
-	happyAuthRequest := &http.Request{
+	happyAuthRequest = &http.Request{
 		Form: url.Values{
 			"response_type":         {"code"},
 			"scope":                 {"openid profile email"},
@@ -207,362 +219,822 @@ func TestTokenEndpoint(t *testing.T) {
 			"redirect_uri":          {goodRedirectURI},
 		},
 	}
+)
 
+type tokenEndpointResponseExpectedValues struct {
+	wantStatus            int
+	wantSuccessBodyFields []string
+	wantErrorResponseBody string
+	wantRequestedScopes   []string
+	wantGrantedScopes     []string
+}
+
+type authcodeExchangeInputs struct {
+	modifyAuthRequest  func(authRequest *http.Request)
+	modifyTokenRequest func(tokenRequest *http.Request, authCode string)
+	modifyStorage      func(
+		t *testing.T,
+		s interface {
+			oauth2.TokenRevocationStorage
+			oauth2.CoreStorage
+			openid.OpenIDConnectRequestStorage
+			pkce.PKCERequestStorage
+			fosite.ClientManager
+		},
+		authCode string,
+	)
+	makeOathHelper func(
+		t *testing.T,
+		authRequest *http.Request,
+		store interface {
+			oauth2.TokenRevocationStorage
+			oauth2.CoreStorage
+			openid.OpenIDConnectRequestStorage
+			pkce.PKCERequestStorage
+			fosite.ClientManager
+		},
+	) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey)
+
+	want tokenEndpointResponseExpectedValues
+}
+
+func TestTokenEndpoint(t *testing.T) {
 	tests := []struct {
-		name string
-
-		authRequest func(authRequest *http.Request)
-		storage     func(
-			t *testing.T,
-			s interface {
-				oauth2.TokenRevocationStorage
-				oauth2.CoreStorage
-				openid.OpenIDConnectRequestStorage
-				pkce.PKCERequestStorage
-				fosite.ClientManager
-			},
-			authCode string,
-		)
-		request        func(r *http.Request, authCode string)
-		makeOathHelper func(
-			t *testing.T,
-			authRequest *http.Request,
-			store interface {
-				oauth2.TokenRevocationStorage
-				oauth2.CoreStorage
-				openid.OpenIDConnectRequestStorage
-				pkce.PKCERequestStorage
-				fosite.ClientManager
-			},
-		) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey)
-
-		wantStatus     int
-		wantBodyFields []string
-		wantExactBody  string
+		name             string
+		authcodeExchange authcodeExchangeInputs
 	}{
 		// happy path
 		{
-			name:           "request is valid and tokens are issued",
-			wantStatus:     http.StatusOK,
-			wantBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in"},
+			name: "request is valid and tokens are issued",
+			authcodeExchange: authcodeExchangeInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in"}, // no refresh token
+					wantRequestedScopes:   []string{"openid", "profile", "email"},
+					wantGrantedScopes:     []string{"openid"},
+				},
+			},
 		},
 		{
 			name: "openid scope was not requested from authorize endpoint",
-			authRequest: func(authRequest *http.Request) {
-				authRequest.Form.Set("scope", "profile email")
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "profile email") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"access_token", "token_type", "scope", "expires_in"}, // no id or refresh tokens
+					wantRequestedScopes:   []string{"profile", "email"},
+					wantGrantedScopes:     []string{},
+				},
 			},
-			wantStatus:     http.StatusOK,
-			wantBodyFields: []string{"access_token", "token_type", "scope", "expires_in"},
+		},
+		{
+			name: "offline_access and openid scopes were requested and granted from authorize endpoint",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "scope", "expires_in", "refresh_token"}, // all possible tokens
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				},
+			},
+		},
+		{
+			name: "offline_access (without openid scope) was requested and granted from authorize endpoint",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"access_token", "token_type", "scope", "expires_in", "refresh_token"}, // no id token
+					wantRequestedScopes:   []string{"offline_access"},
+					wantGrantedScopes:     []string{"offline_access"},
+				},
+			},
 		},
 
 		// sad path
 		{
-			name:          "GET method is wrong",
-			request:       func(r *http.Request, authCode string) { r.Method = http.MethodGet },
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeInvalidMethodErrorBody("GET"),
+			name: "GET method is wrong",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) { r.Method = http.MethodGet },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidMethodErrorBody("GET"),
+				},
+			},
 		},
 		{
-			name:          "PUT method is wrong",
-			request:       func(r *http.Request, authCode string) { r.Method = http.MethodPut },
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeInvalidMethodErrorBody("PUT"),
+			name: "PUT method is wrong",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) { r.Method = http.MethodPut },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidMethodErrorBody("PUT"),
+				},
+			},
 		},
 		{
-			name:          "PATCH method is wrong",
-			request:       func(r *http.Request, authCode string) { r.Method = http.MethodPatch },
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeInvalidMethodErrorBody("PATCH"),
+			name: "PATCH method is wrong",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) { r.Method = http.MethodPatch },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidMethodErrorBody("PATCH"),
+				},
+			},
 		},
 		{
-			name:          "DELETE method is wrong",
-			request:       func(r *http.Request, authCode string) { r.Method = http.MethodDelete },
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeInvalidMethodErrorBody("DELETE"),
+			name: "DELETE method is wrong",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) { r.Method = http.MethodDelete },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidMethodErrorBody("DELETE"),
+				},
+			},
 		},
 		{
-			name:          "content type is invalid",
-			request:       func(r *http.Request, authCode string) { r.Header.Set("Content-Type", "text/plain") },
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeEmptyPayloadErrorBody,
+			name: "content type is invalid",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) { r.Header.Set("Content-Type", "text/plain") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeEmptyPayloadErrorBody,
+				},
+			},
 		},
 		{
 			name: "payload is not valid form serialization",
-			request: func(r *http.Request, authCode string) {
-				r.Body = ioutil.NopCloser(strings.NewReader("this newline character is not allowed in a form serialization: \n"))
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					r.Body = ioutil.NopCloser(strings.NewReader("this newline character is not allowed in a form serialization: \n"))
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeMissingGrantTypeErrorBody,
+				},
 			},
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeMissingGrantTypeErrorBody,
 		},
 		{
-			name:          "payload is empty",
-			request:       func(r *http.Request, authCode string) { r.Body = nil },
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeInvalidPayloadErrorBody,
+			name: "payload is empty",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) { r.Body = nil },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidPayloadErrorBody,
+				},
+			},
 		},
 		{
 			name: "grant type is missing in request",
-			request: func(r *http.Request, authCode string) {
-				r.Body = happyBody(authCode).WithGrantType("").ReadCloser()
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					r.Body = happyAuthcodeRequestBody(authCode).WithGrantType("").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeMissingGrantTypeErrorBody,
+				},
 			},
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeMissingGrantTypeErrorBody,
 		},
 		{
 			name: "grant type is not authorization_code",
-			request: func(r *http.Request, authCode string) {
-				r.Body = happyBody(authCode).WithGrantType("bogus").ReadCloser()
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					r.Body = happyAuthcodeRequestBody(authCode).WithGrantType("bogus").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidRequestErrorBody,
+				},
 			},
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeInvalidRequestErrorBody,
 		},
 		{
 			name: "client id is missing in request",
-			request: func(r *http.Request, authCode string) {
-				r.Body = happyBody(authCode).WithClientID("").ReadCloser()
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					r.Body = happyAuthcodeRequestBody(authCode).WithClientID("").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeMissingClientErrorBody,
+				},
 			},
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeMissingClientErrorBody,
 		},
 		{
 			name: "client id is wrong",
-			request: func(r *http.Request, authCode string) {
-				r.Body = happyBody(authCode).WithClientID("bogus").ReadCloser()
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					r.Body = happyAuthcodeRequestBody(authCode).WithClientID("bogus").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusUnauthorized,
+					wantErrorResponseBody: fositeInvalidClientErrorBody,
+				},
 			},
-			wantStatus:    http.StatusUnauthorized,
-			wantExactBody: fositeInvalidClientErrorBody,
+		},
+		{
+			name: "grant type is missing",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					r.Body = happyAuthcodeRequestBody(authCode).WithGrantType("").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidRequestMissingGrantTypeErrorBody,
+				},
+			},
+		},
+		{
+			name: "grant type is wrong",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					r.Body = happyAuthcodeRequestBody(authCode).WithGrantType("bogus").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidRequestErrorBody,
+				},
+			},
 		},
 		{
 			name: "auth code is missing in request",
-			request: func(r *http.Request, authCode string) {
-				r.Body = happyBody(authCode).WithAuthCode("").ReadCloser()
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					r.Body = happyAuthcodeRequestBody(authCode).WithAuthCode("").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidAuthCodeErrorBody,
+				},
 			},
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeInvalidAuthCodeErrorBody,
 		},
 		{
 			name: "auth code has never been valid",
-			request: func(r *http.Request, authCode string) {
-				r.Body = happyBody(authCode).WithAuthCode("bogus").ReadCloser()
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					r.Body = happyAuthcodeRequestBody(authCode).WithAuthCode("bogus").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidAuthCodeErrorBody,
+				},
 			},
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeInvalidAuthCodeErrorBody,
 		},
 		{
 			name: "auth code is invalidated",
-			storage: func(
-				t *testing.T,
-				s interface {
-					oauth2.TokenRevocationStorage
-					oauth2.CoreStorage
-					openid.OpenIDConnectRequestStorage
-					pkce.PKCERequestStorage
-					fosite.ClientManager
+			authcodeExchange: authcodeExchangeInputs{
+				modifyStorage: func(
+					t *testing.T,
+					s interface {
+						oauth2.TokenRevocationStorage
+						oauth2.CoreStorage
+						openid.OpenIDConnectRequestStorage
+						pkce.PKCERequestStorage
+						fosite.ClientManager
+					},
+					authCode string,
+				) {
+					err := s.InvalidateAuthorizeCodeSession(context.Background(), getFositeDataSignature(t, authCode))
+					require.NoError(t, err)
 				},
-				authCode string,
-			) {
-				err := s.InvalidateAuthorizeCodeSession(context.Background(), getFositeDataSignature(t, authCode))
-				require.NoError(t, err)
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeReusedAuthCodeErrorBody,
+				},
 			},
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeReusedAuthCodeErrorBody,
 		},
 		{
 			name: "redirect uri is missing in request",
-			request: func(r *http.Request, authCode string) {
-				r.Body = happyBody(authCode).WithRedirectURI("").ReadCloser()
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					r.Body = happyAuthcodeRequestBody(authCode).WithRedirectURI("").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidRedirectURIErrorBody,
+				},
 			},
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeInvalidRedirectURIErrorBody,
 		},
 		{
 			name: "redirect uri is wrong",
-			request: func(r *http.Request, authCode string) {
-				r.Body = happyBody(authCode).WithRedirectURI("bogus").ReadCloser()
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					r.Body = happyAuthcodeRequestBody(authCode).WithRedirectURI("bogus").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidRedirectURIErrorBody,
+				},
 			},
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeInvalidRedirectURIErrorBody,
 		},
 		{
 			name: "pkce is missing in request",
-			request: func(r *http.Request, authCode string) {
-				r.Body = happyBody(authCode).WithPKCE("").ReadCloser()
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					r.Body = happyAuthcodeRequestBody(authCode).WithPKCE("").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeMissingPKCEVerifierErrorBody,
+				},
 			},
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeMissingPKCEVerifierErrorBody,
 		},
 		{
 			name: "pkce is wrong",
-			request: func(r *http.Request, authCode string) {
-				r.Body = happyBody(authCode).WithPKCE(
-					"bogus-verifier-that-is-at-least-43-characters-for-the-sake-of-entropy",
-				).ReadCloser()
+			authcodeExchange: authcodeExchangeInputs{
+				modifyTokenRequest: func(r *http.Request, authCode string) {
+					r.Body = happyAuthcodeRequestBody(authCode).WithPKCE(
+						"bogus-verifier-that-is-at-least-43-characters-for-the-sake-of-entropy",
+					).ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeWrongPKCEVerifierErrorBody,
+				},
 			},
-			wantStatus:    http.StatusBadRequest,
-			wantExactBody: fositeWrongPKCEVerifierErrorBody,
 		},
 		{
-			name:           "private signing key for JWTs has not yet been provided by the controller who is responsible for dynamically providing it",
-			makeOathHelper: makeOauthHelperWithNilPrivateJWTSigningKey,
-			wantStatus:     http.StatusServiceUnavailable,
-			wantExactBody:  fositeTemporarilyUnavailableErrorBody,
+			name: "private signing key for JWTs has not yet been provided by the controller who is responsible for dynamically providing it",
+			authcodeExchange: authcodeExchangeInputs{
+				makeOathHelper: makeOauthHelperWithNilPrivateJWTSigningKey,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusServiceUnavailable,
+					wantErrorResponseBody: fositeTemporarilyUnavailableErrorBody,
+				},
+			},
 		},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			authRequest := deepCopyRequestForm(happyAuthRequest)
-			if test.authRequest != nil {
-				test.authRequest(authRequest)
-			}
+			t.Parallel()
 
-			client := fake.NewSimpleClientset()
-			secrets := client.CoreV1().Secrets("some-namespace")
+			exchangeAuthcodeForTokens(t, test.authcodeExchange)
+		})
+	}
+}
 
-			var oauthHelper fosite.OAuth2Provider
-			var authCode string
-			var jwtSigningKey *ecdsa.PrivateKey
+func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
+	tests := []struct {
+		name             string
+		authcodeExchange authcodeExchangeInputs
+	}{
+		{
+			name: "authcode exchange succeeds once and then fails when the same authcode is used again",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access profile email") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "offline_access", "profile", "email"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				},
+			},
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-			oauthStore := oidc.NewKubeStorage(secrets)
-			if test.makeOathHelper != nil {
-				oauthHelper, authCode, jwtSigningKey = test.makeOathHelper(t, authRequest, oauthStore)
-			} else {
-				oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore)
-			}
+			// First call - should be successful.
+			subject, rsp, authCode, _, secrets, oauthStore := exchangeAuthcodeForTokens(t, test.authcodeExchange)
+			var parsedResponseBody map[string]interface{}
+			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedResponseBody))
 
-			if test.storage != nil {
-				test.storage(t, oauthStore, authCode)
-			}
-			subject := NewHandler(oauthHelper)
-
-			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
-			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 1)
-			if strings.Contains(authRequest.Form.Get("scope"), "openid") {
-				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
-				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 3)
-			} else {
-				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 2)
-			}
-
-			req := httptest.NewRequest("POST", "/path/shouldn't/matter", happyBody(authCode).ReadCloser())
+			// Second call - should be unsuccessful since auth code was already used.
+			//
+			// Fosite will also revoke the access token as is recommended by the OIDC spec. Currently, we don't
+			// delete the OIDC storage...but we probably should.
+			req := httptest.NewRequest("POST", "/path/shouldn't/matter", happyAuthcodeRequestBody(authCode).ReadCloser())
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			if test.request != nil {
-				test.request(req, authCode)
+			reusedAuthcodeResponse := httptest.NewRecorder()
+			subject.ServeHTTP(reusedAuthcodeResponse, req)
+			t.Logf("second response: %#v", reusedAuthcodeResponse)
+			t.Logf("second response body: %q", reusedAuthcodeResponse.Body.String())
+			require.Equal(t, http.StatusBadRequest, reusedAuthcodeResponse.Code)
+			testutil.RequireEqualContentType(t, reusedAuthcodeResponse.Header().Get("Content-Type"), "application/json")
+			require.JSONEq(t, fositeReusedAuthCodeErrorBody, reusedAuthcodeResponse.Body.String())
+
+			// This was previously invalidated by the first request, so it remains invalidated
+			requireInvalidAuthCodeStorage(t, authCode, oauthStore)
+			// Has now invalidated the access token that was previously handed out by the first request
+			requireInvalidAccessTokenStorage(t, parsedResponseBody, oauthStore)
+			// This was previously invalidated by the first request, so it remains invalidated
+			requireInvalidPKCEStorage(t, authCode, oauthStore)
+			// Fosite never cleans up OpenID Connect session storage, so it is still there
+			requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore,
+				test.authcodeExchange.want.wantRequestedScopes, test.authcodeExchange.want.wantGrantedScopes)
+
+			// Check that the access token and refresh token storage were both deleted, and the number of other storage objects did not change.
+			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
+			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
+			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: accesstoken.TypeLabelValue}, 0)
+			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: refreshtoken.TypeLabelValue}, 0)
+			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 0)
+			testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 2)
+		})
+	}
+}
+
+type refreshRequestInputs struct {
+	modifyTokenRequest func(tokenRequest *http.Request, refreshToken string, accessToken string)
+	want               tokenEndpointResponseExpectedValues
+}
+
+func TestRefreshGrant(t *testing.T) {
+	tests := []struct {
+		name             string
+		authcodeExchange authcodeExchangeInputs
+		refreshRequest   refreshRequestInputs
+	}{
+		{
+			name: "happy path refresh grant with ID token",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				}},
+		},
+		{
+			name: "happy path refresh grant without ID token",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"offline_access"},
+					wantGrantedScopes:     []string{"offline_access"},
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"offline_access"},
+					wantGrantedScopes:     []string{"offline_access"},
+				}},
+		},
+		{
+			name: "when the refresh request adds a new scope to the list of requested scopes then it is ignored",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
+					r.Body = happyRefreshRequestBody(refreshToken).WithScope("openid some-other-scope-not-from-auth-request").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				}},
+		},
+		{
+			name: "when the refresh request removes a scope which was originally granted from the list of requested scopes then it is ignored",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
+					r.Body = happyRefreshRequestBody(refreshToken).WithScope("").ReadCloser() // TODO FIX ME. WE NEED ANOTHER VALID SCOPE ON THIS CLIENT TO WRITE THIS TEST.
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				}},
+		},
+		{
+			name: "when the refresh request does not include a scope param then it gets all the same scopes as the original authorization request",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
+					r.Body = happyRefreshRequestBody(refreshToken).WithScope("").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				}},
+		},
+		{
+			name: "when a bad refresh token is sent in the refresh request",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"offline_access"},
+					wantGrantedScopes:     []string{"offline_access"},
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
+					r.Body = happyRefreshRequestBody(refreshToken).WithRefreshToken("bad refresh token").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidAuthCodeErrorBody,
+				}},
+		},
+		{
+			name: "when the access token is sent as if it were a refresh token",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"offline_access"},
+					wantGrantedScopes:     []string{"offline_access"},
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
+					r.Body = happyRefreshRequestBody(refreshToken).WithRefreshToken(accessToken).ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidAuthCodeErrorBody,
+				}},
+		},
+		{
+			name: "when the wrong client ID is included in the refresh request",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"offline_access"},
+					wantGrantedScopes:     []string{"offline_access"},
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
+					r.Body = happyRefreshRequestBody(refreshToken).WithClientID("wrong-client-id").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusUnauthorized,
+					wantErrorResponseBody: fositeInvalidClientErrorBody,
+				}},
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			// First exchange the authcode for tokens, including a refresh token.
+			subject, rsp, authCode, jwtSigningKey, secrets, oauthStore := exchangeAuthcodeForTokens(t, test.authcodeExchange)
+			var parsedAuthcodeExchangeResponseBody map[string]interface{}
+			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
+
+			// Wait one second before performing the refresh so we can see that the refreshed ID token has new issued
+			// at and expires at dates which are newer than the old tokens.
+			// If this gets too annoying in terms of making our test suite slower then we can remove it and adjust
+			// the expectations about the ID token that are made at the end of this test accordingly.
+			time.Sleep(1 * time.Second)
+
+			// Send the refresh token back and preform a refresh.
+			firstRefreshToken := parsedAuthcodeExchangeResponseBody["refresh_token"].(string)
+			req := httptest.NewRequest("POST", "/path/shouldn't/matter",
+				happyRefreshRequestBody(firstRefreshToken).ReadCloser())
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			if test.refreshRequest.modifyTokenRequest != nil {
+				test.refreshRequest.modifyTokenRequest(req, firstRefreshToken, parsedAuthcodeExchangeResponseBody["access_token"].(string))
 			}
-			rsp := httptest.NewRecorder()
 
-			subject.ServeHTTP(rsp, req)
-			t.Logf("response: %#v", rsp)
-			t.Logf("response body: %q", rsp.Body.String())
+			refreshResponse := httptest.NewRecorder()
+			subject.ServeHTTP(refreshResponse, req)
+			t.Logf("second response: %#v", refreshResponse)
+			t.Logf("second response body: %q", refreshResponse.Body.String())
 
-			require.Equal(t, test.wantStatus, rsp.Code)
-			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), "application/json")
-			if test.wantBodyFields != nil {
-				var m map[string]interface{}
-				require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &m))
-				require.ElementsMatch(t, test.wantBodyFields, getMapKeys(m))
+			// The bug in fosite that prevents at_hash from appearing in the initial ID token does not impact the refreshed ID token
+			wantAtHashClaimInIDToken := true
+			// Refreshed ID tokens do not include the nonce from the original auth request
+			wantNonceValueInIDToken := false
+			requireTokenEndpointBehavior(t, test.refreshRequest.want, wantAtHashClaimInIDToken, wantNonceValueInIDToken, refreshResponse, authCode, oauthStore, jwtSigningKey, secrets)
 
-				code := req.PostForm.Get("code")
-				wantOpenidScope := contains(test.wantBodyFields, "id_token")
-				requireInvalidAuthCodeStorage(t, code, oauthStore)
-				requireValidAccessTokenStorage(t, m, oauthStore, wantOpenidScope)
-				requireInvalidPKCEStorage(t, code, oauthStore)
-				requireValidOIDCStorage(t, m, code, oauthStore, wantOpenidScope)
+			if test.refreshRequest.want.wantStatus == http.StatusOK {
+				wantIDToken := contains(test.refreshRequest.want.wantSuccessBodyFields, "id_token")
 
-				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
-				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: accesstoken.TypeLabelValue}, 1)
-				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: refreshtoken.TypeLabelValue}, 0)
-				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 0)
+				var parsedRefreshResponseBody map[string]interface{}
+				require.NoError(t, json.Unmarshal(refreshResponse.Body.Bytes(), &parsedRefreshResponseBody))
 
-				if wantOpenidScope {
-					requireValidIDToken(t, m, jwtSigningKey)
-					testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
-					testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 3)
-				} else {
-					testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 2)
+				// Check that we got back new tokens.
+				require.NotEqual(t, parsedAuthcodeExchangeResponseBody["access_token"].(string), parsedRefreshResponseBody["access_token"].(string))
+				require.NotEqual(t, parsedAuthcodeExchangeResponseBody["refresh_token"].(string), parsedRefreshResponseBody["refresh_token"].(string))
+				if wantIDToken {
+					require.NotEqual(t, parsedAuthcodeExchangeResponseBody["id_token"].(string), parsedRefreshResponseBody["id_token"].(string))
 				}
-			} else {
-				require.JSONEq(t, test.wantExactBody, rsp.Body.String())
+
+				// The other fields of the response should be the same as the original response. Note that expires_in is a number of seconds from now.
+				require.Equal(t, parsedAuthcodeExchangeResponseBody["token_type"].(string), parsedRefreshResponseBody["token_type"].(string))
+				require.InDelta(t, parsedAuthcodeExchangeResponseBody["expires_in"].(float64), parsedRefreshResponseBody["expires_in"].(float64), 2)
+				require.Equal(t, parsedAuthcodeExchangeResponseBody["scope"].(string), parsedRefreshResponseBody["scope"].(string))
+
+				if wantIDToken {
+					var claimsOfFirstIDToken map[string]interface{}
+					firstIDTokenDecoded, _ := josejwt.ParseSigned(parsedAuthcodeExchangeResponseBody["id_token"].(string))
+					err := firstIDTokenDecoded.UnsafeClaimsWithoutVerification(&claimsOfFirstIDToken)
+					require.NoError(t, err)
+
+					var claimsOfSecondIDToken map[string]interface{}
+					secondIDTokenDecoded, _ := josejwt.ParseSigned(parsedRefreshResponseBody["id_token"].(string))
+					err = secondIDTokenDecoded.UnsafeClaimsWithoutVerification(&claimsOfSecondIDToken)
+					require.NoError(t, err)
+
+					requireClaimsAreNotEqual(t, "jti", claimsOfFirstIDToken, claimsOfSecondIDToken) // JWT ID
+					requireClaimsAreNotEqual(t, "exp", claimsOfFirstIDToken, claimsOfSecondIDToken) // expires at
+					require.Greater(t, claimsOfSecondIDToken["exp"], claimsOfFirstIDToken["exp"])
+					requireClaimsAreNotEqual(t, "iat", claimsOfFirstIDToken, claimsOfSecondIDToken) // issued at
+					require.Greater(t, claimsOfSecondIDToken["iat"], claimsOfFirstIDToken["iat"])
+
+					requireClaimsAreEqual(t, "iss", claimsOfFirstIDToken, claimsOfSecondIDToken)       // issuer
+					requireClaimsAreEqual(t, "aud", claimsOfFirstIDToken, claimsOfSecondIDToken)       // audience
+					requireClaimsAreEqual(t, "sub", claimsOfFirstIDToken, claimsOfSecondIDToken)       // subject
+					requireClaimsAreEqual(t, "rat", claimsOfFirstIDToken, claimsOfSecondIDToken)       // requested at
+					requireClaimsAreEqual(t, "auth_time", claimsOfFirstIDToken, claimsOfSecondIDToken) // auth time
+				}
 			}
 		})
 	}
+}
 
-	t.Run("auth code is used twice", func(t *testing.T) {
-		authRequest := deepCopyRequestForm(happyAuthRequest)
+func requireClaimsAreNotEqual(t *testing.T, claimName string, claimsOfTokenA map[string]interface{}, claimsOfTokenB map[string]interface{}) {
+	require.NotEmpty(t, claimsOfTokenA[claimName])
+	require.NotEmpty(t, claimsOfTokenB[claimName])
+	require.NotEqual(t, claimsOfTokenA[claimName], claimsOfTokenB[claimName])
+}
 
-		client := fake.NewSimpleClientset()
-		secrets := client.CoreV1().Secrets("some-namespace")
+func requireClaimsAreEqual(t *testing.T, claimName string, claimsOfTokenA map[string]interface{}, claimsOfTokenB map[string]interface{}) {
+	require.NotEmpty(t, claimsOfTokenA[claimName])
+	require.NotEmpty(t, claimsOfTokenB[claimName])
+	require.Equal(t, claimsOfTokenA[claimName], claimsOfTokenB[claimName])
+}
 
-		oauthStore := oidc.NewKubeStorage(secrets)
-		oauthHelper, authCode, jwtSigningKey := makeHappyOauthHelper(t, authRequest, oauthStore)
-		subject := NewHandler(oauthHelper)
+func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs) (
+	subject http.Handler,
+	rsp *httptest.ResponseRecorder,
+	authCode string,
+	jwtSigningKey *ecdsa.PrivateKey,
+	secrets v1.SecretInterface,
+	oauthStore *oidc.KubeStorage,
+) {
+	authRequest := deepCopyRequestForm(happyAuthRequest)
+	if test.modifyAuthRequest != nil {
+		test.modifyAuthRequest(authRequest)
+	}
 
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 1)
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 3)
+	client := fake.NewSimpleClientset()
+	secrets = client.CoreV1().Secrets("some-namespace")
 
-		req := httptest.NewRequest("POST", "/path/shouldn't/matter", happyBody(authCode).ReadCloser())
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	var oauthHelper fosite.OAuth2Provider
 
-		// First call - should be successful.
-		rsp0 := httptest.NewRecorder()
-		subject.ServeHTTP(rsp0, req)
-		t.Logf("response 0: %#v", rsp0)
-		t.Logf("response 0 body: %q", rsp0.Body.String())
-		testutil.RequireEqualContentType(t, rsp0.Header().Get("Content-Type"), "application/json")
-		require.Equal(t, http.StatusOK, rsp0.Code)
+	oauthStore = oidc.NewKubeStorage(secrets)
+	if test.makeOathHelper != nil {
+		oauthHelper, authCode, jwtSigningKey = test.makeOathHelper(t, authRequest, oauthStore)
+	} else {
+		oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore)
+	}
 
-		var m map[string]interface{}
-		require.NoError(t, json.Unmarshal(rsp0.Body.Bytes(), &m))
+	if test.modifyStorage != nil {
+		test.modifyStorage(t, oauthStore, authCode)
+	}
+	subject = NewHandler(oauthHelper)
 
-		wantBodyFields := []string{"id_token", "access_token", "token_type", "expires_in", "scope"}
-		require.ElementsMatch(t, wantBodyFields, getMapKeys(m))
+	authorizeEndpointGrantedOpenIDScope := strings.Contains(authRequest.Form.Get("scope"), "openid")
+	expectedNumberOfIDSessionsStored := 0
+	if authorizeEndpointGrantedOpenIDScope {
+		expectedNumberOfIDSessionsStored = 1
+	}
 
-		code := req.PostForm.Get("code")
-		wantOpenidScope := true
-		requireInvalidAuthCodeStorage(t, code, oauthStore)
-		requireValidAccessTokenStorage(t, m, oauthStore, wantOpenidScope)
-		requireInvalidPKCEStorage(t, code, oauthStore)
-		requireValidOIDCStorage(t, m, code, oauthStore, wantOpenidScope)
-		requireValidIDToken(t, m, jwtSigningKey)
+	testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
+	testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 1)
+	testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, expectedNumberOfIDSessionsStored)
+	testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 2+expectedNumberOfIDSessionsStored)
+
+	req := httptest.NewRequest("POST", "/path/shouldn't/matter", happyAuthcodeRequestBody(authCode).ReadCloser())
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if test.modifyTokenRequest != nil {
+		test.modifyTokenRequest(req, authCode)
+	}
+	rsp = httptest.NewRecorder()
+
+	subject.ServeHTTP(rsp, req)
+	t.Logf("response: %#v", rsp)
+	t.Logf("response body: %q", rsp.Body.String())
+
+	wantAtHashClaimInIDToken := false // due to a bug in fosite, the at_hash claim is not filled in during authcode exchange
+	wantNonceValueInIDToken := true   // ID tokens returned by the authcode exchange must include the nonce from the auth request (unliked refreshed ID tokens)
+	requireTokenEndpointBehavior(t, test.want, wantAtHashClaimInIDToken, wantNonceValueInIDToken, rsp, authCode, oauthStore, jwtSigningKey, secrets)
+
+	return subject, rsp, authCode, jwtSigningKey, secrets, oauthStore
+}
+
+func requireTokenEndpointBehavior(
+	t *testing.T,
+	test tokenEndpointResponseExpectedValues,
+	wantAtHashClaimInIDToken bool,
+	wantNonceValueInIDToken bool,
+	tokenEndpointResponse *httptest.ResponseRecorder,
+	authCode string,
+	oauthStore *oidc.KubeStorage,
+	jwtSigningKey *ecdsa.PrivateKey,
+	secrets v1.SecretInterface,
+) {
+	testutil.RequireEqualContentType(t, tokenEndpointResponse.Header().Get("Content-Type"), "application/json")
+	require.Equal(t, test.wantStatus, tokenEndpointResponse.Code)
+
+	if test.wantStatus == http.StatusOK {
+		require.NotNil(t, test.wantSuccessBodyFields, "problem with test table setup: wanted success but did not specify expected response body")
+
+		var parsedResponseBody map[string]interface{}
+		require.NoError(t, json.Unmarshal(tokenEndpointResponse.Body.Bytes(), &parsedResponseBody))
+		require.ElementsMatch(t, test.wantSuccessBodyFields, getMapKeys(parsedResponseBody))
+
+		wantIDToken := contains(test.wantSuccessBodyFields, "id_token")
+		wantRefreshToken := contains(test.wantSuccessBodyFields, "refresh_token")
+
+		requireInvalidAuthCodeStorage(t, authCode, oauthStore)
+		requireValidAccessTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes)
+		requireInvalidPKCEStorage(t, authCode, oauthStore)
+		requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes)
+
+		expectedNumberOfRefreshTokenSessionsStored := 0
+		if wantRefreshToken {
+			expectedNumberOfRefreshTokenSessionsStored = 1
+		}
+		expectedNumberOfIDSessionsStored := 0
+		if wantIDToken {
+			expectedNumberOfIDSessionsStored = 1
+			requireValidIDToken(t, parsedResponseBody, jwtSigningKey, wantAtHashClaimInIDToken, wantNonceValueInIDToken, parsedResponseBody["access_token"].(string))
+		}
+		if wantRefreshToken {
+			requireValidRefreshTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes)
+		}
 
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: accesstoken.TypeLabelValue}, 1)
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: refreshtoken.TypeLabelValue}, 0)
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 0)
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 3)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: refreshtoken.TypeLabelValue}, expectedNumberOfRefreshTokenSessionsStored)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, expectedNumberOfIDSessionsStored)
+		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 2+expectedNumberOfRefreshTokenSessionsStored+expectedNumberOfIDSessionsStored)
+	} else {
+		require.NotNil(t, test.wantErrorResponseBody, "problem with test table setup: wanted failure but did not specify failure response body")
 
-		// Second call - should be unsuccessful since auth code was already used.
-		//
-		// Fosite will also revoke the access token as is recommended by the OIDC spec. Currently, we don't
-		// delete the OIDC storage...but we probably should.
-		rsp1 := httptest.NewRecorder()
-		subject.ServeHTTP(rsp1, req)
-		t.Logf("response 1: %#v", rsp1)
-		t.Logf("response 1 body: %q", rsp1.Body.String())
-		require.Equal(t, http.StatusBadRequest, rsp1.Code)
-		testutil.RequireEqualContentType(t, rsp1.Header().Get("Content-Type"), "application/json")
-		require.JSONEq(t, fositeReusedAuthCodeErrorBody, rsp1.Body.String())
+		require.JSONEq(t, test.wantErrorResponseBody, tokenEndpointResponse.Body.String())
+	}
+}
 
-		requireInvalidAuthCodeStorage(t, code, oauthStore)
-		requireInvalidAccessTokenStorage(t, m, oauthStore)
-		requireInvalidPKCEStorage(t, code, oauthStore)
-		requireValidOIDCStorage(t, m, code, oauthStore, wantOpenidScope)
-
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: accesstoken.TypeLabelValue}, 0)
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: refreshtoken.TypeLabelValue}, 0)
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: storagepkce.TypeLabelValue}, 0)
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
-		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{}, 2)
-	})
+func hashAccessToken(accessToken string) string {
+	// See https://openid.net/specs/openid-connect-core-1_0.html#CodeIDToken.
+	// "Access Token hash value. Its value is the base64url encoding of the left-most half of
+	// the hash of the octets of the ASCII representation of the access_token value, where the
+	// hash algorithm used is the hash algorithm used in the alg Header Parameter of the ID
+	// Token's JOSE Header."
+	b := sha256.Sum256([]byte(accessToken))
+	return base64.RawURLEncoding.EncodeToString(b[:len(b)/2])
 }
 
 type body url.Values
 
-func happyBody(happyAuthCode string) body {
+func happyAuthcodeRequestBody(happyAuthCode string) body {
 	return map[string][]string{
 		"grant_type":    {"authorization_code"},
 		"code":          {happyAuthCode},
@@ -572,8 +1044,21 @@ func happyBody(happyAuthCode string) body {
 	}
 }
 
+func happyRefreshRequestBody(refreshToken string) body {
+	return map[string][]string{
+		"grant_type":    {"refresh_token"},
+		"scope":         {"openid"},
+		"client_id":     {goodClient},
+		"refresh_token": {refreshToken},
+	}
+}
+
 func (b body) WithGrantType(grantType string) body {
 	return b.with("grant_type", grantType)
+}
+
+func (b body) WithRefreshToken(refreshToken string) body {
+	return b.with("refresh_token", refreshToken)
 }
 
 func (b body) WithClientID(clientID string) body {
@@ -582,6 +1067,10 @@ func (b body) WithClientID(clientID string) body {
 
 func (b body) WithAuthCode(code string) body {
 	return b.with("code", code)
+}
+
+func (b body) WithScope(scope string) body {
+	return b.with("scope", scope)
 }
 
 func (b body) WithRedirectURI(redirectURI string) body {
@@ -652,9 +1141,8 @@ func makeOauthHelperWithNilPrivateJWTSigningKey(
 	return oauthHelper, authResponder.GetCode(), nil
 }
 
+// Simulate the auth endpoint running so Fosite code will fill the store with realistic values.
 func simulateAuthEndpointHavingAlreadyRun(t *testing.T, authRequest *http.Request, oauthHelper fosite.OAuth2Provider) fosite.AuthorizeResponder {
-	// Simulate the auth endpoint running so Fosite code will fill the store with realistic values.
-	//
 	// We only set the fields in the session that Fosite wants us to set.
 	ctx := context.Background()
 	session := &openid.DefaultSession{
@@ -670,6 +1158,9 @@ func simulateAuthEndpointHavingAlreadyRun(t *testing.T, authRequest *http.Reques
 	require.NoError(t, err)
 	if strings.Contains(authRequest.Form.Get("scope"), "openid") {
 		authRequester.GrantScope("openid")
+	}
+	if strings.Contains(authRequest.Form.Get("scope"), "offline_access") {
+		authRequester.GrantScope("offline_access")
 	}
 	authResponder, err := oauthHelper.NewAuthorizeResponse(ctx, authRequester, session)
 	require.NoError(t, err)
@@ -705,11 +1196,41 @@ func requireInvalidAuthCodeStorage(
 	require.True(t, errors.Is(err, fosite.ErrInvalidatedAuthorizeCode))
 }
 
+func requireValidRefreshTokenStorage(
+	t *testing.T,
+	body map[string]interface{},
+	storage oauth2.CoreStorage,
+	wantRequestedScopes []string,
+	wantGrantedScopes []string,
+) {
+	t.Helper()
+
+	// Get the refresh token, and make sure we can use it to perform a lookup on the storage.
+	refreshToken, ok := body["refresh_token"]
+	require.True(t, ok)
+	refreshTokenString, ok := refreshToken.(string)
+	require.Truef(t, ok, "wanted refresh_token to be a string, but got %T", refreshToken)
+	require.NotEmpty(t, refreshTokenString)
+	storedRequest, err := storage.GetRefreshTokenSession(context.Background(), getFositeDataSignature(t, refreshTokenString), nil)
+	require.NoError(t, err)
+
+	// Fosite stores refresh tokens without any of the original request form parameters.
+	requireValidStoredRequest(
+		t,
+		storedRequest,
+		storedRequest.Sanitize([]string{}).GetRequestForm(),
+		wantRequestedScopes,
+		wantGrantedScopes,
+		true,
+	)
+}
+
 func requireValidAccessTokenStorage(
 	t *testing.T,
 	body map[string]interface{},
 	storage oauth2.CoreStorage,
-	wantGrantedOpenidScope bool,
+	wantRequestedScopes []string,
+	wantGrantedScopes []string,
 ) {
 	t.Helper()
 
@@ -718,7 +1239,8 @@ func requireValidAccessTokenStorage(
 	require.True(t, ok)
 	accessTokenString, ok := accessToken.(string)
 	require.Truef(t, ok, "wanted access_token to be a string, but got %T", accessToken)
-	authRequest, err := storage.GetAccessTokenSession(context.Background(), getFositeDataSignature(t, accessTokenString), nil)
+	require.NotEmpty(t, accessTokenString)
+	storedRequest, err := storage.GetAccessTokenSession(context.Background(), getFositeDataSignature(t, accessTokenString), nil)
 	require.NoError(t, err)
 
 	// Make sure the other body fields are valid.
@@ -732,24 +1254,21 @@ func requireValidAccessTokenStorage(
 	require.True(t, ok)
 	expiresInNumber, ok := expiresIn.(float64) // Go unmarshals JSON numbers to float64, see `go doc encoding/json`
 	require.Truef(t, ok, "wanted expires_in to be an float64, but got %T", expiresIn)
-	require.InDelta(t, accessTokenExpirationSeconds, expiresInNumber, timeComparisonFudgeSeconds)
+	require.InDelta(t, accessTokenExpirationSeconds, expiresInNumber, 2) // "expires_in" is a number of seconds, not a timestamp
 
 	scopes, ok := body["scope"]
 	require.True(t, ok)
-	scopesString, ok := scopes.(string)
+	actualGrantedScopesString, ok := scopes.(string)
 	require.Truef(t, ok, "wanted scopes to be an string, but got %T", scopes)
-	wantScopes := ""
-	if wantGrantedOpenidScope {
-		wantScopes += "openid"
-	}
-	require.Equal(t, wantScopes, scopesString)
+	require.Equal(t, strings.Join(wantGrantedScopes, " "), actualGrantedScopesString)
 
-	// Fosite stores access tokens without any of the original request form pararmeters.
-	requireValidAuthRequest(
+	// Fosite stores access tokens without any of the original request form parameters.
+	requireValidStoredRequest(
 		t,
-		authRequest,
-		authRequest.Sanitize([]string{}).GetRequestForm(),
-		wantGrantedOpenidScope,
+		storedRequest,
+		storedRequest.Sanitize([]string{}).GetRequestForm(),
+		wantRequestedScopes,
+		wantGrantedScopes,
 		true,
 	)
 }
@@ -788,13 +1307,14 @@ func requireValidOIDCStorage(
 	body map[string]interface{},
 	code string,
 	storage openid.OpenIDConnectRequestStorage,
-	wantGrantedOpenidScope bool,
+	wantRequestedScopes []string,
+	wantGrantedScopes []string,
 ) {
 	t.Helper()
 
-	if wantGrantedOpenidScope {
+	if contains(wantGrantedScopes, "openid") {
 		// Make sure the OIDC session is still there. Note that Fosite stores OIDC sessions using the full auth code as a key.
-		authRequest, err := storage.GetOpenIDConnectSession(context.Background(), code, nil)
+		storedRequest, err := storage.GetOpenIDConnectSession(context.Background(), code, nil)
 		require.NoError(t, err)
 
 		// Fosite stores OIDC sessions with only the nonce in the original request form.
@@ -804,11 +1324,12 @@ func requireValidOIDCStorage(
 		require.Truef(t, ok, "wanted access_token to be a string, but got %T", accessToken)
 		require.NotEmpty(t, accessTokenString)
 
-		requireValidAuthRequest(
+		requireValidStoredRequest(
 			t,
-			authRequest,
-			authRequest.Sanitize([]string{"nonce"}).GetRequestForm(),
-			true,
+			storedRequest,
+			storedRequest.Sanitize([]string{"nonce"}).GetRequestForm(),
+			wantRequestedScopes,
+			wantGrantedScopes,
 			false,
 		)
 	} else {
@@ -817,37 +1338,32 @@ func requireValidOIDCStorage(
 	}
 }
 
-func requireValidAuthRequest(
+func requireValidStoredRequest(
 	t *testing.T,
-	authRequest fosite.Requester,
+	request fosite.Requester,
 	wantRequestForm url.Values,
-	wantGrantedOpenidScope bool,
+	wantRequestedScopes []string,
+	wantGrantedScopes []string,
 	wantAccessTokenExpiresAt bool,
 ) {
 	t.Helper()
 
-	// Assert that the getters on the authRequest return what we think they should.
-	wantRequestedScopes := []string{"profile", "email"}
-	wantGrantedScopes := []string{}
-	if wantGrantedOpenidScope {
-		wantRequestedScopes = append([]string{"openid"}, wantRequestedScopes...)
-		wantGrantedScopes = append([]string{"openid"}, wantGrantedScopes...)
-	}
-	require.NotEmpty(t, authRequest.GetID())
-	testutil.RequireTimeInDelta(t, authRequest.GetRequestedAt(), time.Now().UTC(), timeComparisonFudgeSeconds*time.Second)
-	require.Equal(t, goodClient, authRequest.GetClient().GetID())
-	require.Equal(t, fosite.Arguments(wantRequestedScopes), authRequest.GetRequestedScopes())
-	require.Equal(t, fosite.Arguments(wantGrantedScopes), authRequest.GetGrantedScopes())
-	require.Empty(t, authRequest.GetRequestedAudience())
-	require.Empty(t, authRequest.GetGrantedAudience())
-	require.Equal(t, wantRequestForm, authRequest.GetRequestForm()) // Fosite stores access token request without form
+	// Assert that the getters on the request return what we think they should.
+	require.NotEmpty(t, request.GetID())
+	testutil.RequireTimeInDelta(t, request.GetRequestedAt(), time.Now().UTC(), timeComparisonFudgeSeconds*time.Second)
+	require.Equal(t, goodClient, request.GetClient().GetID())
+	require.Equal(t, fosite.Arguments(wantRequestedScopes), request.GetRequestedScopes())
+	require.Equal(t, fosite.Arguments(wantGrantedScopes), request.GetGrantedScopes())
+	require.Empty(t, request.GetRequestedAudience())
+	require.Empty(t, request.GetGrantedAudience())
+	require.Equal(t, wantRequestForm, request.GetRequestForm()) // Fosite stores access token request without form
 
 	// Cast session to the type we think it should be.
-	session, ok := authRequest.GetSession().(*openid.DefaultSession)
-	require.Truef(t, ok, "could not cast %T to %T", authRequest.GetSession(), &openid.DefaultSession{})
+	session, ok := request.GetSession().(*openid.DefaultSession)
+	require.Truef(t, ok, "could not cast %T to %T", request.GetSession(), &openid.DefaultSession{})
 
 	// Assert that the session claims are what we think they should be, but only if we are doing OIDC.
-	if wantGrantedOpenidScope {
+	if contains(wantGrantedScopes, "openid") {
 		claims := session.Claims
 		require.Empty(t, claims.JTI) // When claims.JTI is empty, Fosite will generate a UUID for this field.
 		require.Equal(t, goodSubject, claims.Subject)
@@ -912,7 +1428,14 @@ func requireValidAuthRequest(
 	require.Equal(t, goodSubject, session.Subject)
 }
 
-func requireValidIDToken(t *testing.T, body map[string]interface{}, jwtSigningKey *ecdsa.PrivateKey) {
+func requireValidIDToken(
+	t *testing.T,
+	body map[string]interface{},
+	jwtSigningKey *ecdsa.PrivateKey,
+	wantAtHashClaimInIDToken bool,
+	wantNonceValueInIDToken bool,
+	actualAccessToken string,
+) {
 	t.Helper()
 
 	idToken, ok := body["id_token"]
@@ -936,9 +1459,13 @@ func requireValidIDToken(t *testing.T, body map[string]interface{}, jwtSigningKe
 		AuthTime        int64    `json:"auth_time"`
 	}
 
-	// Note that there is a bug in fosite which prevents the `at_hash` claim from appearing in this ID token.
+	// Note that there is a bug in fosite which prevents the `at_hash` claim from appearing in this ID token
+	// during the initial authcode exchange, but does not prevent `at_hash` from appearing in the refreshed ID token.
 	// We can add a workaround for this later.
 	idTokenFields := []string{"sub", "aud", "iss", "jti", "nonce", "auth_time", "exp", "iat", "rat"}
+	if wantAtHashClaimInIDToken {
+		idTokenFields = append(idTokenFields, "at_hash")
+	}
 
 	// make sure that these are the only fields in the token
 	var m map[string]interface{}
@@ -953,7 +1480,12 @@ func requireValidIDToken(t *testing.T, body map[string]interface{}, jwtSigningKe
 	require.Equal(t, goodClient, claims.Audience[0])
 	require.Equal(t, goodIssuer, claims.Issuer)
 	require.NotEmpty(t, claims.JTI)
-	require.Equal(t, goodNonce, claims.Nonce)
+
+	if wantNonceValueInIDToken {
+		require.Equal(t, goodNonce, claims.Nonce)
+	} else {
+		require.Empty(t, claims.Nonce)
+	}
 
 	expiresAt := time.Unix(claims.ExpiresAt, 0)
 	issuedAt := time.Unix(claims.IssuedAt, 0)
@@ -963,6 +1495,13 @@ func requireValidIDToken(t *testing.T, body map[string]interface{}, jwtSigningKe
 	testutil.RequireTimeInDelta(t, time.Now().UTC(), issuedAt, timeComparisonFudgeSeconds*time.Second)
 	testutil.RequireTimeInDelta(t, goodRequestedAtTime, requestedAt, timeComparisonFudgeSeconds*time.Second)
 	testutil.RequireTimeInDelta(t, goodAuthTime, authTime, timeComparisonFudgeSeconds*time.Second)
+
+	if wantAtHashClaimInIDToken {
+		require.NotEmpty(t, actualAccessToken)
+		require.Equal(t, hashAccessToken(actualAccessToken), claims.AccessTokenHash)
+	} else {
+		require.Empty(t, claims.AccessTokenHash)
+	}
 }
 
 func deepCopyRequestForm(r *http.Request) *http.Request {

@@ -7,6 +7,7 @@ package oidc
 import (
 	"time"
 
+	coreosoidc "github.com/coreos/go-oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 
@@ -83,8 +84,8 @@ func PinnipedCLIOIDCClient() *fosite.DefaultOpenIDConnectClient {
 			Public:        true,
 			RedirectURIs:  []string{"http://127.0.0.1/callback"},
 			ResponseTypes: []string{"code"},
-			GrantTypes:    []string{"authorization_code"},
-			Scopes:        []string{"openid", "profile", "email"},
+			GrantTypes:    []string{"authorization_code", "refresh_token"},
+			Scopes:        []string{coreosoidc.ScopeOpenID, coreosoidc.ScopeOfflineAccess, "profile", "email"},
 		},
 		TokenEndpointAuthMethod: "none",
 	}
@@ -111,8 +112,9 @@ func FositeOauth2Helper(
 		EnforcePKCE:              true,                      // follow current set of best practices and always require PKCE
 		AllowedPromptValues:      []string{"none"},          // TODO unclear what we should set here
 
-		RefreshTokenScopes:  nil, // TODO decide what makes sense when we add refresh token support
-		MinParameterEntropy: 32,  // 256 bits seems about right
+		RefreshTokenScopes: []string{coreosoidc.ScopeOfflineAccess}, // as per https://openid.net/specs/openid-connect-core-1_0.html#OfflineAccess
+
+		MinParameterEntropy: 32, // 256 bits seems about right
 	}
 
 	return compose.Compose(
@@ -125,9 +127,9 @@ func FositeOauth2Helper(
 		},
 		nil, // hasher, defaults to using BCrypt when nil. Used for hashing client secrets.
 		compose.OAuth2AuthorizeExplicitFactory,
-		// compose.OAuth2RefreshTokenGrantFactory,
+		compose.OAuth2RefreshTokenGrantFactory,
 		compose.OpenIDConnectExplicitFactory,
-		// compose.OpenIDConnectRefreshFactory,
+		compose.OpenIDConnectRefreshFactory,
 		compose.OAuth2PKCEFactory,
 	)
 }
@@ -155,4 +157,12 @@ func FositeErrorForLog(err error) []interface{} {
 
 type IDPListGetter interface {
 	GetIDPList() []provider.UpstreamOIDCIdentityProviderI
+}
+
+func GrantScopeIfRequested(authorizeRequester fosite.AuthorizeRequester, scopeName string) {
+	for _, scope := range authorizeRequester.GetRequestedScopes() {
+		if scope == scopeName {
+			authorizeRequester.GrantScope(scope)
+		}
+	}
 }

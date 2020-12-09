@@ -566,14 +566,14 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 }
 
 func TestTokenExchange(t *testing.T) {
-	// TODO write this test
-	t.Skip()
 	tests := []struct {
-		name                       string
+		name string
+
 		authcodeExchange           authcodeExchangeInputs
-		wantStatus                 int
-		requestedAudience          string
 		modifyTokenExchangeRequest func(r *http.Request)
+		requestedAudience          string
+
+		wantStatus int
 	}{
 		{
 			name: "token exchange happy path",
@@ -581,12 +581,18 @@ func TestTokenExchange(t *testing.T) {
 				modifyAuthRequest: func(authRequest *http.Request) {
 					authRequest.Form.Set("scope", "openid pinniped.sts.unrestricted")
 				},
-				wantStatus:          http.StatusOK,
-				wantBodyFields:      []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
-				wantRequestedScopes: []string{"openid", "pinniped.sts.unrestricted"},
+				wantStatus:            http.StatusOK,
+				wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
+				wantRequestedScopes:   []string{"openid", "pinniped.sts.unrestricted"},
+				wantGrantedScopes:     []string{"openid", "pinniped.sts.unrestricted"},
 			},
-			wantStatus: http.StatusOK,
+			requestedAudience: "some-workload-cluster",
+			wantStatus:        http.StatusOK,
 		},
+		// TODO add the unhappy path table entries: wrong client id, invalid access token, access token does not have pinniped.sts.unrestricted, etc.
+		//  Can use modifyAuthRequest to change the request params for the original authorize request (e.g. don't request pinniped.sts.unrestricted).
+		//  Can use modifyTokenExchangeRequest to change to request params for the token exchange call (e.g. bad access token or wrong http verb).
+		//  Will need to add some more fields to the test table to declare the expected values of the error response, etc.
 	}
 	for _, test := range tests {
 		test := test
@@ -595,7 +601,7 @@ func TestTokenExchange(t *testing.T) {
 			var parsedResponseBody map[string]interface{}
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedResponseBody))
 
-			request := happyTokenExchangeRequest("foo-cluster", parsedResponseBody["access_token"].(string))
+			request := happyTokenExchangeRequest(test.requestedAudience, parsedResponseBody["access_token"].(string))
 
 			req := httptest.NewRequest("POST", "/path/shouldn't/matter", body(request.Form).ReadCloser())
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -610,6 +616,10 @@ func TestTokenExchange(t *testing.T) {
 
 			require.Equal(t, test.wantStatus, rsp.Code)
 			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), "application/json")
+
+			// TODO write lots more assertions about the happy path
+			//  e.g. that nothing was changed in the fosite k8s storage
+			//  e.g. that the response body is correct, and the decoded token has the right claims
 		})
 	}
 }

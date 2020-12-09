@@ -993,7 +993,7 @@ type singleUseJWKProvider struct {
 }
 
 func (s *singleUseJWKProvider) GetJWKS(issuerName string) (jwks *jose.JSONWebKeySet, activeJWK *jose.JSONWebKey) {
-	s.calls += 1
+	s.calls++
 	if s.calls > 1 {
 		return nil, nil
 	}

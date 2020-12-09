@@ -7,6 +7,7 @@ import (
 	"context"
 	"net/url"
 
+	"github.com/coreos/go-oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 	"github.com/ory/fosite/handler/oauth2"
@@ -15,8 +16,9 @@ import (
 )
 
 const (
-	tokenTypeAccessToken = "urn:ietf:params:oauth:token-type:access_token" //nolint: gosec
-	tokenTypeJWT         = "urn:ietf:params:oauth:token-type:jwt"          //nolint: gosec
+	tokenTypeAccessToken       = "urn:ietf:params:oauth:token-type:access_token" //nolint: gosec
+	tokenTypeJWT               = "urn:ietf:params:oauth:token-type:jwt"          //nolint: gosec
+	pinnipedTokenExchangeScope = "pinniped.sts.unrestricted"                     //nolint: gosec
 )
 
 type stsParams struct {
@@ -63,6 +65,11 @@ func (t *TokenExchangeHandler) PopulateTokenEndpointResponse(ctx context.Context
 		return errors.WithStack(err)
 	}
 
+	// Require that the incoming access token has the STS and OpenID scopes .
+	if !originalRequester.GetGrantedScopes().Has(pinnipedTokenExchangeScope, oidc.ScopeOpenID) {
+		return errors.WithStack(fosite.ErrAccessDenied.WithHintf("missing the %q scope", pinnipedTokenExchangeScope))
+	}
+
 	// Use the original authorize request information, along with the requested audience, to mint a new JWT.
 	responseToken, err := t.mintJWT(ctx, originalRequester, params.requestedAudience)
 	if err != nil {
@@ -72,7 +79,7 @@ func (t *TokenExchangeHandler) PopulateTokenEndpointResponse(ctx context.Context
 	// Format the response parameters according to RFC8693.
 	responder.SetAccessToken(responseToken)
 	responder.SetTokenType("N_A")
-	responder.SetExtra("issued_token_type", "urn:ietf:params:oauth:token-type:jwt")
+	responder.SetExtra("issued_token_type", tokenTypeJWT)
 	return nil
 }
 
@@ -88,19 +95,19 @@ func (t *TokenExchangeHandler) validateParams(params url.Values) (*stsParams, er
 	// Validate some required parameters.
 	result.requestedAudience = params.Get("audience")
 	if result.requestedAudience == "" {
-		return nil, errors.WithMessagef(fosite.ErrInvalidRequest, "missing audience parameter")
+		return nil, fosite.ErrInvalidRequest.WithHint("missing audience parameter")
 	}
 	result.subjectAccessToken = params.Get("subject_token")
 	if result.subjectAccessToken == "" {
-		return nil, errors.WithMessagef(fosite.ErrInvalidRequest, "missing subject_token parameter")
+		return nil, fosite.ErrInvalidRequest.WithHint("missing subject_token parameter")
 	}
 
 	// Validate some parameters with hardcoded values we support.
 	if params.Get("subject_token_type") != tokenTypeAccessToken {
-		return nil, errors.WithMessagef(fosite.ErrInvalidRequest, "unsupported subject_token_type parameter value, must be %q", tokenTypeAccessToken)
+		return nil, fosite.ErrInvalidRequest.WithHintf("unsupported subject_token_type parameter value, must be %q", tokenTypeAccessToken)
 	}
 	if params.Get("requested_token_type") != tokenTypeJWT {
-		return nil, errors.WithMessagef(fosite.ErrInvalidRequest, "unsupported requested_token_type parameter value, must be %q", tokenTypeJWT)
+		return nil, fosite.ErrInvalidRequest.WithHintf("unsupported requested_token_type parameter value, must be %q", tokenTypeJWT)
 	}
 
 	// Validate that none of these unsupported parameters were sent. These are optional and we do not currently support them.
@@ -111,7 +118,7 @@ func (t *TokenExchangeHandler) validateParams(params url.Values) (*stsParams, er
 		"actor_token_type",
 	} {
 		if params.Get(param) != "" {
-			return nil, errors.WithMessagef(fosite.ErrInvalidRequest, "unsupported parameter %s", param)
+			return nil, fosite.ErrInvalidRequest.WithHintf("unsupported parameter %s", param)
 		}
 	}
 
@@ -125,7 +132,7 @@ func (t *TokenExchangeHandler) validateAccessToken(ctx context.Context, requeste
 	signature := t.accessTokenStrategy.AccessTokenSignature(accessToken)
 	originalRequester, err := t.accessTokenStorage.GetAccessTokenSession(ctx, signature, requester.GetSession())
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, fosite.ErrRequestUnauthorized.WithCause(err).WithHint("invalid subject_token")
 	}
 	return originalRequester, nil
 }

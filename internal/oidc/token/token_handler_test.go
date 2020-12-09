@@ -639,7 +639,7 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 }
 
 type refreshRequestInputs struct {
-	modifyTokenRequest func(tokenRequest *http.Request, refreshToken string)
+	modifyTokenRequest func(tokenRequest *http.Request, refreshToken string, accessToken string)
 	want               tokenEndpointResponseExpectedValues
 }
 
@@ -688,6 +688,72 @@ func TestRefreshGrant(t *testing.T) {
 				}},
 		},
 		{
+			name: "when the refresh request adds a new scope to the list of requested scopes then it is ignored",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
+					r.Body = happyRefreshRequestBody(refreshToken).WithScope("openid some-other-scope-not-from-auth-request").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				}},
+		},
+		{
+			name: "when the refresh request removes a scope which was originally granted from the list of requested scopes then it is ignored",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
+					r.Body = happyRefreshRequestBody(refreshToken).WithScope("").ReadCloser() // TODO FIX ME. WE NEED ANOTHER VALID SCOPE ON THIS CLIENT TO WRITE THIS TEST.
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				}},
+		},
+		{
+			name: "when the refresh request does not include a scope param then it gets all the same scopes as the original authorization request",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
+					r.Body = happyRefreshRequestBody(refreshToken).WithScope("").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"openid", "offline_access"},
+					wantGrantedScopes:     []string{"openid", "offline_access"},
+				}},
+		},
+		{
 			name: "when a bad refresh token is sent in the refresh request",
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
@@ -699,8 +765,28 @@ func TestRefreshGrant(t *testing.T) {
 				},
 			},
 			refreshRequest: refreshRequestInputs{
-				modifyTokenRequest: func(r *http.Request, refreshToken string) {
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
 					r.Body = happyRefreshRequestBody(refreshToken).WithRefreshToken("bad refresh token").ReadCloser()
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusBadRequest,
+					wantErrorResponseBody: fositeInvalidAuthCodeErrorBody,
+				}},
+		},
+		{
+			name: "when the access token is sent as if it were a refresh token",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "offline_access") },
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"offline_access"},
+					wantGrantedScopes:     []string{"offline_access"},
+				},
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
+					r.Body = happyRefreshRequestBody(refreshToken).WithRefreshToken(accessToken).ReadCloser()
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusBadRequest,
@@ -719,7 +805,7 @@ func TestRefreshGrant(t *testing.T) {
 				},
 			},
 			refreshRequest: refreshRequestInputs{
-				modifyTokenRequest: func(r *http.Request, refreshToken string) {
+				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
 					r.Body = happyRefreshRequestBody(refreshToken).WithClientID("wrong-client-id").ReadCloser()
 				},
 				want: tokenEndpointResponseExpectedValues{
@@ -750,7 +836,7 @@ func TestRefreshGrant(t *testing.T) {
 				happyRefreshRequestBody(firstRefreshToken).ReadCloser())
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			if test.refreshRequest.modifyTokenRequest != nil {
-				test.refreshRequest.modifyTokenRequest(req, firstRefreshToken)
+				test.refreshRequest.modifyTokenRequest(req, firstRefreshToken, parsedAuthcodeExchangeResponseBody["access_token"].(string))
 			}
 
 			refreshResponse := httptest.NewRecorder()
@@ -981,6 +1067,10 @@ func (b body) WithClientID(clientID string) body {
 
 func (b body) WithAuthCode(code string) body {
 	return b.with("code", code)
+}
+
+func (b body) WithScope(scope string) body {
+	return b.with("scope", scope)
 }
 
 func (b body) WithRedirectURI(redirectURI string) body {

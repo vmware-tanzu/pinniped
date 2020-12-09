@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -125,7 +126,7 @@ func TestSupervisorLogin(t *testing.T) {
 		ClientID:    "pinniped-cli",
 		Endpoint:    discovery.Endpoint(),
 		RedirectURL: localCallbackServer.URL,
-		Scopes:      []string{"openid"},
+		Scopes:      []string{"openid", "pinniped.sts.unrestricted"},
 	}
 
 	// Build a valid downstream authorize URL for the supervisor.
@@ -159,7 +160,7 @@ func TestSupervisorLogin(t *testing.T) {
 	callback := localCallbackServer.waitForCallback(10 * time.Second)
 	t.Logf("got callback request: %s", library.MaskTokens(callback.URL.String()))
 	require.Equal(t, stateParam.String(), callback.URL.Query().Get("state"))
-	require.Equal(t, "openid", callback.URL.Query().Get("scope"))
+	require.Equal(t, "openid pinniped.sts.unrestricted", callback.URL.Query().Get("scope"))
 	authcode := callback.URL.Query().Get("code")
 	require.NotEmpty(t, authcode)
 
@@ -197,6 +198,8 @@ func TestSupervisorLogin(t *testing.T) {
 	testutil.RequireTimeInDelta(t, time.Now().UTC().Add(time.Minute*5), tokenResponse.Expiry, time.Second*30)
 
 	require.Empty(t, tokenResponse.RefreshToken) // for now, until the next user story :)
+
+	wipDoTokenExchange(t, &downstreamOAuth2Config, tokenResponse, httpClient, discovery) // WIP while we work on the token exchange server.
 }
 
 func startLocalCallbackServer(t *testing.T) *localCallbackServer {
@@ -225,4 +228,43 @@ func (s *localCallbackServer) waitForCallback(timeout time.Duration) *http.Reque
 		require.Fail(s.t, "timed out waiting for callback request")
 		return nil
 	}
+}
+
+// WIP test code for the token exchange flow.
+func wipDoTokenExchange(t *testing.T, config *oauth2.Config, tokenResponse *oauth2.Token, httpClient *http.Client, provider *oidc.Provider) {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+
+	// Form the HTTP POST request with the parameters specified by RFC8693.
+	reqBody := strings.NewReader(url.Values{
+		"grant_type":           []string{"urn:ietf:params:oauth:grant-type:token-exchange"},
+		"audience":             []string{"cluster-1234"},
+		"client_id":            []string{config.ClientID},
+		"subject_token":        []string{tokenResponse.AccessToken},
+		"subject_token_type":   []string{"urn:ietf:params:oauth:token-type:access_token"},
+		"requested_token_type": []string{"urn:ietf:params:oauth:token-type:jwt"},
+	}.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, config.Endpoint.TokenURL, reqBody)
+	require.NoError(t, err)
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+
+	resp, err := httpClient.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	var respBody struct {
+		AccessToken     string `json:"access_token"`
+		IssuedTokenType string `json:"issued_token_type"`
+		TokenType       string `json:"token_type"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&respBody))
+
+	var clusterVerifier = provider.Verifier(&oidc.Config{ClientID: "cluster-1234"})
+	exchangedToken, err := clusterVerifier.Verify(ctx, respBody.AccessToken)
+	require.NoError(t, err)
+
+	var claims map[string]interface{}
+	require.NoError(t, exchangedToken.Claims(&claims))
+	indentedClaims, err := json.MarshalIndent(claims, "   ", "  ")
+	require.NoError(t, err)
+	t.Logf("exchanged token claims:\n%s", string(indentedClaims))
 }

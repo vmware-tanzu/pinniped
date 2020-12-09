@@ -753,7 +753,7 @@ func TestTokenExchange(t *testing.T) {
 			wantResponseBodyContains: `invalid subject_token`,
 		},
 		{
-			name: "access token missing required scopes",
+			name: "access token missing pinniped.sts.unrestricted scope",
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(authRequest *http.Request) {
 					authRequest.Form.Set("scope", "openid")
@@ -768,6 +768,23 @@ func TestTokenExchange(t *testing.T) {
 			requestedAudience:        "some-workload-cluster",
 			wantStatus:               http.StatusForbidden,
 			wantResponseBodyContains: `missing the \"pinniped.sts.unrestricted\" scope`,
+		},
+		{
+			name: "access token missing openid scope",
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(authRequest *http.Request) {
+					authRequest.Form.Set("scope", "pinniped.sts.unrestricted")
+				},
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:            http.StatusOK,
+					wantSuccessBodyFields: []string{"access_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:   []string{"pinniped.sts.unrestricted"},
+					wantGrantedScopes:     []string{"pinniped.sts.unrestricted"},
+				},
+			},
+			requestedAudience:        "some-workload-cluster",
+			wantStatus:               http.StatusForbidden,
+			wantResponseBodyContains: `missing the \"openid\" scope`,
 		},
 		{
 			name: "token minting failure",

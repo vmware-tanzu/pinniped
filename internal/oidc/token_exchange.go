@@ -65,9 +65,12 @@ func (t *TokenExchangeHandler) PopulateTokenEndpointResponse(ctx context.Context
 		return errors.WithStack(err)
 	}
 
-	// Require that the incoming access token has the STS and OpenID scopes .
-	if !originalRequester.GetGrantedScopes().Has(pinnipedTokenExchangeScope, oidc.ScopeOpenID) {
+	// Require that the incoming access token has the STS and OpenID scopes.
+	if !originalRequester.GetGrantedScopes().Has(pinnipedTokenExchangeScope) {
 		return errors.WithStack(fosite.ErrAccessDenied.WithHintf("missing the %q scope", pinnipedTokenExchangeScope))
+	}
+	if !originalRequester.GetGrantedScopes().Has(oidc.ScopeOpenID) {
+		return errors.WithStack(fosite.ErrAccessDenied.WithHintf("missing the %q scope", oidc.ScopeOpenID))
 	}
 
 	// Use the original authorize request information, along with the requested audience, to mint a new JWT.

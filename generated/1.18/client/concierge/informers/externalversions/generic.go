@@ -42,6 +42,8 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=authentication.concierge.pinniped.dev, Version=v1alpha1
+	case v1alpha1.SchemeGroupVersion.WithResource("jwtauthenticators"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Authentication().V1alpha1().JWTAuthenticators().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("webhookauthenticators"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Authentication().V1alpha1().WebhookAuthenticators().Informer()}, nil
 

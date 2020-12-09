@@ -114,17 +114,93 @@ func TestCLILoginOIDC(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Start the browser driver.
-	page := browsertest.Open(t)
-
 	// Build pinniped CLI.
 	t.Logf("building CLI binary")
 	pinnipedExe := buildPinnipedCLI(t)
 
+	// Run "pinniped login oidc" to get an ExecCredential struct with an OIDC ID token.
+	credOutput, sessionCachePath := runPinniedLoginOIDC(ctx, t, pinnipedExe)
+
+	// Assert some properties of the ExecCredential.
+	t.Logf("validating ExecCredential")
+	require.NotNil(t, credOutput.Status)
+	require.Empty(t, credOutput.Status.ClientKeyData)
+	require.Empty(t, credOutput.Status.ClientCertificateData)
+
+	// There should be at least 1 minute of remaining expiration (probably more).
+	require.NotNil(t, credOutput.Status.ExpirationTimestamp)
+	ttl := time.Until(credOutput.Status.ExpirationTimestamp.Time)
+	require.Greater(t, ttl.Milliseconds(), (1 * time.Minute).Milliseconds())
+
+	// Assert some properties about the token, which should be a valid JWT.
+	require.NotEmpty(t, credOutput.Status.Token)
+	jws, err := jose.ParseSigned(credOutput.Status.Token)
+	require.NoError(t, err)
+	claims := map[string]interface{}{}
+	require.NoError(t, json.Unmarshal(jws.UnsafePayloadWithoutVerification(), &claims))
+	require.Equal(t, env.CLITestUpstream.Issuer, claims["iss"])
+	require.Equal(t, env.CLITestUpstream.ClientID, claims["aud"])
+	require.Equal(t, env.CLITestUpstream.Username, claims["email"])
+	require.NotEmpty(t, claims["nonce"])
+
+	// Run the CLI again with the same session cache and login parameters.
+	t.Logf("starting second CLI subprocess to test session caching")
+	cmd2Output, err := oidcLoginCommand(ctx, t, pinnipedExe, sessionCachePath).CombinedOutput()
+	require.NoError(t, err, string(cmd2Output))
+
+	// Expect the CLI to output the same ExecCredential in JSON format.
+	t.Logf("validating second ExecCredential")
+	var credOutput2 clientauthenticationv1beta1.ExecCredential
+	require.NoErrorf(t, json.Unmarshal(cmd2Output, &credOutput2),
+		"command returned something other than an ExecCredential:\n%s", string(cmd2Output))
+	require.Equal(t, credOutput, credOutput2)
+
+	// Overwrite the cache entry to remove the access and ID tokens.
+	t.Logf("overwriting cache to remove valid ID token")
+	cache := filesession.New(sessionCachePath)
+	cacheKey := oidcclient.SessionCacheKey{
+		Issuer:      env.CLITestUpstream.Issuer,
+		ClientID:    env.CLITestUpstream.ClientID,
+		Scopes:      []string{"email", "offline_access", "openid", "profile"},
+		RedirectURI: strings.ReplaceAll(env.CLITestUpstream.CallbackURL, "127.0.0.1", "localhost"),
+	}
+	cached := cache.GetToken(cacheKey)
+	require.NotNil(t, cached)
+	require.NotNil(t, cached.RefreshToken)
+	require.NotEmpty(t, cached.RefreshToken.Token)
+	cached.IDToken = nil
+	cached.AccessToken = nil
+	cache.PutToken(cacheKey, cached)
+
+	// Run the CLI a third time with the same session cache and login parameters.
+	t.Logf("starting third CLI subprocess to test refresh flow")
+	cmd3Output, err := oidcLoginCommand(ctx, t, pinnipedExe, sessionCachePath).CombinedOutput()
+	require.NoError(t, err, string(cmd2Output))
+
+	// Expect the CLI to output a new ExecCredential in JSON format (different from the one returned the first two times).
+	t.Logf("validating third ExecCredential")
+	var credOutput3 clientauthenticationv1beta1.ExecCredential
+	require.NoErrorf(t, json.Unmarshal(cmd3Output, &credOutput3),
+		"command returned something other than an ExecCredential:\n%s", string(cmd2Output))
+	require.NotEqual(t, credOutput2.Status.Token, credOutput3.Status.Token)
+}
+
+func runPinniedLoginOIDC(
+	ctx context.Context,
+	t *testing.T,
+	pinnipedExe string,
+) (clientauthenticationv1beta1.ExecCredential, string) {
+	t.Helper()
+
+	env := library.IntegrationEnv(t)
+
 	// Make a temp directory to hold the session cache for this test.
 	sessionCachePath := testutil.TempDir(t) + "/sessions.yaml"
 
-	// Start the CLI running the "alpha login oidc [...]" command with stdout/stderr connected to pipes.
+	// Start the browser driver.
+	page := browsertest.Open(t)
+
+	// Start the CLI running the "login oidc [...]" command with stdout/stderr connected to pipes.
 	cmd := oidcLoginCommand(ctx, t, pinnipedExe, sessionCachePath)
 	stderr, err := cmd.StderrPipe()
 	require.NoError(t, err)
@@ -221,68 +297,7 @@ func TestCLILoginOIDC(t *testing.T) {
 	case credOutput = <-credOutputChan:
 	}
 
-	// Assert some properties of the ExecCredential.
-	t.Logf("validating ExecCredential")
-	require.NotNil(t, credOutput.Status)
-	require.Empty(t, credOutput.Status.ClientKeyData)
-	require.Empty(t, credOutput.Status.ClientCertificateData)
-
-	// There should be at least 1 minute of remaining expiration (probably more).
-	require.NotNil(t, credOutput.Status.ExpirationTimestamp)
-	ttl := time.Until(credOutput.Status.ExpirationTimestamp.Time)
-	require.Greater(t, ttl.Milliseconds(), (1 * time.Minute).Milliseconds())
-
-	// Assert some properties about the token, which should be a valid JWT.
-	require.NotEmpty(t, credOutput.Status.Token)
-	jws, err := jose.ParseSigned(credOutput.Status.Token)
-	require.NoError(t, err)
-	claims := map[string]interface{}{}
-	require.NoError(t, json.Unmarshal(jws.UnsafePayloadWithoutVerification(), &claims))
-	require.Equal(t, env.CLITestUpstream.Issuer, claims["iss"])
-	require.Equal(t, env.CLITestUpstream.ClientID, claims["aud"])
-	require.Equal(t, env.CLITestUpstream.Username, claims["email"])
-	require.NotEmpty(t, claims["nonce"])
-
-	// Run the CLI again with the same session cache and login parameters.
-	t.Logf("starting second CLI subprocess to test session caching")
-	cmd2Output, err := oidcLoginCommand(ctx, t, pinnipedExe, sessionCachePath).CombinedOutput()
-	require.NoError(t, err, string(cmd2Output))
-
-	// Expect the CLI to output the same ExecCredential in JSON format.
-	t.Logf("validating second ExecCredential")
-	var credOutput2 clientauthenticationv1beta1.ExecCredential
-	require.NoErrorf(t, json.Unmarshal(cmd2Output, &credOutput2),
-		"command returned something other than an ExecCredential:\n%s", string(cmd2Output))
-	require.Equal(t, credOutput, credOutput2)
-
-	// Overwrite the cache entry to remove the access and ID tokens.
-	t.Logf("overwriting cache to remove valid ID token")
-	cache := filesession.New(sessionCachePath)
-	cacheKey := oidcclient.SessionCacheKey{
-		Issuer:      env.CLITestUpstream.Issuer,
-		ClientID:    env.CLITestUpstream.ClientID,
-		Scopes:      []string{"email", "offline_access", "openid", "profile"},
-		RedirectURI: strings.ReplaceAll(env.CLITestUpstream.CallbackURL, "127.0.0.1", "localhost"),
-	}
-	cached := cache.GetToken(cacheKey)
-	require.NotNil(t, cached)
-	require.NotNil(t, cached.RefreshToken)
-	require.NotEmpty(t, cached.RefreshToken.Token)
-	cached.IDToken = nil
-	cached.AccessToken = nil
-	cache.PutToken(cacheKey, cached)
-
-	// Run the CLI a third time with the same session cache and login parameters.
-	t.Logf("starting third CLI subprocess to test refresh flow")
-	cmd3Output, err := oidcLoginCommand(ctx, t, pinnipedExe, sessionCachePath).CombinedOutput()
-	require.NoError(t, err, string(cmd2Output))
-
-	// Expect the CLI to output a new ExecCredential in JSON format (different from the one returned the first two times).
-	t.Logf("validating third ExecCredential")
-	var credOutput3 clientauthenticationv1beta1.ExecCredential
-	require.NoErrorf(t, json.Unmarshal(cmd3Output, &credOutput3),
-		"command returned something other than an ExecCredential:\n%s", string(cmd2Output))
-	require.NotEqual(t, credOutput2.Status.Token, credOutput3.Status.Token)
+	return credOutput, sessionCachePath
 }
 
 func readAndExpectEmpty(r io.Reader) (err error) {

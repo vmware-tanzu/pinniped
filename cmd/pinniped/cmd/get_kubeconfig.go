@@ -89,7 +89,7 @@ func (c *getKubeConfigCommand) Command() *cobra.Command {
 	cmd.Flags().StringVar(&c.flags.kubeconfig, "kubeconfig", c.flags.kubeconfig, "Path to the kubeconfig file")
 	cmd.Flags().StringVar(&c.flags.contextOverride, "kubeconfig-context", c.flags.contextOverride, "Kubeconfig context override")
 	cmd.Flags().StringVar(&c.flags.namespace, "pinniped-namespace", c.flags.namespace, "Namespace in which Pinniped was installed")
-	cmd.Flags().StringVar(&c.flags.authenticatorType, "authenticator-type", c.flags.authenticatorType, "Authenticator type (e.g., 'webhook')")
+	cmd.Flags().StringVar(&c.flags.authenticatorType, "authenticator-type", c.flags.authenticatorType, "Authenticator type (e.g., 'webhook', 'jwt')")
 	cmd.Flags().StringVar(&c.flags.authenticatorName, "authenticator-name", c.flags.authenticatorType, "Authenticator name")
 	mustMarkRequired(cmd, "token")
 	plog.RemoveKlogGlobalFlags()

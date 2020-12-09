@@ -79,7 +79,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	user, err := r.authenticator.AuthenticateTokenCredentialRequest(ctx, credentialRequest)
 	if err != nil {
-		traceFailureWithError(t, "webhook authentication", err)
+		traceFailureWithError(t, "token authentication", err)
 		return failureResponse(), nil
 	}
 	if user == nil || user.GetName() == "" {

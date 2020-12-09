@@ -25,7 +25,8 @@ import (
 	"go.pinniped.dev/internal/config/concierge"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
-	"go.pinniped.dev/internal/controller/authenticator/webhookcachecleaner"
+	"go.pinniped.dev/internal/controller/authenticator/cachecleaner"
+	"go.pinniped.dev/internal/controller/authenticator/jwtcachefiller"
 	"go.pinniped.dev/internal/controller/authenticator/webhookcachefiller"
 	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controller/kubecertagent"
@@ -238,9 +239,18 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			singletonWorker,
 		).
 		WithController(
-			webhookcachecleaner.New(
+			jwtcachefiller.New(
+				c.AuthenticatorCache,
+				informers.installationNamespacePinniped.Authentication().V1alpha1().JWTAuthenticators(),
+				klogr.New(),
+			),
+			singletonWorker,
+		).
+		WithController(
+			cachecleaner.New(
 				c.AuthenticatorCache,
 				informers.installationNamespacePinniped.Authentication().V1alpha1().WebhookAuthenticators(),
+				informers.installationNamespacePinniped.Authentication().V1alpha1().JWTAuthenticators(),
 				klogr.New(),
 			),
 			singletonWorker,

@@ -922,25 +922,25 @@ func TestRefreshGrant(t *testing.T) {
 				}},
 		},
 		{
-			name: "when the refresh request removes a scope which was originally granted from the list of requested scopes then it is ignored",
+			name: "when the refresh request removes a scope which was originally granted from the list of requested scopes then it is granted anyway",
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access pinniped.sts.unrestricted") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
 					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "offline_access"},
-					wantGrantedScopes:     []string{"openid", "offline_access"},
+					wantRequestedScopes:   []string{"openid", "offline_access", "pinniped.sts.unrestricted"},
+					wantGrantedScopes:     []string{"openid", "offline_access", "pinniped.sts.unrestricted"},
 				},
 			},
 			refreshRequest: refreshRequestInputs{
 				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
-					r.Body = happyRefreshRequestBody(refreshToken).WithScope("").ReadCloser() // TODO FIX ME. WE NEED ANOTHER VALID SCOPE ON THIS CLIENT TO WRITE THIS TEST.
+					r.Body = happyRefreshRequestBody(refreshToken).WithScope("openid").ReadCloser() // do not ask for "pinniped.sts.unrestricted" again
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
 					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "offline_access"},
-					wantGrantedScopes:     []string{"openid", "offline_access"},
+					wantRequestedScopes:   []string{"openid", "offline_access", "pinniped.sts.unrestricted"},
+					wantGrantedScopes:     []string{"openid", "offline_access", "pinniped.sts.unrestricted"},
 				}},
 		},
 		{

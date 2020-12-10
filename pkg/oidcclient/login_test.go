@@ -152,6 +152,11 @@ func TestLogin(t *testing.T) {
 			}
 
 		case "urn:ietf:params:oauth:grant-type:token-exchange":
+			if r.Form.Get("client_id") != "test-client-id" {
+				http.Error(w, "bad client_id", http.StatusBadRequest)
+				return
+			}
+
 			switch r.Form.Get("audience") {
 			case "test-audience-produce-invalid-http-response":
 				http.Redirect(w, r, "%", http.StatusTemporaryRedirect)

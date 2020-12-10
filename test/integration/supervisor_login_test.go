@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -125,7 +126,7 @@ func TestSupervisorLogin(t *testing.T) {
 		ClientID:    "pinniped-cli",
 		Endpoint:    discovery.Endpoint(),
 		RedirectURL: localCallbackServer.URL,
-		Scopes:      []string{"openid"},
+		Scopes:      []string{"openid", "pinniped.sts.unrestricted", "offline_access"},
 	}
 
 	// Build a valid downstream authorize URL for the supervisor.
@@ -159,13 +160,47 @@ func TestSupervisorLogin(t *testing.T) {
 	callback := localCallbackServer.waitForCallback(10 * time.Second)
 	t.Logf("got callback request: %s", library.MaskTokens(callback.URL.String()))
 	require.Equal(t, stateParam.String(), callback.URL.Query().Get("state"))
-	require.Equal(t, "openid", callback.URL.Query().Get("scope"))
+	require.ElementsMatch(t, []string{"openid", "pinniped.sts.unrestricted", "offline_access"}, strings.Split(callback.URL.Query().Get("scope"), " "))
 	authcode := callback.URL.Query().Get("code")
 	require.NotEmpty(t, authcode)
 
 	// Call the token endpoint to get tokens.
 	tokenResponse, err := downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
 	require.NoError(t, err)
+
+	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat"}
+	verifyTokenResponse(t, tokenResponse, discovery, downstreamOAuth2Config, env.SupervisorTestUpstream.Issuer, nonceParam, expectedIDTokenClaims)
+
+	// token exchange on the original token
+	doTokenExchange(t, &downstreamOAuth2Config, tokenResponse, httpClient, discovery)
+
+	// Use the refresh token to get new tokens
+	refreshSource := downstreamOAuth2Config.TokenSource(oidcHTTPClientContext, &oauth2.Token{RefreshToken: tokenResponse.RefreshToken})
+	refreshedTokenResponse, err := refreshSource.Token()
+	require.NoError(t, err)
+
+	expectedIDTokenClaims = append(expectedIDTokenClaims, "at_hash")
+	verifyTokenResponse(t, refreshedTokenResponse, discovery, downstreamOAuth2Config, env.SupervisorTestUpstream.Issuer, "", expectedIDTokenClaims)
+
+	require.NotEqual(t, tokenResponse.AccessToken, refreshedTokenResponse.AccessToken)
+	require.NotEqual(t, tokenResponse.RefreshToken, refreshedTokenResponse.RefreshToken)
+	require.NotEqual(t, tokenResponse.Extra("id_token"), refreshedTokenResponse.Extra("id_token"))
+
+	// token exchange on the refreshed token
+	doTokenExchange(t, &downstreamOAuth2Config, refreshedTokenResponse, httpClient, discovery)
+}
+
+func verifyTokenResponse(
+	t *testing.T,
+	tokenResponse *oauth2.Token,
+	discovery *oidc.Provider,
+	downstreamOAuth2Config oauth2.Config,
+	upstreamIssuerName string,
+	nonceParam nonce.Nonce,
+	expectedIDTokenClaims []string,
+) {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
 
 	// Verify the ID Token.
 	rawIDToken, ok := tokenResponse.Extra("id_token").(string)
@@ -175,7 +210,7 @@ func TestSupervisorLogin(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check the claims of the ID token.
-	expectedSubjectPrefix := env.SupervisorTestUpstream.Issuer + "?sub="
+	expectedSubjectPrefix := upstreamIssuerName + "?sub="
 	require.True(t, strings.HasPrefix(idToken.Subject, expectedSubjectPrefix))
 	require.Greater(t, len(idToken.Subject), len(expectedSubjectPrefix),
 		"the ID token Subject should include the upstream user ID after the upstream issuer name")
@@ -188,7 +223,7 @@ func TestSupervisorLogin(t *testing.T) {
 	for k := range idTokenClaims {
 		idTokenClaimNames = append(idTokenClaimNames, k)
 	}
-	require.ElementsMatch(t, []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat"}, idTokenClaimNames)
+	require.ElementsMatch(t, expectedIDTokenClaims, idTokenClaimNames)
 
 	// Some light verification of the other tokens that were returned.
 	require.NotEmpty(t, tokenResponse.AccessToken)
@@ -196,7 +231,7 @@ func TestSupervisorLogin(t *testing.T) {
 	require.NotZero(t, tokenResponse.Expiry)
 	testutil.RequireTimeInDelta(t, time.Now().UTC().Add(time.Minute*5), tokenResponse.Expiry, time.Second*30)
 
-	require.Empty(t, tokenResponse.RefreshToken) // for now, until the next user story :)
+	require.NotEmpty(t, tokenResponse.RefreshToken)
 }
 
 func startLocalCallbackServer(t *testing.T) *localCallbackServer {
@@ -225,4 +260,42 @@ func (s *localCallbackServer) waitForCallback(timeout time.Duration) *http.Reque
 		require.Fail(s.t, "timed out waiting for callback request")
 		return nil
 	}
+}
+
+func doTokenExchange(t *testing.T, config *oauth2.Config, tokenResponse *oauth2.Token, httpClient *http.Client, provider *oidc.Provider) {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+
+	// Form the HTTP POST request with the parameters specified by RFC8693.
+	reqBody := strings.NewReader(url.Values{
+		"grant_type":           []string{"urn:ietf:params:oauth:grant-type:token-exchange"},
+		"audience":             []string{"cluster-1234"},
+		"client_id":            []string{config.ClientID},
+		"subject_token":        []string{tokenResponse.AccessToken},
+		"subject_token_type":   []string{"urn:ietf:params:oauth:token-type:access_token"},
+		"requested_token_type": []string{"urn:ietf:params:oauth:token-type:jwt"},
+	}.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, config.Endpoint.TokenURL, reqBody)
+	require.NoError(t, err)
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+
+	resp, err := httpClient.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	var respBody struct {
+		AccessToken     string `json:"access_token"`
+		IssuedTokenType string `json:"issued_token_type"`
+		TokenType       string `json:"token_type"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&respBody))
+
+	var clusterVerifier = provider.Verifier(&oidc.Config{ClientID: "cluster-1234"})
+	exchangedToken, err := clusterVerifier.Verify(ctx, respBody.AccessToken)
+	require.NoError(t, err)
+
+	var claims map[string]interface{}
+	require.NoError(t, exchangedToken.Claims(&claims))
+	indentedClaims, err := json.MarshalIndent(claims, "   ", "  ")
+	require.NoError(t, err)
+	t.Logf("exchanged token claims:\n%s", string(indentedClaims))
 }

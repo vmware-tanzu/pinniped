@@ -127,14 +127,12 @@ func (s *secretsStorage) DeleteByLabel(ctx context.Context, labelName string, la
 		}.String(),
 	})
 	if err != nil {
-		//nolint:err113 // there's nothing wrong with this error
 		return fmt.Errorf(`failed to list secrets for resource "%s" matching label "%s=%s": %w`, s.resource, labelName, labelValue, err)
 	}
 	// TODO try to delete all of the items and consolidate all of the errors and return them all
 	for _, secret := range list.Items {
 		err = s.secrets.Delete(ctx, secret.Name, metav1.DeleteOptions{})
 		if err != nil {
-			//nolint:err113 // there's nothing wrong with this error
 			return fmt.Errorf(`failed to delete secrets for resource "%s" matching label "%s=%s" with name %s: %w`, s.resource, labelName, labelValue, secret.Name, err)
 		}
 	}

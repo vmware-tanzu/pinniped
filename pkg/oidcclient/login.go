@@ -338,11 +338,9 @@ func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidcty
 		return nil, err
 	}
 
-	// Use the base access token to authenticate our request. This will populate the "authorization" header.
-	client := oauth2.NewClient(h.ctx, oauth2.StaticTokenSource(&oauth2.Token{AccessToken: baseToken.AccessToken.Token}))
-
 	// Form the HTTP POST request with the parameters specified by RFC8693.
 	reqBody := strings.NewReader(url.Values{
+		"client_id":            []string{h.clientID},
 		"grant_type":           []string{"urn:ietf:params:oauth:grant-type:token-exchange"},
 		"audience":             []string{h.requestedAudience},
 		"subject_token":        []string{baseToken.AccessToken.Token},
@@ -356,7 +354,7 @@ func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidcty
 	req.Header.Set("content-type", "application/x-www-form-urlencoded")
 
 	// Perform the request.
-	resp, err := client.Do(req)
+	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

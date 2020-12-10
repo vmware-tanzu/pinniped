@@ -88,13 +88,14 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 		//  1. we would like to state to have an embedded expiration date while the cookie does not need that
 		//  2. we would like each downstream provider to use different secrets for signing/encrypting the upstream state, not share secrets
 		//  3. we would like *all* downstream providers to use the *same* signing key for the CSRF cookie (which doesn't need to be encrypted) because cookies are sent per-domain and our issuers can share a domain name (but have different paths)
-		var encoderHashKey = []byte("fake-hash-secret")  // TODO replace this secret
-		var encoderBlockKey = []byte("16-bytes-aaaaaaa") // TODO replace this secret
-
-		var upstreamStateEncoder = securecookie.New(encoderHashKey, encoderBlockKey)
+		var upstreamStateEncoderHashKey = []byte("fake-state-hash-secret") // TODO replace this secret
+		var upstreamStateEncoderBlockKey = []byte("16-bytes-STATE01")      // TODO replace this secret
+		var upstreamStateEncoder = securecookie.New(upstreamStateEncoderHashKey, upstreamStateEncoderBlockKey)
 		upstreamStateEncoder.SetSerializer(securecookie.JSONEncoder{})
 
-		var csrfCookieEncoder = securecookie.New(encoderHashKey, encoderBlockKey)
+		var csrfCookieEncoderHashKey = []byte("fake-csrf-hash-secret") // TODO replace this secret
+		var csrfCookieEncoderBlockKey = []byte("16-bytes-CSRF012")     // TODO replace this secret
+		var csrfCookieEncoder = securecookie.New(csrfCookieEncoderHashKey, csrfCookieEncoderBlockKey)
 		csrfCookieEncoder.SetSerializer(securecookie.JSONEncoder{})
 
 		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuer)

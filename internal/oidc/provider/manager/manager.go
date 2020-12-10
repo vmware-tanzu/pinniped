@@ -94,8 +94,7 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 		upstreamStateEncoder.SetSerializer(securecookie.JSONEncoder{})
 
 		var csrfCookieEncoderHashKey = []byte("fake-csrf-hash-secret") // TODO replace this secret
-		var csrfCookieEncoderBlockKey = []byte("16-bytes-CSRF012")     // TODO replace this secret
-		var csrfCookieEncoder = securecookie.New(csrfCookieEncoderHashKey, csrfCookieEncoderBlockKey)
+		var csrfCookieEncoder = securecookie.New(csrfCookieEncoderHashKey, nil)
 		csrfCookieEncoder.SetSerializer(securecookie.JSONEncoder{})
 
 		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuer)

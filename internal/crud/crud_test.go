@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/ory/fosite/compose"
 	"github.com/stretchr/testify/require"
@@ -44,6 +45,9 @@ func TestStorage(t *testing.T) {
 	// code, signature, err := hmac.GenerateAuthorizeCode(ctx, nil)
 
 	validateSecretName := validation.NameIsDNSSubdomain // matches k/k
+
+	var fakeNow = time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
+	var fakeDuration = time.Minute * 10
 
 	const (
 		namespace          = "test-ns"
@@ -119,6 +123,11 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "access-tokens",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"create-and-get"}`),
@@ -136,6 +145,11 @@ func TestStorage(t *testing.T) {
 						ResourceVersion: "",
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "access-tokens",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
 						},
 					},
 					Data: map[string][]byte{
@@ -179,6 +193,11 @@ func TestStorage(t *testing.T) {
 							"label1":                    "value1",
 							"label2":                    "value2",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"create-and-get"}`),
@@ -198,6 +217,11 @@ func TestStorage(t *testing.T) {
 							"storage.pinniped.dev/type": "access-tokens",
 							"label1":                    "value1",
 							"label2":                    "value2",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
 						},
 					},
 					Data: map[string][]byte{
@@ -220,6 +244,11 @@ func TestStorage(t *testing.T) {
 						ResourceVersion: "",
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "pandas-are-best",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
 						},
 					},
 					Data: map[string][]byte{
@@ -256,6 +285,11 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "pandas-are-best",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"snorlax"}`),
@@ -277,6 +311,11 @@ func TestStorage(t *testing.T) {
 						ResourceVersion: "35",
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "stores",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
 						},
 					},
 					Data: map[string][]byte{
@@ -327,6 +366,11 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "stores",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"shirts"}`),
@@ -344,6 +388,11 @@ func TestStorage(t *testing.T) {
 						ResourceVersion: "45", // final list at new RV
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "stores",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
 						},
 					},
 					Data: map[string][]byte{
@@ -366,6 +415,11 @@ func TestStorage(t *testing.T) {
 						ResourceVersion: "",
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "seals",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
 						},
 					},
 					Data: map[string][]byte{
@@ -402,6 +456,11 @@ func TestStorage(t *testing.T) {
 							"storage.pinniped.dev/type": "seals",
 							"additionalLabel":           "matching-value",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"sad-seal"}`),
@@ -417,6 +476,11 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "seals",
 							"additionalLabel":           "matching-value",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
 						},
 					},
 					Data: map[string][]byte{
@@ -434,6 +498,11 @@ func TestStorage(t *testing.T) {
 							"storage.pinniped.dev/type": "seals",              // same type as above
 							"additionalLabel":           "non-matching-value", // different value for the same label
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"sad-seal2"}`),
@@ -449,6 +518,11 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "walruses",       // different type from above
 							"additionalLabel":           "matching-value", // same value for the same label as above
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
 						},
 					},
 					Data: map[string][]byte{
@@ -479,6 +553,11 @@ func TestStorage(t *testing.T) {
 							"storage.pinniped.dev/type": "seals",              // same type as above
 							"additionalLabel":           "non-matching-value", // different value for the same label
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"sad-seal2"}`),
@@ -495,6 +574,11 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "walruses",       // different type from above
 							"additionalLabel":           "matching-value", // same value for the same label as above
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
 						},
 					},
 					Data: map[string][]byte{
@@ -518,6 +602,11 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "seals",
 							"additionalLabel":           "matching-value",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
 						},
 					},
 					Data: map[string][]byte{
@@ -548,6 +637,11 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "seals",
 							"additionalLabel":           "matching-value",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
 						},
 					},
 					Data: map[string][]byte{
@@ -602,6 +696,11 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"twizzlers"}`),
@@ -637,6 +736,11 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"twizzlers"}`),
@@ -658,6 +762,11 @@ func TestStorage(t *testing.T) {
 						ResourceVersion: "55",
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies-are-bad",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
 						},
 					},
 					Data: map[string][]byte{
@@ -694,6 +803,11 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies-are-bad",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"twizzlers"}`),
@@ -715,6 +829,11 @@ func TestStorage(t *testing.T) {
 						ResourceVersion: "55",
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
 						},
 					},
 					Data: map[string][]byte{
@@ -751,6 +870,11 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"twizzlers"}`),
@@ -772,6 +896,11 @@ func TestStorage(t *testing.T) {
 						ResourceVersion: "55",
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
 						},
 					},
 					Data: map[string][]byte{
@@ -807,6 +936,11 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{
+								Time: fakeNow.Add(fakeDuration),
+							}.String(),
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`}}bad data{{`),
@@ -828,7 +962,7 @@ func TestStorage(t *testing.T) {
 				tt.mocks(t, client)
 			}
 			secrets := client.CoreV1().Secrets(namespace)
-			storage := New(tt.resource, secrets)
+			storage := New(tt.resource, secrets, func() time.Time { return fakeNow }, fakeDuration)
 
 			err := tt.run(t, storage)
 

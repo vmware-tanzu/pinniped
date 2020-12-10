@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,7 +23,8 @@ import (
 
 //nolint:gosec // ignore lint warnings that these are credentials
 const (
-	SecretLabelKey = "storage.pinniped.dev/type"
+	SecretLabelKey              = "storage.pinniped.dev/type"
+	SecretLifetimeAnnotationKey = "storage.pinniped.dev/garbage-collect-after"
 
 	secretNameFormat = "pinniped-storage-%s-%s"
 	secretTypeFormat = "storage.pinniped.dev/%s"
@@ -45,12 +47,14 @@ type Storage interface {
 
 type JSON interface{} // document that we need valid JSON types
 
-func New(resource string, secrets corev1client.SecretInterface) Storage {
+func New(resource string, secrets corev1client.SecretInterface, clock func() time.Time, lifetime time.Duration) Storage {
 	return &secretsStorage{
 		resource:      resource,
 		secretType:    corev1.SecretType(fmt.Sprintf(secretTypeFormat, resource)),
 		secretVersion: []byte(secretVersion),
 		secrets:       secrets,
+		clock:         clock,
+		lifetime:      lifetime,
 	}
 }
 
@@ -59,6 +63,8 @@ type secretsStorage struct {
 	secretType    corev1.SecretType
 	secretVersion []byte
 	secrets       corev1client.SecretInterface
+	clock         func() time.Time
+	lifetime      time.Duration
 }
 
 func (s *secretsStorage) Create(ctx context.Context, signature string, data JSON, additionalLabels map[string]string) (string, error) {
@@ -162,12 +168,16 @@ func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, 
 	for labelName, labelValue := range additionalLabels {
 		labels[labelName] = labelValue
 	}
+	annotations := map[string]string{
+		SecretLifetimeAnnotationKey: s.clock().Add(s.lifetime).UTC().String(),
+	}
 
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            s.getName(signature),
 			ResourceVersion: resourceVersion,
 			Labels:          labels,
+			Annotations:     annotations,
 			OwnerReferences: nil,
 		},
 		Data: map[string][]byte{

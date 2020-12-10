@@ -31,9 +31,9 @@ type KubeStorage struct {
 	refreshTokenStorage      refreshtoken.RevocationStorage
 }
 
-func NewKubeStorage(secrets corev1client.SecretInterface) *KubeStorage {
+func NewKubeStorage(secrets corev1client.SecretInterface, timeoutsConfiguration TimeoutsConfiguration) *KubeStorage {
 	return &KubeStorage{
-		authorizationCodeStorage: authorizationcode.New(secrets),
+		authorizationCodeStorage: authorizationcode.New(secrets, time.Now, timeoutsConfiguration.AuthorizationCodeSessionStorageLifetime),
 		pkceStorage:              pkce.New(secrets),
 		oidcStorage:              openidconnect.New(secrets),
 		accessTokenStorage:       accesstoken.New(secrets),

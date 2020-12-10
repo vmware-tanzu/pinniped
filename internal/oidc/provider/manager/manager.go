@@ -77,12 +77,14 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 
 		fositeHMACSecretForThisProvider := []byte("some secret - must have at least 32 bytes") // TODO replace this secret
 
+		timeoutsConfiguration := oidc.DefaultOIDCTimeoutsConfiguration()
+
 		// Use NullStorage for the authorize endpoint because we do not actually want to store anything until
 		// the upstream callback endpoint is called later.
-		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(oidc.NullStorage{}, issuer, fositeHMACSecretForThisProvider, nil, oidc.DefaultOIDCTimeoutsConfiguration())
+		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(oidc.NullStorage{}, issuer, fositeHMACSecretForThisProvider, nil, timeoutsConfiguration)
 
 		// For all the other endpoints, make another oauth helper with exactly the same settings except use real storage.
-		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(oidc.NewKubeStorage(m.secretsClient), issuer, fositeHMACSecretForThisProvider, m.dynamicJWKSProvider, oidc.DefaultOIDCTimeoutsConfiguration())
+		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(oidc.NewKubeStorage(m.secretsClient, timeoutsConfiguration), issuer, fositeHMACSecretForThisProvider, m.dynamicJWKSProvider, timeoutsConfiguration)
 
 		// TODO use different codecs for the state and the cookie, because:
 		//  1. we would like to state to have an embedded expiration date while the cookie does not need that

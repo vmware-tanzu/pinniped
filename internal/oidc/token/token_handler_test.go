@@ -1155,7 +1155,7 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs) (
 
 	var oauthHelper fosite.OAuth2Provider
 
-	oauthStore = oidc.NewKubeStorage(secrets)
+	oauthStore = oidc.NewKubeStorage(secrets, oidc.DefaultOIDCTimeoutsConfiguration())
 	if test.makeOathHelper != nil {
 		oauthHelper, authCode, jwtSigningKey = test.makeOathHelper(t, authRequest, oauthStore)
 	} else {

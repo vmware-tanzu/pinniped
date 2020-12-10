@@ -58,9 +58,9 @@ const (
 
 	hmacSecret = "this needs to be at least 32 characters to meet entropy requirements"
 
-	authCodeExpirationSeconds    = 3 * 60 // Current, we set our auth code expiration to 3 minutes
-	accessTokenExpirationSeconds = 5 * 60 // Currently, we set our access token expiration to 5 minutes
-	idTokenExpirationSeconds     = 5 * 60 // Currently, we set our ID token expiration to 5 minutes
+	authCodeExpirationSeconds    = 10 * 60 // Current, we set our auth code expiration to 10 minutes
+	accessTokenExpirationSeconds = 15 * 60 // Currently, we set our access token expiration to 15 minutes
+	idTokenExpirationSeconds     = 15 * 60 // Currently, we set our ID token expiration to 15 minutes
 
 	timeComparisonFudgeSeconds = 15
 )
@@ -1346,7 +1346,7 @@ func makeHappyOauthHelper(
 	t.Helper()
 
 	jwtSigningKey, jwkProvider := generateJWTSigningKeyAndJWKSProvider(t, goodIssuer)
-	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), jwkProvider)
+	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
 	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper)
 	return oauthHelper, authResponder.GetCode(), jwtSigningKey
 }
@@ -1378,7 +1378,7 @@ func makeOauthHelperWithJWTKeyThatWorksOnlyOnce(
 	t.Helper()
 
 	jwtSigningKey, jwkProvider := generateJWTSigningKeyAndJWKSProvider(t, goodIssuer)
-	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), &singleUseJWKProvider{DynamicJWKSProvider: jwkProvider})
+	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), &singleUseJWKProvider{DynamicJWKSProvider: jwkProvider}, oidc.DefaultOIDCTimeoutsConfiguration())
 	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper)
 	return oauthHelper, authResponder.GetCode(), jwtSigningKey
 }
@@ -1397,7 +1397,7 @@ func makeOauthHelperWithNilPrivateJWTSigningKey(
 	t.Helper()
 
 	jwkProvider := jwks.NewDynamicJWKSProvider() // empty provider which contains no signing key for this issuer
-	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), jwkProvider)
+	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
 	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper)
 	return oauthHelper, authResponder.GetCode(), nil
 }

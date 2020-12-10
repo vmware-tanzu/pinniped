@@ -136,7 +136,7 @@ func NewHandler(
 	})
 }
 
-func readCSRFCookie(r *http.Request, codec oidc.Codec) csrftoken.CSRFToken {
+func readCSRFCookie(r *http.Request, codec oidc.Decoder) csrftoken.CSRFToken {
 	receivedCSRFCookie, err := r.Cookie(oidc.CSRFCookieName)
 	if err != nil {
 		// Error means that the cookie was not found
@@ -214,7 +214,7 @@ func upstreamStateParam(
 	return encodedStateParamValue, nil
 }
 
-func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken, codec oidc.Codec) error {
+func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken, codec oidc.Encoder) error {
 	encodedCSRFValue, err := codec.Encode(oidc.CSRFCookieEncodingName, csrfValue)
 	if err != nil {
 		return httperr.Wrap(http.StatusInternalServerError, "error encoding CSRF cookie", err)

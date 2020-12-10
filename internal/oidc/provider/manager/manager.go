@@ -88,10 +88,14 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 		//  1. we would like to state to have an embedded expiration date while the cookie does not need that
 		//  2. we would like each downstream provider to use different secrets for signing/encrypting the upstream state, not share secrets
 		//  3. we would like *all* downstream providers to use the *same* signing key for the CSRF cookie (which doesn't need to be encrypted) because cookies are sent per-domain and our issuers can share a domain name (but have different paths)
-		var encoderHashKey = []byte("fake-hash-secret")  // TODO replace this secret
-		var encoderBlockKey = []byte("16-bytes-aaaaaaa") // TODO replace this secret
-		var encoder = securecookie.New(encoderHashKey, encoderBlockKey)
-		encoder.SetSerializer(securecookie.JSONEncoder{})
+		var upstreamStateEncoderHashKey = []byte("fake-state-hash-secret") // TODO replace this secret
+		var upstreamStateEncoderBlockKey = []byte("16-bytes-STATE01")      // TODO replace this secret
+		var upstreamStateEncoder = securecookie.New(upstreamStateEncoderHashKey, upstreamStateEncoderBlockKey)
+		upstreamStateEncoder.SetSerializer(securecookie.JSONEncoder{})
+
+		var csrfCookieEncoderHashKey = []byte("fake-csrf-hash-secret") // TODO replace this secret
+		var csrfCookieEncoder = securecookie.New(csrfCookieEncoderHashKey, nil)
+		csrfCookieEncoder.SetSerializer(securecookie.JSONEncoder{})
 
 		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuer)
 
@@ -104,15 +108,15 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 			csrftoken.Generate,
 			pkce.Generate,
 			nonce.Generate,
-			encoder,
-			encoder,
+			upstreamStateEncoder,
+			csrfCookieEncoder,
 		)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.CallbackEndpointPath)] = callback.NewHandler(
 			m.idpListGetter,
 			oauthHelperWithKubeStorage,
-			encoder,
-			encoder,
+			upstreamStateEncoder,
+			csrfCookieEncoder,
 			issuer+oidc.CallbackEndpointPath,
 		)
 

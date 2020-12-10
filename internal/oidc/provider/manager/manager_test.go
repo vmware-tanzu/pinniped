@@ -104,17 +104,14 @@ func TestManager(t *testing.T) {
 			redirectStateParam := parsedLocation.Query().Get("state")
 			r.NotEmpty(redirectStateParam)
 
-			cookieValueAndDirectivesSplit := strings.SplitN(recorder.Header().Get("Set-Cookie"), ";", 2)
-			r.Len(cookieValueAndDirectivesSplit, 2)
-			cookieKeyValueSplit := strings.Split(cookieValueAndDirectivesSplit[0], "=")
-			r.Len(cookieKeyValueSplit, 2)
-			csrfCookieName := cookieKeyValueSplit[0]
-			r.Equal("__Host-pinniped-csrf", csrfCookieName)
-			csrfCookieValue := cookieKeyValueSplit[1]
-			r.NotEmpty(csrfCookieValue)
+			cookies := recorder.Result().Cookies() //nolint:bodyclose
+			r.Len(cookies, 1)
+			csrfCookie := cookies[0]
+			r.Equal("__Host-pinniped-csrf", csrfCookie.Name)
+			r.NotEmpty(csrfCookie.Value)
 
 			// Return the important parts of the response so we can use them in our next request to the callback endpoint
-			return csrfCookieValue, redirectStateParam
+			return csrfCookie.Value, redirectStateParam
 		}
 
 		requireCallbackRequestToBeHandled := func(requestIssuer, requestURLSuffix, csrfCookieValue string) string {

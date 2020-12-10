@@ -180,7 +180,7 @@ func DefaultOIDCTimeoutsConfiguration() TimeoutsConfiguration {
 		PKCESessionStorageLifetime:              authorizationCodeLifespan + (1 * time.Minute),
 		OIDCSessionStorageLifetime:              authorizationCodeLifespan + (1 * time.Minute),
 		AccessTokenSessionStorageLifetime:       accessTokenLifespan + (1 * time.Minute),
-		RefreshTokenSessionStorageLifetime:      refreshTokenLifespan + (5 * time.Minute),
+		RefreshTokenSessionStorageLifetime:      refreshTokenLifespan + accessTokenLifespan,
 	}
 }
 

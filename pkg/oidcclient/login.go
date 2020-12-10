@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
@@ -364,8 +365,12 @@ func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidcty
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected HTTP response status %d", resp.StatusCode)
 	}
-	if contentType := resp.Header.Get("content-type"); contentType != "application/json" {
-		return nil, fmt.Errorf("unexpected HTTP response content type %q", contentType)
+	mediaType, _, err := mime.ParseMediaType(resp.Header.Get("content-type"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode content-type header: %w", err)
+	}
+	if mediaType != "application/json" {
+		return nil, fmt.Errorf("unexpected HTTP response content type %q", mediaType)
 	}
 
 	// Decode the JSON response body.

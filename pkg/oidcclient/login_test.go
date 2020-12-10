@@ -164,11 +164,14 @@ func TestLogin(t *testing.T) {
 			case "test-audience-produce-http-400":
 				http.Error(w, "some server error", http.StatusBadRequest)
 				return
+			case "test-audience-produce-invalid-content-type":
+				w.Header().Set("content-type", "invalid/invalid;=")
+				return
 			case "test-audience-produce-wrong-content-type":
 				w.Header().Set("content-type", "invalid")
 				return
 			case "test-audience-produce-invalid-json":
-				w.Header().Set("content-type", "application/json")
+				w.Header().Set("content-type", "application/json;charset=UTF-8")
 				_, _ = w.Write([]byte(`{`))
 				return
 			case "test-audience-produce-invalid-tokentype":
@@ -600,6 +603,29 @@ func TestLogin(t *testing.T) {
 				}
 			},
 			wantErr: `failed to exchange token: unexpected HTTP response status 400`,
+		},
+		{
+			name:     "with requested audience, session cache hit with valid token, but token exchange request returns invalid content-type header",
+			issuer:   successServer.URL,
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					cache := &mockSessionCache{t: t, getReturnsToken: &testToken}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{{
+							Issuer:      successServer.URL,
+							ClientID:    "test-client-id",
+							Scopes:      []string{"test-scope"},
+							RedirectURI: "http://localhost:0/callback",
+						}}, cache.sawGetKeys)
+						require.Empty(t, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithRequestAudience("test-audience-produce-invalid-content-type")(h))
+					return nil
+				}
+			},
+			wantErr: `failed to exchange token: failed to decode content-type header: mime: invalid media parameter`,
 		},
 		{
 			name:     "with requested audience, session cache hit with valid token, but token exchange request returns wrong content-type",

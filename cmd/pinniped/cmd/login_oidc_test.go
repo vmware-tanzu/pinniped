@@ -42,7 +42,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 
 				Flags:
 					  --ca-bundle strings         Path to TLS certificate authority bundle (PEM format, optional, can be repeated).
-					  --client-id string          OpenID Connect client ID.
+					  --client-id string          OpenID Connect client ID. (default "pinniped-cli")
 				  -h, --help                      help for oidc
 					  --issuer string             OpenID Connect issuer URL.
 					  --listen-port uint16        TCP port for localhost listener (authorization code flow only).
@@ -57,7 +57,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			args:      []string{},
 			wantError: true,
 			wantStdout: here.Doc(`
-				Error: required flag(s) "client-id", "issuer" not set
+				Error: required flag(s) "issuer" not set
 			`),
 		},
 		{

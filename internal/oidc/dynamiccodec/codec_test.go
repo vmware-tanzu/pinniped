@@ -81,9 +81,12 @@ func TestCodec(t *testing.T) {
 			if test.keys != nil {
 				test.keys(&encoderSigningKey, &encoderEncryptionKey, &decoderSigningKey, &decoderEncryptionKey)
 			}
-			encoder := New(func() ([]byte, []byte) {
-				return encoderSigningKey, encoderEncryptionKey
-			})
+			encoder := New(func() []byte {
+				return encoderSigningKey
+			},
+				func() []byte {
+					return encoderEncryptionKey
+				})
 
 			encoded, err := encoder.Encode("some-name", "some-message")
 			if test.wantEncoderError != "" {
@@ -92,9 +95,12 @@ func TestCodec(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			decoder := New(func() ([]byte, []byte) {
-				return decoderSigningKey, decoderEncryptionKey
-			})
+			decoder := New(func() []byte {
+				return decoderSigningKey
+			},
+				func() []byte {
+					return decoderEncryptionKey
+				})
 
 			var decoded string
 			err = decoder.Decode("some-name", encoded, &decoded)

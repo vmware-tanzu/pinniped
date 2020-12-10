@@ -13,30 +13,30 @@ import (
 
 var _ oidc.Codec = &Codec{}
 
-// KeyFunc returns 2 keys: a required signing key, and an optional encryption key.
-type KeyFunc func() ([]byte, []byte)
+// KeyFunc returns a single key: a symmetric key.
+type KeyFunc func() []byte
 
 // Codec can dynamically encode and decode information by using a KeyFunc to get its keys
 // just-in-time.
 type Codec struct {
-	keyFunc KeyFunc
+	signingKeyFunc    KeyFunc
+	encryptionKeyFunc KeyFunc
 }
 
-// New creates a new Codec that will use the provided keyFunc for its key source.
-func New(keyFunc KeyFunc) *Codec {
+// New creates a new Codec that will use the provided keyFuncs for its key source.
+func New(signingKeyFunc, encryptionKeyFunc KeyFunc) *Codec {
 	return &Codec{
-		keyFunc: keyFunc,
+		signingKeyFunc:    signingKeyFunc,
+		encryptionKeyFunc: encryptionKeyFunc,
 	}
 }
 
 // Encode implements oidc.Encode().
 func (c *Codec) Encode(name string, value interface{}) (string, error) {
-	signingKey, encryptionKey := c.keyFunc()
-	return securecookie.New(signingKey, encryptionKey).Encode(name, value)
+	return securecookie.New(c.signingKeyFunc(), c.encryptionKeyFunc()).Encode(name, value)
 }
 
 // Decode implements oidc.Decode().
 func (c *Codec) Decode(name string, value string, into interface{}) error {
-	signingKey, encryptionKey := c.keyFunc()
-	return securecookie.New(signingKey, encryptionKey).Decode(name, value, into)
+	return securecookie.New(c.signingKeyFunc(), c.encryptionKeyFunc()).Decode(name, value, into)
 }

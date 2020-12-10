@@ -48,16 +48,16 @@ func oidcLoginCommand(loginFunc func(issuer string, clientID string, opts ...oid
 		requestAudience   string
 	)
 	cmd.Flags().StringVar(&issuer, "issuer", "", "OpenID Connect issuer URL.")
-	cmd.Flags().StringVar(&clientID, "client-id", "", "OpenID Connect client ID.")
+	cmd.Flags().StringVar(&clientID, "client-id", "pinniped-cli", "OpenID Connect client ID.")
 	cmd.Flags().Uint16Var(&listenPort, "listen-port", 0, "TCP port for localhost listener (authorization code flow only).")
-	cmd.Flags().StringSliceVar(&scopes, "scopes", []string{oidc.ScopeOfflineAccess, oidc.ScopeOpenID}, "OIDC scopes to request during login.")
+	cmd.Flags().StringSliceVar(&scopes, "scopes", []string{oidc.ScopeOfflineAccess, oidc.ScopeOpenID, "pinniped.sts.unrestricted"}, "OIDC scopes to request during login.")
 	cmd.Flags().BoolVar(&skipBrowser, "skip-browser", false, "Skip opening the browser (just print the URL).")
 	cmd.Flags().StringVar(&sessionCachePath, "session-cache", filepath.Join(mustGetConfigDir(), "sessions.yaml"), "Path to session cache file.")
 	cmd.Flags().StringSliceVar(&caBundlePaths, "ca-bundle", nil, "Path to TLS certificate authority bundle (PEM format, optional, can be repeated).")
 	cmd.Flags().BoolVar(&debugSessionCache, "debug-session-cache", false, "Print debug logs related to the session cache.")
 	cmd.Flags().StringVar(&requestAudience, "request-audience", "", "Request a token with an alternate audience using RF8693 token exchange.")
 	mustMarkHidden(&cmd, "debug-session-cache")
-	mustMarkRequired(&cmd, "issuer", "client-id")
+	mustMarkRequired(&cmd, "issuer")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		// Initialize the session cache.

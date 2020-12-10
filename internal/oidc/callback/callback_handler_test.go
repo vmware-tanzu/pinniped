@@ -61,6 +61,7 @@ const (
 	downstreamPKCEChallenge       = "some-challenge"
 	downstreamPKCEChallengeMethod = "S256"
 
+	authCodeExpirationSeconds = 10 * 60 // Current, we set our auth code expiration to 10 minutes
 	timeComparisonFudgeFactor = time.Second * 15
 )
 
@@ -460,7 +461,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			hmacSecret := []byte("some secret - must have at least 32 bytes")
 			require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
-			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecret, jwksProviderIsUnused)
+			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecret, jwksProviderIsUnused, oidc.DefaultOIDCTimeoutsConfiguration())
 
 			idpListGetter := oidctestutil.NewIDPListGetter(&test.idp)
 			subject := NewHandler(idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec, happyUpstreamRedirectURI)
@@ -768,7 +769,7 @@ func validateAuthcodeStorage(
 	require.Empty(t, storedSessionFromAuthcode.Headers)
 
 	// The authcode that we are issuing should be good for the length of time that we declare in the fosite config.
-	testutil.RequireTimeInDelta(t, time.Now().Add(time.Minute*3), storedSessionFromAuthcode.ExpiresAt[fosite.AuthorizeCode], timeComparisonFudgeFactor)
+	testutil.RequireTimeInDelta(t, time.Now().Add(authCodeExpirationSeconds*time.Second), storedSessionFromAuthcode.ExpiresAt[fosite.AuthorizeCode], timeComparisonFudgeFactor)
 	require.Len(t, storedSessionFromAuthcode.ExpiresAt, 1)
 
 	// Now confirm the ID token claims.

@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coreos/go-oidc"
+	coreosoidc "github.com/coreos/go-oidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -25,6 +25,7 @@ import (
 	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -69,7 +70,7 @@ func TestSupervisorLogin(t *testing.T) {
 			return proxyURL, nil
 		},
 	}}
-	oidcHTTPClientContext := oidc.ClientContext(ctx, httpClient)
+	oidcHTTPClientContext := coreosoidc.ClientContext(ctx, httpClient)
 
 	// Use the CA to issue a TLS server cert.
 	t.Logf("issuing test certificate")
@@ -110,9 +111,9 @@ func TestSupervisorLogin(t *testing.T) {
 	}, idpv1alpha1.PhaseReady)
 
 	// Perform OIDC discovery for our downstream.
-	var discovery *oidc.Provider
+	var discovery *coreosoidc.Provider
 	assert.Eventually(t, func() bool {
-		discovery, err = oidc.NewProvider(oidcHTTPClientContext, downstream.Spec.Issuer)
+		discovery, err = coreosoidc.NewProvider(oidcHTTPClientContext, downstream.Spec.Issuer)
 		return err == nil
 	}, 30*time.Second, 200*time.Millisecond)
 	require.NoError(t, err)
@@ -193,7 +194,7 @@ func TestSupervisorLogin(t *testing.T) {
 func verifyTokenResponse(
 	t *testing.T,
 	tokenResponse *oauth2.Token,
-	discovery *oidc.Provider,
+	discovery *coreosoidc.Provider,
 	downstreamOAuth2Config oauth2.Config,
 	upstreamIssuerName string,
 	nonceParam nonce.Nonce,
@@ -205,7 +206,7 @@ func verifyTokenResponse(
 	// Verify the ID Token.
 	rawIDToken, ok := tokenResponse.Extra("id_token").(string)
 	require.True(t, ok, "expected to get an ID token but did not")
-	var verifier = discovery.Verifier(&oidc.Config{ClientID: downstreamOAuth2Config.ClientID})
+	var verifier = discovery.Verifier(&coreosoidc.Config{ClientID: downstreamOAuth2Config.ClientID})
 	idToken, err := verifier.Verify(ctx, rawIDToken)
 	require.NoError(t, err)
 
@@ -215,7 +216,8 @@ func verifyTokenResponse(
 	require.Greater(t, len(idToken.Subject), len(expectedSubjectPrefix),
 		"the ID token Subject should include the upstream user ID after the upstream issuer name")
 	require.NoError(t, nonceParam.Validate(idToken))
-	testutil.RequireTimeInDelta(t, time.Now().UTC().Add(time.Minute*5), idToken.Expiry, time.Second*30)
+	expectedIDTokenLifetime := oidc.DefaultOIDCTimeoutsConfiguration().IDTokenLifespan
+	testutil.RequireTimeInDelta(t, time.Now().UTC().Add(expectedIDTokenLifetime), idToken.Expiry, time.Second*30)
 	idTokenClaims := map[string]interface{}{}
 	err = idToken.Claims(&idTokenClaims)
 	require.NoError(t, err)
@@ -229,7 +231,8 @@ func verifyTokenResponse(
 	require.NotEmpty(t, tokenResponse.AccessToken)
 	require.Equal(t, "bearer", tokenResponse.TokenType)
 	require.NotZero(t, tokenResponse.Expiry)
-	testutil.RequireTimeInDelta(t, time.Now().UTC().Add(time.Minute*5), tokenResponse.Expiry, time.Second*30)
+	expectedAccessTokenLifetime := oidc.DefaultOIDCTimeoutsConfiguration().AccessTokenLifespan
+	testutil.RequireTimeInDelta(t, time.Now().UTC().Add(expectedAccessTokenLifetime), tokenResponse.Expiry, time.Second*30)
 
 	require.NotEmpty(t, tokenResponse.RefreshToken)
 }
@@ -262,7 +265,7 @@ func (s *localCallbackServer) waitForCallback(timeout time.Duration) *http.Reque
 	}
 }
 
-func doTokenExchange(t *testing.T, config *oauth2.Config, tokenResponse *oauth2.Token, httpClient *http.Client, provider *oidc.Provider) {
+func doTokenExchange(t *testing.T, config *oauth2.Config, tokenResponse *oauth2.Token, httpClient *http.Client, provider *coreosoidc.Provider) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
@@ -289,7 +292,7 @@ func doTokenExchange(t *testing.T, config *oauth2.Config, tokenResponse *oauth2.
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&respBody))
 
-	var clusterVerifier = provider.Verifier(&oidc.Config{ClientID: "cluster-1234"})
+	var clusterVerifier = provider.Verifier(&coreosoidc.Config{ClientID: "cluster-1234"})
 	exchangedToken, err := clusterVerifier.Verify(ctx, respBody.AccessToken)
 	require.NoError(t, err)
 

@@ -90,8 +90,12 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 		//  3. we would like *all* downstream providers to use the *same* signing key for the CSRF cookie (which doesn't need to be encrypted) because cookies are sent per-domain and our issuers can share a domain name (but have different paths)
 		var encoderHashKey = []byte("fake-hash-secret")  // TODO replace this secret
 		var encoderBlockKey = []byte("16-bytes-aaaaaaa") // TODO replace this secret
-		var encoder = securecookie.New(encoderHashKey, encoderBlockKey)
-		encoder.SetSerializer(securecookie.JSONEncoder{})
+
+		var upstreamStateEncoder = securecookie.New(encoderHashKey, encoderBlockKey)
+		upstreamStateEncoder.SetSerializer(securecookie.JSONEncoder{})
+
+		var csrfCookieEncoder = securecookie.New(encoderHashKey, encoderBlockKey)
+		csrfCookieEncoder.SetSerializer(securecookie.JSONEncoder{})
 
 		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuer)
 
@@ -104,15 +108,15 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 			csrftoken.Generate,
 			pkce.Generate,
 			nonce.Generate,
-			encoder,
-			encoder,
+			upstreamStateEncoder,
+			csrfCookieEncoder,
 		)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.CallbackEndpointPath)] = callback.NewHandler(
 			m.idpListGetter,
 			oauthHelperWithKubeStorage,
-			encoder,
-			encoder,
+			upstreamStateEncoder,
+			csrfCookieEncoder,
 			issuer+oidc.CallbackEndpointPath,
 		)
 

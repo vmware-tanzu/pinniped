@@ -135,6 +135,9 @@ func (s *secretsStorage) DeleteByLabel(ctx context.Context, labelName string, la
 	if err != nil {
 		return fmt.Errorf(`failed to list secrets for resource "%s" matching label "%s=%s": %w`, s.resource, labelName, labelValue, err)
 	}
+	if len(list.Items) == 0 {
+		return fmt.Errorf(`failed to delete secrets for resource "%s" matching label "%s=%s": none found`, s.resource, labelName, labelValue)
+	}
 	// TODO try to delete all of the items and consolidate all of the errors and return them all
 	for _, secret := range list.Items {
 		err = s.secrets.Delete(ctx, secret.Name, metav1.DeleteOptions{})
@@ -162,22 +165,21 @@ func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, 
 		return nil, fmt.Errorf("failed to encode secret data for %s: %w", s.getName(signature), err)
 	}
 
-	labels := map[string]string{
+	labelsToAdd := map[string]string{
 		SecretLabelKey: s.resource, // make it easier to find this stuff via kubectl
 	}
 	for labelName, labelValue := range additionalLabels {
-		labels[labelName] = labelValue
-	}
-	annotations := map[string]string{
-		SecretLifetimeAnnotationKey: s.clock().Add(s.lifetime).UTC().String(),
+		labelsToAdd[labelName] = labelValue
 	}
 
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            s.getName(signature),
 			ResourceVersion: resourceVersion,
-			Labels:          labels,
-			Annotations:     annotations,
+			Labels:          labelsToAdd,
+			Annotations: map[string]string{
+				SecretLifetimeAnnotationKey: s.clock().Add(s.lifetime).UTC().Format(time.RFC3339),
+			},
 			OwnerReferences: nil,
 		},
 		Data: map[string][]byte{

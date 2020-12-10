@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
@@ -39,8 +40,8 @@ type session struct {
 	Version string          `json:"version"`
 }
 
-func New(secrets corev1client.SecretInterface) openid.OpenIDConnectRequestStorage {
-	return &openIDConnectRequestStorage{storage: crud.New(TypeLabelValue, secrets)}
+func New(secrets corev1client.SecretInterface, clock func() time.Time, sessionStorageLifetime time.Duration) openid.OpenIDConnectRequestStorage {
+	return &openIDConnectRequestStorage{storage: crud.New(TypeLabelValue, secrets, clock, sessionStorageLifetime)}
 }
 
 func (a *openIDConnectRequestStorage) CreateOpenIDConnectSession(ctx context.Context, authcode string, requester fosite.Requester) error {

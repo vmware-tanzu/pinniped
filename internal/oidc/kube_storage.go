@@ -32,12 +32,13 @@ type KubeStorage struct {
 }
 
 func NewKubeStorage(secrets corev1client.SecretInterface, timeoutsConfiguration TimeoutsConfiguration) *KubeStorage {
+	nowFunc := time.Now
 	return &KubeStorage{
-		authorizationCodeStorage: authorizationcode.New(secrets, time.Now, timeoutsConfiguration.AuthorizationCodeSessionStorageLifetime),
-		pkceStorage:              pkce.New(secrets),
-		oidcStorage:              openidconnect.New(secrets),
-		accessTokenStorage:       accesstoken.New(secrets),
-		refreshTokenStorage:      refreshtoken.New(secrets),
+		authorizationCodeStorage: authorizationcode.New(secrets, nowFunc, timeoutsConfiguration.AuthorizationCodeSessionStorageLifetime),
+		pkceStorage:              pkce.New(secrets, nowFunc, timeoutsConfiguration.PKCESessionStorageLifetime),
+		oidcStorage:              openidconnect.New(secrets, nowFunc, timeoutsConfiguration.OIDCSessionStorageLifetime),
+		accessTokenStorage:       accesstoken.New(secrets, nowFunc, timeoutsConfiguration.AccessTokenSessionStorageLifetime),
+		refreshTokenStorage:      refreshtoken.New(secrets, nowFunc, timeoutsConfiguration.RefreshTokenSessionStorageLifetime),
 	}
 }
 

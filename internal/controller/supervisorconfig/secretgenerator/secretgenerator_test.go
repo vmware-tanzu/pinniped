@@ -226,6 +226,9 @@ func TestController(t *testing.T) {
 		},
 		{
 			name: "when generating the secret fails, we return an error",
+			storedSecret: func(secret **corev1.Secret) {
+				*secret = nil
+			},
 			generateKey: func() ([]byte, error) {
 				return nil, errors.New("some generate error")
 			},

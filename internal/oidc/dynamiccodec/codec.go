@@ -23,7 +23,9 @@ type Codec struct {
 	encryptionKeyFunc KeyFunc
 }
 
-// New creates a new Codec that will use the provided keyFuncs for its key source.
+// New creates a new Codec that will use the provided keyFuncs for its key source, and
+// use the securecookie.JSONEncoder. The securecookie.JSONEncoder is used because the default
+// securecookie.GobEncoder is less compact and more difficult to make forward compatible.
 func New(signingKeyFunc, encryptionKeyFunc KeyFunc) *Codec {
 	return &Codec{
 		signingKeyFunc:    signingKeyFunc,
@@ -33,10 +35,14 @@ func New(signingKeyFunc, encryptionKeyFunc KeyFunc) *Codec {
 
 // Encode implements oidc.Encode().
 func (c *Codec) Encode(name string, value interface{}) (string, error) {
-	return securecookie.New(c.signingKeyFunc(), c.encryptionKeyFunc()).Encode(name, value)
+	encoder := securecookie.New(c.signingKeyFunc(), c.encryptionKeyFunc())
+	encoder.SetSerializer(securecookie.JSONEncoder{})
+	return encoder.Encode(name, value)
 }
 
 // Decode implements oidc.Decode().
 func (c *Codec) Decode(name string, value string, into interface{}) error {
-	return securecookie.New(c.signingKeyFunc(), c.encryptionKeyFunc()).Decode(name, value, into)
+	decoder := securecookie.New(c.signingKeyFunc(), c.encryptionKeyFunc())
+	decoder.SetSerializer(securecookie.JSONEncoder{})
+	return decoder.Decode(name, value, into)
 }

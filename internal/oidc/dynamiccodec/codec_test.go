@@ -4,6 +4,7 @@
 package dynamiccodec
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,10 +12,10 @@ import (
 
 func TestCodec(t *testing.T) {
 	tests := []struct {
-		name             string
-		keys             func(encoderSigningKey, encoderEncryptionKey, decoderSigningKey, decoderEncryptionKey *[]byte)
-		wantEncoderError string
-		wantDecoderError string
+		name                   string
+		keys                   func(encoderSigningKey, encoderEncryptionKey, decoderSigningKey, decoderEncryptionKey *[]byte)
+		wantEncoderErrorPrefix string
+		wantDecoderError       string
 	}{
 		{
 			name: "good signing and encryption keys",
@@ -31,7 +32,7 @@ func TestCodec(t *testing.T) {
 			keys: func(encoderSigningKey, encoderEncryptionKey, decoderSigningKey, decoderEncryptionKey *[]byte) {
 				*encoderEncryptionKey = []byte("this-secret-is-not-16-bytes")
 			},
-			wantEncoderError: "securecookie: error - caused by: crypto/aes: invalid key size 27",
+			wantEncoderErrorPrefix: "securecookie: error - caused by: crypto/aes: invalid key size 27",
 		},
 		{
 			name: "good signing keys and bad decoding encryption key",
@@ -45,7 +46,7 @@ func TestCodec(t *testing.T) {
 			keys: func(encoderSigningKey, encoderEncryptionKey, decoderSigningKey, decoderEncryptionKey *[]byte) {
 				*encoderSigningKey = nil
 			},
-			wantEncoderError: "securecookie: hash key is not set",
+			wantEncoderErrorPrefix: "securecookie: hash key is not set",
 		},
 		{
 			name: "bad decoder signing key",
@@ -66,7 +67,7 @@ func TestCodec(t *testing.T) {
 			keys: func(encoderSigningKey, encoderEncryptionKey, decoderSigningKey, decoderEncryptionKey *[]byte) {
 				*encoderEncryptionKey = []byte("16-byte-no-match")
 			},
-			wantDecoderError: "securecookie: error - caused by: securecookie: error - caused by: gob: encoded unsigned integer out of range",
+			wantDecoderError: "securecookie: error - caused by: securecookie: error - caused by: invalid character '",
 		},
 	}
 	for _, test := range tests {
@@ -85,8 +86,8 @@ func TestCodec(t *testing.T) {
 				func() []byte { return encoderEncryptionKey })
 
 			encoded, err := encoder.Encode("some-name", "some-message")
-			if test.wantEncoderError != "" {
-				require.EqualError(t, err, test.wantEncoderError)
+			if test.wantEncoderErrorPrefix != "" {
+				require.EqualError(t, err, test.wantEncoderErrorPrefix)
 				return
 			}
 			require.NoError(t, err)
@@ -97,7 +98,8 @@ func TestCodec(t *testing.T) {
 			var decoded string
 			err = decoder.Decode("some-name", encoded, &decoded)
 			if test.wantDecoderError != "" {
-				require.EqualError(t, err, test.wantDecoderError)
+				require.Error(t, err)
+				require.True(t, strings.HasPrefix(err.Error(), test.wantDecoderError))
 				return
 			}
 			require.NoError(t, err)

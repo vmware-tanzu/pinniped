@@ -8,7 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gorilla/securecookie"
+	"go.pinniped.dev/internal/oidc/dynamiccodec"
+
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/internal/oidc"
@@ -88,14 +89,13 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 		//  1. we would like to state to have an embedded expiration date while the cookie does not need that
 		//  2. we would like each downstream provider to use different secrets for signing/encrypting the upstream state, not share secrets
 		//  3. we would like *all* downstream providers to use the *same* signing key for the CSRF cookie (which doesn't need to be encrypted) because cookies are sent per-domain and our issuers can share a domain name (but have different paths)
-		var upstreamStateEncoderHashKey = []byte("fake-state-hash-secret") // TODO replace this secret
-		var upstreamStateEncoderBlockKey = []byte("16-bytes-STATE01")      // TODO replace this secret
-		var upstreamStateEncoder = securecookie.New(upstreamStateEncoderHashKey, upstreamStateEncoderBlockKey)
-		upstreamStateEncoder.SetSerializer(securecookie.JSONEncoder{})
+		var upstreamStateEncoderHashKeyFunc = func() []byte { return []byte("fake-state-hash-secret") } // TODO replace this secret
+		var upstreamStateEncoderBlockKeyFunc = func() []byte { return []byte("16-bytes-STATE01") }      // TODO replace this secret
+		var upstreamStateEncoder = dynamiccodec.New(upstreamStateEncoderHashKeyFunc, upstreamStateEncoderBlockKeyFunc)
 
-		var csrfCookieEncoderHashKey = []byte("fake-csrf-hash-secret") // TODO replace this secret
-		var csrfCookieEncoder = securecookie.New(csrfCookieEncoderHashKey, nil)
-		csrfCookieEncoder.SetSerializer(securecookie.JSONEncoder{})
+		var csrfCookieEncoderHashKeyFunc = func() []byte { return []byte("fake-csrf-hash-secret") } // TODO replace this secret
+		var csrEncoderBlockKeyFunc = func() []byte { return nil }                                   // TODO replace this secret
+		var csrfCookieEncoder = dynamiccodec.New(csrfCookieEncoderHashKeyFunc, csrEncoderBlockKeyFunc)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuer)
 

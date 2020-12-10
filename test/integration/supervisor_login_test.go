@@ -126,7 +126,7 @@ func TestSupervisorLogin(t *testing.T) {
 		ClientID:    "pinniped-cli",
 		Endpoint:    discovery.Endpoint(),
 		RedirectURL: localCallbackServer.URL,
-		Scopes:      []string{"openid", "pinniped.sts.unrestricted"},
+		Scopes:      []string{"openid", "pinniped.sts.unrestricted", "offline_access"},
 	}
 
 	// Build a valid downstream authorize URL for the supervisor.
@@ -160,13 +160,47 @@ func TestSupervisorLogin(t *testing.T) {
 	callback := localCallbackServer.waitForCallback(10 * time.Second)
 	t.Logf("got callback request: %s", library.MaskTokens(callback.URL.String()))
 	require.Equal(t, stateParam.String(), callback.URL.Query().Get("state"))
-	require.Equal(t, "openid pinniped.sts.unrestricted", callback.URL.Query().Get("scope"))
+	require.ElementsMatch(t, []string{"openid", "pinniped.sts.unrestricted", "offline_access"}, strings.Split(callback.URL.Query().Get("scope"), " "))
 	authcode := callback.URL.Query().Get("code")
 	require.NotEmpty(t, authcode)
 
 	// Call the token endpoint to get tokens.
 	tokenResponse, err := downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
 	require.NoError(t, err)
+
+	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat"}
+	verifyTokenResponse(t, tokenResponse, discovery, downstreamOAuth2Config, env.SupervisorTestUpstream.Issuer, nonceParam, expectedIDTokenClaims)
+
+	// token exchange on the original token
+	doTokenExchange(t, &downstreamOAuth2Config, tokenResponse, httpClient, discovery)
+
+	// Use the refresh token to get new tokens
+	refreshSource := downstreamOAuth2Config.TokenSource(oidcHTTPClientContext, &oauth2.Token{RefreshToken: tokenResponse.RefreshToken})
+	refreshedTokenResponse, err := refreshSource.Token()
+	require.NoError(t, err)
+
+	expectedIDTokenClaims = append(expectedIDTokenClaims, "at_hash")
+	verifyTokenResponse(t, refreshedTokenResponse, discovery, downstreamOAuth2Config, env.SupervisorTestUpstream.Issuer, "", expectedIDTokenClaims)
+
+	require.NotEqual(t, tokenResponse.AccessToken, refreshedTokenResponse.AccessToken)
+	require.NotEqual(t, tokenResponse.RefreshToken, refreshedTokenResponse.RefreshToken)
+	require.NotEqual(t, tokenResponse.Extra("id_token"), refreshedTokenResponse.Extra("id_token"))
+
+	// token exchange on the refreshed token
+	doTokenExchange(t, &downstreamOAuth2Config, refreshedTokenResponse, httpClient, discovery)
+}
+
+func verifyTokenResponse(
+	t *testing.T,
+	tokenResponse *oauth2.Token,
+	discovery *oidc.Provider,
+	downstreamOAuth2Config oauth2.Config,
+	upstreamIssuerName string,
+	nonceParam nonce.Nonce,
+	expectedIDTokenClaims []string,
+) {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
 
 	// Verify the ID Token.
 	rawIDToken, ok := tokenResponse.Extra("id_token").(string)
@@ -176,7 +210,7 @@ func TestSupervisorLogin(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check the claims of the ID token.
-	expectedSubjectPrefix := env.SupervisorTestUpstream.Issuer + "?sub="
+	expectedSubjectPrefix := upstreamIssuerName + "?sub="
 	require.True(t, strings.HasPrefix(idToken.Subject, expectedSubjectPrefix))
 	require.Greater(t, len(idToken.Subject), len(expectedSubjectPrefix),
 		"the ID token Subject should include the upstream user ID after the upstream issuer name")
@@ -189,7 +223,7 @@ func TestSupervisorLogin(t *testing.T) {
 	for k := range idTokenClaims {
 		idTokenClaimNames = append(idTokenClaimNames, k)
 	}
-	require.ElementsMatch(t, []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat"}, idTokenClaimNames)
+	require.ElementsMatch(t, expectedIDTokenClaims, idTokenClaimNames)
 
 	// Some light verification of the other tokens that were returned.
 	require.NotEmpty(t, tokenResponse.AccessToken)
@@ -197,9 +231,7 @@ func TestSupervisorLogin(t *testing.T) {
 	require.NotZero(t, tokenResponse.Expiry)
 	testutil.RequireTimeInDelta(t, time.Now().UTC().Add(time.Minute*5), tokenResponse.Expiry, time.Second*30)
 
-	require.Empty(t, tokenResponse.RefreshToken) // for now, until the next user story :)
-
-	wipDoTokenExchange(t, &downstreamOAuth2Config, tokenResponse, httpClient, discovery) // WIP while we work on the token exchange server.
+	require.NotEmpty(t, tokenResponse.RefreshToken)
 }
 
 func startLocalCallbackServer(t *testing.T) *localCallbackServer {
@@ -230,8 +262,7 @@ func (s *localCallbackServer) waitForCallback(timeout time.Duration) *http.Reque
 	}
 }
 
-// WIP test code for the token exchange flow.
-func wipDoTokenExchange(t *testing.T, config *oauth2.Config, tokenResponse *oauth2.Token, httpClient *http.Client, provider *oidc.Provider) {
+func doTokenExchange(t *testing.T, config *oauth2.Config, tokenResponse *oauth2.Token, httpClient *http.Client, provider *oidc.Provider) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 

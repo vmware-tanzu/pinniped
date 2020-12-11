@@ -13,12 +13,17 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"go.pinniped.dev/internal/plog"
 )
 
 // PodInfo contains pod metadata about the current pod.
 type PodInfo struct {
 	// Namespace where the current pod is running.
 	Namespace string
+
+	// Name of the current pod.
+	Name string
 
 	// Labels of the current pod.
 	Labels map[string]string
@@ -32,6 +37,13 @@ func Load(directory string) (*PodInfo, error) {
 		return nil, fmt.Errorf("could not load namespace: %w", err)
 	}
 	result.Namespace = strings.TrimSpace(string(ns))
+
+	name, err := ioutil.ReadFile(filepath.Join(directory, "name"))
+	if err != nil {
+		plog.Warning("could not read 'name' downward API file")
+	} else {
+		result.Name = strings.TrimSpace(string(name))
+	}
 
 	labels, err := ioutil.ReadFile(filepath.Join(directory, "labels"))
 	if err != nil {

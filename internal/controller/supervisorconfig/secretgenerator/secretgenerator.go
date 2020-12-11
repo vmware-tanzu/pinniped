@@ -44,24 +44,27 @@ func generateSymmetricKey() ([]byte, error) {
 }
 
 type controller struct {
-	owner            *appsv1.Deployment
-	client           kubernetes.Interface
-	secrets          corev1informers.SecretInformer
-	onCreateOrUpdate func(secret []byte)
+	owner    *appsv1.Deployment
+	client   kubernetes.Interface
+	secrets  corev1informers.SecretInformer
+	setCache func(secret []byte)
 }
 
 // New instantiates a new controllerlib.Controller which will ensure existence of a generated secret.
 func New(
+	// TODO: label the generated secret like we do in the JWKSWriterController
+	// TODO: generate the name for the secret and label the secret with the UID of the owner? So that we don't have naming conflicts if the user has already created a Secret with that name.
+	// TODO: add tests for the filter like we do in the JWKSWriterController?
 	owner *appsv1.Deployment,
 	client kubernetes.Interface,
 	secrets corev1informers.SecretInformer,
-	onCreateOrUpdate func(secret []byte),
+	setCache func(secret []byte),
 ) controllerlib.Controller {
 	c := controller{
-		owner:            owner,
-		client:           client,
-		secrets:          secrets,
-		onCreateOrUpdate: onCreateOrUpdate,
+		owner:    owner,
+		client:   client,
+		secrets:  secrets,
+		setCache: setCache,
 	}
 	filter := pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
 		return metav1.IsControlledBy(obj, owner)
@@ -71,7 +74,7 @@ func New(
 		controllerlib.WithInformer(secrets, filter, controllerlib.InformerOption{}),
 		controllerlib.WithInitialEvent(controllerlib.Key{
 			Namespace: owner.Namespace,
-			Name:      owner.Name + "-keys",
+			Name:      owner.Name + "-key",
 		}),
 	)
 }
@@ -87,7 +90,7 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 	secretNeedsUpdate := isNotFound || !c.isValid(secret)
 	if !secretNeedsUpdate {
 		plog.Debug("secret is up to date", "secret", klog.KObj(secret))
-		c.onCreateOrUpdate(secret.Data[symmetricKeySecretDataKey])
+		c.setCache(secret.Data[symmetricKeySecretDataKey])
 		return nil
 	}
 
@@ -105,7 +108,7 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("failed to create/update secret %s/%s: %w", newSecret.Namespace, newSecret.Name, err)
 	}
 
-	c.onCreateOrUpdate(newSecret.Data[symmetricKeySecretDataKey])
+	c.setCache(newSecret.Data[symmetricKeySecretDataKey])
 
 	return nil
 }

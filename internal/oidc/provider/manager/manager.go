@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 
+	"go.pinniped.dev/internal/secret"
+
 	"go.pinniped.dev/internal/oidc/dynamiccodec"
 
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -72,30 +74,33 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 	m.providers = oidcProviders
 	m.providerHandlers = make(map[string]http.Handler)
 
+	cache := secret.Cache{}
+	cache.SetCSRFCookieEncoderHashKey([]byte("fake-csrf-hash-secret")) // TODO fetch from `Secret`
+
+	var csrfCookieEncoder = dynamiccodec.New(cache.GetCSRFCookieEncoderHashKey, cache.GetCSRFCookieEncoderBlockKey)
+
 	for _, incomingProvider := range oidcProviders {
+		providerCache := cache.GetOIDCProviderCacheFor(incomingProvider.Issuer())
+
+		if providerCache == nil {
+			providerCache = &secret.OIDCProviderCache{}
+			providerCache.SetTokenHMACKey([]byte("some secret - must have at least 32 bytes")) // TODO fetch from `Secret`
+			providerCache.SetStateEncoderHashKey([]byte("fake-state-hash-secret"))             // TODO fetch from `Secret`
+			providerCache.SetStateEncoderBlockKey([]byte("16-bytes-STATE01"))                  // TODO fetch from `Secret`
+			cache.SetOIDCProviderCacheFor(incomingProvider.Issuer(), providerCache)
+		}
+
 		issuer := incomingProvider.Issuer()
 		issuerHostWithPath := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath()
 
-		fositeHMACSecretForThisProvider := []byte("some secret - must have at least 32 bytes") // TODO replace this secret
-
 		// Use NullStorage for the authorize endpoint because we do not actually want to store anything until
 		// the upstream callback endpoint is called later.
-		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(oidc.NullStorage{}, issuer, fositeHMACSecretForThisProvider, nil, oidc.DefaultOIDCTimeoutsConfiguration())
+		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(oidc.NullStorage{}, issuer, providerCache.GetTokenHMACKey(), nil, oidc.DefaultOIDCTimeoutsConfiguration())
 
 		// For all the other endpoints, make another oauth helper with exactly the same settings except use real storage.
-		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(oidc.NewKubeStorage(m.secretsClient), issuer, fositeHMACSecretForThisProvider, m.dynamicJWKSProvider, oidc.DefaultOIDCTimeoutsConfiguration())
+		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(oidc.NewKubeStorage(m.secretsClient), issuer, providerCache.GetTokenHMACKey(), m.dynamicJWKSProvider, oidc.DefaultOIDCTimeoutsConfiguration())
 
-		// TODO use different codecs for the state and the cookie, because:
-		//  1. we would like to state to have an embedded expiration date while the cookie does not need that
-		//  2. we would like each downstream provider to use different secrets for signing/encrypting the upstream state, not share secrets
-		//  3. we would like *all* downstream providers to use the *same* signing key for the CSRF cookie (which doesn't need to be encrypted) because cookies are sent per-domain and our issuers can share a domain name (but have different paths)
-		var upstreamStateEncoderHashKeyFunc = func() []byte { return []byte("fake-state-hash-secret") } // TODO replace this secret
-		var upstreamStateEncoderBlockKeyFunc = func() []byte { return []byte("16-bytes-STATE01") }      // TODO replace this secret
-		var upstreamStateEncoder = dynamiccodec.New(upstreamStateEncoderHashKeyFunc, upstreamStateEncoderBlockKeyFunc)
-
-		var csrfCookieEncoderHashKeyFunc = func() []byte { return []byte("fake-csrf-hash-secret") } // TODO replace this secret
-		var csrEncoderBlockKeyFunc = func() []byte { return nil }                                   // TODO replace this secret
-		var csrfCookieEncoder = dynamiccodec.New(csrfCookieEncoderHashKeyFunc, csrEncoderBlockKeyFunc)
+		var upstreamStateEncoder = dynamiccodec.New(providerCache.GetStateEncoderHashKey, providerCache.GetStateEncoderBlockKey)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuer)
 

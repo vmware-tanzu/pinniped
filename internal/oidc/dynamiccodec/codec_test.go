@@ -74,7 +74,7 @@ func TestCodec(t *testing.T) {
 			keys: func(encoderSigningKey, encoderEncryptionKey, decoderSigningKey, decoderEncryptionKey *[]byte) {
 				*encoderEncryptionKey = []byte("16-byte-no-match")
 			},
-			wantDecoderError: "securecookie: error - caused by: securecookie: error - caused by: invalid character '",
+			wantDecoderError: "securecookie: error - caused by: securecookie: error - caused by: ",
 		},
 	}
 	for _, test := range tests {

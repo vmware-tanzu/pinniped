@@ -124,10 +124,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 
 	// Configure fosite the same way that the production code would, using NullStorage to turn off storage.
 	oauthStore := oidc.NullStorage{}
-	hmacSecret := []byte("some secret - must have at least 32 bytes")
-	require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
+	hmacSecretFunc := func() []byte { return []byte("some secret - must have at least 32 bytes") }
+	require.GreaterOrEqual(t, len(hmacSecretFunc()), 32, "fosite requires that hmac secrets have at least 32 bytes")
 	jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
-	oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecret, jwksProviderIsUnused, oidc.DefaultOIDCTimeoutsConfiguration())
+	oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, oidc.DefaultOIDCTimeoutsConfiguration())
 
 	happyCSRF := "test-csrf"
 	happyPKCE := "test-pkce"

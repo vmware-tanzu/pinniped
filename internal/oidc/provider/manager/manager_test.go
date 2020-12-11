@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 
+	"go.pinniped.dev/internal/secret"
+
 	"github.com/sclevine/spec"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
@@ -241,7 +243,10 @@ func TestManager(t *testing.T) {
 			kubeClient = fake.NewSimpleClientset()
 			secretsClient := kubeClient.CoreV1().Secrets("some-namespace")
 
-			subject = NewManager(nextHandler, dynamicJWKSProvider, idpListGetter, secretsClient)
+			cache := secret.Cache{}
+			cache.SetCSRFCookieEncoderHashKey([]byte("fake-csrf-hash-secret"))
+
+			subject = NewManager(nextHandler, dynamicJWKSProvider, idpListGetter, cache, secretsClient)
 		})
 
 		when("given no providers via SetProviders()", func() {

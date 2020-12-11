@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"go.pinniped.dev/internal/secret"
+
 	"k8s.io/apimachinery/pkg/util/clock"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -194,12 +196,16 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 	dynamicJWKSProvider := jwks.NewDynamicJWKSProvider()
 	dynamicTLSCertProvider := provider.NewDynamicTLSCertProvider()
 	dynamicUpstreamIDPProvider := provider.NewDynamicUpstreamIDPProvider()
+	cache := secret.Cache{}
+
+	cache.SetCSRFCookieEncoderHashKey([]byte("fake-csrf-hash-secret")) // TODO fetch from `Secret`
 
 	// OIDC endpoints will be served by the oidProvidersManager, and any non-OIDC paths will fallback to the healthMux.
 	oidProvidersManager := manager.NewManager(
 		healthMux,
 		dynamicJWKSProvider,
 		dynamicUpstreamIDPProvider,
+		cache,
 		kubeClient.CoreV1().Secrets(serverInstallationNamespace),
 	)
 

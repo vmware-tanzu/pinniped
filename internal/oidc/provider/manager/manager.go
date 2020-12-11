@@ -37,6 +37,7 @@ type Manager struct {
 	nextHandler         http.Handler             // the next handler in a chain, called when this manager didn't know how to handle a request
 	dynamicJWKSProvider jwks.DynamicJWKSProvider // in-memory cache of per-issuer JWKS data
 	idpListGetter       oidc.IDPListGetter       // in-memory cache of upstream IDPs
+	cache               secret.Cache             // in-memory cache of cryptographic material
 	secretsClient       corev1client.SecretInterface
 }
 
@@ -48,6 +49,7 @@ func NewManager(
 	nextHandler http.Handler,
 	dynamicJWKSProvider jwks.DynamicJWKSProvider,
 	idpListGetter oidc.IDPListGetter,
+	cache secret.Cache,
 	secretsClient corev1client.SecretInterface,
 ) *Manager {
 	return &Manager{
@@ -55,6 +57,7 @@ func NewManager(
 		nextHandler:         nextHandler,
 		dynamicJWKSProvider: dynamicJWKSProvider,
 		idpListGetter:       idpListGetter,
+		cache:               cache,
 		secretsClient:       secretsClient,
 	}
 }
@@ -74,20 +77,17 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 	m.providers = oidcProviders
 	m.providerHandlers = make(map[string]http.Handler)
 
-	cache := secret.Cache{}
-	cache.SetCSRFCookieEncoderHashKey([]byte("fake-csrf-hash-secret")) // TODO fetch from `Secret`
-
-	var csrfCookieEncoder = dynamiccodec.New(cache.GetCSRFCookieEncoderHashKey, cache.GetCSRFCookieEncoderBlockKey)
+	var csrfCookieEncoder = dynamiccodec.New(m.cache.GetCSRFCookieEncoderHashKey, m.cache.GetCSRFCookieEncoderBlockKey)
 
 	for _, incomingProvider := range oidcProviders {
-		providerCache := cache.GetOIDCProviderCacheFor(incomingProvider.Issuer())
+		providerCache := m.cache.GetOIDCProviderCacheFor(incomingProvider.Issuer())
 
-		if providerCache == nil {
+		if providerCache == nil { // TODO remove when populated from `Secret` values
 			providerCache = &secret.OIDCProviderCache{}
 			providerCache.SetTokenHMACKey([]byte("some secret - must have at least 32 bytes")) // TODO fetch from `Secret`
 			providerCache.SetStateEncoderHashKey([]byte("fake-state-hash-secret"))             // TODO fetch from `Secret`
 			providerCache.SetStateEncoderBlockKey([]byte("16-bytes-STATE01"))                  // TODO fetch from `Secret`
-			cache.SetOIDCProviderCacheFor(incomingProvider.Issuer(), providerCache)
+			m.cache.SetOIDCProviderCacheFor(incomingProvider.Issuer(), providerCache)
 		}
 
 		issuer := incomingProvider.Issuer()

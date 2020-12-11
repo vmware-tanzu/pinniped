@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,9 +26,9 @@ import (
 
 func TestController(t *testing.T) {
 	const (
-		generatedSecretNamespace  = "some-namespace"
-		generatedSecretNamePrefix = "some-name-"
-		generatedSecretName       = "some-name-abc123"
+		generatedSecretNamespace = "some-namespace"
+		generatedSecretName      = "some-name-abc123"
+		otherGeneratedSecretName = "some-other-name-abc123"
 	)
 
 	var (
@@ -37,32 +38,60 @@ func TestController(t *testing.T) {
 			Resource: "secrets",
 		}
 
-		generatedSymmetricKey = []byte("some-neato-32-byte-generated-key")
+		owner = &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "some-owner-name",
+				UID:  "some-owner-uid",
+			},
+		}
+		ownerGVK = schema.GroupVersionKind{
+			Group:   appsv1.SchemeGroupVersion.Group,
+			Version: appsv1.SchemeGroupVersion.Version,
+			Kind:    "Deployment",
+		}
+
+		generatedSymmetricKey      = []byte("some-neato-32-byte-generated-key")
+		otherGeneratedSymmetricKey = []byte("some-funio-32-byte-generated-key")
 
 		generatedSecret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: generatedSecretNamePrefix,
-				Namespace:    generatedSecretNamespace,
+				Name:      generatedSecretName,
+				Namespace: generatedSecretNamespace,
+				OwnerReferences: []metav1.OwnerReference{
+					*metav1.NewControllerRef(owner, ownerGVK),
+				},
 			},
 			Type: "secrets.pinniped.dev/symmetric",
 			Data: map[string][]byte{
 				"key": generatedSymmetricKey,
 			},
 		}
-	)
 
-	generatedSecretWithName := generatedSecret.DeepCopy()
-	generatedSecretWithName.Name = generatedSecretName
+		otherGeneratedSecret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      generatedSecretName,
+				Namespace: generatedSecretNamespace,
+				OwnerReferences: []metav1.OwnerReference{
+					*metav1.NewControllerRef(owner, ownerGVK),
+				},
+			},
+			Type: "secrets.pinniped.dev/symmetric",
+			Data: map[string][]byte{
+				"key": otherGeneratedSymmetricKey,
+			},
+		}
+	)
 
 	once := sync.Once{}
 
 	tests := []struct {
-		name         string
-		storedSecret func(**corev1.Secret)
-		generateKey  func() ([]byte, error)
-		apiClient    func(*testing.T, *kubernetesfake.Clientset)
-		wantError    string
-		wantActions  []kubetesting.Action
+		name               string
+		storedSecret       func(**corev1.Secret)
+		generateKey        func() ([]byte, error)
+		apiClient          func(*testing.T, *kubernetesfake.Clientset)
+		wantError          string
+		wantActions        []kubetesting.Action
+		wantCallbackSecret []byte
 	}{
 		{
 			name: "when the secrets does not exist, it gets generated",
@@ -72,9 +101,11 @@ func TestController(t *testing.T) {
 			wantActions: []kubetesting.Action{
 				kubetesting.NewCreateAction(secretsGVR, generatedSecretNamespace, generatedSecret),
 			},
+			wantCallbackSecret: generatedSymmetricKey,
 		},
 		{
-			name: "when a valid secret exists, nothing happens",
+			name:               "when a valid secret exists, nothing happens",
+			wantCallbackSecret: generatedSymmetricKey,
 		},
 		{
 			name: "secret gets updated when the type is wrong",
@@ -83,8 +114,9 @@ func TestController(t *testing.T) {
 			},
 			wantActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretsGVR, generatedSecretNamespace, generatedSecretName),
-				kubetesting.NewUpdateAction(secretsGVR, generatedSecretNamespace, generatedSecretWithName),
+				kubetesting.NewUpdateAction(secretsGVR, generatedSecretNamespace, generatedSecret),
 			},
+			wantCallbackSecret: generatedSymmetricKey,
 		},
 		{
 			name: "secret gets updated when the key data does not exist",
@@ -93,8 +125,9 @@ func TestController(t *testing.T) {
 			},
 			wantActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretsGVR, generatedSecretNamespace, generatedSecretName),
-				kubetesting.NewUpdateAction(secretsGVR, generatedSecretNamespace, generatedSecretWithName),
+				kubetesting.NewUpdateAction(secretsGVR, generatedSecretNamespace, generatedSecret),
 			},
+			wantCallbackSecret: generatedSymmetricKey,
 		},
 		{
 			name: "secret gets updated when the key data is too short",
@@ -103,8 +136,9 @@ func TestController(t *testing.T) {
 			},
 			wantActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretsGVR, generatedSecretNamespace, generatedSecretName),
-				kubetesting.NewUpdateAction(secretsGVR, generatedSecretNamespace, generatedSecretWithName),
+				kubetesting.NewUpdateAction(secretsGVR, generatedSecretNamespace, generatedSecret),
 			},
+			wantCallbackSecret: generatedSymmetricKey,
 		},
 		{
 			name: "an error is returned when creating fails",
@@ -133,7 +167,7 @@ func TestController(t *testing.T) {
 			},
 			wantActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretsGVR, generatedSecretNamespace, generatedSecretName),
-				kubetesting.NewUpdateAction(secretsGVR, generatedSecretNamespace, generatedSecretWithName),
+				kubetesting.NewUpdateAction(secretsGVR, generatedSecretNamespace, generatedSecret),
 			},
 			wantError: "failed to create/update secret some-namespace/some-name-abc123: some update error",
 		},
@@ -168,10 +202,11 @@ func TestController(t *testing.T) {
 			},
 			wantActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretsGVR, generatedSecretNamespace, generatedSecretName),
-				kubetesting.NewUpdateAction(secretsGVR, generatedSecretNamespace, generatedSecretWithName),
+				kubetesting.NewUpdateAction(secretsGVR, generatedSecretNamespace, generatedSecret),
 				kubetesting.NewGetAction(secretsGVR, generatedSecretNamespace, generatedSecretName),
-				kubetesting.NewUpdateAction(secretsGVR, generatedSecretNamespace, generatedSecretWithName),
+				kubetesting.NewUpdateAction(secretsGVR, generatedSecretNamespace, generatedSecret),
 			},
+			wantCallbackSecret: generatedSymmetricKey,
 		},
 		{
 			name: "upon updating we discover that a valid secret exists",
@@ -180,12 +215,13 @@ func TestController(t *testing.T) {
 			},
 			apiClient: func(t *testing.T, client *kubernetesfake.Clientset) {
 				client.PrependReactor("get", "secrets", func(action kubetesting.Action) (bool, runtime.Object, error) {
-					return true, generatedSecretWithName, nil
+					return true, otherGeneratedSecret, nil
 				})
 			},
 			wantActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretsGVR, generatedSecretNamespace, generatedSecretName),
 			},
+			wantCallbackSecret: otherGeneratedSymmetricKey,
 		},
 		{
 			name: "upon updating we discover that the secret has been deleted",
@@ -204,6 +240,7 @@ func TestController(t *testing.T) {
 				kubetesting.NewGetAction(secretsGVR, generatedSecretNamespace, generatedSecretName),
 				kubetesting.NewCreateAction(secretsGVR, generatedSecretNamespace, generatedSecret),
 			},
+			wantCallbackSecret: generatedSymmetricKey,
 		},
 		{
 			name: "upon updating we discover that the secret has been deleted and our create fails",
@@ -257,7 +294,7 @@ func TestController(t *testing.T) {
 			}
 			informerClient := kubernetesfake.NewSimpleClientset()
 
-			storedSecret := generatedSecretWithName.DeepCopy()
+			storedSecret := generatedSecret.DeepCopy()
 			if test.storedSecret != nil {
 				test.storedSecret(&storedSecret)
 			}
@@ -269,7 +306,11 @@ func TestController(t *testing.T) {
 			informers := kubeinformers.NewSharedInformerFactory(informerClient, 0)
 			secrets := informers.Core().V1().Secrets()
 
-			c := New(generatedSecretNamePrefix, apiClient, secrets)
+			var callbackSecret []byte
+			c := New(owner, apiClient, secrets, func(secret []byte) {
+				require.Nil(t, callbackSecret, "callback was called twice")
+				callbackSecret = secret
+			})
 
 			// Must start informers before calling TestRunSynchronously().
 			informers.Start(ctx.Done())
@@ -292,6 +333,8 @@ func TestController(t *testing.T) {
 				test.wantActions = []kubetesting.Action{}
 			}
 			require.Equal(t, test.wantActions, apiClient.Actions())
+
+			require.Equal(t, test.wantCallbackSecret, callbackSecret)
 		})
 	}
 }

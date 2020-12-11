@@ -25,6 +25,14 @@ rules:
   - apiGroups: [idp.supervisor.pinniped.dev]
     resources: [upstreamoidcproviders/status]
     verbs: [get, patch, update]
+    #! We want to be able to read pods/replicasets/deployment so we can learn who our deployment is to set
+    #! as an owner reference.
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get]
+  - apiGroups: [apps]
+    resources: [replicasets,deployments]
+    verbs: [get]
 ---
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

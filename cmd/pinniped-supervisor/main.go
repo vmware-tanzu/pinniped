@@ -16,6 +16,8 @@ import (
 
 	"go.pinniped.dev/internal/secret"
 
+	appsv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/clock"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -30,6 +32,7 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/controller/supervisorconfig"
+	"go.pinniped.dev/internal/controller/supervisorconfig/secretgenerator"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatcher"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/downward"
@@ -78,6 +81,8 @@ func startControllers(
 	dynamicJWKSProvider jwks.DynamicJWKSProvider,
 	dynamicTLSCertProvider provider.DynamicTLSCertProvider,
 	dynamicUpstreamIDPProvider provider.DynamicUpstreamIDPProvider,
+	secretCache *secret.Cache,
+	supervisorDeployment *appsv1.Deployment,
 	kubeClient kubernetes.Interface,
 	pinnipedClient pinnipedclientset.Interface,
 	kubeInformers kubeinformers.SharedInformerFactory,
@@ -127,6 +132,18 @@ func startControllers(
 			singletonWorker,
 		).
 		WithController(
+			secretgenerator.New(
+				supervisorDeployment,
+				kubeClient,
+				kubeInformers.Core().V1().Secrets(),
+				func(secret []byte) {
+					plog.Debug("setting csrf cookie secret")
+					secretCache.SetCSRFCookieEncoderHashKey(secret)
+				},
+			),
+			singletonWorker,
+		).
+		WithController(
 			upstreamwatcher.New(
 				dynamicUpstreamIDPProvider,
 				pinnipedClient,
@@ -143,6 +160,41 @@ func startControllers(
 	pinnipedInformers.WaitForCacheSync(ctx.Done())
 
 	go controllerManager.Start(ctx)
+}
+
+func getSupervisorDeployment(
+	ctx context.Context,
+	kubeClient kubernetes.Interface,
+	podInfo *downward.PodInfo,
+) (*appsv1.Deployment, error) {
+	ns := podInfo.Namespace
+
+	pod, err := kubeClient.CoreV1().Pods(ns).Get(ctx, podInfo.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("could not get pod: %w", err)
+	}
+
+	podOwner := metav1.GetControllerOf(pod)
+	if podOwner == nil {
+		return nil, fmt.Errorf("pod %s/%s is missing owner", ns, podInfo.Name)
+	}
+
+	rs, err := kubeClient.AppsV1().ReplicaSets(ns).Get(ctx, podOwner.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("could not get replicaset: %w", err)
+	}
+
+	rsOwner := metav1.GetControllerOf(rs)
+	if rsOwner == nil {
+		return nil, fmt.Errorf("replicaset %s/%s is missing owner", ns, podInfo.Name)
+	}
+
+	d, err := kubeClient.AppsV1().Deployments(ns).Get(ctx, rsOwner.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("could not get deployment: %w", err)
+	}
+
+	return d, nil
 }
 
 func newClients() (kubernetes.Interface, pinnipedclientset.Interface, error) {
@@ -166,7 +218,9 @@ func newClients() (kubernetes.Interface, pinnipedclientset.Interface, error) {
 	return kubeClient, pinnipedClient, nil
 }
 
-func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
+func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
+	serverInstallationNamespace := podInfo.Namespace
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -196,18 +250,21 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 	dynamicJWKSProvider := jwks.NewDynamicJWKSProvider()
 	dynamicTLSCertProvider := provider.NewDynamicTLSCertProvider()
 	dynamicUpstreamIDPProvider := provider.NewDynamicUpstreamIDPProvider()
-	cache := secret.Cache{}
-
-	cache.SetCSRFCookieEncoderHashKey([]byte("fake-csrf-hash-secret")) // TODO fetch from `Secret`
+	secretCache := secret.Cache{}
 
 	// OIDC endpoints will be served by the oidProvidersManager, and any non-OIDC paths will fallback to the healthMux.
 	oidProvidersManager := manager.NewManager(
 		healthMux,
 		dynamicJWKSProvider,
 		dynamicUpstreamIDPProvider,
-		cache,
+		&secretCache,
 		kubeClient.CoreV1().Secrets(serverInstallationNamespace),
 	)
+
+	supervisorDeployment, err := getSupervisorDeployment(ctx, kubeClient, podInfo)
+	if err != nil {
+		return fmt.Errorf("cannot get supervisor deployment: %w", err)
+	}
 
 	startControllers(
 		ctx,
@@ -216,6 +273,8 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 		dynamicJWKSProvider,
 		dynamicTLSCertProvider,
 		dynamicUpstreamIDPProvider,
+		&secretCache,
+		supervisorDeployment,
 		kubeClient,
 		pinnipedClient,
 		kubeInformers,
@@ -284,7 +343,7 @@ func main() {
 		klog.Fatal(fmt.Errorf("could not load config: %w", err))
 	}
 
-	if err := run(podInfo.Namespace, cfg); err != nil {
+	if err := run(podInfo, cfg); err != nil {
 		klog.Fatal(err)
 	}
 }

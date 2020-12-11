@@ -132,6 +132,9 @@ spec:
               - path: "namespace"
                 fieldRef:
                   fieldPath: metadata.namespace
+              - path: "name"
+                fieldRef:
+                  fieldPath: metadata.name
       #! This will help make sure our multiple pods run on different nodes, making
       #! our deployment "more" "HA".
       affinity:

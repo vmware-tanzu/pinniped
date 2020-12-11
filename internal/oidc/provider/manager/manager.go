@@ -37,7 +37,7 @@ type Manager struct {
 	nextHandler         http.Handler             // the next handler in a chain, called when this manager didn't know how to handle a request
 	dynamicJWKSProvider jwks.DynamicJWKSProvider // in-memory cache of per-issuer JWKS data
 	idpListGetter       oidc.IDPListGetter       // in-memory cache of upstream IDPs
-	cache               secret.Cache             // in-memory cache of cryptographic material
+	cache               *secret.Cache            // in-memory cache of cryptographic material
 	secretsClient       corev1client.SecretInterface
 }
 
@@ -49,7 +49,7 @@ func NewManager(
 	nextHandler http.Handler,
 	dynamicJWKSProvider jwks.DynamicJWKSProvider,
 	idpListGetter oidc.IDPListGetter,
-	cache secret.Cache,
+	cache *secret.Cache,
 	secretsClient corev1client.SecretInterface,
 ) *Manager {
 	return &Manager{

@@ -9,9 +9,11 @@ import (
 	"crypto/rand"
 	"fmt"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
@@ -42,22 +44,35 @@ func generateSymmetricKey() ([]byte, error) {
 }
 
 type controller struct {
-	secretNamePrefix string
+	owner            *appsv1.Deployment
 	client           kubernetes.Interface
 	secrets          corev1informers.SecretInformer
+	onCreateOrUpdate func(secret []byte)
 }
 
 // New instantiates a new controllerlib.Controller which will ensure existence of a generated secret.
-func New(secretNamePrefix string, client kubernetes.Interface, secrets corev1informers.SecretInformer) controllerlib.Controller {
+func New(
+	owner *appsv1.Deployment,
+	client kubernetes.Interface,
+	secrets corev1informers.SecretInformer,
+	onCreateOrUpdate func(secret []byte),
+) controllerlib.Controller {
 	c := controller{
-		secretNamePrefix: secretNamePrefix,
+		owner:            owner,
 		client:           client,
 		secrets:          secrets,
+		onCreateOrUpdate: onCreateOrUpdate,
 	}
-	filter := pinnipedcontroller.SimpleFilterWithSingletonQueue(isOwnee)
+	filter := pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
+		return metav1.IsControlledBy(obj, owner)
+	}, nil)
 	return controllerlib.New(
-		controllerlib.Config{Name: secretNamePrefix + "-secrets-generator", Syncer: &c},
+		controllerlib.Config{Name: owner.Name + "-secret-generator", Syncer: &c},
 		controllerlib.WithInformer(secrets, filter, controllerlib.InformerOption{}),
+		controllerlib.WithInitialEvent(controllerlib.Key{
+			Namespace: owner.Namespace,
+			Name:      owner.Name + "-keys",
+		}),
 	)
 }
 
@@ -72,10 +87,11 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 	secretNeedsUpdate := isNotFound || !c.isValid(secret)
 	if !secretNeedsUpdate {
 		plog.Debug("secret is up to date", "secret", klog.KObj(secret))
+		c.onCreateOrUpdate(secret.Data[symmetricKeySecretDataKey])
 		return nil
 	}
 
-	newSecret, err := c.generateSecret(ctx.Key.Namespace)
+	newSecret, err := c.generateSecret(ctx.Key.Namespace, ctx.Key.Name)
 	if err != nil {
 		return fmt.Errorf("failed to generate secret: %w", err)
 	}
@@ -83,11 +99,13 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 	if isNotFound {
 		err = c.createSecret(ctx.Context, newSecret)
 	} else {
-		err = c.updateSecret(ctx.Context, newSecret, ctx.Key.Name)
+		err = c.updateSecret(ctx.Context, &newSecret, ctx.Key.Name)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to create/update secret %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
+		return fmt.Errorf("failed to create/update secret %s/%s: %w", newSecret.Namespace, newSecret.Name, err)
 	}
+
+	c.onCreateOrUpdate(newSecret.Data[symmetricKeySecretDataKey])
 
 	return nil
 }
@@ -108,16 +126,24 @@ func (c *controller) isValid(secret *corev1.Secret) bool {
 	return true
 }
 
-func (c *controller) generateSecret(namespace string) (*corev1.Secret, error) {
+func (c *controller) generateSecret(namespace, name string) (*corev1.Secret, error) {
 	symmetricKey, err := generateKey()
 	if err != nil {
 		return nil, err
 	}
 
+	deploymentGVK := schema.GroupVersionKind{
+		Group:   appsv1.SchemeGroupVersion.Group,
+		Version: appsv1.SchemeGroupVersion.Version,
+		Kind:    "Deployment",
+	}
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: c.secretNamePrefix,
-			Namespace:    namespace,
+			Name:      name,
+			Namespace: namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(c.owner, deploymentGVK),
+			},
 		},
 		Type: symmetricKeySecretType,
 		Data: map[string][]byte{
@@ -131,8 +157,8 @@ func (c *controller) createSecret(ctx context.Context, newSecret *corev1.Secret)
 	return err
 }
 
-func (c *controller) updateSecret(ctx context.Context, newSecret *corev1.Secret, secretName string) error {
-	secrets := c.client.CoreV1().Secrets(newSecret.Namespace)
+func (c *controller) updateSecret(ctx context.Context, newSecret **corev1.Secret, secretName string) error {
+	secrets := c.client.CoreV1().Secrets((*newSecret).Namespace)
 	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		currentSecret, err := secrets.Get(ctx, secretName, metav1.GetOptions{})
 		isNotFound := k8serrors.IsNotFound(err)
@@ -141,26 +167,21 @@ func (c *controller) updateSecret(ctx context.Context, newSecret *corev1.Secret,
 		}
 
 		if isNotFound {
-			if err := c.createSecret(ctx, newSecret); err != nil {
+			if err := c.createSecret(ctx, *newSecret); err != nil {
 				return fmt.Errorf("failed to create secret: %w", err)
 			}
 			return nil
 		}
 
 		if c.isValid(currentSecret) {
+			*newSecret = currentSecret
 			return nil
 		}
 
-		currentSecret.Type = newSecret.Type
-		currentSecret.Data = newSecret.Data
+		currentSecret.Type = (*newSecret).Type
+		currentSecret.Data = (*newSecret).Data
 
 		_, err = secrets.Update(ctx, currentSecret, metav1.UpdateOptions{})
 		return err
 	})
-}
-
-// isOwnee returns whether the provided obj is owned by this controller.
-func isOwnee(obj metav1.Object) bool {
-	// TODO: how do we say we are owned by our Deployment?
-	return true
 }

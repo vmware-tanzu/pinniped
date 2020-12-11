@@ -246,7 +246,7 @@ func TestManager(t *testing.T) {
 			cache := secret.Cache{}
 			cache.SetCSRFCookieEncoderHashKey([]byte("fake-csrf-hash-secret"))
 
-			subject = NewManager(nextHandler, dynamicJWKSProvider, idpListGetter, cache, secretsClient)
+			subject = NewManager(nextHandler, dynamicJWKSProvider, idpListGetter, &cache, secretsClient)
 		})
 
 		when("given no providers via SetProviders()", func() {

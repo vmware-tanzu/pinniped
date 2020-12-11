@@ -22,11 +22,6 @@ func MatchAnythingFilter(parentFunc controllerlib.ParentFunc) controllerlib.Filt
 	return SimpleFilter(func(object metav1.Object) bool { return true }, parentFunc)
 }
 
-// MatchNothingFilter returns a controllerlib.Filter that allows no objects.
-func MatchNothingFilter(parentFunc controllerlib.ParentFunc) controllerlib.Filter {
-	return SimpleFilter(func(object metav1.Object) bool { return false }, parentFunc)
-}
-
 // SimpleFilter takes a single boolean match function on a metav1.Object and wraps it into a proper controllerlib.Filter.
 func SimpleFilter(match func(metav1.Object) bool, parentFunc controllerlib.ParentFunc) controllerlib.Filter {
 	return controllerlib.FilterFuncs{

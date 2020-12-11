@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/clock"
 	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	kubetesting "k8s.io/client-go/testing"
@@ -37,6 +38,7 @@ func TestGarbageCollectorControllerInformerFilters(t *testing.T) {
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
 			_ = GarbageCollectorController(
+				clock.RealClock{},
 				nil,
 				secretsInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
@@ -57,11 +59,11 @@ func TestGarbageCollectorControllerInformerFilters(t *testing.T) {
 			})
 
 			when("any Secret changes", func() {
-				it("returns false to avoid triggering the sync function", func() {
-					r.False(subject.Add(secret))
-					r.False(subject.Update(secret, otherSecret))
-					r.False(subject.Update(otherSecret, secret))
-					r.False(subject.Delete(secret))
+				it("returns true to trigger the sync function for all secrets", func() {
+					r.True(subject.Add(secret))
+					r.True(subject.Update(secret, otherSecret))
+					r.True(subject.Update(otherSecret, secret))
+					r.True(subject.Delete(secret))
 				})
 			})
 		})
@@ -74,10 +76,6 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		Version:  "v1",
 		Resource: "secrets",
 	}
-
-	firstExpiredTime := time.Date(1900, time.January, 1, 1, 0, 0, 0, time.UTC).Format(time.RFC3339)
-	secondExpiredTime := time.Date(1901, time.January, 1, 1, 0, 0, 0, time.UTC).Format(time.RFC3339)
-	unexpiredTime := time.Now().Add(time.Hour * 24).UTC().Format(time.RFC3339)
 
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const (
@@ -93,6 +91,8 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			timeoutContext       context.Context
 			timeoutContextCancel context.CancelFunc
 			syncContext          *controllerlib.Context
+			fakeClock            *clock.FakeClock
+			frozenNow            time.Time
 		)
 
 		// Defer starting the informers until the last possible moment so that the
@@ -100,6 +100,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		var startInformersAndController = func() {
 			// Set this at the last second to allow for injection of server override.
 			subject = GarbageCollectorController(
+				fakeClock,
 				kubeClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
@@ -128,6 +129,8 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeClient = kubernetesfake.NewSimpleClientset()
 			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
+			frozenNow = time.Now().UTC()
+			fakeClock = clock.NewFakeClock(frozenNow)
 
 			unrelatedSecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
@@ -163,7 +166,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 						Name:      "first expired secret",
 						Namespace: installedInNamespace,
 						Annotations: map[string]string{
-							"storage.pinniped.dev/garbage-collect-after": firstExpiredTime,
+							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add(-time.Second).Format(time.RFC3339),
 						},
 					},
 				}
@@ -174,7 +177,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 						Name:      "second expired secret",
 						Namespace: installedInNamespace,
 						Annotations: map[string]string{
-							"storage.pinniped.dev/garbage-collect-after": secondExpiredTime,
+							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add(-2 * time.Second).Format(time.RFC3339),
 						},
 					},
 				}
@@ -185,7 +188,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 						Name:      "unexpired secret",
 						Namespace: installedInNamespace,
 						Annotations: map[string]string{
-							"storage.pinniped.dev/garbage-collect-after": unexpiredTime,
+							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add(time.Second).Format(time.RFC3339),
 						},
 					},
 				}
@@ -211,6 +214,54 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			})
 		})
 
+		when("very little time has passed since the previous sync call", func() {
+			it.Before(func() {
+				// Add a secret that will expire in 20 seconds.
+				expiredSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "expired secret",
+						Namespace: installedInNamespace,
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add(20 * time.Second).Format(time.RFC3339),
+						},
+					},
+				}
+				r.NoError(kubeInformerClient.Tracker().Add(expiredSecret))
+				r.NoError(kubeClient.Tracker().Add(expiredSecret))
+			})
+
+			it("should do nothing to avoid being super chatty since it is called for every change to any Secret, until more time has passed", func() {
+				startInformersAndController()
+				require.Empty(t, kubeClient.Actions())
+
+				// Run sync once with the current time set to frozenTime.
+				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+				require.Empty(t, kubeClient.Actions())
+
+				// Run sync again when not enough time has passed since the most recent run, so no delete
+				// operations should happen even though there is a expired secret now.
+				fakeClock.Step(29 * time.Second)
+				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+				require.Empty(t, kubeClient.Actions())
+
+				// Step to the exact threshold and run Sync again. Now we are past the rate limiting period.
+				fakeClock.Step(1*time.Second + 1*time.Millisecond)
+				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+
+				// It should have deleted the expired secret.
+				r.ElementsMatch(
+					[]kubetesting.Action{
+						kubetesting.NewDeleteAction(secretsGVR, installedInNamespace, "expired secret"),
+					},
+					kubeClient.Actions(),
+				)
+				list, err := kubeClient.CoreV1().Secrets(installedInNamespace).List(context.Background(), metav1.ListOptions{})
+				r.NoError(err)
+				r.Len(list.Items, 1)
+				r.Equal("some other unrelated secret", list.Items[0].Name)
+			})
+		})
+
 		when("there is a secret with a malformed garbage-collect-after date", func() {
 			it.Before(func() {
 				malformedSecret := &corev1.Secret{
@@ -229,7 +280,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 						Name:      "expired secret",
 						Namespace: installedInNamespace,
 						Annotations: map[string]string{
-							"storage.pinniped.dev/garbage-collect-after": firstExpiredTime,
+							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add(-time.Second).Format(time.RFC3339),
 						},
 					},
 				}
@@ -254,14 +305,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			})
 		})
 
-		when("the delete call fails", func() {
+		when("the kube API delete call fails", func() {
 			it.Before(func() {
 				erroringSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "erroring secret",
 						Namespace: installedInNamespace,
 						Annotations: map[string]string{
-							"storage.pinniped.dev/garbage-collect-after": firstExpiredTime,
+							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add(-time.Second).Format(time.RFC3339),
 						},
 					},
 				}
@@ -278,7 +329,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 						Name:      "expired secret",
 						Namespace: installedInNamespace,
 						Annotations: map[string]string{
-							"storage.pinniped.dev/garbage-collect-after": firstExpiredTime,
+							"storage.pinniped.dev/garbage-collect-after": frozenNow.Add(-time.Second).Format(time.RFC3339),
 						},
 					},
 				}
@@ -286,7 +337,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				r.NoError(kubeClient.Tracker().Add(expiredSecret))
 			})
 
-			it("continues on to delete the next one", func() {
+			it("ignores the error and continues on to delete the next expired Secret", func() {
 				startInformersAndController()
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 

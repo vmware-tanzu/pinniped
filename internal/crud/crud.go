@@ -23,8 +23,10 @@ import (
 
 //nolint:gosec // ignore lint warnings that these are credentials
 const (
-	SecretLabelKey              = "storage.pinniped.dev/type"
-	SecretLifetimeAnnotationKey = "storage.pinniped.dev/garbage-collect-after"
+	SecretLabelKey = "storage.pinniped.dev/type"
+
+	SecretLifetimeAnnotationKey        = "storage.pinniped.dev/garbage-collect-after"
+	SecretLifetimeAnnotationDateFormat = time.RFC3339
 
 	secretNameFormat = "pinniped-storage-%s-%s"
 	secretTypeFormat = "storage.pinniped.dev/%s"
@@ -178,7 +180,7 @@ func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, 
 			ResourceVersion: resourceVersion,
 			Labels:          labelsToAdd,
 			Annotations: map[string]string{
-				SecretLifetimeAnnotationKey: s.clock().Add(s.lifetime).UTC().Format(time.RFC3339),
+				SecretLifetimeAnnotationKey: s.clock().Add(s.lifetime).UTC().Format(SecretLifetimeAnnotationDateFormat),
 			},
 			OwnerReferences: nil,
 		},

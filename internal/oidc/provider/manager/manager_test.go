@@ -341,7 +341,7 @@ func TestManager(t *testing.T) {
 				r.NoError(err)
 				subject.SetProviders(p1, p2)
 
-				jwks := map[string]*jose.JSONWebKeySet{
+				jwksMap := map[string]*jose.JSONWebKeySet{
 					issuer1: {Keys: []jose.JSONWebKey{*newTestJWK(issuer1KeyID)}},
 					issuer2: {Keys: []jose.JSONWebKey{*newTestJWK(issuer2KeyID)}},
 				}
@@ -349,7 +349,7 @@ func TestManager(t *testing.T) {
 					issuer1: newTestJWK(issuer1KeyID),
 					issuer2: newTestJWK(issuer2KeyID),
 				}
-				dynamicJWKSProvider.SetIssuerToJWKSMap(jwks, activeJWK)
+				dynamicJWKSProvider.SetIssuerToJWKSMap(jwksMap, activeJWK)
 			})
 
 			it("sends all non-matching host requests to the nextHandler", func() {
@@ -384,7 +384,7 @@ func TestManager(t *testing.T) {
 				r.NoError(err)
 				subject.SetProviders(p2, p1)
 
-				jwks := map[string]*jose.JSONWebKeySet{
+				jwksMap := map[string]*jose.JSONWebKeySet{
 					issuer1: {Keys: []jose.JSONWebKey{*newTestJWK(issuer1KeyID)}},
 					issuer2: {Keys: []jose.JSONWebKey{*newTestJWK(issuer2KeyID)}},
 				}
@@ -392,7 +392,7 @@ func TestManager(t *testing.T) {
 					issuer1: newTestJWK(issuer1KeyID),
 					issuer2: newTestJWK(issuer2KeyID),
 				}
-				dynamicJWKSProvider.SetIssuerToJWKSMap(jwks, activeJWK)
+				dynamicJWKSProvider.SetIssuerToJWKSMap(jwksMap, activeJWK)
 			})
 
 			it("still routes matching requests to the appropriate provider", func() {

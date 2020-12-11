@@ -6,6 +6,7 @@ package dynamiccodec
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -13,6 +14,7 @@ import (
 func TestCodec(t *testing.T) {
 	tests := []struct {
 		name                   string
+		lifespan               time.Duration
 		keys                   func(encoderSigningKey, encoderEncryptionKey, decoderSigningKey, decoderEncryptionKey *[]byte)
 		wantEncoderErrorPrefix string
 		wantDecoderError       string
@@ -40,6 +42,11 @@ func TestCodec(t *testing.T) {
 				*decoderEncryptionKey = []byte("this-secret-is-not-16-bytes")
 			},
 			wantDecoderError: "securecookie: error - caused by: crypto/aes: invalid key size 27",
+		},
+		{
+			name:             "aaa encoder times stuff out",
+			lifespan:         time.Second,
+			wantDecoderError: "securecookie: expired timestamp",
 		},
 		{
 			name: "bad encoder signing key",
@@ -82,7 +89,13 @@ func TestCodec(t *testing.T) {
 			if test.keys != nil {
 				test.keys(&encoderSigningKey, &encoderEncryptionKey, &decoderSigningKey, &decoderEncryptionKey)
 			}
-			encoder := New(func() []byte { return encoderSigningKey },
+
+			lifespan := test.lifespan
+			if lifespan == 0 {
+				lifespan = time.Hour
+			}
+
+			encoder := New(lifespan, func() []byte { return encoderSigningKey },
 				func() []byte { return encoderEncryptionKey })
 
 			encoded, err := encoder.Encode("some-name", "some-message")
@@ -92,14 +105,18 @@ func TestCodec(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			decoder := New(func() []byte { return decoderSigningKey },
+			if test.lifespan != 0 {
+				time.Sleep(test.lifespan + time.Second)
+			}
+
+			decoder := New(lifespan, func() []byte { return decoderSigningKey },
 				func() []byte { return decoderEncryptionKey })
 
 			var decoded string
 			err = decoder.Decode("some-name", encoded, &decoded)
 			if test.wantDecoderError != "" {
 				require.Error(t, err)
-				require.True(t, strings.HasPrefix(err.Error(), test.wantDecoderError))
+				require.True(t, strings.HasPrefix(err.Error(), test.wantDecoderError), "expected %q to start with %q", err.Error(), test.wantDecoderError)
 				return
 			}
 			require.NoError(t, err)

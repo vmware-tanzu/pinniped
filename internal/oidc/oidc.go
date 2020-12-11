@@ -44,6 +44,11 @@ const (
 	// CSRFCookieEncodingName is the `name` passed to the encoder for encoding and decoding the CSRF
 	// cookie contents.
 	CSRFCookieEncodingName = "csrf"
+
+	// CSRFCookieLifespan is the length of time that the CSRF cookie is valid. After this time, the
+	// Supervisor's authorization endpoint should give the browser a new CSRF cookie. We set it to
+	// a week so that it is unlikely to expire during a login.
+	CSRFCookieLifespan = time.Hour * 24 * 7
 )
 
 // Encoder is the encoding side of the securecookie.Codec interface.

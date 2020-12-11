@@ -77,7 +77,11 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 	m.providers = oidcProviders
 	m.providerHandlers = make(map[string]http.Handler)
 
-	var csrfCookieEncoder = dynamiccodec.New(m.cache.GetCSRFCookieEncoderHashKey, m.cache.GetCSRFCookieEncoderBlockKey)
+	var csrfCookieEncoder = dynamiccodec.New(
+		oidc.CSRFCookieLifespan,
+		m.cache.GetCSRFCookieEncoderHashKey,
+		m.cache.GetCSRFCookieEncoderBlockKey,
+	)
 
 	for _, incomingProvider := range oidcProviders {
 		providerCache := m.cache.GetOIDCProviderCacheFor(incomingProvider.Issuer())
@@ -101,7 +105,11 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 		// For all the other endpoints, make another oauth helper with exactly the same settings except use real storage.
 		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(oidc.NewKubeStorage(m.secretsClient), issuer, providerCache.GetTokenHMACKey, m.dynamicJWKSProvider, oidcTimeouts)
 
-		var upstreamStateEncoder = dynamiccodec.New(providerCache.GetStateEncoderHashKey, providerCache.GetStateEncoderBlockKey)
+		var upstreamStateEncoder = dynamiccodec.New(
+			oidcTimeouts.UpstreamStateParamLifespan,
+			providerCache.GetStateEncoderHashKey,
+			providerCache.GetStateEncoderBlockKey,
+		)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuer)
 

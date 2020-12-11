@@ -6,6 +6,8 @@
 package dynamiccodec
 
 import (
+	"time"
+
 	"github.com/gorilla/securecookie"
 
 	"go.pinniped.dev/internal/oidc"
@@ -19,6 +21,7 @@ type KeyFunc func() []byte
 // Codec can dynamically encode and decode information by using a KeyFunc to get its keys
 // just-in-time.
 type Codec struct {
+	lifespan          time.Duration
 	signingKeyFunc    KeyFunc
 	encryptionKeyFunc KeyFunc
 }
@@ -26,8 +29,12 @@ type Codec struct {
 // New creates a new Codec that will use the provided keyFuncs for its key source, and
 // use the securecookie.JSONEncoder. The securecookie.JSONEncoder is used because the default
 // securecookie.GobEncoder is less compact and more difficult to make forward compatible.
-func New(signingKeyFunc, encryptionKeyFunc KeyFunc) *Codec {
+//
+// The returned Codec will make ensure that the encoded values will only be valid for the provided
+// lifespan.
+func New(lifespan time.Duration, signingKeyFunc, encryptionKeyFunc KeyFunc) *Codec {
 	return &Codec{
+		lifespan:          lifespan,
 		signingKeyFunc:    signingKeyFunc,
 		encryptionKeyFunc: encryptionKeyFunc,
 	}
@@ -35,14 +42,17 @@ func New(signingKeyFunc, encryptionKeyFunc KeyFunc) *Codec {
 
 // Encode implements oidc.Encode().
 func (c *Codec) Encode(name string, value interface{}) (string, error) {
-	encoder := securecookie.New(c.signingKeyFunc(), c.encryptionKeyFunc())
-	encoder.SetSerializer(securecookie.JSONEncoder{})
-	return encoder.Encode(name, value)
+	return c.delegate().Encode(name, value)
 }
 
 // Decode implements oidc.Decode().
 func (c *Codec) Decode(name string, value string, into interface{}) error {
-	decoder := securecookie.New(c.signingKeyFunc(), c.encryptionKeyFunc())
-	decoder.SetSerializer(securecookie.JSONEncoder{})
-	return decoder.Decode(name, value, into)
+	return c.delegate().Decode(name, value, into)
+}
+
+func (c *Codec) delegate() *securecookie.SecureCookie {
+	codec := securecookie.New(c.signingKeyFunc(), c.encryptionKeyFunc())
+	codec.MaxAge(int(c.lifespan.Seconds()))
+	codec.SetSerializer(securecookie.JSONEncoder{})
+	return codec
 }

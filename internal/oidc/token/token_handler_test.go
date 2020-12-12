@@ -52,7 +52,7 @@ const (
 	goodClient           = "pinniped-cli"
 	goodRedirectURI      = "http://127.0.0.1/callback"
 	goodPKCECodeVerifier = "some-pkce-verifier-that-must-be-at-least-43-characters-to-meet-entropy-requirements"
-	goodNonce            = "some-nonce-that-is-at-least-32-characters-to-meet-entropy-requirements"
+	goodNonce            = "some-nonce-value-with-enough-bytes-to-exceed-min-allowed"
 	goodSubject          = "some-subject"
 	goodUsername         = "some-username"
 
@@ -213,7 +213,7 @@ var (
 			"response_type":         {"code"},
 			"scope":                 {"openid profile email"},
 			"client_id":             {goodClient},
-			"state":                 {"some-state-value-that-is-32-byte"},
+			"state":                 {"some-state-value-with-enough-bytes-to-exceed-min-allowed"},
 			"nonce":                 {goodNonce},
 			"code_challenge":        {testutil.SHA256(goodPKCECodeVerifier)},
 			"code_challenge_method": {"S256"},

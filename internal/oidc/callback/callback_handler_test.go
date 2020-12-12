@@ -48,7 +48,7 @@ const (
 
 	happyUpstreamRedirectURI = "https://example.com/callback"
 
-	happyDownstreamState        = "some-downstream-state-with-at-least-32-bytes"
+	happyDownstreamState        = "8b-state"
 	happyDownstreamCSRF         = "test-csrf"
 	happyDownstreamPKCE         = "test-pkce"
 	happyDownstreamNonce        = "test-nonce"
@@ -84,6 +84,8 @@ var (
 )
 
 func TestCallbackEndpoint(t *testing.T) {
+	require.Len(t, happyDownstreamState, 8, "we expect fosite to allow 8 byte state params, so we want to test that boundary case")
+
 	otherUpstreamOIDCIdentityProvider := oidctestutil.TestUpstreamOIDCIdentityProvider{
 		Name:     "other-upstream-idp-name",
 		ClientID: "other-some-client-id",

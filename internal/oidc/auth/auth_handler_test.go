@@ -32,7 +32,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		downstreamIssuer                       = "https://my-downstream-issuer.com/some-path"
 		downstreamRedirectURI                  = "http://127.0.0.1/callback"
 		downstreamRedirectURIWithDifferentPort = "http://127.0.0.1:42/callback"
+		happyState                             = "8b-state"
 	)
+
+	require.Len(t, happyState, 8, "we expect fosite to allow 8 byte state params, so we want to test that boundary case")
 
 	var (
 		fositeInvalidClientErrorBody = here.Doc(`
@@ -59,42 +62,42 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			"error":             "invalid_request",
 			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nParameter \"prompt\" was set to \"none\", but contains other values as well which is not allowed.",
 			"error_hint":        "Parameter \"prompt\" was set to \"none\", but contains other values as well which is not allowed.",
-			"state":             "some-state-value-that-is-32-byte",
+			"state":             happyState,
 		}
 
 		fositeMissingCodeChallengeErrorQuery = map[string]string{
 			"error":             "invalid_request",
 			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nClients must include a code_challenge when performing the authorize code flow, but it is missing.",
 			"error_hint":        "Clients must include a code_challenge when performing the authorize code flow, but it is missing.",
-			"state":             "some-state-value-that-is-32-byte",
+			"state":             happyState,
 		}
 
 		fositeMissingCodeChallengeMethodErrorQuery = map[string]string{
 			"error":             "invalid_request",
 			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nClients must use code_challenge_method=S256, plain is not allowed.",
 			"error_hint":        "Clients must use code_challenge_method=S256, plain is not allowed.",
-			"state":             "some-state-value-that-is-32-byte",
+			"state":             happyState,
 		}
 
 		fositeInvalidCodeChallengeErrorQuery = map[string]string{
 			"error":             "invalid_request",
 			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nThe code_challenge_method is not supported, use S256 instead.",
 			"error_hint":        "The code_challenge_method is not supported, use S256 instead.",
-			"state":             "some-state-value-that-is-32-byte",
+			"state":             happyState,
 		}
 
 		fositeUnsupportedResponseTypeErrorQuery = map[string]string{
 			"error":             "unsupported_response_type",
 			"error_description": "The authorization server does not support obtaining a token using this method\n\nThe client is not allowed to request response_type \"unsupported\".",
 			"error_hint":        `The client is not allowed to request response_type "unsupported".`,
-			"state":             "some-state-value-that-is-32-byte",
+			"state":             happyState,
 		}
 
 		fositeInvalidScopeErrorQuery = map[string]string{
 			"error":             "invalid_scope",
 			"error_description": "The requested scope is invalid, unknown, or malformed\n\nThe OAuth 2.0 Client is not allowed to request scope \"tuna\".",
 			"error_hint":        `The OAuth 2.0 Client is not allowed to request scope "tuna".`,
-			"state":             "some-state-value-that-is-32-byte",
+			"state":             happyState,
 		}
 
 		fositeInvalidStateErrorQuery = map[string]string{
@@ -108,7 +111,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			"error":             "unsupported_response_type",
 			"error_description": "The authorization server does not support obtaining a token using this method\n\nThe request is missing the \"response_type\"\" parameter.",
 			"error_hint":        `The request is missing the "response_type"" parameter.`,
-			"state":             "some-state-value-that-is-32-byte",
+			"state":             happyState,
 		}
 	)
 
@@ -131,7 +134,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 
 	happyCSRF := "test-csrf"
 	happyPKCE := "test-pkce"
-	happyNonce := "test-nonce-that-is-32-bytes-long"
+	happyNonce := "test-nonce"
 	happyCSRFGenerator := func() (csrftoken.CSRFToken, error) { return csrftoken.CSRFToken(happyCSRF), nil }
 	happyPKCEGenerator := func() (pkce.Code, error) { return pkce.Code(happyPKCE), nil }
 	happyNonceGenerator := func() (nonce.Nonce, error) { return nonce.Nonce(happyNonce), nil }
@@ -177,7 +180,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		"response_type":         "code",
 		"scope":                 "openid profile email",
 		"client_id":             "pinniped-cli",
-		"state":                 "some-state-value-that-is-32-byte",
+		"state":                 happyState,
 		"nonce":                 "some-nonce-value",
 		"code_challenge":        "some-challenge",
 		"code_challenge_method": "S256",

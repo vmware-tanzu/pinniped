@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,6 +24,9 @@ import (
 //nolint:gosec // ignore lint warnings that these are credentials
 const (
 	SecretLabelKey = "storage.pinniped.dev/type"
+
+	SecretLifetimeAnnotationKey        = "storage.pinniped.dev/garbage-collect-after"
+	SecretLifetimeAnnotationDateFormat = time.RFC3339
 
 	secretNameFormat = "pinniped-storage-%s-%s"
 	secretTypeFormat = "storage.pinniped.dev/%s"
@@ -45,12 +49,14 @@ type Storage interface {
 
 type JSON interface{} // document that we need valid JSON types
 
-func New(resource string, secrets corev1client.SecretInterface) Storage {
+func New(resource string, secrets corev1client.SecretInterface, clock func() time.Time, lifetime time.Duration) Storage {
 	return &secretsStorage{
 		resource:      resource,
 		secretType:    corev1.SecretType(fmt.Sprintf(secretTypeFormat, resource)),
 		secretVersion: []byte(secretVersion),
 		secrets:       secrets,
+		clock:         clock,
+		lifetime:      lifetime,
 	}
 }
 
@@ -59,6 +65,8 @@ type secretsStorage struct {
 	secretType    corev1.SecretType
 	secretVersion []byte
 	secrets       corev1client.SecretInterface
+	clock         func() time.Time
+	lifetime      time.Duration
 }
 
 func (s *secretsStorage) Create(ctx context.Context, signature string, data JSON, additionalLabels map[string]string) (string, error) {
@@ -129,6 +137,9 @@ func (s *secretsStorage) DeleteByLabel(ctx context.Context, labelName string, la
 	if err != nil {
 		return fmt.Errorf(`failed to list secrets for resource "%s" matching label "%s=%s": %w`, s.resource, labelName, labelValue, err)
 	}
+	if len(list.Items) == 0 {
+		return fmt.Errorf(`failed to delete secrets for resource "%s" matching label "%s=%s": none found`, s.resource, labelName, labelValue)
+	}
 	// TODO try to delete all of the items and consolidate all of the errors and return them all
 	for _, secret := range list.Items {
 		err = s.secrets.Delete(ctx, secret.Name, metav1.DeleteOptions{})
@@ -156,18 +167,21 @@ func (s *secretsStorage) toSecret(signature, resourceVersion string, data JSON, 
 		return nil, fmt.Errorf("failed to encode secret data for %s: %w", s.getName(signature), err)
 	}
 
-	labels := map[string]string{
+	labelsToAdd := map[string]string{
 		SecretLabelKey: s.resource, // make it easier to find this stuff via kubectl
 	}
 	for labelName, labelValue := range additionalLabels {
-		labels[labelName] = labelValue
+		labelsToAdd[labelName] = labelValue
 	}
 
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            s.getName(signature),
 			ResourceVersion: resourceVersion,
-			Labels:          labels,
+			Labels:          labelsToAdd,
+			Annotations: map[string]string{
+				SecretLifetimeAnnotationKey: s.clock().Add(s.lifetime).UTC().Format(SecretLifetimeAnnotationDateFormat),
+			},
 			OwnerReferences: nil,
 		},
 		Data: map[string][]byte{

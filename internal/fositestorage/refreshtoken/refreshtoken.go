@@ -6,6 +6,7 @@ package refreshtoken
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/oauth2"
@@ -43,8 +44,8 @@ type session struct {
 	Version string          `json:"version"`
 }
 
-func New(secrets corev1client.SecretInterface) RevocationStorage {
-	return &refreshTokenStorage{storage: crud.New(TypeLabelValue, secrets)}
+func New(secrets corev1client.SecretInterface, clock func() time.Time, sessionStorageLifetime time.Duration) RevocationStorage {
+	return &refreshTokenStorage{storage: crud.New(TypeLabelValue, secrets, clock, sessionStorageLifetime)}
 }
 
 func (a *refreshTokenStorage) RevokeRefreshToken(ctx context.Context, requestID string) error {

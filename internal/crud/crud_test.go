@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/ory/fosite/compose"
 	"github.com/stretchr/testify/require"
@@ -17,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 )
@@ -45,6 +47,10 @@ func TestStorage(t *testing.T) {
 
 	validateSecretName := validation.NameIsDNSSubdomain // matches k/k
 
+	fakeNow := time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
+	lifetime := time.Minute * 10
+	fakeNowPlusLifetimeAsString := metav1.Time{Time: fakeNow.Add(lifetime)}.Format(time.RFC3339)
+
 	const (
 		namespace          = "test-ns"
 		authorizationCode1 = "81qE408EKL-e99gcXo3UnXBz9W05yGm92_hBmvXeadM.R5h38Bmw7yOaWNy0ypB3feh9toM-3T2zlwMXQyeE9B0"
@@ -56,7 +62,7 @@ func TestStorage(t *testing.T) {
 		name        string
 		resource    string
 		mocks       func(*testing.T, mocker)
-		run         func(*testing.T, Storage) error
+		run         func(*testing.T, Storage, *clock.FakeClock) error
 		wantActions []coretesting.Action
 		wantSecrets []corev1.Secret
 		wantErr     string
@@ -65,7 +71,7 @@ func TestStorage(t *testing.T) {
 			name:     "get non-existent",
 			resource: "authcode",
 			mocks:    nil,
-			run: func(t *testing.T, storage Storage) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
 				_, err := storage.Get(ctx, "not-exists", nil)
 				return err
 			},
@@ -79,7 +85,7 @@ func TestStorage(t *testing.T) {
 			name:     "delete non-existent",
 			resource: "tokens",
 			mocks:    nil,
-			run: func(t *testing.T, storage Storage) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
 				return storage.Delete(ctx, "not-a-token")
 			},
 			wantActions: []coretesting.Action{
@@ -88,12 +94,26 @@ func TestStorage(t *testing.T) {
 			wantSecrets: nil,
 			wantErr:     `failed to delete tokens for signature not-a-token: secrets "pinniped-storage-tokens-t2fx427lnci6s" not found`,
 		},
-		// TODO make a delete non-existent test for DeleteByLabel
+		{
+			name:     "delete non-existent by label",
+			resource: "tokens",
+			mocks:    nil,
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+				return storage.DeleteByLabel(ctx, "additionalLabel", "matching-value")
+			},
+			wantActions: []coretesting.Action{
+				coretesting.NewListAction(secretsGVR, schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}, namespace, metav1.ListOptions{
+					LabelSelector: "storage.pinniped.dev/type=tokens,additionalLabel=matching-value",
+				}),
+			},
+			wantSecrets: nil,
+			wantErr:     `failed to delete secrets for resource "tokens" matching label "additionalLabel=matching-value": none found`,
+		},
 		{
 			name:     "create and get",
 			resource: "access-tokens",
 			mocks:    nil,
-			run: func(t *testing.T, storage Storage) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode1)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -119,6 +139,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "access-tokens",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"create-and-get"}`),
@@ -137,6 +160,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "access-tokens",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"create-and-get"}`),
@@ -148,10 +174,105 @@ func TestStorage(t *testing.T) {
 			wantErr: "",
 		},
 		{
+			name:     "create multiple, each gets the correct lifetime timestamp",
+			resource: "access-tokens",
+			mocks:    nil,
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
+				data := &testJSON{Data: "create1"}
+				rv1, err := storage.Create(ctx, "sig1", data, nil)
+				require.Empty(t, rv1) // fake client does not set this
+				require.NoError(t, err)
+
+				fakeClock.Step(42 * time.Minute) // simulate that a known amount of time has passed
+
+				data = &testJSON{Data: "create2"}
+				rv1, err = storage.Create(ctx, "sig2", data, nil)
+				require.Empty(t, rv1) // fake client does not set this
+				require.NoError(t, err)
+
+				return nil
+			},
+			wantActions: []coretesting.Action{
+				coretesting.NewCreateAction(secretsGVR, namespace, &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-access-tokens-wiudk",
+						ResourceVersion: "",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "access-tokens",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"create1"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/access-tokens",
+				}),
+				coretesting.NewCreateAction(secretsGVR, namespace, &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-access-tokens-wiudm",
+						ResourceVersion: "",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "access-tokens",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{Time: fakeNow.Add(42 * time.Minute).Add(lifetime)}.Format(time.RFC3339),
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"create2"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/access-tokens",
+				}),
+			},
+			wantSecrets: []corev1.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-access-tokens-wiudk",
+						Namespace:       namespace,
+						ResourceVersion: "",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "access-tokens",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"create1"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/access-tokens",
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "pinniped-storage-access-tokens-wiudm",
+						Namespace:       namespace,
+						ResourceVersion: "",
+						Labels: map[string]string{
+							"storage.pinniped.dev/type": "access-tokens",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": metav1.Time{Time: fakeNow.Add(42 * time.Minute).Add(lifetime)}.Format(time.RFC3339),
+						},
+					},
+					Data: map[string][]byte{
+						"pinniped-storage-data":    []byte(`{"Data":"create2"}`),
+						"pinniped-storage-version": []byte("1"),
+					},
+					Type: "storage.pinniped.dev/access-tokens",
+				},
+			},
+			wantErr: "",
+		},
+		{
 			name:     "create and get with additional labels",
 			resource: "access-tokens",
 			mocks:    nil,
-			run: func(t *testing.T, storage Storage) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode1)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -179,6 +300,9 @@ func TestStorage(t *testing.T) {
 							"label1":                    "value1",
 							"label2":                    "value2",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"create-and-get"}`),
@@ -198,6 +322,9 @@ func TestStorage(t *testing.T) {
 							"storage.pinniped.dev/type": "access-tokens",
 							"label1":                    "value1",
 							"label2":                    "value2",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
 						},
 					},
 					Data: map[string][]byte{
@@ -221,6 +348,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "pandas-are-best",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"snorlax"}`),
@@ -230,7 +360,7 @@ func TestStorage(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			run: func(t *testing.T, storage Storage) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode2)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -256,6 +386,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "pandas-are-best",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"snorlax"}`),
@@ -278,6 +411,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "stores",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"pants"}`),
@@ -293,7 +429,7 @@ func TestStorage(t *testing.T) {
 					return false, nil, nil // we mutated the secret in place but we do not "handle" it
 				})
 			},
-			run: func(t *testing.T, storage Storage) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -327,6 +463,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "stores",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"shirts"}`),
@@ -344,6 +483,9 @@ func TestStorage(t *testing.T) {
 						ResourceVersion: "45", // final list at new RV
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "stores",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
 						},
 					},
 					Data: map[string][]byte{
@@ -367,6 +509,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "seals",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"sad-seal"}`),
@@ -376,7 +521,7 @@ func TestStorage(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			run: func(t *testing.T, storage Storage) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode2)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -402,6 +547,9 @@ func TestStorage(t *testing.T) {
 							"storage.pinniped.dev/type": "seals",
 							"additionalLabel":           "matching-value",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"sad-seal"}`),
@@ -417,6 +565,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "seals",
 							"additionalLabel":           "matching-value",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
 						},
 					},
 					Data: map[string][]byte{
@@ -434,6 +585,9 @@ func TestStorage(t *testing.T) {
 							"storage.pinniped.dev/type": "seals",              // same type as above
 							"additionalLabel":           "non-matching-value", // different value for the same label
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"sad-seal2"}`),
@@ -450,6 +604,9 @@ func TestStorage(t *testing.T) {
 							"storage.pinniped.dev/type": "walruses",       // different type from above
 							"additionalLabel":           "matching-value", // same value for the same label as above
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"sad-seal3"}`),
@@ -458,7 +615,7 @@ func TestStorage(t *testing.T) {
 					Type: "storage.pinniped.dev/walruses",
 				}))
 			},
-			run: func(t *testing.T, storage Storage) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
 				return storage.DeleteByLabel(ctx, "additionalLabel", "matching-value")
 			},
 			wantActions: []coretesting.Action{
@@ -479,6 +636,9 @@ func TestStorage(t *testing.T) {
 							"storage.pinniped.dev/type": "seals",              // same type as above
 							"additionalLabel":           "non-matching-value", // different value for the same label
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"sad-seal2"}`),
@@ -495,6 +655,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "walruses",       // different type from above
 							"additionalLabel":           "matching-value", // same value for the same label as above
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
 						},
 					},
 					Data: map[string][]byte{
@@ -519,6 +682,9 @@ func TestStorage(t *testing.T) {
 							"storage.pinniped.dev/type": "seals",
 							"additionalLabel":           "matching-value",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"sad-seal"}`),
@@ -530,7 +696,7 @@ func TestStorage(t *testing.T) {
 					return true, nil, fmt.Errorf("some delete error")
 				})
 			},
-			run: func(t *testing.T, storage Storage) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
 				return storage.DeleteByLabel(ctx, "additionalLabel", "matching-value")
 			},
 			wantActions: []coretesting.Action{
@@ -548,6 +714,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "seals",
 							"additionalLabel":           "matching-value",
+						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
 						},
 					},
 					Data: map[string][]byte{
@@ -580,7 +749,7 @@ func TestStorage(t *testing.T) {
 					return true, nil, fmt.Errorf("some listing error")
 				})
 			},
-			run: func(t *testing.T, storage Storage) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
 				return storage.DeleteByLabel(ctx, "additionalLabel", "matching-value")
 			},
 			wantActions: []coretesting.Action{
@@ -602,6 +771,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"twizzlers"}`),
@@ -611,7 +783,7 @@ func TestStorage(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			run: func(t *testing.T, storage Storage) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -637,6 +809,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"twizzlers"}`),
@@ -659,6 +834,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies-are-bad",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"twizzlers"}`),
@@ -668,7 +846,7 @@ func TestStorage(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			run: func(t *testing.T, storage Storage) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -694,6 +872,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies-are-bad",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"twizzlers"}`),
@@ -716,6 +897,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"twizzlers"}`),
@@ -725,7 +909,7 @@ func TestStorage(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			run: func(t *testing.T, storage Storage) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -751,6 +935,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`{"Data":"twizzlers"}`),
@@ -773,6 +960,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`}}bad data{{`),
@@ -782,7 +972,7 @@ func TestStorage(t *testing.T) {
 				})
 				require.NoError(t, err)
 			},
-			run: func(t *testing.T, storage Storage) error {
+			run: func(t *testing.T, storage Storage, fakeClock *clock.FakeClock) error {
 				signature := hmac.AuthorizeCodeSignature(authorizationCode3)
 				require.NotEmpty(t, signature)
 				require.NotEmpty(t, validateSecretName(signature, false)) // signature is not valid secret name as-is
@@ -807,6 +997,9 @@ func TestStorage(t *testing.T) {
 						Labels: map[string]string{
 							"storage.pinniped.dev/type": "candies",
 						},
+						Annotations: map[string]string{
+							"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+						},
 					},
 					Data: map[string][]byte{
 						"pinniped-storage-data":    []byte(`}}bad data{{`),
@@ -828,9 +1021,10 @@ func TestStorage(t *testing.T) {
 				tt.mocks(t, client)
 			}
 			secrets := client.CoreV1().Secrets(namespace)
-			storage := New(tt.resource, secrets)
+			fakeClock := clock.NewFakeClock(fakeNow)
+			storage := New(tt.resource, secrets, fakeClock.Now, lifetime)
 
-			err := tt.run(t, storage)
+			err := tt.run(t, storage, fakeClock)
 
 			require.Equal(t, tt.wantErr, errString(err))
 			require.Equal(t, tt.wantActions, client.Actions())

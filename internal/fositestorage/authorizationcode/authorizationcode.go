@@ -7,6 +7,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"time"
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/oauth2"
@@ -40,8 +41,8 @@ type AuthorizeCodeSession struct {
 	Version string          `json:"version"`
 }
 
-func New(secrets corev1client.SecretInterface) oauth2.AuthorizeCodeStorage {
-	return &authorizeCodeStorage{storage: crud.New(TypeLabelValue, secrets)}
+func New(secrets corev1client.SecretInterface, clock func() time.Time, sessionStorageLifetime time.Duration) oauth2.AuthorizeCodeStorage {
+	return &authorizeCodeStorage{storage: crud.New(TypeLabelValue, secrets, clock, sessionStorageLifetime)}
 }
 
 func (a *authorizeCodeStorage) CreateAuthorizeCodeSession(ctx context.Context, signature string, requester fosite.Requester) error {

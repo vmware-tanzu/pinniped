@@ -87,14 +87,14 @@ func (c *supervisorSecretsController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("failed to list secret %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
 	}
 
-	secretNeedsUpdate := isNotFound || !c.isValid(secret)
+	secretNeedsUpdate := isNotFound || !isValid(secret)
 	if !secretNeedsUpdate {
 		plog.Debug("secret is up to date", "secret", klog.KObj(secret))
 		c.setCache(secret.Data[symmetricKeySecretDataKey])
 		return nil
 	}
 
-	newSecret, err := c.generateSecret(ctx.Key.Namespace, ctx.Key.Name)
+	newSecret, err := generateSecret(ctx.Key.Namespace, ctx.Key.Name, secretDataFunc, c.owner)
 	if err != nil {
 		return fmt.Errorf("failed to generate secret: %w", err)
 	}
@@ -113,7 +113,7 @@ func (c *supervisorSecretsController) Sync(ctx controllerlib.Context) error {
 	return nil
 }
 
-func (c *supervisorSecretsController) isValid(secret *corev1.Secret) bool {
+func isValid(secret *corev1.Secret) bool {
 	if secret.Type != symmetricKeySecretType {
 		return false
 	}
@@ -129,8 +129,19 @@ func (c *supervisorSecretsController) isValid(secret *corev1.Secret) bool {
 	return true
 }
 
-func (c *supervisorSecretsController) generateSecret(namespace, name string) (*corev1.Secret, error) {
+func secretDataFunc() (map[string][]byte, error) {
 	symmetricKey, err := generateKey()
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string][]byte{
+		symmetricKeySecretDataKey: symmetricKey,
+	}, nil
+}
+
+func generateSecret(namespace, name string, secretDataFunc func() (map[string][]byte, error), owner metav1.Object) (*corev1.Secret, error) {
+	secretData, err := secretDataFunc()
 	if err != nil {
 		return nil, err
 	}
@@ -145,13 +156,11 @@ func (c *supervisorSecretsController) generateSecret(namespace, name string) (*c
 			Name:      name,
 			Namespace: namespace,
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(c.owner, deploymentGVK),
+				*metav1.NewControllerRef(owner, deploymentGVK),
 			},
 		},
 		Type: symmetricKeySecretType,
-		Data: map[string][]byte{
-			symmetricKeySecretDataKey: symmetricKey,
-		},
+		Data: secretData,
 	}, nil
 }
 
@@ -176,7 +185,7 @@ func (c *supervisorSecretsController) updateSecret(ctx context.Context, newSecre
 			return nil
 		}
 
-		if c.isValid(currentSecret) {
+		if isValid(currentSecret) {
 			*newSecret = currentSecret
 			return nil
 		}

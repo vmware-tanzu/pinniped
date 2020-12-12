@@ -16,11 +16,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/kubernetes/fake"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	coretesting "k8s.io/client-go/testing"
 )
 
 const namespace = "test-ns"
+
+var fakeNow = time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
+var lifetime = time.Minute * 10
+var fakeNowPlusLifetimeAsString = metav1.Time{Time: fakeNow.Add(lifetime)}.Format(time.RFC3339)
 
 var secretsGVR = schema.GroupVersionResource{
 	Group:    "",
@@ -29,8 +35,6 @@ var secretsGVR = schema.GroupVersionResource{
 }
 
 func TestAccessTokenStorage(t *testing.T) {
-	ctx := context.Background()
-
 	wantActions := []coretesting.Action{
 		coretesting.NewCreateAction(secretsGVR, namespace, &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -39,6 +43,9 @@ func TestAccessTokenStorage(t *testing.T) {
 				Labels: map[string]string{
 					"storage.pinniped.dev/type":       "access-token",
 					"storage.pinniped.dev/request-id": "abcd-1",
+				},
+				Annotations: map[string]string{
+					"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
 				},
 			},
 			Data: map[string][]byte{
@@ -51,9 +58,7 @@ func TestAccessTokenStorage(t *testing.T) {
 		coretesting.NewDeleteAction(secretsGVR, namespace, "pinniped-storage-access-token-pwu5zs7lekbhnln2w4"),
 	}
 
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, client, _, storage := makeTestSubject()
 
 	request := &fosite.Request{
 		ID:          "abcd-1",
@@ -103,8 +108,6 @@ func TestAccessTokenStorage(t *testing.T) {
 }
 
 func TestAccessTokenStorageRevocation(t *testing.T) {
-	ctx := context.Background()
-
 	wantActions := []coretesting.Action{
 		coretesting.NewCreateAction(secretsGVR, namespace, &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -113,6 +116,9 @@ func TestAccessTokenStorageRevocation(t *testing.T) {
 				Labels: map[string]string{
 					"storage.pinniped.dev/type":       "access-token",
 					"storage.pinniped.dev/request-id": "abcd-1",
+				},
+				Annotations: map[string]string{
+					"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
 				},
 			},
 			Data: map[string][]byte{
@@ -127,9 +133,7 @@ func TestAccessTokenStorageRevocation(t *testing.T) {
 		coretesting.NewDeleteAction(secretsGVR, namespace, "pinniped-storage-access-token-pwu5zs7lekbhnln2w4"),
 	}
 
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, client, _, storage := makeTestSubject()
 
 	request := &fosite.Request{
 		ID:          "abcd-1",
@@ -159,10 +163,7 @@ func TestAccessTokenStorageRevocation(t *testing.T) {
 }
 
 func TestGetNotFound(t *testing.T) {
-	ctx := context.Background()
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, _, _, storage := makeTestSubject()
 
 	_, notFoundErr := storage.GetAccessTokenSession(ctx, "non-existent-signature", nil)
 	require.EqualError(t, notFoundErr, "not_found")
@@ -170,10 +171,7 @@ func TestGetNotFound(t *testing.T) {
 }
 
 func TestWrongVersion(t *testing.T) {
-	ctx := context.Background()
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, _, secrets, storage := makeTestSubject()
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -181,6 +179,9 @@ func TestWrongVersion(t *testing.T) {
 			ResourceVersion: "",
 			Labels: map[string]string{
 				"storage.pinniped.dev/type": "access-token",
+			},
+			Annotations: map[string]string{
+				"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
 			},
 		},
 		Data: map[string][]byte{
@@ -198,10 +199,7 @@ func TestWrongVersion(t *testing.T) {
 }
 
 func TestNilSessionRequest(t *testing.T) {
-	ctx := context.Background()
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, _, secrets, storage := makeTestSubject()
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -209,6 +207,9 @@ func TestNilSessionRequest(t *testing.T) {
 			ResourceVersion: "",
 			Labels: map[string]string{
 				"storage.pinniped.dev/type": "access-token",
+			},
+			Annotations: map[string]string{
+				"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
 			},
 		},
 		Data: map[string][]byte{
@@ -226,20 +227,14 @@ func TestNilSessionRequest(t *testing.T) {
 }
 
 func TestCreateWithNilRequester(t *testing.T) {
-	ctx := context.Background()
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, _, _, storage := makeTestSubject()
 
 	err := storage.CreateAccessTokenSession(ctx, "signature-doesnt-matter", nil)
 	require.EqualError(t, err, "requester must be of type fosite.Request")
 }
 
 func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
-	ctx := context.Background()
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, _, _, storage := makeTestSubject()
 
 	request := &fosite.Request{
 		Session: nil,
@@ -257,10 +252,7 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 }
 
 func TestCreateWithoutRequesterID(t *testing.T) {
-	ctx := context.Background()
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, client, _, storage := makeTestSubject()
 
 	request := &fosite.Request{
 		ID:      "", // empty ID
@@ -279,4 +271,10 @@ func TestCreateWithoutRequesterID(t *testing.T) {
 
 	// The generated secret was labeled with that auto-generated request ID
 	require.Equal(t, request.ID, actualSecret.Labels["storage.pinniped.dev/request-id"])
+}
+
+func makeTestSubject() (context.Context, *fake.Clientset, corev1client.SecretInterface, RevocationStorage) {
+	client := fake.NewSimpleClientset()
+	secrets := client.CoreV1().Secrets(namespace)
+	return context.Background(), client, secrets, New(secrets, clock.NewFakeClock(fakeNow).Now, lifetime)
 }

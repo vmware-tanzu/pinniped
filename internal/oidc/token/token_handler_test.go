@@ -496,29 +496,6 @@ func TestTokenEndpoint(t *testing.T) {
 			},
 		},
 		{
-			name: "auth code is invalidated",
-			authcodeExchange: authcodeExchangeInputs{
-				modifyStorage: func(
-					t *testing.T,
-					s interface {
-						oauth2.TokenRevocationStorage
-						oauth2.CoreStorage
-						openid.OpenIDConnectRequestStorage
-						pkce.PKCERequestStorage
-						fosite.ClientManager
-					},
-					authCode string,
-				) {
-					err := s.InvalidateAuthorizeCodeSession(context.Background(), getFositeDataSignature(t, authCode))
-					require.NoError(t, err)
-				},
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusBadRequest,
-					wantErrorResponseBody: fositeReusedAuthCodeErrorBody,
-				},
-			},
-		},
-		{
 			name: "redirect uri is missing in request",
 			authcodeExchange: authcodeExchangeInputs{
 				modifyTokenRequest: func(r *http.Request, authCode string) {
@@ -1155,7 +1132,7 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs) (
 
 	var oauthHelper fosite.OAuth2Provider
 
-	oauthStore = oidc.NewKubeStorage(secrets)
+	oauthStore = oidc.NewKubeStorage(secrets, oidc.DefaultOIDCTimeoutsConfiguration())
 	if test.makeOathHelper != nil {
 		oauthHelper, authCode, jwtSigningKey = test.makeOathHelper(t, authRequest, oauthStore)
 	} else {

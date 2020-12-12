@@ -14,10 +14,12 @@ import (
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/test/library"
 )
 
@@ -54,7 +56,8 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 	err := json.Unmarshal([]byte(authorizationcode.ExpectedAuthorizeCodeSessionJSONFromFuzzing), session)
 	require.NoError(t, err)
 
-	storage := authorizationcode.New(secrets)
+	sessionStorageLifetime := 5 * time.Minute
+	storage := authorizationcode.New(secrets, time.Now, sessionStorageLifetime)
 
 	// the session for this signature should not exist yet
 	notFoundRequest, err := storage.GetAuthorizeCodeSession(ctx, signature, nil)
@@ -74,6 +77,19 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 	initialSecret, err := secrets.Get(ctx, name, metav1.GetOptions{})
 	require.NoError(t, err)
 	require.JSONEq(t, authorizationcode.ExpectedAuthorizeCodeSessionJSONFromFuzzing, string(initialSecret.Data["pinniped-storage-data"]))
+
+	// check that the Secret got the expected annotations
+	actualGCAfterValue := initialSecret.Annotations["storage.pinniped.dev/garbage-collect-after"]
+	require.NotEmpty(t, actualGCAfterValue)
+	parsedActualGCAfterValue, err := time.Parse(time.RFC3339, actualGCAfterValue)
+	require.NoError(t, err)
+	testutil.RequireTimeInDelta(t, time.Now().Add(sessionStorageLifetime), parsedActualGCAfterValue, 30*time.Second)
+
+	// check that the Secret got the right labels
+	require.Equal(t, map[string]string{"storage.pinniped.dev/type": "authcode"}, initialSecret.Labels)
+
+	// check that the Secret got the right type
+	require.Equal(t, v1.SecretType("storage.pinniped.dev/authcode"), initialSecret.Type)
 
 	// we should be able to get the session now and the request should be the same as what we put in
 	request, err := storage.GetAuthorizeCodeSession(ctx, signature, nil)

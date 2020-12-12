@@ -32,7 +32,7 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/controller/supervisorconfig"
-	"go.pinniped.dev/internal/controller/supervisorconfig/secretgenerator"
+	"go.pinniped.dev/internal/controller/supervisorconfig/generator"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatcher"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/downward"
@@ -132,7 +132,7 @@ func startControllers(
 			singletonWorker,
 		).
 		WithController(
-			secretgenerator.New(
+			generator.NewSupervisorSecretsController(
 				supervisorDeployment,
 				kubeClient,
 				kubeInformers.Core().V1().Secrets(),

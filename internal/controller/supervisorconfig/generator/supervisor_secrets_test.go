@@ -1,7 +1,7 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package secretgenerator
+package generator
 
 import (
 	"context"
@@ -307,7 +307,7 @@ func TestController(t *testing.T) {
 			secrets := informers.Core().V1().Secrets()
 
 			var callbackSecret []byte
-			c := New(owner, apiClient, secrets, func(secret []byte) {
+			c := NewSupervisorSecretsController(owner, apiClient, secrets, func(secret []byte) {
 				require.Nil(t, callbackSecret, "callback was called twice")
 				callbackSecret = secret
 			})

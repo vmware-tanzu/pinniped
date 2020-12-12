@@ -1,8 +1,8 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package secretgenerator provides a controller that can ensure existence of a generated secret.
-package secretgenerator
+// Package secretgenerator provides a supervisorSecretsController that can ensure existence of a generated secret.
+package generator
 
 import (
 	"context"
@@ -43,15 +43,15 @@ func generateSymmetricKey() ([]byte, error) {
 	return b, nil
 }
 
-type controller struct {
+type supervisorSecretsController struct {
 	owner    *appsv1.Deployment
 	client   kubernetes.Interface
 	secrets  corev1informers.SecretInformer
 	setCache func(secret []byte)
 }
 
-// New instantiates a new controllerlib.Controller which will ensure existence of a generated secret.
-func New(
+// NewSupervisorSecretsController instantiates a new controllerlib.Controller which will ensure existence of a generated secret.
+func NewSupervisorSecretsController(
 	// TODO: label the generated secret like we do in the JWKSWriterController
 	// TODO: generate the name for the secret and label the secret with the UID of the owner? So that we don't have naming conflicts if the user has already created a Secret with that name.
 	// TODO: add tests for the filter like we do in the JWKSWriterController?
@@ -60,7 +60,7 @@ func New(
 	secrets corev1informers.SecretInformer,
 	setCache func(secret []byte),
 ) controllerlib.Controller {
-	c := controller{
+	c := supervisorSecretsController{
 		owner:    owner,
 		client:   client,
 		secrets:  secrets,
@@ -80,7 +80,7 @@ func New(
 }
 
 // Sync implements controllerlib.Syncer.Sync().
-func (c *controller) Sync(ctx controllerlib.Context) error {
+func (c *supervisorSecretsController) Sync(ctx controllerlib.Context) error {
 	secret, err := c.secrets.Lister().Secrets(ctx.Key.Namespace).Get(ctx.Key.Name)
 	isNotFound := k8serrors.IsNotFound(err)
 	if !isNotFound && err != nil {
@@ -113,7 +113,7 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 	return nil
 }
 
-func (c *controller) isValid(secret *corev1.Secret) bool {
+func (c *supervisorSecretsController) isValid(secret *corev1.Secret) bool {
 	if secret.Type != symmetricKeySecretType {
 		return false
 	}
@@ -129,7 +129,7 @@ func (c *controller) isValid(secret *corev1.Secret) bool {
 	return true
 }
 
-func (c *controller) generateSecret(namespace, name string) (*corev1.Secret, error) {
+func (c *supervisorSecretsController) generateSecret(namespace, name string) (*corev1.Secret, error) {
 	symmetricKey, err := generateKey()
 	if err != nil {
 		return nil, err
@@ -155,12 +155,12 @@ func (c *controller) generateSecret(namespace, name string) (*corev1.Secret, err
 	}, nil
 }
 
-func (c *controller) createSecret(ctx context.Context, newSecret *corev1.Secret) error {
+func (c *supervisorSecretsController) createSecret(ctx context.Context, newSecret *corev1.Secret) error {
 	_, err := c.client.CoreV1().Secrets(newSecret.Namespace).Create(ctx, newSecret, metav1.CreateOptions{})
 	return err
 }
 
-func (c *controller) updateSecret(ctx context.Context, newSecret **corev1.Secret, secretName string) error {
+func (c *supervisorSecretsController) updateSecret(ctx context.Context, newSecret **corev1.Secret, secretName string) error {
 	secrets := c.client.CoreV1().Secrets((*newSecret).Namespace)
 	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		currentSecret, err := secrets.Get(ctx, secretName, metav1.GetOptions{})

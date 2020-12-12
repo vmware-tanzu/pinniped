@@ -259,9 +259,16 @@ type IDPListGetter interface {
 }
 
 func GrantScopeIfRequested(authorizeRequester fosite.AuthorizeRequester, scopeName string) {
+	if ScopeWasRequested(authorizeRequester, scopeName) {
+		authorizeRequester.GrantScope(scopeName)
+	}
+}
+
+func ScopeWasRequested(authorizeRequester fosite.AuthorizeRequester, scopeName string) bool {
 	for _, scope := range authorizeRequester.GetRequestedScopes() {
 		if scope == scopeName {
-			authorizeRequester.GrantScope(scope)
+			return true
 		}
 	}
+	return false
 }

@@ -199,12 +199,20 @@ func FositeOauth2Helper(
 		AccessTokenLifespan:   timeoutsConfiguration.AccessTokenLifespan,
 		RefreshTokenLifespan:  timeoutsConfiguration.RefreshTokenLifespan,
 
-		ScopeStrategy:            fosite.ExactScopeStrategy,
-		AudienceMatchingStrategy: nil,
-		EnforcePKCE:              true,
-		AllowedPromptValues:      []string{"none"},                        // TODO unclear what we should set here
-		RefreshTokenScopes:       []string{coreosoidc.ScopeOfflineAccess}, // as per https://openid.net/specs/openid-connect-core-1_0.html#OfflineAccess
-		MinParameterEntropy:      32,                                      // TODO is 256 bits too high?
+		ScopeStrategy: fosite.ExactScopeStrategy,
+		EnforcePKCE:   true,
+
+		// "offline_access" as per https://openid.net/specs/openid-connect-core-1_0.html#OfflineAccess
+		RefreshTokenScopes: []string{coreosoidc.ScopeOfflineAccess},
+
+		// The default is to support all prompt values from the spec.
+		// See https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+		// We'll make a best effort to support these by passing the value of this prompt param to the upstream IDP
+		// and rely on its implementation of this param.
+		AllowedPromptValues: nil,
+
+		// Use the fosite default to make it more likely that off the shelf OIDC clients can work with the supervisor.
+		MinParameterEntropy: fosite.MinParameterEntropy,
 	}
 
 	return compose.Compose(
@@ -251,9 +259,16 @@ type IDPListGetter interface {
 }
 
 func GrantScopeIfRequested(authorizeRequester fosite.AuthorizeRequester, scopeName string) {
+	if ScopeWasRequested(authorizeRequester, scopeName) {
+		authorizeRequester.GrantScope(scopeName)
+	}
+}
+
+func ScopeWasRequested(authorizeRequester fosite.AuthorizeRequester, scopeName string) bool {
 	for _, scope := range authorizeRequester.GetRequestedScopes() {
 		if scope == scopeName {
-			authorizeRequester.GrantScope(scope)
+			return true
 		}
 	}
+	return false
 }

@@ -30,7 +30,7 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 		clientID     = "some-client-id"
 		goodSubject  = "some-subject"
 		goodUsername = "some-username"
-		goodNonce    = "some-nonce-that-is-at-least-32-characters-to-meet-entropy-requirements"
+		goodNonce    = "some-nonce-value-with-enough-bytes-to-exceed-min-allowed"
 	)
 
 	ecPrivateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

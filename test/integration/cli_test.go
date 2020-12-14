@@ -102,9 +102,14 @@ func runPinnipedCLIGetKubeconfig(t *testing.T, pinnipedExe, token, namespaceName
 		"--pinniped-namespace", namespaceName,
 		"--authenticator-type", authenticatorType,
 		"--authenticator-name", authenticatorName,
-	).CombinedOutput()
-	require.NoError(t, err, string(output))
+	).Output()
 
+	// Log stderr if there is a problem.
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		t.Logf("stderr:\n%s\n", string(exitErr.Stderr))
+	}
+	require.NoError(t, err, string(output))
 	return string(output)
 }
 

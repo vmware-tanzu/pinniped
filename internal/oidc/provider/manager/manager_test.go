@@ -144,7 +144,7 @@ func TestManager(t *testing.T) {
 			actualLocationQueryParams := parsedLocation.Query()
 			r.Contains(actualLocationQueryParams, "code")
 			r.Equal("openid", actualLocationQueryParams.Get("scope"))
-			r.Equal("some-state-value-that-is-32-byte", actualLocationQueryParams.Get("state"))
+			r.Equal("some-state-value-with-enough-bytes-to-exceed-min-allowed", actualLocationQueryParams.Get("state"))
 
 			// Make sure that we wired up the callback endpoint to use kube storage for fosite sessions.
 			r.Equal(len(kubeClient.Actions()), numberOfKubeActionsBeforeThisRequest+3,
@@ -306,8 +306,8 @@ func TestManager(t *testing.T) {
 				"response_type":         []string{"code"},
 				"scope":                 []string{"openid profile email"},
 				"client_id":             []string{downstreamClientID},
-				"state":                 []string{"some-state-value-that-is-32-byte"},
-				"nonce":                 []string{"some-nonce-value-that-is-at-least-32-bytes"},
+				"state":                 []string{"some-state-value-with-enough-bytes-to-exceed-min-allowed"},
+				"nonce":                 []string{"some-nonce-value-with-enough-bytes-to-exceed-min-allowed"},
 				"code_challenge":        []string{testutil.SHA256(downstreamPKCECodeVerifier)},
 				"code_challenge_method": []string{"S256"},
 				"redirect_uri":          []string{downstreamRedirectURL},

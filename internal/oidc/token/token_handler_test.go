@@ -52,7 +52,7 @@ const (
 	goodClient           = "pinniped-cli"
 	goodRedirectURI      = "http://127.0.0.1/callback"
 	goodPKCECodeVerifier = "some-pkce-verifier-that-must-be-at-least-43-characters-to-meet-entropy-requirements"
-	goodNonce            = "some-nonce-that-is-at-least-32-characters-to-meet-entropy-requirements"
+	goodNonce            = "some-nonce-value-with-enough-bytes-to-exceed-min-allowed"
 	goodSubject          = "some-subject"
 	goodUsername         = "some-username"
 
@@ -217,7 +217,7 @@ var (
 			"response_type":         {"code"},
 			"scope":                 {"openid profile email"},
 			"client_id":             {goodClient},
-			"state":                 {"some-state-value-that-is-32-byte"},
+			"state":                 {"some-state-value-with-enough-bytes-to-exceed-min-allowed"},
 			"nonce":                 {goodNonce},
 			"code_challenge":        {testutil.SHA256(goodPKCECodeVerifier)},
 			"code_challenge_method": {"S256"},
@@ -496,29 +496,6 @@ func TestTokenEndpoint(t *testing.T) {
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusBadRequest,
 					wantErrorResponseBody: fositeInvalidAuthCodeErrorBody,
-				},
-			},
-		},
-		{
-			name: "auth code is invalidated",
-			authcodeExchange: authcodeExchangeInputs{
-				modifyStorage: func(
-					t *testing.T,
-					s interface {
-						oauth2.TokenRevocationStorage
-						oauth2.CoreStorage
-						openid.OpenIDConnectRequestStorage
-						pkce.PKCERequestStorage
-						fosite.ClientManager
-					},
-					authCode string,
-				) {
-					err := s.InvalidateAuthorizeCodeSession(context.Background(), getFositeDataSignature(t, authCode))
-					require.NoError(t, err)
-				},
-				want: tokenEndpointResponseExpectedValues{
-					wantStatus:            http.StatusBadRequest,
-					wantErrorResponseBody: fositeReusedAuthCodeErrorBody,
 				},
 			},
 		},
@@ -1159,7 +1136,7 @@ func exchangeAuthcodeForTokens(t *testing.T, test authcodeExchangeInputs) (
 
 	var oauthHelper fosite.OAuth2Provider
 
-	oauthStore = oidc.NewKubeStorage(secrets)
+	oauthStore = oidc.NewKubeStorage(secrets, oidc.DefaultOIDCTimeoutsConfiguration())
 	if test.makeOathHelper != nil {
 		oauthHelper, authCode, jwtSigningKey = test.makeOathHelper(t, authRequest, oauthStore)
 	} else {

@@ -38,6 +38,7 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig/generator"
 	"go.pinniped.dev/internal/controller/supervisorconfig/generator/symmetricsecrethelper"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatcher"
+	"go.pinniped.dev/internal/controller/supervisorstorage"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/oidc/jwks"
@@ -78,6 +79,7 @@ func waitForSignal() os.Signal {
 	return <-signalCh
 }
 
+//nolint:funlen
 func startControllers(
 	ctx context.Context,
 	cfg *supervisor.Config,
@@ -98,6 +100,15 @@ func startControllers(
 	// Create controller manager.
 	controllerManager := controllerlib.
 		NewManager().
+		WithController(
+			supervisorstorage.GarbageCollectorController(
+				clock.RealClock{},
+				kubeClient,
+				kubeInformers.Core().V1().Secrets(),
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		).
 		WithController(
 			supervisorconfig.NewOIDCProviderWatcherController(
 				issuerManager,

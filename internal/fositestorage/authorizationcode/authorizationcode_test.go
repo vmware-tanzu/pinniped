@@ -15,19 +15,21 @@ import (
 	"testing"
 	"time"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
-
 	fuzz "github.com/google/gofuzz"
 	"github.com/ory/fosite"
+	"github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/kubernetes/fake"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	kubetesting "k8s.io/client-go/testing"
 
 	"go.pinniped.dev/internal/fositestorage"
@@ -35,8 +37,11 @@ import (
 
 const namespace = "test-ns"
 
+var fakeNow = time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
+var lifetime = time.Minute * 10
+var fakeNowPlusLifetimeAsString = metav1.Time{Time: fakeNow.Add(lifetime)}.Format(time.RFC3339)
+
 func TestAuthorizationCodeStorage(t *testing.T) {
-	ctx := context.Background()
 	secretsGVR := schema.GroupVersionResource{
 		Group:    "",
 		Version:  "v1",
@@ -50,6 +55,9 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 				ResourceVersion: "",
 				Labels: map[string]string{
 					"storage.pinniped.dev/type": "authcode",
+				},
+				Annotations: map[string]string{
+					"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
 				},
 			},
 			Data: map[string][]byte{
@@ -67,6 +75,9 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 				Labels: map[string]string{
 					"storage.pinniped.dev/type": "authcode",
 				},
+				Annotations: map[string]string{
+					"storage.pinniped.dev/garbage-collect-after": fakeNowPlusLifetimeAsString,
+				},
 			},
 			Data: map[string][]byte{
 				"pinniped-storage-data":    []byte(`{"active":false,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
@@ -76,9 +87,7 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 		}),
 	}
 
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, client, _, storage := makeTestSubject()
 
 	request := &fosite.Request{
 		ID:          "abcd-1",
@@ -133,10 +142,7 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 }
 
 func TestGetNotFound(t *testing.T) {
-	ctx := context.Background()
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, _, _, storage := makeTestSubject()
 
 	_, notFoundErr := storage.GetAuthorizeCodeSession(ctx, "non-existent-signature", nil)
 	require.EqualError(t, notFoundErr, "not_found")
@@ -144,10 +150,7 @@ func TestGetNotFound(t *testing.T) {
 }
 
 func TestInvalidateWhenNotFound(t *testing.T) {
-	ctx := context.Background()
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, _, _, storage := makeTestSubject()
 
 	notFoundErr := storage.InvalidateAuthorizeCodeSession(ctx, "non-existent-signature")
 	require.EqualError(t, notFoundErr, "not_found")
@@ -155,10 +158,7 @@ func TestInvalidateWhenNotFound(t *testing.T) {
 }
 
 func TestInvalidateWhenConflictOnUpdateHappens(t *testing.T) {
-	ctx := context.Background()
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, client, _, storage := makeTestSubject()
 
 	client.PrependReactor("update", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 		return true, nil, apierrors.NewConflict(schema.GroupResource{
@@ -179,10 +179,7 @@ func TestInvalidateWhenConflictOnUpdateHappens(t *testing.T) {
 }
 
 func TestWrongVersion(t *testing.T) {
-	ctx := context.Background()
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, _, secrets, storage := makeTestSubject()
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -207,10 +204,7 @@ func TestWrongVersion(t *testing.T) {
 }
 
 func TestNilSessionRequest(t *testing.T) {
-	ctx := context.Background()
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, _, secrets, storage := makeTestSubject()
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -235,20 +229,14 @@ func TestNilSessionRequest(t *testing.T) {
 }
 
 func TestCreateWithNilRequester(t *testing.T) {
-	ctx := context.Background()
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, _, _, storage := makeTestSubject()
 
 	err := storage.CreateAuthorizeCodeSession(ctx, "signature-doesnt-matter", nil)
 	require.EqualError(t, err, "requester must be of type fosite.Request")
 }
 
 func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
-	ctx := context.Background()
-	client := fake.NewSimpleClientset()
-	secrets := client.CoreV1().Secrets(namespace)
-	storage := New(secrets)
+	ctx, _, _, storage := makeTestSubject()
 
 	request := &fosite.Request{
 		Session: nil,
@@ -263,6 +251,12 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 	}
 	err = storage.CreateAuthorizeCodeSession(ctx, "signature-doesnt-matter", request)
 	require.EqualError(t, err, "requester's client must be of type fosite.DefaultOpenIDConnectClient")
+}
+
+func makeTestSubject() (context.Context, *fake.Clientset, corev1client.SecretInterface, oauth2.AuthorizeCodeStorage) {
+	client := fake.NewSimpleClientset()
+	secrets := client.CoreV1().Secrets(namespace)
+	return context.Background(), client, secrets, New(secrets, clock.NewFakeClock(fakeNow).Now, lifetime)
 }
 
 // TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession asserts that we can correctly round trip our authorize code session.
@@ -365,7 +359,7 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 	const name = "fuzz" // value is irrelevant
 	ctx := context.Background()
 	secrets := fake.NewSimpleClientset().CoreV1().Secrets(name)
-	storage := New(secrets)
+	storage := New(secrets, func() time.Time { return fakeNow }, lifetime)
 
 	// issue a create using the fuzzed request to confirm that marshalling works
 	err = storage.CreateAuthorizeCodeSession(ctx, name, validSession.Request)

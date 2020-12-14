@@ -48,7 +48,7 @@ const (
 
 	happyUpstreamRedirectURI = "https://example.com/callback"
 
-	happyDownstreamState        = "some-downstream-state-with-at-least-32-bytes"
+	happyDownstreamState        = "8b-state"
 	happyDownstreamCSRF         = "test-csrf"
 	happyDownstreamPKCE         = "test-pkce"
 	happyDownstreamNonce        = "test-nonce"
@@ -84,6 +84,8 @@ var (
 )
 
 func TestCallbackEndpoint(t *testing.T) {
+	require.Len(t, happyDownstreamState, 8, "we expect fosite to allow 8 byte state params, so we want to test that boundary case")
+
 	otherUpstreamOIDCIdentityProvider := oidctestutil.TestUpstreamOIDCIdentityProvider{
 		Name:     "other-upstream-idp-name",
 		ClientID: "other-some-client-id",
@@ -457,11 +459,12 @@ func TestCallbackEndpoint(t *testing.T) {
 
 			// Configure fosite the same way that the production code would.
 			// Inject this into our test subject at the last second so we get a fresh storage for every test.
-			oauthStore := oidc.NewKubeStorage(secrets)
+			timeoutsConfiguration := oidc.DefaultOIDCTimeoutsConfiguration()
+			oauthStore := oidc.NewKubeStorage(secrets, timeoutsConfiguration)
 			hmacSecretFunc := func() []byte { return []byte("some secret - must have at least 32 bytes") }
 			require.GreaterOrEqual(t, len(hmacSecretFunc()), 32, "fosite requires that hmac secrets have at least 32 bytes")
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
-			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, oidc.DefaultOIDCTimeoutsConfiguration())
+			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration)
 
 			idpListGetter := oidctestutil.NewIDPListGetter(&test.idp)
 			subject := NewHandler(idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec, happyUpstreamRedirectURI)

@@ -86,19 +86,20 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 	for _, incomingProvider := range oidcProviders {
 		issuer := incomingProvider.Issuer()
 		issuerHostWithPath := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath()
-		oidcTimeouts := oidc.DefaultOIDCTimeoutsConfiguration()
 
 		tokenHMACKeyGetter := wrapGetter(incomingProvider.Issuer(), m.secretCache.GetTokenHMACKey)
 
+		timeoutsConfiguration := oidc.DefaultOIDCTimeoutsConfiguration()
+
 		// Use NullStorage for the authorize endpoint because we do not actually want to store anything until
 		// the upstream callback endpoint is called later.
-		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(oidc.NullStorage{}, issuer, tokenHMACKeyGetter, nil, oidcTimeouts)
+		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(oidc.NullStorage{}, issuer, tokenHMACKeyGetter, nil, timeoutsConfiguration)
 
 		// For all the other endpoints, make another oauth helper with exactly the same settings except use real storage.
-		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(oidc.NewKubeStorage(m.secretsClient), issuer, tokenHMACKeyGetter, m.dynamicJWKSProvider, oidcTimeouts)
+		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(oidc.NewKubeStorage(m.secretsClient, timeoutsConfiguration), issuer, tokenHMACKeyGetter, m.dynamicJWKSProvider, timeoutsConfiguration)
 
 		var upstreamStateEncoder = dynamiccodec.New(
-			oidcTimeouts.UpstreamStateParamLifespan,
+			timeoutsConfiguration.UpstreamStateParamLifespan,
 			wrapGetter(incomingProvider.Issuer(), m.secretCache.GetStateEncoderHashKey),
 			wrapGetter(incomingProvider.Issuer(), m.secretCache.GetStateEncoderBlockKey),
 		)

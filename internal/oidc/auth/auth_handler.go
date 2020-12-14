@@ -121,13 +121,22 @@ func NewHandler(
 			}
 		}
 
+		authCodeOptions := []oauth2.AuthCodeOption{
+			oauth2.AccessTypeOffline,
+			nonceValue.Param(),
+			pkceValue.Challenge(),
+			pkceValue.Method(),
+		}
+
+		promptParam := r.Form.Get("prompt")
+		if promptParam != "" && oidc.ScopeWasRequested(authorizeRequester, coreosoidc.ScopeOpenID) {
+			authCodeOptions = append(authCodeOptions, oauth2.SetAuthURLParam("prompt", promptParam))
+		}
+
 		http.Redirect(w, r,
 			upstreamOAuthConfig.AuthCodeURL(
 				encodedStateParamValue,
-				oauth2.AccessTypeOffline,
-				nonceValue.Param(),
-				pkceValue.Challenge(),
-				pkceValue.Method(),
+				authCodeOptions...,
 			),
 			302,
 		)

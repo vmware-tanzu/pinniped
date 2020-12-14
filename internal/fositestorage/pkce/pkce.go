@@ -6,6 +6,7 @@ package pkce
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
@@ -38,8 +39,8 @@ type session struct {
 	Version string          `json:"version"`
 }
 
-func New(secrets corev1client.SecretInterface) pkce.PKCERequestStorage {
-	return &pkceStorage{storage: crud.New(TypeLabelValue, secrets)}
+func New(secrets corev1client.SecretInterface, clock func() time.Time, sessionStorageLifetime time.Duration) pkce.PKCERequestStorage {
+	return &pkceStorage{storage: crud.New(TypeLabelValue, secrets, clock, sessionStorageLifetime)}
 }
 
 func (a *pkceStorage) CreatePKCERequestSession(ctx context.Context, signature string, requester fosite.Requester) error {

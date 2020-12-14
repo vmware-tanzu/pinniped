@@ -22,11 +22,6 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-const (
-	// TODO should this live on `provider.OIDCProvider` ?
-	opcKind = "OIDCProvider" // TODO: deduplicate - internal/controller/supervisorconfig/jwks_writer.go
-)
-
 // SecretHelper describes an object that can Generate() a Secret and determine whether a Secret
 // IsValid(). It can also be Notify()'d about a Secret being persisted.
 //
@@ -70,8 +65,8 @@ func NewOIDCProviderSecretsController(
 		// TODO: de-dup me (jwks_writer.go).
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.SimpleFilter(isOPCControllee, func(obj metav1.Object) controllerlib.Key {
-				if isOPCControllee(obj) {
+			pinnipedcontroller.SimpleFilter(isOPControllee, func(obj metav1.Object) controllerlib.Key {
+				if isOPControllee(obj) {
 					controller := metav1.GetControllerOf(obj)
 					return controllerlib.Key{
 						Name:      controller.Name,
@@ -210,12 +205,4 @@ func (c *oidcProviderSecretsController) createOrUpdateSecret(
 		_, err = secretClient.Update(ctx, oldSecret, metav1.UpdateOptions{})
 		return err
 	})
-}
-
-// isOPCControlle returns whether the provided obj is controlled by an OPC.
-func isOPCControllee(obj metav1.Object) bool { // TODO: deduplicate - internal/controller/supervisorconfig/jwks_writer.go
-	controller := metav1.GetControllerOf(obj)
-	return controller != nil &&
-		controller.APIVersion == configv1alpha1.SchemeGroupVersion.String() &&
-		controller.Kind == opcKind
 }

@@ -37,7 +37,7 @@ type Manager struct {
 	nextHandler         http.Handler             // the next handler in a chain, called when this manager didn't know how to handle a request
 	dynamicJWKSProvider jwks.DynamicJWKSProvider // in-memory cache of per-issuer JWKS data
 	idpListGetter       oidc.IDPListGetter       // in-memory cache of upstream IDPs
-	cache               *secret.Cache            // in-memory cache of cryptographic material
+	secretCache         *secret.Cache            // in-memory cache of cryptographic material
 	secretsClient       corev1client.SecretInterface
 }
 
@@ -49,7 +49,7 @@ func NewManager(
 	nextHandler http.Handler,
 	dynamicJWKSProvider jwks.DynamicJWKSProvider,
 	idpListGetter oidc.IDPListGetter,
-	cache *secret.Cache,
+	secretCache *secret.Cache,
 	secretsClient corev1client.SecretInterface,
 ) *Manager {
 	return &Manager{
@@ -57,7 +57,7 @@ func NewManager(
 		nextHandler:         nextHandler,
 		dynamicJWKSProvider: dynamicJWKSProvider,
 		idpListGetter:       idpListGetter,
-		cache:               cache,
+		secretCache:         secretCache,
 		secretsClient:       secretsClient,
 	}
 }
@@ -79,28 +79,28 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 
 	var csrfCookieEncoder = dynamiccodec.New(
 		oidc.CSRFCookieLifespan,
-		m.cache.GetCSRFCookieEncoderHashKey,
-		m.cache.GetCSRFCookieEncoderBlockKey,
+		m.secretCache.GetCSRFCookieEncoderHashKey,
+		func() []byte { return nil },
 	)
 
 	for _, incomingProvider := range oidcProviders {
-		providerCache := m.cache.GetOIDCProviderCacheFor(incomingProvider.Issuer())
-
 		issuer := incomingProvider.Issuer()
 		issuerHostWithPath := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath()
 		oidcTimeouts := oidc.DefaultOIDCTimeoutsConfiguration()
 
+		tokenHMACKeyGetter := wrapGetter(incomingProvider.Issuer(), m.secretCache.GetTokenHMACKey)
+
 		// Use NullStorage for the authorize endpoint because we do not actually want to store anything until
 		// the upstream callback endpoint is called later.
-		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(oidc.NullStorage{}, issuer, providerCache.GetTokenHMACKey, nil, oidcTimeouts)
+		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(oidc.NullStorage{}, issuer, tokenHMACKeyGetter, nil, oidcTimeouts)
 
 		// For all the other endpoints, make another oauth helper with exactly the same settings except use real storage.
-		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(oidc.NewKubeStorage(m.secretsClient), issuer, providerCache.GetTokenHMACKey, m.dynamicJWKSProvider, oidcTimeouts)
+		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(oidc.NewKubeStorage(m.secretsClient), issuer, tokenHMACKeyGetter, m.dynamicJWKSProvider, oidcTimeouts)
 
 		var upstreamStateEncoder = dynamiccodec.New(
 			oidcTimeouts.UpstreamStateParamLifespan,
-			providerCache.GetStateEncoderHashKey,
-			providerCache.GetStateEncoderBlockKey,
+			wrapGetter(incomingProvider.Issuer(), m.secretCache.GetStateEncoderHashKey),
+			wrapGetter(incomingProvider.Issuer(), m.secretCache.GetStateEncoderBlockKey),
 		)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuer)
@@ -157,4 +157,10 @@ func (m *Manager) findHandler(req *http.Request) http.Handler {
 	defer m.mu.RUnlock()
 
 	return m.providerHandlers[strings.ToLower(req.Host)+"/"+req.URL.Path]
+}
+
+func wrapGetter(issuer string, getter func(string) []byte) func() []byte {
+	return func() []byte {
+		return getter(issuer)
+	}
 }

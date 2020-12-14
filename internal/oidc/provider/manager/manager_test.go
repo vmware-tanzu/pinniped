@@ -246,15 +246,13 @@ func TestManager(t *testing.T) {
 			cache := secret.Cache{}
 			cache.SetCSRFCookieEncoderHashKey([]byte("fake-csrf-hash-secret"))
 
-			oidcProvider1Cache := cache.GetOIDCProviderCacheFor(issuer1)
-			oidcProvider1Cache.SetStateEncoderHashKey([]byte("some-state-encoder-hash-key-1"))
-			oidcProvider1Cache.SetStateEncoderBlockKey([]byte("16-bytes-STATE01"))
-			oidcProvider1Cache.SetTokenHMACKey([]byte("some secret 1 - must have at least 32 bytes"))
+			cache.SetTokenHMACKey(issuer1, []byte("some secret 1 - must have at least 32 bytes"))
+			cache.SetStateEncoderHashKey(issuer1, []byte("some-state-encoder-hash-key-1"))
+			cache.SetStateEncoderBlockKey(issuer1, []byte("16-bytes-STATE01"))
 
-			oidcProvider2Cache := cache.GetOIDCProviderCacheFor(issuer2)
-			oidcProvider2Cache.SetStateEncoderHashKey([]byte("some-state-encoder-hash-key-2"))
-			oidcProvider2Cache.SetStateEncoderBlockKey([]byte("16-bytes-STATE02"))
-			oidcProvider2Cache.SetTokenHMACKey([]byte("some secret 2 - must have at least 32 bytes"))
+			cache.SetTokenHMACKey(issuer2, []byte("some secret 2 - must have at least 32 bytes"))
+			cache.SetStateEncoderHashKey(issuer2, []byte("some-state-encoder-hash-key-2"))
+			cache.SetStateEncoderBlockKey(issuer2, []byte("16-bytes-STATE02"))
 
 			subject = NewManager(nextHandler, dynamicJWKSProvider, idpListGetter, &cache, secretsClient)
 		})

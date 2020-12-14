@@ -3,77 +3,69 @@
 
 package secret
 
-// TODO: synchronize me.
-// TODO: use SetIssuerXXX() functions instead of returning a struct so that we don't have to worry about reentrancy.
+import (
+	"sync"
+	"sync/atomic"
+)
 
 type Cache struct {
-	csrfCookieEncoderHashKey  []byte
-	csrfCookieEncoderBlockKey []byte
-	oidcProviderCacheMap      map[string]*OIDCProviderCache
+	csrfCookieEncoderHashKey atomic.Value
+	oidcProviderCacheMap     sync.Map
+}
+
+// New returns an empty Cache.
+func New() *Cache { return &Cache{} }
+
+type oidcProviderCache struct {
+	tokenHMACKey         atomic.Value
+	stateEncoderHashKey  atomic.Value
+	stateEncoderBlockKey atomic.Value
 }
 
 func (c *Cache) GetCSRFCookieEncoderHashKey() []byte {
-	return c.csrfCookieEncoderHashKey
+	return bytesOrNil(c.csrfCookieEncoderHashKey.Load())
 }
 
 func (c *Cache) SetCSRFCookieEncoderHashKey(key []byte) {
-	c.csrfCookieEncoderHashKey = key
+	c.csrfCookieEncoderHashKey.Store(key)
 }
 
-func (c *Cache) GetCSRFCookieEncoderBlockKey() []byte {
-	return c.csrfCookieEncoderBlockKey
+func (c *Cache) GetTokenHMACKey(oidcIssuer string) []byte {
+	return bytesOrNil(c.getOIDCProviderCache(oidcIssuer).tokenHMACKey.Load())
 }
 
-func (c *Cache) SetCSRFCookieEncoderBlockKey(key []byte) {
-	c.csrfCookieEncoderBlockKey = key
+func (c *Cache) SetTokenHMACKey(oidcIssuer string, key []byte) {
+	c.getOIDCProviderCache(oidcIssuer).tokenHMACKey.Store(key)
 }
 
-func (c *Cache) GetOIDCProviderCacheFor(oidcIssuer string) *OIDCProviderCache {
-	oidcProvider, ok := c.oidcProviderCaches()[oidcIssuer]
+func (c *Cache) GetStateEncoderHashKey(oidcIssuer string) []byte {
+	return bytesOrNil(c.getOIDCProviderCache(oidcIssuer).stateEncoderHashKey.Load())
+}
+
+func (c *Cache) SetStateEncoderHashKey(oidcIssuer string, key []byte) {
+	c.getOIDCProviderCache(oidcIssuer).stateEncoderHashKey.Store(key)
+}
+
+func (c *Cache) GetStateEncoderBlockKey(oidcIssuer string) []byte {
+	return bytesOrNil(c.getOIDCProviderCache(oidcIssuer).stateEncoderBlockKey.Load())
+}
+
+func (c *Cache) SetStateEncoderBlockKey(oidcIssuer string, key []byte) {
+	c.getOIDCProviderCache(oidcIssuer).stateEncoderBlockKey.Store(key)
+}
+
+func (c *Cache) getOIDCProviderCache(oidcIssuer string) *oidcProviderCache {
+	value, ok := c.oidcProviderCacheMap.Load(oidcIssuer)
 	if !ok {
-		oidcProvider = &OIDCProviderCache{}
-		c.oidcProviderCaches()[oidcIssuer] = oidcProvider
+		value = &oidcProviderCache{}
+		c.oidcProviderCacheMap.Store(oidcIssuer, value)
 	}
-	return oidcProvider
+	return value.(*oidcProviderCache)
 }
 
-func (c *Cache) SetOIDCProviderCacheFor(oidcIssuer string, oidcProviderCache *OIDCProviderCache) {
-	c.oidcProviderCaches()[oidcIssuer] = oidcProviderCache
-}
-
-func (c *Cache) oidcProviderCaches() map[string]*OIDCProviderCache {
-	if c.oidcProviderCacheMap == nil {
-		c.oidcProviderCacheMap = map[string]*OIDCProviderCache{}
+func bytesOrNil(b interface{}) []byte {
+	if b == nil {
+		return nil
 	}
-	return c.oidcProviderCacheMap
-}
-
-type OIDCProviderCache struct {
-	tokenHMACKey         []byte
-	stateEncoderHashKey  []byte
-	stateEncoderBlockKey []byte
-}
-
-func (o *OIDCProviderCache) GetTokenHMACKey() []byte {
-	return o.tokenHMACKey
-}
-
-func (o *OIDCProviderCache) SetTokenHMACKey(key []byte) {
-	o.tokenHMACKey = key
-}
-
-func (o *OIDCProviderCache) GetStateEncoderHashKey() []byte {
-	return o.stateEncoderHashKey
-}
-
-func (o *OIDCProviderCache) SetStateEncoderHashKey(key []byte) {
-	o.stateEncoderHashKey = key
-}
-
-func (o *OIDCProviderCache) GetStateEncoderBlockKey() []byte {
-	return o.stateEncoderBlockKey
-}
-
-func (o *OIDCProviderCache) SetStateEncoderBlockKey(key []byte) {
-	o.stateEncoderBlockKey = key
+	return b.([]byte)
 }

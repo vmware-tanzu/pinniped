@@ -70,23 +70,16 @@ func NewOIDCProviderSecretsController(
 		// TODO: de-dup me (jwks_writer.go).
 		withInformer(
 			secretInformer,
-			controllerlib.FilterFuncs{
-				ParentFunc: func(obj metav1.Object) controllerlib.Key {
-					if isOPCControllee(obj) {
-						controller := metav1.GetControllerOf(obj)
-						return controllerlib.Key{
-							Name:      controller.Name,
-							Namespace: obj.GetNamespace(),
-						}
+			pinnipedcontroller.SimpleFilter(isOPCControllee, func(obj metav1.Object) controllerlib.Key {
+				if isOPCControllee(obj) {
+					controller := metav1.GetControllerOf(obj)
+					return controllerlib.Key{
+						Name:      controller.Name,
+						Namespace: obj.GetNamespace(),
 					}
-					return controllerlib.Key{}
-				},
-				AddFunc: isOPCControllee,
-				UpdateFunc: func(oldObj, newObj metav1.Object) bool {
-					return isOPCControllee(oldObj) || isOPCControllee(newObj)
-				},
-				DeleteFunc: isOPCControllee,
-			},
+				}
+				return controllerlib.Key{}
+			}),
 			controllerlib.InformerOption{},
 		),
 		// We want to be notified when anything happens to an OPC.

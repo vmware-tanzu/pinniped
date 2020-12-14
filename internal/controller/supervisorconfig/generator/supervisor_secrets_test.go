@@ -28,7 +28,6 @@ func TestController(t *testing.T) {
 	const (
 		generatedSecretNamespace = "some-namespace"
 		generatedSecretName      = "some-name-abc123"
-		otherGeneratedSecretName = "some-other-name-abc123"
 	)
 
 	var (
@@ -53,6 +52,11 @@ func TestController(t *testing.T) {
 		generatedSymmetricKey      = []byte("some-neato-32-byte-generated-key")
 		otherGeneratedSymmetricKey = []byte("some-funio-32-byte-generated-key")
 
+		labels = map[string]string{
+			"some-label-key-1": "some-label-value-1",
+			"some-label-key-2": "some-label-value-2",
+		}
+
 		generatedSecret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      generatedSecretName,
@@ -60,6 +64,7 @@ func TestController(t *testing.T) {
 				OwnerReferences: []metav1.OwnerReference{
 					*metav1.NewControllerRef(owner, ownerGVK),
 				},
+				Labels: labels,
 			},
 			Type: "secrets.pinniped.dev/symmetric",
 			Data: map[string][]byte{
@@ -74,6 +79,7 @@ func TestController(t *testing.T) {
 				OwnerReferences: []metav1.OwnerReference{
 					*metav1.NewControllerRef(owner, ownerGVK),
 				},
+				Labels: labels,
 			},
 			Type: "secrets.pinniped.dev/symmetric",
 			Data: map[string][]byte{
@@ -307,7 +313,7 @@ func TestController(t *testing.T) {
 			secrets := informers.Core().V1().Secrets()
 
 			var callbackSecret []byte
-			c := NewSupervisorSecretsController(owner, apiClient, secrets, func(secret []byte) {
+			c := NewSupervisorSecretsController(owner, labels, apiClient, secrets, func(secret []byte) {
 				require.Nil(t, callbackSecret, "callback was called twice")
 				callbackSecret = secret
 			})

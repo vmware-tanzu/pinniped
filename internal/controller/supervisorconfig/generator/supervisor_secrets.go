@@ -46,6 +46,7 @@ func generateSymmetricKey() ([]byte, error) {
 
 type supervisorSecretsController struct {
 	owner    *appsv1.Deployment
+	labels   map[string]string
 	client   kubernetes.Interface
 	secrets  corev1informers.SecretInformer
 	setCache func(secret []byte)
@@ -53,16 +54,17 @@ type supervisorSecretsController struct {
 
 // NewSupervisorSecretsController instantiates a new controllerlib.Controller which will ensure existence of a generated secret.
 func NewSupervisorSecretsController(
-	// TODO: label the generated secret like we do in the JWKSWriterController
 	// TODO: generate the name for the secret and label the secret with the UID of the owner? So that we don't have naming conflicts if the user has already created a Secret with that name.
 	// TODO: add tests for the filter like we do in the JWKSWriterController?
 	owner *appsv1.Deployment,
+	labels map[string]string,
 	client kubernetes.Interface,
 	secrets corev1informers.SecretInformer,
 	setCache func(secret []byte),
 ) controllerlib.Controller {
 	c := supervisorSecretsController{
 		owner:    owner,
+		labels:   labels,
 		client:   client,
 		secrets:  secrets,
 		setCache: setCache,
@@ -95,7 +97,7 @@ func (c *supervisorSecretsController) Sync(ctx controllerlib.Context) error {
 		return nil
 	}
 
-	newSecret, err := generateSecret(ctx.Key.Namespace, ctx.Key.Name, secretDataFunc, c.owner)
+	newSecret, err := generateSecret(ctx.Key.Namespace, ctx.Key.Name, c.labels, secretDataFunc, c.owner)
 	if err != nil {
 		return fmt.Errorf("failed to generate secret: %w", err)
 	}
@@ -141,7 +143,7 @@ func secretDataFunc() (map[string][]byte, error) {
 	}, nil
 }
 
-func generateSecret(namespace, name string, secretDataFunc func() (map[string][]byte, error), owner metav1.Object) (*corev1.Secret, error) {
+func generateSecret(namespace, name string, labels map[string]string, secretDataFunc func() (map[string][]byte, error), owner metav1.Object) (*corev1.Secret, error) {
 	secretData, err := secretDataFunc()
 	if err != nil {
 		return nil, err
@@ -159,6 +161,7 @@ func generateSecret(namespace, name string, secretDataFunc func() (map[string][]
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(owner, deploymentGVK),
 			},
+			Labels: labels,
 		},
 		Type: symmetricKeySecretType,
 		Data: secretData,

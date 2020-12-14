@@ -152,6 +152,7 @@ func startControllers(
 		WithController(
 			generator.NewSupervisorSecretsController(
 				supervisorDeployment,
+				cfg.Labels,
 				kubeClient,
 				secretInformer,
 				func(secret []byte) {

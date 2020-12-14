@@ -24,6 +24,7 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
+// TODO: de-dup me when we abstract these controllers.
 const (
 	symmetricKeySecretType    = "secrets.pinniped.dev/symmetric"
 	symmetricKeySecretDataKey = "key"

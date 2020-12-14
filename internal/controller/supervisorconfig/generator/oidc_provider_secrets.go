@@ -16,7 +16,6 @@ import (
 	"k8s.io/klog/v2"
 
 	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.19/client/supervisor/clientset/versioned"
 	configinformers "go.pinniped.dev/generated/1.19/client/supervisor/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
@@ -28,43 +27,47 @@ const (
 	opcKind = "OIDCProvider" // TODO: deduplicate - internal/controller/supervisorconfig/jwks_writer.go
 )
 
-// jwkController holds the fields necessary for the JWKS controller to communicate with OPC's and
-// secrets, both via a cache and via the API.
+// SecretHelper describes an object that can Generate() a Secret and determine whether a Secret
+// IsValid(). It can also be Notify()'d about a Secret being persisted.
+//
+// A SecretHelper has a Name() that can be used to identify it from other SecretHelper instances.
+type SecretHelper interface {
+	Name() string
+	Generate(*configv1alpha1.OIDCProvider) (*corev1.Secret, error)
+	IsValid(*configv1alpha1.OIDCProvider, *corev1.Secret) bool
+	Notify(*configv1alpha1.OIDCProvider, *corev1.Secret)
+}
+
 type oidcProviderSecretsController struct {
-	secretNameFunc func(*configv1alpha1.OIDCProvider) string
-	secretLabels   map[string]string
-	secretDataFunc func() (map[string][]byte, error)
-	pinnipedClient pinnipedclientset.Interface
+	secretHelper   SecretHelper
 	kubeClient     kubernetes.Interface
 	opcInformer    configinformers.OIDCProviderInformer
 	secretInformer corev1informers.SecretInformer
 }
 
+// NewOIDCProviderSecretsController returns a controllerlib.Controller that ensures a child Secret
+// always exists for a parent OIDCProvider. It does this using the provided secretHelper, which
+// provides the parent/child mapping logic.
 func NewOIDCProviderSecretsController(
-	secretNameFunc func(*configv1alpha1.OIDCProvider) string,
-	secretLabels map[string]string,
-	secretDataFunc func() (map[string][]byte, error),
+	secretHelper SecretHelper,
 	kubeClient kubernetes.Interface,
-	pinnipedClient pinnipedclientset.Interface,
 	secretInformer corev1informers.SecretInformer,
 	opcInformer configinformers.OIDCProviderInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
-			Name: "JWKSController",
+			Name: fmt.Sprintf("%s%s", secretHelper.Name(), "controller"),
 			Syncer: &oidcProviderSecretsController{
-				secretNameFunc: secretNameFunc,
-				secretLabels:   secretLabels,
-				secretDataFunc: secretDataFunc,
+				secretHelper:   secretHelper,
 				kubeClient:     kubeClient,
-				pinnipedClient: pinnipedClient,
 				secretInformer: secretInformer,
 				opcInformer:    opcInformer,
 			},
 		},
 		// We want to be notified when a OPC's secret gets updated or deleted. When this happens, we
 		// should get notified via the corresponding OPC key.
+		// TODO: de-dup me (jwks_writer.go).
 		withInformer(
 			secretInformer,
 			controllerlib.FilterFuncs{
@@ -96,7 +99,7 @@ func NewOIDCProviderSecretsController(
 }
 
 func (c *oidcProviderSecretsController) Sync(ctx controllerlib.Context) error {
-	opc, err := c.opcInformer.Lister().OIDCProviders(ctx.Key.Namespace).Get(ctx.Key.Name)
+	op, err := c.opcInformer.Lister().OIDCProviders(ctx.Key.Namespace).Get(ctx.Key.Name)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return fmt.Errorf(
@@ -108,8 +111,8 @@ func (c *oidcProviderSecretsController) Sync(ctx controllerlib.Context) error {
 	}
 
 	if notFound {
-		// The corresponding secret to this OPC should have been garbage collected since it should have
-		// had this OPC as its owner.
+		// The corresponding secret to this OP should have been garbage collected since it should have
+		// had this OP as its owner.
 		plog.Debug(
 			"oidcprovider deleted",
 			"oidcprovider",
@@ -118,83 +121,99 @@ func (c *oidcProviderSecretsController) Sync(ctx controllerlib.Context) error {
 		return nil
 	}
 
-	secretNeedsUpdate, err := c.secretNeedsUpdate(opc)
+	newSecret, err := c.secretHelper.Generate(op)
 	if err != nil {
-		return fmt.Errorf("cannot determine secret status: %w", err)
+		return fmt.Errorf("failed to generate secret: %w", err)
+	}
+
+	secretNeedsUpdate, existingSecret, err := c.secretNeedsUpdate(op, newSecret.Name)
+	if err != nil {
+		return fmt.Errorf("failed to determine secret status: %w", err)
 	}
 	if !secretNeedsUpdate {
 		// Secret is up to date - we are good to go.
 		plog.Debug(
 			"secret is up to date",
 			"oidcprovider",
-			klog.KRef(ctx.Key.Namespace, ctx.Key.Name),
+			klog.KObj(op),
+			"secret",
+			klog.KObj(existingSecret),
 		)
+		c.secretHelper.Notify(op, existingSecret)
 		return nil
 	}
 
-	// If the OPC does not have a secret associated with it, that secret does not exist, or the secret
-	// is invalid, we will generate a new secret (i.e., a JWKS).
-	secret, err := generateSecret(opc.Namespace, c.secretNameFunc(opc), c.secretDataFunc, opc)
-	if err != nil {
-		return fmt.Errorf("cannot generate secret: %w", err)
+	// If the OP does not have a secret associated with it, that secret does not exist, or the secret
+	// is invalid, we will create a new secret.
+	if err := c.createOrUpdateSecret(ctx.Context, op, &newSecret); err != nil {
+		return fmt.Errorf("failed to create or update secret: %w", err)
 	}
+	plog.Debug("created/updated secret", "oidcprovider", klog.KObj(op), "secret", klog.KObj(newSecret))
 
-	if err := c.createOrUpdateSecret(ctx.Context, secret); err != nil {
-		return fmt.Errorf("cannot create or update secret: %w", err)
-	}
-	plog.Debug("created/updated secret", "secret", klog.KObj(secret))
+	c.secretHelper.Notify(op, newSecret)
 
 	return nil
 }
 
-func (c *oidcProviderSecretsController) secretNeedsUpdate(opc *configv1alpha1.OIDCProvider) (bool, error) {
+// secretNeedsUpdate returns whether or not the Secret, with name secretName, for OIDCProvider op
+// needs to be updated. It returns the existing secret as its second argument.
+func (c *oidcProviderSecretsController) secretNeedsUpdate(
+	op *configv1alpha1.OIDCProvider,
+	secretName string,
+) (bool, *corev1.Secret, error) {
 	// This OPC says it has a secret associated with it. Let's try to get it from the cache.
-	secret, err := c.secretInformer.Lister().Secrets(opc.Namespace).Get(c.secretNameFunc(opc))
+	secret, err := c.secretInformer.Lister().Secrets(op.Namespace).Get(secretName)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
-		return false, fmt.Errorf("cannot get secret: %w", err)
+		return false, nil, fmt.Errorf("cannot get secret: %w", err)
 	}
 	if notFound {
 		// If we can't find the secret, let's assume we need to create it.
-		return true, nil
+		return true, nil, nil
 	}
 
-	if !isValid(secret) {
+	if !c.secretHelper.IsValid(op, secret) {
 		// If this secret is invalid, we need to generate a new one.
-		return true, nil
+		return true, secret, nil
 	}
 
-	return false, nil
+	return false, secret, nil
 }
 
 func (c *oidcProviderSecretsController) createOrUpdateSecret(
 	ctx context.Context,
-	newSecret *corev1.Secret,
+	op *configv1alpha1.OIDCProvider,
+	newSecret **corev1.Secret,
 ) error {
-	secretClient := c.kubeClient.CoreV1().Secrets(newSecret.Namespace)
+	secretClient := c.kubeClient.CoreV1().Secrets((*newSecret).Namespace)
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		oldSecret, err := secretClient.Get(ctx, newSecret.Name, metav1.GetOptions{})
+		oldSecret, err := secretClient.Get(ctx, (*newSecret).Name, metav1.GetOptions{})
 		notFound := k8serrors.IsNotFound(err)
 		if err != nil && !notFound {
-			return fmt.Errorf("cannot get secret: %w", err)
+			return fmt.Errorf("failed to get secret %s/%s: %w", (*newSecret).Namespace, (*newSecret).Name, err)
 		}
 
 		if notFound {
 			// New secret doesn't exist, so create it.
-			_, err := secretClient.Create(ctx, newSecret, metav1.CreateOptions{})
+			_, err := secretClient.Create(ctx, *newSecret, metav1.CreateOptions{})
 			if err != nil {
-				return fmt.Errorf("cannot create secret: %w", err)
+				return fmt.Errorf("failed to create secret %s/%s: %w", (*newSecret).Namespace, (*newSecret).Name, err)
 			}
 			return nil
 		}
 
 		// New secret already exists, so ensure it is up to date.
-		if isValid(oldSecret) {
-			// If the secret already has valid JWK's, then we are good to go and we don't need an update.
+		if c.secretHelper.IsValid(op, oldSecret) {
+			// If the secret already has valid a valid Secret, then we are good to go and we don't need an
+			// update.
+			*newSecret = oldSecret
 			return nil
 		}
 
-		oldSecret.Data = newSecret.Data
+		oldSecret.Labels = (*newSecret).Labels
+		oldSecret.Type = (*newSecret).Type
+		oldSecret.Data = (*newSecret).Data
+		*newSecret = oldSecret
 		_, err = secretClient.Update(ctx, oldSecret, metav1.UpdateOptions{})
 		return err
 	})

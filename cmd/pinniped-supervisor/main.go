@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -17,6 +18,7 @@ import (
 	"go.pinniped.dev/internal/secret"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/clock"
 	kubeinformers "k8s.io/client-go/informers"
@@ -28,11 +30,13 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/supervisor/clientset/versioned"
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/controller/supervisorconfig"
 	"go.pinniped.dev/internal/controller/supervisorconfig/generator"
+	"go.pinniped.dev/internal/controller/supervisorconfig/generator/symmetricsecrethelper"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatcher"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/downward"
@@ -88,6 +92,9 @@ func startControllers(
 	kubeInformers kubeinformers.SharedInformerFactory,
 	pinnipedInformers pinnipedinformers.SharedInformerFactory,
 ) {
+	opInformer := pinnipedInformers.Config().V1alpha1().OIDCProviders()
+	secretInformer := kubeInformers.Core().V1().Secrets()
+
 	// Create controller manager.
 	controllerManager := controllerlib.
 		NewManager().
@@ -96,7 +103,7 @@ func startControllers(
 				issuerManager,
 				clock.RealClock{},
 				pinnipedClient,
-				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
+				opInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -106,8 +113,8 @@ func startControllers(
 				cfg.Labels,
 				kubeClient,
 				pinnipedClient,
-				kubeInformers.Core().V1().Secrets(),
-				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
+				secretInformer,
+				opInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -115,8 +122,8 @@ func startControllers(
 		WithController(
 			supervisorconfig.NewJWKSObserverController(
 				dynamicJWKSProvider,
-				kubeInformers.Core().V1().Secrets(),
-				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
+				secretInformer,
+				opInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -125,8 +132,8 @@ func startControllers(
 			supervisorconfig.NewTLSCertObserverController(
 				dynamicTLSCertProvider,
 				cfg.NamesConfig.DefaultTLSCertificateSecret,
-				kubeInformers.Core().V1().Secrets(),
-				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
+				secretInformer,
+				opInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -135,11 +142,68 @@ func startControllers(
 			generator.NewSupervisorSecretsController(
 				supervisorDeployment,
 				kubeClient,
-				kubeInformers.Core().V1().Secrets(),
+				secretInformer,
 				func(secret []byte) {
 					plog.Debug("setting csrf cookie secret")
 					secretCache.SetCSRFCookieEncoderHashKey(secret)
 				},
+			),
+			singletonWorker,
+		).
+		WithController(
+			generator.NewOIDCProviderSecretsController(
+				symmetricsecrethelper.New(
+					"pinniped-oidc-provider-hmac-key-",
+					cfg.Labels,
+					rand.Reader,
+					func(parent *configv1alpha1.OIDCProvider, child *corev1.Secret) {
+						plog.Debug("setting hmac secret", "issuer", parent.Spec.Issuer)
+						secretCache.GetOIDCProviderCacheFor(parent.Spec.Issuer).
+							SetTokenHMACKey(child.Data[symmetricsecrethelper.SecretDataKey])
+					},
+				),
+				kubeClient,
+				secretInformer,
+				opInformer,
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		).
+		WithController(
+			generator.NewOIDCProviderSecretsController(
+				symmetricsecrethelper.New(
+					"pinniped-oidc-provider-upstream-state-signature-key-",
+					cfg.Labels,
+					rand.Reader,
+					func(parent *configv1alpha1.OIDCProvider, child *corev1.Secret) {
+						plog.Debug("setting state signature key", "issuer", parent.Spec.Issuer)
+						secretCache.GetOIDCProviderCacheFor(parent.Spec.Issuer).
+							SetStateEncoderHashKey(child.Data[symmetricsecrethelper.SecretDataKey])
+					},
+				),
+				kubeClient,
+				secretInformer,
+				opInformer,
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		).
+		WithController(
+			generator.NewOIDCProviderSecretsController(
+				symmetricsecrethelper.New(
+					"pinniped-oidc-provider-upstream-state-encryption-key-",
+					cfg.Labels,
+					rand.Reader,
+					func(parent *configv1alpha1.OIDCProvider, child *corev1.Secret) {
+						plog.Debug("setting state encryption key", "issuer", parent.Spec.Issuer)
+						secretCache.GetOIDCProviderCacheFor(parent.Spec.Issuer).
+							SetStateEncoderHashKey(child.Data[symmetricsecrethelper.SecretDataKey])
+					},
+				),
+				kubeClient,
+				secretInformer,
+				opInformer,
+				controllerlib.WithInformer,
 			),
 			singletonWorker,
 		).

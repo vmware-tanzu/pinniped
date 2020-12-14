@@ -86,14 +86,6 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 	for _, incomingProvider := range oidcProviders {
 		providerCache := m.cache.GetOIDCProviderCacheFor(incomingProvider.Issuer())
 
-		if providerCache == nil { // TODO remove when populated from `Secret` values
-			providerCache = &secret.OIDCProviderCache{}
-			providerCache.SetTokenHMACKey([]byte("some secret - must have at least 32 bytes")) // TODO fetch from `Secret`
-			providerCache.SetStateEncoderHashKey([]byte("fake-state-hash-secret"))             // TODO fetch from `Secret`
-			providerCache.SetStateEncoderBlockKey([]byte("16-bytes-STATE01"))                  // TODO fetch from `Secret`
-			m.cache.SetOIDCProviderCacheFor(incomingProvider.Issuer(), providerCache)
-		}
-
 		issuer := incomingProvider.Issuer()
 		issuerHostWithPath := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath()
 		oidcTimeouts := oidc.DefaultOIDCTimeoutsConfiguration()

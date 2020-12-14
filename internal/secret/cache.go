@@ -3,6 +3,9 @@
 
 package secret
 
+// TODO: synchronize me.
+// TODO: use SetIssuerXXX() functions instead of returning a struct so that we don't have to worry about reentrancy.
+
 type Cache struct {
 	csrfCookieEncoderHashKey  []byte
 	csrfCookieEncoderBlockKey []byte
@@ -26,7 +29,12 @@ func (c *Cache) SetCSRFCookieEncoderBlockKey(key []byte) {
 }
 
 func (c *Cache) GetOIDCProviderCacheFor(oidcIssuer string) *OIDCProviderCache {
-	return c.oidcProviderCaches()[oidcIssuer]
+	oidcProvider, ok := c.oidcProviderCaches()[oidcIssuer]
+	if !ok {
+		oidcProvider = &OIDCProviderCache{}
+		c.oidcProviderCaches()[oidcIssuer] = oidcProvider
+	}
+	return oidcProvider
 }
 
 func (c *Cache) SetOIDCProviderCacheFor(oidcIssuer string, oidcProviderCache *OIDCProviderCache) {

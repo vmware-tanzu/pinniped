@@ -169,6 +169,9 @@ func TestSupervisorLogin(t *testing.T) {
 	var tokenResponse *oauth2.Token
 	assert.Eventually(t, func() bool {
 		tokenResponse, err = downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
+		if err != nil {
+			t.Logf("error trying to exchange auth code (%s), trying again", err.Error())
+		}
 		return err == nil
 	}, time.Second*5, time.Second*1)
 	require.NoError(t, err)

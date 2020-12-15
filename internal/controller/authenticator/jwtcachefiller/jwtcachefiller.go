@@ -29,7 +29,7 @@ import (
 // These default values come from the way that the Supervisor issues and signs tokens. We make these
 // the defaults for a JWTAuthenticator so that they can easily integrate with the Supervisor.
 const (
-	defaultUsernameClaim = "sub"
+	defaultUsernameClaim = "username"
 	defaultGroupsClaim   = "groups"
 )
 

@@ -19,11 +19,10 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/square/go-jose.v2/jwt"
-
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
+	"gopkg.in/square/go-jose.v2/jwt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
@@ -324,19 +323,20 @@ func TestController(t *testing.T) {
 			t.Cleanup(cachedAuthenticator.(*jwtAuthenticator).Close)
 
 			const (
-				goodSubject = "some-subject"
-				group0      = "some-group-0"
-				group1      = "some-group-1"
+				goodSubject  = "some-subject"
+				group0       = "some-group-0"
+				group1       = "some-group-1"
+				goodUsername = "pinny123"
 			)
 
 			for _, test := range testTableForAuthenticateTokenTests(
 				t,
-				goodSubject,
 				goodRSASigningKey,
 				goodRSASigningAlgo,
 				goodRSASigningKeyID,
 				group0,
 				group1,
+				goodUsername,
 			) {
 				test := test
 				t.Run(test.name, func(t *testing.T) {
@@ -351,8 +351,9 @@ func TestController(t *testing.T) {
 						IssuedAt:  jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					}
 					var groups interface{}
+					username := goodUsername
 					if test.jwtClaims != nil {
-						test.jwtClaims(&wellKnownClaims, &groups)
+						test.jwtClaims(&wellKnownClaims, &groups, &username)
 					}
 
 					var signingKey interface{} = goodECSigningKey
@@ -362,7 +363,7 @@ func TestController(t *testing.T) {
 						test.jwtSignature(&signingKey, &signingAlgo, &signingKID)
 					}
 
-					jwt := createJWT(t, signingKey, signingAlgo, signingKID, &wellKnownClaims, groups)
+					jwt := createJWT(t, signingKey, signingAlgo, signingKID, &wellKnownClaims, groups, username)
 					rsp, authenticated, err := cachedAuthenticator.AuthenticateToken(context.Background(), jwt)
 					if test.wantErrorRegexp != "" {
 						require.Error(t, err)
@@ -380,15 +381,15 @@ func TestController(t *testing.T) {
 
 func testTableForAuthenticateTokenTests(
 	t *testing.T,
-	goodSubject string,
 	goodRSASigningKey *rsa.PrivateKey,
 	goodRSASigningAlgo jose.SignatureAlgorithm,
 	goodRSASigningKeyID string,
 	group0 string,
 	group1 string,
+	goodUsername string,
 ) []struct {
 	name              string
-	jwtClaims         func(wellKnownClaims *jwt.Claims, groups *interface{})
+	jwtClaims         func(wellKnownClaims *jwt.Claims, groups *interface{}, username *string)
 	jwtSignature      func(key *interface{}, algo *jose.SignatureAlgorithm, kid *string)
 	wantResponse      *authenticator.Response
 	wantAuthenticated bool
@@ -396,7 +397,7 @@ func testTableForAuthenticateTokenTests(
 } {
 	tests := []struct {
 		name              string
-		jwtClaims         func(wellKnownClaims *jwt.Claims, groups *interface{})
+		jwtClaims         func(wellKnownClaims *jwt.Claims, groups *interface{}, username *string)
 		jwtSignature      func(key *interface{}, algo *jose.SignatureAlgorithm, kid *string)
 		wantResponse      *authenticator.Response
 		wantAuthenticated bool
@@ -406,7 +407,7 @@ func testTableForAuthenticateTokenTests(
 			name: "good token without groups and with EC signature",
 			wantResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
-					Name: goodSubject,
+					Name: goodUsername,
 				},
 			},
 			wantAuthenticated: true,
@@ -420,19 +421,19 @@ func testTableForAuthenticateTokenTests(
 			},
 			wantResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
-					Name: goodSubject,
+					Name: goodUsername,
 				},
 			},
 			wantAuthenticated: true,
 		},
 		{
 			name: "good token with groups as array",
-			jwtClaims: func(_ *jwt.Claims, groups *interface{}) {
+			jwtClaims: func(_ *jwt.Claims, groups *interface{}, username *string) {
 				*groups = []string{group0, group1}
 			},
 			wantResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
-					Name:   goodSubject,
+					Name:   goodUsername,
 					Groups: []string{group0, group1},
 				},
 			},
@@ -440,12 +441,12 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "good token with groups as string",
-			jwtClaims: func(_ *jwt.Claims, groups *interface{}) {
+			jwtClaims: func(_ *jwt.Claims, groups *interface{}, username *string) {
 				*groups = group0
 			},
 			wantResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
-					Name:   goodSubject,
+					Name:   goodUsername,
 					Groups: []string{group0},
 				},
 			},
@@ -453,26 +454,26 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "good token with nbf unset",
-			jwtClaims: func(claims *jwt.Claims, _ *interface{}) {
+			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				claims.NotBefore = nil
 			},
 			wantResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
-					Name: goodSubject,
+					Name: goodUsername,
 				},
 			},
 			wantAuthenticated: true,
 		},
 		{
 			name: "bad token with groups as map",
-			jwtClaims: func(_ *jwt.Claims, groups *interface{}) {
+			jwtClaims: func(_ *jwt.Claims, groups *interface{}, username *string) {
 				*groups = map[string]string{"not an array": "or a string"}
 			},
 			wantErrorRegexp: "oidc: parse groups claim \"groups\": json: cannot unmarshal object into Go value of type string",
 		},
 		{
 			name: "bad token with wrong issuer",
-			jwtClaims: func(claims *jwt.Claims, _ *interface{}) {
+			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				claims.Issuer = "wrong-issuer"
 			},
 			wantResponse:      nil,
@@ -480,38 +481,45 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "bad token with no audience",
-			jwtClaims: func(claims *jwt.Claims, _ *interface{}) {
+			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				claims.Audience = nil
 			},
 			wantErrorRegexp: `oidc: verify token: oidc: expected audience "some-audience" got \[\]`,
 		},
 		{
 			name: "bad token with wrong audience",
-			jwtClaims: func(claims *jwt.Claims, _ *interface{}) {
+			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				claims.Audience = []string{"wrong-audience"}
 			},
 			wantErrorRegexp: `oidc: verify token: oidc: expected audience "some-audience" got \["wrong-audience"\]`,
 		},
 		{
 			name: "bad token with nbf in the future",
-			jwtClaims: func(claims *jwt.Claims, _ *interface{}) {
+			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				claims.NotBefore = jwt.NewNumericDate(time.Date(3020, 2, 3, 4, 5, 6, 7, time.UTC))
 			},
 			wantErrorRegexp: `oidc: verify token: oidc: current time .* before the nbf \(not before\) time: 3020-.*`,
 		},
 		{
 			name: "bad token with exp in past",
-			jwtClaims: func(claims *jwt.Claims, _ *interface{}) {
+			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				claims.Expiry = jwt.NewNumericDate(time.Date(1, 2, 3, 4, 5, 6, 7, time.UTC))
 			},
 			wantErrorRegexp: `oidc: verify token: oidc: token is expired \(Token Expiry: 0001-02-02 20:12:08 -0752 LMT\)`,
 		},
 		{
 			name: "bad token without exp",
-			jwtClaims: func(claims *jwt.Claims, _ *interface{}) {
+			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				claims.Expiry = nil
 			},
 			wantErrorRegexp: `oidc: verify token: oidc: token is expired \(Token Expiry: 0001-01-01 00:00:00 \+0000 UTC\)`,
+		},
+		{
+			name: "token does not have username claim",
+			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
+				*username = ""
+			},
+			wantErrorRegexp: `oidc: parse username claims "username": claim not present`,
 		},
 		{
 			name: "signing key is wrong",
@@ -560,6 +568,7 @@ func createJWT(
 	kid string,
 	claims *jwt.Claims,
 	groups interface{},
+	username string,
 ) string {
 	t.Helper()
 
@@ -572,6 +581,9 @@ func createJWT(
 	builder := jwt.Signed(sig).Claims(claims)
 	if groups != nil {
 		builder = builder.Claims(map[string]interface{}{"groups": groups})
+	}
+	if username != "" {
+		builder = builder.Claims(map[string]interface{}{"username": username})
 	}
 	jwt, err := builder.CompactSerialize()
 	require.NoError(t, err)

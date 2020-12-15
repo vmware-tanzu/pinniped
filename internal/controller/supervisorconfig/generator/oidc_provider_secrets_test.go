@@ -144,7 +144,7 @@ func TestOIDCProviderControllerFilterSecret(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
 			secretHelper := mocksecrethelper.NewMockSecretHelper(ctrl)
-			secretHelper.EXPECT().Name().Times(1).Return("some-name")
+			secretHelper.EXPECT().NamePrefix().Times(1).Return("some-name")
 
 			secretInformer := kubeinformers.NewSharedInformerFactory(
 				kubernetesfake.NewSimpleClientset(),
@@ -202,7 +202,7 @@ func TestNewOIDCProviderSecretsControllerFilterOPC(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
 			secretHelper := mocksecrethelper.NewMockSecretHelper(ctrl)
-			secretHelper.EXPECT().Name().Times(1).Return("some-name")
+			secretHelper.EXPECT().NamePrefix().Times(1).Return("some-name")
 
 			secretInformer := kubeinformers.NewSharedInformerFactory(
 				kubernetesfake.NewSimpleClientset(),
@@ -511,7 +511,7 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
 			secretHelper := mocksecrethelper.NewMockSecretHelper(ctrl)
-			secretHelper.EXPECT().Name().Times(1).Return("some-name")
+			secretHelper.EXPECT().NamePrefix().Times(1).Return("some-name")
 			if test.secretHelper != nil {
 				test.secretHelper(secretHelper)
 			}

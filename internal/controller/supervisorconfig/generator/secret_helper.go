@@ -17,9 +17,9 @@ import (
 // SecretHelper describes an object that can Generate() a Secret and determine whether a Secret
 // IsValid(). It can also be Notify()'d about a Secret being persisted.
 //
-// A SecretHelper has a Name() that can be used to identify it from other SecretHelper instances.
+// A SecretHelper has a NamePrefix() that can be used to identify it from other SecretHelper instances.
 type SecretHelper interface {
-	Name() string
+	NamePrefix() string
 	Generate(*configv1alpha1.OIDCProvider) (*corev1.Secret, error)
 	IsValid(*configv1alpha1.OIDCProvider, *corev1.Secret) bool
 	Notify(*configv1alpha1.OIDCProvider, *corev1.Secret)
@@ -60,7 +60,7 @@ type symmetricSecretHelper struct {
 	notifyFunc func(parent *configv1alpha1.OIDCProvider, child *corev1.Secret)
 }
 
-func (s *symmetricSecretHelper) Name() string { return s.namePrefix }
+func (s *symmetricSecretHelper) NamePrefix() string { return s.namePrefix }
 
 // Generate implements SecretHelper.Generate().
 func (s *symmetricSecretHelper) Generate(parent *configv1alpha1.OIDCProvider) (*corev1.Secret, error) {

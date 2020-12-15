@@ -41,7 +41,7 @@ func NewOIDCProviderSecretsController(
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
-			Name: fmt.Sprintf("%s%s", secretHelper.Name(), "controller"),
+			Name: fmt.Sprintf("%s%s", secretHelper.NamePrefix(), "controller"),
 			Syncer: &oidcProviderSecretsController{
 				secretHelper:   secretHelper,
 				kubeClient:     kubeClient,

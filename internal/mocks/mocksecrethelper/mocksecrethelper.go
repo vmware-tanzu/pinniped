@@ -67,18 +67,18 @@ func (mr *MockSecretHelperMockRecorder) IsValid(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsValid", reflect.TypeOf((*MockSecretHelper)(nil).IsValid), arg0, arg1)
 }
 
-// Name mocks base method
-func (m *MockSecretHelper) Name() string {
+// NamePrefix mocks base method
+func (m *MockSecretHelper) NamePrefix() string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Name")
+	ret := m.ctrl.Call(m, "NamePrefix")
 	ret0, _ := ret[0].(string)
 	return ret0
 }
 
-// Name indicates an expected call of Name
-func (mr *MockSecretHelperMockRecorder) Name() *gomock.Call {
+// NamePrefix indicates an expected call of NamePrefix
+func (mr *MockSecretHelperMockRecorder) NamePrefix() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*MockSecretHelper)(nil).Name))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NamePrefix", reflect.TypeOf((*MockSecretHelper)(nil).NamePrefix))
 }
 
 // Notify mocks base method

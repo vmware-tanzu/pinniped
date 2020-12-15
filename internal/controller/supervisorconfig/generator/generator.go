@@ -15,11 +15,6 @@ import (
 )
 
 const (
-	symmetricKeySecretType    = "secrets.pinniped.dev/symmetric"
-	symmetricKeySecretDataKey = "key"
-
-	symmetricKeySize = 32
-
 	opKind = "OIDCProvider"
 )
 
@@ -32,11 +27,11 @@ func generateSymmetricKey() ([]byte, error) {
 }
 
 func isValid(secret *corev1.Secret) bool {
-	if secret.Type != symmetricKeySecretType {
+	if secret.Type != SymmetricSecretType {
 		return false
 	}
 
-	data, ok := secret.Data[symmetricKeySecretDataKey]
+	data, ok := secret.Data[SymmetricSecretDataKey]
 	if !ok {
 		return false
 	}
@@ -54,7 +49,7 @@ func secretDataFunc() (map[string][]byte, error) {
 	}
 
 	return map[string][]byte{
-		symmetricKeySecretDataKey: symmetricKey,
+		SymmetricSecretDataKey: symmetricKey,
 	}, nil
 }
 
@@ -78,7 +73,7 @@ func generateSecret(namespace, name string, labels map[string]string, secretData
 			},
 			Labels: labels,
 		},
-		Type: symmetricKeySecretType,
+		Type: SymmetricSecretType,
 		Data: secretData,
 	}, nil
 }

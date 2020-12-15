@@ -1,7 +1,7 @@
 // Copyright 2020 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package symmetricsecrethelper
+package generator
 
 import (
 	"strings"
@@ -17,7 +17,7 @@ import (
 
 const keyWith32Bytes = "0123456789abcdef0123456789abcdef"
 
-func TestHelper(t *testing.T) {
+func TestSymmetricSecretHHelper(t *testing.T) {
 	labels := map[string]string{
 		"some-label-key-1": "some-label-value-1",
 		"some-label-key-2": "some-label-value-2",
@@ -25,7 +25,7 @@ func TestHelper(t *testing.T) {
 	randSource := strings.NewReader(keyWith32Bytes)
 	var notifyParent *configv1alpha1.OIDCProvider
 	var notifyChild *corev1.Secret
-	h := New("some-name-prefix-", labels, randSource, func(parent *configv1alpha1.OIDCProvider, child *corev1.Secret) {
+	h := NewSymmetricSecretHelper("some-name-prefix-", labels, randSource, func(parent *configv1alpha1.OIDCProvider, child *corev1.Secret) {
 		require.True(t, notifyParent == nil && notifyChild == nil, "expected notify func not to have been called yet")
 		notifyParent = parent
 		notifyChild = child
@@ -65,7 +65,7 @@ func TestHelper(t *testing.T) {
 	require.Equal(t, child, notifyChild)
 }
 
-func TestHelperIsValid(t *testing.T) {
+func TestSymmetricSecretHHelperIsValid(t *testing.T) {
 	tests := []struct {
 		name   string
 		child  func(*corev1.Secret)
@@ -115,7 +115,7 @@ func TestHelperIsValid(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			h := New("none of these args matter", nil, nil, nil)
+			h := NewSymmetricSecretHelper("none of these args matter", nil, nil, nil)
 
 			parent := &configv1alpha1.OIDCProvider{
 				ObjectMeta: metav1.ObjectMeta{

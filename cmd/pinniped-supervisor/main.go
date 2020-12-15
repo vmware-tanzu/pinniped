@@ -36,7 +36,6 @@ import (
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/controller/supervisorconfig"
 	"go.pinniped.dev/internal/controller/supervisorconfig/generator"
-	"go.pinniped.dev/internal/controller/supervisorconfig/generator/symmetricsecrethelper"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorstorage"
 	"go.pinniped.dev/internal/controllerlib"
@@ -165,13 +164,13 @@ func startControllers(
 		).
 		WithController(
 			generator.NewOIDCProviderSecretsController(
-				symmetricsecrethelper.New(
+				generator.NewSymmetricSecretHelper(
 					"pinniped-oidc-provider-hmac-key-",
 					cfg.Labels,
 					rand.Reader,
 					func(parent *configv1alpha1.OIDCProvider, child *corev1.Secret) {
 						plog.Debug("setting hmac secret", "issuer", parent.Spec.Issuer)
-						secretCache.SetTokenHMACKey(parent.Spec.Issuer, child.Data[symmetricsecrethelper.SymmetricSecretDataKey])
+						secretCache.SetTokenHMACKey(parent.Spec.Issuer, child.Data[generator.SymmetricSecretDataKey])
 					},
 				),
 				kubeClient,
@@ -183,13 +182,13 @@ func startControllers(
 		).
 		WithController(
 			generator.NewOIDCProviderSecretsController(
-				symmetricsecrethelper.New(
+				generator.NewSymmetricSecretHelper(
 					"pinniped-oidc-provider-upstream-state-signature-key-",
 					cfg.Labels,
 					rand.Reader,
 					func(parent *configv1alpha1.OIDCProvider, child *corev1.Secret) {
 						plog.Debug("setting state signature key", "issuer", parent.Spec.Issuer)
-						secretCache.SetStateEncoderHashKey(parent.Spec.Issuer, child.Data[symmetricsecrethelper.SymmetricSecretDataKey])
+						secretCache.SetStateEncoderHashKey(parent.Spec.Issuer, child.Data[generator.SymmetricSecretDataKey])
 					},
 				),
 				kubeClient,
@@ -201,13 +200,13 @@ func startControllers(
 		).
 		WithController(
 			generator.NewOIDCProviderSecretsController(
-				symmetricsecrethelper.New(
+				generator.NewSymmetricSecretHelper(
 					"pinniped-oidc-provider-upstream-state-encryption-key-",
 					cfg.Labels,
 					rand.Reader,
 					func(parent *configv1alpha1.OIDCProvider, child *corev1.Secret) {
 						plog.Debug("setting state encryption key", "issuer", parent.Spec.Issuer)
-						secretCache.SetStateEncoderBlockKey(parent.Spec.Issuer, child.Data[symmetricsecrethelper.SymmetricSecretDataKey])
+						secretCache.SetStateEncoderBlockKey(parent.Spec.Issuer, child.Data[generator.SymmetricSecretDataKey])
 					},
 				),
 				kubeClient,

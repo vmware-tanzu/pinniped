@@ -22,17 +22,6 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-// SecretHelper describes an object that can Generate() a Secret and determine whether a Secret
-// IsValid(). It can also be Notify()'d about a Secret being persisted.
-//
-// A SecretHelper has a Name() that can be used to identify it from other SecretHelper instances.
-type SecretHelper interface {
-	Name() string
-	Generate(*configv1alpha1.OIDCProvider) (*corev1.Secret, error)
-	IsValid(*configv1alpha1.OIDCProvider, *corev1.Secret) bool
-	Notify(*configv1alpha1.OIDCProvider, *corev1.Secret)
-}
-
 type oidcProviderSecretsController struct {
 	secretHelper   SecretHelper
 	kubeClient     kubernetes.Interface

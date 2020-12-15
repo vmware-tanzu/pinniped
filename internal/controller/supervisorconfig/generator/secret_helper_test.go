@@ -23,12 +23,14 @@ func TestSymmetricSecretHHelper(t *testing.T) {
 		"some-label-key-2": "some-label-value-2",
 	}
 	randSource := strings.NewReader(keyWith32Bytes)
-	var notifyParent *configv1alpha1.OIDCProvider
-	var notifyChild *corev1.Secret
-	h := NewSymmetricSecretHelper("some-name-prefix-", labels, randSource, func(parent *configv1alpha1.OIDCProvider, child *corev1.Secret) {
-		require.True(t, notifyParent == nil && notifyChild == nil, "expected notify func not to have been called yet")
-		notifyParent = parent
-		notifyChild = child
+	// var notifyParent *configv1alpha1.OIDCProvider
+	// var notifyChild *corev1.Secret
+	var oidcProviderIssuerValue string
+	var symmetricKeyValue []byte
+	h := NewSymmetricSecretHelper("some-name-prefix-", labels, randSource, func(oidcProviderIssuer string, symmetricKey []byte) {
+		require.True(t, oidcProviderIssuer == "" && symmetricKeyValue == nil, "expected notify func not to have been called yet")
+		oidcProviderIssuerValue = oidcProviderIssuer
+		symmetricKeyValue = symmetricKey
 	})
 
 	parent := &configv1alpha1.OIDCProvider{
@@ -61,8 +63,8 @@ func TestSymmetricSecretHHelper(t *testing.T) {
 	require.True(t, h.IsValid(parent, child))
 
 	h.Notify(parent, child)
-	require.Equal(t, parent, notifyParent)
-	require.Equal(t, child, notifyChild)
+	require.Equal(t, parent.Spec.Issuer, oidcProviderIssuerValue)
+	require.Equal(t, child.Data[SymmetricSecretDataKey], symmetricKeyValue)
 }
 
 func TestSymmetricSecretHHelperIsValid(t *testing.T) {

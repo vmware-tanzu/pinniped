@@ -43,21 +43,21 @@ func NewSymmetricSecretHelper(
 	namePrefix string,
 	labels map[string]string,
 	rand io.Reader,
-	notifyFunc func(parent *configv1alpha1.OIDCProvider, child *corev1.Secret),
+	updateCacheFunc func(cacheKey string, cacheValue []byte),
 ) SecretHelper {
 	return &symmetricSecretHelper{
-		namePrefix: namePrefix,
-		labels:     labels,
-		rand:       rand,
-		notifyFunc: notifyFunc,
+		namePrefix:      namePrefix,
+		labels:          labels,
+		rand:            rand,
+		updateCacheFunc: updateCacheFunc,
 	}
 }
 
 type symmetricSecretHelper struct {
-	namePrefix string
-	labels     map[string]string
-	rand       io.Reader
-	notifyFunc func(parent *configv1alpha1.OIDCProvider, child *corev1.Secret)
+	namePrefix      string
+	labels          map[string]string
+	rand            io.Reader
+	updateCacheFunc func(cacheKey string, cacheValue []byte)
 }
 
 func (s *symmetricSecretHelper) NamePrefix() string { return s.namePrefix }
@@ -90,16 +90,16 @@ func (s *symmetricSecretHelper) Generate(parent *configv1alpha1.OIDCProvider) (*
 }
 
 // IsValid implements SecretHelper.IsValid().
-func (s *symmetricSecretHelper) IsValid(parent *configv1alpha1.OIDCProvider, child *corev1.Secret) bool {
-	if !metav1.IsControlledBy(child, parent) {
+func (s *symmetricSecretHelper) IsValid(parent *configv1alpha1.OIDCProvider, secret *corev1.Secret) bool {
+	if !metav1.IsControlledBy(secret, parent) {
 		return false
 	}
 
-	if child.Type != SymmetricSecretType {
+	if secret.Type != SymmetricSecretType {
 		return false
 	}
 
-	key, ok := child.Data[SymmetricSecretDataKey]
+	key, ok := secret.Data[SymmetricSecretDataKey]
 	if !ok {
 		return false
 	}
@@ -111,6 +111,11 @@ func (s *symmetricSecretHelper) IsValid(parent *configv1alpha1.OIDCProvider, chi
 }
 
 // Notify implements SecretHelper.Notify().
-func (s *symmetricSecretHelper) Notify(parent *configv1alpha1.OIDCProvider, child *corev1.Secret) {
-	s.notifyFunc(parent, child)
+func (s *symmetricSecretHelper) Notify(op *configv1alpha1.OIDCProvider, secret *corev1.Secret) {
+	var cacheKey string
+	if op != nil {
+		cacheKey = op.Spec.Issuer
+	}
+
+	s.updateCacheFunc(cacheKey, secret.Data[SymmetricSecretDataKey])
 }

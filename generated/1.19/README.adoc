@@ -92,6 +92,8 @@ Spec for configuring a JWT authenticator.
 | Field | Description
 | *`issuer`* __string__ | Issuer is the OIDC issuer URL that will be used to discover public signing keys. Issuer is also used to validate the "iss" JWT claim.
 | *`audience`* __string__ | Audience is the required value of the "aud" JWT claim.
+| *`username_claim`* __string__ | UsernameClaim is the name of the claim which should be read to extract the username from the JWT token. When not specified, it will default to "username".
+| *`groups_claim`* __string__ | GroupsClaim is the name of the claim which should be read to extract the user's group membership from the JWT token. When not specified, it will default to "groups".
 | *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration for communicating with the OIDC provider.
 |===
 

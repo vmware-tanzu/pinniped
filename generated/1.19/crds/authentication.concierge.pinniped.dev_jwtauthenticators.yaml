@@ -51,6 +51,11 @@ spec:
                 description: Audience is the required value of the "aud" JWT claim.
                 minLength: 1
                 type: string
+              groups_claim:
+                description: GroupsClaim is the name of the claim which should be
+                  read to extract the user's group membership from the JWT token.
+                  When not specified, it will default to "groups".
+                type: string
               issuer:
                 description: Issuer is the OIDC issuer URL that will be used to discover
                   public signing keys. Issuer is also used to validate the "iss" JWT
@@ -66,6 +71,11 @@ spec:
                       If omitted, a default set of system roots will be trusted.
                     type: string
                 type: object
+              username_claim:
+                description: UsernameClaim is the name of the claim which should be
+                  read to extract the username from the JWT token. When not specified,
+                  it will default to "username".
+                type: string
             required:
             - audience
             - issuer

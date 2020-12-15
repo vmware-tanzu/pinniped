@@ -27,6 +27,16 @@ type JWTAuthenticatorSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	Audience string `json:"audience"`
 
+	// UsernameClaim is the name of the claim which should be read to extract the
+	// username from the JWT token. When not specified, it will default to "username".
+	// +optional
+	UsernameClaim string `json:"username_claim"`
+
+	// GroupsClaim is the name of the claim which should be read to extract the user's
+	// group membership from the JWT token. When not specified, it will default to "groups".
+	// +optional
+	GroupsClaim string `json:"groups_claim"`
+
 	// TLS configuration for communicating with the OIDC provider.
 	// +optional
 	TLS *TLSSpec `json:"tls,omitempty"`

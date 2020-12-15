@@ -254,7 +254,7 @@ func runPinnipedLoginOIDC(
 	credOutputChan := make(chan clientauthenticationv1beta1.ExecCredential)
 	spawnTestGoroutine(t, func() (err error) {
 		defer func() {
-			closeErr := stderr.Close()
+			closeErr := stdout.Close()
 			if closeErr == nil || errors.Is(closeErr, os.ErrClosed) {
 				return
 			}

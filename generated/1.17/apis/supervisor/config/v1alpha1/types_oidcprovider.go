@@ -8,7 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// +kubebuilder:validation:Enum=Success;Duplicate;Invalid
+// +kubebuilder:validation:Enum=Success;Duplicate;Invalid;SameIssuerHostMustUseSameSecret
 type OIDCProviderStatusCondition string
 
 const (

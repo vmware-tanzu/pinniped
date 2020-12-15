@@ -234,7 +234,7 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer string, ce
 	defer cancel()
 
 	if issuer == "" {
-		issuer = randomIssuer(t)
+		issuer = fmt.Sprintf("http://test-issuer-%s.pinniped.dev", RandHex(t, 8))
 	}
 
 	opcs := NewSupervisorClientset(t).ConfigV1alpha1().OIDCProviders(testEnv.SupervisorNamespace)
@@ -279,11 +279,11 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer string, ce
 	return opc
 }
 
-func randomIssuer(t *testing.T) string {
-	var buf [8]byte
-	_, err := io.ReadFull(rand.Reader, buf[:])
+func RandHex(t *testing.T, numBytes int) string {
+	buf := make([]byte, numBytes)
+	_, err := io.ReadFull(rand.Reader, buf)
 	require.NoError(t, err)
-	return fmt.Sprintf("http://test-issuer-%s.pinniped.dev", hex.EncodeToString(buf[:]))
+	return hex.EncodeToString(buf)
 }
 
 func CreateTestSecret(t *testing.T, namespace string, baseName string, secretType string, stringData map[string]string) *corev1.Secret {

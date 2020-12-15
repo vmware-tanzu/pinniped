@@ -27,36 +27,39 @@ import (
 var generateKey = generateSymmetricKey
 
 type supervisorSecretsController struct {
-	owner    *appsv1.Deployment
-	labels   map[string]string
-	client   kubernetes.Interface
-	secrets  corev1informers.SecretInformer
-	setCache func(secret []byte)
+	owner          *appsv1.Deployment
+	labels         map[string]string
+	kubeClient     kubernetes.Interface
+	secretInformer corev1informers.SecretInformer
+	setCacheFunc   func(secret []byte)
 }
 
 // NewSupervisorSecretsController instantiates a new controllerlib.Controller which will ensure existence of a generated secret.
 func NewSupervisorSecretsController(
 	// TODO: generate the name for the secret and label the secret with the UID of the owner? So that we don't have naming conflicts if the user has already created a Secret with that name.
-	// TODO: add tests for the filter like we do in the JWKSWriterController?
 	owner *appsv1.Deployment,
 	labels map[string]string,
-	client kubernetes.Interface,
-	secrets corev1informers.SecretInformer,
-	setCache func(secret []byte),
+	kubeClient kubernetes.Interface,
+	secretInformer corev1informers.SecretInformer,
+	setCacheFunc func(secret []byte),
+	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	c := supervisorSecretsController{
-		owner:    owner,
-		labels:   labels,
-		client:   client,
-		secrets:  secrets,
-		setCache: setCache,
+		owner:          owner,
+		labels:         labels,
+		kubeClient:     kubeClient,
+		secretInformer: secretInformer,
+		setCacheFunc:   setCacheFunc,
 	}
-	filter := pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
-		return metav1.IsControlledBy(obj, owner)
-	}, nil)
 	return controllerlib.New(
 		controllerlib.Config{Name: owner.Name + "-secret-generator", Syncer: &c},
-		controllerlib.WithInformer(secrets, filter, controllerlib.InformerOption{}),
+		withInformer(
+			secretInformer,
+			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
+				return metav1.IsControlledBy(obj, owner)
+			}, nil),
+			controllerlib.InformerOption{},
+		),
 		controllerlib.WithInitialEvent(controllerlib.Key{
 			Namespace: owner.Namespace,
 			Name:      owner.Name + "-key",
@@ -66,7 +69,7 @@ func NewSupervisorSecretsController(
 
 // Sync implements controllerlib.Syncer.Sync().
 func (c *supervisorSecretsController) Sync(ctx controllerlib.Context) error {
-	secret, err := c.secrets.Lister().Secrets(ctx.Key.Namespace).Get(ctx.Key.Name)
+	secret, err := c.secretInformer.Lister().Secrets(ctx.Key.Namespace).Get(ctx.Key.Name)
 	isNotFound := k8serrors.IsNotFound(err)
 	if !isNotFound && err != nil {
 		return fmt.Errorf("failed to list secret %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
@@ -75,7 +78,7 @@ func (c *supervisorSecretsController) Sync(ctx controllerlib.Context) error {
 	secretNeedsUpdate := isNotFound || !isValid(secret)
 	if !secretNeedsUpdate {
 		plog.Debug("secret is up to date", "secret", klog.KObj(secret))
-		c.setCache(secret.Data[symmetricKeySecretDataKey])
+		c.setCacheFunc(secret.Data[symmetricKeySecretDataKey])
 		return nil
 	}
 
@@ -93,18 +96,18 @@ func (c *supervisorSecretsController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("failed to create/update secret %s/%s: %w", newSecret.Namespace, newSecret.Name, err)
 	}
 
-	c.setCache(newSecret.Data[symmetricKeySecretDataKey])
+	c.setCacheFunc(newSecret.Data[symmetricKeySecretDataKey])
 
 	return nil
 }
 
 func (c *supervisorSecretsController) createSecret(ctx context.Context, newSecret *corev1.Secret) error {
-	_, err := c.client.CoreV1().Secrets(newSecret.Namespace).Create(ctx, newSecret, metav1.CreateOptions{})
+	_, err := c.kubeClient.CoreV1().Secrets(newSecret.Namespace).Create(ctx, newSecret, metav1.CreateOptions{})
 	return err
 }
 
 func (c *supervisorSecretsController) updateSecret(ctx context.Context, newSecret **corev1.Secret, secretName string) error {
-	secrets := c.client.CoreV1().Secrets((*newSecret).Namespace)
+	secrets := c.kubeClient.CoreV1().Secrets((*newSecret).Namespace)
 	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		currentSecret, err := secrets.Get(ctx, secretName, metav1.GetOptions{})
 		isNotFound := k8serrors.IsNotFound(err)

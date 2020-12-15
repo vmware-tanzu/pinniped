@@ -159,6 +159,7 @@ func startControllers(
 					plog.Debug("setting csrf cookie secret")
 					secretCache.SetCSRFCookieEncoderHashKey(secret)
 				},
+				controllerlib.WithInformer,
 			),
 			singletonWorker,
 		).

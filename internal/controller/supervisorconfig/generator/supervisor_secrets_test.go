@@ -21,10 +21,163 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	kubetesting "k8s.io/client-go/testing"
 
+	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/testutil"
 )
 
-func TestController(t *testing.T) {
+var (
+	owner = &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "some-owner-name",
+			UID:  "some-owner-uid",
+		},
+	}
+
+	ownerGVK = schema.GroupVersionKind{
+		Group:   appsv1.SchemeGroupVersion.Group,
+		Version: appsv1.SchemeGroupVersion.Version,
+		Kind:    "Deployment",
+	}
+
+	labels = map[string]string{
+		"some-label-key-1": "some-label-value-1",
+		"some-label-key-2": "some-label-value-2",
+	}
+)
+
+func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		secret     corev1.Secret
+		wantAdd    bool
+		wantUpdate bool
+		wantDelete bool
+	}{
+		{
+			name: "no owner reference",
+			secret: corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{},
+			},
+		},
+		{
+			name: "owner reference without controller set to true",
+			secret: corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "some-namespace",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
+							Name:       "some-name",
+							Kind:       ownerGVK.Kind,
+							UID:        owner.GetUID(),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "owner reference without correct APIVersion",
+			secret: corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "some-namespace",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:       "some-name",
+							Kind:       ownerGVK.Kind,
+							Controller: boolPtr(true),
+							UID:        owner.GetUID(),
+						}},
+				},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "owner reference without correct Kind",
+			secret: corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "some-namespace",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
+							Name:       "some-name",
+							Kind:       "IncorrectKind",
+							Controller: boolPtr(true),
+							UID:        owner.GetUID(),
+						},
+					},
+				},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "correct owner reference",
+			secret: corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "some-namespace",
+					OwnerReferences: []metav1.OwnerReference{
+						*metav1.NewControllerRef(owner, ownerGVK),
+					},
+				},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "multiple owner references",
+			secret: corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "some-namespace",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Kind: "UnrelatedKind",
+						},
+						*metav1.NewControllerRef(owner, ownerGVK),
+					},
+				},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			secretInformer := kubeinformers.NewSharedInformerFactory(
+				kubernetesfake.NewSimpleClientset(),
+				0,
+			).Core().V1().Secrets()
+			withInformer := testutil.NewObservableWithInformerOption()
+			_ = NewSupervisorSecretsController(
+				owner,
+				labels,
+				nil, // kubeClient, not needed
+				secretInformer,
+				nil, // setCache, not needed
+				withInformer.WithInformer,
+			)
+
+			unrelated := corev1.Secret{}
+			filter := withInformer.GetFilterForInformer(secretInformer)
+			require.Equal(t, test.wantAdd, filter.Add(&test.secret))
+			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, &test.secret))
+			require.Equal(t, test.wantUpdate, filter.Update(&test.secret, &unrelated))
+			require.Equal(t, test.wantDelete, filter.Delete(&test.secret))
+		})
+	}
+}
+
+func TestSupervisorSecretsControllerSync(t *testing.T) {
 	const (
 		generatedSecretNamespace = "some-namespace"
 		generatedSecretName      = "some-name-abc123"
@@ -37,25 +190,8 @@ func TestController(t *testing.T) {
 			Resource: "secrets",
 		}
 
-		owner = &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "some-owner-name",
-				UID:  "some-owner-uid",
-			},
-		}
-		ownerGVK = schema.GroupVersionKind{
-			Group:   appsv1.SchemeGroupVersion.Group,
-			Version: appsv1.SchemeGroupVersion.Version,
-			Kind:    "Deployment",
-		}
-
 		generatedSymmetricKey      = []byte("some-neato-32-byte-generated-key")
 		otherGeneratedSymmetricKey = []byte("some-funio-32-byte-generated-key")
-
-		labels = map[string]string{
-			"some-label-key-1": "some-label-value-1",
-			"some-label-key-2": "some-label-value-2",
-		}
 
 		generatedSecret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -313,10 +449,17 @@ func TestController(t *testing.T) {
 			secrets := informers.Core().V1().Secrets()
 
 			var callbackSecret []byte
-			c := NewSupervisorSecretsController(owner, labels, apiClient, secrets, func(secret []byte) {
-				require.Nil(t, callbackSecret, "callback was called twice")
-				callbackSecret = secret
-			})
+			c := NewSupervisorSecretsController(
+				owner,
+				labels,
+				apiClient,
+				secrets,
+				func(secret []byte) {
+					require.Nil(t, callbackSecret, "callback was called twice")
+					callbackSecret = secret
+				},
+				testutil.NewObservableWithInformerOption().WithInformer,
+			)
 
 			// Must start informers before calling TestRunSynchronously().
 			informers.Start(ctx.Done())

@@ -171,7 +171,7 @@ func startControllers(
 					rand.Reader,
 					func(parent *configv1alpha1.OIDCProvider, child *corev1.Secret) {
 						plog.Debug("setting hmac secret", "issuer", parent.Spec.Issuer)
-						secretCache.SetTokenHMACKey(parent.Spec.Issuer, child.Data[symmetricsecrethelper.SecretDataKey])
+						secretCache.SetTokenHMACKey(parent.Spec.Issuer, child.Data[symmetricsecrethelper.SymmetricSecretDataKey])
 					},
 				),
 				kubeClient,
@@ -189,7 +189,7 @@ func startControllers(
 					rand.Reader,
 					func(parent *configv1alpha1.OIDCProvider, child *corev1.Secret) {
 						plog.Debug("setting state signature key", "issuer", parent.Spec.Issuer)
-						secretCache.SetStateEncoderHashKey(parent.Spec.Issuer, child.Data[symmetricsecrethelper.SecretDataKey])
+						secretCache.SetStateEncoderHashKey(parent.Spec.Issuer, child.Data[symmetricsecrethelper.SymmetricSecretDataKey])
 					},
 				),
 				kubeClient,
@@ -207,7 +207,7 @@ func startControllers(
 					rand.Reader,
 					func(parent *configv1alpha1.OIDCProvider, child *corev1.Secret) {
 						plog.Debug("setting state encryption key", "issuer", parent.Spec.Issuer)
-						secretCache.SetStateEncoderBlockKey(parent.Spec.Issuer, child.Data[symmetricsecrethelper.SecretDataKey])
+						secretCache.SetStateEncoderBlockKey(parent.Spec.Issuer, child.Data[symmetricsecrethelper.SymmetricSecretDataKey])
 					},
 				),
 				kubeClient,

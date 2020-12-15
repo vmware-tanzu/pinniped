@@ -133,6 +133,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantRedirectLocationRegexp        string
 		wantDownstreamGrantedScopes       []string
 		wantDownstreamIDTokenSubject      string
+		wantDownstreamIDTokenUsername     string
 		wantDownstreamIDTokenGroups       []string
 		wantDownstreamRequestedScopes     []string
 		wantDownstreamNonce               string
@@ -150,7 +151,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamUsername,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenUsername:     upstreamUsername,
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
@@ -169,6 +171,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
 			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenUsername:     upstreamIssuer + "?sub=" + upstreamSubject,
 			wantDownstreamIDTokenGroups:       nil,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
@@ -186,7 +189,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamSubject,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenUsername:     upstreamSubject,
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
@@ -312,7 +316,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyDownstreamState,
-			wantDownstreamIDTokenSubject:      upstreamUsername,
+			wantDownstreamIDTokenUsername:     upstreamUsername,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
 			wantDownstreamRequestedScopes:     []string{"profile", "email"},
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamNonce:               downstreamNonce,
@@ -333,7 +338,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid%20offline_access&state=` + happyDownstreamState,
-			wantDownstreamIDTokenSubject:      upstreamUsername,
+			wantDownstreamIDTokenUsername:     upstreamUsername,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
 			wantDownstreamRequestedScopes:     []string{"openid", "offline_access"},
 			wantDownstreamGrantedScopes:       []string{"openid", "offline_access"},
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
@@ -522,6 +528,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					authcodeDataAndSignature[1], // Authcode store key is authcode signature
 					test.wantDownstreamGrantedScopes,
 					test.wantDownstreamIDTokenSubject,
+					test.wantDownstreamIDTokenUsername,
 					test.wantDownstreamIDTokenGroups,
 					test.wantDownstreamRequestedScopes,
 				)
@@ -742,6 +749,7 @@ func validateAuthcodeStorage(
 	storeKey string,
 	wantDownstreamGrantedScopes []string,
 	wantDownstreamIDTokenSubject string,
+	wantDownstreamIDTokenUsername string,
 	wantDownstreamIDTokenGroups []string,
 	wantDownstreamRequestedScopes []string,
 ) (*fosite.Request, *openid.DefaultSession) {
@@ -778,13 +786,14 @@ func validateAuthcodeStorage(
 	// Now confirm the ID token claims.
 	actualClaims := storedSessionFromAuthcode.Claims
 
-	// Check the user's identity, which are put into the downstream ID token's subject and groups claims.
+	// Check the user's identity, which are put into the downstream ID token's subject, username and groups claims.
 	require.Equal(t, wantDownstreamIDTokenSubject, actualClaims.Subject)
+	require.Equal(t, wantDownstreamIDTokenUsername, actualClaims.Extra["username"])
 	if wantDownstreamIDTokenGroups != nil {
-		require.Len(t, actualClaims.Extra, 1)
+		require.Len(t, actualClaims.Extra, 2)
 		require.ElementsMatch(t, wantDownstreamIDTokenGroups, actualClaims.Extra["groups"])
 	} else {
-		require.Empty(t, actualClaims.Extra)
+		require.Len(t, actualClaims.Extra, 1)
 		require.NotContains(t, actualClaims.Extra, "groups")
 	}
 

@@ -23,23 +23,6 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-const (
-	// The name of the issuer claim specified in the OIDC spec.
-	idTokenIssuerClaim = "iss"
-
-	// The name of the subject claim specified in the OIDC spec.
-	idTokenSubjectClaim = "sub"
-
-	// idTokenUsernameClaim is a custom claim in the downstream ID token
-	// whose value is mapped from a claim in the upstream token.
-	// By default the value is the same as the downstream subject claim's.
-	idTokenUsernameClaim = "username"
-
-	// downstreamGroupsClaim is what we will use to encode the groups in the downstream OIDC ID token
-	// information.
-	downstreamGroupsClaim = "groups"
-)
-
 func NewHandler(
 	idpListGetter oidc.IDPListGetter,
 	oauthHelper fosite.OAuth2Provider,
@@ -199,7 +182,7 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 ) (string, string, error) {
 	// The spec says the "sub" claim is only unique per issuer,
 	// so we will prepend the issuer string to make it globally unique.
-	upstreamIssuer := idTokenClaims[idTokenIssuerClaim]
+	upstreamIssuer := idTokenClaims[oidc.IDTokenIssuerClaim]
 	if upstreamIssuer == "" {
 		plog.Warning(
 			"issuer claim in upstream ID token missing",
@@ -218,7 +201,7 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 		return "", "", httperr.New(http.StatusUnprocessableEntity, "issuer claim in upstream ID token has invalid format")
 	}
 
-	subjectAsInterface, ok := idTokenClaims[idTokenSubjectClaim]
+	subjectAsInterface, ok := idTokenClaims[oidc.IDTokenSubjectClaim]
 	if !ok {
 		plog.Warning(
 			"no subject claim in upstream ID token",
@@ -236,7 +219,7 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 		return "", "", httperr.New(http.StatusUnprocessableEntity, "subject claim in upstream ID token has invalid format")
 	}
 
-	subject := fmt.Sprintf("%s?%s=%s", upstreamIssuerAsString, idTokenSubjectClaim, upstreamSubject)
+	subject := fmt.Sprintf("%s?%s=%s", upstreamIssuerAsString, oidc.IDTokenSubjectClaim, upstreamSubject)
 
 	usernameClaim := upstreamIDPConfig.GetUsernameClaim()
 	if usernameClaim == "" {
@@ -312,10 +295,10 @@ func makeDownstreamSession(subject string, username string, groups []string) *op
 		},
 	}
 	openIDSession.Claims.Extra = map[string]interface{}{
-		idTokenUsernameClaim: username,
+		oidc.DownstreamUsernameClaim: username,
 	}
 	if groups != nil {
-		openIDSession.Claims.Extra[downstreamGroupsClaim] = groups
+		openIDSession.Claims.Extra[oidc.DownstreamGroupsClaim] = groups
 	}
 	return openIDSession
 }

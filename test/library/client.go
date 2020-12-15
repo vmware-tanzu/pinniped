@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -353,6 +354,31 @@ func CreateTestUpstreamOIDCProvider(t *testing.T, spec idpv1alpha1.UpstreamOIDCP
 		return result.Status.Phase == expectedPhase
 	}, 60*time.Second, 1*time.Second, "expected the UpstreamOIDCProvider to go into phase %s", expectedPhase)
 	return result
+}
+
+func CreateTestClusterRoleBinding(t *testing.T, subject rbacv1.Subject, roleRef rbacv1.RoleRef) *rbacv1.ClusterRoleBinding {
+	t.Helper()
+	client := NewClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Create the ClusterRoleBinding using GenerateName to get a random name.
+	clusterRoles := client.RbacV1().ClusterRoleBindings()
+
+	created, err := clusterRoles.Create(ctx, &rbacv1.ClusterRoleBinding{
+		ObjectMeta: testObjectMeta(t, "cluster-role"),
+		Subjects:   []rbacv1.Subject{subject},
+		RoleRef:    roleRef,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+	t.Logf("created test ClusterRoleBinding %s", created.Name)
+
+	t.Cleanup(func() {
+		t.Logf("cleaning up test ClusterRoleBinding %s", created.Name)
+		err := clusterRoles.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+	return created
 }
 
 func testObjectMeta(t *testing.T, baseName string) metav1.ObjectMeta {

@@ -7,7 +7,6 @@ require (
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/davecgh/go-spew v1.1.1
-	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/logr v0.2.1
 	github.com/go-logr/stdr v0.2.0
 	github.com/gofrs/flock v0.8.0

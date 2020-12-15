@@ -173,6 +173,13 @@ func chooseUpstreamIDP(idpListGetter oidc.IDPListGetter) (provider.UpstreamOIDCI
 			"No upstream providers are configured",
 		)
 	} else if len(allUpstreamIDPs) > 1 {
+		var upstreamIDPNames []string
+		for _, idp := range allUpstreamIDPs {
+			upstreamIDPNames = append(upstreamIDPNames, idp.GetName())
+		}
+
+		plog.Warning("Too many upstream providers are configured (found: %s)", upstreamIDPNames)
+
 		return nil, httperr.New(
 			http.StatusUnprocessableEntity,
 			"Too many upstream providers are configured (support for multiple upstreams is not yet implemented)",

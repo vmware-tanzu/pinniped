@@ -32,7 +32,7 @@ import (
 	"go.pinniped.dev/test/library/browsertest"
 )
 
-func TestCLIGetKubeconfig(t *testing.T) {
+func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
 	// Create a test webhook configuration to use with the CLI.
@@ -42,70 +42,81 @@ func TestCLIGetKubeconfig(t *testing.T) {
 	authenticator := library.CreateTestWebhookAuthenticator(ctx, t)
 
 	// Build pinniped CLI.
-	pinnipedExe := buildPinnipedCLI(t)
+	pinnipedExe := library.PinnipedCLIPath(t)
 
-	// Run pinniped CLI to get kubeconfig.
-	kubeConfigYAML := runPinnipedCLIGetKubeconfig(t, pinnipedExe, env.TestUser.Token, env.ConciergeNamespace, "webhook", authenticator.Name)
+	for _, tt := range []struct {
+		name         string
+		args         []string
+		expectStderr string
+	}{
+		{
+			name: "deprecated command",
+			args: []string{
+				"get-kubeconfig",
+				"--token", env.TestUser.Token,
+				"--pinniped-namespace", env.ConciergeNamespace,
+				"--authenticator-type", "webhook",
+				"--authenticator-name", authenticator.Name,
+			},
+			expectStderr: "Command \"get-kubeconfig\" is deprecated, Please use `pinniped get kubeconfig` instead.\n",
+		},
+		{
+			name: "newer command, but still using static parameters",
+			args: []string{
+				"get", "kubeconfig",
+				"--static-token", env.TestUser.Token,
+				"--concierge-namespace", env.ConciergeNamespace,
+				"--concierge-authenticator-type", "webhook",
+				"--concierge-authenticator-name", authenticator.Name,
+			},
+		},
+	} {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			stdout, stderr := runPinnipedCLI(t, pinnipedExe, tt.args...)
+			require.Equal(t, tt.expectStderr, stderr)
 
-	// In addition to the client-go based testing below, also try the kubeconfig
-	// with kubectl to validate that it works.
-	adminClient := library.NewClientset(t)
-	t.Run(
-		"access as user with kubectl",
-		library.AccessAsUserWithKubectlTest(ctx, adminClient, kubeConfigYAML, env.TestUser.ExpectedUsername, env.ConciergeNamespace),
-	)
-	for _, group := range env.TestUser.ExpectedGroups {
-		group := group
-		t.Run(
-			"access as group "+group+" with kubectl",
-			library.AccessAsGroupWithKubectlTest(ctx, adminClient, kubeConfigYAML, group, env.ConciergeNamespace),
-		)
-	}
+			// Even the deprecated command should now generate a kubeconfig with the new "pinniped login static" command.
+			restConfig := library.NewRestConfigFromKubeconfig(t, stdout)
+			require.NotNil(t, restConfig.ExecProvider)
+			require.Equal(t, []string{"login", "static"}, restConfig.ExecProvider.Args[:2])
 
-	// Create Kubernetes client with kubeconfig from pinniped CLI.
-	kubeClient := library.NewClientsetForKubeConfig(t, kubeConfigYAML)
+			// In addition to the client-go based testing below, also try the kubeconfig
+			// with kubectl to validate that it works.
+			adminClient := library.NewClientset(t)
+			t.Run(
+				"access as user with kubectl",
+				library.AccessAsUserWithKubectlTest(ctx, adminClient, stdout, env.TestUser.ExpectedUsername, env.ConciergeNamespace),
+			)
+			for _, group := range env.TestUser.ExpectedGroups {
+				group := group
+				t.Run(
+					"access as group "+group+" with kubectl",
+					library.AccessAsGroupWithKubectlTest(ctx, adminClient, stdout, group, env.ConciergeNamespace),
+				)
+			}
 
-	// Validate that we can auth to the API via our user.
-	t.Run("access as user with client-go", library.AccessAsUserTest(ctx, adminClient, env.TestUser.ExpectedUsername, kubeClient))
-	for _, group := range env.TestUser.ExpectedGroups {
-		group := group
-		t.Run("access as group "+group+" with client-go", library.AccessAsGroupTest(ctx, adminClient, group, kubeClient))
+			// Create Kubernetes client with kubeconfig from pinniped CLI.
+			kubeClient := library.NewClientsetForKubeConfig(t, stdout)
+
+			// Validate that we can auth to the API via our user.
+			t.Run("access as user with client-go", library.AccessAsUserTest(ctx, adminClient, env.TestUser.ExpectedUsername, kubeClient))
+			for _, group := range env.TestUser.ExpectedGroups {
+				group := group
+				t.Run("access as group "+group+" with client-go", library.AccessAsGroupTest(ctx, adminClient, group, kubeClient))
+			}
+		})
 	}
 }
 
-func buildPinnipedCLI(t *testing.T) string {
+func runPinnipedCLI(t *testing.T, pinnipedExe string, args ...string) (string, string) {
 	t.Helper()
-
-	pinnipedExeDir, err := ioutil.TempDir("", "pinniped-cli-test-*")
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, os.RemoveAll(pinnipedExeDir)) })
-
-	pinnipedExe := filepath.Join(pinnipedExeDir, "pinniped")
-	output, err := exec.Command(
-		"go",
-		"build",
-		"-o",
-		pinnipedExe,
-		"go.pinniped.dev/cmd/pinniped",
-	).CombinedOutput()
-	require.NoError(t, err, string(output))
-	return pinnipedExe
-}
-
-func runPinnipedCLIGetKubeconfig(t *testing.T, pinnipedExe, token, namespaceName, authenticatorType, authenticatorName string) string {
-	t.Helper()
-
-	output, err := exec.Command(
-		pinnipedExe,
-		"get-kubeconfig",
-		"--token", token,
-		"--pinniped-namespace", namespaceName,
-		"--authenticator-type", authenticatorType,
-		"--authenticator-name", authenticatorName,
-	).CombinedOutput()
-	require.NoError(t, err, string(output))
-
-	return string(output)
+	var stdout, stderr bytes.Buffer
+	cmd := exec.Command(pinnipedExe, args...)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	require.NoErrorf(t, cmd.Run(), "stderr:\n%s\n\nstdout:\n%s\n\n", stderr.String(), stdout.String())
+	return stdout.String(), stderr.String()
 }
 
 func TestCLILoginOIDC(t *testing.T) {
@@ -115,11 +126,10 @@ func TestCLILoginOIDC(t *testing.T) {
 	defer cancel()
 
 	// Build pinniped CLI.
-	t.Logf("building CLI binary")
-	pinnipedExe := buildPinnipedCLI(t)
+	pinnipedExe := library.PinnipedCLIPath(t)
 
 	// Run "pinniped login oidc" to get an ExecCredential struct with an OIDC ID token.
-	credOutput, sessionCachePath := runPinniedLoginOIDC(ctx, t, pinnipedExe)
+	credOutput, sessionCachePath := runPinnipedLoginOIDC(ctx, t, pinnipedExe)
 
 	// Assert some properties of the ExecCredential.
 	t.Logf("validating ExecCredential")
@@ -185,7 +195,7 @@ func TestCLILoginOIDC(t *testing.T) {
 	require.NotEqual(t, credOutput2.Status.Token, credOutput3.Status.Token)
 }
 
-func runPinniedLoginOIDC(
+func runPinnipedLoginOIDC(
 	ctx context.Context,
 	t *testing.T,
 	pinnipedExe string,
@@ -244,7 +254,7 @@ func runPinniedLoginOIDC(
 	credOutputChan := make(chan clientauthenticationv1beta1.ExecCredential)
 	spawnTestGoroutine(t, func() (err error) {
 		defer func() {
-			closeErr := stderr.Close()
+			closeErr := stdout.Close()
 			if closeErr == nil || errors.Is(closeErr, os.ErrClosed) {
 				return
 			}
@@ -342,12 +352,6 @@ func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, ses
 	}
 
 	// If there is a custom proxy, set it using standard environment variables.
-	if env.Proxy != "" {
-		cmd.Env = append(os.Environ(),
-			"http_proxy="+env.Proxy,
-			"https_proxy="+env.Proxy,
-			"no_proxy=127.0.0.1",
-		)
-	}
+	cmd.Env = append(os.Environ(), env.ProxyEnv()...)
 	return cmd
 }

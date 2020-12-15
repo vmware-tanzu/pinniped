@@ -309,6 +309,7 @@ func CreateTestSecret(t *testing.T, namespace string, baseName string, secretTyp
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
+		t.Logf("cleaning up test Secret %s/%s", created.Namespace, created.Name)
 		err := client.CoreV1().Secrets(namespace).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
 	})
@@ -321,7 +322,7 @@ func CreateClientCredsSecret(t *testing.T, clientID string, clientSecret string)
 	env := IntegrationEnv(t)
 	return CreateTestSecret(t,
 		env.SupervisorNamespace,
-		"test-client-creds",
+		"client-creds",
 		"secrets.pinniped.dev/oidc-client",
 		map[string]string{
 			"clientID":     clientID,
@@ -348,6 +349,7 @@ func CreateTestUpstreamOIDCProvider(t *testing.T, spec idpv1alpha1.UpstreamOIDCP
 
 	// Always clean this up after this point.
 	t.Cleanup(func() {
+		t.Logf("cleaning up test UpstreamOIDCProvider %s/%s", created.Namespace, created.Name)
 		err := upstreams.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
 	})

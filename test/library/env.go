@@ -59,6 +59,14 @@ type TestOIDCUpstream struct {
 	Password     string `json:"password"`
 }
 
+// ProxyEnv returns a set of environment variable strings (e.g., to combine with os.Environ()) which set up the configured test HTTP proxy.
+func (e *TestEnv) ProxyEnv() []string {
+	if e.Proxy == "" {
+		return nil
+	}
+	return []string{"http_proxy=" + e.Proxy, "https_proxy=" + e.Proxy, "no_proxy=127.0.0.1"}
+}
+
 // IntegrationEnv gets the integration test environment from OS environment variables. This
 // method also implies SkipUnlessIntegration().
 func IntegrationEnv(t *testing.T) *TestEnv {

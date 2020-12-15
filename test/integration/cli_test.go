@@ -372,12 +372,6 @@ func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, ses
 	}
 
 	// If there is a custom proxy, set it using standard environment variables.
-	if env.Proxy != "" {
-		cmd.Env = append(os.Environ(),
-			"http_proxy="+env.Proxy,
-			"https_proxy="+env.Proxy,
-			"no_proxy=127.0.0.1",
-		)
-	}
+	cmd.Env = append(os.Environ(), env.ProxyEnv()...)
 	return cmd
 }

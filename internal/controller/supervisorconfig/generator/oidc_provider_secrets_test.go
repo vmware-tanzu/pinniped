@@ -158,6 +158,7 @@ func TestOIDCProviderControllerFilterSecret(t *testing.T) {
 			_ = NewOIDCProviderSecretsController(
 				secretHelper,
 				nil, // kubeClient, not needed
+				nil, // pinnipedClient, not needed
 				secretInformer,
 				opcInformer,
 				withInformer.WithInformer,
@@ -216,6 +217,7 @@ func TestNewOIDCProviderSecretsControllerFilterOPC(t *testing.T) {
 			_ = NewOIDCProviderSecretsController(
 				secretHelper,
 				nil, // kubeClient, not needed
+				nil, // pinnipedClient, not needed
 				secretInformer,
 				opcInformer,
 				withInformer.WithInformer,
@@ -291,6 +293,9 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 		},
 	}
 
+	goodOPWithStatus := goodOP.DeepCopy()
+	goodOPWithStatus.Status.Secrets.TokenSigningKey.Name = goodSecret.Name
+
 	invalidSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
@@ -309,26 +314,24 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 		},
 	}
 
-	once := sync.Once{}
-
 	tests := []struct {
 		name              string
 		storage           func(**configv1alpha1.OIDCProvider, **corev1.Secret)
-		client            func(*kubernetesfake.Clientset)
+		client            func(*pinnipedfake.Clientset, *kubernetesfake.Clientset)
 		secretHelper      func(*mocksecrethelper.MockSecretHelper)
-		wantSecretActions []kubetesting.Action
 		wantOPActions     []kubetesting.Action
+		wantSecretActions []kubetesting.Action
 		wantError         string
 	}{
 		{
-			name: "OIDCProvider exists and secret does not exist",
+			name: "OIDCProvider does not exist and secret does not exist",
 			storage: func(op **configv1alpha1.OIDCProvider, s **corev1.Secret) {
 				*op = nil
 				*s = nil
 			},
 		},
 		{
-			name: "OIDCProvider exists and secret exists",
+			name: "OIDCProvider does not exist and secret exists",
 			storage: func(op **configv1alpha1.OIDCProvider, s **corev1.Secret) {
 				*op = nil
 			},
@@ -340,19 +343,15 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
-				secretHelper.EXPECT().Notify(goodOP, goodSecret).Times(1)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentOIDCProvider(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
+			},
+			wantOPActions: []kubetesting.Action{
+				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
+				kubetesting.NewUpdateAction(opGVR, namespace, goodOPWithStatus),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
 				kubetesting.NewCreateAction(secretGVR, namespace, goodSecret),
-			},
-		},
-		{
-			name: "OIDCProvider exists and valid secret exists",
-			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
-				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
-				secretHelper.EXPECT().IsValid(goodOP, goodSecret).Times(1).Return(true)
-				secretHelper.EXPECT().Notify(goodOP, goodSecret).Times(1)
 			},
 		},
 		{
@@ -363,7 +362,11 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
 				secretHelper.EXPECT().IsValid(goodOP, invalidSecret).Times(2).Return(false)
-				secretHelper.EXPECT().Notify(goodOP, goodSecret).Times(1)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentOIDCProvider(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
+			},
+			wantOPActions: []kubetesting.Action{
+				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
+				kubetesting.NewUpdateAction(opGVR, namespace, goodOPWithStatus),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
@@ -386,19 +389,23 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(otherSecret, nil)
 				secretHelper.EXPECT().IsValid(goodOP, goodSecret).Times(1).Return(false)
 				secretHelper.EXPECT().IsValid(goodOP, goodSecret).Times(1).Return(true)
-				secretHelper.EXPECT().Notify(goodOP, goodSecret).Times(1)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentOIDCProvider(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
+			},
+			wantOPActions: []kubetesting.Action{
+				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
+				kubetesting.NewUpdateAction(opGVR, namespace, goodOPWithStatus),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
 			},
 		},
 		{
-			name: "OIDCProvider exists and invalid secret exists and get fails",
+			name: "OIDCProvider exists and invalid secret exists and getting secret fails",
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
 				secretHelper.EXPECT().IsValid(goodOP, goodSecret).Times(1).Return(false)
 			},
-			client: func(c *kubernetesfake.Clientset) {
+			client: func(_ *pinnipedfake.Clientset, c *kubernetesfake.Clientset) {
 				c.PrependReactor("get", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New("some get error")
 				})
@@ -409,14 +416,14 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			wantError: fmt.Sprintf("failed to create or update secret: failed to get secret %s/%s: some get error", namespace, goodSecret.Name),
 		},
 		{
-			name: "OIDCProvider exists and secret does not exist and create fails",
+			name: "OIDCProvider exists and secret does not exist and creating secret fails",
 			storage: func(op **configv1alpha1.OIDCProvider, s **corev1.Secret) {
 				*s = nil
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
 			},
-			client: func(c *kubernetesfake.Clientset) {
+			client: func(_ *pinnipedfake.Clientset, c *kubernetesfake.Clientset) {
 				c.PrependReactor("create", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New("some create error")
 				})
@@ -428,12 +435,12 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			wantError: fmt.Sprintf("failed to create or update secret: failed to create secret %s/%s: some create error", namespace, goodSecret.Name),
 		},
 		{
-			name: "OIDCProvider exists and invalid secret exists and update fails",
+			name: "OIDCProvider exists and invalid secret exists and updating secret fails",
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
 				secretHelper.EXPECT().IsValid(goodOP, goodSecret).Times(2).Return(false)
 			},
-			client: func(c *kubernetesfake.Clientset) {
+			client: func(_ *pinnipedfake.Clientset, c *kubernetesfake.Clientset) {
 				c.PrependReactor("update", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New("some update error")
 				})
@@ -445,25 +452,83 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			wantError: "failed to create or update secret: some update error",
 		},
 		{
-			name: "OIDCProvider exists and invalid secret exists and update fails due to conflict",
+			name: "OIDCProvider exists and invalid secret exists and updating secret fails due to conflict",
 			storage: func(op **configv1alpha1.OIDCProvider, s **corev1.Secret) {
 				*s = invalidSecret.DeepCopy()
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
 				secretHelper.EXPECT().IsValid(goodOP, invalidSecret).Times(3).Return(false)
-				secretHelper.EXPECT().Notify(goodOP, goodSecret).Times(1)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentOIDCProvider(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
 			},
-			client: func(c *kubernetesfake.Clientset) {
+			client: func(_ *pinnipedfake.Clientset, c *kubernetesfake.Clientset) {
+				once := sync.Once{}
 				c.PrependReactor("update", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					var err error
 					once.Do(func() { err = k8serrors.NewConflict(secretGVR.GroupResource(), namespace, errors.New("some error")) })
 					return true, nil, err
 				})
 			},
+			wantOPActions: []kubetesting.Action{
+				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
+				kubetesting.NewUpdateAction(opGVR, namespace, goodOPWithStatus),
+			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
 				kubetesting.NewUpdateAction(secretGVR, namespace, goodSecret),
+				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
+				kubetesting.NewUpdateAction(secretGVR, namespace, goodSecret),
+			},
+		},
+		{
+			name: "OIDCProvider exists and invalid secret exists and getting OIDCProvider fails",
+			storage: func(op **configv1alpha1.OIDCProvider, s **corev1.Secret) {
+				*s = invalidSecret.DeepCopy()
+			},
+			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
+				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
+				secretHelper.EXPECT().IsValid(goodOP, invalidSecret).Times(2).Return(false)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentOIDCProvider(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
+			},
+			client: func(c *pinnipedfake.Clientset, _ *kubernetesfake.Clientset) {
+				c.PrependReactor("get", "oidcproviders", func(_ kubetesting.Action) (bool, runtime.Object, error) {
+					return true, nil, errors.New("some get error")
+				})
+			},
+			wantOPActions: []kubetesting.Action{
+				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
+			},
+			wantSecretActions: []kubetesting.Action{
+				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
+				kubetesting.NewUpdateAction(secretGVR, namespace, goodSecret),
+			},
+			wantError: fmt.Sprintf("failed to update oidcprovider: failed to get oidcprovider %s/%s: some get error", goodOPWithStatus.Namespace, goodOPWithStatus.Name),
+		},
+		{
+			name: "OIDCProvider exists and invalid secret exists and updating OIDCProvider fails due to conflict",
+			storage: func(op **configv1alpha1.OIDCProvider, s **corev1.Secret) {
+				*s = invalidSecret.DeepCopy()
+			},
+			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
+				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
+				secretHelper.EXPECT().IsValid(goodOP, invalidSecret).Times(2).Return(false)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentOIDCProvider(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
+			},
+			client: func(c *pinnipedfake.Clientset, _ *kubernetesfake.Clientset) {
+				once := sync.Once{}
+				c.PrependReactor("update", "oidcproviders", func(_ kubetesting.Action) (bool, runtime.Object, error) {
+					var err error
+					once.Do(func() { err = k8serrors.NewConflict(secretGVR.GroupResource(), namespace, errors.New("some error")) })
+					return true, nil, err
+				})
+			},
+			wantOPActions: []kubetesting.Action{
+				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
+				kubetesting.NewUpdateAction(opGVR, namespace, goodOPWithStatus),
+				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
+				kubetesting.NewUpdateAction(opGVR, namespace, goodOPWithStatus),
+			},
+			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
 				kubetesting.NewUpdateAction(secretGVR, namespace, goodSecret),
 			},
@@ -477,6 +542,7 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 			defer cancel()
 
+			pinnipedAPIClient := pinnipedfake.NewSimpleClientset()
 			pinnipedInformerClient := pinnipedfake.NewSimpleClientset()
 
 			kubeAPIClient := kubernetesfake.NewSimpleClientset()
@@ -488,6 +554,7 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 				test.storage(&op, &secret)
 			}
 			if op != nil {
+				require.NoError(t, pinnipedAPIClient.Tracker().Add(op))
 				require.NoError(t, pinnipedInformerClient.Tracker().Add(op))
 			}
 			if secret != nil {
@@ -496,7 +563,7 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			}
 
 			if test.client != nil {
-				test.client(kubeAPIClient)
+				test.client(pinnipedAPIClient, kubeAPIClient)
 			}
 
 			kubeInformers := kubeinformers.NewSharedInformerFactory(
@@ -519,6 +586,7 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			c := NewOIDCProviderSecretsController(
 				secretHelper,
 				kubeAPIClient,
+				pinnipedAPIClient,
 				kubeInformers.Core().V1().Secrets(),
 				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
 				controllerlib.WithInformer,
@@ -542,6 +610,10 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			}
 			require.NoError(t, err)
 
+			if test.wantOPActions == nil {
+				test.wantOPActions = []kubetesting.Action{}
+			}
+			require.Equal(t, test.wantOPActions, pinnipedAPIClient.Actions())
 			if test.wantSecretActions == nil {
 				test.wantSecretActions = []kubetesting.Action{}
 			}

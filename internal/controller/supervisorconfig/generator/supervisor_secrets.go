@@ -79,7 +79,7 @@ func (c *supervisorSecretsController) Sync(ctx controllerlib.Context) error {
 	secretNeedsUpdate := isNotFound || !isValid(secret)
 	if !secretNeedsUpdate {
 		plog.Debug("secret is up to date", "secret", klog.KObj(secret))
-		c.setCacheFunc(secret.Data[SymmetricSecretDataKey])
+		c.setCacheFunc(secret.Data[symmetricSecretDataKey])
 		return nil
 	}
 
@@ -97,7 +97,7 @@ func (c *supervisorSecretsController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("failed to create/update secret %s/%s: %w", newSecret.Namespace, newSecret.Name, err)
 	}
 
-	c.setCacheFunc(newSecret.Data[SymmetricSecretDataKey])
+	c.setCacheFunc(newSecret.Data[symmetricSecretDataKey])
 
 	return nil
 }

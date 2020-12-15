@@ -81,14 +81,16 @@ func (mr *MockSecretHelperMockRecorder) NamePrefix() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NamePrefix", reflect.TypeOf((*MockSecretHelper)(nil).NamePrefix))
 }
 
-// Notify mocks base method
-func (m *MockSecretHelper) Notify(arg0 *v1alpha1.OIDCProvider, arg1 *v1.Secret) {
+// ObserveActiveSecretAndUpdateParentOIDCProvider mocks base method
+func (m *MockSecretHelper) ObserveActiveSecretAndUpdateParentOIDCProvider(arg0 *v1alpha1.OIDCProvider, arg1 *v1.Secret) *v1alpha1.OIDCProvider {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Notify", arg0, arg1)
+	ret := m.ctrl.Call(m, "ObserveActiveSecretAndUpdateParentOIDCProvider", arg0, arg1)
+	ret0, _ := ret[0].(*v1alpha1.OIDCProvider)
+	return ret0
 }
 
-// Notify indicates an expected call of Notify
-func (mr *MockSecretHelperMockRecorder) Notify(arg0, arg1 interface{}) *gomock.Call {
+// ObserveActiveSecretAndUpdateParentOIDCProvider indicates an expected call of ObserveActiveSecretAndUpdateParentOIDCProvider
+func (mr *MockSecretHelperMockRecorder) ObserveActiveSecretAndUpdateParentOIDCProvider(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Notify", reflect.TypeOf((*MockSecretHelper)(nil).Notify), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ObserveActiveSecretAndUpdateParentOIDCProvider", reflect.TypeOf((*MockSecretHelper)(nil).ObserveActiveSecretAndUpdateParentOIDCProvider), arg0, arg1)
 }

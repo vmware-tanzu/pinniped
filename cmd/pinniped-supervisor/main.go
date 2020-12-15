@@ -167,12 +167,14 @@ func startControllers(
 					"pinniped-oidc-provider-hmac-key-",
 					cfg.Labels,
 					rand.Reader,
+					generator.SecretUsageTokenSigningKey,
 					func(oidcProviderIssuer string, symmetricKey []byte) {
 						plog.Debug("setting hmac secret", "issuer", oidcProviderIssuer)
 						secretCache.SetTokenHMACKey(oidcProviderIssuer, symmetricKey)
 					},
 				),
 				kubeClient,
+				pinnipedClient,
 				secretInformer,
 				opInformer,
 				controllerlib.WithInformer,
@@ -185,12 +187,14 @@ func startControllers(
 					"pinniped-oidc-provider-upstream-state-signature-key-",
 					cfg.Labels,
 					rand.Reader,
+					generator.SecretUsageStateSigningKey,
 					func(oidcProviderIssuer string, symmetricKey []byte) {
 						plog.Debug("setting state signature key", "issuer", oidcProviderIssuer)
 						secretCache.SetStateEncoderHashKey(oidcProviderIssuer, symmetricKey)
 					},
 				),
 				kubeClient,
+				pinnipedClient,
 				secretInformer,
 				opInformer,
 				controllerlib.WithInformer,
@@ -203,12 +207,14 @@ func startControllers(
 					"pinniped-oidc-provider-upstream-state-encryption-key-",
 					cfg.Labels,
 					rand.Reader,
+					generator.SecretUsageStateEncryptionKey,
 					func(oidcProviderIssuer string, symmetricKey []byte) {
 						plog.Debug("setting state encryption key", "issuer", oidcProviderIssuer)
 						secretCache.SetStateEncoderBlockKey(oidcProviderIssuer, symmetricKey)
 					},
 				),
 				kubeClient,
+				pinnipedClient,
 				secretInformer,
 				opInformer,
 				controllerlib.WithInformer,

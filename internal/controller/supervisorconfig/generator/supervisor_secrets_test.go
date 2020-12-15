@@ -194,8 +194,8 @@ func TestSupervisorSecretsControllerInitialEvent(t *testing.T) {
 		initialEventOption.WithInitialEvent,
 	)
 	require.Equal(t, &controllerlib.Key{
-		owner.Namespace,
-		owner.Name + "-key",
+		Namespace: owner.Namespace,
+		Name:      owner.Name + "-key",
 	}, initialEventOption.GetInitialEventKey())
 }
 

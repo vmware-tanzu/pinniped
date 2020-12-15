@@ -27,11 +27,11 @@ func generateSymmetricKey() ([]byte, error) {
 }
 
 func isValid(secret *corev1.Secret) bool {
-	if secret.Type != SymmetricSecretType {
+	if secret.Type != symmetricSecretType {
 		return false
 	}
 
-	data, ok := secret.Data[SymmetricSecretDataKey]
+	data, ok := secret.Data[symmetricSecretDataKey]
 	if !ok {
 		return false
 	}
@@ -49,7 +49,7 @@ func secretDataFunc() (map[string][]byte, error) {
 	}
 
 	return map[string][]byte{
-		SymmetricSecretDataKey: symmetricKey,
+		symmetricSecretDataKey: symmetricKey,
 	}, nil
 }
 
@@ -73,7 +73,7 @@ func generateSecret(namespace, name string, labels map[string]string, secretData
 			},
 			Labels: labels,
 		},
-		Type: SymmetricSecretType,
+		Type: symmetricSecretType,
 		Data: secretData,
 	}, nil
 }

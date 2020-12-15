@@ -169,7 +169,7 @@ func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
 
 	// Ensure that the OPC points to the secret.
 	newOPC := opc.DeepCopy()
-	newOPC.Status.JWKSSecret.Name = secret.Name
+	newOPC.Status.Secrets.JWKS.Name = secret.Name
 	if err := c.updateOPC(ctx.Context, newOPC); err != nil {
 		return fmt.Errorf("cannot update opc: %w", err)
 	}
@@ -179,13 +179,13 @@ func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
 }
 
 func (c *jwksWriterController) secretNeedsUpdate(opc *configv1alpha1.OIDCProvider) (bool, error) {
-	if opc.Status.JWKSSecret.Name == "" {
+	if opc.Status.Secrets.JWKS.Name == "" {
 		// If the OPC says it doesn't have a secret associated with it, then let's create one.
 		return true, nil
 	}
 
 	// This OPC says it has a secret associated with it. Let's try to get it from the cache.
-	secret, err := c.secretInformer.Lister().Secrets(opc.Namespace).Get(opc.Status.JWKSSecret.Name)
+	secret, err := c.secretInformer.Lister().Secrets(opc.Namespace).Get(opc.Status.Secrets.JWKS.Name)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return false, fmt.Errorf("cannot get secret: %w", err)
@@ -301,12 +301,12 @@ func (c *jwksWriterController) updateOPC(
 			return fmt.Errorf("cannot get opc: %w", err)
 		}
 
-		if newOPC.Status.JWKSSecret.Name == oldOPC.Status.JWKSSecret.Name {
+		if newOPC.Status.Secrets.JWKS.Name == oldOPC.Status.Secrets.JWKS.Name {
 			// If the existing OPC is up to date, we don't need to update it.
 			return nil
 		}
 
-		oldOPC.Status.JWKSSecret.Name = newOPC.Status.JWKSSecret.Name
+		oldOPC.Status.Secrets.JWKS.Name = newOPC.Status.Secrets.JWKS.Name
 		_, err = opcClient.Update(ctx, oldOPC, metav1.UpdateOptions{})
 		return err
 	})

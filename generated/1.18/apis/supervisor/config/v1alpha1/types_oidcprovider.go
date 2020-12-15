@@ -59,6 +59,30 @@ type OIDCProviderSpec struct {
 	TLS *OIDCProviderTLSSpec `json:"tls,omitempty"`
 }
 
+// OIDCProviderSecrets holds information about this OIDC Provider's secrets.
+type OIDCProviderSecrets struct {
+	// JWKS holds the name of the corev1.Secret in which this OIDC Provider's signing/verification keys are
+	// stored. If it is empty, then the signing/verification keys are either unknown or they don't
+	// exist.
+	// +optional
+	JWKS corev1.LocalObjectReference `json:"jwks,omitempty"`
+
+	// TokenSigningKey holds the name of the corev1.Secret in which this OIDC Provider's key for
+	// signing tokens is stored.
+	// +optional
+	TokenSigningKey corev1.LocalObjectReference `json:"tokenSigningKey,omitempty"`
+
+	// StateSigningKey holds the name of the corev1.Secret in which this OIDC Provider's key for
+	// signing state parameters is stored.
+	// +optional
+	StateSigningKey corev1.LocalObjectReference `json:"stateSigningKey,omitempty"`
+
+	// StateSigningKey holds the name of the corev1.Secret in which this OIDC Provider's key for
+	// encrypting state parameters is stored.
+	// +optional
+	StateEncryptionKey corev1.LocalObjectReference `json:"stateEncryptionKey,omitempty"`
+}
+
 // OIDCProviderStatus is a struct that describes the actual state of an OIDC Provider.
 type OIDCProviderStatus struct {
 	// Status holds an enum that describes the state of this OIDC Provider. Note that this Status can
@@ -76,11 +100,9 @@ type OIDCProviderStatus struct {
 	// +optional
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 
-	// JWKSSecret holds the name of the secret in which this OIDC Provider's signing/verification keys
-	// are stored. If it is empty, then the signing/verification keys are either unknown or they don't
-	// exist.
+	// Secrets contains information about this OIDC Provider's secrets.
 	// +optional
-	JWKSSecret corev1.LocalObjectReference `json:"jwksSecret,omitempty"`
+	Secrets OIDCProviderSecrets `json:"secrets,omitempty"`
 }
 
 // OIDCProvider describes the configuration of an OIDC provider.

@@ -6,6 +6,7 @@ package generator
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -16,6 +17,7 @@ import (
 	"k8s.io/klog/v2"
 
 	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.19/client/supervisor/clientset/versioned"
 	configinformers "go.pinniped.dev/generated/1.19/client/supervisor/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
@@ -25,6 +27,7 @@ import (
 type oidcProviderSecretsController struct {
 	secretHelper   SecretHelper
 	kubeClient     kubernetes.Interface
+	pinnipedClient pinnipedclientset.Interface
 	opcInformer    configinformers.OIDCProviderInformer
 	secretInformer corev1informers.SecretInformer
 }
@@ -35,6 +38,7 @@ type oidcProviderSecretsController struct {
 func NewOIDCProviderSecretsController(
 	secretHelper SecretHelper,
 	kubeClient kubernetes.Interface,
+	pinnipedClient pinnipedclientset.Interface,
 	secretInformer corev1informers.SecretInformer,
 	opcInformer configinformers.OIDCProviderInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
@@ -45,6 +49,7 @@ func NewOIDCProviderSecretsController(
 			Syncer: &oidcProviderSecretsController{
 				secretHelper:   secretHelper,
 				kubeClient:     kubeClient,
+				pinnipedClient: pinnipedClient,
 				secretInformer: secretInformer,
 				opcInformer:    opcInformer,
 			},
@@ -116,7 +121,13 @@ func (c *oidcProviderSecretsController) Sync(ctx controllerlib.Context) error {
 			"secret",
 			klog.KObj(existingSecret),
 		)
-		c.secretHelper.Notify(op, existingSecret)
+
+		op = c.secretHelper.ObserveActiveSecretAndUpdateParentOIDCProvider(op, existingSecret)
+		if err := c.updateOIDCProvider(ctx.Context, op); err != nil {
+			return fmt.Errorf("failed to update oidcprovider: %w", err)
+		}
+		plog.Debug("updated oidcprovider", "oidcprovider", klog.KObj(op), "secret", klog.KObj(newSecret))
+
 		return nil
 	}
 
@@ -127,7 +138,11 @@ func (c *oidcProviderSecretsController) Sync(ctx controllerlib.Context) error {
 	}
 	plog.Debug("created/updated secret", "oidcprovider", klog.KObj(op), "secret", klog.KObj(newSecret))
 
-	c.secretHelper.Notify(op, newSecret)
+	op = c.secretHelper.ObserveActiveSecretAndUpdateParentOIDCProvider(op, newSecret)
+	if err := c.updateOIDCProvider(ctx.Context, op); err != nil {
+		return fmt.Errorf("failed to update oidcprovider: %w", err)
+	}
+	plog.Debug("updated oidcprovider", "oidcprovider", klog.KObj(op), "secret", klog.KObj(newSecret))
 
 	return nil
 }
@@ -192,6 +207,27 @@ func (c *oidcProviderSecretsController) createOrUpdateSecret(
 		oldSecret.Data = (*newSecret).Data
 		*newSecret = oldSecret
 		_, err = secretClient.Update(ctx, oldSecret, metav1.UpdateOptions{})
+		return err
+	})
+}
+
+func (c *oidcProviderSecretsController) updateOIDCProvider(
+	ctx context.Context,
+	newOP *configv1alpha1.OIDCProvider,
+) error {
+	opcClient := c.pinnipedClient.ConfigV1alpha1().OIDCProviders(newOP.Namespace)
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		oldOP, err := opcClient.Get(ctx, newOP.Name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to get oidcprovider %s/%s: %w", newOP.Namespace, newOP.Name, err)
+		}
+
+		if reflect.DeepEqual(newOP.Status.Secrets, oldOP.Status.Secrets) {
+			return nil
+		}
+
+		oldOP.Status.Secrets = newOP.Status.Secrets
+		_, err = opcClient.Update(ctx, oldOP, metav1.UpdateOptions{})
 		return err
 	})
 }

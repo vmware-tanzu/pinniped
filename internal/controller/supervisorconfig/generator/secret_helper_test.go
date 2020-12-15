@@ -17,57 +17,98 @@ import (
 
 const keyWith32Bytes = "0123456789abcdef0123456789abcdef"
 
-func TestSymmetricSecretHHelper(t *testing.T) {
-	labels := map[string]string{
-		"some-label-key-1": "some-label-value-1",
-		"some-label-key-2": "some-label-value-2",
-	}
-	randSource := strings.NewReader(keyWith32Bytes)
-	// var notifyParent *configv1alpha1.OIDCProvider
-	// var notifyChild *corev1.Secret
-	var oidcProviderIssuerValue string
-	var symmetricKeyValue []byte
-	h := NewSymmetricSecretHelper("some-name-prefix-", labels, randSource, func(oidcProviderIssuer string, symmetricKey []byte) {
-		require.True(t, oidcProviderIssuer == "" && symmetricKeyValue == nil, "expected notify func not to have been called yet")
-		oidcProviderIssuerValue = oidcProviderIssuer
-		symmetricKeyValue = symmetricKey
-	})
+func TestSymmetricSecretHelper(t *testing.T) {
+	t.Parallel()
 
-	parent := &configv1alpha1.OIDCProvider{
-		ObjectMeta: metav1.ObjectMeta{
-			UID:       "some-uid",
-			Namespace: "some-namespace",
-		},
-	}
-	child, err := h.Generate(parent)
-	require.NoError(t, err)
-	require.Equal(t, child, &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "some-name-prefix-some-uid",
-			Namespace: "some-namespace",
-			Labels:    labels,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(parent, schema.GroupVersionKind{
-					Group:   configv1alpha1.SchemeGroupVersion.Group,
-					Version: configv1alpha1.SchemeGroupVersion.Version,
-					Kind:    "OIDCProvider",
-				}),
+	tests := []struct {
+		name                     string
+		secretUsage              SecretUsage
+		wantSetOIDCProviderField func(*configv1alpha1.OIDCProvider) string
+	}{
+		{
+			name:        "token signing key",
+			secretUsage: SecretUsageTokenSigningKey,
+			wantSetOIDCProviderField: func(op *configv1alpha1.OIDCProvider) string {
+				return op.Status.Secrets.TokenSigningKey.Name
 			},
 		},
-		Type: "secrets.pinniped.dev/symmetric",
-		Data: map[string][]byte{
-			"key": []byte(keyWith32Bytes),
+		{
+			name:        "state signing key",
+			secretUsage: SecretUsageStateSigningKey,
+			wantSetOIDCProviderField: func(op *configv1alpha1.OIDCProvider) string {
+				return op.Status.Secrets.StateSigningKey.Name
+			},
 		},
-	})
+		{
+			name:        "state encryption key",
+			secretUsage: SecretUsageStateEncryptionKey,
+			wantSetOIDCProviderField: func(op *configv1alpha1.OIDCProvider) string {
+				return op.Status.Secrets.StateEncryptionKey.Name
+			},
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-	require.True(t, h.IsValid(parent, child))
+			labels := map[string]string{
+				"some-label-key-1": "some-label-value-1",
+				"some-label-key-2": "some-label-value-2",
+			}
+			randSource := strings.NewReader(keyWith32Bytes)
+			var oidcProviderIssuerValue string
+			var symmetricKeyValue []byte
+			h := NewSymmetricSecretHelper(
+				"some-name-prefix-",
+				labels,
+				randSource,
+				test.secretUsage,
+				func(oidcProviderIssuer string, symmetricKey []byte) {
+					require.True(t, oidcProviderIssuer == "" && symmetricKeyValue == nil, "expected notify func not to have been called yet")
+					oidcProviderIssuerValue = oidcProviderIssuer
+					symmetricKeyValue = symmetricKey
+				},
+			)
 
-	h.Notify(parent, child)
-	require.Equal(t, parent.Spec.Issuer, oidcProviderIssuerValue)
-	require.Equal(t, child.Data[SymmetricSecretDataKey], symmetricKeyValue)
+			parent := &configv1alpha1.OIDCProvider{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "some-uid",
+					Namespace: "some-namespace",
+				},
+			}
+			child, err := h.Generate(parent)
+			require.NoError(t, err)
+			require.Equal(t, child, &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "some-name-prefix-some-uid",
+					Namespace: "some-namespace",
+					Labels:    labels,
+					OwnerReferences: []metav1.OwnerReference{
+						*metav1.NewControllerRef(parent, schema.GroupVersionKind{
+							Group:   configv1alpha1.SchemeGroupVersion.Group,
+							Version: configv1alpha1.SchemeGroupVersion.Version,
+							Kind:    "OIDCProvider",
+						}),
+					},
+				},
+				Type: "secrets.pinniped.dev/symmetric",
+				Data: map[string][]byte{
+					"key": []byte(keyWith32Bytes),
+				},
+			})
+
+			require.True(t, h.IsValid(parent, child))
+
+			h.ObserveActiveSecretAndUpdateParentOIDCProvider(parent, child)
+			require.Equal(t, parent.Spec.Issuer, oidcProviderIssuerValue)
+			require.Equal(t, child.Name, test.wantSetOIDCProviderField(parent))
+			require.Equal(t, child.Data["key"], symmetricKeyValue)
+		})
+	}
 }
 
-func TestSymmetricSecretHHelperIsValid(t *testing.T) {
+func TestSymmetricSecretHelperIsValid(t *testing.T) {
 	tests := []struct {
 		name   string
 		child  func(*corev1.Secret)
@@ -117,7 +158,7 @@ func TestSymmetricSecretHHelperIsValid(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			h := NewSymmetricSecretHelper("none of these args matter", nil, nil, nil)
+			h := NewSymmetricSecretHelper("none of these args matter", nil, nil, SecretUsageTokenSigningKey, nil)
 
 			parent := &configv1alpha1.OIDCProvider{
 				ObjectMeta: metav1.ObjectMeta{

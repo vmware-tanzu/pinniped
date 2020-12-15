@@ -45,28 +45,28 @@ func TestSupervisorSecrets(t *testing.T) {
 		{
 			name: "jwks",
 			secretName: func(op *configv1alpha1.OIDCProvider) string {
-				return op.Status.JWKSSecret.Name
+				return op.Status.Secrets.JWKS.Name
 			},
 			ensureValid: ensureValidJWKS,
 		},
 		{
 			name: "hmac signing secret",
 			secretName: func(op *configv1alpha1.OIDCProvider) string {
-				return "pinniped-oidc-provider-hmac-key-" + string(op.UID)
+				return op.Status.Secrets.TokenSigningKey.Name
 			},
 			ensureValid: ensureValidSymmetricKey,
 		},
 		{
 			name: "state signature secret",
 			secretName: func(op *configv1alpha1.OIDCProvider) string {
-				return "pinniped-oidc-provider-upstream-state-signature-key-" + string(op.UID)
+				return op.Status.Secrets.StateSigningKey.Name
 			},
 			ensureValid: ensureValidSymmetricKey,
 		},
 		{
 			name: "state encryption secret",
 			secretName: func(op *configv1alpha1.OIDCProvider) string {
-				return "pinniped-oidc-provider-upstream-state-encryption-key-" + string(op.UID)
+				return op.Status.Secrets.StateEncryptionKey.Name
 			},
 			ensureValid: ensureValidSymmetricKey,
 		},

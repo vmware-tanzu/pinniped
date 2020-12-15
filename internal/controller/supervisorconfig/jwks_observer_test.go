@@ -202,7 +202,7 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 						Namespace: installedInNamespace,
 					},
 					Spec:   v1alpha1.OIDCProviderSpec{Issuer: "https://no-secret-issuer1.com"},
-					Status: v1alpha1.OIDCProviderStatus{}, // no JWKSSecret field
+					Status: v1alpha1.OIDCProviderStatus{}, // no Secrets.JWKS field
 				}
 				oidcProviderWithoutSecret2 := &v1alpha1.OIDCProvider{
 					ObjectMeta: metav1.ObjectMeta{
@@ -219,7 +219,9 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 					},
 					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://bad-secret-issuer.com"},
 					Status: v1alpha1.OIDCProviderStatus{
-						JWKSSecret: corev1.LocalObjectReference{Name: "bad-secret-name"},
+						Secrets: v1alpha1.OIDCProviderSecrets{
+							JWKS: corev1.LocalObjectReference{Name: "bad-secret-name"},
+						},
 					},
 				}
 				oidcProviderWithBadJWKSSecret := &v1alpha1.OIDCProvider{
@@ -229,7 +231,9 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 					},
 					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://bad-jwks-secret-issuer.com"},
 					Status: v1alpha1.OIDCProviderStatus{
-						JWKSSecret: corev1.LocalObjectReference{Name: "bad-jwks-secret-name"},
+						Secrets: v1alpha1.OIDCProviderSecrets{
+							JWKS: corev1.LocalObjectReference{Name: "bad-jwks-secret-name"},
+						},
 					},
 				}
 				oidcProviderWithBadActiveJWKSecret := &v1alpha1.OIDCProvider{
@@ -239,7 +243,9 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 					},
 					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://bad-active-jwk-secret-issuer.com"},
 					Status: v1alpha1.OIDCProviderStatus{
-						JWKSSecret: corev1.LocalObjectReference{Name: "bad-active-jwk-secret-name"},
+						Secrets: v1alpha1.OIDCProviderSecrets{
+							JWKS: corev1.LocalObjectReference{Name: "bad-active-jwk-secret-name"},
+						},
 					},
 				}
 				oidcProviderWithGoodSecret1 := &v1alpha1.OIDCProvider{
@@ -249,7 +255,9 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 					},
 					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://issuer-with-good-secret1.com"},
 					Status: v1alpha1.OIDCProviderStatus{
-						JWKSSecret: corev1.LocalObjectReference{Name: "good-jwks-secret-name1"},
+						Secrets: v1alpha1.OIDCProviderSecrets{
+							JWKS: corev1.LocalObjectReference{Name: "good-jwks-secret-name1"},
+						},
 					},
 				}
 				oidcProviderWithGoodSecret2 := &v1alpha1.OIDCProvider{
@@ -259,7 +267,9 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 					},
 					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://issuer-with-good-secret2.com"},
 					Status: v1alpha1.OIDCProviderStatus{
-						JWKSSecret: corev1.LocalObjectReference{Name: "good-jwks-secret-name2"},
+						Secrets: v1alpha1.OIDCProviderSecrets{
+							JWKS: corev1.LocalObjectReference{Name: "good-jwks-secret-name2"},
+						},
 					},
 				}
 				expectedJWK1 = string(readJWKJSON(t, "testdata/public-jwk.json"))

@@ -81,17 +81,6 @@ spec:
           status:
             description: Status of the OIDC provider.
             properties:
-              jwksSecret:
-                description: JWKSSecret holds the name of the secret in which this
-                  OIDC Provider's signing/verification keys are stored. If it is empty,
-                  then the signing/verification keys are either unknown or they don't
-                  exist.
-                properties:
-                  name:
-                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                      TODO: Add other useful fields. apiVersion, kind, uid?'
-                    type: string
-                type: object
               lastUpdateTime:
                 description: LastUpdateTime holds the time at which the Status was
                   last updated. It is a pointer to get around some undesirable behavior
@@ -101,6 +90,51 @@ spec:
               message:
                 description: Message provides human-readable details about the Status.
                 type: string
+              secrets:
+                description: Secrets contains information about this OIDC Provider's
+                  secrets.
+                properties:
+                  jwks:
+                    description: JWKS holds the name of the corev1.Secret in which
+                      this OIDC Provider's signing/verification keys are stored. If
+                      it is empty, then the signing/verification keys are either unknown
+                      or they don't exist.
+                    properties:
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                    type: object
+                  stateEncryptionKey:
+                    description: StateSigningKey holds the name of the corev1.Secret
+                      in which this OIDC Provider's key for encrypting state parameters
+                      is stored.
+                    properties:
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                    type: object
+                  stateSigningKey:
+                    description: StateSigningKey holds the name of the corev1.Secret
+                      in which this OIDC Provider's key for signing state parameters
+                      is stored.
+                    properties:
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                    type: object
+                  tokenSigningKey:
+                    description: TokenSigningKey holds the name of the corev1.Secret
+                      in which this OIDC Provider's key for signing tokens is stored.
+                    properties:
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                    type: object
+                type: object
               status:
                 description: Status holds an enum that describes the state of this
                   OIDC Provider. Note that this Status can represent success or failure.

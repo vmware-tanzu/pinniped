@@ -65,7 +65,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 				return library.CreateTestJWTAuthenticator(ctx, t)
 			},
 			token: func(t *testing.T) (string, string, []string) {
-				pinnipedExe := buildPinnipedCLI(t)
+				pinnipedExe := library.PinnipedCLIPath(t)
 				credOutput, _ := runPinniedLoginOIDC(ctx, t, pinnipedExe)
 				token := credOutput.Status.Token
 

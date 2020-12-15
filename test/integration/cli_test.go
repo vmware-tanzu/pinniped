@@ -42,7 +42,7 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 	authenticator := library.CreateTestWebhookAuthenticator(ctx, t)
 
 	// Build pinniped CLI.
-	pinnipedExe := buildPinnipedCLI(t)
+	pinnipedExe := library.PinnipedCLIPath(t)
 
 	for _, tt := range []struct {
 		name         string
@@ -109,25 +109,6 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 	}
 }
 
-func buildPinnipedCLI(t *testing.T) string {
-	t.Helper()
-
-	pinnipedExeDir, err := ioutil.TempDir("", "pinniped-cli-test-*")
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, os.RemoveAll(pinnipedExeDir)) })
-
-	pinnipedExe := filepath.Join(pinnipedExeDir, "pinniped")
-	output, err := exec.Command(
-		"go",
-		"build",
-		"-o",
-		pinnipedExe,
-		"go.pinniped.dev/cmd/pinniped",
-	).CombinedOutput()
-	require.NoError(t, err, string(output))
-	return pinnipedExe
-}
-
 func runPinnipedCLI(t *testing.T, pinnipedExe string, args ...string) (string, string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
@@ -145,8 +126,7 @@ func TestCLILoginOIDC(t *testing.T) {
 	defer cancel()
 
 	// Build pinniped CLI.
-	t.Logf("building CLI binary")
-	pinnipedExe := buildPinnipedCLI(t)
+	pinnipedExe := library.PinnipedCLIPath(t)
 
 	// Run "pinniped login oidc" to get an ExecCredential struct with an OIDC ID token.
 	credOutput, sessionCachePath := runPinniedLoginOIDC(ctx, t, pinnipedExe)

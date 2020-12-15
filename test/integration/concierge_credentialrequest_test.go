@@ -47,26 +47,22 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		authenticator func(t *testing.T) corev1.TypedLocalObjectReference
+		authenticator func(context.Context, *testing.T) corev1.TypedLocalObjectReference
 		token         func(t *testing.T) (token string, username string, groups []string)
 	}{
 		{
-			name: "webhook",
-			authenticator: func(t *testing.T) corev1.TypedLocalObjectReference {
-				return library.CreateTestWebhookAuthenticator(ctx, t)
-			},
+			name:          "webhook",
+			authenticator: library.CreateTestWebhookAuthenticator,
 			token: func(t *testing.T) (string, string, []string) {
 				return library.IntegrationEnv(t).TestUser.Token, env.TestUser.ExpectedUsername, env.TestUser.ExpectedGroups
 			},
 		},
 		{
-			name: "jwt authenticator",
-			authenticator: func(t *testing.T) corev1.TypedLocalObjectReference {
-				return library.CreateTestJWTAuthenticator(ctx, t)
-			},
+			name:          "jwt authenticator",
+			authenticator: library.CreateTestJWTAuthenticator,
 			token: func(t *testing.T) (string, string, []string) {
 				pinnipedExe := library.PinnipedCLIPath(t)
-				credOutput, _ := runPinniedLoginOIDC(ctx, t, pinnipedExe)
+				credOutput, _ := runPinnipedLoginOIDC(ctx, t, pinnipedExe)
 				token := credOutput.Status.Token
 
 				// By default, the JWTAuthenticator expects the username to be in the "sub" claim and the
@@ -80,7 +76,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			authenticator := test.authenticator(t)
+			authenticator := test.authenticator(ctx, t)
 			token, username, groups := test.token(t)
 
 			var response *loginv1alpha1.TokenCredentialRequest

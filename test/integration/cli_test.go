@@ -129,7 +129,7 @@ func TestCLILoginOIDC(t *testing.T) {
 	pinnipedExe := library.PinnipedCLIPath(t)
 
 	// Run "pinniped login oidc" to get an ExecCredential struct with an OIDC ID token.
-	credOutput, sessionCachePath := runPinniedLoginOIDC(ctx, t, pinnipedExe)
+	credOutput, sessionCachePath := runPinnipedLoginOIDC(ctx, t, pinnipedExe)
 
 	// Assert some properties of the ExecCredential.
 	t.Logf("validating ExecCredential")
@@ -195,7 +195,7 @@ func TestCLILoginOIDC(t *testing.T) {
 	require.NotEqual(t, credOutput2.Status.Token, credOutput3.Status.Token)
 }
 
-func runPinniedLoginOIDC(
+func runPinnipedLoginOIDC(
 	ctx context.Context,
 	t *testing.T,
 	pinnipedExe string,

@@ -43,6 +43,7 @@ func NewSupervisorSecretsController(
 	secretInformer corev1informers.SecretInformer,
 	setCacheFunc func(secret []byte),
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
+	initialEventFunc pinnipedcontroller.WithInitialEventOptionFunc,
 ) controllerlib.Controller {
 	c := supervisorSecretsController{
 		owner:          owner,
@@ -60,7 +61,7 @@ func NewSupervisorSecretsController(
 			}, nil),
 			controllerlib.InformerOption{},
 		),
-		controllerlib.WithInitialEvent(controllerlib.Key{
+		initialEventFunc(controllerlib.Key{
 			Namespace: owner.Namespace,
 			Name:      owner.Name + "-key",
 		}),

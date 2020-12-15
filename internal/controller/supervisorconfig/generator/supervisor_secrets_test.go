@@ -21,7 +21,6 @@ import (
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	kubetesting "k8s.io/client-go/testing"
 
-	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -29,8 +28,9 @@ import (
 var (
 	owner = &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "some-owner-name",
-			UID:  "some-owner-uid",
+			Name:      "some-owner-name",
+			Namespace: "some-namespace",
+			UID:       "some-owner-uid",
 		},
 	}
 
@@ -69,7 +69,7 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
+							APIVersion: ownerGVK.String(),
 							Name:       "some-name",
 							Kind:       ownerGVK.Kind,
 							UID:        owner.GetUID(),
@@ -103,7 +103,7 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
+							APIVersion: ownerGVK.String(),
 							Name:       "some-name",
 							Kind:       "IncorrectKind",
 							Controller: boolPtr(true),
@@ -165,6 +165,7 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 				secretInformer,
 				nil, // setCache, not needed
 				withInformer.WithInformer,
+				testutil.NewObservableWithInitialEventOption().WithInitialEvent,
 			)
 
 			unrelated := corev1.Secret{}
@@ -175,6 +176,27 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 			require.Equal(t, test.wantDelete, filter.Delete(&test.secret))
 		})
 	}
+}
+
+func TestSupervisorSecretsControllerInitialEvent(t *testing.T) {
+	initialEventOption := testutil.NewObservableWithInitialEventOption()
+	secretInformer := kubeinformers.NewSharedInformerFactory(
+		kubernetesfake.NewSimpleClientset(),
+		0,
+	).Core().V1().Secrets()
+	_ = NewSupervisorSecretsController(
+		owner,
+		nil,
+		nil, // kubeClient, not needed
+		secretInformer,
+		nil, // setCache, not needed
+		testutil.NewObservableWithInformerOption().WithInformer,
+		initialEventOption.WithInitialEvent,
+	)
+	require.Equal(t, &controllerlib.Key{
+		owner.Namespace,
+		owner.Name + "-key",
+	}, initialEventOption.GetInitialEventKey())
 }
 
 func TestSupervisorSecretsControllerSync(t *testing.T) {
@@ -459,6 +481,7 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 					callbackSecret = secret
 				},
 				testutil.NewObservableWithInformerOption().WithInformer,
+				testutil.NewObservableWithInitialEventOption().WithInitialEvent,
 			)
 
 			// Must start informers before calling TestRunSynchronously().

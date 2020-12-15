@@ -157,6 +157,7 @@ func startControllers(
 					secretCache.SetCSRFCookieEncoderHashKey(secret)
 				},
 				controllerlib.WithInformer,
+				controllerlib.WithInitialEvent,
 			),
 			singletonWorker,
 		).

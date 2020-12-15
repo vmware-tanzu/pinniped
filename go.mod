@@ -19,7 +19,6 @@ require (
 	github.com/ory/fosite v0.35.1
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/common v0.10.0
 	github.com/sclevine/agouti v3.0.0+incompatible
 	github.com/sclevine/spec v1.4.0
 	github.com/spf13/cobra v1.0.0

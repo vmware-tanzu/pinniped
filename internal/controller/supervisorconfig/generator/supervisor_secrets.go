@@ -81,7 +81,7 @@ func (c *supervisorSecretsController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("failed to list secret %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
 	}
 
-	secretNeedsUpdate := isNotFound || !isValid(secret)
+	secretNeedsUpdate := isNotFound || !isValid(secret, c.labels)
 	if !secretNeedsUpdate {
 		plog.Debug("secret is up to date", "secret", klog.KObj(secret))
 		c.setCacheFunc(secret.Data[symmetricSecretDataKey])
@@ -128,13 +128,16 @@ func (c *supervisorSecretsController) updateSecret(ctx context.Context, newSecre
 			return nil
 		}
 
-		if isValid(currentSecret) {
+		if isValid(currentSecret, c.labels) {
 			*newSecret = currentSecret
 			return nil
 		}
 
 		currentSecret.Type = (*newSecret).Type
 		currentSecret.Data = (*newSecret).Data
+		for key, value := range c.labels {
+			currentSecret.Labels[key] = value
+		}
 
 		_, err = secrets.Update(ctx, currentSecret, metav1.UpdateOptions{})
 		return err

@@ -26,7 +26,7 @@ func generateSymmetricKey() ([]byte, error) {
 	return b, nil
 }
 
-func isValid(secret *corev1.Secret) bool {
+func isValid(secret *corev1.Secret, labels map[string]string) bool {
 	if secret.Type != symmetricSecretType {
 		return false
 	}
@@ -37,6 +37,12 @@ func isValid(secret *corev1.Secret) bool {
 	}
 	if len(data) != symmetricKeySize {
 		return false
+	}
+
+	for key, value := range labels {
+		if secret.Labels[key] != value {
+			return false
+		}
 	}
 
 	return true

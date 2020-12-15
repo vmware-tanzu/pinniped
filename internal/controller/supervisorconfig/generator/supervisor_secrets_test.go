@@ -46,7 +46,6 @@ var (
 	}
 )
 
-// TODO want what??
 func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 	t.Parallel()
 
@@ -288,6 +287,9 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 		}
 	)
 
+	// Add an extra label to make sure we don't overwrite existing labels on a Secret.
+	generatedSecret.Labels["extra-label-key"] = "extra-label-value"
+
 	once := sync.Once{}
 
 	tests := []struct {
@@ -428,6 +430,28 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 				kubetesting.NewGetAction(secretsGVR, generatedSecretNamespace, generatedSecretName),
 			},
 			wantCallbackSecret: otherGeneratedSymmetricKey,
+		},
+		{
+			name: "upon updating we discover that a secret with missing labels exists",
+			storedSecret: func(secret **corev1.Secret) {
+				delete((*secret).Labels, "some-label-key-1")
+			},
+			wantActions: []kubetesting.Action{
+				kubetesting.NewGetAction(secretsGVR, generatedSecretNamespace, generatedSecretName),
+				kubetesting.NewUpdateAction(secretsGVR, generatedSecretNamespace, generatedSecret),
+			},
+			wantCallbackSecret: generatedSymmetricKey,
+		},
+		{
+			name: "upon updating we discover that a secret with incorrect labels exists",
+			storedSecret: func(secret **corev1.Secret) {
+				(*secret).Labels["some-label-key-1"] = "incorrect"
+			},
+			wantActions: []kubetesting.Action{
+				kubetesting.NewGetAction(secretsGVR, generatedSecretNamespace, generatedSecretName),
+				kubetesting.NewUpdateAction(secretsGVR, generatedSecretNamespace, generatedSecret),
+			},
+			wantCallbackSecret: generatedSymmetricKey,
 		},
 		{
 			name: "upon updating we discover that the secret has been deleted",

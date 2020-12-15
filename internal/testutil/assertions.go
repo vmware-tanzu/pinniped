@@ -6,6 +6,7 @@ package testutil
 import (
 	"context"
 	"mime"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -51,4 +52,16 @@ func RequireNumberOfSecretsMatchingLabelSelector(t *testing.T, secrets v1.Secret
 	})
 	require.NoError(t, err)
 	require.Len(t, storedAuthcodeSecrets.Items, expectedNumberOfSecrets)
+}
+
+func RequireSecurityHeaders(t *testing.T, response *httptest.ResponseRecorder) {
+	require.Equal(t, "default-src 'none'; frame-ancestors 'none'", response.Header().Get("Content-Security-Policy"))
+	require.Equal(t, "DENY", response.Header().Get("X-Frame-Options"))
+	require.Equal(t, "1; mode=block", response.Header().Get("X-XSS-Protection"))
+	require.Equal(t, "nosniff", response.Header().Get("X-Content-Type-Options"))
+	require.Equal(t, "no-referrer", response.Header().Get("Referrer-Policy"))
+	require.Equal(t, "off", response.Header().Get("X-DNS-Prefetch-Control"))
+	require.ElementsMatch(t, []string{"no-cache", "no-store", "max-age=0", "must-revalidate"}, response.Header().Values("Cache-Control"))
+	require.Equal(t, "no-cache", response.Header().Get("Pragma"))
+	require.Equal(t, "0", response.Header().Get("Expires"))
 }

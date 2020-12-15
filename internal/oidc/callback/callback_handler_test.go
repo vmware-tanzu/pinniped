@@ -477,6 +477,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			t.Logf("response: %#v", rsp)
 			t.Logf("response body: %q", rsp.Body.String())
 
+			testutil.RequireSecurityHeaders(t, rsp)
+
 			if test.wantExchangeAndValidateTokensCall != nil {
 				require.Equal(t, 1, test.idp.ExchangeAuthcodeAndValidateTokensCallCount())
 				test.wantExchangeAndValidateTokensCall.Ctx = req.Context()

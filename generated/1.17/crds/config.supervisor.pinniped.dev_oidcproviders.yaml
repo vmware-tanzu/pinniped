@@ -108,6 +108,7 @@ spec:
                 - Success
                 - Duplicate
                 - Invalid
+                - SameIssuerHostMustUseSameSecret
                 type: string
             type: object
         required:

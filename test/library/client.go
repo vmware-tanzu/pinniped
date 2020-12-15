@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -265,12 +266,13 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer string, ce
 
 	// Wait for the OIDCProvider to enter the expected phase (or time out).
 	var result *configv1alpha1.OIDCProvider
-	require.Eventuallyf(t, func() bool {
+	assert.Eventuallyf(t, func() bool {
 		var err error
 		result, err = opcs.Get(ctx, opc.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		return result.Status.Status == expectStatus
-	}, 60*time.Second, 1*time.Second, "expected the UpstreamOIDCProvider to go into phase %s", expectStatus)
+	}, 60*time.Second, 1*time.Second, "expected the OIDCProvider to have status %q", expectStatus)
+	require.Equal(t, expectStatus, result.Status.Status)
 
 	return opc
 }

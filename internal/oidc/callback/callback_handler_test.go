@@ -134,7 +134,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantDownstreamGrantedScopes       []string
 		wantDownstreamIDTokenSubject      string
 		wantDownstreamIDTokenUsername     string
-		wantDownstreamIDTokenGroups       []string
+		wantDownstreamIDTokenGroups       interface{}
 		wantDownstreamRequestedScopes     []string
 		wantDownstreamNonce               string
 		wantDownstreamPKCEChallenge       string
@@ -192,6 +192,25 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
 			wantDownstreamIDTokenUsername:     upstreamSubject,
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
+			name:                              "upstream IDP's configured groups claim in the ID token has a non-array value",
+			idp:                               happyUpstream().WithIDTokenClaim(upstreamGroupsClaim, "notAnArrayGroup1 notAnArrayGroup2").Build(),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusFound,
+			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenUsername:     upstreamUsername,
+			wantDownstreamIDTokenGroups:       "notAnArrayGroup1 notAnArrayGroup2",
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
@@ -682,8 +701,8 @@ func happyUpstream() *upstreamOIDCIdentityProviderBuilder {
 	}
 }
 
-func (u *upstreamOIDCIdentityProviderBuilder) WithUsernameClaim(claim string) *upstreamOIDCIdentityProviderBuilder {
-	u.usernameClaim = claim
+func (u *upstreamOIDCIdentityProviderBuilder) WithUsernameClaim(value string) *upstreamOIDCIdentityProviderBuilder {
+	u.usernameClaim = value
 	return u
 }
 
@@ -750,7 +769,7 @@ func validateAuthcodeStorage(
 	wantDownstreamGrantedScopes []string,
 	wantDownstreamIDTokenSubject string,
 	wantDownstreamIDTokenUsername string,
-	wantDownstreamIDTokenGroups []string,
+	wantDownstreamIDTokenGroups interface{},
 	wantDownstreamRequestedScopes []string,
 ) (*fosite.Request, *openid.DefaultSession) {
 	t.Helper()
@@ -789,9 +808,19 @@ func validateAuthcodeStorage(
 	// Check the user's identity, which are put into the downstream ID token's subject, username and groups claims.
 	require.Equal(t, wantDownstreamIDTokenSubject, actualClaims.Subject)
 	require.Equal(t, wantDownstreamIDTokenUsername, actualClaims.Extra["username"])
-	if wantDownstreamIDTokenGroups != nil {
+	if wantDownstreamIDTokenGroups != nil { //nolint:nestif // there are some nested if's here but its probably fine for a test
 		require.Len(t, actualClaims.Extra, 2)
-		require.ElementsMatch(t, wantDownstreamIDTokenGroups, actualClaims.Extra["groups"])
+		wantArray, ok := wantDownstreamIDTokenGroups.([]string)
+		if ok {
+			require.ElementsMatch(t, wantArray, actualClaims.Extra["groups"])
+		} else {
+			wantString, ok := wantDownstreamIDTokenGroups.(string)
+			if ok {
+				require.Equal(t, wantString, actualClaims.Extra["groups"])
+			} else {
+				require.Fail(t, "wantDownstreamIDTokenGroups should be of type: either []string or string")
+			}
+		}
 	} else {
 		require.Len(t, actualClaims.Extra, 1)
 		require.NotContains(t, actualClaims.Extra, "groups")

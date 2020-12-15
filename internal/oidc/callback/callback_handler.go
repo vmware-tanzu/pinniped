@@ -254,7 +254,7 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 func getGroupsFromUpstreamIDToken(
 	upstreamIDPConfig provider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
-) ([]string, error) {
+) (interface{}, error) {
 	groupsClaim := upstreamIDPConfig.GetGroupsClaim()
 	if groupsClaim == "" {
 		return nil, nil
@@ -271,8 +271,9 @@ func getGroupsFromUpstreamIDToken(
 		return nil, httperr.New(http.StatusUnprocessableEntity, "no groups claim in upstream ID token")
 	}
 
-	groups, ok := groupsAsInterface.([]string)
-	if !ok {
+	groupsAsArray, okAsArray := groupsAsInterface.([]string)
+	groupsAsString, okAsString := groupsAsInterface.(string)
+	if !okAsArray && !okAsString {
 		plog.Warning(
 			"groups claim in upstream ID token has invalid format",
 			"upstreamName", upstreamIDPConfig.GetName(),
@@ -282,10 +283,13 @@ func getGroupsFromUpstreamIDToken(
 		return nil, httperr.New(http.StatusUnprocessableEntity, "groups claim in upstream ID token has invalid format")
 	}
 
-	return groups, nil
+	if okAsArray {
+		return groupsAsArray, nil
+	}
+	return groupsAsString, nil
 }
 
-func makeDownstreamSession(subject string, username string, groups []string) *openid.DefaultSession {
+func makeDownstreamSession(subject string, username string, groups interface{}) *openid.DefaultSession {
 	now := time.Now().UTC()
 	openIDSession := &openid.DefaultSession{
 		Claims: &jwt.IDTokenClaims{

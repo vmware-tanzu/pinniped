@@ -36,7 +36,6 @@ type supervisorSecretsController struct {
 
 // NewSupervisorSecretsController instantiates a new controllerlib.Controller which will ensure existence of a generated secret.
 func NewSupervisorSecretsController(
-	// TODO: generate the name for the secret and label the secret with the UID of the owner? So that we don't have naming conflicts if the user has already created a Secret with that name.
 	owner *appsv1.Deployment,
 	labels map[string]string,
 	kubeClient kubernetes.Interface,

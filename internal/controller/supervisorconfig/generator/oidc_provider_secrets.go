@@ -56,7 +56,6 @@ func NewOIDCProviderSecretsController(
 		},
 		// We want to be notified when a OPC's secret gets updated or deleted. When this happens, we
 		// should get notified via the corresponding OPC key.
-		// TODO: de-dup me (jwks_writer.go).
 		withInformer(
 			secretInformer,
 			pinnipedcontroller.SimpleFilter(isOPControllee, func(obj metav1.Object) controllerlib.Key {

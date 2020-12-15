@@ -56,7 +56,13 @@ func NewSupervisorSecretsController(
 		withInformer(
 			secretInformer,
 			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
-				return metav1.IsControlledBy(obj, owner)
+				ownerReferences := obj.GetOwnerReferences()
+				for i := range obj.GetOwnerReferences() {
+					if ownerReferences[i].UID == owner.GetUID() {
+						return true
+					}
+				}
+				return false
 			}, nil),
 			controllerlib.InformerOption{},
 		),

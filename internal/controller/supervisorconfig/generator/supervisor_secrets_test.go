@@ -46,6 +46,7 @@ var (
 	}
 )
 
+// TODO want what??
 func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 	t.Parallel()
 
@@ -57,39 +58,25 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 		wantDelete bool
 	}{
 		{
-			name: "no owner reference",
-			secret: corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{},
-			},
-		},
-		{
-			name: "owner reference without controller set to true",
+			name: "owner reference is missing",
 			secret: corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: ownerGVK.String(),
-							Name:       "some-name",
-							Kind:       ownerGVK.Kind,
-							UID:        owner.GetUID(),
-						},
-					},
 				},
 			},
 		},
 		{
-			name: "owner reference without correct APIVersion",
+			name: "owner reference with incorrect `APIVersion`",
 			secret: corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							Name:       "some-name",
-							Kind:       ownerGVK.Kind,
-							Controller: boolPtr(true),
-							UID:        owner.GetUID(),
-						}},
+							Name: owner.GetName(),
+							Kind: ownerGVK.Kind,
+							UID:  owner.GetUID(),
+						},
+					},
 				},
 			},
 			wantAdd:    true,
@@ -97,16 +84,15 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 			wantDelete: true,
 		},
 		{
-			name: "owner reference without correct Kind",
+			name: "owner reference with incorrect `Kind`",
 			secret: corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							APIVersion: ownerGVK.String(),
-							Name:       "some-name",
+							Name:       owner.GetName(),
 							Kind:       "IncorrectKind",
-							Controller: boolPtr(true),
 							UID:        owner.GetUID(),
 						},
 					},
@@ -117,7 +103,7 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 			wantDelete: true,
 		},
 		{
-			name: "correct owner reference",
+			name: "owner reference with `Controller`: true",
 			secret: corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
@@ -131,7 +117,42 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 			wantDelete: true,
 		},
 		{
-			name: "multiple owner references",
+			name: "expected owner reference with incorrect `UID`",
+			secret: corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "some-namespace",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: ownerGVK.String(),
+							Name:       owner.GetName(),
+							Kind:       ownerGVK.Kind,
+							UID:        "DOES_NOT_MATCH",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "expected owner reference - where `Controller`: false",
+			secret: corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "some-namespace",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: ownerGVK.String(),
+							Name:       owner.GetName(),
+							Kind:       ownerGVK.Kind,
+							UID:        owner.GetUID(),
+						},
+					},
+				},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "multiple owner references (expected owner reference, and one more)",
 			secret: corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
@@ -139,7 +160,12 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 						{
 							Kind: "UnrelatedKind",
 						},
-						*metav1.NewControllerRef(owner, ownerGVK),
+						{
+							APIVersion: ownerGVK.String(),
+							Name:       owner.GetName(),
+							Kind:       ownerGVK.Kind,
+							UID:        owner.GetUID(),
+						},
 					},
 				},
 			},
@@ -215,12 +241,21 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 		generatedSymmetricKey      = []byte("some-neato-32-byte-generated-key")
 		otherGeneratedSymmetricKey = []byte("some-funio-32-byte-generated-key")
 
-		generatedSecret = &corev1.Secret{
+		blockOwnerDeletion = true
+		isController       = false
+		generatedSecret    = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      generatedSecretName,
 				Namespace: generatedSecretNamespace,
 				OwnerReferences: []metav1.OwnerReference{
-					*metav1.NewControllerRef(owner, ownerGVK),
+					{
+						APIVersion:         ownerGVK.GroupVersion().String(),
+						Kind:               ownerGVK.Kind,
+						Name:               owner.GetName(),
+						UID:                owner.GetUID(),
+						BlockOwnerDeletion: &blockOwnerDeletion,
+						Controller:         &isController,
+					},
 				},
 				Labels: labels,
 			},
@@ -235,7 +270,14 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 				Name:      generatedSecretName,
 				Namespace: generatedSecretNamespace,
 				OwnerReferences: []metav1.OwnerReference{
-					*metav1.NewControllerRef(owner, ownerGVK),
+					{
+						APIVersion:         ownerGVK.GroupVersion().String(),
+						Kind:               ownerGVK.Kind,
+						Name:               owner.GetName(),
+						UID:                owner.GetUID(),
+						BlockOwnerDeletion: &blockOwnerDeletion,
+						Controller:         &isController,
+					},
 				},
 				Labels: labels,
 			},

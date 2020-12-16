@@ -45,7 +45,7 @@ func TestWrap(t *testing.T) {
 		"X-Frame-Options":         []string{"DENY"},
 		"X-Xss-Protection":        []string{"1; mode=block"},
 		"X-Dns-Prefetch-Control":  []string{"off"},
-		"Cache-Control":           []string{"no-cache", "no-store", "max-age=0", "must-revalidate"},
+		"Cache-Control":           []string{"no-cache,no-store,max-age=0,must-revalidate"},
 		"Pragma":                  []string{"no-cache"},
 		"Expires":                 []string{"0"},
 	}

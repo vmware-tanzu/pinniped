@@ -89,6 +89,18 @@ func TestController(t *testing.T) {
 		Audience: goodAudience,
 		TLS:      tlsSpecFromTLSConfig(server.TLS),
 	}
+	someJWTAuthenticatorSpecWithUsernameClaim := &auth1alpha1.JWTAuthenticatorSpec{
+		Issuer:        goodIssuer,
+		Audience:      goodAudience,
+		TLS:           tlsSpecFromTLSConfig(server.TLS),
+		UsernameClaim: "my-custom-username-claim",
+	}
+	someJWTAuthenticatorSpecWithGroupsClaim := &auth1alpha1.JWTAuthenticatorSpec{
+		Issuer:      goodIssuer,
+		Audience:    goodAudience,
+		TLS:         tlsSpecFromTLSConfig(server.TLS),
+		GroupsClaim: "my-custom-groups-claim",
+	}
 	otherJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   "https://some-other-issuer.com",
 		Audience: goodAudience,
@@ -113,6 +125,8 @@ func TestController(t *testing.T) {
 		wantErr                          string
 		wantLogs                         []string
 		wantCacheEntries                 int
+		wantUsernameClaim                string
+		wantGroupsClaim                  string
 		runTestsOnResultingAuthenticator bool
 	}{
 		{
@@ -138,6 +152,44 @@ func TestController(t *testing.T) {
 				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
 			},
 			wantCacheEntries:                 1,
+			runTestsOnResultingAuthenticator: true,
+		},
+		{
+			name:    "valid jwt authenticator with custom username claim",
+			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			jwtAuthenticators: []runtime.Object{
+				&auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "test-namespace",
+						Name:      "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpecWithUsernameClaim,
+				},
+			},
+			wantLogs: []string{
+				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
+			},
+			wantCacheEntries:                 1,
+			wantUsernameClaim:                someJWTAuthenticatorSpecWithUsernameClaim.UsernameClaim,
+			runTestsOnResultingAuthenticator: true,
+		},
+		{
+			name:    "valid jwt authenticator with custom groups claim",
+			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			jwtAuthenticators: []runtime.Object{
+				&auth1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "test-namespace",
+						Name:      "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpecWithGroupsClaim,
+				},
+			},
+			wantLogs: []string{
+				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
+			},
+			wantCacheEntries:                 1,
+			wantGroupsClaim:                  someJWTAuthenticatorSpecWithGroupsClaim.GroupsClaim,
 			runTestsOnResultingAuthenticator: true,
 		},
 		{
@@ -329,6 +381,14 @@ func TestController(t *testing.T) {
 				goodUsername = "pinny123"
 			)
 
+			if tt.wantUsernameClaim == "" {
+				tt.wantUsernameClaim = "username"
+			}
+
+			if tt.wantGroupsClaim == "" {
+				tt.wantGroupsClaim = "groups"
+			}
+
 			for _, test := range testTableForAuthenticateTokenTests(
 				t,
 				goodRSASigningKey,
@@ -337,6 +397,8 @@ func TestController(t *testing.T) {
 				group0,
 				group1,
 				goodUsername,
+				tt.wantUsernameClaim,
+				tt.wantGroupsClaim,
 			) {
 				test := test
 				t.Run(test.name, func(t *testing.T) {
@@ -363,7 +425,17 @@ func TestController(t *testing.T) {
 						test.jwtSignature(&signingKey, &signingAlgo, &signingKID)
 					}
 
-					jwt := createJWT(t, signingKey, signingAlgo, signingKID, &wellKnownClaims, groups, username)
+					jwt := createJWT(
+						t,
+						signingKey,
+						signingAlgo,
+						signingKID,
+						&wellKnownClaims,
+						tt.wantGroupsClaim,
+						groups,
+						tt.wantUsernameClaim,
+						username,
+					)
 					rsp, authenticated, err := cachedAuthenticator.AuthenticateToken(context.Background(), jwt)
 					if test.wantErrorRegexp != "" {
 						require.Error(t, err)
@@ -387,6 +459,8 @@ func testTableForAuthenticateTokenTests(
 	group0 string,
 	group1 string,
 	goodUsername string,
+	expectedUsernameClaim string,
+	expectedGroupsClaim string,
 ) []struct {
 	name              string
 	jwtClaims         func(wellKnownClaims *jwt.Claims, groups *interface{}, username *string)
@@ -469,7 +543,7 @@ func testTableForAuthenticateTokenTests(
 			jwtClaims: func(_ *jwt.Claims, groups *interface{}, username *string) {
 				*groups = map[string]string{"not an array": "or a string"}
 			},
-			wantErrorRegexp: "oidc: parse groups claim \"groups\": json: cannot unmarshal object into Go value of type string",
+			wantErrorRegexp: "oidc: parse groups claim \"" + expectedGroupsClaim + "\": json: cannot unmarshal object into Go value of type string",
 		},
 		{
 			name: "bad token with wrong issuer",
@@ -519,7 +593,7 @@ func testTableForAuthenticateTokenTests(
 			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				*username = ""
 			},
-			wantErrorRegexp: `oidc: parse username claims "username": claim not present`,
+			wantErrorRegexp: `oidc: parse username claims "` + expectedUsernameClaim + `": claim not present`,
 		},
 		{
 			name: "signing key is wrong",
@@ -567,8 +641,10 @@ func createJWT(
 	signingAlgo jose.SignatureAlgorithm,
 	kid string,
 	claims *jwt.Claims,
-	groups interface{},
-	username string,
+	groupsClaim string,
+	groupsValue interface{},
+	usernameClaim string,
+	usernameValue string,
 ) string {
 	t.Helper()
 
@@ -579,11 +655,11 @@ func createJWT(
 	require.NoError(t, err)
 
 	builder := jwt.Signed(sig).Claims(claims)
-	if groups != nil {
-		builder = builder.Claims(map[string]interface{}{"groups": groups})
+	if groupsValue != nil {
+		builder = builder.Claims(map[string]interface{}{groupsClaim: groupsValue})
 	}
-	if username != "" {
-		builder = builder.Claims(map[string]interface{}{"username": username})
+	if usernameValue != "" {
+		builder = builder.Claims(map[string]interface{}{usernameClaim: usernameValue})
 	}
 	jwt, err := builder.CompactSerialize()
 	require.NoError(t, err)

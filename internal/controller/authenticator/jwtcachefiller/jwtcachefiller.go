@@ -169,12 +169,20 @@ func newJWTAuthenticator(spec *auth1alpha1.JWTAuthenticatorSpec) (*jwtAuthentica
 
 		caFile = temp.Name()
 	}
+	usernameClaim := spec.UsernameClaim
+	if usernameClaim == "" {
+		usernameClaim = defaultUsernameClaim
+	}
+	groupsClaim := spec.GroupsClaim
+	if groupsClaim == "" {
+		groupsClaim = defaultGroupsClaim
+	}
 
 	authenticator, err := oidc.New(oidc.Options{
 		IssuerURL:            spec.Issuer,
 		ClientID:             spec.Audience,
-		UsernameClaim:        defaultUsernameClaim,
-		GroupsClaim:          defaultGroupsClaim,
+		UsernameClaim:        usernameClaim,
+		GroupsClaim:          groupsClaim,
 		SupportedSigningAlgs: defaultSupportedSigningAlgos(),
 		CAFile:               caFile,
 	})

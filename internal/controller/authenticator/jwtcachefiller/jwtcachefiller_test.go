@@ -583,14 +583,14 @@ func testTableForAuthenticateTokenTests(
 			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				claims.Expiry = jwt.NewNumericDate(time.Date(1, 2, 3, 4, 5, 6, 7, time.UTC))
 			},
-			wantErrorRegexp: `oidc: verify token: oidc: token is expired \(Token Expiry: 0001-02-02 20:12:08 -0752 LMT\)`,
+			wantErrorRegexp: `oidc: verify token: oidc: token is expired \(Token Expiry: .+`,
 		},
 		{
 			name: "bad token without exp",
 			jwtClaims: func(claims *jwt.Claims, _ *interface{}, username *string) {
 				claims.Expiry = nil
 			},
-			wantErrorRegexp: `oidc: verify token: oidc: token is expired \(Token Expiry: 0001-01-01 00:00:00 \+0000 UTC\)`,
+			wantErrorRegexp: `oidc: verify token: oidc: token is expired \(Token Expiry: .+`,
 		},
 		{
 			name: "token does not have username claim",

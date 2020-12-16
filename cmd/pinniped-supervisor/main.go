@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -14,6 +15,10 @@ import (
 	"strings"
 	"time"
 
+	"go.pinniped.dev/internal/secret"
+
+	appsv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/clock"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -28,6 +33,7 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/1.19/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/controller/supervisorconfig"
+	"go.pinniped.dev/internal/controller/supervisorconfig/generator"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorstorage"
 	"go.pinniped.dev/internal/controllerlib"
@@ -70,6 +76,7 @@ func waitForSignal() os.Signal {
 	return <-signalCh
 }
 
+//nolint:funlen
 func startControllers(
 	ctx context.Context,
 	cfg *supervisor.Config,
@@ -77,11 +84,16 @@ func startControllers(
 	dynamicJWKSProvider jwks.DynamicJWKSProvider,
 	dynamicTLSCertProvider provider.DynamicTLSCertProvider,
 	dynamicUpstreamIDPProvider provider.DynamicUpstreamIDPProvider,
+	secretCache *secret.Cache,
+	supervisorDeployment *appsv1.Deployment,
 	kubeClient kubernetes.Interface,
 	pinnipedClient pinnipedclientset.Interface,
 	kubeInformers kubeinformers.SharedInformerFactory,
 	pinnipedInformers pinnipedinformers.SharedInformerFactory,
 ) {
+	opInformer := pinnipedInformers.Config().V1alpha1().OIDCProviders()
+	secretInformer := kubeInformers.Core().V1().Secrets()
+
 	// Create controller manager.
 	controllerManager := controllerlib.
 		NewManager().
@@ -99,7 +111,7 @@ func startControllers(
 				issuerManager,
 				clock.RealClock{},
 				pinnipedClient,
-				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
+				opInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -109,8 +121,8 @@ func startControllers(
 				cfg.Labels,
 				kubeClient,
 				pinnipedClient,
-				kubeInformers.Core().V1().Secrets(),
-				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
+				secretInformer,
+				opInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -118,8 +130,8 @@ func startControllers(
 		WithController(
 			supervisorconfig.NewJWKSObserverController(
 				dynamicJWKSProvider,
-				kubeInformers.Core().V1().Secrets(),
-				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
+				secretInformer,
+				opInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -128,8 +140,83 @@ func startControllers(
 			supervisorconfig.NewTLSCertObserverController(
 				dynamicTLSCertProvider,
 				cfg.NamesConfig.DefaultTLSCertificateSecret,
-				kubeInformers.Core().V1().Secrets(),
-				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
+				secretInformer,
+				opInformer,
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		).
+		WithController(
+			generator.NewSupervisorSecretsController(
+				supervisorDeployment,
+				cfg.Labels,
+				kubeClient,
+				secretInformer,
+				func(secret []byte) {
+					plog.Debug("setting csrf cookie secret")
+					secretCache.SetCSRFCookieEncoderHashKey(secret)
+				},
+				controllerlib.WithInformer,
+				controllerlib.WithInitialEvent,
+			),
+			singletonWorker,
+		).
+		WithController(
+			generator.NewOIDCProviderSecretsController(
+				generator.NewSymmetricSecretHelper(
+					"pinniped-oidc-provider-hmac-key-",
+					cfg.Labels,
+					rand.Reader,
+					generator.SecretUsageTokenSigningKey,
+					func(oidcProviderIssuer string, symmetricKey []byte) {
+						plog.Debug("setting hmac secret", "issuer", oidcProviderIssuer)
+						secretCache.SetTokenHMACKey(oidcProviderIssuer, symmetricKey)
+					},
+				),
+				kubeClient,
+				pinnipedClient,
+				secretInformer,
+				opInformer,
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		).
+		WithController(
+			generator.NewOIDCProviderSecretsController(
+				generator.NewSymmetricSecretHelper(
+					"pinniped-oidc-provider-upstream-state-signature-key-",
+					cfg.Labels,
+					rand.Reader,
+					generator.SecretUsageStateSigningKey,
+					func(oidcProviderIssuer string, symmetricKey []byte) {
+						plog.Debug("setting state signature key", "issuer", oidcProviderIssuer)
+						secretCache.SetStateEncoderHashKey(oidcProviderIssuer, symmetricKey)
+					},
+				),
+				kubeClient,
+				pinnipedClient,
+				secretInformer,
+				opInformer,
+				controllerlib.WithInformer,
+			),
+			singletonWorker,
+		).
+		WithController(
+			generator.NewOIDCProviderSecretsController(
+				generator.NewSymmetricSecretHelper(
+					"pinniped-oidc-provider-upstream-state-encryption-key-",
+					cfg.Labels,
+					rand.Reader,
+					generator.SecretUsageStateEncryptionKey,
+					func(oidcProviderIssuer string, symmetricKey []byte) {
+						plog.Debug("setting state encryption key", "issuer", oidcProviderIssuer)
+						secretCache.SetStateEncoderBlockKey(oidcProviderIssuer, symmetricKey)
+					},
+				),
+				kubeClient,
+				pinnipedClient,
+				secretInformer,
+				opInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -153,6 +240,41 @@ func startControllers(
 	go controllerManager.Start(ctx)
 }
 
+func getSupervisorDeployment(
+	ctx context.Context,
+	kubeClient kubernetes.Interface,
+	podInfo *downward.PodInfo,
+) (*appsv1.Deployment, error) {
+	ns := podInfo.Namespace
+
+	pod, err := kubeClient.CoreV1().Pods(ns).Get(ctx, podInfo.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("could not get pod: %w", err)
+	}
+
+	podOwner := metav1.GetControllerOf(pod)
+	if podOwner == nil {
+		return nil, fmt.Errorf("pod %s/%s is missing owner", ns, podInfo.Name)
+	}
+
+	rs, err := kubeClient.AppsV1().ReplicaSets(ns).Get(ctx, podOwner.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("could not get replicaset: %w", err)
+	}
+
+	rsOwner := metav1.GetControllerOf(rs)
+	if rsOwner == nil {
+		return nil, fmt.Errorf("replicaset %s/%s is missing owner", ns, podInfo.Name)
+	}
+
+	d, err := kubeClient.AppsV1().Deployments(ns).Get(ctx, rsOwner.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("could not get deployment: %w", err)
+	}
+
+	return d, nil
+}
+
 func newClients() (kubernetes.Interface, pinnipedclientset.Interface, error) {
 	kubeConfig, err := restclient.InClusterConfig()
 	if err != nil {
@@ -174,7 +296,9 @@ func newClients() (kubernetes.Interface, pinnipedclientset.Interface, error) {
 	return kubeClient, pinnipedClient, nil
 }
 
-func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
+func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
+	serverInstallationNamespace := podInfo.Namespace
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -204,14 +328,21 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 	dynamicJWKSProvider := jwks.NewDynamicJWKSProvider()
 	dynamicTLSCertProvider := provider.NewDynamicTLSCertProvider()
 	dynamicUpstreamIDPProvider := provider.NewDynamicUpstreamIDPProvider()
+	secretCache := secret.Cache{}
 
 	// OIDC endpoints will be served by the oidProvidersManager, and any non-OIDC paths will fallback to the healthMux.
 	oidProvidersManager := manager.NewManager(
 		healthMux,
 		dynamicJWKSProvider,
 		dynamicUpstreamIDPProvider,
+		&secretCache,
 		kubeClient.CoreV1().Secrets(serverInstallationNamespace),
 	)
+
+	supervisorDeployment, err := getSupervisorDeployment(ctx, kubeClient, podInfo)
+	if err != nil {
+		return fmt.Errorf("cannot get supervisor deployment: %w", err)
+	}
 
 	startControllers(
 		ctx,
@@ -220,6 +351,8 @@ func run(serverInstallationNamespace string, cfg *supervisor.Config) error {
 		dynamicJWKSProvider,
 		dynamicTLSCertProvider,
 		dynamicUpstreamIDPProvider,
+		&secretCache,
+		supervisorDeployment,
 		kubeClient,
 		pinnipedClient,
 		kubeInformers,
@@ -288,7 +421,7 @@ func main() {
 		klog.Fatal(fmt.Errorf("could not load config: %w", err))
 	}
 
-	if err := run(podInfo.Namespace, cfg); err != nil {
+	if err := run(podInfo, cfg); err != nil {
 		klog.Fatal(err)
 	}
 }

@@ -37,6 +37,15 @@ func TestLoad(t *testing.T) {
 			inputDir: "./testdata/valid",
 			want: &PodInfo{
 				Namespace: "test-namespace",
+				Name:      "test-name",
+				Labels:    map[string]string{"foo": "bar", "bat": "baz"},
+			},
+		},
+		{
+			name:     "valid without name",
+			inputDir: "./testdata/validwithoutname",
+			want: &PodInfo{
+				Namespace: "test-namespace",
 				Labels:    map[string]string{"foo": "bar", "bat": "baz"},
 			},
 		},

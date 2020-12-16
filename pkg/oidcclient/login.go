@@ -37,9 +37,13 @@ const (
 	// API operation.
 	minIDTokenValidity = 10 * time.Minute
 
-	// 	refreshTimeout is the amount of time allotted for OAuth2 refresh operations. Since these don't involve any
-	// 	user interaction, they should always be roughly as fast as network latency.
-	refreshTimeout = 30 * time.Second
+	// httpRequestTimeout is the timeout for operations that involve one (or a few) non-interactive HTTPS requests.
+	// Since these don't involve any user interaction, they should always be roughly as fast as network latency.
+	httpRequestTimeout = 60 * time.Second
+
+	// overallTimeout is the overall time that a login is allowed to take. This includes several user interactions, so
+	// we set this to be relatively long.
+	overallTimeout = 90 * time.Minute
 )
 
 type handlerState struct {
@@ -155,7 +159,7 @@ func WithClient(httpClient *http.Client) Option {
 	}
 }
 
-// WithRequestAudience causes the login flow to perform an additional token exchange using the RFC8693 STS flow.
+// WithRequestAudience causes the login flow to perform an additional token exchange using the RFC8693 flow.
 func WithRequestAudience(audience string) Option {
 	return func(h *handlerState) error {
 		h.requestedAudience = audience
@@ -198,8 +202,13 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		}
 	}
 
+	// Copy the configured HTTP client to set a request timeout (the Go default client has no timeout configured).
+	httpClientWithTimeout := *h.httpClient
+	httpClientWithTimeout.Timeout = httpRequestTimeout
+	h.httpClient = &httpClientWithTimeout
+
 	// Always set a long, but non-infinite timeout for this operation.
-	ctx, cancel := context.WithTimeout(h.ctx, 10*time.Minute)
+	ctx, cancel := context.WithTimeout(h.ctx, overallTimeout)
 	defer cancel()
 	ctx = oidc.ClientContext(ctx, h.httpClient)
 	h.ctx = ctx
@@ -404,8 +413,6 @@ func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidcty
 }
 
 func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *oidctypes.RefreshToken) (*oidctypes.Token, error) {
-	ctx, cancel := context.WithTimeout(ctx, refreshTimeout)
-	defer cancel()
 	refreshSource := h.oauth2Config.TokenSource(ctx, &oauth2.Token{RefreshToken: refreshToken.Token})
 
 	refreshed, err := refreshSource.Token()
@@ -473,7 +480,7 @@ func (h *handlerState) serve(listener net.Listener) func() {
 	return func() {
 		// Gracefully shut down the server, allowing up to 5 seconds for
 		// clients to receive any in-flight responses.
-		shutdownCtx, cancel := context.WithTimeout(h.ctx, 1*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(h.ctx, 5*time.Second)
 		_ = srv.Shutdown(shutdownCtx)
 		cancel()
 	}

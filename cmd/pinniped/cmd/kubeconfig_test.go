@@ -68,8 +68,8 @@ func TestGetKubeconfig(t *testing.T) {
 				      --oidc-client-id string                 OpenID Connect client ID (default: autodiscover) (default "pinniped-cli")
 				      --oidc-issuer string                    OpenID Connect issuer URL (default: autodiscover)
 				      --oidc-listen-port uint16               TCP port for localhost listener (authorization code flow only)
-				      --oidc-request-audience string          Request a token with an alternate audience using RF8693 token exchange
-				      --oidc-scopes strings                   OpenID Connect scopes to request during login (default [offline_access,openid,pinniped.sts.unrestricted])
+				      --oidc-request-audience string          Request a token with an alternate audience using RFC8693 token exchange
+				      --oidc-scopes strings                   OpenID Connect scopes to request during login (default [offline_access,openid,pinniped:request-audience])
 				      --oidc-session-cache string             Path to OpenID Connect session cache file
 				      --oidc-skip-browser                     During OpenID Connect login, skip opening the browser (just print the URL)
 				      --static-token string                   Instead of doing an OIDC-based login, specify a static token
@@ -415,7 +415,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
-        		      - --scopes=offline_access,openid,pinniped.sts.unrestricted
+        		      - --scopes=offline_access,openid,pinniped:request-audience
         		      - --ca-bundle-data=%s
         		      - --request-audience=test-audience
         		      command: '.../path/to/pinniped'
@@ -472,7 +472,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
-        		      - --scopes=offline_access,openid,pinniped.sts.unrestricted
+        		      - --scopes=offline_access,openid,pinniped:request-audience
         		      - --skip-browser
         		      - --listen-port=1234
         		      - --ca-bundle-data=%s

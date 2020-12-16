@@ -8,7 +8,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gorilla/securecookie"
+	"go.pinniped.dev/internal/secret"
+
+	"go.pinniped.dev/internal/oidc/dynamiccodec"
+
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/internal/oidc"
@@ -34,6 +37,7 @@ type Manager struct {
 	nextHandler         http.Handler             // the next handler in a chain, called when this manager didn't know how to handle a request
 	dynamicJWKSProvider jwks.DynamicJWKSProvider // in-memory cache of per-issuer JWKS data
 	idpListGetter       oidc.IDPListGetter       // in-memory cache of upstream IDPs
+	secretCache         *secret.Cache            // in-memory cache of cryptographic material
 	secretsClient       corev1client.SecretInterface
 }
 
@@ -45,6 +49,7 @@ func NewManager(
 	nextHandler http.Handler,
 	dynamicJWKSProvider jwks.DynamicJWKSProvider,
 	idpListGetter oidc.IDPListGetter,
+	secretCache *secret.Cache,
 	secretsClient corev1client.SecretInterface,
 ) *Manager {
 	return &Manager{
@@ -52,6 +57,7 @@ func NewManager(
 		nextHandler:         nextHandler,
 		dynamicJWKSProvider: dynamicJWKSProvider,
 		idpListGetter:       idpListGetter,
+		secretCache:         secretCache,
 		secretsClient:       secretsClient,
 	}
 }
@@ -71,33 +77,32 @@ func (m *Manager) SetProviders(oidcProviders ...*provider.OIDCProvider) {
 	m.providers = oidcProviders
 	m.providerHandlers = make(map[string]http.Handler)
 
+	var csrfCookieEncoder = dynamiccodec.New(
+		oidc.CSRFCookieLifespan,
+		m.secretCache.GetCSRFCookieEncoderHashKey,
+		func() []byte { return nil },
+	)
+
 	for _, incomingProvider := range oidcProviders {
 		issuer := incomingProvider.Issuer()
 		issuerHostWithPath := strings.ToLower(incomingProvider.IssuerHost()) + "/" + incomingProvider.IssuerPath()
 
-		fositeHMACSecretForThisProvider := []byte("some secret - must have at least 32 bytes") // TODO replace this secret
+		tokenHMACKeyGetter := wrapGetter(incomingProvider.Issuer(), m.secretCache.GetTokenHMACKey)
 
 		timeoutsConfiguration := oidc.DefaultOIDCTimeoutsConfiguration()
 
 		// Use NullStorage for the authorize endpoint because we do not actually want to store anything until
 		// the upstream callback endpoint is called later.
-		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(oidc.NullStorage{}, issuer, fositeHMACSecretForThisProvider, nil, timeoutsConfiguration)
+		oauthHelperWithNullStorage := oidc.FositeOauth2Helper(oidc.NullStorage{}, issuer, tokenHMACKeyGetter, nil, timeoutsConfiguration)
 
 		// For all the other endpoints, make another oauth helper with exactly the same settings except use real storage.
-		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(oidc.NewKubeStorage(m.secretsClient, timeoutsConfiguration), issuer, fositeHMACSecretForThisProvider, m.dynamicJWKSProvider, timeoutsConfiguration)
+		oauthHelperWithKubeStorage := oidc.FositeOauth2Helper(oidc.NewKubeStorage(m.secretsClient, timeoutsConfiguration), issuer, tokenHMACKeyGetter, m.dynamicJWKSProvider, timeoutsConfiguration)
 
-		// TODO use different codecs for the state and the cookie, because:
-		//  1. we would like to state to have an embedded expiration date while the cookie does not need that
-		//  2. we would like each downstream provider to use different secrets for signing/encrypting the upstream state, not share secrets
-		//  3. we would like *all* downstream providers to use the *same* signing key for the CSRF cookie (which doesn't need to be encrypted) because cookies are sent per-domain and our issuers can share a domain name (but have different paths)
-		var upstreamStateEncoderHashKey = []byte("fake-state-hash-secret") // TODO replace this secret
-		var upstreamStateEncoderBlockKey = []byte("16-bytes-STATE01")      // TODO replace this secret
-		var upstreamStateEncoder = securecookie.New(upstreamStateEncoderHashKey, upstreamStateEncoderBlockKey)
-		upstreamStateEncoder.SetSerializer(securecookie.JSONEncoder{})
-
-		var csrfCookieEncoderHashKey = []byte("fake-csrf-hash-secret") // TODO replace this secret
-		var csrfCookieEncoder = securecookie.New(csrfCookieEncoderHashKey, nil)
-		csrfCookieEncoder.SetSerializer(securecookie.JSONEncoder{})
+		var upstreamStateEncoder = dynamiccodec.New(
+			timeoutsConfiguration.UpstreamStateParamLifespan,
+			wrapGetter(incomingProvider.Issuer(), m.secretCache.GetStateEncoderHashKey),
+			wrapGetter(incomingProvider.Issuer(), m.secretCache.GetStateEncoderBlockKey),
+		)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuer)
 
@@ -153,4 +158,10 @@ func (m *Manager) findHandler(req *http.Request) http.Handler {
 	defer m.mu.RUnlock()
 
 	return m.providerHandlers[strings.ToLower(req.Host)+"/"+req.URL.Path]
+}
+
+func wrapGetter(issuer string, getter func(string) []byte) func() []byte {
+	return func() []byte {
+		return getter(issuer)
+	}
 }

@@ -59,6 +59,11 @@ const (
 	// DownstreamGroupsClaim is what we will use to encode the groups in the downstream OIDC ID token
 	// information.
 	DownstreamGroupsClaim = "groups"
+
+	// CSRFCookieLifespan is the length of time that the CSRF cookie is valid. After this time, the
+	// Supervisor's authorization endpoint should give the browser a new CSRF cookie. We set it to
+	// a week so that it is unlikely to expire during a login.
+	CSRFCookieLifespan = time.Hour * 24 * 7
 )
 
 // Encoder is the encoding side of the securecookie.Codec interface.
@@ -100,7 +105,7 @@ func PinnipedCLIOIDCClient() *fosite.DefaultOpenIDConnectClient {
 			RedirectURIs:  []string{"http://127.0.0.1/callback"},
 			ResponseTypes: []string{"code"},
 			GrantTypes:    []string{"authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:token-exchange"},
-			Scopes:        []string{coreosoidc.ScopeOpenID, coreosoidc.ScopeOfflineAccess, "profile", "email", "pinniped.sts.unrestricted"},
+			Scopes:        []string{coreosoidc.ScopeOpenID, coreosoidc.ScopeOfflineAccess, "profile", "email", "pinniped:request-audience"},
 		},
 		TokenEndpointAuthMethod: "none",
 	}
@@ -202,7 +207,7 @@ func DefaultOIDCTimeoutsConfiguration() TimeoutsConfiguration {
 func FositeOauth2Helper(
 	oauthStore interface{},
 	issuer string,
-	hmacSecretOfLengthAtLeast32 []byte,
+	hmacSecretOfLengthAtLeast32Func func() []byte,
 	jwksProvider jwks.DynamicJWKSProvider,
 	timeoutsConfiguration TimeoutsConfiguration,
 ) fosite.OAuth2Provider {
@@ -235,7 +240,7 @@ func FositeOauth2Helper(
 		oauthStore,
 		&compose.CommonStrategy{
 			// Note that Fosite requires the HMAC secret to be at least 32 bytes.
-			CoreStrategy:               compose.NewOAuth2HMACStrategy(oauthConfig, hmacSecretOfLengthAtLeast32, nil),
+			CoreStrategy:               newDynamicOauth2HMACStrategy(oauthConfig, hmacSecretOfLengthAtLeast32Func),
 			OpenIDConnectTokenStrategy: newDynamicOpenIDConnectECDSAStrategy(oauthConfig, jwksProvider),
 		},
 		nil, // hasher, defaults to using BCrypt when nil. Used for hashing client secrets.

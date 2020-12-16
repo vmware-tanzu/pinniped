@@ -35,6 +35,11 @@ import (
 // TestE2EFullIntegration tests a full integration scenario that combines the supervisor, concierge, and CLI.
 func TestE2EFullIntegration(t *testing.T) {
 	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+
+	// If anything in this test crashes, dump out the supervisor and proxy pod logs.
+	defer library.DumpLogs(t, env.SupervisorNamespace, "")
+	defer library.DumpLogs(t, "dex", "app=proxy")
+
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancelFunc()
 
@@ -160,7 +165,15 @@ func TestE2EFullIntegration(t *testing.T) {
 	t.Cleanup(func() {
 		err := kubectlCmd.Wait()
 		t.Logf("kubectl subprocess exited with code %d", kubectlCmd.ProcessState.ExitCode())
-		require.NoErrorf(t, err, "kubectl process did not exit cleanly")
+		stdout, stdoutErr := ioutil.ReadAll(stdoutPipe)
+		if stdoutErr != nil {
+			stdout = []byte("<error reading stdout: " + stdoutErr.Error() + ">")
+		}
+		stderr, stderrErr := ioutil.ReadAll(stderrPipe)
+		if stderrErr != nil {
+			stderr = []byte("<error reading stderr: " + stderrErr.Error() + ">")
+		}
+		require.NoErrorf(t, err, "kubectl process did not exit cleanly, stdout/stderr: %q/%q", string(stdout), string(stderr))
 	})
 
 	// Start a background goroutine to read stderr from the CLI and parse out the login URL.
@@ -244,7 +257,7 @@ func TestE2EFullIntegration(t *testing.T) {
 		require.Fail(t, "timed out waiting for kubectl output")
 	case kubectlOutput = <-kubectlOutputChan:
 	}
-	require.Greaterf(t, len(strings.Split(kubectlOutput, "\n")), 2, "expected some namespaces to be returned")
+	require.Greaterf(t, len(strings.Split(kubectlOutput, "\n")), 2, "expected some namespaces to be returned, got %q", kubectlOutput)
 	t.Logf("first kubectl command took %s", time.Since(start).String())
 
 	// 	Run kubectl again, which should work with no browser interaction.

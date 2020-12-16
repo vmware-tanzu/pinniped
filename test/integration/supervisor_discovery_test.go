@@ -592,13 +592,16 @@ func requireDelete(t *testing.T, client pinnipedclientset.Interface, ns, name st
 
 func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string, status v1alpha1.OIDCProviderStatusCondition) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	var opc *v1alpha1.OIDCProvider
 	var err error
 	assert.Eventually(t, func() bool {
 		opc, err = client.ConfigV1alpha1().OIDCProviders(ns).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			t.Logf("error trying to get OIDCProvider: %s", err.Error())
+		}
 		return err == nil && opc.Status.Status == status
 	}, 10*time.Second, 200*time.Millisecond)
 	require.NoError(t, err)

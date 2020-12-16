@@ -1,7 +1,7 @@
 # Copyright 2020 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.15.5 as build-env
+FROM golang:1.15.6 as build-env
 
 WORKDIR /work
 # Get dependencies first so they can be cached as a layer
@@ -25,7 +25,7 @@ RUN mkdir out \
   && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o out ./cmd/local-user-authenticator/...
 
 # Use a runtime image based on Debian slim
-FROM debian:10.6-slim
+FROM debian:10.7-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Copy the binaries from the build-env stage

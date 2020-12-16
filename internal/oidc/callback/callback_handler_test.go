@@ -486,10 +486,10 @@ func TestCallbackEndpoint(t *testing.T) {
 			// Inject this into our test subject at the last second so we get a fresh storage for every test.
 			timeoutsConfiguration := oidc.DefaultOIDCTimeoutsConfiguration()
 			oauthStore := oidc.NewKubeStorage(secrets, timeoutsConfiguration)
-			hmacSecret := []byte("some secret - must have at least 32 bytes")
-			require.GreaterOrEqual(t, len(hmacSecret), 32, "fosite requires that hmac secrets have at least 32 bytes")
+			hmacSecretFunc := func() []byte { return []byte("some secret - must have at least 32 bytes") }
+			require.GreaterOrEqual(t, len(hmacSecretFunc()), 32, "fosite requires that hmac secrets have at least 32 bytes")
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
-			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecret, jwksProviderIsUnused, timeoutsConfiguration)
+			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration)
 
 			idpListGetter := oidctestutil.NewIDPListGetter(&test.idp)
 			subject := NewHandler(idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec, happyUpstreamRedirectURI)

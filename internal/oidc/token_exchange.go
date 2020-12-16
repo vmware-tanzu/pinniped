@@ -18,7 +18,7 @@ import (
 const (
 	tokenTypeAccessToken       = "urn:ietf:params:oauth:token-type:access_token" //nolint: gosec
 	tokenTypeJWT               = "urn:ietf:params:oauth:token-type:jwt"          //nolint: gosec
-	pinnipedTokenExchangeScope = "pinniped.sts.unrestricted"                     //nolint: gosec
+	pinnipedTokenExchangeScope = "pinniped:request-audience"                     //nolint: gosec
 )
 
 type stsParams struct {
@@ -65,7 +65,7 @@ func (t *TokenExchangeHandler) PopulateTokenEndpointResponse(ctx context.Context
 		return errors.WithStack(err)
 	}
 
-	// Require that the incoming access token has the STS and OpenID scopes.
+	// Require that the incoming access token has the pinniped:request-audience and OpenID scopes.
 	if !originalRequester.GetGrantedScopes().Has(pinnipedTokenExchangeScope) {
 		return errors.WithStack(fosite.ErrAccessDenied.WithHintf("missing the %q scope", pinnipedTokenExchangeScope))
 	}

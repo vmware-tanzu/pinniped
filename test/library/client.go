@@ -288,6 +288,22 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer string, ce
 	}, 60*time.Second, 1*time.Second, "expected the OIDCProvider to have status %q", expectStatus)
 	require.Equal(t, expectStatus, result.Status.Status)
 
+	// If the OIDCProvider was successfully created, ensure all secrets are present before continuing
+	if result.Status.Status == configv1alpha1.SuccessOIDCProviderStatusCondition {
+		assert.Eventually(t, func() bool {
+			var err error
+			result, err = opcs.Get(ctx, opc.Name, metav1.GetOptions{})
+			require.NoError(t, err)
+			return result.Status.Secrets.JWKS.Name != "" &&
+				result.Status.Secrets.TokenSigningKey.Name != "" &&
+				result.Status.Secrets.StateSigningKey.Name != "" &&
+				result.Status.Secrets.StateEncryptionKey.Name != ""
+		}, 60*time.Second, 1*time.Second, "expected the OIDCProvider to have secrets populated")
+		require.NotEmpty(t, result.Status.Secrets.JWKS.Name)
+		require.NotEmpty(t, result.Status.Secrets.TokenSigningKey.Name)
+		require.NotEmpty(t, result.Status.Secrets.StateSigningKey.Name)
+		require.NotEmpty(t, result.Status.Secrets.StateEncryptionKey.Name)
+	}
 	return opc
 }
 

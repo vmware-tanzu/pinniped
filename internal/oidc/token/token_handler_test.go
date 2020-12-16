@@ -70,6 +70,10 @@ var (
 	goodAuthTime        = time.Date(1, 2, 3, 4, 5, 6, 7, time.UTC)
 	goodRequestedAtTime = time.Date(7, 6, 5, 4, 3, 2, 1, time.UTC)
 
+	hmacSecretFunc = func() []byte {
+		return []byte(hmacSecret)
+	}
+
 	fositeInvalidMethodErrorBody = func(actual string) string {
 		return here.Docf(`
 			{
@@ -634,13 +638,13 @@ func TestTokenExchange(t *testing.T) {
 	successfulAuthCodeExchange := tokenEndpointResponseExpectedValues{
 		wantStatus:            http.StatusOK,
 		wantSuccessBodyFields: []string{"id_token", "access_token", "token_type", "expires_in", "scope"},
-		wantRequestedScopes:   []string{"openid", "pinniped.sts.unrestricted"},
-		wantGrantedScopes:     []string{"openid", "pinniped.sts.unrestricted"},
+		wantRequestedScopes:   []string{"openid", "pinniped:request-audience"},
+		wantGrantedScopes:     []string{"openid", "pinniped:request-audience"},
 	}
 
 	doValidAuthCodeExchange := authcodeExchangeInputs{
 		modifyAuthRequest: func(authRequest *http.Request) {
-			authRequest.Form.Set("scope", "openid pinniped.sts.unrestricted")
+			authRequest.Form.Set("scope", "openid pinniped:request-audience")
 		},
 		want: successfulAuthCodeExchange,
 	}
@@ -731,7 +735,7 @@ func TestTokenExchange(t *testing.T) {
 			wantResponseBodyContains: `invalid subject_token`,
 		},
 		{
-			name: "access token missing pinniped.sts.unrestricted scope",
+			name: "access token missing pinniped:request-audience scope",
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(authRequest *http.Request) {
 					authRequest.Form.Set("scope", "openid")
@@ -745,19 +749,19 @@ func TestTokenExchange(t *testing.T) {
 			},
 			requestedAudience:        "some-workload-cluster",
 			wantStatus:               http.StatusForbidden,
-			wantResponseBodyContains: `missing the \"pinniped.sts.unrestricted\" scope`,
+			wantResponseBodyContains: `missing the \"pinniped:request-audience\" scope`,
 		},
 		{
 			name: "access token missing openid scope",
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(authRequest *http.Request) {
-					authRequest.Form.Set("scope", "pinniped.sts.unrestricted")
+					authRequest.Form.Set("scope", "pinniped:request-audience")
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
 					wantSuccessBodyFields: []string{"access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"pinniped.sts.unrestricted"},
-					wantGrantedScopes:     []string{"pinniped.sts.unrestricted"},
+					wantRequestedScopes:   []string{"pinniped:request-audience"},
+					wantGrantedScopes:     []string{"pinniped:request-audience"},
 				},
 			},
 			requestedAudience:        "some-workload-cluster",
@@ -768,7 +772,7 @@ func TestTokenExchange(t *testing.T) {
 			name: "token minting failure",
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(authRequest *http.Request) {
-					authRequest.Form.Set("scope", "openid pinniped.sts.unrestricted")
+					authRequest.Form.Set("scope", "openid pinniped:request-audience")
 				},
 				// Fail to fetch a JWK signing key after the authcode exchange has happened.
 				makeOathHelper: makeOauthHelperWithJWTKeyThatWorksOnlyOnce,
@@ -956,23 +960,23 @@ func TestRefreshGrant(t *testing.T) {
 		{
 			name: "when the refresh request removes a scope which was originally granted from the list of requested scopes then it is granted anyway",
 			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access pinniped.sts.unrestricted") },
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access pinniped:request-audience") },
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
 					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "offline_access", "pinniped.sts.unrestricted"},
-					wantGrantedScopes:     []string{"openid", "offline_access", "pinniped.sts.unrestricted"},
+					wantRequestedScopes:   []string{"openid", "offline_access", "pinniped:request-audience"},
+					wantGrantedScopes:     []string{"openid", "offline_access", "pinniped:request-audience"},
 				},
 			},
 			refreshRequest: refreshRequestInputs{
 				modifyTokenRequest: func(r *http.Request, refreshToken string, accessToken string) {
-					r.Body = happyRefreshRequestBody(refreshToken).WithScope("openid").ReadCloser() // do not ask for "pinniped.sts.unrestricted" again
+					r.Body = happyRefreshRequestBody(refreshToken).WithScope("openid").ReadCloser() // do not ask for "pinniped:request-audience" again
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusOK,
 					wantSuccessBodyFields: []string{"id_token", "refresh_token", "access_token", "token_type", "expires_in", "scope"},
-					wantRequestedScopes:   []string{"openid", "offline_access", "pinniped.sts.unrestricted"},
-					wantGrantedScopes:     []string{"openid", "offline_access", "pinniped.sts.unrestricted"},
+					wantRequestedScopes:   []string{"openid", "offline_access", "pinniped:request-audience"},
+					wantGrantedScopes:     []string{"openid", "offline_access", "pinniped:request-audience"},
 				}},
 		},
 		{
@@ -1361,7 +1365,7 @@ func makeHappyOauthHelper(
 	t.Helper()
 
 	jwtSigningKey, jwkProvider := generateJWTSigningKeyAndJWKSProvider(t, goodIssuer)
-	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
+	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
 	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper)
 	return oauthHelper, authResponder.GetCode(), jwtSigningKey
 }
@@ -1393,7 +1397,7 @@ func makeOauthHelperWithJWTKeyThatWorksOnlyOnce(
 	t.Helper()
 
 	jwtSigningKey, jwkProvider := generateJWTSigningKeyAndJWKSProvider(t, goodIssuer)
-	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), &singleUseJWKProvider{DynamicJWKSProvider: jwkProvider}, oidc.DefaultOIDCTimeoutsConfiguration())
+	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, &singleUseJWKProvider{DynamicJWKSProvider: jwkProvider}, oidc.DefaultOIDCTimeoutsConfiguration())
 	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper)
 	return oauthHelper, authResponder.GetCode(), jwtSigningKey
 }
@@ -1412,7 +1416,7 @@ func makeOauthHelperWithNilPrivateJWTSigningKey(
 	t.Helper()
 
 	jwkProvider := jwks.NewDynamicJWKSProvider() // empty provider which contains no signing key for this issuer
-	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
+	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
 	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper)
 	return oauthHelper, authResponder.GetCode(), nil
 }
@@ -1442,8 +1446,8 @@ func simulateAuthEndpointHavingAlreadyRun(t *testing.T, authRequest *http.Reques
 	if strings.Contains(authRequest.Form.Get("scope"), "offline_access") {
 		authRequester.GrantScope("offline_access")
 	}
-	if strings.Contains(authRequest.Form.Get("scope"), "pinniped.sts.unrestricted") {
-		authRequester.GrantScope("pinniped.sts.unrestricted")
+	if strings.Contains(authRequest.Form.Get("scope"), "pinniped:request-audience") {
+		authRequester.GrantScope("pinniped:request-audience")
 	}
 	authResponder, err := oauthHelper.NewAuthorizeResponse(ctx, authRequester, session)
 	require.NoError(t, err)

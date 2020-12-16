@@ -253,7 +253,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		},
 	}
 	goodOPCWithStatus := goodOPC.DeepCopy()
-	goodOPCWithStatus.Status.JWKSSecret.Name = goodOPCWithStatus.Name + "-jwks"
+	goodOPCWithStatus.Status.Secrets.JWKS.Name = goodOPCWithStatus.Name + "-jwks"
 
 	secretGVR := schema.GroupVersionResource{
 		Group:    corev1.SchemeGroupVersion.Group,
@@ -264,7 +264,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 	newSecret := func(activeJWKPath, jwksPath string) *corev1.Secret {
 		s := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      goodOPCWithStatus.Status.JWKSSecret.Name,
+				Name:      goodOPCWithStatus.Status.Secrets.JWKS.Name,
 				Namespace: namespace,
 				Labels: map[string]string{
 					"myLabelKey1": "myLabelValue1",

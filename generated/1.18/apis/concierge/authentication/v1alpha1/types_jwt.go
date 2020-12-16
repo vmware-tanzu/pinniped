@@ -27,9 +27,28 @@ type JWTAuthenticatorSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	Audience string `json:"audience"`
 
+	// Claims allows customization of the claims that will be mapped to user identity
+	// for Kubernetes access.
+	// +optional
+	Claims JWTTokenClaims `json:"claims"`
+
 	// TLS configuration for communicating with the OIDC provider.
 	// +optional
 	TLS *TLSSpec `json:"tls,omitempty"`
+}
+
+// JWTTokenClaims allows customization of the claims that will be mapped to user identity
+// for Kubernetes access.
+type JWTTokenClaims struct {
+	// Groups is the name of the claim which should be read to extract the user's
+	// group membership from the JWT token. When not specified, it will default to "groups".
+	// +optional
+	Groups string `json:"groups"`
+
+	// Username is the name of the claim which should be read to extract the
+	// username from the JWT token. When not specified, it will default to "username".
+	// +optional
+	Username string `json:"username"`
 }
 
 // JWTAuthenticator describes the configuration of a JWT authenticator.

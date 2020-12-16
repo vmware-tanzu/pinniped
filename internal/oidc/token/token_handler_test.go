@@ -53,8 +53,9 @@ const (
 	goodRedirectURI      = "http://127.0.0.1/callback"
 	goodPKCECodeVerifier = "some-pkce-verifier-that-must-be-at-least-43-characters-to-meet-entropy-requirements"
 	goodNonce            = "some-nonce-value-with-enough-bytes-to-exceed-min-allowed"
-	goodSubject          = "some-subject"
+	goodSubject          = "https://issuer?sub=some-subject"
 	goodUsername         = "some-username"
+	goodGroups           = "group1,groups2"
 
 	hmacSecret = "this needs to be at least 32 characters to meet entropy requirements"
 
@@ -785,11 +786,13 @@ func TestTokenExchange(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			subject, rsp, _, _, secrets, storage := exchangeAuthcodeForTokens(t, test.authcodeExchange)
-			var parsedResponseBody map[string]interface{}
-			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedResponseBody))
+			t.Parallel()
 
-			request := happyTokenExchangeRequest(test.requestedAudience, parsedResponseBody["access_token"].(string))
+			subject, rsp, _, _, secrets, storage := exchangeAuthcodeForTokens(t, test.authcodeExchange)
+			var parsedAuthcodeExchangeResponseBody map[string]interface{}
+			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
+
+			request := happyTokenExchangeRequest(test.requestedAudience, parsedAuthcodeExchangeResponseBody["access_token"].(string))
 			if test.modifyStorage != nil {
 				test.modifyStorage(t, storage, request)
 			}
@@ -804,6 +807,10 @@ func TestTokenExchange(t *testing.T) {
 			// Measure the secrets in storage after the auth code flow.
 			existingSecrets, err := secrets.List(context.Background(), metav1.ListOptions{})
 			require.NoError(t, err)
+
+			// Wait one second before performing the token exchange so we can see that the new ID token has new issued
+			// at and expires at dates which are newer than the old tokens.
+			time.Sleep(1 * time.Second)
 
 			subject.ServeHTTP(rsp, req)
 			t.Logf("response: %#v", rsp)
@@ -820,6 +827,12 @@ func TestTokenExchange(t *testing.T) {
 				return
 			}
 
+			claimsOfFirstIDToken := map[string]interface{}{}
+			originalIDToken := parsedAuthcodeExchangeResponseBody["id_token"].(string)
+			firstIDTokenDecoded, _ := josejwt.ParseSigned(originalIDToken)
+			err = firstIDTokenDecoded.UnsafeClaimsWithoutVerification(&claimsOfFirstIDToken)
+			require.NoError(t, err)
+
 			var responseBody map[string]interface{}
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &responseBody))
 
@@ -827,18 +840,43 @@ func TestTokenExchange(t *testing.T) {
 			require.Equal(t, "N_A", responseBody["token_type"])
 			require.Equal(t, "urn:ietf:params:oauth:token-type:jwt", responseBody["issued_token_type"])
 
-			// Assert that the returned token has expected claims.
+			// Parse the returned token.
 			parsedJWT, err := jose.ParseSigned(responseBody["access_token"].(string))
 			require.NoError(t, err)
 			var tokenClaims map[string]interface{}
 			require.NoError(t, json.Unmarshal(parsedJWT.UnsafePayloadWithoutVerification(), &tokenClaims))
-			require.Contains(t, tokenClaims, "iat")
-			require.Contains(t, tokenClaims, "rat")
-			require.Contains(t, tokenClaims, "jti")
+
+			// Make sure that these are the only fields in the token.
+			idTokenFields := []string{"sub", "aud", "iss", "jti", "nonce", "auth_time", "exp", "iat", "rat", "groups", "username"}
+			require.ElementsMatch(t, idTokenFields, getMapKeys(tokenClaims))
+
+			// Assert that the returned token has expected claims values.
+			require.NotEmpty(t, tokenClaims["jti"])
+			require.NotEmpty(t, tokenClaims["auth_time"])
+			require.NotEmpty(t, tokenClaims["exp"])
+			require.NotEmpty(t, tokenClaims["iat"])
+			require.NotEmpty(t, tokenClaims["rat"])
+			require.Empty(t, tokenClaims["nonce"]) // ID tokens only contain nonce during an authcode exchange
 			require.Len(t, tokenClaims["aud"], 1)
 			require.Contains(t, tokenClaims["aud"], test.requestedAudience)
 			require.Equal(t, goodSubject, tokenClaims["sub"])
 			require.Equal(t, goodIssuer, tokenClaims["iss"])
+			require.Equal(t, goodUsername, tokenClaims["username"])
+			require.Equal(t, goodGroups, tokenClaims["groups"])
+
+			// Also assert that some are the same as the original downstream ID token.
+			requireClaimsAreEqual(t, "iss", claimsOfFirstIDToken, tokenClaims)       // issuer
+			requireClaimsAreEqual(t, "sub", claimsOfFirstIDToken, tokenClaims)       // subject
+			requireClaimsAreEqual(t, "rat", claimsOfFirstIDToken, tokenClaims)       // requested at
+			requireClaimsAreEqual(t, "auth_time", claimsOfFirstIDToken, tokenClaims) // auth time
+
+			// Also assert which are the different from the original downstream ID token.
+			requireClaimsAreNotEqual(t, "jti", claimsOfFirstIDToken, tokenClaims) // JWT ID
+			requireClaimsAreNotEqual(t, "aud", claimsOfFirstIDToken, tokenClaims) // audience
+			requireClaimsAreNotEqual(t, "exp", claimsOfFirstIDToken, tokenClaims) // expires at
+			require.Greater(t, tokenClaims["exp"], claimsOfFirstIDToken["exp"])
+			requireClaimsAreNotEqual(t, "iat", claimsOfFirstIDToken, tokenClaims) // issued at
+			require.Greater(t, tokenClaims["iat"], claimsOfFirstIDToken["iat"])
 
 			// Assert that nothing in storage has been modified.
 			newSecrets, err := secrets.List(context.Background(), metav1.ListOptions{})
@@ -1390,11 +1428,15 @@ func simulateAuthEndpointHavingAlreadyRun(t *testing.T, authRequest *http.Reques
 	session := &openid.DefaultSession{
 		Claims: &jwt.IDTokenClaims{
 			Subject:     goodSubject,
-			AuthTime:    goodAuthTime,
 			RequestedAt: goodRequestedAtTime,
+			AuthTime:    goodAuthTime,
+			Extra: map[string]interface{}{
+				oidc.DownstreamUsernameClaim: goodUsername,
+				oidc.DownstreamGroupsClaim:   goodGroups,
+			},
 		},
-		Subject:  goodSubject,
-		Username: goodUsername,
+		Subject:  "", // not used, note that callback_handler.go does not set this
+		Username: "", // not used, note that callback_handler.go does not set this
 	}
 	authRequester, err := oauthHelper.NewAuthorizeRequest(ctx, authRequest)
 	require.NoError(t, err)
@@ -1613,6 +1655,12 @@ func requireValidStoredRequest(
 		require.Empty(t, claims.JTI) // When claims.JTI is empty, Fosite will generate a UUID for this field.
 		require.Equal(t, goodSubject, claims.Subject)
 
+		// Our custom claims from the authorize endpoint should still be set.
+		require.Equal(t, map[string]interface{}{
+			"username": goodUsername,
+			"groups":   goodGroups,
+		}, claims.Extra)
+
 		// We are in charge of setting these fields. For the purpose of testing, we ensure that the
 		// sentinel test value is set correctly.
 		require.Equal(t, goodRequestedAtTime, claims.RequestedAt)
@@ -1637,7 +1685,6 @@ func requireValidStoredRequest(
 		require.Empty(t, claims.AuthenticationContextClassReference)
 		require.Empty(t, claims.AuthenticationMethodsReference)
 		require.Empty(t, claims.CodeHash)
-		require.Empty(t, claims.Extra)
 	}
 
 	// Assert that the session headers are what we think they should be.
@@ -1668,9 +1715,9 @@ func requireValidStoredRequest(
 		require.False(t, ok, "expected session to not hold expiration time for access token, but it did")
 	}
 
-	// Assert that the session's username and subject are correct.
-	require.Equal(t, goodUsername, session.Username)
-	require.Equal(t, goodSubject, session.Subject)
+	// We don't use these, so they should be empty.
+	require.Empty(t, session.Username)
+	require.Empty(t, session.Subject)
 }
 
 func requireValidIDToken(
@@ -1702,12 +1749,14 @@ func requireValidIDToken(
 		IssuedAt        int64    `json:"iat"`
 		RequestedAt     int64    `json:"rat"`
 		AuthTime        int64    `json:"auth_time"`
+		Groups          string   `json:"groups"`
+		Username        string   `json:"username"`
 	}
 
 	// Note that there is a bug in fosite which prevents the `at_hash` claim from appearing in this ID token
 	// during the initial authcode exchange, but does not prevent `at_hash` from appearing in the refreshed ID token.
 	// We can add a workaround for this later.
-	idTokenFields := []string{"sub", "aud", "iss", "jti", "nonce", "auth_time", "exp", "iat", "rat"}
+	idTokenFields := []string{"sub", "aud", "iss", "jti", "nonce", "auth_time", "exp", "iat", "rat", "groups", "username"}
 	if wantAtHashClaimInIDToken {
 		idTokenFields = append(idTokenFields, "at_hash")
 	}
@@ -1721,6 +1770,8 @@ func requireValidIDToken(
 	err := token.Claims(&claims)
 	require.NoError(t, err)
 	require.Equal(t, goodSubject, claims.Subject)
+	require.Equal(t, goodUsername, claims.Username)
+	require.Equal(t, goodGroups, claims.Groups)
 	require.Len(t, claims.Audience, 1)
 	require.Equal(t, goodClient, claims.Audience[0])
 	require.Equal(t, goodIssuer, claims.Issuer)

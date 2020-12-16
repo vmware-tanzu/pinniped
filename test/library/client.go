@@ -180,6 +180,9 @@ func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T)
 	spec := auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   testEnv.CLITestUpstream.Issuer,
 		Audience: testEnv.CLITestUpstream.ClientID,
+		// The default UsernameClaim is "username" but the upstreams that we use for
+		// integration tests won't necessarily have that claim, so use "sub" here.
+		Claims: auth1alpha1.JWTTokenClaims{Username: "sub"},
 	}
 	// If the test upstream does not have a CA bundle specified, then don't configure one in the
 	// JWTAuthenticator. Leaving TLSSpec set to nil will result in OIDC discovery using the OS's root

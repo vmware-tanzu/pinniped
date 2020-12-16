@@ -92,6 +92,7 @@ Spec for configuring a JWT authenticator.
 | Field | Description
 | *`issuer`* __string__ | Issuer is the OIDC issuer URL that will be used to discover public signing keys. Issuer is also used to validate the "iss" JWT claim.
 | *`audience`* __string__ | Audience is the required value of the "aud" JWT claim.
+| *`claims`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-jwttokenclaims[$$JWTTokenClaims$$]__ | Claims allows customization of the claims that will be mapped to user identity for Kubernetes access.
 | *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration for communicating with the OIDC provider.
 |===
 
@@ -110,6 +111,24 @@ Status of a JWT authenticator.
 |===
 | Field | Description
 | *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-condition[$$Condition$$] array__ | Represents the observations of the authenticator's current state.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-jwttokenclaims"]
+==== JWTTokenClaims 
+
+JWTTokenClaims allows customization of the claims that will be mapped to user identity for Kubernetes access.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`groups`* __string__ | Groups is the name of the claim which should be read to extract the user's group membership from the JWT token. When not specified, it will default to "groups".
+| *`username`* __string__ | Username is the name of the claim which should be read to extract the username from the JWT token. When not specified, it will default to "username".
 |===
 
 

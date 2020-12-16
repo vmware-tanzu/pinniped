@@ -51,6 +51,21 @@ spec:
                 description: Audience is the required value of the "aud" JWT claim.
                 minLength: 1
                 type: string
+              claims:
+                description: Claims allows customization of the claims that will be
+                  mapped to user identity for Kubernetes access.
+                properties:
+                  groups:
+                    description: Groups is the name of the claim which should be read
+                      to extract the user's group membership from the JWT token. When
+                      not specified, it will default to "groups".
+                    type: string
+                  username:
+                    description: Username is the name of the claim which should be
+                      read to extract the username from the JWT token. When not specified,
+                      it will default to "username".
+                    type: string
+                type: object
               issuer:
                 description: Issuer is the OIDC issuer URL that will be used to discover
                   public signing keys. Issuer is also used to validate the "iss" JWT

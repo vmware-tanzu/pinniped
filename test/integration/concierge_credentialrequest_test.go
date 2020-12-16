@@ -65,11 +65,13 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 				credOutput, _ := runPinnipedLoginOIDC(ctx, t, pinnipedExe)
 				token := credOutput.Status.Token
 
-				// By default, the JWTAuthenticator expects the username to be in the "sub" claim and the
+				// By default, the JWTAuthenticator expects the username to be in the "username" claim and the
 				// groups to be in the "groups" claim.
+				// However, we are configuring Pinniped in the `CreateTestJWTAuthenticatorForCLIUpstream` method above
+				// to read the username from the "sub" claim of the token instead.
 				username, groups := getJWTSubAndGroupsClaims(t, token)
 
-				return credOutput.Status.Token, username, groups
+				return token, username, groups
 			},
 		},
 	}

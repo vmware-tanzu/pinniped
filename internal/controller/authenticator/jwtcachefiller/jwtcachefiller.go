@@ -29,7 +29,7 @@ import (
 // These default values come from the way that the Supervisor issues and signs tokens. We make these
 // the defaults for a JWTAuthenticator so that they can easily integrate with the Supervisor.
 const (
-	defaultUsernameClaim = "sub"
+	defaultUsernameClaim = "username"
 	defaultGroupsClaim   = "groups"
 )
 
@@ -169,12 +169,20 @@ func newJWTAuthenticator(spec *auth1alpha1.JWTAuthenticatorSpec) (*jwtAuthentica
 
 		caFile = temp.Name()
 	}
+	usernameClaim := spec.Claims.Username
+	if usernameClaim == "" {
+		usernameClaim = defaultUsernameClaim
+	}
+	groupsClaim := spec.Claims.Groups
+	if groupsClaim == "" {
+		groupsClaim = defaultGroupsClaim
+	}
 
 	authenticator, err := oidc.New(oidc.Options{
 		IssuerURL:            spec.Issuer,
 		ClientID:             spec.Audience,
-		UsernameClaim:        defaultUsernameClaim,
-		GroupsClaim:          defaultGroupsClaim,
+		UsernameClaim:        usernameClaim,
+		GroupsClaim:          groupsClaim,
 		SupportedSigningAlgs: defaultSupportedSigningAlgos(),
 		CAFile:               caFile,
 	})

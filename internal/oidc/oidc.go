@@ -45,6 +45,21 @@ const (
 	// cookie contents.
 	CSRFCookieEncodingName = "csrf"
 
+	// The name of the issuer claim specified in the OIDC spec.
+	IDTokenIssuerClaim = "iss"
+
+	// The name of the subject claim specified in the OIDC spec.
+	IDTokenSubjectClaim = "sub"
+
+	// DownstreamUsernameClaim is a custom claim in the downstream ID token
+	// whose value is mapped from a claim in the upstream token.
+	// By default the value is the same as the downstream subject claim's.
+	DownstreamUsernameClaim = "username"
+
+	// DownstreamGroupsClaim is what we will use to encode the groups in the downstream OIDC ID token
+	// information.
+	DownstreamGroupsClaim = "groups"
+
 	// CSRFCookieLifespan is the length of time that the CSRF cookie is valid. After this time, the
 	// Supervisor's authorization endpoint should give the browser a new CSRF cookie. We set it to
 	// a week so that it is unlikely to expire during a login.

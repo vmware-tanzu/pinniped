@@ -44,6 +44,11 @@ const (
 	// CSRFCookieEncodingName is the `name` passed to the encoder for encoding and decoding the CSRF
 	// cookie contents.
 	CSRFCookieEncodingName = "csrf"
+
+	// CSRFCookieLifespan is the length of time that the CSRF cookie is valid. After this time, the
+	// Supervisor's authorization endpoint should give the browser a new CSRF cookie. We set it to
+	// a week so that it is unlikely to expire during a login.
+	CSRFCookieLifespan = time.Hour * 24 * 7
 )
 
 // Encoder is the encoding side of the securecookie.Codec interface.
@@ -187,7 +192,7 @@ func DefaultOIDCTimeoutsConfiguration() TimeoutsConfiguration {
 func FositeOauth2Helper(
 	oauthStore interface{},
 	issuer string,
-	hmacSecretOfLengthAtLeast32 []byte,
+	hmacSecretOfLengthAtLeast32Func func() []byte,
 	jwksProvider jwks.DynamicJWKSProvider,
 	timeoutsConfiguration TimeoutsConfiguration,
 ) fosite.OAuth2Provider {
@@ -220,7 +225,7 @@ func FositeOauth2Helper(
 		oauthStore,
 		&compose.CommonStrategy{
 			// Note that Fosite requires the HMAC secret to be at least 32 bytes.
-			CoreStrategy:               compose.NewOAuth2HMACStrategy(oauthConfig, hmacSecretOfLengthAtLeast32, nil),
+			CoreStrategy:               newDynamicOauth2HMACStrategy(oauthConfig, hmacSecretOfLengthAtLeast32Func),
 			OpenIDConnectTokenStrategy: newDynamicOpenIDConnectECDSAStrategy(oauthConfig, jwksProvider),
 		},
 		nil, // hasher, defaults to using BCrypt when nil. Used for hashing client secrets.

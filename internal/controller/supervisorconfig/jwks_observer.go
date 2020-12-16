@@ -76,7 +76,7 @@ func (c *jwksObserverController) Sync(ctx controllerlib.Context) error {
 	issuerToActiveJWKMap := map[string]*jose.JSONWebKey{}
 
 	for _, provider := range allProviders {
-		secretRef := provider.Status.JWKSSecret
+		secretRef := provider.Status.Secrets.JWKS
 		jwksSecret, err := c.secretInformer.Lister().Secrets(ns).Get(secretRef.Name)
 		if err != nil {
 			plog.Debug("jwksObserverController Sync could not find JWKS secret", "namespace", ns, "secretName", secretRef.Name)

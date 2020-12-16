@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 
+	"go.pinniped.dev/internal/secret"
+
 	"github.com/sclevine/spec"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
@@ -241,7 +243,18 @@ func TestManager(t *testing.T) {
 			kubeClient = fake.NewSimpleClientset()
 			secretsClient := kubeClient.CoreV1().Secrets("some-namespace")
 
-			subject = NewManager(nextHandler, dynamicJWKSProvider, idpListGetter, secretsClient)
+			cache := secret.Cache{}
+			cache.SetCSRFCookieEncoderHashKey([]byte("fake-csrf-hash-secret"))
+
+			cache.SetTokenHMACKey(issuer1, []byte("some secret 1 - must have at least 32 bytes"))
+			cache.SetStateEncoderHashKey(issuer1, []byte("some-state-encoder-hash-key-1"))
+			cache.SetStateEncoderBlockKey(issuer1, []byte("16-bytes-STATE01"))
+
+			cache.SetTokenHMACKey(issuer2, []byte("some secret 2 - must have at least 32 bytes"))
+			cache.SetStateEncoderHashKey(issuer2, []byte("some-state-encoder-hash-key-2"))
+			cache.SetStateEncoderBlockKey(issuer2, []byte("16-bytes-STATE02"))
+
+			subject = NewManager(nextHandler, dynamicJWKSProvider, idpListGetter, &cache, secretsClient)
 		})
 
 		when("given no providers via SetProviders()", func() {
@@ -304,21 +317,26 @@ func TestManager(t *testing.T) {
 			requireAuthorizationRequestToBeHandled(issuer2, authRequestParams, upstreamIDPAuthorizationURL)
 
 			// Hostnames are case-insensitive, so test that we can handle that.
-			requireAuthorizationRequestToBeHandled(issuer1DifferentCaseHostname, authRequestParams, upstreamIDPAuthorizationURL)
-			csrfCookieValue, upstreamStateParam :=
+			csrfCookieValue1, upstreamStateParam1 :=
+				requireAuthorizationRequestToBeHandled(issuer1DifferentCaseHostname, authRequestParams, upstreamIDPAuthorizationURL)
+			csrfCookieValue2, upstreamStateParam2 :=
 				requireAuthorizationRequestToBeHandled(issuer2DifferentCaseHostname, authRequestParams, upstreamIDPAuthorizationURL)
 
-			callbackRequestParams := "?" + url.Values{
+			callbackRequestParams1 := "?" + url.Values{
 				"code":  []string{"some-fake-code"},
-				"state": []string{upstreamStateParam},
+				"state": []string{upstreamStateParam1},
+			}.Encode()
+			callbackRequestParams2 := "?" + url.Values{
+				"code":  []string{"some-fake-code"},
+				"state": []string{upstreamStateParam2},
 			}.Encode()
 
-			downstreamAuthCode1 := requireCallbackRequestToBeHandled(issuer1, callbackRequestParams, csrfCookieValue)
-			downstreamAuthCode2 := requireCallbackRequestToBeHandled(issuer2, callbackRequestParams, csrfCookieValue)
+			downstreamAuthCode1 := requireCallbackRequestToBeHandled(issuer1, callbackRequestParams1, csrfCookieValue1)
+			downstreamAuthCode2 := requireCallbackRequestToBeHandled(issuer2, callbackRequestParams2, csrfCookieValue2)
 
 			// Hostnames are case-insensitive, so test that we can handle that.
-			downstreamAuthCode3 := requireCallbackRequestToBeHandled(issuer1DifferentCaseHostname, callbackRequestParams, csrfCookieValue)
-			downstreamAuthCode4 := requireCallbackRequestToBeHandled(issuer2DifferentCaseHostname, callbackRequestParams, csrfCookieValue)
+			downstreamAuthCode3 := requireCallbackRequestToBeHandled(issuer1DifferentCaseHostname, callbackRequestParams1, csrfCookieValue1)
+			downstreamAuthCode4 := requireCallbackRequestToBeHandled(issuer2DifferentCaseHostname, callbackRequestParams2, csrfCookieValue2)
 
 			requireTokenRequestToBeHandled(issuer1, downstreamAuthCode1, issuer1JWKS, issuer1)
 			requireTokenRequestToBeHandled(issuer2, downstreamAuthCode2, issuer2JWKS, issuer2)
@@ -336,7 +354,7 @@ func TestManager(t *testing.T) {
 				r.NoError(err)
 				subject.SetProviders(p1, p2)
 
-				jwks := map[string]*jose.JSONWebKeySet{
+				jwksMap := map[string]*jose.JSONWebKeySet{
 					issuer1: {Keys: []jose.JSONWebKey{*newTestJWK(issuer1KeyID)}},
 					issuer2: {Keys: []jose.JSONWebKey{*newTestJWK(issuer2KeyID)}},
 				}
@@ -344,7 +362,7 @@ func TestManager(t *testing.T) {
 					issuer1: newTestJWK(issuer1KeyID),
 					issuer2: newTestJWK(issuer2KeyID),
 				}
-				dynamicJWKSProvider.SetIssuerToJWKSMap(jwks, activeJWK)
+				dynamicJWKSProvider.SetIssuerToJWKSMap(jwksMap, activeJWK)
 			})
 
 			it("sends all non-matching host requests to the nextHandler", func() {
@@ -379,7 +397,7 @@ func TestManager(t *testing.T) {
 				r.NoError(err)
 				subject.SetProviders(p2, p1)
 
-				jwks := map[string]*jose.JSONWebKeySet{
+				jwksMap := map[string]*jose.JSONWebKeySet{
 					issuer1: {Keys: []jose.JSONWebKey{*newTestJWK(issuer1KeyID)}},
 					issuer2: {Keys: []jose.JSONWebKey{*newTestJWK(issuer2KeyID)}},
 				}
@@ -387,7 +405,7 @@ func TestManager(t *testing.T) {
 					issuer1: newTestJWK(issuer1KeyID),
 					issuer2: newTestJWK(issuer2KeyID),
 				}
-				dynamicJWKSProvider.SetIssuerToJWKSMap(jwks, activeJWK)
+				dynamicJWKSProvider.SetIssuerToJWKSMap(jwksMap, activeJWK)
 			})
 
 			it("still routes matching requests to the appropriate provider", func() {

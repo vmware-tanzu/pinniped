@@ -69,6 +69,10 @@ var (
 	goodAuthTime        = time.Date(1, 2, 3, 4, 5, 6, 7, time.UTC)
 	goodRequestedAtTime = time.Date(7, 6, 5, 4, 3, 2, 1, time.UTC)
 
+	hmacSecretFunc = func() []byte {
+		return []byte(hmacSecret)
+	}
+
 	fositeInvalidMethodErrorBody = func(actual string) string {
 		return here.Docf(`
 			{
@@ -1323,7 +1327,7 @@ func makeHappyOauthHelper(
 	t.Helper()
 
 	jwtSigningKey, jwkProvider := generateJWTSigningKeyAndJWKSProvider(t, goodIssuer)
-	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
+	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
 	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper)
 	return oauthHelper, authResponder.GetCode(), jwtSigningKey
 }
@@ -1355,7 +1359,7 @@ func makeOauthHelperWithJWTKeyThatWorksOnlyOnce(
 	t.Helper()
 
 	jwtSigningKey, jwkProvider := generateJWTSigningKeyAndJWKSProvider(t, goodIssuer)
-	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), &singleUseJWKProvider{DynamicJWKSProvider: jwkProvider}, oidc.DefaultOIDCTimeoutsConfiguration())
+	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, &singleUseJWKProvider{DynamicJWKSProvider: jwkProvider}, oidc.DefaultOIDCTimeoutsConfiguration())
 	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper)
 	return oauthHelper, authResponder.GetCode(), jwtSigningKey
 }
@@ -1374,7 +1378,7 @@ func makeOauthHelperWithNilPrivateJWTSigningKey(
 	t.Helper()
 
 	jwkProvider := jwks.NewDynamicJWKSProvider() // empty provider which contains no signing key for this issuer
-	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, []byte(hmacSecret), jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
+	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
 	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper)
 	return oauthHelper, authResponder.GetCode(), nil
 }

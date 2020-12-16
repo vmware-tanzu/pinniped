@@ -285,8 +285,8 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer string, ce
 	}, 60*time.Second, 1*time.Second, "expected the OIDCProvider to have status %q", expectStatus)
 	require.Equal(t, expectStatus, result.Status.Status)
 
-	// If the expected status is success, also wait for the secrets to be created.
-	if expectStatus == configv1alpha1.SuccessOIDCProviderStatusCondition {
+	// If the OIDCProvider was successfully created, ensure all secrets are present before continuing
+	if result.Status.Status == configv1alpha1.SuccessOIDCProviderStatusCondition {
 		assert.Eventually(t, func() bool {
 			var err error
 			result, err = opcs.Get(ctx, opc.Name, metav1.GetOptions{})

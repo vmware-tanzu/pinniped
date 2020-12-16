@@ -592,7 +592,7 @@ func requireDelete(t *testing.T, client pinnipedclientset.Interface, ns, name st
 
 func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string, status v1alpha1.OIDCProviderStatusCondition) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	var opc *v1alpha1.OIDCProvider

@@ -62,18 +62,19 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 		{
 			name: "jwt authenticator",
 			authenticator: func(t *testing.T) corev1.TypedLocalObjectReference {
-				return library.CreateTestJWTAuthenticator(ctx, t)
+				return library.CreateTestJWTAuthenticator(ctx, t, "email")
 			},
 			token: func(t *testing.T) (string, string, []string) {
 				pinnipedExe := buildPinnipedCLI(t)
 				credOutput, _ := runPinniedLoginOIDC(ctx, t, pinnipedExe)
 				token := credOutput.Status.Token
 
-				// By default, the JWTAuthenticator expects the username to be in the "sub" claim and the
+				// By default, the JWTAuthenticator expects the username to be in the "username" claim and the
 				// groups to be in the "groups" claim.
-				username, groups := getJWTSubAndGroupsClaims(t, token)
+				// We are configuring pinniped to set the username to be the "email" claim from the token.
+				username, groups := getJWTEmailAndGroupsClaims(t, token)
 
-				return credOutput.Status.Token, username, groups
+				return token, username, groups
 			},
 		},
 	}
@@ -233,18 +234,18 @@ func safeDerefStringPtr(s *string) string {
 	return *s
 }
 
-func getJWTSubAndGroupsClaims(t *testing.T, jwt string) (string, []string) {
+func getJWTEmailAndGroupsClaims(t *testing.T, jwt string) (string, []string) {
 	t.Helper()
 
 	token, err := jwtpkg.ParseSigned(jwt)
 	require.NoError(t, err)
 
 	var claims struct {
-		Sub    string   `json:"sub"`
+		Email  string   `json:"email"`
 		Groups []string `json:"groups"`
 	}
 	err = token.UnsafeClaimsWithoutVerification(&claims)
 	require.NoError(t, err)
 
-	return claims.Sub, claims.Groups
+	return claims.Email, claims.Groups
 }

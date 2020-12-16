@@ -169,7 +169,7 @@ func TestSupervisorLogin(t *testing.T) {
 	tokenResponse, err := downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
 	require.NoError(t, err)
 
-	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat"}
+	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "username"}
 	verifyTokenResponse(t, tokenResponse, discovery, downstreamOAuth2Config, env.SupervisorTestUpstream.Issuer, nonceParam, expectedIDTokenClaims)
 
 	// token exchange on the original token
@@ -226,6 +226,10 @@ func verifyTokenResponse(
 		idTokenClaimNames = append(idTokenClaimNames, k)
 	}
 	require.ElementsMatch(t, expectedIDTokenClaims, idTokenClaimNames)
+	expectedUsernamePrefix := upstreamIssuerName + "?sub="
+	require.True(t, strings.HasPrefix(idTokenClaims["username"].(string), expectedUsernamePrefix))
+	require.Greater(t, len(idTokenClaims["username"].(string)), len(expectedUsernamePrefix),
+		"the ID token Username should include the upstream user ID after the upstream issuer name")
 
 	// Some light verification of the other tokens that were returned.
 	require.NotEmpty(t, tokenResponse.AccessToken)

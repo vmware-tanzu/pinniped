@@ -170,7 +170,7 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 // authenticator within the test namespace.
 //
 // CreateTestJWTAuthenticator gets the OIDC issuer info from IntegrationEnv().CLITestUpstream.
-func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T) corev1.TypedLocalObjectReference {
+func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, usernameClaim string) corev1.TypedLocalObjectReference {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
@@ -193,9 +193,10 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T) corev1.TypedL
 	jwtAuthenticator, err := jwtAuthenticators.Create(createContext, &auth1alpha1.JWTAuthenticator{
 		ObjectMeta: testObjectMeta(t, "jwt-authenticator"),
 		Spec: auth1alpha1.JWTAuthenticatorSpec{
-			Issuer:   testEnv.CLITestUpstream.Issuer,
-			Audience: testEnv.CLITestUpstream.ClientID,
-			TLS:      tlsSpec,
+			Issuer:        testEnv.CLITestUpstream.Issuer,
+			Audience:      testEnv.CLITestUpstream.ClientID,
+			TLS:           tlsSpec,
+			UsernameClaim: usernameClaim,
 		},
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test JWTAuthenticator")

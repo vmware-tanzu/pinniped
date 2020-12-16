@@ -165,15 +165,8 @@ func TestSupervisorLogin(t *testing.T) {
 	authcode := callback.URL.Query().Get("code")
 	require.NotEmpty(t, authcode)
 
-	// Call the token endpoint to get tokens. Give the Supervisor a couple of seconds to wire up its signing key.
-	var tokenResponse *oauth2.Token
-	assert.Eventually(t, func() bool {
-		tokenResponse, err = downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
-		if err != nil {
-			t.Logf("error trying to exchange auth code (%s), trying again", err.Error())
-		}
-		return err == nil
-	}, time.Second*5, time.Second*1)
+	// Call the token endpoint to get tokens.
+	tokenResponse, err := downstreamOAuth2Config.Exchange(oidcHTTPClientContext, authcode, pkceParam.Verifier())
 	require.NoError(t, err)
 
 	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat"}

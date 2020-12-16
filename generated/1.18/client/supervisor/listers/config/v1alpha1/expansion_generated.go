@@ -5,10 +5,10 @@
 
 package v1alpha1
 
-// OIDCProviderListerExpansion allows custom methods to be added to
-// OIDCProviderLister.
-type OIDCProviderListerExpansion interface{}
+// FederationDomainListerExpansion allows custom methods to be added to
+// FederationDomainLister.
+type FederationDomainListerExpansion interface{}
 
-// OIDCProviderNamespaceListerExpansion allows custom methods to be added to
-// OIDCProviderNamespaceLister.
-type OIDCProviderNamespaceListerExpansion interface{}
+// FederationDomainNamespaceListerExpansion allows custom methods to be added to
+// FederationDomainNamespaceLister.
+type FederationDomainNamespaceListerExpansion interface{}

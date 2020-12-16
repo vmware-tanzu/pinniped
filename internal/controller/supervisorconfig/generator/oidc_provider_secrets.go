@@ -24,29 +24,29 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-type oidcProviderSecretsController struct {
+type federationDomainSecretsController struct {
 	secretHelper   SecretHelper
 	kubeClient     kubernetes.Interface
 	pinnipedClient pinnipedclientset.Interface
-	opcInformer    configinformers.OIDCProviderInformer
+	opcInformer    configinformers.FederationDomainInformer
 	secretInformer corev1informers.SecretInformer
 }
 
-// NewOIDCProviderSecretsController returns a controllerlib.Controller that ensures a child Secret
-// always exists for a parent OIDCProvider. It does this using the provided secretHelper, which
+// NewFederationDomainSecretsController returns a controllerlib.Controller that ensures a child Secret
+// always exists for a parent FederationDomain. It does this using the provided secretHelper, which
 // provides the parent/child mapping logic.
-func NewOIDCProviderSecretsController(
+func NewFederationDomainSecretsController(
 	secretHelper SecretHelper,
 	kubeClient kubernetes.Interface,
 	pinnipedClient pinnipedclientset.Interface,
 	secretInformer corev1informers.SecretInformer,
-	opcInformer configinformers.OIDCProviderInformer,
+	opcInformer configinformers.FederationDomainInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: fmt.Sprintf("%s%s", secretHelper.NamePrefix(), "controller"),
-			Syncer: &oidcProviderSecretsController{
+			Syncer: &federationDomainSecretsController{
 				secretHelper:   secretHelper,
 				kubeClient:     kubeClient,
 				pinnipedClient: pinnipedClient,
@@ -79,12 +79,12 @@ func NewOIDCProviderSecretsController(
 	)
 }
 
-func (c *oidcProviderSecretsController) Sync(ctx controllerlib.Context) error {
-	op, err := c.opcInformer.Lister().OIDCProviders(ctx.Key.Namespace).Get(ctx.Key.Name)
+func (c *federationDomainSecretsController) Sync(ctx controllerlib.Context) error {
+	op, err := c.opcInformer.Lister().FederationDomains(ctx.Key.Namespace).Get(ctx.Key.Name)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return fmt.Errorf(
-			"failed to get %s/%s OIDCProvider: %w",
+			"failed to get %s/%s FederationDomain: %w",
 			ctx.Key.Namespace,
 			ctx.Key.Name,
 			err,
@@ -95,8 +95,8 @@ func (c *oidcProviderSecretsController) Sync(ctx controllerlib.Context) error {
 		// The corresponding secret to this OP should have been garbage collected since it should have
 		// had this OP as its owner.
 		plog.Debug(
-			"oidcprovider deleted",
-			"oidcprovider",
+			"federationdomain deleted",
+			"federationdomain",
 			klog.KRef(ctx.Key.Namespace, ctx.Key.Name),
 		)
 		return nil
@@ -115,17 +115,17 @@ func (c *oidcProviderSecretsController) Sync(ctx controllerlib.Context) error {
 		// Secret is up to date - we are good to go.
 		plog.Debug(
 			"secret is up to date",
-			"oidcprovider",
+			"federationdomain",
 			klog.KObj(op),
 			"secret",
 			klog.KObj(existingSecret),
 		)
 
-		op = c.secretHelper.ObserveActiveSecretAndUpdateParentOIDCProvider(op, existingSecret)
-		if err := c.updateOIDCProvider(ctx.Context, op); err != nil {
-			return fmt.Errorf("failed to update oidcprovider: %w", err)
+		op = c.secretHelper.ObserveActiveSecretAndUpdateParentFederationDomain(op, existingSecret)
+		if err := c.updateFederationDomain(ctx.Context, op); err != nil {
+			return fmt.Errorf("failed to update federationdomain: %w", err)
 		}
-		plog.Debug("updated oidcprovider", "oidcprovider", klog.KObj(op), "secret", klog.KObj(newSecret))
+		plog.Debug("updated federationdomain", "federationdomain", klog.KObj(op), "secret", klog.KObj(newSecret))
 
 		return nil
 	}
@@ -135,21 +135,21 @@ func (c *oidcProviderSecretsController) Sync(ctx controllerlib.Context) error {
 	if err := c.createOrUpdateSecret(ctx.Context, op, &newSecret); err != nil {
 		return fmt.Errorf("failed to create or update secret: %w", err)
 	}
-	plog.Debug("created/updated secret", "oidcprovider", klog.KObj(op), "secret", klog.KObj(newSecret))
+	plog.Debug("created/updated secret", "federationdomain", klog.KObj(op), "secret", klog.KObj(newSecret))
 
-	op = c.secretHelper.ObserveActiveSecretAndUpdateParentOIDCProvider(op, newSecret)
-	if err := c.updateOIDCProvider(ctx.Context, op); err != nil {
-		return fmt.Errorf("failed to update oidcprovider: %w", err)
+	op = c.secretHelper.ObserveActiveSecretAndUpdateParentFederationDomain(op, newSecret)
+	if err := c.updateFederationDomain(ctx.Context, op); err != nil {
+		return fmt.Errorf("failed to update federationdomain: %w", err)
 	}
-	plog.Debug("updated oidcprovider", "oidcprovider", klog.KObj(op), "secret", klog.KObj(newSecret))
+	plog.Debug("updated federationdomain", "federationdomain", klog.KObj(op), "secret", klog.KObj(newSecret))
 
 	return nil
 }
 
-// secretNeedsUpdate returns whether or not the Secret, with name secretName, for OIDCProvider op
+// secretNeedsUpdate returns whether or not the Secret, with name secretName, for FederationDomain op
 // needs to be updated. It returns the existing secret as its second argument.
-func (c *oidcProviderSecretsController) secretNeedsUpdate(
-	op *configv1alpha1.OIDCProvider,
+func (c *federationDomainSecretsController) secretNeedsUpdate(
+	op *configv1alpha1.FederationDomain,
 	secretName string,
 ) (bool, *corev1.Secret, error) {
 	// This OPC says it has a secret associated with it. Let's try to get it from the cache.
@@ -171,9 +171,9 @@ func (c *oidcProviderSecretsController) secretNeedsUpdate(
 	return false, secret, nil
 }
 
-func (c *oidcProviderSecretsController) createOrUpdateSecret(
+func (c *federationDomainSecretsController) createOrUpdateSecret(
 	ctx context.Context,
-	op *configv1alpha1.OIDCProvider,
+	op *configv1alpha1.FederationDomain,
 	newSecret **corev1.Secret,
 ) error {
 	secretClient := c.kubeClient.CoreV1().Secrets((*newSecret).Namespace)
@@ -210,15 +210,15 @@ func (c *oidcProviderSecretsController) createOrUpdateSecret(
 	})
 }
 
-func (c *oidcProviderSecretsController) updateOIDCProvider(
+func (c *federationDomainSecretsController) updateFederationDomain(
 	ctx context.Context,
-	newOP *configv1alpha1.OIDCProvider,
+	newOP *configv1alpha1.FederationDomain,
 ) error {
-	opcClient := c.pinnipedClient.ConfigV1alpha1().OIDCProviders(newOP.Namespace)
+	opcClient := c.pinnipedClient.ConfigV1alpha1().FederationDomains(newOP.Namespace)
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		oldOP, err := opcClient.Get(ctx, newOP.Name, metav1.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("failed to get oidcprovider %s/%s: %w", newOP.Namespace, newOP.Name, err)
+			return fmt.Errorf("failed to get federationdomain %s/%s: %w", newOP.Namespace, newOP.Name, err)
 		}
 
 		if reflect.DeepEqual(newOP.Status.Secrets, oldOP.Status.Secrets) {

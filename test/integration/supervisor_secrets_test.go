@@ -28,44 +28,44 @@ func TestSupervisorSecrets(t *testing.T) {
 	defer cancel()
 
 	// Create our OP under test.
-	op := library.CreateTestOIDCProvider(ctx, t, "", "", "")
+	op := library.CreateTestFederationDomain(ctx, t, "", "", "")
 
 	tests := []struct {
 		name        string
-		secretName  func(op *configv1alpha1.OIDCProvider) string
+		secretName  func(op *configv1alpha1.FederationDomain) string
 		ensureValid func(t *testing.T, secret *corev1.Secret)
 	}{
 		{
 			name: "csrf cookie signing key",
-			secretName: func(op *configv1alpha1.OIDCProvider) string {
+			secretName: func(op *configv1alpha1.FederationDomain) string {
 				return env.SupervisorAppName + "-key"
 			},
 			ensureValid: ensureValidSymmetricKey,
 		},
 		{
 			name: "jwks",
-			secretName: func(op *configv1alpha1.OIDCProvider) string {
+			secretName: func(op *configv1alpha1.FederationDomain) string {
 				return op.Status.Secrets.JWKS.Name
 			},
 			ensureValid: ensureValidJWKS,
 		},
 		{
 			name: "hmac signing secret",
-			secretName: func(op *configv1alpha1.OIDCProvider) string {
+			secretName: func(op *configv1alpha1.FederationDomain) string {
 				return op.Status.Secrets.TokenSigningKey.Name
 			},
 			ensureValid: ensureValidSymmetricKey,
 		},
 		{
 			name: "state signature secret",
-			secretName: func(op *configv1alpha1.OIDCProvider) string {
+			secretName: func(op *configv1alpha1.FederationDomain) string {
 				return op.Status.Secrets.StateSigningKey.Name
 			},
 			ensureValid: ensureValidSymmetricKey,
 		},
 		{
 			name: "state encryption secret",
-			secretName: func(op *configv1alpha1.OIDCProvider) string {
+			secretName: func(op *configv1alpha1.FederationDomain) string {
 				return op.Status.Secrets.StateEncryptionKey.Name
 			},
 			ensureValid: ensureValidSymmetricKey,
@@ -75,12 +75,12 @@ func TestSupervisorSecrets(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			// Ensure a secret is created with the OP's JWKS.
-			var updatedOP *configv1alpha1.OIDCProvider
+			var updatedOP *configv1alpha1.FederationDomain
 			var err error
 			assert.Eventually(t, func() bool {
 				updatedOP, err = supervisorClient.
 					ConfigV1alpha1().
-					OIDCProviders(env.SupervisorNamespace).
+					FederationDomains(env.SupervisorNamespace).
 					Get(ctx, op.Name, metav1.GetOptions{})
 				return err == nil && test.secretName(updatedOP) != ""
 			}, time.Second*10, time.Millisecond*500)

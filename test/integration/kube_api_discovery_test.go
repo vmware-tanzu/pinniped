@@ -68,10 +68,10 @@ func TestGetAPIResourceList(t *testing.T) {
 			resourceByVersion: map[string][]metav1.APIResource{
 				"config.supervisor.pinniped.dev/v1alpha1": {
 					{
-						Name:         "oidcproviders",
-						SingularName: "oidcprovider",
+						Name:         "federationdomains",
+						SingularName: "federationdomain",
 						Namespaced:   true,
-						Kind:         "OIDCProvider",
+						Kind:         "FederationDomain",
 						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
 						Categories:   []string{"pinniped"},
 					},
@@ -95,17 +95,17 @@ func TestGetAPIResourceList(t *testing.T) {
 			resourceByVersion: map[string][]metav1.APIResource{
 				"idp.supervisor.pinniped.dev/v1alpha1": {
 					{
-						Name:         "upstreamoidcproviders",
-						SingularName: "upstreamoidcprovider",
+						Name:         "oidcidentityproviders",
+						SingularName: "oidcidentityprovider",
 						Namespaced:   true,
-						Kind:         "UpstreamOIDCProvider",
+						Kind:         "OIDCIdentityProvider",
 						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
 						Categories:   []string{"pinniped", "pinniped-idp", "pinniped-idps"},
 					},
 					{
-						Name:       "upstreamoidcproviders/status",
+						Name:       "oidcidentityproviders/status",
 						Namespaced: true,
-						Kind:       "UpstreamOIDCProvider",
+						Kind:       "OIDCIdentityProvider",
 						Verbs:      []string{"get", "patch", "update"},
 					},
 				},

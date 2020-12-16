@@ -9,10 +9,12 @@
 package mocksecrethelper
 
 import (
-	gomock "github.com/golang/mock/gomock"
-	v1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
-	v1 "k8s.io/api/core/v1"
 	reflect "reflect"
+
+	gomock "github.com/golang/mock/gomock"
+	v1 "k8s.io/api/core/v1"
+
+	v1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
 )
 
 // MockSecretHelper is a mock of SecretHelper interface
@@ -39,7 +41,7 @@ func (m *MockSecretHelper) EXPECT() *MockSecretHelperMockRecorder {
 }
 
 // Generate mocks base method
-func (m *MockSecretHelper) Generate(arg0 *v1alpha1.OIDCProvider) (*v1.Secret, error) {
+func (m *MockSecretHelper) Generate(arg0 *v1alpha1.FederationDomain) (*v1.Secret, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Generate", arg0)
 	ret0, _ := ret[0].(*v1.Secret)
@@ -54,7 +56,7 @@ func (mr *MockSecretHelperMockRecorder) Generate(arg0 interface{}) *gomock.Call 
 }
 
 // IsValid mocks base method
-func (m *MockSecretHelper) IsValid(arg0 *v1alpha1.OIDCProvider, arg1 *v1.Secret) bool {
+func (m *MockSecretHelper) IsValid(arg0 *v1alpha1.FederationDomain, arg1 *v1.Secret) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsValid", arg0, arg1)
 	ret0, _ := ret[0].(bool)
@@ -81,16 +83,16 @@ func (mr *MockSecretHelperMockRecorder) NamePrefix() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NamePrefix", reflect.TypeOf((*MockSecretHelper)(nil).NamePrefix))
 }
 
-// ObserveActiveSecretAndUpdateParentOIDCProvider mocks base method
-func (m *MockSecretHelper) ObserveActiveSecretAndUpdateParentOIDCProvider(arg0 *v1alpha1.OIDCProvider, arg1 *v1.Secret) *v1alpha1.OIDCProvider {
+// ObserveActiveSecretAndUpdateParentFederationDomain mocks base method
+func (m *MockSecretHelper) ObserveActiveSecretAndUpdateParentFederationDomain(arg0 *v1alpha1.FederationDomain, arg1 *v1.Secret) *v1alpha1.FederationDomain {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ObserveActiveSecretAndUpdateParentOIDCProvider", arg0, arg1)
-	ret0, _ := ret[0].(*v1alpha1.OIDCProvider)
+	ret := m.ctrl.Call(m, "ObserveActiveSecretAndUpdateParentFederationDomain", arg0, arg1)
+	ret0, _ := ret[0].(*v1alpha1.FederationDomain)
 	return ret0
 }
 
-// ObserveActiveSecretAndUpdateParentOIDCProvider indicates an expected call of ObserveActiveSecretAndUpdateParentOIDCProvider
-func (mr *MockSecretHelperMockRecorder) ObserveActiveSecretAndUpdateParentOIDCProvider(arg0, arg1 interface{}) *gomock.Call {
+// ObserveActiveSecretAndUpdateParentFederationDomain indicates an expected call of ObserveActiveSecretAndUpdateParentFederationDomain
+func (mr *MockSecretHelperMockRecorder) ObserveActiveSecretAndUpdateParentFederationDomain(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ObserveActiveSecretAndUpdateParentOIDCProvider", reflect.TypeOf((*MockSecretHelper)(nil).ObserveActiveSecretAndUpdateParentOIDCProvider), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ObserveActiveSecretAndUpdateParentFederationDomain", reflect.TypeOf((*MockSecretHelper)(nil).ObserveActiveSecretAndUpdateParentFederationDomain), arg0, arg1)
 }

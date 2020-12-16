@@ -13,12 +13,12 @@ import (
 
 // dynamicOauth2HMACStrategy is an oauth2.CoreStrategy that can dynamically load an HMAC key to sign
 // stuff (access tokens, refresh tokens, and auth codes). We want this dynamic capability since our
-// controllers for loading OIDCProvider's and signing keys run in parallel, and thus the signing key
-// might not be ready when an OIDCProvider is otherwise ready.
+// controllers for loading FederationDomain's and signing keys run in parallel, and thus the signing key
+// might not be ready when an FederationDomain is otherwise ready.
 //
-// If we ever update OIDCProvider's to hold their signing key, we might not need this type, since we
-// could have an invariant that routes to an OIDCProvider's endpoints are only wired up if an
-// OIDCProvider has a valid signing key.
+// If we ever update FederationDomain's to hold their signing key, we might not need this type, since we
+// could have an invariant that routes to an FederationDomain's endpoints are only wired up if an
+// FederationDomain has a valid signing key.
 type dynamicOauth2HMACStrategy struct {
 	fositeConfig *compose.Config
 	keyFunc      func() []byte

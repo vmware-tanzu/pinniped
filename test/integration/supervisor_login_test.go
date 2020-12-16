@@ -98,15 +98,15 @@ func TestSupervisorLogin(t *testing.T) {
 		map[string]string{"tls.crt": string(certPEM), "tls.key": string(keyPEM)},
 	)
 
-	// Create the downstream OIDCProvider and expect it to go into the success status condition.
-	downstream := library.CreateTestOIDCProvider(ctx, t,
+	// Create the downstream FederationDomain and expect it to go into the success status condition.
+	downstream := library.CreateTestFederationDomain(ctx, t,
 		issuerURL.String(),
 		certSecret.Name,
-		configv1alpha1.SuccessOIDCProviderStatusCondition,
+		configv1alpha1.SuccessFederationDomainStatusCondition,
 	)
 
 	// Create upstream OIDC provider and wait for it to become ready.
-	library.CreateTestUpstreamOIDCProvider(t, idpv1alpha1.UpstreamOIDCProviderSpec{
+	library.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 		Issuer: env.SupervisorTestUpstream.Issuer,
 		TLS: &idpv1alpha1.TLSSpec{
 			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),

@@ -29,26 +29,26 @@ import (
 func TestTLSCertObserverControllerInformerFilters(t *testing.T) {
 	spec.Run(t, "informer filters", func(t *testing.T, when spec.G, it spec.S) {
 		var (
-			r                            *require.Assertions
-			observableWithInformerOption *testutil.ObservableWithInformerOption
-			secretsInformerFilter        controllerlib.Filter
-			oidcProviderInformerFilter   controllerlib.Filter
+			r                              *require.Assertions
+			observableWithInformerOption   *testutil.ObservableWithInformerOption
+			secretsInformerFilter          controllerlib.Filter
+			federationDomainInformerFilter controllerlib.Filter
 		)
 
 		it.Before(func() {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
-			oidcProviderInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().OIDCProviders()
+			federationDomainInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().FederationDomains()
 			_ = NewTLSCertObserverController(
 				nil,
 				"", // don't care about the secret name for this test
 				secretsInformer,
-				oidcProviderInformer,
+				federationDomainInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
 			)
 			secretsInformerFilter = observableWithInformerOption.GetFilterForInformer(secretsInformer)
-			oidcProviderInformerFilter = observableWithInformerOption.GetFilterForInformer(oidcProviderInformer)
+			federationDomainInformerFilter = observableWithInformerOption.GetFilterForInformer(federationDomainInformer)
 		})
 
 		when("watching Secret objects", func() {
@@ -73,19 +73,19 @@ func TestTLSCertObserverControllerInformerFilters(t *testing.T) {
 			})
 		})
 
-		when("watching OIDCProvider objects", func() {
+		when("watching FederationDomain objects", func() {
 			var (
 				subject                 controllerlib.Filter
-				provider, otherProvider *v1alpha1.OIDCProvider
+				provider, otherProvider *v1alpha1.FederationDomain
 			)
 
 			it.Before(func() {
-				subject = oidcProviderInformerFilter
-				provider = &v1alpha1.OIDCProvider{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: "any-namespace"}}
-				otherProvider = &v1alpha1.OIDCProvider{ObjectMeta: metav1.ObjectMeta{Name: "any-other-name", Namespace: "any-other-namespace"}}
+				subject = federationDomainInformerFilter
+				provider = &v1alpha1.FederationDomain{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: "any-namespace"}}
+				otherProvider = &v1alpha1.FederationDomain{ObjectMeta: metav1.ObjectMeta{Name: "any-other-name", Namespace: "any-other-namespace"}}
 			})
 
-			when("any OIDCProvider changes", func() {
+			when("any FederationDomain changes", func() {
 				it("returns true to trigger the sync method", func() {
 					r.True(subject.Add(provider))
 					r.True(subject.Update(provider, otherProvider))
@@ -142,7 +142,7 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 				issuerTLSCertSetter,
 				defaultTLSSecretName,
 				kubeInformers.Core().V1().Secrets(),
-				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
+				pinnipedInformers.Config().V1alpha1().FederationDomains(),
 				controllerlib.WithInformer,
 			)
 
@@ -192,7 +192,7 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 			timeoutContextCancel()
 		})
 
-		when("there are no OIDCProviders and no TLS Secrets yet", func() {
+		when("there are no FederationDomains and no TLS Secrets yet", func() {
 			it("sets the issuerTLSCertSetter's map to be empty", func() {
 				startInformersAndController()
 				err := controllerlib.TestSync(t, subject, *syncContext)
@@ -205,71 +205,71 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 			})
 		})
 
-		when("there are OIDCProviders where some have corresponding TLS Secrets and some don't", func() {
+		when("there are FederationDomains where some have corresponding TLS Secrets and some don't", func() {
 			var (
 				expectedCertificate1, expectedCertificate2 tls.Certificate
 			)
 
 			it.Before(func() {
 				var err error
-				oidcProviderWithoutSecret1 := &v1alpha1.OIDCProvider{
+				federationDomainWithoutSecret1 := &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "no-secret-oidcprovider1",
+						Name:      "no-secret-federationdomain1",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://no-secret-issuer1.com"}, // no SNICertificateSecretName field
+					Spec: v1alpha1.FederationDomainSpec{Issuer: "https://no-secret-issuer1.com"}, // no SNICertificateSecretName field
 				}
-				oidcProviderWithoutSecret2 := &v1alpha1.OIDCProvider{
+				federationDomainWithoutSecret2 := &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "no-secret-oidcprovider2",
+						Name:      "no-secret-federationdomain2",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderSpec{
+					Spec: v1alpha1.FederationDomainSpec{
 						Issuer: "https://no-secret-issuer2.com",
-						TLS:    &v1alpha1.OIDCProviderTLSSpec{SecretName: ""},
+						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: ""},
 					},
 				}
-				oidcProviderWithBadSecret := &v1alpha1.OIDCProvider{
+				federationDomainWithBadSecret := &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "bad-secret-oidcprovider",
+						Name:      "bad-secret-federationdomain",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderSpec{
+					Spec: v1alpha1.FederationDomainSpec{
 						Issuer: "https://bad-secret-issuer.com",
-						TLS:    &v1alpha1.OIDCProviderTLSSpec{SecretName: "bad-tls-secret-name"},
+						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "bad-tls-secret-name"},
 					},
 				}
 				// Also add one with a URL that cannot be parsed to make sure that the controller is not confused by invalid URLs.
 				invalidIssuerURL := ":/host//path"
 				_, err = url.Parse(invalidIssuerURL) //nolint:staticcheck // Yes, this URL is intentionally invalid.
 				r.Error(err)
-				oidcProviderWithBadIssuer := &v1alpha1.OIDCProvider{
+				federationDomainWithBadIssuer := &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "bad-issuer-oidcprovider",
+						Name:      "bad-issuer-federationdomain",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderSpec{Issuer: invalidIssuerURL},
+					Spec: v1alpha1.FederationDomainSpec{Issuer: invalidIssuerURL},
 				}
-				oidcProviderWithGoodSecret1 := &v1alpha1.OIDCProvider{
+				federationDomainWithGoodSecret1 := &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "good-secret-oidcprovider1",
+						Name:      "good-secret-federationdomain1",
 						Namespace: installedInNamespace,
 					},
 					// Issuer hostname should be treated in a case-insensitive way and SNI ignores port numbers. Test without a port number.
-					Spec: v1alpha1.OIDCProviderSpec{
+					Spec: v1alpha1.FederationDomainSpec{
 						Issuer: "https://www.iSSuer-wiTh-goOd-secRet1.cOm/path",
-						TLS:    &v1alpha1.OIDCProviderTLSSpec{SecretName: "good-tls-secret-name1"},
+						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "good-tls-secret-name1"},
 					},
 				}
-				oidcProviderWithGoodSecret2 := &v1alpha1.OIDCProvider{
+				federationDomainWithGoodSecret2 := &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "good-secret-oidcprovider2",
+						Name:      "good-secret-federationdomain2",
 						Namespace: installedInNamespace,
 					},
 					// Issuer hostname should be treated in a case-insensitive way and SNI ignores port numbers. Test with a port number.
-					Spec: v1alpha1.OIDCProviderSpec{
+					Spec: v1alpha1.FederationDomainSpec{
 						Issuer: "https://www.issUEr-WIth-gOOd-seCret2.com:1234/path",
-						TLS:    &v1alpha1.OIDCProviderTLSSpec{SecretName: "good-tls-secret-name2"},
+						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "good-tls-secret-name2"},
 					},
 				}
 				testCrt1 := readTestFile("testdata/test.crt")
@@ -296,12 +296,12 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{Name: "bad-tls-secret-name", Namespace: installedInNamespace},
 					Data:       map[string][]byte{"junk": nil},
 				}
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithoutSecret1))
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithoutSecret2))
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithBadSecret))
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithBadIssuer))
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithGoodSecret1))
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithGoodSecret2))
+				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithoutSecret1))
+				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithoutSecret2))
+				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithBadSecret))
+				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithBadIssuer))
+				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithGoodSecret1))
+				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithGoodSecret2))
 				r.NoError(kubeInformerClient.Tracker().Add(goodTLSSecret1))
 				r.NoError(kubeInformerClient.Tracker().Add(goodTLSSecret2))
 				r.NoError(kubeInformerClient.Tracker().Add(badTLSSecret))

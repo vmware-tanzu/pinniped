@@ -5,4 +5,4 @@
 
 package v1alpha1
 
-type OIDCProviderExpansion interface{}
+type FederationDomainExpansion interface{}

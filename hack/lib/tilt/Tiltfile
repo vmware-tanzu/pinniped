@@ -118,8 +118,8 @@ k8s_resource(
     new_name='supervisor', # this is the name that will appear in the tilt UI
     objects=[
         # these are the objects that would otherwise appear in the "uncategorized" tab in the tilt UI
-        'oidcproviders.config.supervisor.pinniped.dev:customresourcedefinition',
-        'upstreamoidcproviders.idp.supervisor.pinniped.dev:customresourcedefinition',
+        'federationdomains.config.supervisor.pinniped.dev:customresourcedefinition',
+        'oidcidentityproviders.idp.supervisor.pinniped.dev:customresourcedefinition',
         'pinniped-supervisor-static-config:configmap',
         'supervisor:namespace',
         'pinniped-supervisor:role',

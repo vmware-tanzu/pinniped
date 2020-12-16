@@ -54,7 +54,7 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							Kind:       "OIDCProvider",
+							Kind:       "FederationDomain",
 							Name:       "some-name",
 							Controller: boolPtr(true),
 						},
@@ -85,7 +85,7 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
-							Kind:       "OIDCProvider",
+							Kind:       "FederationDomain",
 							Name:       "some-name",
 						},
 					},
@@ -100,7 +100,7 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
-							Kind:       "OIDCProvider",
+							Kind:       "FederationDomain",
 							Name:       "some-name",
 							Controller: boolPtr(true),
 						},
@@ -123,7 +123,7 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 						},
 						{
 							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
-							Kind:       "OIDCProvider",
+							Kind:       "FederationDomain",
 							Name:       "some-name",
 							Controller: boolPtr(true),
 						},
@@ -148,7 +148,7 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 			opcInformer := pinnipedinformers.NewSharedInformerFactory(
 				pinnipedfake.NewSimpleClientset(),
 				0,
-			).Config().V1alpha1().OIDCProviders()
+			).Config().V1alpha1().FederationDomains()
 			withInformer := testutil.NewObservableWithInformerOption()
 			_ = NewJWKSWriterController(
 				nil, // labels, not needed
@@ -175,7 +175,7 @@ func TestJWKSWriterControllerFilterOPC(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		opc        configv1alpha1.OIDCProvider
+		opc        configv1alpha1.FederationDomain
 		wantAdd    bool
 		wantUpdate bool
 		wantDelete bool
@@ -183,7 +183,7 @@ func TestJWKSWriterControllerFilterOPC(t *testing.T) {
 	}{
 		{
 			name:       "anything goes",
-			opc:        configv1alpha1.OIDCProvider{},
+			opc:        configv1alpha1.FederationDomain{},
 			wantAdd:    true,
 			wantUpdate: true,
 			wantDelete: true,
@@ -202,7 +202,7 @@ func TestJWKSWriterControllerFilterOPC(t *testing.T) {
 			opcInformer := pinnipedinformers.NewSharedInformerFactory(
 				pinnipedfake.NewSimpleClientset(),
 				0,
-			).Config().V1alpha1().OIDCProviders()
+			).Config().V1alpha1().FederationDomains()
 			withInformer := testutil.NewObservableWithInformerOption()
 			_ = NewJWKSWriterController(
 				nil, // labels, not needed
@@ -213,7 +213,7 @@ func TestJWKSWriterControllerFilterOPC(t *testing.T) {
 				withInformer.WithInformer,
 			)
 
-			unrelated := configv1alpha1.OIDCProvider{}
+			unrelated := configv1alpha1.FederationDomain{}
 			filter := withInformer.GetFilterForInformer(opcInformer)
 			require.Equal(t, test.wantAdd, filter.Add(&test.opc))
 			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, &test.opc))
@@ -239,16 +239,16 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 	opcGVR := schema.GroupVersionResource{
 		Group:    configv1alpha1.SchemeGroupVersion.Group,
 		Version:  configv1alpha1.SchemeGroupVersion.Version,
-		Resource: "oidcproviders",
+		Resource: "federationdomains",
 	}
 
-	goodOPC := &configv1alpha1.OIDCProvider{
+	goodOPC := &configv1alpha1.FederationDomain{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "good-opc",
 			Namespace: namespace,
 			UID:       "good-opc-uid",
 		},
-		Spec: configv1alpha1.OIDCProviderSpec{
+		Spec: configv1alpha1.FederationDomainSpec{
 			Issuer: "https://some-issuer.com",
 		},
 	}
@@ -273,7 +273,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						APIVersion:         opcGVR.GroupVersion().String(),
-						Kind:               "OIDCProvider",
+						Kind:               "FederationDomain",
 						Name:               goodOPC.Name,
 						UID:                goodOPC.UID,
 						BlockOwnerDeletion: boolPtr(true),
@@ -300,7 +300,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		secrets              []*corev1.Secret
 		configKubeClient     func(*kubernetesfake.Clientset)
 		configPinnipedClient func(*pinnipedfake.Clientset)
-		opcs                 []*configv1alpha1.OIDCProvider
+		opcs                 []*configv1alpha1.FederationDomain
 		generateKeyErr       error
 		wantGenerateKeyCount int
 		wantSecretActions    []kubetesting.Action
@@ -310,7 +310,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "new opc with no secret",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPC,
 			},
 			wantGenerateKeyCount: 1,
@@ -326,7 +326,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "opc without status with existing secret",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPC,
 			},
 			secrets: []*corev1.Secret{
@@ -344,7 +344,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "existing opc with no secret",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPCWithStatus,
 			},
 			wantGenerateKeyCount: 1,
@@ -359,7 +359,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "existing opc with existing secret",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPCWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -374,7 +374,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "missing jwk in secret",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPCWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -392,7 +392,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "missing jwks in secret",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPCWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -410,7 +410,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "invalid jwk JSON in secret",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPCWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -428,7 +428,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "invalid jwks JSON in secret",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPCWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -446,7 +446,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "public jwk in secret",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPCWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -464,7 +464,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "private jwks in secret",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPCWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -482,7 +482,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "invalid jwk key in secret",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPCWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -500,7 +500,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "invalid jwks key in secret",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPCWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -518,7 +518,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "missing active jwks in secret",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPCWithStatus,
 			},
 			secrets: []*corev1.Secret{
@@ -536,7 +536,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "generate key fails",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPCWithStatus,
 			},
 			generateKeyErr: errors.New("some generate error"),
@@ -545,7 +545,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "get secret fails",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPC,
 			},
 			configKubeClient: func(client *kubernetesfake.Clientset) {
@@ -558,7 +558,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "create secret fails",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPC,
 			},
 			configKubeClient: func(client *kubernetesfake.Clientset) {
@@ -571,7 +571,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "update secret fails",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPC,
 			},
 			secrets: []*corev1.Secret{
@@ -587,11 +587,11 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "get opc fails",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPC,
 			},
 			configPinnipedClient: func(client *pinnipedfake.Clientset) {
-				client.PrependReactor("get", "oidcproviders", func(_ kubetesting.Action) (bool, runtime.Object, error) {
+				client.PrependReactor("get", "federationdomains", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New("some get error")
 				})
 			},
@@ -600,11 +600,11 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 		{
 			name: "update opc fails",
 			key:  controllerlib.Key{Namespace: goodOPC.Namespace, Name: goodOPC.Name},
-			opcs: []*configv1alpha1.OIDCProvider{
+			opcs: []*configv1alpha1.FederationDomain{
 				goodOPC,
 			},
 			configPinnipedClient: func(client *pinnipedfake.Clientset) {
-				client.PrependReactor("update", "oidcproviders", func(_ kubetesting.Action) (bool, runtime.Object, error) {
+				client.PrependReactor("update", "federationdomains", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New("some update error")
 				})
 			},
@@ -661,7 +661,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 				kubeAPIClient,
 				pinnipedAPIClient,
 				kubeInformers.Core().V1().Secrets(),
-				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
+				pinnipedInformers.Config().V1alpha1().FederationDomains(),
 				controllerlib.WithInformer,
 			)
 

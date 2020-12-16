@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestOIDCProviderValidations(t *testing.T) {
+func TestFederationDomainValidations(t *testing.T) {
 	tests := []struct {
 		name      string
 		issuer    string
@@ -72,7 +72,7 @@ func TestOIDCProviderValidations(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewOIDCProvider(tt.issuer)
+			_, err := NewFederationDomain(tt.issuer)
 			if tt.wantError != "" {
 				require.EqualError(t, err, tt.wantError)
 			} else {

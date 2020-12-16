@@ -15,8 +15,8 @@ type FakeIDPV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeIDPV1alpha1) UpstreamOIDCProviders(namespace string) v1alpha1.UpstreamOIDCProviderInterface {
-	return &FakeUpstreamOIDCProviders{c, namespace}
+func (c *FakeIDPV1alpha1) OIDCIdentityProviders(namespace string) v1alpha1.OIDCIdentityProviderInterface {
+	return &FakeOIDCIdentityProviders{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

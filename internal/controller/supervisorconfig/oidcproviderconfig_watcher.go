@@ -29,29 +29,29 @@ import (
 // If there are no longer any valid issuers, then it can be called with no arguments.
 // Implementations of this type should be thread-safe to support calls from multiple goroutines.
 type ProvidersSetter interface {
-	SetProviders(oidcProviders ...*provider.OIDCProvider)
+	SetProviders(federationDomains ...*provider.FederationDomain)
 }
 
-type oidcProviderWatcherController struct {
+type federationDomainWatcherController struct {
 	providerSetter ProvidersSetter
 	clock          clock.Clock
 	client         pinnipedclientset.Interface
-	opcInformer    configinformers.OIDCProviderInformer
+	opcInformer    configinformers.FederationDomainInformer
 }
 
-// NewOIDCProviderWatcherController creates a controllerlib.Controller that watches
-// OIDCProvider objects and notifies a callback object of the collection of provider configs.
-func NewOIDCProviderWatcherController(
+// NewFederationDomainWatcherController creates a controllerlib.Controller that watches
+// FederationDomain objects and notifies a callback object of the collection of provider configs.
+func NewFederationDomainWatcherController(
 	providerSetter ProvidersSetter,
 	clock clock.Clock,
 	client pinnipedclientset.Interface,
-	opcInformer configinformers.OIDCProviderInformer,
+	opcInformer configinformers.FederationDomainInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
-			Name: "OIDCProviderWatcherController",
-			Syncer: &oidcProviderWatcherController{
+			Name: "FederationDomainWatcherController",
+			Syncer: &federationDomainWatcherController{
 				providerSetter: providerSetter,
 				clock:          clock,
 				client:         client,
@@ -67,7 +67,7 @@ func NewOIDCProviderWatcherController(
 }
 
 // Sync implements controllerlib.Syncer.
-func (c *oidcProviderWatcherController) Sync(ctx controllerlib.Context) error {
+func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) error {
 	all, err := c.opcInformer.Lister().List(labels.Everything())
 	if err != nil {
 		return err
@@ -82,7 +82,7 @@ func (c *oidcProviderWatcherController) Sync(ctx controllerlib.Context) error {
 	}
 
 	// Make a map of issuer hostnames -> set of unique secret names. This will help us complain when
-	// multiple OIDCProviders have the same issuer hostname (excluding port) but specify
+	// multiple FederationDomains have the same issuer hostname (excluding port) but specify
 	// different TLS serving Secrets. Doesn't make sense to have the one address use more than one
 	// TLS cert. Ignore ports because SNI information on the incoming requests is not going to include
 	// port numbers. Also make a helper function for forming keys into this map.
@@ -109,7 +109,7 @@ func (c *oidcProviderWatcherController) Sync(ctx controllerlib.Context) error {
 
 	errs := multierror.New()
 
-	oidcProviders := make([]*provider.OIDCProvider, 0)
+	federationDomains := make([]*provider.FederationDomain, 0)
 	for _, opc := range all {
 		issuerURL, urlParseErr := url.Parse(opc.Spec.Issuer)
 
@@ -120,7 +120,7 @@ func (c *oidcProviderWatcherController) Sync(ctx controllerlib.Context) error {
 					ctx.Context,
 					opc.Namespace,
 					opc.Name,
-					configv1alpha1.DuplicateOIDCProviderStatusCondition,
+					configv1alpha1.DuplicateFederationDomainStatusCondition,
 					"Duplicate issuer: "+opc.Spec.Issuer,
 				); err != nil {
 					errs.Add(fmt.Errorf("could not update status: %w", err))
@@ -135,7 +135,7 @@ func (c *oidcProviderWatcherController) Sync(ctx controllerlib.Context) error {
 				ctx.Context,
 				opc.Namespace,
 				opc.Name,
-				configv1alpha1.SameIssuerHostMustUseSameSecretOIDCProviderStatusCondition,
+				configv1alpha1.SameIssuerHostMustUseSameSecretFederationDomainStatusCondition,
 				"Issuers with the same DNS hostname (address not including port) must use the same secretName: "+issuerURLToHostnameKey(issuerURL),
 			); err != nil {
 				errs.Add(fmt.Errorf("could not update status: %w", err))
@@ -143,13 +143,13 @@ func (c *oidcProviderWatcherController) Sync(ctx controllerlib.Context) error {
 			continue
 		}
 
-		oidcProvider, err := provider.NewOIDCProvider(opc.Spec.Issuer) // This validates the Issuer URL.
+		federationDomain, err := provider.NewFederationDomain(opc.Spec.Issuer) // This validates the Issuer URL.
 		if err != nil {
 			if err := c.updateStatus(
 				ctx.Context,
 				opc.Namespace,
 				opc.Name,
-				configv1alpha1.InvalidOIDCProviderStatusCondition,
+				configv1alpha1.InvalidFederationDomainStatusCondition,
 				"Invalid: "+err.Error(),
 			); err != nil {
 				errs.Add(fmt.Errorf("could not update status: %w", err))
@@ -161,28 +161,28 @@ func (c *oidcProviderWatcherController) Sync(ctx controllerlib.Context) error {
 			ctx.Context,
 			opc.Namespace,
 			opc.Name,
-			configv1alpha1.SuccessOIDCProviderStatusCondition,
+			configv1alpha1.SuccessFederationDomainStatusCondition,
 			"Provider successfully created",
 		); err != nil {
 			errs.Add(fmt.Errorf("could not update status: %w", err))
 			continue
 		}
-		oidcProviders = append(oidcProviders, oidcProvider)
+		federationDomains = append(federationDomains, federationDomain)
 	}
 
-	c.providerSetter.SetProviders(oidcProviders...)
+	c.providerSetter.SetProviders(federationDomains...)
 
 	return errs.ErrOrNil()
 }
 
-func (c *oidcProviderWatcherController) updateStatus(
+func (c *federationDomainWatcherController) updateStatus(
 	ctx context.Context,
 	namespace, name string,
-	status configv1alpha1.OIDCProviderStatusCondition,
+	status configv1alpha1.FederationDomainStatusCondition,
 	message string,
 ) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		opc, err := c.client.ConfigV1alpha1().OIDCProviders(namespace).Get(ctx, name, metav1.GetOptions{})
+		opc, err := c.client.ConfigV1alpha1().FederationDomains(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("get failed: %w", err)
 		}
@@ -193,7 +193,7 @@ func (c *oidcProviderWatcherController) updateStatus(
 
 		plog.Debug(
 			"attempting status update",
-			"openidproviderconfig",
+			"federationdomainconfig",
 			klog.KRef(namespace, name),
 			"status",
 			status,
@@ -203,7 +203,7 @@ func (c *oidcProviderWatcherController) updateStatus(
 		opc.Status.Status = status
 		opc.Status.Message = message
 		opc.Status.LastUpdateTime = timePtr(metav1.NewTime(c.clock.Now()))
-		_, err = c.client.ConfigV1alpha1().OIDCProviders(namespace).Update(ctx, opc, metav1.UpdateOptions{})
+		_, err = c.client.ConfigV1alpha1().FederationDomains(namespace).Update(ctx, opc, metav1.UpdateOptions{})
 		return err
 	})
 }

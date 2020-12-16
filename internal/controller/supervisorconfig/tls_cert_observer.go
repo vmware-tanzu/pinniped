@@ -21,7 +21,7 @@ import (
 type tlsCertObserverController struct {
 	issuerTLSCertSetter             IssuerTLSCertSetter
 	defaultTLSCertificateSecretName string
-	oidcProviderInformer            v1alpha1.OIDCProviderInformer
+	federationDomainInformer        v1alpha1.FederationDomainInformer
 	secretInformer                  corev1informers.SecretInformer
 }
 
@@ -34,7 +34,7 @@ func NewTLSCertObserverController(
 	issuerTLSCertSetter IssuerTLSCertSetter,
 	defaultTLSCertificateSecretName string,
 	secretInformer corev1informers.SecretInformer,
-	oidcProviderInformer v1alpha1.OIDCProviderInformer,
+	federationDomainInformer v1alpha1.FederationDomainInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
@@ -43,7 +43,7 @@ func NewTLSCertObserverController(
 			Syncer: &tlsCertObserverController{
 				issuerTLSCertSetter:             issuerTLSCertSetter,
 				defaultTLSCertificateSecretName: defaultTLSCertificateSecretName,
-				oidcProviderInformer:            oidcProviderInformer,
+				federationDomainInformer:        federationDomainInformer,
 				secretInformer:                  secretInformer,
 			},
 		},
@@ -53,7 +53,7 @@ func NewTLSCertObserverController(
 			controllerlib.InformerOption{},
 		),
 		withInformer(
-			oidcProviderInformer,
+			federationDomainInformer,
 			pinnipedcontroller.MatchAnythingFilter(nil),
 			controllerlib.InformerOption{},
 		),
@@ -62,12 +62,12 @@ func NewTLSCertObserverController(
 
 func (c *tlsCertObserverController) Sync(ctx controllerlib.Context) error {
 	ns := ctx.Key.Namespace
-	allProviders, err := c.oidcProviderInformer.Lister().OIDCProviders(ns).List(labels.Everything())
+	allProviders, err := c.federationDomainInformer.Lister().FederationDomains(ns).List(labels.Everything())
 	if err != nil {
-		return fmt.Errorf("failed to list OIDCProviders: %w", err)
+		return fmt.Errorf("failed to list FederationDomains: %w", err)
 	}
 
-	// Rebuild the whole map on any change to any Secret or OIDCProvider, because either can have changes that
+	// Rebuild the whole map on any change to any Secret or FederationDomain, because either can have changes that
 	// can cause the map to need to be updated.
 	issuerHostToTLSCertMap := map[string]*tls.Certificate{}
 

@@ -368,7 +368,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 		{
-			name:       "the UpstreamOIDCProvider CRD has been deleted",
+			name:       "the OIDCIdentityProvider CRD has been deleted",
 			idp:        otherUpstreamOIDCIdentityProvider,
 			method:     http.MethodGet,
 			path:       newRequestPath().WithState(happyState).String(),

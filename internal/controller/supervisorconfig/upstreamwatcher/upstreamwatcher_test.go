@@ -61,16 +61,16 @@ func TestController(t *testing.T) {
 		wantErr                string
 		wantLogs               []string
 		wantResultingCache     []provider.UpstreamOIDCIdentityProviderI
-		wantResultingUpstreams []v1alpha1.UpstreamOIDCProvider
+		wantResultingUpstreams []v1alpha1.OIDCIdentityProvider
 	}{
 		{
 			name: "no upstreams",
 		},
 		{
 			name: "missing secret",
-			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-				Spec: v1alpha1.UpstreamOIDCProviderSpec{
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
 					Issuer:              testIssuerURL,
 					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
@@ -82,12 +82,12 @@ func TestController(t *testing.T) {
 			wantLogs: []string{
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="secret \"test-client-secret\" not found" "reason"="SecretNotFound" "status"="False" "type"="ClientCredentialsValid"`,
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "error"="UpstreamOIDCProvider has a failing condition" "msg"="found failing condition" "message"="secret \"test-client-secret\" not found" "name"="test-name" "namespace"="test-namespace" "reason"="SecretNotFound" "type"="ClientCredentialsValid"`,
+				`upstream-observer "error"="OIDCIdentityProvider has a failing condition" "msg"="found failing condition" "message"="secret \"test-client-secret\" not found" "name"="test-name" "namespace"="test-namespace" "reason"="SecretNotFound" "type"="ClientCredentialsValid"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
-			wantResultingUpstreams: []v1alpha1.UpstreamOIDCProvider{{
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-				Status: v1alpha1.UpstreamOIDCProviderStatus{
+				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
 						{
@@ -110,9 +110,9 @@ func TestController(t *testing.T) {
 		},
 		{
 			name: "secret has wrong type",
-			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-				Spec: v1alpha1.UpstreamOIDCProviderSpec{
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
 					Issuer:              testIssuerURL,
 					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
@@ -128,12 +128,12 @@ func TestController(t *testing.T) {
 			wantLogs: []string{
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")" "reason"="SecretWrongType" "status"="False" "type"="ClientCredentialsValid"`,
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "error"="UpstreamOIDCProvider has a failing condition" "msg"="found failing condition" "message"="referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")" "name"="test-name" "namespace"="test-namespace" "reason"="SecretWrongType" "type"="ClientCredentialsValid"`,
+				`upstream-observer "error"="OIDCIdentityProvider has a failing condition" "msg"="found failing condition" "message"="referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")" "name"="test-name" "namespace"="test-namespace" "reason"="SecretWrongType" "type"="ClientCredentialsValid"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
-			wantResultingUpstreams: []v1alpha1.UpstreamOIDCProvider{{
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-				Status: v1alpha1.UpstreamOIDCProviderStatus{
+				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
 						{
@@ -156,9 +156,9 @@ func TestController(t *testing.T) {
 		},
 		{
 			name: "secret is missing key",
-			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-				Spec: v1alpha1.UpstreamOIDCProviderSpec{
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
 					Issuer:              testIssuerURL,
 					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
@@ -173,12 +173,12 @@ func TestController(t *testing.T) {
 			wantLogs: []string{
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]" "reason"="SecretMissingKeys" "status"="False" "type"="ClientCredentialsValid"`,
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "error"="UpstreamOIDCProvider has a failing condition" "msg"="found failing condition" "message"="referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]" "name"="test-name" "namespace"="test-namespace" "reason"="SecretMissingKeys" "type"="ClientCredentialsValid"`,
+				`upstream-observer "error"="OIDCIdentityProvider has a failing condition" "msg"="found failing condition" "message"="referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]" "name"="test-name" "namespace"="test-namespace" "reason"="SecretMissingKeys" "type"="ClientCredentialsValid"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
-			wantResultingUpstreams: []v1alpha1.UpstreamOIDCProvider{{
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-				Status: v1alpha1.UpstreamOIDCProviderStatus{
+				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
 						{
@@ -201,9 +201,9 @@ func TestController(t *testing.T) {
 		},
 		{
 			name: "TLS CA bundle is invalid base64",
-			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "test-name"},
-				Spec: v1alpha1.UpstreamOIDCProviderSpec{
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
 					Issuer: testIssuerURL,
 					TLS: &v1alpha1.TLSSpec{
 						CertificateAuthorityData: "invalid-base64",
@@ -221,12 +221,12 @@ func TestController(t *testing.T) {
 			wantLogs: []string{
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7" "reason"="InvalidTLSConfig" "status"="False" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "error"="UpstreamOIDCProvider has a failing condition" "msg"="found failing condition" "message"="spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidTLSConfig" "type"="OIDCDiscoverySucceeded"`,
+				`upstream-observer "error"="OIDCIdentityProvider has a failing condition" "msg"="found failing condition" "message"="spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidTLSConfig" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
-			wantResultingUpstreams: []v1alpha1.UpstreamOIDCProvider{{
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-				Status: v1alpha1.UpstreamOIDCProviderStatus{
+				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
 						{
@@ -249,9 +249,9 @@ func TestController(t *testing.T) {
 		},
 		{
 			name: "TLS CA bundle does not have any certificates",
-			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "test-name"},
-				Spec: v1alpha1.UpstreamOIDCProviderSpec{
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
 					Issuer: testIssuerURL,
 					TLS: &v1alpha1.TLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte("not-a-pem-ca-bundle")),
@@ -269,12 +269,12 @@ func TestController(t *testing.T) {
 			wantLogs: []string{
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="spec.certificateAuthorityData is invalid: no certificates found" "reason"="InvalidTLSConfig" "status"="False" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "error"="UpstreamOIDCProvider has a failing condition" "msg"="found failing condition" "message"="spec.certificateAuthorityData is invalid: no certificates found" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidTLSConfig" "type"="OIDCDiscoverySucceeded"`,
+				`upstream-observer "error"="OIDCIdentityProvider has a failing condition" "msg"="found failing condition" "message"="spec.certificateAuthorityData is invalid: no certificates found" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidTLSConfig" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
-			wantResultingUpstreams: []v1alpha1.UpstreamOIDCProvider{{
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-				Status: v1alpha1.UpstreamOIDCProviderStatus{
+				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
 						{
@@ -297,9 +297,9 @@ func TestController(t *testing.T) {
 		},
 		{
 			name: "issuer is invalid URL",
-			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-				Spec: v1alpha1.UpstreamOIDCProviderSpec{
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
 					Issuer:              "invalid-url",
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
 					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: testAdditionalScopes},
@@ -314,12 +314,12 @@ func TestController(t *testing.T) {
 			wantLogs: []string{
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"invalid-url\"" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "error"="UpstreamOIDCProvider has a failing condition" "msg"="found failing condition" "message"="failed to perform OIDC discovery against \"invalid-url\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
+				`upstream-observer "error"="OIDCIdentityProvider has a failing condition" "msg"="found failing condition" "message"="failed to perform OIDC discovery against \"invalid-url\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
-			wantResultingUpstreams: []v1alpha1.UpstreamOIDCProvider{{
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-				Status: v1alpha1.UpstreamOIDCProviderStatus{
+				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
 						{
@@ -342,9 +342,9 @@ func TestController(t *testing.T) {
 		},
 		{
 			name: "issuer returns invalid authorize URL",
-			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-				Spec: v1alpha1.UpstreamOIDCProviderSpec{
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
 					Issuer:              testIssuerURL + "/invalid",
 					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
@@ -360,12 +360,12 @@ func TestController(t *testing.T) {
 			wantLogs: []string{
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to parse authorization endpoint URL: parse \"%\": invalid URL escape \"%\"" "reason"="InvalidResponse" "status"="False" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "error"="UpstreamOIDCProvider has a failing condition" "msg"="found failing condition" "message"="failed to parse authorization endpoint URL: parse \"%\": invalid URL escape \"%\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
+				`upstream-observer "error"="OIDCIdentityProvider has a failing condition" "msg"="found failing condition" "message"="failed to parse authorization endpoint URL: parse \"%\": invalid URL escape \"%\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
-			wantResultingUpstreams: []v1alpha1.UpstreamOIDCProvider{{
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-				Status: v1alpha1.UpstreamOIDCProviderStatus{
+				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
 						{
@@ -388,9 +388,9 @@ func TestController(t *testing.T) {
 		},
 		{
 			name: "issuer returns insecure authorize URL",
-			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-				Spec: v1alpha1.UpstreamOIDCProviderSpec{
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
 					Issuer:              testIssuerURL + "/insecure",
 					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
@@ -406,12 +406,12 @@ func TestController(t *testing.T) {
 			wantLogs: []string{
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="authorization endpoint URL scheme must be \"https\", not \"http\"" "reason"="InvalidResponse" "status"="False" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "error"="UpstreamOIDCProvider has a failing condition" "msg"="found failing condition" "message"="authorization endpoint URL scheme must be \"https\", not \"http\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
+				`upstream-observer "error"="OIDCIdentityProvider has a failing condition" "msg"="found failing condition" "message"="authorization endpoint URL scheme must be \"https\", not \"http\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
-			wantResultingUpstreams: []v1alpha1.UpstreamOIDCProvider{{
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-				Status: v1alpha1.UpstreamOIDCProviderStatus{
+				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
 						{
@@ -434,16 +434,16 @@ func TestController(t *testing.T) {
 		},
 		{
 			name: "upstream becomes valid",
-			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "test-name"},
-				Spec: v1alpha1.UpstreamOIDCProviderSpec{
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
 					Issuer:              testIssuerURL,
 					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
 					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: append(testAdditionalScopes, "xyz", "openid")},
 					Claims:              v1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
 				},
-				Status: v1alpha1.UpstreamOIDCProviderStatus{
+				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []v1alpha1.Condition{
 						{Type: "ClientCredentialsValid", Status: "False", LastTransitionTime: earlier, Reason: "SomeError1", Message: "some previous error 1"},
@@ -470,9 +470,9 @@ func TestController(t *testing.T) {
 					GroupsClaim:      testGroupsClaim,
 				},
 			},
-			wantResultingUpstreams: []v1alpha1.UpstreamOIDCProvider{{
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
-				Status: v1alpha1.UpstreamOIDCProviderStatus{
+				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []v1alpha1.Condition{
 						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "loaded client credentials"},
@@ -483,16 +483,16 @@ func TestController(t *testing.T) {
 		},
 		{
 			name: "existing valid upstream",
-			inputUpstreams: []runtime.Object{&v1alpha1.UpstreamOIDCProvider{
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
-				Spec: v1alpha1.UpstreamOIDCProviderSpec{
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
 					Issuer:              testIssuerURL,
 					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
 					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: testAdditionalScopes},
 					Claims:              v1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
 				},
-				Status: v1alpha1.UpstreamOIDCProviderStatus{
+				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []v1alpha1.Condition{
 						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
@@ -519,9 +519,9 @@ func TestController(t *testing.T) {
 					GroupsClaim:      testGroupsClaim,
 				},
 			},
-			wantResultingUpstreams: []v1alpha1.UpstreamOIDCProvider{{
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
-				Status: v1alpha1.UpstreamOIDCProviderStatus{
+				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []v1alpha1.Condition{
 						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
@@ -548,7 +548,7 @@ func TestController(t *testing.T) {
 			controller := New(
 				cache,
 				fakePinnipedClient,
-				pinnipedInformers.IDP().V1alpha1().UpstreamOIDCProviders(),
+				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				kubeInformers.Core().V1().Secrets(),
 				testLog)
 
@@ -580,7 +580,7 @@ func TestController(t *testing.T) {
 				require.ElementsMatch(t, tt.wantResultingCache[i].GetScopes(), actualIDP.GetScopes())
 			}
 
-			actualUpstreams, err := fakePinnipedClient.IDPV1alpha1().UpstreamOIDCProviders(testNamespace).List(ctx, metav1.ListOptions{})
+			actualUpstreams, err := fakePinnipedClient.IDPV1alpha1().OIDCIdentityProviders(testNamespace).List(ctx, metav1.ListOptions{})
 			require.NoError(t, err)
 
 			// Preprocess the set of upstreams a bit so that they're easier to assert against.
@@ -597,13 +597,13 @@ func TestController(t *testing.T) {
 	}
 }
 
-func normalizeUpstreams(upstreams []v1alpha1.UpstreamOIDCProvider, now metav1.Time) []v1alpha1.UpstreamOIDCProvider {
-	result := make([]v1alpha1.UpstreamOIDCProvider, 0, len(upstreams))
+func normalizeUpstreams(upstreams []v1alpha1.OIDCIdentityProvider, now metav1.Time) []v1alpha1.OIDCIdentityProvider {
+	result := make([]v1alpha1.OIDCIdentityProvider, 0, len(upstreams))
 	for _, u := range upstreams {
 		normalized := u.DeepCopy()
 
 		// We're only interested in comparing the status, so zero out the spec.
-		normalized.Spec = v1alpha1.UpstreamOIDCProviderSpec{}
+		normalized.Spec = v1alpha1.OIDCIdentityProviderSpec{}
 
 		// Round down the LastTransitionTime values to `now` if they were just updated. This makes
 		// it much easier to encode assertions about the expected timestamps.

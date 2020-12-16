@@ -10,13 +10,13 @@ import (
 
 type Cache struct {
 	csrfCookieEncoderHashKey atomic.Value
-	oidcProviderCacheMap     sync.Map
+	federationDomainCacheMap sync.Map
 }
 
 // New returns an empty Cache.
 func New() *Cache { return &Cache{} }
 
-type oidcProviderCache struct {
+type federationDomainCache struct {
 	tokenHMACKey         atomic.Value
 	stateEncoderHashKey  atomic.Value
 	stateEncoderBlockKey atomic.Value
@@ -31,36 +31,36 @@ func (c *Cache) SetCSRFCookieEncoderHashKey(key []byte) {
 }
 
 func (c *Cache) GetTokenHMACKey(oidcIssuer string) []byte {
-	return bytesOrNil(c.getOIDCProviderCache(oidcIssuer).tokenHMACKey.Load())
+	return bytesOrNil(c.getFederationDomainCache(oidcIssuer).tokenHMACKey.Load())
 }
 
 func (c *Cache) SetTokenHMACKey(oidcIssuer string, key []byte) {
-	c.getOIDCProviderCache(oidcIssuer).tokenHMACKey.Store(key)
+	c.getFederationDomainCache(oidcIssuer).tokenHMACKey.Store(key)
 }
 
 func (c *Cache) GetStateEncoderHashKey(oidcIssuer string) []byte {
-	return bytesOrNil(c.getOIDCProviderCache(oidcIssuer).stateEncoderHashKey.Load())
+	return bytesOrNil(c.getFederationDomainCache(oidcIssuer).stateEncoderHashKey.Load())
 }
 
 func (c *Cache) SetStateEncoderHashKey(oidcIssuer string, key []byte) {
-	c.getOIDCProviderCache(oidcIssuer).stateEncoderHashKey.Store(key)
+	c.getFederationDomainCache(oidcIssuer).stateEncoderHashKey.Store(key)
 }
 
 func (c *Cache) GetStateEncoderBlockKey(oidcIssuer string) []byte {
-	return bytesOrNil(c.getOIDCProviderCache(oidcIssuer).stateEncoderBlockKey.Load())
+	return bytesOrNil(c.getFederationDomainCache(oidcIssuer).stateEncoderBlockKey.Load())
 }
 
 func (c *Cache) SetStateEncoderBlockKey(oidcIssuer string, key []byte) {
-	c.getOIDCProviderCache(oidcIssuer).stateEncoderBlockKey.Store(key)
+	c.getFederationDomainCache(oidcIssuer).stateEncoderBlockKey.Store(key)
 }
 
-func (c *Cache) getOIDCProviderCache(oidcIssuer string) *oidcProviderCache {
-	value, ok := c.oidcProviderCacheMap.Load(oidcIssuer)
+func (c *Cache) getFederationDomainCache(oidcIssuer string) *federationDomainCache {
+	value, ok := c.federationDomainCacheMap.Load(oidcIssuer)
 	if !ok {
-		value = &oidcProviderCache{}
-		c.oidcProviderCacheMap.Store(oidcIssuer, value)
+		value = &federationDomainCache{}
+		c.federationDomainCacheMap.Store(oidcIssuer, value)
 	}
-	return value.(*oidcProviderCache)
+	return value.(*federationDomainCache)
 }
 
 func bytesOrNil(b interface{}) []byte {

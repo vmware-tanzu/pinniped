@@ -28,25 +28,25 @@ import (
 func TestJWKSObserverControllerInformerFilters(t *testing.T) {
 	spec.Run(t, "informer filters", func(t *testing.T, when spec.G, it spec.S) {
 		var (
-			r                            *require.Assertions
-			observableWithInformerOption *testutil.ObservableWithInformerOption
-			secretsInformerFilter        controllerlib.Filter
-			oidcProviderInformerFilter   controllerlib.Filter
+			r                              *require.Assertions
+			observableWithInformerOption   *testutil.ObservableWithInformerOption
+			secretsInformerFilter          controllerlib.Filter
+			federationDomainInformerFilter controllerlib.Filter
 		)
 
 		it.Before(func() {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
-			oidcProviderInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().OIDCProviders()
+			federationDomainInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().FederationDomains()
 			_ = NewJWKSObserverController(
 				nil,
 				secretsInformer,
-				oidcProviderInformer,
+				federationDomainInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
 			)
 			secretsInformerFilter = observableWithInformerOption.GetFilterForInformer(secretsInformer)
-			oidcProviderInformerFilter = observableWithInformerOption.GetFilterForInformer(oidcProviderInformer)
+			federationDomainInformerFilter = observableWithInformerOption.GetFilterForInformer(federationDomainInformer)
 		})
 
 		when("watching Secret objects", func() {
@@ -71,19 +71,19 @@ func TestJWKSObserverControllerInformerFilters(t *testing.T) {
 			})
 		})
 
-		when("watching OIDCProvider objects", func() {
+		when("watching FederationDomain objects", func() {
 			var (
 				subject                 controllerlib.Filter
-				provider, otherProvider *v1alpha1.OIDCProvider
+				provider, otherProvider *v1alpha1.FederationDomain
 			)
 
 			it.Before(func() {
-				subject = oidcProviderInformerFilter
-				provider = &v1alpha1.OIDCProvider{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: "any-namespace"}}
-				otherProvider = &v1alpha1.OIDCProvider{ObjectMeta: metav1.ObjectMeta{Name: "any-other-name", Namespace: "any-other-namespace"}}
+				subject = federationDomainInformerFilter
+				provider = &v1alpha1.FederationDomain{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: "any-namespace"}}
+				otherProvider = &v1alpha1.FederationDomain{ObjectMeta: metav1.ObjectMeta{Name: "any-other-name", Namespace: "any-other-namespace"}}
 			})
 
-			when("any OIDCProvider changes", func() {
+			when("any FederationDomain changes", func() {
 				it("returns true to trigger the sync method", func() {
 					r.True(subject.Add(provider))
 					r.True(subject.Update(provider, otherProvider))
@@ -134,7 +134,7 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 			subject = NewJWKSObserverController(
 				issuerToJWKSSetter,
 				kubeInformers.Core().V1().Secrets(),
-				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
+				pinnipedInformers.Config().V1alpha1().FederationDomains(),
 				controllerlib.WithInformer,
 			)
 
@@ -178,7 +178,7 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 			timeoutContextCancel()
 		})
 
-		when("there are no OIDCProviders and no JWKS Secrets yet", func() {
+		when("there are no FederationDomains and no JWKS Secrets yet", func() {
 			it("sets the issuerToJWKSSetter's map to be empty", func() {
 				startInformersAndController()
 				err := controllerlib.TestSync(t, subject, *syncContext)
@@ -190,84 +190,84 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 			})
 		})
 
-		when("there are OIDCProviders where some have corresponding JWKS Secrets and some don't", func() {
+		when("there are FederationDomains where some have corresponding JWKS Secrets and some don't", func() {
 			var (
 				expectedJWK1, expectedJWK2 string
 			)
 
 			it.Before(func() {
-				oidcProviderWithoutSecret1 := &v1alpha1.OIDCProvider{
+				federationDomainWithoutSecret1 := &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "no-secret-oidcprovider1",
+						Name:      "no-secret-federationdomain1",
 						Namespace: installedInNamespace,
 					},
-					Spec:   v1alpha1.OIDCProviderSpec{Issuer: "https://no-secret-issuer1.com"},
-					Status: v1alpha1.OIDCProviderStatus{}, // no Secrets.JWKS field
+					Spec:   v1alpha1.FederationDomainSpec{Issuer: "https://no-secret-issuer1.com"},
+					Status: v1alpha1.FederationDomainStatus{}, // no Secrets.JWKS field
 				}
-				oidcProviderWithoutSecret2 := &v1alpha1.OIDCProvider{
+				federationDomainWithoutSecret2 := &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "no-secret-oidcprovider2",
+						Name:      "no-secret-federationdomain2",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://no-secret-issuer2.com"},
+					Spec: v1alpha1.FederationDomainSpec{Issuer: "https://no-secret-issuer2.com"},
 					// no Status field
 				}
-				oidcProviderWithBadSecret := &v1alpha1.OIDCProvider{
+				federationDomainWithBadSecret := &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "bad-secret-oidcprovider",
+						Name:      "bad-secret-federationdomain",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://bad-secret-issuer.com"},
-					Status: v1alpha1.OIDCProviderStatus{
-						Secrets: v1alpha1.OIDCProviderSecrets{
+					Spec: v1alpha1.FederationDomainSpec{Issuer: "https://bad-secret-issuer.com"},
+					Status: v1alpha1.FederationDomainStatus{
+						Secrets: v1alpha1.FederationDomainSecrets{
 							JWKS: corev1.LocalObjectReference{Name: "bad-secret-name"},
 						},
 					},
 				}
-				oidcProviderWithBadJWKSSecret := &v1alpha1.OIDCProvider{
+				federationDomainWithBadJWKSSecret := &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "bad-jwks-secret-oidcprovider",
+						Name:      "bad-jwks-secret-federationdomain",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://bad-jwks-secret-issuer.com"},
-					Status: v1alpha1.OIDCProviderStatus{
-						Secrets: v1alpha1.OIDCProviderSecrets{
+					Spec: v1alpha1.FederationDomainSpec{Issuer: "https://bad-jwks-secret-issuer.com"},
+					Status: v1alpha1.FederationDomainStatus{
+						Secrets: v1alpha1.FederationDomainSecrets{
 							JWKS: corev1.LocalObjectReference{Name: "bad-jwks-secret-name"},
 						},
 					},
 				}
-				oidcProviderWithBadActiveJWKSecret := &v1alpha1.OIDCProvider{
+				federationDomainWithBadActiveJWKSecret := &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "bad-active-jwk-secret-oidcprovider",
+						Name:      "bad-active-jwk-secret-federationdomain",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://bad-active-jwk-secret-issuer.com"},
-					Status: v1alpha1.OIDCProviderStatus{
-						Secrets: v1alpha1.OIDCProviderSecrets{
+					Spec: v1alpha1.FederationDomainSpec{Issuer: "https://bad-active-jwk-secret-issuer.com"},
+					Status: v1alpha1.FederationDomainStatus{
+						Secrets: v1alpha1.FederationDomainSecrets{
 							JWKS: corev1.LocalObjectReference{Name: "bad-active-jwk-secret-name"},
 						},
 					},
 				}
-				oidcProviderWithGoodSecret1 := &v1alpha1.OIDCProvider{
+				federationDomainWithGoodSecret1 := &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "good-secret-oidcprovider1",
+						Name:      "good-secret-federationdomain1",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://issuer-with-good-secret1.com"},
-					Status: v1alpha1.OIDCProviderStatus{
-						Secrets: v1alpha1.OIDCProviderSecrets{
+					Spec: v1alpha1.FederationDomainSpec{Issuer: "https://issuer-with-good-secret1.com"},
+					Status: v1alpha1.FederationDomainStatus{
+						Secrets: v1alpha1.FederationDomainSecrets{
 							JWKS: corev1.LocalObjectReference{Name: "good-jwks-secret-name1"},
 						},
 					},
 				}
-				oidcProviderWithGoodSecret2 := &v1alpha1.OIDCProvider{
+				federationDomainWithGoodSecret2 := &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "good-secret-oidcprovider2",
+						Name:      "good-secret-federationdomain2",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.OIDCProviderSpec{Issuer: "https://issuer-with-good-secret2.com"},
-					Status: v1alpha1.OIDCProviderStatus{
-						Secrets: v1alpha1.OIDCProviderSecrets{
+					Spec: v1alpha1.FederationDomainSpec{Issuer: "https://issuer-with-good-secret2.com"},
+					Status: v1alpha1.FederationDomainStatus{
+						Secrets: v1alpha1.FederationDomainSecrets{
 							JWKS: corev1.LocalObjectReference{Name: "good-jwks-secret-name2"},
 						},
 					},
@@ -323,13 +323,13 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 						"jwks":      []byte(`{"keys": [` + expectedJWK2 + `]}`),
 					},
 				}
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithoutSecret1))
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithoutSecret2))
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithBadSecret))
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithBadJWKSSecret))
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithBadActiveJWKSecret))
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithGoodSecret1))
-				r.NoError(pinnipedInformerClient.Tracker().Add(oidcProviderWithGoodSecret2))
+				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithoutSecret1))
+				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithoutSecret2))
+				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithBadSecret))
+				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithBadJWKSSecret))
+				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithBadActiveJWKSecret))
+				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithGoodSecret1))
+				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithGoodSecret2))
 				r.NoError(kubeInformerClient.Tracker().Add(goodJWKSSecret1))
 				r.NoError(kubeInformerClient.Tracker().Add(goodJWKSSecret2))
 				r.NoError(kubeInformerClient.Tracker().Add(badSecret))

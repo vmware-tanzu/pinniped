@@ -232,13 +232,13 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 	}
 }
 
-// CreateTestOIDCProvider creates and returns a test OIDCProvider in
+// CreateTestFederationDomain creates and returns a test FederationDomain in
 // $PINNIPED_TEST_SUPERVISOR_NAMESPACE, which will be automatically deleted at the end of the
-// current test's lifetime. It generates a random, valid, issuer for the OIDCProvider.
+// current test's lifetime. It generates a random, valid, issuer for the FederationDomain.
 //
 // If the provided issuer is not the empty string, then it will be used for the
-// OIDCProvider.Spec.Issuer field. Else, a random issuer will be generated.
-func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer string, certSecretName string, expectStatus configv1alpha1.OIDCProviderStatusCondition) *configv1alpha1.OIDCProvider {
+// FederationDomain.Spec.Issuer field. Else, a random issuer will be generated.
+func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string, certSecretName string, expectStatus configv1alpha1.FederationDomainStatusCondition) *configv1alpha1.FederationDomain {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
@@ -249,47 +249,47 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer string, ce
 		issuer = fmt.Sprintf("http://test-issuer-%s.pinniped.dev", RandHex(t, 8))
 	}
 
-	opcs := NewSupervisorClientset(t).ConfigV1alpha1().OIDCProviders(testEnv.SupervisorNamespace)
-	opc, err := opcs.Create(createContext, &configv1alpha1.OIDCProvider{
+	opcs := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
+	opc, err := opcs.Create(createContext, &configv1alpha1.FederationDomain{
 		ObjectMeta: testObjectMeta(t, "oidc-provider"),
-		Spec: configv1alpha1.OIDCProviderSpec{
+		Spec: configv1alpha1.FederationDomainSpec{
 			Issuer: issuer,
-			TLS:    &configv1alpha1.OIDCProviderTLSSpec{SecretName: certSecretName},
+			TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecretName},
 		},
 	}, metav1.CreateOptions{})
-	require.NoError(t, err, "could not create test OIDCProvider")
-	t.Logf("created test OIDCProvider %s/%s", opc.Namespace, opc.Name)
+	require.NoError(t, err, "could not create test FederationDomain")
+	t.Logf("created test FederationDomain %s/%s", opc.Namespace, opc.Name)
 
 	t.Cleanup(func() {
 		t.Helper()
-		t.Logf("cleaning up test OIDCProvider %s/%s", opc.Namespace, opc.Name)
+		t.Logf("cleaning up test FederationDomain %s/%s", opc.Namespace, opc.Name)
 		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		err := opcs.Delete(deleteCtx, opc.Name, metav1.DeleteOptions{})
 		notFound := k8serrors.IsNotFound(err)
 		// It's okay if it is not found, because it might have been deleted by another part of this test.
 		if !notFound {
-			require.NoErrorf(t, err, "could not cleanup test OIDCProvider %s/%s", opc.Namespace, opc.Name)
+			require.NoErrorf(t, err, "could not cleanup test FederationDomain %s/%s", opc.Namespace, opc.Name)
 		}
 	})
 
-	// If we're not expecting any particular status, just return the new OIDCProvider immediately.
+	// If we're not expecting any particular status, just return the new FederationDomain immediately.
 	if expectStatus == "" {
 		return opc
 	}
 
-	// Wait for the OIDCProvider to enter the expected phase (or time out).
-	var result *configv1alpha1.OIDCProvider
+	// Wait for the FederationDomain to enter the expected phase (or time out).
+	var result *configv1alpha1.FederationDomain
 	assert.Eventuallyf(t, func() bool {
 		var err error
 		result, err = opcs.Get(ctx, opc.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		return result.Status.Status == expectStatus
-	}, 60*time.Second, 1*time.Second, "expected the OIDCProvider to have status %q", expectStatus)
+	}, 60*time.Second, 1*time.Second, "expected the FederationDomain to have status %q", expectStatus)
 	require.Equal(t, expectStatus, result.Status.Status)
 
-	// If the OIDCProvider was successfully created, ensure all secrets are present before continuing
-	if result.Status.Status == configv1alpha1.SuccessOIDCProviderStatusCondition {
+	// If the FederationDomain was successfully created, ensure all secrets are present before continuing
+	if result.Status.Status == configv1alpha1.SuccessFederationDomainStatusCondition {
 		assert.Eventually(t, func() bool {
 			var err error
 			result, err = opcs.Get(ctx, opc.Name, metav1.GetOptions{})
@@ -298,7 +298,7 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer string, ce
 				result.Status.Secrets.TokenSigningKey.Name != "" &&
 				result.Status.Secrets.StateSigningKey.Name != "" &&
 				result.Status.Secrets.StateEncryptionKey.Name != ""
-		}, 60*time.Second, 1*time.Second, "expected the OIDCProvider to have secrets populated")
+		}, 60*time.Second, 1*time.Second, "expected the FederationDomain to have secrets populated")
 		require.NotEmpty(t, result.Status.Secrets.JWKS.Name)
 		require.NotEmpty(t, result.Status.Secrets.TokenSigningKey.Name)
 		require.NotEmpty(t, result.Status.Secrets.StateSigningKey.Name)
@@ -350,17 +350,17 @@ func CreateClientCredsSecret(t *testing.T, clientID string, clientSecret string)
 	)
 }
 
-func CreateTestUpstreamOIDCProvider(t *testing.T, spec idpv1alpha1.UpstreamOIDCProviderSpec, expectedPhase idpv1alpha1.UpstreamOIDCProviderPhase) *idpv1alpha1.UpstreamOIDCProvider {
+func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityProviderSpec, expectedPhase idpv1alpha1.OIDCIdentityProviderPhase) *idpv1alpha1.OIDCIdentityProvider {
 	t.Helper()
 	env := IntegrationEnv(t)
 	client := NewSupervisorClientset(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Create the UpstreamOIDCProvider using GenerateName to get a random name.
-	upstreams := client.IDPV1alpha1().UpstreamOIDCProviders(env.SupervisorNamespace)
+	// Create the OIDCIdentityProvider using GenerateName to get a random name.
+	upstreams := client.IDPV1alpha1().OIDCIdentityProviders(env.SupervisorNamespace)
 
-	created, err := upstreams.Create(ctx, &idpv1alpha1.UpstreamOIDCProvider{
+	created, err := upstreams.Create(ctx, &idpv1alpha1.OIDCIdentityProvider{
 		ObjectMeta: testObjectMeta(t, "upstream"),
 		Spec:       spec,
 	}, metav1.CreateOptions{})
@@ -368,20 +368,20 @@ func CreateTestUpstreamOIDCProvider(t *testing.T, spec idpv1alpha1.UpstreamOIDCP
 
 	// Always clean this up after this point.
 	t.Cleanup(func() {
-		t.Logf("cleaning up test UpstreamOIDCProvider %s/%s", created.Namespace, created.Name)
+		t.Logf("cleaning up test OIDCIdentityProvider %s/%s", created.Namespace, created.Name)
 		err := upstreams.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
 	})
-	t.Logf("created test UpstreamOIDCProvider %s", created.Name)
+	t.Logf("created test OIDCIdentityProvider %s", created.Name)
 
-	// Wait for the UpstreamOIDCProvider to enter the expected phase (or time out).
-	var result *idpv1alpha1.UpstreamOIDCProvider
+	// Wait for the OIDCIdentityProvider to enter the expected phase (or time out).
+	var result *idpv1alpha1.OIDCIdentityProvider
 	require.Eventuallyf(t, func() bool {
 		var err error
 		result, err = upstreams.Get(ctx, created.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		return result.Status.Phase == expectedPhase
-	}, 60*time.Second, 1*time.Second, "expected the UpstreamOIDCProvider to go into phase %s", expectedPhase)
+	}, 60*time.Second, 1*time.Second, "expected the OIDCIdentityProvider to go into phase %s", expectedPhase)
 	return result
 }
 

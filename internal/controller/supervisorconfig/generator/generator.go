@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	opKind = "OIDCProvider"
+	opKind = "FederationDomain"
 )
 
 func generateSymmetricKey() ([]byte, error) {

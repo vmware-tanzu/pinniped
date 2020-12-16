@@ -45,7 +45,7 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 	client := library.NewSupervisorClientset(t)
 
 	ns := env.SupervisorNamespace
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
 	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), client, library.NewClientset(t))
@@ -149,7 +149,7 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	kubeClient := library.NewClientset(t)
 
 	ns := env.SupervisorNamespace
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
 	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), pinnipedClient, kubeClient)
@@ -216,7 +216,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	kubeClient := library.NewClientset(t)
 
 	ns := env.SupervisorNamespace
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
 	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), pinnipedClient, kubeClient)
@@ -303,7 +303,7 @@ func createTLSCertificateSecret(ctx context.Context, t *testing.T, ns string, ho
 	// Delete the Secret when the test ends.
 	t.Cleanup(func() {
 		t.Helper()
-		deleteCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		deleteCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		err := kubeClient.CoreV1().Secrets(ns).Delete(deleteCtx, secretName, metav1.DeleteOptions{})
 		require.NoError(t, err)
@@ -396,7 +396,7 @@ func requireEndpointNotFound(t *testing.T, url, host, caBundle string) {
 	assert.Eventually(t, func() bool {
 		response, err = httpClient.Do(requestNonExistentPath) //nolint:bodyclose
 		return err == nil && response.StatusCode == http.StatusNotFound
-	}, 10*time.Second, 200*time.Millisecond)
+	}, time.Minute, 200*time.Millisecond)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNotFound, response.StatusCode)
 	err = response.Body.Close()
@@ -415,7 +415,7 @@ func requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t *testing.T, url 
 	assert.Eventually(t, func() bool {
 		_, err = httpClient.Do(request) //nolint:bodyclose
 		return err != nil && strings.Contains(err.Error(), "tls: unrecognized name")
-	}, 10*time.Second, 200*time.Millisecond)
+	}, time.Minute, 200*time.Millisecond)
 	require.Error(t, err)
 	require.EqualError(t, err, fmt.Sprintf(`Get "%s": remote error: tls: unrecognized name`, url))
 }
@@ -549,7 +549,7 @@ func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle 
 	assert.Eventually(t, func() bool {
 		response, err = httpClient.Do(requestDiscoveryEndpoint) //nolint:bodyclose
 		return err == nil && response.StatusCode == http.StatusOK
-	}, 10*time.Second, 200*time.Millisecond)
+	}, time.Minute, 200*time.Millisecond)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, response.StatusCode)
 
@@ -583,7 +583,7 @@ func editFederationDomainIssuerName(
 
 func requireDelete(t *testing.T, client pinnipedclientset.Interface, ns, name string) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	err := client.ConfigV1alpha1().FederationDomains(ns).Delete(ctx, name, metav1.DeleteOptions{})
@@ -592,7 +592,7 @@ func requireDelete(t *testing.T, client pinnipedclientset.Interface, ns, name st
 
 func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string, status v1alpha1.FederationDomainStatusCondition) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	var opc *v1alpha1.FederationDomain
@@ -603,7 +603,7 @@ func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name st
 			t.Logf("error trying to get FederationDomain: %s", err.Error())
 		}
 		return err == nil && opc.Status.Status == status
-	}, 10*time.Second, 200*time.Millisecond)
+	}, time.Minute, 200*time.Millisecond)
 	require.NoError(t, err)
 	require.Equalf(t, status, opc.Status.Status, "unexpected status (message = '%s')", opc.Status.Message)
 }

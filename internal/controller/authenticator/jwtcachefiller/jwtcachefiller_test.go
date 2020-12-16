@@ -90,16 +90,20 @@ func TestController(t *testing.T) {
 		TLS:      tlsSpecFromTLSConfig(server.TLS),
 	}
 	someJWTAuthenticatorSpecWithUsernameClaim := &auth1alpha1.JWTAuthenticatorSpec{
-		Issuer:        goodIssuer,
-		Audience:      goodAudience,
-		TLS:           tlsSpecFromTLSConfig(server.TLS),
-		UsernameClaim: "my-custom-username-claim",
+		Issuer:   goodIssuer,
+		Audience: goodAudience,
+		TLS:      tlsSpecFromTLSConfig(server.TLS),
+		Claims: auth1alpha1.JWTTokenClaims{
+			Username: "my-custom-username-claim",
+		},
 	}
 	someJWTAuthenticatorSpecWithGroupsClaim := &auth1alpha1.JWTAuthenticatorSpec{
-		Issuer:      goodIssuer,
-		Audience:    goodAudience,
-		TLS:         tlsSpecFromTLSConfig(server.TLS),
-		GroupsClaim: "my-custom-groups-claim",
+		Issuer:   goodIssuer,
+		Audience: goodAudience,
+		TLS:      tlsSpecFromTLSConfig(server.TLS),
+		Claims: auth1alpha1.JWTTokenClaims{
+			Groups: "my-custom-groups-claim",
+		},
 	}
 	otherJWTAuthenticatorSpec := &auth1alpha1.JWTAuthenticatorSpec{
 		Issuer:   "https://some-other-issuer.com",
@@ -170,7 +174,7 @@ func TestController(t *testing.T) {
 				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
 			},
 			wantCacheEntries:                 1,
-			wantUsernameClaim:                someJWTAuthenticatorSpecWithUsernameClaim.UsernameClaim,
+			wantUsernameClaim:                someJWTAuthenticatorSpecWithUsernameClaim.Claims.Username,
 			runTestsOnResultingAuthenticator: true,
 		},
 		{
@@ -189,7 +193,7 @@ func TestController(t *testing.T) {
 				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
 			},
 			wantCacheEntries:                 1,
-			wantGroupsClaim:                  someJWTAuthenticatorSpecWithGroupsClaim.GroupsClaim,
+			wantGroupsClaim:                  someJWTAuthenticatorSpecWithGroupsClaim.Claims.Groups,
 			runTestsOnResultingAuthenticator: true,
 		},
 		{

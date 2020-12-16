@@ -169,11 +169,11 @@ func newJWTAuthenticator(spec *auth1alpha1.JWTAuthenticatorSpec) (*jwtAuthentica
 
 		caFile = temp.Name()
 	}
-	usernameClaim := spec.UsernameClaim
+	usernameClaim := spec.Claims.Username
 	if usernameClaim == "" {
 		usernameClaim = defaultUsernameClaim
 	}
-	groupsClaim := spec.GroupsClaim
+	groupsClaim := spec.Claims.Groups
 	if groupsClaim == "" {
 		groupsClaim = defaultGroupsClaim
 	}

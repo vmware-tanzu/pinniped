@@ -15,8 +15,8 @@ type FakeConfigV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeConfigV1alpha1) OIDCProviders(namespace string) v1alpha1.OIDCProviderInterface {
-	return &FakeOIDCProviders{c, namespace}
+func (c *FakeConfigV1alpha1) FederationDomains(namespace string) v1alpha1.FederationDomainInterface {
+	return &FakeFederationDomains{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

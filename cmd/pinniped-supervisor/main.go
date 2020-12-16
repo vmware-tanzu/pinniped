@@ -91,7 +91,7 @@ func startControllers(
 	kubeInformers kubeinformers.SharedInformerFactory,
 	pinnipedInformers pinnipedinformers.SharedInformerFactory,
 ) {
-	opInformer := pinnipedInformers.Config().V1alpha1().OIDCProviders()
+	opInformer := pinnipedInformers.Config().V1alpha1().FederationDomains()
 	secretInformer := kubeInformers.Core().V1().Secrets()
 
 	// Create controller manager.
@@ -107,7 +107,7 @@ func startControllers(
 			singletonWorker,
 		).
 		WithController(
-			supervisorconfig.NewOIDCProviderWatcherController(
+			supervisorconfig.NewFederationDomainWatcherController(
 				issuerManager,
 				clock.RealClock{},
 				pinnipedClient,
@@ -162,15 +162,15 @@ func startControllers(
 			singletonWorker,
 		).
 		WithController(
-			generator.NewOIDCProviderSecretsController(
+			generator.NewFederationDomainSecretsController(
 				generator.NewSymmetricSecretHelper(
 					"pinniped-oidc-provider-hmac-key-",
 					cfg.Labels,
 					rand.Reader,
 					generator.SecretUsageTokenSigningKey,
-					func(oidcProviderIssuer string, symmetricKey []byte) {
-						plog.Debug("setting hmac secret", "issuer", oidcProviderIssuer)
-						secretCache.SetTokenHMACKey(oidcProviderIssuer, symmetricKey)
+					func(federationDomainIssuer string, symmetricKey []byte) {
+						plog.Debug("setting hmac secret", "issuer", federationDomainIssuer)
+						secretCache.SetTokenHMACKey(federationDomainIssuer, symmetricKey)
 					},
 				),
 				kubeClient,
@@ -182,15 +182,15 @@ func startControllers(
 			singletonWorker,
 		).
 		WithController(
-			generator.NewOIDCProviderSecretsController(
+			generator.NewFederationDomainSecretsController(
 				generator.NewSymmetricSecretHelper(
 					"pinniped-oidc-provider-upstream-state-signature-key-",
 					cfg.Labels,
 					rand.Reader,
 					generator.SecretUsageStateSigningKey,
-					func(oidcProviderIssuer string, symmetricKey []byte) {
-						plog.Debug("setting state signature key", "issuer", oidcProviderIssuer)
-						secretCache.SetStateEncoderHashKey(oidcProviderIssuer, symmetricKey)
+					func(federationDomainIssuer string, symmetricKey []byte) {
+						plog.Debug("setting state signature key", "issuer", federationDomainIssuer)
+						secretCache.SetStateEncoderHashKey(federationDomainIssuer, symmetricKey)
 					},
 				),
 				kubeClient,
@@ -202,15 +202,15 @@ func startControllers(
 			singletonWorker,
 		).
 		WithController(
-			generator.NewOIDCProviderSecretsController(
+			generator.NewFederationDomainSecretsController(
 				generator.NewSymmetricSecretHelper(
 					"pinniped-oidc-provider-upstream-state-encryption-key-",
 					cfg.Labels,
 					rand.Reader,
 					generator.SecretUsageStateEncryptionKey,
-					func(oidcProviderIssuer string, symmetricKey []byte) {
-						plog.Debug("setting state encryption key", "issuer", oidcProviderIssuer)
-						secretCache.SetStateEncoderBlockKey(oidcProviderIssuer, symmetricKey)
+					func(federationDomainIssuer string, symmetricKey []byte) {
+						plog.Debug("setting state encryption key", "issuer", federationDomainIssuer)
+						secretCache.SetStateEncoderBlockKey(federationDomainIssuer, symmetricKey)
 					},
 				),
 				kubeClient,
@@ -225,7 +225,7 @@ func startControllers(
 			upstreamwatcher.New(
 				dynamicUpstreamIDPProvider,
 				pinnipedClient,
-				pinnipedInformers.IDP().V1alpha1().UpstreamOIDCProviders(),
+				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				kubeInformers.Core().V1().Secrets(),
 				klogr.New()),
 			singletonWorker)

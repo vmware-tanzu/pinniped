@@ -48,7 +48,7 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	temporarilyRemoveAllOIDCProvidersAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), client, library.NewClientset(t))
+	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), client, library.NewClientset(t))
 
 	tests := []struct {
 		Scheme   string
@@ -69,7 +69,7 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 			continue
 		}
 
-		// Test that there is no default discovery endpoint available when there are no OIDCProviders.
+		// Test that there is no default discovery endpoint available when there are no FederationDomains.
 		requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, fmt.Sprintf("%s://%s", scheme, addr))
 
 		// Define several unique issuer strings. Always use https in the issuer name even when we are accessing the http port.
@@ -81,48 +81,48 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 		issuer6 := fmt.Sprintf("https://%s/issuer6", addr)
 		badIssuer := fmt.Sprintf("https://%s/badIssuer?cannot-use=queries", addr)
 
-		// When OIDCProvider are created in sequence they each cause a discovery endpoint to appear only for as long as the OIDCProvider exists.
-		config1, jwks1 := requireCreatingOIDCProviderCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer1, client)
-		requireDeletingOIDCProviderCausesDiscoveryEndpointsToDisappear(t, config1, client, ns, scheme, addr, caBundle, issuer1)
-		config2, jwks2 := requireCreatingOIDCProviderCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer2, client)
-		requireDeletingOIDCProviderCausesDiscoveryEndpointsToDisappear(t, config2, client, ns, scheme, addr, caBundle, issuer2)
+		// When FederationDomain are created in sequence they each cause a discovery endpoint to appear only for as long as the FederationDomain exists.
+		config1, jwks1 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer1, client)
+		requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config1, client, ns, scheme, addr, caBundle, issuer1)
+		config2, jwks2 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer2, client)
+		requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config2, client, ns, scheme, addr, caBundle, issuer2)
 		// The auto-created JWK's were different from each other.
 		require.NotEqual(t, jwks1.Keys[0]["x"], jwks2.Keys[0]["x"])
 		require.NotEqual(t, jwks1.Keys[0]["y"], jwks2.Keys[0]["y"])
 
-		// When multiple OIDCProviders exist at the same time they each serve a unique discovery endpoint.
-		config3, jwks3 := requireCreatingOIDCProviderCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer3, client)
-		config4, jwks4 := requireCreatingOIDCProviderCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer4, client)
+		// When multiple FederationDomains exist at the same time they each serve a unique discovery endpoint.
+		config3, jwks3 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer3, client)
+		config4, jwks4 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer4, client)
 		requireDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer3, nil) // discovery for issuer3 is still working after issuer4 started working
 		// The auto-created JWK's were different from each other.
 		require.NotEqual(t, jwks3.Keys[0]["x"], jwks4.Keys[0]["x"])
 		require.NotEqual(t, jwks3.Keys[0]["y"], jwks4.Keys[0]["y"])
 
 		// Editing a provider to change the issuer name updates the endpoints that are being served.
-		updatedConfig4 := editOIDCProviderIssuerName(t, config4, client, ns, issuer5)
+		updatedConfig4 := editFederationDomainIssuerName(t, config4, client, ns, issuer5)
 		requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer4)
 		jwks5 := requireDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer5, nil)
 		// The JWK did not change when the issuer name was updated.
 		require.Equal(t, jwks4.Keys[0], jwks5.Keys[0])
 
 		// When they are deleted they stop serving discovery endpoints.
-		requireDeletingOIDCProviderCausesDiscoveryEndpointsToDisappear(t, config3, client, ns, scheme, addr, caBundle, issuer3)
-		requireDeletingOIDCProviderCausesDiscoveryEndpointsToDisappear(t, updatedConfig4, client, ns, scheme, addr, caBundle, issuer5)
+		requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config3, client, ns, scheme, addr, caBundle, issuer3)
+		requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, updatedConfig4, client, ns, scheme, addr, caBundle, issuer5)
 
 		// When the same issuer is added twice, both issuers are marked as duplicates, and neither provider is serving.
-		config6Duplicate1, _ := requireCreatingOIDCProviderCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer6, client)
-		config6Duplicate2 := library.CreateTestOIDCProvider(ctx, t, issuer6, "", "")
-		requireStatus(t, client, ns, config6Duplicate1.Name, v1alpha1.DuplicateOIDCProviderStatusCondition)
-		requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.DuplicateOIDCProviderStatusCondition)
+		config6Duplicate1, _ := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer6, client)
+		config6Duplicate2 := library.CreateTestFederationDomain(ctx, t, issuer6, "", "")
+		requireStatus(t, client, ns, config6Duplicate1.Name, v1alpha1.DuplicateFederationDomainStatusCondition)
+		requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.DuplicateFederationDomainStatusCondition)
 		requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer6)
 
 		// If we delete the first duplicate issuer, the second duplicate issuer starts serving.
 		requireDelete(t, client, ns, config6Duplicate1.Name)
 		requireWellKnownEndpointIsWorking(t, scheme, addr, caBundle, issuer6, nil)
-		requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.SuccessOIDCProviderStatusCondition)
+		requireStatus(t, client, ns, config6Duplicate2.Name, v1alpha1.SuccessFederationDomainStatusCondition)
 
 		// When we finally delete all issuers, the endpoint should be down.
-		requireDeletingOIDCProviderCausesDiscoveryEndpointsToDisappear(t, config6Duplicate2, client, ns, scheme, addr, caBundle, issuer6)
+		requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config6Duplicate2, client, ns, scheme, addr, caBundle, issuer6)
 
 		// Only test this for http endpoints because https endpoints are going through an Ingress,
 		// and while it is possible to configure an Ingress to serve multiple hostnames with matching TLS certs
@@ -131,15 +131,15 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 		if scheme == "http" {
 			// "Host" headers can be used to send requests to discovery endpoints when the public address is different from the issuer name.
 			issuer7 := "https://some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com:2684/issuer7"
-			config7, _ := requireCreatingOIDCProviderCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer7, client)
-			requireDeletingOIDCProviderCausesDiscoveryEndpointsToDisappear(t, config7, client, ns, scheme, addr, caBundle, issuer7)
+			config7, _ := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer7, client)
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config7, client, ns, scheme, addr, caBundle, issuer7)
 		}
 
 		// When we create a provider with an invalid issuer, the status is set to invalid.
-		badConfig := library.CreateTestOIDCProvider(ctx, t, badIssuer, "", "")
-		requireStatus(t, client, ns, badConfig.Name, v1alpha1.InvalidOIDCProviderStatusCondition)
+		badConfig := library.CreateTestFederationDomain(ctx, t, badIssuer, "", "")
+		requireStatus(t, client, ns, badConfig.Name, v1alpha1.InvalidFederationDomainStatusCondition)
 		requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, badIssuer)
-		requireDeletingOIDCProviderCausesDiscoveryEndpointsToDisappear(t, badConfig, client, ns, scheme, addr, caBundle, badIssuer)
+		requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, badConfig, client, ns, scheme, addr, caBundle, badIssuer)
 	}
 }
 
@@ -152,7 +152,7 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	temporarilyRemoveAllOIDCProvidersAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), pinnipedClient, kubeClient)
+	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), pinnipedClient, kubeClient)
 
 	scheme := "https"
 	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 8443
@@ -161,9 +161,9 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	issuer1 := fmt.Sprintf("%s://%s/issuer1", scheme, address)
 	certSecretName1 := "integration-test-cert-1"
 
-	// Create an OIDCProvider with a spec.tls.secretName.
-	oidcProvider1 := library.CreateTestOIDCProvider(ctx, t, issuer1, certSecretName1, "")
-	requireStatus(t, pinnipedClient, oidcProvider1.Namespace, oidcProvider1.Name, v1alpha1.SuccessOIDCProviderStatusCondition)
+	// Create an FederationDomain with a spec.tls.secretName.
+	federationDomain1 := library.CreateTestFederationDomain(ctx, t, issuer1, certSecretName1, "")
+	requireStatus(t, pinnipedClient, federationDomain1.Namespace, federationDomain1.Name, v1alpha1.SuccessFederationDomainStatusCondition)
 
 	// The spec.tls.secretName Secret does not exist, so the endpoints should fail with TLS errors.
 	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
@@ -176,10 +176,10 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 
 	// Update the config to with a new .spec.tls.secretName.
 	certSecretName1update := "integration-test-cert-1-update"
-	oidcProvider1LatestVersion, err := pinnipedClient.ConfigV1alpha1().OIDCProviders(ns).Get(ctx, oidcProvider1.Name, metav1.GetOptions{})
+	federationDomain1LatestVersion, err := pinnipedClient.ConfigV1alpha1().FederationDomains(ns).Get(ctx, federationDomain1.Name, metav1.GetOptions{})
 	require.NoError(t, err)
-	oidcProvider1LatestVersion.Spec.TLS = &v1alpha1.OIDCProviderTLSSpec{SecretName: certSecretName1update}
-	_, err = pinnipedClient.ConfigV1alpha1().OIDCProviders(ns).Update(ctx, oidcProvider1LatestVersion, metav1.UpdateOptions{})
+	federationDomain1LatestVersion.Spec.TLS = &v1alpha1.FederationDomainTLSSpec{SecretName: certSecretName1update}
+	_, err = pinnipedClient.ConfigV1alpha1().FederationDomains(ns).Update(ctx, federationDomain1LatestVersion, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
 	// The the endpoints should fail with TLS errors again.
@@ -197,9 +197,9 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	issuer2 := fmt.Sprintf("%s://%s:%s/issuer2", scheme, hostname2, hostnamePort2)
 	certSecretName2 := "integration-test-cert-2"
 
-	// Create an OIDCProvider with a spec.tls.secretName.
-	oidcProvider2 := library.CreateTestOIDCProvider(ctx, t, issuer2, certSecretName2, "")
-	requireStatus(t, pinnipedClient, oidcProvider2.Namespace, oidcProvider2.Name, v1alpha1.SuccessOIDCProviderStatusCondition)
+	// Create an FederationDomain with a spec.tls.secretName.
+	federationDomain2 := library.CreateTestFederationDomain(ctx, t, issuer2, certSecretName2, "")
+	requireStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name, v1alpha1.SuccessFederationDomainStatusCondition)
 
 	// Create the Secret.
 	ca2 := createTLSCertificateSecret(ctx, t, ns, hostname2, nil, certSecretName2, kubeClient)
@@ -219,7 +219,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	temporarilyRemoveAllOIDCProvidersAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), pinnipedClient, kubeClient)
+	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), pinnipedClient, kubeClient)
 
 	scheme := "https"
 	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 8443
@@ -240,9 +240,9 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	issuerUsingIPAddress := fmt.Sprintf("%s://%s/issuer1", scheme, ipWithPort)
 	issuerUsingHostname := fmt.Sprintf("%s://%s/issuer1", scheme, address)
 
-	// Create an OIDCProvider without a spec.tls.secretName.
-	oidcProvider1 := library.CreateTestOIDCProvider(ctx, t, issuerUsingIPAddress, "", "")
-	requireStatus(t, pinnipedClient, oidcProvider1.Namespace, oidcProvider1.Name, v1alpha1.SuccessOIDCProviderStatusCondition)
+	// Create an FederationDomain without a spec.tls.secretName.
+	federationDomain1 := library.CreateTestFederationDomain(ctx, t, issuerUsingIPAddress, "", "")
+	requireStatus(t, pinnipedClient, federationDomain1.Namespace, federationDomain1.Name, v1alpha1.SuccessFederationDomainStatusCondition)
 
 	// There is no default TLS cert and the spec.tls.secretName was not set, so the endpoints should fail with TLS errors.
 	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuerUsingIPAddress)
@@ -253,10 +253,10 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	// Now that the Secret exists, we should be able to access the endpoints by IP address using the CA.
 	_ = requireDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
 
-	// Create an OIDCProvider with a spec.tls.secretName.
+	// Create an FederationDomain with a spec.tls.secretName.
 	certSecretName := "integration-test-cert-1"
-	oidcProvider2 := library.CreateTestOIDCProvider(ctx, t, issuerUsingHostname, certSecretName, "")
-	requireStatus(t, pinnipedClient, oidcProvider2.Namespace, oidcProvider2.Name, v1alpha1.SuccessOIDCProviderStatusCondition)
+	federationDomain2 := library.CreateTestFederationDomain(ctx, t, issuerUsingHostname, certSecretName, "")
+	requireStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name, v1alpha1.SuccessFederationDomainStatusCondition)
 
 	// Create the Secret.
 	certCA := createTLSCertificateSecret(ctx, t, ns, hostname, nil, certSecretName, kubeClient)
@@ -312,7 +312,7 @@ func createTLSCertificateSecret(ctx context.Context, t *testing.T, ns string, ho
 	return ca
 }
 
-func temporarilyRemoveAllOIDCProvidersAndDefaultTLSCertSecret(
+func temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(
 	ctx context.Context,
 	t *testing.T,
 	ns string,
@@ -320,11 +320,11 @@ func temporarilyRemoveAllOIDCProvidersAndDefaultTLSCertSecret(
 	pinnipedClient pinnipedclientset.Interface,
 	kubeClient kubernetes.Interface,
 ) {
-	// Temporarily remove any existing OIDCProviders from the cluster so we can test from a clean slate.
-	originalConfigList, err := pinnipedClient.ConfigV1alpha1().OIDCProviders(ns).List(ctx, metav1.ListOptions{})
+	// Temporarily remove any existing FederationDomains from the cluster so we can test from a clean slate.
+	originalConfigList, err := pinnipedClient.ConfigV1alpha1().FederationDomains(ns).List(ctx, metav1.ListOptions{})
 	require.NoError(t, err)
 	for _, config := range originalConfigList.Items {
-		err := pinnipedClient.ConfigV1alpha1().OIDCProviders(ns).Delete(ctx, config.Name, metav1.DeleteOptions{})
+		err := pinnipedClient.ConfigV1alpha1().FederationDomains(ns).Delete(ctx, config.Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
 	}
 
@@ -339,7 +339,7 @@ func temporarilyRemoveAllOIDCProvidersAndDefaultTLSCertSecret(
 		require.NoError(t, err)
 	}
 
-	// When this test has finished, recreate any OIDCProviders and default secret that had existed on the cluster before this test.
+	// When this test has finished, recreate any FederationDomains and default secret that had existed on the cluster before this test.
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
@@ -347,7 +347,7 @@ func temporarilyRemoveAllOIDCProvidersAndDefaultTLSCertSecret(
 		for _, config := range originalConfigList.Items {
 			thisConfig := config
 			thisConfig.ResourceVersion = "" // Get rid of resource version since we can't create an object with one.
-			_, err := pinnipedClient.ConfigV1alpha1().OIDCProviders(ns).Create(cleanupCtx, &thisConfig, metav1.CreateOptions{})
+			_, err := pinnipedClient.ConfigV1alpha1().FederationDomains(ns).Create(cleanupCtx, &thisConfig, metav1.CreateOptions{})
 			require.NoError(t, err)
 		}
 
@@ -420,18 +420,18 @@ func requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t *testing.T, url 
 	require.EqualError(t, err, fmt.Sprintf(`Get "%s": remote error: tls: unrecognized name`, url))
 }
 
-func requireCreatingOIDCProviderCausesDiscoveryEndpointsToAppear(
+func requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(
 	ctx context.Context,
 	t *testing.T,
 	supervisorScheme, supervisorAddress, supervisorCABundle string,
 	issuerName string,
 	client pinnipedclientset.Interface,
-) (*v1alpha1.OIDCProvider, *ExpectedJWKSResponseFormat) {
+) (*v1alpha1.FederationDomain, *ExpectedJWKSResponseFormat) {
 	t.Helper()
-	newOIDCProvider := library.CreateTestOIDCProvider(ctx, t, issuerName, "", "")
+	newFederationDomain := library.CreateTestFederationDomain(ctx, t, issuerName, "", "")
 	jwksResult := requireDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, nil)
-	requireStatus(t, client, newOIDCProvider.Namespace, newOIDCProvider.Name, v1alpha1.SuccessOIDCProviderStatusCondition)
-	return newOIDCProvider, jwksResult
+	requireStatus(t, client, newFederationDomain.Namespace, newFederationDomain.Name, v1alpha1.SuccessFederationDomainStatusCondition)
+	return newFederationDomain, jwksResult
 }
 
 func requireDiscoveryEndpointsAreWorking(t *testing.T, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string, dnsOverrides map[string]string) *ExpectedJWKSResponseFormat {
@@ -440,9 +440,9 @@ func requireDiscoveryEndpointsAreWorking(t *testing.T, supervisorScheme, supervi
 	return jwksResult
 }
 
-func requireDeletingOIDCProviderCausesDiscoveryEndpointsToDisappear(
+func requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(
 	t *testing.T,
-	existingOIDCProvider *v1alpha1.OIDCProvider,
+	existingFederationDomain *v1alpha1.FederationDomain,
 	client pinnipedclientset.Interface,
 	ns string,
 	supervisorScheme, supervisorAddress, supervisorCABundle string,
@@ -452,8 +452,8 @@ func requireDeletingOIDCProviderCausesDiscoveryEndpointsToDisappear(
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// Delete the OIDCProvider.
-	err := client.ConfigV1alpha1().OIDCProviders(ns).Delete(ctx, existingOIDCProvider.Name, metav1.DeleteOptions{})
+	// Delete the FederationDomain.
+	err := client.ConfigV1alpha1().FederationDomains(ns).Delete(ctx, existingFederationDomain.Name, metav1.DeleteOptions{})
 	require.NoError(t, err)
 
 	// Fetch that same discovery endpoint as before, but now it should not exist anymore. Give it some time for the endpoint to go away.
@@ -528,7 +528,7 @@ func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// Define a request to the new discovery endpoint which should have been created by an OIDCProvider.
+	// Define a request to the new discovery endpoint which should have been created by an FederationDomain.
 	requestDiscoveryEndpoint, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
@@ -560,22 +560,22 @@ func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle 
 	return response, string(responseBody)
 }
 
-func editOIDCProviderIssuerName(
+func editFederationDomainIssuerName(
 	t *testing.T,
-	existingOIDCProvider *v1alpha1.OIDCProvider,
+	existingFederationDomain *v1alpha1.FederationDomain,
 	client pinnipedclientset.Interface,
 	ns string,
 	newIssuerName string,
-) *v1alpha1.OIDCProvider {
+) *v1alpha1.FederationDomain {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	mostRecentVersion, err := client.ConfigV1alpha1().OIDCProviders(ns).Get(ctx, existingOIDCProvider.Name, metav1.GetOptions{})
+	mostRecentVersion, err := client.ConfigV1alpha1().FederationDomains(ns).Get(ctx, existingFederationDomain.Name, metav1.GetOptions{})
 	require.NoError(t, err)
 
 	mostRecentVersion.Spec.Issuer = newIssuerName
-	updated, err := client.ConfigV1alpha1().OIDCProviders(ns).Update(ctx, mostRecentVersion, metav1.UpdateOptions{})
+	updated, err := client.ConfigV1alpha1().FederationDomains(ns).Update(ctx, mostRecentVersion, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
 	return updated
@@ -586,21 +586,21 @@ func requireDelete(t *testing.T, client pinnipedclientset.Interface, ns, name st
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err := client.ConfigV1alpha1().OIDCProviders(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	err := client.ConfigV1alpha1().FederationDomains(ns).Delete(ctx, name, metav1.DeleteOptions{})
 	require.NoError(t, err)
 }
 
-func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string, status v1alpha1.OIDCProviderStatusCondition) {
+func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string, status v1alpha1.FederationDomainStatusCondition) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	var opc *v1alpha1.OIDCProvider
+	var opc *v1alpha1.FederationDomain
 	var err error
 	assert.Eventually(t, func() bool {
-		opc, err = client.ConfigV1alpha1().OIDCProviders(ns).Get(ctx, name, metav1.GetOptions{})
+		opc, err = client.ConfigV1alpha1().FederationDomains(ns).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
-			t.Logf("error trying to get OIDCProvider: %s", err.Error())
+			t.Logf("error trying to get FederationDomain: %s", err.Error())
 		}
 		return err == nil && opc.Status.Status == status
 	}, 10*time.Second, 200*time.Millisecond)

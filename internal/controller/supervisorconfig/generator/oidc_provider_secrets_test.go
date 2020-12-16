@@ -30,7 +30,7 @@ import (
 	"go.pinniped.dev/internal/testutil"
 )
 
-func TestOIDCProviderControllerFilterSecret(t *testing.T) {
+func TestFederationDomainControllerFilterSecret(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -54,7 +54,7 @@ func TestOIDCProviderControllerFilterSecret(t *testing.T) {
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							Kind:       "OIDCProvider",
+							Kind:       "FederationDomain",
 							Name:       "some-name",
 							Controller: boolPtr(true),
 						},
@@ -85,7 +85,7 @@ func TestOIDCProviderControllerFilterSecret(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
-							Kind:       "OIDCProvider",
+							Kind:       "FederationDomain",
 							Name:       "some-name",
 						},
 					},
@@ -100,7 +100,7 @@ func TestOIDCProviderControllerFilterSecret(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
-							Kind:       "OIDCProvider",
+							Kind:       "FederationDomain",
 							Name:       "some-name",
 							Controller: boolPtr(true),
 						},
@@ -123,7 +123,7 @@ func TestOIDCProviderControllerFilterSecret(t *testing.T) {
 						},
 						{
 							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
-							Kind:       "OIDCProvider",
+							Kind:       "FederationDomain",
 							Name:       "some-name",
 							Controller: boolPtr(true),
 						},
@@ -153,9 +153,9 @@ func TestOIDCProviderControllerFilterSecret(t *testing.T) {
 			opcInformer := pinnipedinformers.NewSharedInformerFactory(
 				pinnipedfake.NewSimpleClientset(),
 				0,
-			).Config().V1alpha1().OIDCProviders()
+			).Config().V1alpha1().FederationDomains()
 			withInformer := testutil.NewObservableWithInformerOption()
-			_ = NewOIDCProviderSecretsController(
+			_ = NewFederationDomainSecretsController(
 				secretHelper,
 				nil, // kubeClient, not needed
 				nil, // pinnipedClient, not needed
@@ -175,12 +175,12 @@ func TestOIDCProviderControllerFilterSecret(t *testing.T) {
 	}
 }
 
-func TestNewOIDCProviderSecretsControllerFilterOPC(t *testing.T) {
+func TestNewFederationDomainSecretsControllerFilterOPC(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name       string
-		opc        configv1alpha1.OIDCProvider
+		opc        configv1alpha1.FederationDomain
 		wantAdd    bool
 		wantUpdate bool
 		wantDelete bool
@@ -188,7 +188,7 @@ func TestNewOIDCProviderSecretsControllerFilterOPC(t *testing.T) {
 	}{
 		{
 			name:       "anything goes",
-			opc:        configv1alpha1.OIDCProvider{},
+			opc:        configv1alpha1.FederationDomain{},
 			wantAdd:    true,
 			wantUpdate: true,
 			wantDelete: true,
@@ -212,9 +212,9 @@ func TestNewOIDCProviderSecretsControllerFilterOPC(t *testing.T) {
 			opcInformer := pinnipedinformers.NewSharedInformerFactory(
 				pinnipedfake.NewSimpleClientset(),
 				0,
-			).Config().V1alpha1().OIDCProviders()
+			).Config().V1alpha1().FederationDomains()
 			withInformer := testutil.NewObservableWithInformerOption()
-			_ = NewOIDCProviderSecretsController(
+			_ = NewFederationDomainSecretsController(
 				secretHelper,
 				nil, // kubeClient, not needed
 				nil, // pinnipedClient, not needed
@@ -223,7 +223,7 @@ func TestNewOIDCProviderSecretsControllerFilterOPC(t *testing.T) {
 				withInformer.WithInformer,
 			)
 
-			unrelated := configv1alpha1.OIDCProvider{}
+			unrelated := configv1alpha1.FederationDomain{}
 			filter := withInformer.GetFilterForInformer(opcInformer)
 			require.Equal(t, test.wantAdd, filter.Add(&test.opc))
 			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, &test.opc))
@@ -234,7 +234,7 @@ func TestNewOIDCProviderSecretsControllerFilterOPC(t *testing.T) {
 	}
 }
 
-func TestOIDCProviderSecretsControllerSync(t *testing.T) {
+func TestFederationDomainSecretsControllerSync(t *testing.T) {
 	t.Parallel()
 
 	const (
@@ -250,7 +250,7 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 	opGVR := schema.GroupVersionResource{
 		Group:    configv1alpha1.SchemeGroupVersion.Group,
 		Version:  configv1alpha1.SchemeGroupVersion.Version,
-		Resource: "oidcproviders",
+		Resource: "federationdomains",
 	}
 
 	secretGVR := schema.GroupVersionResource{
@@ -259,7 +259,7 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 		Resource: "secrets",
 	}
 
-	goodOP := &configv1alpha1.OIDCProvider{
+	goodOP := &configv1alpha1.FederationDomain{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      opName,
 			Namespace: namespace,
@@ -275,7 +275,7 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion:         opGVR.GroupVersion().String(),
-					Kind:               "OIDCProvider",
+					Kind:               "FederationDomain",
 					Name:               opName,
 					UID:                opUID,
 					BlockOwnerDeletion: boolPtr(true),
@@ -304,7 +304,7 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion:         opGVR.GroupVersion().String(),
-					Kind:               "OIDCProvider",
+					Kind:               "FederationDomain",
 					Name:               opName,
 					UID:                opUID,
 					BlockOwnerDeletion: boolPtr(true),
@@ -316,7 +316,7 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 
 	tests := []struct {
 		name              string
-		storage           func(**configv1alpha1.OIDCProvider, **corev1.Secret)
+		storage           func(**configv1alpha1.FederationDomain, **corev1.Secret)
 		client            func(*pinnipedfake.Clientset, *kubernetesfake.Clientset)
 		secretHelper      func(*mocksecrethelper.MockSecretHelper)
 		wantOPActions     []kubetesting.Action
@@ -324,26 +324,26 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 		wantError         string
 	}{
 		{
-			name: "OIDCProvider does not exist and secret does not exist",
-			storage: func(op **configv1alpha1.OIDCProvider, s **corev1.Secret) {
+			name: "FederationDomain does not exist and secret does not exist",
+			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*op = nil
 				*s = nil
 			},
 		},
 		{
-			name: "OIDCProvider does not exist and secret exists",
-			storage: func(op **configv1alpha1.OIDCProvider, s **corev1.Secret) {
+			name: "FederationDomain does not exist and secret exists",
+			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*op = nil
 			},
 		},
 		{
-			name: "OIDCProvider exists and secret does not exist",
-			storage: func(op **configv1alpha1.OIDCProvider, s **corev1.Secret) {
+			name: "FederationDomain exists and secret does not exist",
+			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*s = nil
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
-				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentOIDCProvider(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
 			},
 			wantOPActions: []kubetesting.Action{
 				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
@@ -355,14 +355,14 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			},
 		},
 		{
-			name: "OIDCProvider exists and invalid secret exists",
-			storage: func(op **configv1alpha1.OIDCProvider, s **corev1.Secret) {
+			name: "FederationDomain exists and invalid secret exists",
+			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*s = invalidSecret.DeepCopy()
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
 				secretHelper.EXPECT().IsValid(goodOP, invalidSecret).Times(2).Return(false)
-				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentOIDCProvider(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
 			},
 			wantOPActions: []kubetesting.Action{
 				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
@@ -374,14 +374,14 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			},
 		},
 		{
-			name: "OIDCProvider exists and generating a secret fails",
+			name: "FederationDomain exists and generating a secret fails",
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(nil, errors.New("some generate error"))
 			},
 			wantError: "failed to generate secret: some generate error",
 		},
 		{
-			name: "OIDCProvider exists and invalid secret exists and upon update we learn of a valid secret",
+			name: "FederationDomain exists and invalid secret exists and upon update we learn of a valid secret",
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				otherSecret := goodSecret.DeepCopy()
 				otherSecret.UID = "other-secret-uid"
@@ -389,7 +389,7 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(otherSecret, nil)
 				secretHelper.EXPECT().IsValid(goodOP, goodSecret).Times(1).Return(false)
 				secretHelper.EXPECT().IsValid(goodOP, goodSecret).Times(1).Return(true)
-				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentOIDCProvider(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
 			},
 			wantOPActions: []kubetesting.Action{
 				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
@@ -400,7 +400,7 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			},
 		},
 		{
-			name: "OIDCProvider exists and invalid secret exists and getting secret fails",
+			name: "FederationDomain exists and invalid secret exists and getting secret fails",
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
 				secretHelper.EXPECT().IsValid(goodOP, goodSecret).Times(1).Return(false)
@@ -416,8 +416,8 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			wantError: fmt.Sprintf("failed to create or update secret: failed to get secret %s/%s: some get error", namespace, goodSecret.Name),
 		},
 		{
-			name: "OIDCProvider exists and secret does not exist and creating secret fails",
-			storage: func(op **configv1alpha1.OIDCProvider, s **corev1.Secret) {
+			name: "FederationDomain exists and secret does not exist and creating secret fails",
+			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*s = nil
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
@@ -435,7 +435,7 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			wantError: fmt.Sprintf("failed to create or update secret: failed to create secret %s/%s: some create error", namespace, goodSecret.Name),
 		},
 		{
-			name: "OIDCProvider exists and invalid secret exists and updating secret fails",
+			name: "FederationDomain exists and invalid secret exists and updating secret fails",
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
 				secretHelper.EXPECT().IsValid(goodOP, goodSecret).Times(2).Return(false)
@@ -452,14 +452,14 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			wantError: "failed to create or update secret: some update error",
 		},
 		{
-			name: "OIDCProvider exists and invalid secret exists and updating secret fails due to conflict",
-			storage: func(op **configv1alpha1.OIDCProvider, s **corev1.Secret) {
+			name: "FederationDomain exists and invalid secret exists and updating secret fails due to conflict",
+			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*s = invalidSecret.DeepCopy()
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
 				secretHelper.EXPECT().IsValid(goodOP, invalidSecret).Times(3).Return(false)
-				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentOIDCProvider(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
 			},
 			client: func(_ *pinnipedfake.Clientset, c *kubernetesfake.Clientset) {
 				once := sync.Once{}
@@ -481,17 +481,17 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 			},
 		},
 		{
-			name: "OIDCProvider exists and invalid secret exists and getting OIDCProvider fails",
-			storage: func(op **configv1alpha1.OIDCProvider, s **corev1.Secret) {
+			name: "FederationDomain exists and invalid secret exists and getting FederationDomain fails",
+			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*s = invalidSecret.DeepCopy()
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
 				secretHelper.EXPECT().IsValid(goodOP, invalidSecret).Times(2).Return(false)
-				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentOIDCProvider(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
 			},
 			client: func(c *pinnipedfake.Clientset, _ *kubernetesfake.Clientset) {
-				c.PrependReactor("get", "oidcproviders", func(_ kubetesting.Action) (bool, runtime.Object, error) {
+				c.PrependReactor("get", "federationdomains", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New("some get error")
 				})
 			},
@@ -502,21 +502,21 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
 				kubetesting.NewUpdateAction(secretGVR, namespace, goodSecret),
 			},
-			wantError: fmt.Sprintf("failed to update oidcprovider: failed to get oidcprovider %s/%s: some get error", goodOPWithStatus.Namespace, goodOPWithStatus.Name),
+			wantError: fmt.Sprintf("failed to update federationdomain: failed to get federationdomain %s/%s: some get error", goodOPWithStatus.Namespace, goodOPWithStatus.Name),
 		},
 		{
-			name: "OIDCProvider exists and invalid secret exists and updating OIDCProvider fails due to conflict",
-			storage: func(op **configv1alpha1.OIDCProvider, s **corev1.Secret) {
+			name: "FederationDomain exists and invalid secret exists and updating FederationDomain fails due to conflict",
+			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*s = invalidSecret.DeepCopy()
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
 				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
 				secretHelper.EXPECT().IsValid(goodOP, invalidSecret).Times(2).Return(false)
-				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentOIDCProvider(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodOP, goodSecret).Times(1).Return(goodOPWithStatus)
 			},
 			client: func(c *pinnipedfake.Clientset, _ *kubernetesfake.Clientset) {
 				once := sync.Once{}
-				c.PrependReactor("update", "oidcproviders", func(_ kubetesting.Action) (bool, runtime.Object, error) {
+				c.PrependReactor("update", "federationdomains", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					var err error
 					once.Do(func() { err = k8serrors.NewConflict(secretGVR.GroupResource(), namespace, errors.New("some error")) })
 					return true, nil, err
@@ -583,12 +583,12 @@ func TestOIDCProviderSecretsControllerSync(t *testing.T) {
 				test.secretHelper(secretHelper)
 			}
 
-			c := NewOIDCProviderSecretsController(
+			c := NewFederationDomainSecretsController(
 				secretHelper,
 				kubeAPIClient,
 				pinnipedAPIClient,
 				kubeInformers.Core().V1().Secrets(),
-				pinnipedInformers.Config().V1alpha1().OIDCProviders(),
+				pinnipedInformers.Config().V1alpha1().FederationDomains(),
 				controllerlib.WithInformer,
 			)
 

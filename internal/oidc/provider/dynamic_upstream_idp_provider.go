@@ -54,24 +54,24 @@ type DynamicUpstreamIDPProvider interface {
 }
 
 type dynamicUpstreamIDPProvider struct {
-	oidcProviders []UpstreamOIDCIdentityProviderI
-	mutex         sync.RWMutex
+	federationDomains []UpstreamOIDCIdentityProviderI
+	mutex             sync.RWMutex
 }
 
 func NewDynamicUpstreamIDPProvider() DynamicUpstreamIDPProvider {
 	return &dynamicUpstreamIDPProvider{
-		oidcProviders: []UpstreamOIDCIdentityProviderI{},
+		federationDomains: []UpstreamOIDCIdentityProviderI{},
 	}
 }
 
 func (p *dynamicUpstreamIDPProvider) SetIDPList(oidcIDPs []UpstreamOIDCIdentityProviderI) {
 	p.mutex.Lock() // acquire a write lock
 	defer p.mutex.Unlock()
-	p.oidcProviders = oidcIDPs
+	p.federationDomains = oidcIDPs
 }
 
 func (p *dynamicUpstreamIDPProvider) GetIDPList() []UpstreamOIDCIdentityProviderI {
 	p.mutex.RLock() // acquire a read lock
 	defer p.mutex.RUnlock()
-	return p.oidcProviders
+	return p.federationDomains
 }

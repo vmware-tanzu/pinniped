@@ -41,12 +41,12 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=config.supervisor.pinniped.dev, Version=v1alpha1
-	case v1alpha1.SchemeGroupVersion.WithResource("oidcproviders"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().OIDCProviders().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("federationdomains"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Config().V1alpha1().FederationDomains().Informer()}, nil
 
 		// Group=idp.supervisor.pinniped.dev, Version=v1alpha1
-	case idpv1alpha1.SchemeGroupVersion.WithResource("upstreamoidcproviders"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.IDP().V1alpha1().UpstreamOIDCProviders().Informer()}, nil
+	case idpv1alpha1.SchemeGroupVersion.WithResource("oidcidentityproviders"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.IDP().V1alpha1().OIDCIdentityProviders().Informer()}, nil
 
 	}
 

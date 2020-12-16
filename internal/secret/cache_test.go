@@ -58,7 +58,7 @@ func TestCache(t *testing.T) {
 	require.Nil(t, c.GetStateEncoderBlockKey(otherIssuer))
 }
 
-// TestCacheSynchronized should mimic the behavior of an OIDCProvider: multiple goroutines
+// TestCacheSynchronized should mimic the behavior of an FederationDomain: multiple goroutines
 // read the same fields, sequentially, from the cache.
 func TestCacheSynchronized(t *testing.T) {
 	c := New()

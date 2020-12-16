@@ -21,28 +21,28 @@ func TestSymmetricSecretHelper(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name                     string
-		secretUsage              SecretUsage
-		wantSetOIDCProviderField func(*configv1alpha1.OIDCProvider) string
+		name                         string
+		secretUsage                  SecretUsage
+		wantSetFederationDomainField func(*configv1alpha1.FederationDomain) string
 	}{
 		{
 			name:        "token signing key",
 			secretUsage: SecretUsageTokenSigningKey,
-			wantSetOIDCProviderField: func(op *configv1alpha1.OIDCProvider) string {
+			wantSetFederationDomainField: func(op *configv1alpha1.FederationDomain) string {
 				return op.Status.Secrets.TokenSigningKey.Name
 			},
 		},
 		{
 			name:        "state signing key",
 			secretUsage: SecretUsageStateSigningKey,
-			wantSetOIDCProviderField: func(op *configv1alpha1.OIDCProvider) string {
+			wantSetFederationDomainField: func(op *configv1alpha1.FederationDomain) string {
 				return op.Status.Secrets.StateSigningKey.Name
 			},
 		},
 		{
 			name:        "state encryption key",
 			secretUsage: SecretUsageStateEncryptionKey,
-			wantSetOIDCProviderField: func(op *configv1alpha1.OIDCProvider) string {
+			wantSetFederationDomainField: func(op *configv1alpha1.FederationDomain) string {
 				return op.Status.Secrets.StateEncryptionKey.Name
 			},
 		},
@@ -57,21 +57,21 @@ func TestSymmetricSecretHelper(t *testing.T) {
 				"some-label-key-2": "some-label-value-2",
 			}
 			randSource := strings.NewReader(keyWith32Bytes)
-			var oidcProviderIssuerValue string
+			var federationDomainIssuerValue string
 			var symmetricKeyValue []byte
 			h := NewSymmetricSecretHelper(
 				"some-name-prefix-",
 				labels,
 				randSource,
 				test.secretUsage,
-				func(oidcProviderIssuer string, symmetricKey []byte) {
-					require.True(t, oidcProviderIssuer == "" && symmetricKeyValue == nil, "expected notify func not to have been called yet")
-					oidcProviderIssuerValue = oidcProviderIssuer
+				func(federationDomainIssuer string, symmetricKey []byte) {
+					require.True(t, federationDomainIssuer == "" && symmetricKeyValue == nil, "expected notify func not to have been called yet")
+					federationDomainIssuerValue = federationDomainIssuer
 					symmetricKeyValue = symmetricKey
 				},
 			)
 
-			parent := &configv1alpha1.OIDCProvider{
+			parent := &configv1alpha1.FederationDomain{
 				ObjectMeta: metav1.ObjectMeta{
 					UID:       "some-uid",
 					Namespace: "some-namespace",
@@ -88,7 +88,7 @@ func TestSymmetricSecretHelper(t *testing.T) {
 						*metav1.NewControllerRef(parent, schema.GroupVersionKind{
 							Group:   configv1alpha1.SchemeGroupVersion.Group,
 							Version: configv1alpha1.SchemeGroupVersion.Version,
-							Kind:    "OIDCProvider",
+							Kind:    "FederationDomain",
 						}),
 					},
 				},
@@ -100,9 +100,9 @@ func TestSymmetricSecretHelper(t *testing.T) {
 
 			require.True(t, h.IsValid(parent, child))
 
-			h.ObserveActiveSecretAndUpdateParentOIDCProvider(parent, child)
-			require.Equal(t, parent.Spec.Issuer, oidcProviderIssuerValue)
-			require.Equal(t, child.Name, test.wantSetOIDCProviderField(parent))
+			h.ObserveActiveSecretAndUpdateParentFederationDomain(parent, child)
+			require.Equal(t, parent.Spec.Issuer, federationDomainIssuerValue)
+			require.Equal(t, child.Name, test.wantSetFederationDomainField(parent))
 			require.Equal(t, child.Data["key"], symmetricKeyValue)
 		})
 	}
@@ -112,7 +112,7 @@ func TestSymmetricSecretHelperIsValid(t *testing.T) {
 	tests := []struct {
 		name   string
 		child  func(*corev1.Secret)
-		parent func(*configv1alpha1.OIDCProvider)
+		parent func(*configv1alpha1.FederationDomain)
 		want   bool
 	}{
 		{
@@ -145,7 +145,7 @@ func TestSymmetricSecretHelperIsValid(t *testing.T) {
 		},
 		{
 			name: "child not owned by parent",
-			parent: func(op *configv1alpha1.OIDCProvider) {
+			parent: func(op *configv1alpha1.FederationDomain) {
 				op.UID = "wrong"
 			},
 			want: false,
@@ -160,7 +160,7 @@ func TestSymmetricSecretHelperIsValid(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			h := NewSymmetricSecretHelper("none of these args matter", nil, nil, SecretUsageTokenSigningKey, nil)
 
-			parent := &configv1alpha1.OIDCProvider{
+			parent := &configv1alpha1.FederationDomain{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "some-parent-name",
 					Namespace: "some-namespace",
@@ -175,7 +175,7 @@ func TestSymmetricSecretHelperIsValid(t *testing.T) {
 						*metav1.NewControllerRef(parent, schema.GroupVersionKind{
 							Group:   configv1alpha1.SchemeGroupVersion.Group,
 							Version: configv1alpha1.SchemeGroupVersion.Version,
-							Kind:    "OIDCProvider",
+							Kind:    "FederationDomain",
 						}),
 					},
 				},

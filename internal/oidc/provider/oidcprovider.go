@@ -11,15 +11,15 @@ import (
 	"go.pinniped.dev/internal/constable"
 )
 
-// OIDCProvider represents all of the settings and state for an OIDC provider.
-type OIDCProvider struct {
+// FederationDomain represents all of the settings and state for an OIDC provider.
+type FederationDomain struct {
 	issuer     string
 	issuerHost string
 	issuerPath string
 }
 
-func NewOIDCProvider(issuer string) (*OIDCProvider, error) {
-	p := OIDCProvider{issuer: issuer}
+func NewFederationDomain(issuer string) (*FederationDomain, error) {
+	p := FederationDomain{issuer: issuer}
 	err := p.validate()
 	if err != nil {
 		return nil, err
@@ -27,7 +27,7 @@ func NewOIDCProvider(issuer string) (*OIDCProvider, error) {
 	return &p, nil
 }
 
-func (p *OIDCProvider) validate() error {
+func (p *FederationDomain) validate() error {
 	if p.issuer == "" {
 		return constable.Error("provider must have an issuer")
 	}
@@ -63,14 +63,14 @@ func (p *OIDCProvider) validate() error {
 	return nil
 }
 
-func (p *OIDCProvider) Issuer() string {
+func (p *FederationDomain) Issuer() string {
 	return p.issuer
 }
 
-func (p *OIDCProvider) IssuerHost() string {
+func (p *FederationDomain) IssuerHost() string {
 	return p.issuerHost
 }
 
-func (p *OIDCProvider) IssuerPath() string {
+func (p *FederationDomain) IssuerPath() string {
 	return p.issuerPath
 }

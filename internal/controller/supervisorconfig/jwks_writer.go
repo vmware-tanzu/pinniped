@@ -43,7 +43,7 @@ const (
 )
 
 const (
-	opcKind = "OIDCProvider"
+	opcKind = "FederationDomain"
 )
 
 // generateKey is stubbed out for the purpose of testing. The default behavior is to generate an EC key.
@@ -60,7 +60,7 @@ type jwksWriterController struct {
 	jwksSecretLabels map[string]string
 	pinnipedClient   pinnipedclientset.Interface
 	kubeClient       kubernetes.Interface
-	opcInformer      configinformers.OIDCProviderInformer
+	opcInformer      configinformers.FederationDomainInformer
 	secretInformer   corev1informers.SecretInformer
 }
 
@@ -71,7 +71,7 @@ func NewJWKSWriterController(
 	kubeClient kubernetes.Interface,
 	pinnipedClient pinnipedclientset.Interface,
 	secretInformer corev1informers.SecretInformer,
-	opcInformer configinformers.OIDCProviderInformer,
+	opcInformer configinformers.FederationDomainInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
@@ -119,11 +119,11 @@ func NewJWKSWriterController(
 
 // Sync implements controllerlib.Syncer.
 func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
-	opc, err := c.opcInformer.Lister().OIDCProviders(ctx.Key.Namespace).Get(ctx.Key.Name)
+	opc, err := c.opcInformer.Lister().FederationDomains(ctx.Key.Namespace).Get(ctx.Key.Name)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return fmt.Errorf(
-			"failed to get %s/%s OIDCProvider: %w",
+			"failed to get %s/%s FederationDomain: %w",
 			ctx.Key.Namespace,
 			ctx.Key.Name,
 			err,
@@ -134,8 +134,8 @@ func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
 		// The corresponding secret to this OPC should have been garbage collected since it should have
 		// had this OPC as its owner.
 		plog.Debug(
-			"oidcprovider deleted",
-			"oidcprovider",
+			"federationdomain deleted",
+			"federationdomain",
 			klog.KRef(ctx.Key.Namespace, ctx.Key.Name),
 		)
 		return nil
@@ -149,7 +149,7 @@ func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
 		// Secret is up to date - we are good to go.
 		plog.Debug(
 			"secret is up to date",
-			"oidcprovider",
+			"federationdomain",
 			klog.KRef(ctx.Key.Namespace, ctx.Key.Name),
 		)
 		return nil
@@ -173,12 +173,12 @@ func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
 	if err := c.updateOPC(ctx.Context, newOPC); err != nil {
 		return fmt.Errorf("cannot update opc: %w", err)
 	}
-	plog.Debug("updated oidcprovider", "oidcprovider", klog.KObj(newOPC))
+	plog.Debug("updated federationdomain", "federationdomain", klog.KObj(newOPC))
 
 	return nil
 }
 
-func (c *jwksWriterController) secretNeedsUpdate(opc *configv1alpha1.OIDCProvider) (bool, error) {
+func (c *jwksWriterController) secretNeedsUpdate(opc *configv1alpha1.FederationDomain) (bool, error) {
 	if opc.Status.Secrets.JWKS.Name == "" {
 		// If the OPC says it doesn't have a secret associated with it, then let's create one.
 		return true, nil
@@ -203,7 +203,7 @@ func (c *jwksWriterController) secretNeedsUpdate(opc *configv1alpha1.OIDCProvide
 	return false, nil
 }
 
-func (c *jwksWriterController) generateSecret(opc *configv1alpha1.OIDCProvider) (*corev1.Secret, error) {
+func (c *jwksWriterController) generateSecret(opc *configv1alpha1.FederationDomain) (*corev1.Secret, error) {
 	// Note! This is where we could potentially add more handling of OPC spec fields which tell us how
 	// this OIDC provider should sign and verify ID tokens (e.g., hardcoded token secret, gRPC
 	// connection to KMS, etc).
@@ -292,9 +292,9 @@ func (c *jwksWriterController) createOrUpdateSecret(
 
 func (c *jwksWriterController) updateOPC(
 	ctx context.Context,
-	newOPC *configv1alpha1.OIDCProvider,
+	newOPC *configv1alpha1.FederationDomain,
 ) error {
-	opcClient := c.pinnipedClient.ConfigV1alpha1().OIDCProviders(newOPC.Namespace)
+	opcClient := c.pinnipedClient.ConfigV1alpha1().FederationDomains(newOPC.Namespace)
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		oldOPC, err := opcClient.Get(ctx, newOPC.Name, metav1.GetOptions{})
 		if err != nil {

@@ -5,10 +5,10 @@
 
 package v1alpha1
 
-// UpstreamOIDCProviderListerExpansion allows custom methods to be added to
-// UpstreamOIDCProviderLister.
-type UpstreamOIDCProviderListerExpansion interface{}
+// OIDCIdentityProviderListerExpansion allows custom methods to be added to
+// OIDCIdentityProviderLister.
+type OIDCIdentityProviderListerExpansion interface{}
 
-// UpstreamOIDCProviderNamespaceListerExpansion allows custom methods to be added to
-// UpstreamOIDCProviderNamespaceLister.
-type UpstreamOIDCProviderNamespaceListerExpansion interface{}
+// OIDCIdentityProviderNamespaceListerExpansion allows custom methods to be added to
+// OIDCIdentityProviderNamespaceLister.
+type OIDCIdentityProviderNamespaceListerExpansion interface{}

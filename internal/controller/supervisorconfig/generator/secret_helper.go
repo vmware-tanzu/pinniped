@@ -21,9 +21,9 @@ import (
 // A SecretHelper has a NamePrefix() that can be used to identify it from other SecretHelper instances.
 type SecretHelper interface {
 	NamePrefix() string
-	Generate(*configv1alpha1.OIDCProvider) (*corev1.Secret, error)
-	IsValid(*configv1alpha1.OIDCProvider, *corev1.Secret) bool
-	ObserveActiveSecretAndUpdateParentOIDCProvider(*configv1alpha1.OIDCProvider, *corev1.Secret) *configv1alpha1.OIDCProvider
+	Generate(*configv1alpha1.FederationDomain) (*corev1.Secret, error)
+	IsValid(*configv1alpha1.FederationDomain, *corev1.Secret) bool
+	ObserveActiveSecretAndUpdateParentFederationDomain(*configv1alpha1.FederationDomain, *corev1.Secret) *configv1alpha1.FederationDomain
 }
 
 const (
@@ -39,7 +39,7 @@ const (
 )
 
 // SecretUsage describes how a cryptographic secret is going to be used. It is currently used to
-// indicate to a SecretHelper which status field to set on the parent OIDCProvider for a Secret.
+// indicate to a SecretHelper which status field to set on the parent FederationDomain for a Secret.
 type SecretUsage int
 
 const (
@@ -77,7 +77,7 @@ type symmetricSecretHelper struct {
 func (s *symmetricSecretHelper) NamePrefix() string { return s.namePrefix }
 
 // Generate implements SecretHelper.Generate().
-func (s *symmetricSecretHelper) Generate(parent *configv1alpha1.OIDCProvider) (*corev1.Secret, error) {
+func (s *symmetricSecretHelper) Generate(parent *configv1alpha1.FederationDomain) (*corev1.Secret, error) {
 	key := make([]byte, symmetricKeySize)
 	if _, err := s.rand.Read(key); err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func (s *symmetricSecretHelper) Generate(parent *configv1alpha1.OIDCProvider) (*
 				*metav1.NewControllerRef(parent, schema.GroupVersionKind{
 					Group:   configv1alpha1.SchemeGroupVersion.Group,
 					Version: configv1alpha1.SchemeGroupVersion.Version,
-					Kind:    "OIDCProvider",
+					Kind:    "FederationDomain",
 				}),
 			},
 		},
@@ -104,7 +104,7 @@ func (s *symmetricSecretHelper) Generate(parent *configv1alpha1.OIDCProvider) (*
 }
 
 // IsValid implements SecretHelper.IsValid().
-func (s *symmetricSecretHelper) IsValid(parent *configv1alpha1.OIDCProvider, secret *corev1.Secret) bool {
+func (s *symmetricSecretHelper) IsValid(parent *configv1alpha1.FederationDomain, secret *corev1.Secret) bool {
 	if !metav1.IsControlledBy(secret, parent) {
 		return false
 	}
@@ -124,11 +124,11 @@ func (s *symmetricSecretHelper) IsValid(parent *configv1alpha1.OIDCProvider, sec
 	return true
 }
 
-// ObserveActiveSecretAndUpdateParentOIDCProvider implements SecretHelper.ObserveActiveSecretAndUpdateParentOIDCProvider().
-func (s *symmetricSecretHelper) ObserveActiveSecretAndUpdateParentOIDCProvider(
-	op *configv1alpha1.OIDCProvider,
+// ObserveActiveSecretAndUpdateParentFederationDomain implements SecretHelper.ObserveActiveSecretAndUpdateParentFederationDomain().
+func (s *symmetricSecretHelper) ObserveActiveSecretAndUpdateParentFederationDomain(
+	op *configv1alpha1.FederationDomain,
 	secret *corev1.Secret,
-) *configv1alpha1.OIDCProvider {
+) *configv1alpha1.FederationDomain {
 	var cacheKey string
 	if op != nil {
 		cacheKey = op.Spec.Issuer

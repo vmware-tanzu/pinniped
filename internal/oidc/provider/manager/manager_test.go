@@ -348,9 +348,9 @@ func TestManager(t *testing.T) {
 
 		when("given some valid providers via SetProviders()", func() {
 			it.Before(func() {
-				p1, err := provider.NewOIDCProvider(issuer1)
+				p1, err := provider.NewFederationDomain(issuer1)
 				r.NoError(err)
-				p2, err := provider.NewOIDCProvider(issuer2)
+				p2, err := provider.NewFederationDomain(issuer2)
 				r.NoError(err)
 				subject.SetProviders(p1, p2)
 
@@ -391,9 +391,9 @@ func TestManager(t *testing.T) {
 
 		when("given the same valid providers as arguments to SetProviders() in reverse order", func() {
 			it.Before(func() {
-				p1, err := provider.NewOIDCProvider(issuer1)
+				p1, err := provider.NewFederationDomain(issuer1)
 				r.NoError(err)
-				p2, err := provider.NewOIDCProvider(issuer2)
+				p2, err := provider.NewFederationDomain(issuer2)
 				r.NoError(err)
 				subject.SetProviders(p2, p1)
 

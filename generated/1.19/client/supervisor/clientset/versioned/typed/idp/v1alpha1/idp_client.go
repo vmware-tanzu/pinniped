@@ -13,7 +13,7 @@ import (
 
 type IDPV1alpha1Interface interface {
 	RESTClient() rest.Interface
-	UpstreamOIDCProvidersGetter
+	OIDCIdentityProvidersGetter
 }
 
 // IDPV1alpha1Client is used to interact with features provided by the idp.supervisor.pinniped.dev group.
@@ -21,8 +21,8 @@ type IDPV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *IDPV1alpha1Client) UpstreamOIDCProviders(namespace string) UpstreamOIDCProviderInterface {
-	return newUpstreamOIDCProviders(c, namespace)
+func (c *IDPV1alpha1Client) OIDCIdentityProviders(namespace string) OIDCIdentityProviderInterface {
+	return newOIDCIdentityProviders(c, namespace)
 }
 
 // NewForConfig creates a new IDPV1alpha1Client for the given config.

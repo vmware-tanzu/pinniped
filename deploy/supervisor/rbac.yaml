@@ -17,13 +17,13 @@ rules:
     resources: [secrets]
     verbs: [create, get, list, patch, update, watch, delete]
   - apiGroups: [config.supervisor.pinniped.dev]
-    resources: [oidcproviders]
+    resources: [federationdomains]
     verbs: [update, get, list, watch]
   - apiGroups: [idp.supervisor.pinniped.dev]
-    resources: [upstreamoidcproviders]
+    resources: [oidcidentityproviders]
     verbs: [get, list, watch]
   - apiGroups: [idp.supervisor.pinniped.dev]
-    resources: [upstreamoidcproviders/status]
+    resources: [oidcidentityproviders/status]
     verbs: [get, patch, update]
     #! We want to be able to read pods/replicasets/deployment so we can learn who our deployment is to set
     #! as an owner reference.

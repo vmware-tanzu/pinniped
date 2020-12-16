@@ -62,7 +62,7 @@ type OIDCClaims struct {
 type OIDCClient struct {
 	// SecretName contains the name of a namespace-local Secret object that provides the clientID and
 	// clientSecret for an OIDC client. If only the SecretName is specified in an OIDCClient
-	// struct, then it is expected that the Secret is of type "secrets.pinniped.dev/oidc" with keys
+	// struct, then it is expected that the Secret is of type "secrets.pinniped.dev/oidc-client" with keys
 	// "clientID" and "clientSecret".
 	SecretName string `json:"secretName"`
 }

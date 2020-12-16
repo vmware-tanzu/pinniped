@@ -57,19 +57,25 @@ func TestSupervisorLogin(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create an HTTP client that can reach the downstream discovery endpoint using the CA certs.
-	httpClient := &http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{RootCAs: ca.Pool()},
-		Proxy: func(req *http.Request) (*url.URL, error) {
-			if env.Proxy == "" {
-				t.Logf("passing request for %s with no proxy", req.URL)
-				return nil, nil
-			}
-			proxyURL, err := url.Parse(env.Proxy)
-			require.NoError(t, err)
-			t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
-			return proxyURL, nil
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{RootCAs: ca.Pool()},
+			Proxy: func(req *http.Request) (*url.URL, error) {
+				if env.Proxy == "" {
+					t.Logf("passing request for %s with no proxy", req.URL)
+					return nil, nil
+				}
+				proxyURL, err := url.Parse(env.Proxy)
+				require.NoError(t, err)
+				t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
+				return proxyURL, nil
+			},
 		},
-	}}
+		// Don't follow redirects automatically.
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	oidcHTTPClientContext := coreosoidc.ClientContext(ctx, httpClient)
 
 	// Use the CA to issue a TLS server cert.
@@ -143,6 +149,14 @@ func TestSupervisorLogin(t *testing.T) {
 		pkceParam.Challenge(),
 		pkceParam.Method(),
 	)
+
+	// Make the authorize request one "manually" so we can check its response headers.
+	authorizeRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthorizeURL, nil)
+	require.NoError(t, err)
+	authorizeResp, err := httpClient.Do(authorizeRequest)
+	require.NoError(t, err)
+	require.NoError(t, authorizeResp.Body.Close())
+	expectSecurityHeaders(t, authorizeResp)
 
 	// Open the web browser and navigate to the downstream authorize URL.
 	page := browsertest.Open(t)
@@ -301,4 +315,17 @@ func doTokenExchange(t *testing.T, config *oauth2.Config, tokenResponse *oauth2.
 	indentedClaims, err := json.MarshalIndent(claims, "   ", "  ")
 	require.NoError(t, err)
 	t.Logf("exchanged token claims:\n%s", string(indentedClaims))
+}
+
+func expectSecurityHeaders(t *testing.T, response *http.Response) {
+	h := response.Header
+	assert.Equal(t, "default-src 'none'; frame-ancestors 'none'", h.Get("Content-Security-Policy"))
+	assert.Equal(t, "DENY", h.Get("X-Frame-Options"))
+	assert.Equal(t, "1; mode=block", h.Get("X-XSS-Protection"))
+	assert.Equal(t, "nosniff", h.Get("X-Content-Type-Options"))
+	assert.Equal(t, "no-referrer", h.Get("Referrer-Policy"))
+	assert.Equal(t, "off", h.Get("X-DNS-Prefetch-Control"))
+	assert.Equal(t, "no-cache,no-store,max-age=0,must-revalidate", h.Get("Cache-Control"))
+	assert.Equal(t, "no-cache", h.Get("Pragma"))
+	assert.Equal(t, "0", h.Get("Expires"))
 }

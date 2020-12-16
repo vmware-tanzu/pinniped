@@ -61,7 +61,9 @@ func RequireSecurityHeaders(t *testing.T, response *httptest.ResponseRecorder) {
 	require.Equal(t, "nosniff", response.Header().Get("X-Content-Type-Options"))
 	require.Equal(t, "no-referrer", response.Header().Get("Referrer-Policy"))
 	require.Equal(t, "off", response.Header().Get("X-DNS-Prefetch-Control"))
-	require.ElementsMatch(t, []string{"no-cache", "no-store", "max-age=0", "must-revalidate"}, response.Header().Values("Cache-Control"))
 	require.Equal(t, "no-cache", response.Header().Get("Pragma"))
 	require.Equal(t, "0", response.Header().Get("Expires"))
+
+	// This check is more relaxed since Fosite can override the base header we set.
+	require.Contains(t, response.Header().Get("Cache-Control"), "no-store")
 }

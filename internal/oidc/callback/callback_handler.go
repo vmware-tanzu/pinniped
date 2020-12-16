@@ -72,10 +72,10 @@ func NewHandler(
 			return httperr.New(http.StatusBadRequest, "error using state downstream auth params")
 		}
 
-		// Automatically grant the openid, offline_access, and Pinniped STS scopes, but only if they were requested.
+		// Automatically grant the openid, offline_access, and pinniped:request-audience scopes, but only if they were requested.
 		oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOpenID)
 		oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOfflineAccess)
-		oidc.GrantScopeIfRequested(authorizeRequester, "pinniped.sts.unrestricted")
+		oidc.GrantScopeIfRequested(authorizeRequester, "pinniped:request-audience")
 
 		token, err := upstreamIDPConfig.ExchangeAuthcodeAndValidateTokens(
 			r.Context(),

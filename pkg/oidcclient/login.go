@@ -159,7 +159,7 @@ func WithClient(httpClient *http.Client) Option {
 	}
 }
 
-// WithRequestAudience causes the login flow to perform an additional token exchange using the RFC8693 STS flow.
+// WithRequestAudience causes the login flow to perform an additional token exchange using the RFC8693 flow.
 func WithRequestAudience(audience string) Option {
 	return func(h *handlerState) error {
 		h.requestedAudience = audience

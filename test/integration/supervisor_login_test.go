@@ -133,7 +133,7 @@ func TestSupervisorLogin(t *testing.T) {
 		ClientID:    "pinniped-cli",
 		Endpoint:    discovery.Endpoint(),
 		RedirectURL: localCallbackServer.URL,
-		Scopes:      []string{"openid", "pinniped.sts.unrestricted", "offline_access"},
+		Scopes:      []string{"openid", "pinniped:request-audience", "offline_access"},
 	}
 
 	// Build a valid downstream authorize URL for the supervisor.
@@ -175,7 +175,7 @@ func TestSupervisorLogin(t *testing.T) {
 	callback := localCallbackServer.waitForCallback(10 * time.Second)
 	t.Logf("got callback request: %s", library.MaskTokens(callback.URL.String()))
 	require.Equal(t, stateParam.String(), callback.URL.Query().Get("state"))
-	require.ElementsMatch(t, []string{"openid", "pinniped.sts.unrestricted", "offline_access"}, strings.Split(callback.URL.Query().Get("scope"), " "))
+	require.ElementsMatch(t, []string{"openid", "pinniped:request-audience", "offline_access"}, strings.Split(callback.URL.Query().Get("scope"), " "))
 	authcode := callback.URL.Query().Get("code")
 	require.NotEmpty(t, authcode)
 

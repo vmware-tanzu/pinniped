@@ -47,32 +47,29 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		authenticator func(t *testing.T) corev1.TypedLocalObjectReference
+		authenticator func(context.Context, *testing.T) corev1.TypedLocalObjectReference
 		token         func(t *testing.T) (token string, username string, groups []string)
 	}{
 		{
-			name: "webhook",
-			authenticator: func(t *testing.T) corev1.TypedLocalObjectReference {
-				return library.CreateTestWebhookAuthenticator(ctx, t)
-			},
+			name:          "webhook",
+			authenticator: library.CreateTestWebhookAuthenticator,
 			token: func(t *testing.T) (string, string, []string) {
 				return library.IntegrationEnv(t).TestUser.Token, env.TestUser.ExpectedUsername, env.TestUser.ExpectedGroups
 			},
 		},
 		{
-			name: "jwt authenticator",
-			authenticator: func(t *testing.T) corev1.TypedLocalObjectReference {
-				return library.CreateTestJWTAuthenticator(ctx, t, "email")
-			},
+			name:          "jwt authenticator",
+			authenticator: library.CreateTestJWTAuthenticatorForCLIUpstream,
 			token: func(t *testing.T) (string, string, []string) {
-				pinnipedExe := buildPinnipedCLI(t)
-				credOutput, _ := runPinniedLoginOIDC(ctx, t, pinnipedExe)
+				pinnipedExe := library.PinnipedCLIPath(t)
+				credOutput, _ := runPinnipedLoginOIDC(ctx, t, pinnipedExe)
 				token := credOutput.Status.Token
 
 				// By default, the JWTAuthenticator expects the username to be in the "username" claim and the
 				// groups to be in the "groups" claim.
-				// We are configuring pinniped to set the username to be the "email" claim from the token.
-				username, groups := getJWTEmailAndGroupsClaims(t, token)
+				// However, we are configuring Pinniped in the `CreateTestJWTAuthenticatorForCLIUpstream` method above
+				// to read the username from the "sub" claim of the token instead.
+				username, groups := getJWTSubAndGroupsClaims(t, token)
 
 				return token, username, groups
 			},
@@ -81,7 +78,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			authenticator := test.authenticator(t)
+			authenticator := test.authenticator(ctx, t)
 			token, username, groups := test.token(t)
 
 			var response *loginv1alpha1.TokenCredentialRequest
@@ -234,18 +231,18 @@ func safeDerefStringPtr(s *string) string {
 	return *s
 }
 
-func getJWTEmailAndGroupsClaims(t *testing.T, jwt string) (string, []string) {
+func getJWTSubAndGroupsClaims(t *testing.T, jwt string) (string, []string) {
 	t.Helper()
 
 	token, err := jwtpkg.ParseSigned(jwt)
 	require.NoError(t, err)
 
 	var claims struct {
-		Email  string   `json:"email"`
+		Sub    string   `json:"sub"`
 		Groups []string `json:"groups"`
 	}
 	err = token.UnsafeClaimsWithoutVerification(&claims)
 	require.NoError(t, err)
 
-	return claims.Email, claims.Groups
+	return claims.Sub, claims.Groups
 }

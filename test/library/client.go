@@ -15,8 +15,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -49,7 +51,10 @@ func NewClientset(t *testing.T) kubernetes.Interface {
 
 func NewClientsetForKubeConfig(t *testing.T, kubeConfig string) kubernetes.Interface {
 	t.Helper()
+	return newClientsetWithConfig(t, NewRestConfigFromKubeconfig(t, kubeConfig))
+}
 
+func NewRestConfigFromKubeconfig(t *testing.T, kubeConfig string) *rest.Config {
 	kubeConfigFile, err := ioutil.TempFile("", "pinniped-cli-test-*")
 	require.NoError(t, err)
 	defer os.Remove(kubeConfigFile.Name())
@@ -59,8 +64,7 @@ func NewClientsetForKubeConfig(t *testing.T, kubeConfig string) kubernetes.Inter
 
 	restConfig, err := clientcmd.BuildConfigFromFlags("", kubeConfigFile.Name())
 	require.NoError(t, err)
-
-	return newClientsetWithConfig(t, restConfig)
+	return restConfig
 }
 
 func NewClientsetWithCertAndKey(t *testing.T, clientCertificateData, clientKeyData string) kubernetes.Interface {
@@ -164,13 +168,38 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 	}
 }
 
-// CreateTestJWTAuthenticator creates and returns a test JWTAuthenticator in
+// CreateTestJWTAuthenticatorForCLIUpstream creates and returns a test JWTAuthenticator in
 // $PINNIPED_TEST_CONCIERGE_NAMESPACE, which will be automatically deleted at the end of the current
 // test's lifetime. It returns a corev1.TypedLocalObjectReference which describes the test JWT
 // authenticator within the test namespace.
 //
-// CreateTestJWTAuthenticator gets the OIDC issuer info from IntegrationEnv().CLITestUpstream.
-func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, usernameClaim string) corev1.TypedLocalObjectReference {
+// CreateTestJWTAuthenticatorForCLIUpstream gets the OIDC issuer info from IntegrationEnv().CLITestUpstream.
+func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T) corev1.TypedLocalObjectReference {
+	t.Helper()
+	testEnv := IntegrationEnv(t)
+	spec := auth1alpha1.JWTAuthenticatorSpec{
+		Issuer:   testEnv.CLITestUpstream.Issuer,
+		Audience: testEnv.CLITestUpstream.ClientID,
+		// The default UsernameClaim is "username" but the upstreams that we use for
+		// integration tests won't necessarily have that claim, so use "sub" here.
+		UsernameClaim: "sub",
+	}
+	// If the test upstream does not have a CA bundle specified, then don't configure one in the
+	// JWTAuthenticator. Leaving TLSSpec set to nil will result in OIDC discovery using the OS's root
+	// CA store.
+	if testEnv.CLITestUpstream.CABundle != "" {
+		spec.TLS = &auth1alpha1.TLSSpec{
+			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(testEnv.CLITestUpstream.CABundle)),
+		}
+	}
+	return CreateTestJWTAuthenticator(ctx, t, spec)
+}
+
+// CreateTestJWTAuthenticator creates and returns a test JWTAuthenticator in
+// $PINNIPED_TEST_CONCIERGE_NAMESPACE, which will be automatically deleted at the end of the current
+// test's lifetime. It returns a corev1.TypedLocalObjectReference which describes the test JWT
+// authenticator within the test namespace.
+func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alpha1.JWTAuthenticatorSpec) corev1.TypedLocalObjectReference {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
@@ -180,24 +209,9 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, usernameClaim
 	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	// If the test upstream does not have a CA bundle specified, then don't configure one in the
-	// JWTAuthenticator. Leaving TLSSpec set to nil will result in OIDC discovery using the OS's root
-	// CA store.
-	tlsSpec := &auth1alpha1.TLSSpec{
-		CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(testEnv.CLITestUpstream.CABundle)),
-	}
-	if testEnv.CLITestUpstream.CABundle == "" {
-		tlsSpec = nil
-	}
-
 	jwtAuthenticator, err := jwtAuthenticators.Create(createContext, &auth1alpha1.JWTAuthenticator{
 		ObjectMeta: testObjectMeta(t, "jwt-authenticator"),
-		Spec: auth1alpha1.JWTAuthenticatorSpec{
-			Issuer:        testEnv.CLITestUpstream.Issuer,
-			Audience:      testEnv.CLITestUpstream.ClientID,
-			TLS:           tlsSpec,
-			UsernameClaim: usernameClaim,
-		},
+		Spec:       spec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test JWTAuthenticator")
 	t.Logf("created test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
@@ -232,7 +246,7 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer string, ce
 	defer cancel()
 
 	if issuer == "" {
-		issuer = randomIssuer(t)
+		issuer = fmt.Sprintf("http://test-issuer-%s.pinniped.dev", RandHex(t, 8))
 	}
 
 	opcs := NewSupervisorClientset(t).ConfigV1alpha1().OIDCProviders(testEnv.SupervisorNamespace)
@@ -266,21 +280,22 @@ func CreateTestOIDCProvider(ctx context.Context, t *testing.T, issuer string, ce
 
 	// Wait for the OIDCProvider to enter the expected phase (or time out).
 	var result *configv1alpha1.OIDCProvider
-	require.Eventuallyf(t, func() bool {
+	assert.Eventuallyf(t, func() bool {
 		var err error
 		result, err = opcs.Get(ctx, opc.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		return result.Status.Status == expectStatus
-	}, 60*time.Second, 1*time.Second, "expected the UpstreamOIDCProvider to go into phase %s", expectStatus)
+	}, 60*time.Second, 1*time.Second, "expected the OIDCProvider to have status %q", expectStatus)
+	require.Equal(t, expectStatus, result.Status.Status)
 
 	return opc
 }
 
-func randomIssuer(t *testing.T) string {
-	var buf [8]byte
-	_, err := io.ReadFull(rand.Reader, buf[:])
+func RandHex(t *testing.T, numBytes int) string {
+	buf := make([]byte, numBytes)
+	_, err := io.ReadFull(rand.Reader, buf)
 	require.NoError(t, err)
-	return fmt.Sprintf("http://test-issuer-%s.pinniped.dev", hex.EncodeToString(buf[:]))
+	return hex.EncodeToString(buf)
 }
 
 func CreateTestSecret(t *testing.T, namespace string, baseName string, secretType string, stringData map[string]string) *corev1.Secret {
@@ -297,6 +312,7 @@ func CreateTestSecret(t *testing.T, namespace string, baseName string, secretTyp
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
+		t.Logf("cleaning up test Secret %s/%s", created.Namespace, created.Name)
 		err := client.CoreV1().Secrets(namespace).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
 	})
@@ -309,7 +325,7 @@ func CreateClientCredsSecret(t *testing.T, clientID string, clientSecret string)
 	env := IntegrationEnv(t)
 	return CreateTestSecret(t,
 		env.SupervisorNamespace,
-		"test-client-creds",
+		"client-creds",
 		"secrets.pinniped.dev/oidc-client",
 		map[string]string{
 			"clientID":     clientID,
@@ -336,6 +352,7 @@ func CreateTestUpstreamOIDCProvider(t *testing.T, spec idpv1alpha1.UpstreamOIDCP
 
 	// Always clean this up after this point.
 	t.Cleanup(func() {
+		t.Logf("cleaning up test UpstreamOIDCProvider %s/%s", created.Namespace, created.Name)
 		err := upstreams.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
 	})
@@ -350,6 +367,31 @@ func CreateTestUpstreamOIDCProvider(t *testing.T, spec idpv1alpha1.UpstreamOIDCP
 		return result.Status.Phase == expectedPhase
 	}, 60*time.Second, 1*time.Second, "expected the UpstreamOIDCProvider to go into phase %s", expectedPhase)
 	return result
+}
+
+func CreateTestClusterRoleBinding(t *testing.T, subject rbacv1.Subject, roleRef rbacv1.RoleRef) *rbacv1.ClusterRoleBinding {
+	t.Helper()
+	client := NewClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Create the ClusterRoleBinding using GenerateName to get a random name.
+	clusterRoles := client.RbacV1().ClusterRoleBindings()
+
+	created, err := clusterRoles.Create(ctx, &rbacv1.ClusterRoleBinding{
+		ObjectMeta: testObjectMeta(t, "cluster-role"),
+		Subjects:   []rbacv1.Subject{subject},
+		RoleRef:    roleRef,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+	t.Logf("created test ClusterRoleBinding %s", created.Name)
+
+	t.Cleanup(func() {
+		t.Logf("cleaning up test ClusterRoleBinding %s", created.Name)
+		err := clusterRoles.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+	return created
 }
 
 func testObjectMeta(t *testing.T, baseName string) metav1.ObjectMeta {

@@ -16,6 +16,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"go.pinniped.dev/internal/httputil/httperr"
+	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/provider"
@@ -34,7 +35,7 @@ func NewHandler(
 	upstreamStateEncoder oidc.Encoder,
 	cookieCodec oidc.Codec,
 ) http.Handler {
-	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+	return securityheader.Wrap(httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		if r.Method != http.MethodPost && r.Method != http.MethodGet {
 			// https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
 			// Authorization Servers MUST support the use of the HTTP GET and POST methods defined in
@@ -142,7 +143,7 @@ func NewHandler(
 		)
 
 		return nil
-	})
+	}))
 }
 
 func readCSRFCookie(r *http.Request, codec oidc.Decoder) csrftoken.CSRFToken {
@@ -172,6 +173,13 @@ func chooseUpstreamIDP(idpListGetter oidc.IDPListGetter) (provider.UpstreamOIDCI
 			"No upstream providers are configured",
 		)
 	} else if len(allUpstreamIDPs) > 1 {
+		var upstreamIDPNames []string
+		for _, idp := range allUpstreamIDPs {
+			upstreamIDPNames = append(upstreamIDPNames, idp.GetName())
+		}
+
+		plog.Warning("Too many upstream providers are configured (found: %s)", upstreamIDPNames)
+
 		return nil, httperr.New(
 			http.StatusUnprocessableEntity,
 			"Too many upstream providers are configured (support for multiple upstreams is not yet implemented)",

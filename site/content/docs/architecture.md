@@ -10,9 +10,14 @@ The principal purpose of Pinniped is to allow users to access Kubernetes
 clusters. Pinniped hopes to enable this access across a wide range of Kubernetes
 environments with zero configuration.
 
-This integration is implemented using a credential exchange API which takes as
-input a credential from the external IDP and returns a credential which is understood by the host
-Kubernetes cluster.
+This integration is composed of two parts. 
+One part, the supervisor, is a service which allows users
+to authenticate with their external Identity Provider,
+then issues its own federation id tokens based on the information from the external
+Identity Provider's token. 
+The other, the concierge, is a credential exchange API which takes as input a token
+(from the supervisor or elsewhere), and returns a credential which is understood by 
+the host Kubernetes cluster.
 
 ![Pinniped Architecture Sketch](/docs/img/pinniped_architecture.svg)
 
@@ -33,7 +38,14 @@ Pinniped will consume identity from one or more external identity providers
 (IDPs). Administrators will configure external IDPs via Kubernetes custom
 resources allowing Pinniped to be managed using GitOps and standard Kubernetes tools.
 
-Pinniped supports the following external IDP types.
+## Authenticators
+
+The Pinniped concierge requires one or more **authenticators** to validate tokens before
+issuing cluster specific certificates. 
+Administrators will configure external IDPs via Kubernetes custom
+resources allowing Pinniped to be managed using GitOps and standard Kubernetes tools.
+
+Pinniped supports the following authenticator types.
 
 1. Any webhook which implements the
    [Kubernetes TokenReview API](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#webhook-token-authentication).
@@ -44,13 +56,14 @@ Pinniped supports the following external IDP types.
    sample implementation in Golang. See the `ServeHTTP` method of
    [cmd/local-user-authenticator/main.go](https://github.com/vmware-tanzu/pinniped/blob/main/cmd/local-user-authenticator/main.go).
 
-More IDP types are coming soon.
+1. A JwtAuthenticator resource, which will validate and parse claims from
+   JWT id tokens.
+   This can be used to validate tokens that are issued by the supervisor.
 
 ## Cluster Integration Strategies
 
 Pinniped will issue a cluster credential by leveraging cluster-specific
-functionality.  In the near term, cluster integrations will happen via different
-cluster-specific flows depending on the type of cluster. In the longer term,
+functionality. In the longer term,
 Pinniped hopes to contribute and leverage upstream Kubernetes extension points that
 cleanly enable this integration.
 

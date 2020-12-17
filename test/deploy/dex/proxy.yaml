@@ -54,6 +54,11 @@ spec:
             - "-c"
           args:
             - tail -F /var/log/squid/access.log
+          env:
+            - name: KUBE_CACHE_MUTATION_DETECTOR
+              value: "true"
+            - name: KUBE_PANIC_WATCH_DECODE_ERROR
+              value: "true"
           volumeMounts:
             - name: log-dir
               mountPath: "/var/log/squid/"

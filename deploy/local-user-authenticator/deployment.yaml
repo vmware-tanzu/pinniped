@@ -65,6 +65,11 @@ spec:
           imagePullPolicy: IfNotPresent
           command: #! override the default entrypoint
             - /usr/local/bin/local-user-authenticator
+          env:
+            - name: KUBE_CACHE_MUTATION_DETECTOR
+              value: "true"
+            - name: KUBE_PANIC_WATCH_DECODE_ERROR
+              value: "true"
 ---
 apiVersion: v1
 kind: Service

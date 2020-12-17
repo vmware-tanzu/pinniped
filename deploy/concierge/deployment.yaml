@@ -115,6 +115,11 @@ spec:
           args:
             - --config=/etc/config/pinniped.yaml
             - --downward-api-path=/etc/podinfo
+          env:
+            - name: KUBE_CACHE_MUTATION_DETECTOR
+              value: "true"
+            - name: KUBE_PANIC_WATCH_DECODE_ERROR
+              value: "true"
           volumeMounts:
             - name: config-volume
               mountPath: /etc/config

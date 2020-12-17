@@ -84,6 +84,11 @@ spec:
           args:
             - /etc/podinfo
             - /etc/config/pinniped.yaml
+          env:
+            - name: KUBE_CACHE_MUTATION_DETECTOR
+              value: "true"
+            - name: KUBE_PANIC_WATCH_DECODE_ERROR
+              value: "true"
           resources:
             requests:
               cpu: "100m"

@@ -82,6 +82,11 @@ spec:
         - /usr/local/bin/dex
         - serve
         - /etc/dex/cfg/config.yaml
+        env:
+          - name: KUBE_CACHE_MUTATION_DETECTOR
+            value: "true"
+          - name: KUBE_PANIC_WATCH_DECODE_ERROR
+            value: "true"
         ports:
         - name: https
           containerPort: 443

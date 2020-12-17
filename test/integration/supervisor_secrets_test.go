@@ -27,46 +27,46 @@ func TestSupervisorSecrets(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// Create our OP under test.
-	op := library.CreateTestFederationDomain(ctx, t, "", "", "")
+	// Create our FederationDomain under test.
+	federationDomain := library.CreateTestFederationDomain(ctx, t, "", "", "")
 
 	tests := []struct {
 		name        string
-		secretName  func(op *configv1alpha1.FederationDomain) string
+		secretName  func(federationDomain *configv1alpha1.FederationDomain) string
 		ensureValid func(t *testing.T, secret *corev1.Secret)
 	}{
 		{
 			name: "csrf cookie signing key",
-			secretName: func(op *configv1alpha1.FederationDomain) string {
+			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
 				return env.SupervisorAppName + "-key"
 			},
 			ensureValid: ensureValidSymmetricKey,
 		},
 		{
 			name: "jwks",
-			secretName: func(op *configv1alpha1.FederationDomain) string {
-				return op.Status.Secrets.JWKS.Name
+			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
+				return federationDomain.Status.Secrets.JWKS.Name
 			},
 			ensureValid: ensureValidJWKS,
 		},
 		{
 			name: "hmac signing secret",
-			secretName: func(op *configv1alpha1.FederationDomain) string {
-				return op.Status.Secrets.TokenSigningKey.Name
+			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
+				return federationDomain.Status.Secrets.TokenSigningKey.Name
 			},
 			ensureValid: ensureValidSymmetricKey,
 		},
 		{
 			name: "state signature secret",
-			secretName: func(op *configv1alpha1.FederationDomain) string {
-				return op.Status.Secrets.StateSigningKey.Name
+			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
+				return federationDomain.Status.Secrets.StateSigningKey.Name
 			},
 			ensureValid: ensureValidSymmetricKey,
 		},
 		{
 			name: "state encryption secret",
-			secretName: func(op *configv1alpha1.FederationDomain) string {
-				return op.Status.Secrets.StateEncryptionKey.Name
+			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
+				return federationDomain.Status.Secrets.StateEncryptionKey.Name
 			},
 			ensureValid: ensureValidSymmetricKey,
 		},
@@ -74,24 +74,24 @@ func TestSupervisorSecrets(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			// Ensure a secret is created with the OP's JWKS.
-			var updatedOP *configv1alpha1.FederationDomain
+			// Ensure a secret is created with the FederationDomain's JWKS.
+			var updatedFederationDomain *configv1alpha1.FederationDomain
 			var err error
 			assert.Eventually(t, func() bool {
-				updatedOP, err = supervisorClient.
+				updatedFederationDomain, err = supervisorClient.
 					ConfigV1alpha1().
 					FederationDomains(env.SupervisorNamespace).
-					Get(ctx, op.Name, metav1.GetOptions{})
-				return err == nil && test.secretName(updatedOP) != ""
+					Get(ctx, federationDomain.Name, metav1.GetOptions{})
+				return err == nil && test.secretName(updatedFederationDomain) != ""
 			}, time.Second*10, time.Millisecond*500)
 			require.NoError(t, err)
-			require.NotEmpty(t, test.secretName(updatedOP))
+			require.NotEmpty(t, test.secretName(updatedFederationDomain))
 
 			// Ensure the secret actually exists.
 			secret, err := kubeClient.
 				CoreV1().
 				Secrets(env.SupervisorNamespace).
-				Get(ctx, test.secretName(updatedOP), metav1.GetOptions{})
+				Get(ctx, test.secretName(updatedFederationDomain), metav1.GetOptions{})
 			require.NoError(t, err)
 
 			// Ensure that the secret was labelled.
@@ -107,13 +107,13 @@ func TestSupervisorSecrets(t *testing.T) {
 			err = kubeClient.
 				CoreV1().
 				Secrets(env.SupervisorNamespace).
-				Delete(ctx, test.secretName(updatedOP), metav1.DeleteOptions{})
+				Delete(ctx, test.secretName(updatedFederationDomain), metav1.DeleteOptions{})
 			require.NoError(t, err)
 			assert.Eventually(t, func() bool {
 				secret, err = kubeClient.
 					CoreV1().
 					Secrets(env.SupervisorNamespace).
-					Get(ctx, test.secretName(updatedOP), metav1.GetOptions{})
+					Get(ctx, test.secretName(updatedFederationDomain), metav1.GetOptions{})
 				return err == nil
 			}, time.Second*10, time.Millisecond*500)
 			require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestSupervisorSecrets(t *testing.T) {
 		})
 	}
 
-	// Upon deleting the OP, the secret is deleted (we test this behavior in our uninstall tests).
+	// Upon deleting the FederationDomain, the secret is deleted (we test this behavior in our uninstall tests).
 }
 
 func ensureValidJWKS(t *testing.T, secret *corev1.Secret) {

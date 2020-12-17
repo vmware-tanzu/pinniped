@@ -28,22 +28,22 @@ func TestSymmetricSecretHelper(t *testing.T) {
 		{
 			name:        "token signing key",
 			secretUsage: SecretUsageTokenSigningKey,
-			wantSetFederationDomainField: func(op *configv1alpha1.FederationDomain) string {
-				return op.Status.Secrets.TokenSigningKey.Name
+			wantSetFederationDomainField: func(federationDomain *configv1alpha1.FederationDomain) string {
+				return federationDomain.Status.Secrets.TokenSigningKey.Name
 			},
 		},
 		{
 			name:        "state signing key",
 			secretUsage: SecretUsageStateSigningKey,
-			wantSetFederationDomainField: func(op *configv1alpha1.FederationDomain) string {
-				return op.Status.Secrets.StateSigningKey.Name
+			wantSetFederationDomainField: func(federationDomain *configv1alpha1.FederationDomain) string {
+				return federationDomain.Status.Secrets.StateSigningKey.Name
 			},
 		},
 		{
 			name:        "state encryption key",
 			secretUsage: SecretUsageStateEncryptionKey,
-			wantSetFederationDomainField: func(op *configv1alpha1.FederationDomain) string {
-				return op.Status.Secrets.StateEncryptionKey.Name
+			wantSetFederationDomainField: func(federationDomain *configv1alpha1.FederationDomain) string {
+				return federationDomain.Status.Secrets.StateEncryptionKey.Name
 			},
 		},
 	}
@@ -145,8 +145,8 @@ func TestSymmetricSecretHelperIsValid(t *testing.T) {
 		},
 		{
 			name: "child not owned by parent",
-			parent: func(op *configv1alpha1.FederationDomain) {
-				op.UID = "wrong"
+			parent: func(federationDomain *configv1alpha1.FederationDomain) {
+				federationDomain.UID = "wrong"
 			},
 			want: false,
 		},

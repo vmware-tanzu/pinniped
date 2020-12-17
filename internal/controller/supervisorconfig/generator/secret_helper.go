@@ -126,26 +126,26 @@ func (s *symmetricSecretHelper) IsValid(parent *configv1alpha1.FederationDomain,
 
 // ObserveActiveSecretAndUpdateParentFederationDomain implements SecretHelper.ObserveActiveSecretAndUpdateParentFederationDomain().
 func (s *symmetricSecretHelper) ObserveActiveSecretAndUpdateParentFederationDomain(
-	op *configv1alpha1.FederationDomain,
+	federationDomain *configv1alpha1.FederationDomain,
 	secret *corev1.Secret,
 ) *configv1alpha1.FederationDomain {
 	var cacheKey string
-	if op != nil {
-		cacheKey = op.Spec.Issuer
+	if federationDomain != nil {
+		cacheKey = federationDomain.Spec.Issuer
 	}
 
 	s.updateCacheFunc(cacheKey, secret.Data[symmetricSecretDataKey])
 
 	switch s.secretUsage {
 	case SecretUsageTokenSigningKey:
-		op.Status.Secrets.TokenSigningKey.Name = secret.Name
+		federationDomain.Status.Secrets.TokenSigningKey.Name = secret.Name
 	case SecretUsageStateSigningKey:
-		op.Status.Secrets.StateSigningKey.Name = secret.Name
+		federationDomain.Status.Secrets.StateSigningKey.Name = secret.Name
 	case SecretUsageStateEncryptionKey:
-		op.Status.Secrets.StateEncryptionKey.Name = secret.Name
+		federationDomain.Status.Secrets.StateEncryptionKey.Name = secret.Name
 	default:
 		plog.Warning("unknown secret usage enum value: %d", s.secretUsage)
 	}
 
-	return op
+	return federationDomain
 }

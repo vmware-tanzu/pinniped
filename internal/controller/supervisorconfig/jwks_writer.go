@@ -41,7 +41,7 @@ const (
 	// Note! The value for this key will contain only public key material!
 	jwksKey = "jwks"
 
-	jwksSecretTypeValue = "secrets.pinniped.dev/federation-domain-jwks"
+	jwksSecretTypeValue corev1.SecretType = "secrets.pinniped.dev/federation-domain-jwks"
 )
 
 const (

@@ -18,6 +18,7 @@ import (
 	"github.com/coreos/go-oidc"
 	"github.com/go-logr/logr"
 	"golang.org/x/oauth2"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -39,9 +40,10 @@ const (
 	controllerName = "upstream-observer"
 
 	// Constants related to the client credentials Secret.
-	oidcClientSecretType = "secrets.pinniped.dev/oidc-client"
-	clientIDDataKey      = "clientID"
-	clientSecretDataKey  = "clientSecret"
+	oidcClientSecretType corev1.SecretType = "secrets.pinniped.dev/oidc-client"
+
+	clientIDDataKey     = "clientID"
+	clientSecretDataKey = "clientSecret"
 
 	// Constants related to the OIDC provider discovery cache. These do not affect the cache of JWKS.
 	validatorCacheTTL = 15 * time.Minute

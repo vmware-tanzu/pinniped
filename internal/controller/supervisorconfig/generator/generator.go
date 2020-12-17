@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	opKind = "FederationDomain"
+	federationDomainKind = "FederationDomain"
 )
 
 func generateSymmetricKey() ([]byte, error) {
@@ -100,5 +100,5 @@ func isFederationDomainControllee(obj metav1.Object) bool {
 	controller := metav1.GetControllerOf(obj)
 	return controller != nil &&
 		controller.APIVersion == configv1alpha1.SchemeGroupVersion.String() &&
-		controller.Kind == opKind
+		controller.Kind == federationDomainKind
 }

@@ -20,10 +20,8 @@ func TestCacheMutationDetectorEnabled(t *testing.T) {
 
 	c := cache.NewCacheMutationDetector("test pinniped")
 
-	type isRealCacheMutationDetector interface {
+	type realCacheMutationDetector interface {
 		CompareObjects() // this is brittle, but this function name has never changed...
 	}
-
-	_, ok := c.(isRealCacheMutationDetector)
-	require.Truef(t, ok, "%T is not a real cache mutation detector", c)
+	require.Implementsf(t, (*realCacheMutationDetector)(nil), c, "%T is not a real cache mutation detector", c)
 }

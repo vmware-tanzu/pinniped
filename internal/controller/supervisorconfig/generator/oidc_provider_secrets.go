@@ -26,6 +26,7 @@ import (
 
 type federationDomainSecretsController struct {
 	secretHelper   SecretHelper
+	secretRefFunc  func(domain *configv1alpha1.FederationDomain) *corev1.LocalObjectReference
 	kubeClient     kubernetes.Interface
 	pinnipedClient pinnipedclientset.Interface
 	opcInformer    configinformers.FederationDomainInformer
@@ -37,6 +38,7 @@ type federationDomainSecretsController struct {
 // provides the parent/child mapping logic.
 func NewFederationDomainSecretsController(
 	secretHelper SecretHelper,
+	secretRefFunc func(domain *configv1alpha1.FederationDomain) *corev1.LocalObjectReference,
 	kubeClient kubernetes.Interface,
 	pinnipedClient pinnipedclientset.Interface,
 	secretInformer corev1informers.SecretInformer,
@@ -48,6 +50,7 @@ func NewFederationDomainSecretsController(
 			Name: fmt.Sprintf("%s%s", secretHelper.NamePrefix(), "controller"),
 			Syncer: &federationDomainSecretsController{
 				secretHelper:   secretHelper,
+				secretRefFunc:  secretRefFunc,
 				kubeClient:     kubeClient,
 				pinnipedClient: pinnipedClient,
 				secretInformer: secretInformer,
@@ -102,6 +105,7 @@ func (c *federationDomainSecretsController) Sync(ctx controllerlib.Context) erro
 		return nil
 	}
 
+	op = op.DeepCopy()
 	newSecret, err := c.secretHelper.Generate(op)
 	if err != nil {
 		return fmt.Errorf("failed to generate secret: %w", err)
@@ -221,11 +225,13 @@ func (c *federationDomainSecretsController) updateFederationDomain(
 			return fmt.Errorf("failed to get federationdomain %s/%s: %w", newOP.Namespace, newOP.Name, err)
 		}
 
-		if reflect.DeepEqual(newOP.Status.Secrets, oldOP.Status.Secrets) {
+		oldOPSecretRef := c.secretRefFunc(oldOP)
+		newOPSecretRef := c.secretRefFunc(newOP)
+		if reflect.DeepEqual(oldOPSecretRef, newOPSecretRef) {
 			return nil
 		}
 
-		oldOP.Status.Secrets = newOP.Status.Secrets
+		*oldOPSecretRef = *newOPSecretRef
 		_, err = opcClient.Update(ctx, oldOP, metav1.UpdateOptions{})
 		return err
 	})

@@ -9,16 +9,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFederationDomainValidations(t *testing.T) {
+func TestFederationDomainIssuerValidations(t *testing.T) {
 	tests := []struct {
 		name      string
 		issuer    string
 		wantError string
 	}{
 		{
-			name:      "provider must have an issuer",
+			name:      "must have an issuer",
 			issuer:    "",
-			wantError: "provider must have an issuer",
+			wantError: "federation domain must have an issuer",
 		},
 		{
 			name:      "no scheme",
@@ -72,7 +72,7 @@ func TestFederationDomainValidations(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewFederationDomain(tt.issuer)
+			_, err := NewFederationDomainIssuer(tt.issuer)
 			if tt.wantError != "" {
 				require.EqualError(t, err, tt.wantError)
 			} else {

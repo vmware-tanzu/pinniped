@@ -102,7 +102,7 @@ func startControllers(
 			supervisorstorage.GarbageCollectorController(
 				clock.RealClock{},
 				kubeClient,
-				kubeInformers.Core().V1().Secrets(),
+				secretInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,

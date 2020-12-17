@@ -95,8 +95,8 @@ func generateSecret(namespace, name string, labels map[string]string, secretData
 	}, nil
 }
 
-// isOPCControlle returns whether the provided obj is controlled by an OPC.
-func isOPControllee(obj metav1.Object) bool {
+// isFederationDomainControllee returns whether the provided obj is controlled by an FederationDomain.
+func isFederationDomainControllee(obj metav1.Object) bool {
 	controller := metav1.GetControllerOf(obj)
 	return controller != nil &&
 		controller.APIVersion == configv1alpha1.SchemeGroupVersion.String() &&

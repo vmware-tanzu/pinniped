@@ -281,6 +281,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 					},
 				},
 			},
+			Type: "secrets.pinniped.dev/federation-domain-jwks",
 		}
 		s.Data = make(map[string][]byte)
 		if activeJWKPath != "" {
@@ -293,6 +294,9 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 	}
 
 	goodSecret := newSecret("testdata/good-jwk.json", "testdata/good-jwks.json")
+
+	secretWithWrongType := newSecret("testdata/good-jwk.json", "testdata/good-jwks.json")
+	secretWithWrongType.Type = "not-the-right-type"
 
 	tests := []struct {
 		name                        string
@@ -397,6 +401,24 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 			},
 			secrets: []*corev1.Secret{
 				newSecret("testdata/good-jwk.json", ""),
+			},
+			wantGenerateKeyCount: 1,
+			wantSecretActions: []kubetesting.Action{
+				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
+				kubetesting.NewUpdateAction(secretGVR, namespace, goodSecret),
+			},
+			wantFederationDomainActions: []kubetesting.Action{
+				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
+			},
+		},
+		{
+			name: "wrong type in secret",
+			key:  controllerlib.Key{Namespace: goodFederationDomain.Namespace, Name: goodFederationDomain.Name},
+			federationDomains: []*configv1alpha1.FederationDomain{
+				goodFederationDomainWithStatus,
+			},
+			secrets: []*corev1.Secret{
+				secretWithWrongType,
 			},
 			wantGenerateKeyCount: 1,
 			wantSecretActions: []kubetesting.Action{

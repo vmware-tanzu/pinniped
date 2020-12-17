@@ -129,6 +129,9 @@ func TestSupervisorSecrets(t *testing.T) {
 func ensureValidJWKS(t *testing.T, secret *corev1.Secret) {
 	t.Helper()
 
+	// Ensure the secret has the right type.
+	require.Equal(t, "secrets.pinniped.dev/federation-domain-jwks", secret.Type)
+
 	// Ensure the secret has an active key.
 	jwkData, ok := secret.Data["activeJWK"]
 	require.True(t, ok, "secret is missing active jwk")

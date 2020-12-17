@@ -9,6 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -104,6 +105,27 @@ func TestSupervisorLogin(t *testing.T) {
 		certSecret.Name,
 		configv1alpha1.SuccessFederationDomainStatusCondition,
 	)
+
+	// Ensure the the JWKS data is created and ready for the new FederationDomain by waiting for
+	// the `/jwks.json` endpoint to succeed, because there is no point in proceeding and eventually
+	// calling the token endpoint from this test until the JWKS data has been loaded into
+	// the server's in-memory JWKS cache for the token endpoint to use.
+	requestJWKSEndpoint, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		fmt.Sprintf("%s/jwks.json", issuerURL.String()),
+		nil,
+	)
+	require.NoError(t, err)
+	var jwksRequestStatus int
+	assert.Eventually(t, func() bool {
+		rsp, err := httpClient.Do(requestJWKSEndpoint)
+		require.NoError(t, err)
+		require.NoError(t, rsp.Body.Close())
+		jwksRequestStatus = rsp.StatusCode
+		return jwksRequestStatus == http.StatusOK
+	}, 30*time.Second, 200*time.Millisecond)
+	require.Equal(t, http.StatusOK, jwksRequestStatus)
 
 	// Create upstream OIDC provider and wait for it to become ready.
 	library.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
@@ -302,6 +324,7 @@ func doTokenExchange(t *testing.T, config *oauth2.Config, tokenResponse *oauth2.
 
 	resp, err := httpClient.Do(req)
 	require.NoError(t, err)
+	require.Equal(t, resp.StatusCode, http.StatusOK)
 	defer func() { _ = resp.Body.Close() }()
 	var respBody struct {
 		AccessToken     string `json:"access_token"`

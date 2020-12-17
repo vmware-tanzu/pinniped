@@ -41,76 +41,62 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		fositeInvalidClientErrorBody = here.Doc(`
 			{
 				"error":             "invalid_client",
-				"error_verbose":     "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)",
-				"error_description": "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)\n\nThe requested OAuth 2.0 Client does not exist.",
-				"error_hint":        "The requested OAuth 2.0 Client does not exist.",
-				"status_code":       401
+				"error_description": "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method). The requested OAuth 2.0 Client does not exist."
 			 }
 		`)
 
 		fositeInvalidRedirectURIErrorBody = here.Doc(`
 			{
 				"error":             "invalid_request",
-				"error_verbose":     "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed",
-				"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nThe \"redirect_uri\" parameter does not match any of the OAuth 2.0 Client's pre-registered redirect urls.",
-				"error_hint":        "The \"redirect_uri\" parameter does not match any of the OAuth 2.0 Client's pre-registered redirect urls.",
-				"status_code":       400
+				"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered redirect urls."
 			}
 		`)
 
 		fositePromptHasNoneAndOtherValueErrorQuery = map[string]string{
 			"error":             "invalid_request",
-			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nParameter \"prompt\" was set to \"none\", but contains other values as well which is not allowed.",
-			"error_hint":        "Parameter \"prompt\" was set to \"none\", but contains other values as well which is not allowed.",
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Parameter 'prompt' was set to 'none', but contains other values as well which is not allowed.",
 			"state":             happyState,
 		}
 
 		fositeMissingCodeChallengeErrorQuery = map[string]string{
 			"error":             "invalid_request",
-			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nClients must include a code_challenge when performing the authorize code flow, but it is missing.",
-			"error_hint":        "Clients must include a code_challenge when performing the authorize code flow, but it is missing.",
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must include a code_challenge when performing the authorize code flow, but it is missing.",
 			"state":             happyState,
 		}
 
 		fositeMissingCodeChallengeMethodErrorQuery = map[string]string{
 			"error":             "invalid_request",
-			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nClients must use code_challenge_method=S256, plain is not allowed.",
-			"error_hint":        "Clients must use code_challenge_method=S256, plain is not allowed.",
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Clients must use code_challenge_method=S256, plain is not allowed.",
 			"state":             happyState,
 		}
 
 		fositeInvalidCodeChallengeErrorQuery = map[string]string{
 			"error":             "invalid_request",
-			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nThe code_challenge_method is not supported, use S256 instead.",
-			"error_hint":        "The code_challenge_method is not supported, use S256 instead.",
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The code_challenge_method is not supported, use S256 instead.",
 			"state":             happyState,
 		}
 
 		fositeUnsupportedResponseTypeErrorQuery = map[string]string{
 			"error":             "unsupported_response_type",
-			"error_description": "The authorization server does not support obtaining a token using this method\n\nThe client is not allowed to request response_type \"unsupported\".",
-			"error_hint":        `The client is not allowed to request response_type "unsupported".`,
+			"error_description": "The authorization server does not support obtaining a token using this method. The client is not allowed to request response_type 'unsupported'.",
 			"state":             happyState,
 		}
 
 		fositeInvalidScopeErrorQuery = map[string]string{
 			"error":             "invalid_scope",
-			"error_description": "The requested scope is invalid, unknown, or malformed\n\nThe OAuth 2.0 Client is not allowed to request scope \"tuna\".",
-			"error_hint":        `The OAuth 2.0 Client is not allowed to request scope "tuna".`,
+			"error_description": "The requested scope is invalid, unknown, or malformed. The OAuth 2.0 Client is not allowed to request scope 'tuna'.",
 			"state":             happyState,
 		}
 
 		fositeInvalidStateErrorQuery = map[string]string{
 			"error":             "invalid_state",
-			"error_description": "The state is missing or does not have enough characters and is therefore considered too weak\n\nRequest parameter \"state\" must be at least be 8 characters long to ensure sufficient entropy.",
-			"error_hint":        `Request parameter "state" must be at least be 8 characters long to ensure sufficient entropy.`,
+			"error_description": "The state is missing or does not have enough characters and is therefore considered too weak. Request parameter 'state' must be at least be 8 characters long to ensure sufficient entropy.",
 			"state":             "short",
 		}
 
 		fositeMissingResponseTypeErrorQuery = map[string]string{
 			"error":             "unsupported_response_type",
-			"error_description": "The authorization server does not support obtaining a token using this method\n\nThe request is missing the \"response_type\"\" parameter.",
-			"error_hint":        `The request is missing the "response_type"" parameter.`,
+			"error_description": "The authorization server does not support obtaining a token using this method. `The request is missing the 'response_type' parameter.",
 			"state":             happyState,
 		}
 	)

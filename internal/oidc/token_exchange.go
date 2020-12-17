@@ -135,7 +135,7 @@ func (t *TokenExchangeHandler) validateAccessToken(ctx context.Context, requeste
 	signature := t.accessTokenStrategy.AccessTokenSignature(accessToken)
 	originalRequester, err := t.accessTokenStorage.GetAccessTokenSession(ctx, signature, requester.GetSession())
 	if err != nil {
-		return nil, fosite.ErrRequestUnauthorized.WithCause(err).WithHint("invalid subject_token")
+		return nil, fosite.ErrRequestUnauthorized.WithWrap(err).WithHint("invalid subject_token")
 	}
 	return originalRequester, nil
 }

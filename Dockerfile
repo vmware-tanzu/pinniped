@@ -15,7 +15,6 @@ COPY generated ./generated
 COPY cmd ./cmd
 COPY pkg ./pkg
 COPY internal ./internal
-COPY tools ./tools
 COPY hack ./hack
 
 # Build the executable binary (CGO_ENABLED=0 means static linking)

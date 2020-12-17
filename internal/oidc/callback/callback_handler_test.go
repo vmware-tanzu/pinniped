@@ -356,7 +356,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
-			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid%20offline_access&state=` + happyDownstreamState,
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access&state=` + happyDownstreamState,
 			wantDownstreamIDTokenUsername:     upstreamUsername,
 			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
 			wantDownstreamRequestedScopes:     []string{"openid", "offline_access"},

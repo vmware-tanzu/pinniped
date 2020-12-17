@@ -391,5 +391,5 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 	// while the fuzzer will panic if AuthorizeRequest changes in a way that cannot be fuzzed,
 	// if it adds a new field that can be fuzzed, this check will fail
 	// thus if AuthorizeRequest changes, we will detect it here (though we could possibly miss an omitempty field)
-	require.Equal(t, ExpectedAuthorizeCodeSessionJSONFromFuzzing, authorizeCodeSessionJSONFromFuzzing)
+	require.JSONEq(t, ExpectedAuthorizeCodeSessionJSONFromFuzzing, authorizeCodeSessionJSONFromFuzzing)
 }

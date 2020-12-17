@@ -12,12 +12,7 @@ function tidy_cmd() {
 }
 
 function lint_cmd() {
-  if [ -x "$(command -v golangci-lint)" ]; then
-    cmd='golangci-lint'
-  else
-    cmd='go run github.com/golangci/golangci-lint/cmd/golangci-lint'
-  fi
-  echo "${cmd} run --modules-download-mode=readonly --timeout=10m"
+  echo "golangci-lint run --modules-download-mode=readonly --timeout=10m"
 }
 
 function test_cmd() {

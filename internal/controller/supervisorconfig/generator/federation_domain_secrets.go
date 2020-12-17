@@ -24,6 +24,10 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
+const (
+	federationDomainKind = "FederationDomain"
+)
+
 type federationDomainSecretsController struct {
 	secretHelper             SecretHelper
 	secretRefFunc            func(domain *configv1alpha1.FederationDomain) *corev1.LocalObjectReference
@@ -235,4 +239,12 @@ func (c *federationDomainSecretsController) updateFederationDomain(
 		_, err = federationDomainClient.Update(ctx, oldFederationDomain, metav1.UpdateOptions{})
 		return err
 	})
+}
+
+// isFederationDomainControllee returns whether the provided obj is controlled by an FederationDomain.
+func isFederationDomainControllee(obj metav1.Object) bool {
+	controller := metav1.GetControllerOf(obj)
+	return controller != nil &&
+		controller.APIVersion == configv1alpha1.SchemeGroupVersion.String() &&
+		controller.Kind == federationDomainKind
 }

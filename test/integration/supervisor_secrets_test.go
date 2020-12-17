@@ -40,7 +40,7 @@ func TestSupervisorSecrets(t *testing.T) {
 			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
 				return env.SupervisorAppName + "-key"
 			},
-			ensureValid: ensureValidSymmetricKey,
+			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/supervisor-csrf-signing-key"),
 		},
 		{
 			name: "jwks",
@@ -54,21 +54,21 @@ func TestSupervisorSecrets(t *testing.T) {
 			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.TokenSigningKey.Name
 			},
-			ensureValid: ensureValidSymmetricKey,
+			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/symmetric"),
 		},
 		{
 			name: "state signature secret",
 			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.StateSigningKey.Name
 			},
-			ensureValid: ensureValidSymmetricKey,
+			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/symmetric"),
 		},
 		{
 			name: "state encryption secret",
 			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.StateEncryptionKey.Name
 			},
-			ensureValid: ensureValidSymmetricKey,
+			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/symmetric"),
 		},
 	}
 	for _, test := range tests {
@@ -160,10 +160,12 @@ func ensureValidJWKS(t *testing.T, secret *corev1.Secret) {
 	require.True(t, foundActiveJWK, "could not find active JWK in JWKS: %s", jwks)
 }
 
-func ensureValidSymmetricKey(t *testing.T, secret *corev1.Secret) {
-	t.Helper()
-	require.Equal(t, corev1.SecretType("secrets.pinniped.dev/symmetric"), secret.Type)
-	key, ok := secret.Data["key"]
-	require.Truef(t, ok, "secret data does not contain 'key': %s", secret.Data)
-	require.Equal(t, 32, len(key))
+func ensureValidSymmetricSecretOfTypeFunc(secretTypeValue string) func(*testing.T, *corev1.Secret) {
+	return func(t *testing.T, secret *corev1.Secret) {
+		t.Helper()
+		require.Equal(t, corev1.SecretType(secretTypeValue), secret.Type)
+		key, ok := secret.Data["key"]
+		require.Truef(t, ok, "secret data does not contain 'key': %s", secret.Data)
+		require.Equal(t, 32, len(key))
+	}
 }

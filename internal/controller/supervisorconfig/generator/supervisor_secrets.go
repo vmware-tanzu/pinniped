@@ -6,12 +6,14 @@ package generator
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
@@ -142,4 +144,81 @@ func (c *supervisorSecretsController) updateSecret(ctx context.Context, newSecre
 		_, err = secrets.Update(ctx, currentSecret, metav1.UpdateOptions{})
 		return err
 	})
+}
+
+func generateSymmetricKey() ([]byte, error) {
+	b := make([]byte, symmetricKeySize)
+	if _, err := rand.Read(b); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func isValid(secret *corev1.Secret, labels map[string]string) bool {
+	if secret.Type != SupervisorCSRFSigningKeySecretType {
+		return false
+	}
+
+	data, ok := secret.Data[symmetricSecretDataKey]
+	if !ok {
+		return false
+	}
+	if len(data) != symmetricKeySize {
+		return false
+	}
+
+	for key, value := range labels {
+		if secret.Labels[key] != value {
+			return false
+		}
+	}
+
+	return true
+}
+
+func secretDataFunc() (map[string][]byte, error) {
+	symmetricKey, err := generateKey()
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string][]byte{
+		symmetricSecretDataKey: symmetricKey,
+	}, nil
+}
+
+func generateSecret(namespace, name string, labels map[string]string, secretDataFunc func() (map[string][]byte, error), owner metav1.Object) (*corev1.Secret, error) {
+	secretData, err := secretDataFunc()
+	if err != nil {
+		return nil, err
+	}
+
+	deploymentGVK := schema.GroupVersionKind{
+		Group:   appsv1.SchemeGroupVersion.Group,
+		Version: appsv1.SchemeGroupVersion.Version,
+		Kind:    "Deployment",
+	}
+
+	blockOwnerDeletion := true
+	isController := false
+
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion:         deploymentGVK.GroupVersion().String(),
+					Kind:               deploymentGVK.Kind,
+					Name:               owner.GetName(),
+					UID:                owner.GetUID(),
+					BlockOwnerDeletion: &blockOwnerDeletion,
+					Controller:         &isController,
+				},
+			},
+			Labels: labels,
+		},
+		Type: SupervisorCSRFSigningKeySecretType,
+		Data: secretData,
+	}, nil
 }

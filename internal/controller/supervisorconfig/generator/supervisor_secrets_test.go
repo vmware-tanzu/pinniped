@@ -258,7 +258,7 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 				},
 				Labels: labels,
 			},
-			Type: "secrets.pinniped.dev/symmetric",
+			Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
 			Data: map[string][]byte{
 				"key": generatedSymmetricKey,
 			},
@@ -280,7 +280,7 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 				},
 				Labels: labels,
 			},
-			Type: "secrets.pinniped.dev/symmetric",
+			Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
 			Data: map[string][]byte{
 				"key": otherGeneratedSymmetricKey,
 			},

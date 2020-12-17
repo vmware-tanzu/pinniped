@@ -72,7 +72,7 @@ func (a *pkceStorage) getSession(ctx context.Context, signature string) (*sessio
 	rv, err := a.storage.Get(ctx, signature, session)
 
 	if errors.IsNotFound(err) {
-		return nil, "", fosite.ErrNotFound.WithCause(err).WithDebug(err.Error())
+		return nil, "", fosite.ErrNotFound.WithWrap(err).WithDebug(err.Error())
 	}
 
 	if err != nil {

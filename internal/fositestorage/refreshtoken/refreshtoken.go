@@ -86,7 +86,7 @@ func (a *refreshTokenStorage) getSession(ctx context.Context, signature string) 
 	rv, err := a.storage.Get(ctx, signature, session)
 
 	if errors.IsNotFound(err) {
-		return nil, "", fosite.ErrNotFound.WithCause(err).WithDebug(err.Error())
+		return nil, "", fosite.ErrNotFound.WithWrap(err).WithDebug(err.Error())
 	}
 
 	if err != nil {

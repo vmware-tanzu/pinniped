@@ -42,13 +42,21 @@ function with_modules() {
   local cmd_function="${1}"
   cmd="$(${cmd_function})"
 
+  # start the cache mutation detector by default so that cache mutators will be found
+  local kube_cache_mutation_detector="${KUBE_CACHE_MUTATION_DETECTOR:-true}"
+
+  # panic the server on watch decode errors since they are considered coder mistakes
+  local kube_panic_watch_decode_error="${KUBE_PANIC_WATCH_DECODE_ERROR:-true}"
+
+  env_vars="KUBE_CACHE_MUTATION_DETECTOR=${kube_cache_mutation_detector} KUBE_PANIC_WATCH_DECODE_ERROR=${kube_panic_watch_decode_error}"
+
   pushd "${ROOT}" >/dev/null
   for mod_file in $(find . -maxdepth 4 -not -path "./generated/*" -name go.mod | sort); do
     mod_dir="$(dirname "${mod_file}")"
     (
       echo "=> "
-      echo "   cd ${mod_dir} && ${cmd}"
-      cd "${mod_dir}" && ${cmd}
+      echo "   cd ${mod_dir} && ${env_vars} ${cmd}"
+      cd "${mod_dir}" && env ${env_vars} ${cmd}
     )
   done
   popd >/dev/null

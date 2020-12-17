@@ -40,15 +40,15 @@ func TestInformerFilters(t *testing.T) {
 		it.Before(func() {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
-			opcInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).Config().V1alpha1().FederationDomains()
+			federationDomainInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).Config().V1alpha1().FederationDomains()
 			_ = NewFederationDomainWatcherController(
 				nil,
 				nil,
 				nil,
-				opcInformer,
+				federationDomainInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
 			)
-			configMapInformerFilter = observableWithInformerOption.GetFilterForInformer(opcInformer)
+			configMapInformerFilter = observableWithInformerOption.GetFilterForInformer(federationDomainInformer)
 		})
 
 		when("watching FederationDomain objects", func() {
@@ -84,10 +84,10 @@ func TestInformerFilters(t *testing.T) {
 
 type fakeProvidersSetter struct {
 	SetProvidersWasCalled     bool
-	FederationDomainsReceived []*provider.FederationDomain
+	FederationDomainsReceived []*provider.FederationDomainIssuer
 }
 
-func (f *fakeProvidersSetter) SetProviders(federationDomains ...*provider.FederationDomain) {
+func (f *fakeProvidersSetter) SetProviders(federationDomains ...*provider.FederationDomainIssuer) {
 	f.SetProvidersWasCalled = true
 	f.FederationDomainsReceived = federationDomains
 }
@@ -99,8 +99,8 @@ func TestSync(t *testing.T) {
 		var r *require.Assertions
 
 		var subject controllerlib.Controller
-		var opcInformerClient *pinnipedfake.Clientset
-		var opcInformers pinnipedinformers.SharedInformerFactory
+		var federationDomainInformerClient *pinnipedfake.Clientset
+		var federationDomainInformers pinnipedinformers.SharedInformerFactory
 		var pinnipedAPIClient *pinnipedfake.Clientset
 		var timeoutContext context.Context
 		var timeoutContextCancel context.CancelFunc
@@ -117,7 +117,7 @@ func TestSync(t *testing.T) {
 				providersSetter,
 				clock.NewFakeClock(frozenNow),
 				pinnipedAPIClient,
-				opcInformers.Config().V1alpha1().FederationDomains(),
+				federationDomainInformers.Config().V1alpha1().FederationDomains(),
 				controllerlib.WithInformer,
 			)
 
@@ -132,7 +132,7 @@ func TestSync(t *testing.T) {
 			}
 
 			// Must start informers before calling TestRunSynchronously()
-			opcInformers.Start(timeoutContext.Done())
+			federationDomainInformers.Start(timeoutContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
@@ -144,8 +144,8 @@ func TestSync(t *testing.T) {
 
 			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
 
-			opcInformerClient = pinnipedfake.NewSimpleClientset()
-			opcInformers = pinnipedinformers.NewSharedInformerFactory(opcInformerClient, 0)
+			federationDomainInformerClient = pinnipedfake.NewSimpleClientset()
+			federationDomainInformers = pinnipedinformers.NewSharedInformerFactory(federationDomainInformerClient, 0)
 			pinnipedAPIClient = pinnipedfake.NewSimpleClientset()
 
 			federationDomainGVR = schema.GroupVersionResource{
@@ -171,14 +171,14 @@ func TestSync(t *testing.T) {
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer1.com"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain1))
-				r.NoError(opcInformerClient.Tracker().Add(federationDomain1))
+				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomain1))
 
 				federationDomain2 = &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config2", Namespace: namespace},
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer2.com"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain2))
-				r.NoError(opcInformerClient.Tracker().Add(federationDomain2))
+				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomain2))
 			})
 
 			it("calls the ProvidersSetter", func() {
@@ -186,15 +186,15 @@ func TestSync(t *testing.T) {
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				provider1, err := provider.NewFederationDomain(federationDomain1.Spec.Issuer)
+				provider1, err := provider.NewFederationDomainIssuer(federationDomain1.Spec.Issuer)
 				r.NoError(err)
 
-				provider2, err := provider.NewFederationDomain(federationDomain2.Spec.Issuer)
+				provider2, err := provider.NewFederationDomainIssuer(federationDomain2.Spec.Issuer)
 				r.NoError(err)
 
 				r.True(providersSetter.SetProvidersWasCalled)
 				r.ElementsMatch(
-					[]*provider.FederationDomain{
+					[]*provider.FederationDomainIssuer{
 						provider1,
 						provider2,
 					},
@@ -247,7 +247,7 @@ func TestSync(t *testing.T) {
 					federationDomain1.Status.LastUpdateTime = timePtr(metav1.NewTime(frozenNow))
 
 					r.NoError(pinnipedAPIClient.Tracker().Update(federationDomainGVR, federationDomain1, federationDomain1.Namespace))
-					r.NoError(opcInformerClient.Tracker().Update(federationDomainGVR, federationDomain1, federationDomain1.Namespace))
+					r.NoError(federationDomainInformerClient.Tracker().Update(federationDomainGVR, federationDomain1, federationDomain1.Namespace))
 				})
 
 				it("only updates the out-of-date FederationDomain", func() {
@@ -284,15 +284,15 @@ func TestSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.NoError(err)
 
-					provider1, err := provider.NewFederationDomain(federationDomain1.Spec.Issuer)
+					provider1, err := provider.NewFederationDomainIssuer(federationDomain1.Spec.Issuer)
 					r.NoError(err)
 
-					provider2, err := provider.NewFederationDomain(federationDomain2.Spec.Issuer)
+					provider2, err := provider.NewFederationDomainIssuer(federationDomain2.Spec.Issuer)
 					r.NoError(err)
 
 					r.True(providersSetter.SetProvidersWasCalled)
 					r.ElementsMatch(
-						[]*provider.FederationDomain{
+						[]*provider.FederationDomainIssuer{
 							provider1,
 							provider2,
 						},
@@ -322,10 +322,10 @@ func TestSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.EqualError(err, "1 error(s):\n- could not update status: some update error")
 
-					provider1, err := provider.NewFederationDomain(federationDomain1.Spec.Issuer)
+					provider1, err := provider.NewFederationDomainIssuer(federationDomain1.Spec.Issuer)
 					r.NoError(err)
 
-					provider2, err := provider.NewFederationDomain(federationDomain2.Spec.Issuer)
+					provider2, err := provider.NewFederationDomainIssuer(federationDomain2.Spec.Issuer)
 					r.NoError(err)
 
 					r.True(providersSetter.SetProvidersWasCalled)
@@ -387,7 +387,7 @@ func TestSync(t *testing.T) {
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer.com"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain))
-				r.NoError(opcInformerClient.Tracker().Add(federationDomain))
+				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomain))
 			})
 
 			when("there is a conflict while updating an FederationDomain", func() {
@@ -521,14 +521,14 @@ func TestSync(t *testing.T) {
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://valid-issuer.com"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(validFederationDomain))
-				r.NoError(opcInformerClient.Tracker().Add(validFederationDomain))
+				r.NoError(federationDomainInformerClient.Tracker().Add(validFederationDomain))
 
 				invalidFederationDomain = &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "invalid-config", Namespace: namespace},
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://invalid-issuer.com?some=query"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(invalidFederationDomain))
-				r.NoError(opcInformerClient.Tracker().Add(invalidFederationDomain))
+				r.NoError(federationDomainInformerClient.Tracker().Add(invalidFederationDomain))
 			})
 
 			it("calls the ProvidersSetter with the valid provider", func() {
@@ -536,12 +536,12 @@ func TestSync(t *testing.T) {
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				validProvider, err := provider.NewFederationDomain(validFederationDomain.Spec.Issuer)
+				validProvider, err := provider.NewFederationDomainIssuer(validFederationDomain.Spec.Issuer)
 				r.NoError(err)
 
 				r.True(providersSetter.SetProvidersWasCalled)
 				r.Equal(
-					[]*provider.FederationDomain{
+					[]*provider.FederationDomainIssuer{
 						validProvider,
 					},
 					providersSetter.FederationDomainsReceived,
@@ -593,8 +593,8 @@ func TestSync(t *testing.T) {
 						"federationdomains",
 						func(action coretesting.Action) (bool, runtime.Object, error) {
 							updateAction := action.(coretesting.UpdateActionImpl)
-							opc := updateAction.Object.(*v1alpha1.FederationDomain)
-							if opc.Name == validFederationDomain.Name {
+							federationDomain := updateAction.Object.(*v1alpha1.FederationDomain)
+							if federationDomain.Name == validFederationDomain.Name {
 								return true, nil, nil
 							}
 
@@ -608,12 +608,12 @@ func TestSync(t *testing.T) {
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.EqualError(err, "1 error(s):\n- could not update status: some update error")
 
-					validProvider, err := provider.NewFederationDomain(validFederationDomain.Spec.Issuer)
+					validProvider, err := provider.NewFederationDomainIssuer(validFederationDomain.Spec.Issuer)
 					r.NoError(err)
 
 					r.True(providersSetter.SetProvidersWasCalled)
 					r.Equal(
-						[]*provider.FederationDomain{
+						[]*provider.FederationDomainIssuer{
 							validProvider,
 						},
 						providersSetter.FederationDomainsReceived,
@@ -675,20 +675,20 @@ func TestSync(t *testing.T) {
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://iSSueR-duPlicAte.cOm/a"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainDuplicate1))
-				r.NoError(opcInformerClient.Tracker().Add(federationDomainDuplicate1))
+				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomainDuplicate1))
 				federationDomainDuplicate2 = &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "duplicate2", Namespace: namespace},
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/a"},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainDuplicate2))
-				r.NoError(opcInformerClient.Tracker().Add(federationDomainDuplicate2))
+				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomainDuplicate2))
 
 				federationDomain = &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "not-duplicate", Namespace: namespace},
 					Spec:       v1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/A"}, // different path
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomain))
-				r.NoError(opcInformerClient.Tracker().Add(federationDomain))
+				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomain))
 			})
 
 			it("calls the ProvidersSetter with the non-duplicate", func() {
@@ -696,12 +696,12 @@ func TestSync(t *testing.T) {
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				nonDuplicateProvider, err := provider.NewFederationDomain(federationDomain.Spec.Issuer)
+				nonDuplicateProvider, err := provider.NewFederationDomainIssuer(federationDomain.Spec.Issuer)
 				r.NoError(err)
 
 				r.True(providersSetter.SetProvidersWasCalled)
 				r.Equal(
-					[]*provider.FederationDomain{
+					[]*provider.FederationDomainIssuer{
 						nonDuplicateProvider,
 					},
 					providersSetter.FederationDomainsReceived,
@@ -824,7 +824,7 @@ func TestSync(t *testing.T) {
 					},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainSameIssuerAddress1))
-				r.NoError(opcInformerClient.Tracker().Add(federationDomainSameIssuerAddress1))
+				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomainSameIssuerAddress1))
 				federationDomainSameIssuerAddress2 = &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "provider2", Namespace: namespace},
 					Spec: v1alpha1.FederationDomainSpec{
@@ -835,7 +835,7 @@ func TestSync(t *testing.T) {
 					},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainSameIssuerAddress2))
-				r.NoError(opcInformerClient.Tracker().Add(federationDomainSameIssuerAddress2))
+				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomainSameIssuerAddress2))
 
 				federationDomainDifferentIssuerAddress = &v1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "differentIssuerAddressProvider", Namespace: namespace},
@@ -845,7 +845,7 @@ func TestSync(t *testing.T) {
 					},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainDifferentIssuerAddress))
-				r.NoError(opcInformerClient.Tracker().Add(federationDomainDifferentIssuerAddress))
+				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomainDifferentIssuerAddress))
 
 				// Also add one with a URL that cannot be parsed to make sure that the error handling
 				// for the duplicate issuers and secret names are not confused by invalid URLs.
@@ -860,7 +860,7 @@ func TestSync(t *testing.T) {
 					},
 				}
 				r.NoError(pinnipedAPIClient.Tracker().Add(federationDomainWithInvalidIssuerURL))
-				r.NoError(opcInformerClient.Tracker().Add(federationDomainWithInvalidIssuerURL))
+				r.NoError(federationDomainInformerClient.Tracker().Add(federationDomainWithInvalidIssuerURL))
 			})
 
 			it("calls the ProvidersSetter with the non-duplicate", func() {
@@ -868,12 +868,12 @@ func TestSync(t *testing.T) {
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				nonDuplicateProvider, err := provider.NewFederationDomain(federationDomainDifferentIssuerAddress.Spec.Issuer)
+				nonDuplicateProvider, err := provider.NewFederationDomainIssuer(federationDomainDifferentIssuerAddress.Spec.Issuer)
 				r.NoError(err)
 
 				r.True(providersSetter.SetProvidersWasCalled)
 				r.Equal(
-					[]*provider.FederationDomain{
+					[]*provider.FederationDomainIssuer{
 						nonDuplicateProvider,
 					},
 					providersSetter.FederationDomainsReceived,

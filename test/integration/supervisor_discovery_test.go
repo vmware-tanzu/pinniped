@@ -595,17 +595,17 @@ func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name st
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	var opc *v1alpha1.FederationDomain
+	var federationDomain *v1alpha1.FederationDomain
 	var err error
 	assert.Eventually(t, func() bool {
-		opc, err = client.ConfigV1alpha1().FederationDomains(ns).Get(ctx, name, metav1.GetOptions{})
+		federationDomain, err = client.ConfigV1alpha1().FederationDomains(ns).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			t.Logf("error trying to get FederationDomain: %s", err.Error())
 		}
-		return err == nil && opc.Status.Status == status
+		return err == nil && federationDomain.Status.Status == status
 	}, time.Minute, 200*time.Millisecond)
 	require.NoError(t, err)
-	require.Equalf(t, status, opc.Status.Status, "unexpected status (message = '%s')", opc.Status.Message)
+	require.Equalf(t, status, federationDomain.Status.Status, "unexpected status (message = '%s')", federationDomain.Status.Message)
 }
 
 func newHTTPClient(t *testing.T, caBundle string, dnsOverrides map[string]string) *http.Client {

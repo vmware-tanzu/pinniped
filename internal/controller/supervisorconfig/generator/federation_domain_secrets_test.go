@@ -150,7 +150,7 @@ func TestFederationDomainControllerFilterSecret(t *testing.T) {
 				kubernetesfake.NewSimpleClientset(),
 				0,
 			).Core().V1().Secrets()
-			opcInformer := pinnipedinformers.NewSharedInformerFactory(
+			federationDomainInformer := pinnipedinformers.NewSharedInformerFactory(
 				pinnipedfake.NewSimpleClientset(),
 				0,
 			).Config().V1alpha1().FederationDomains()
@@ -161,7 +161,7 @@ func TestFederationDomainControllerFilterSecret(t *testing.T) {
 				nil, // kubeClient, not needed
 				nil, // pinnipedClient, not needed
 				secretInformer,
-				opcInformer,
+				federationDomainInformer,
 				withInformer.WithInformer,
 			)
 
@@ -176,24 +176,24 @@ func TestFederationDomainControllerFilterSecret(t *testing.T) {
 	}
 }
 
-func TestNewFederationDomainSecretsControllerFilterOPC(t *testing.T) {
+func TestNewFederationDomainSecretsControllerFilterFederationDomain(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		opc        configv1alpha1.FederationDomain
-		wantAdd    bool
-		wantUpdate bool
-		wantDelete bool
-		wantParent controllerlib.Key
+		name             string
+		federationDomain configv1alpha1.FederationDomain
+		wantAdd          bool
+		wantUpdate       bool
+		wantDelete       bool
+		wantParent       controllerlib.Key
 	}{
 		{
-			name:       "anything goes",
-			opc:        configv1alpha1.FederationDomain{},
-			wantAdd:    true,
-			wantUpdate: true,
-			wantDelete: true,
-			wantParent: controllerlib.Key{},
+			name:             "anything goes",
+			federationDomain: configv1alpha1.FederationDomain{},
+			wantAdd:          true,
+			wantUpdate:       true,
+			wantDelete:       true,
+			wantParent:       controllerlib.Key{},
 		},
 	}
 	for _, test := range tests {
@@ -210,7 +210,7 @@ func TestNewFederationDomainSecretsControllerFilterOPC(t *testing.T) {
 				kubernetesfake.NewSimpleClientset(),
 				0,
 			).Core().V1().Secrets()
-			opcInformer := pinnipedinformers.NewSharedInformerFactory(
+			federationDomainInformer := pinnipedinformers.NewSharedInformerFactory(
 				pinnipedfake.NewSimpleClientset(),
 				0,
 			).Config().V1alpha1().FederationDomains()
@@ -221,17 +221,17 @@ func TestNewFederationDomainSecretsControllerFilterOPC(t *testing.T) {
 				nil, // kubeClient, not needed
 				nil, // pinnipedClient, not needed
 				secretInformer,
-				opcInformer,
+				federationDomainInformer,
 				withInformer.WithInformer,
 			)
 
 			unrelated := configv1alpha1.FederationDomain{}
-			filter := withInformer.GetFilterForInformer(opcInformer)
-			require.Equal(t, test.wantAdd, filter.Add(&test.opc))
-			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, &test.opc))
-			require.Equal(t, test.wantUpdate, filter.Update(&test.opc, &unrelated))
-			require.Equal(t, test.wantDelete, filter.Delete(&test.opc))
-			require.Equal(t, test.wantParent, filter.Parent(&test.opc))
+			filter := withInformer.GetFilterForInformer(federationDomainInformer)
+			require.Equal(t, test.wantAdd, filter.Add(&test.federationDomain))
+			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, &test.federationDomain))
+			require.Equal(t, test.wantUpdate, filter.Update(&test.federationDomain, &unrelated))
+			require.Equal(t, test.wantDelete, filter.Delete(&test.federationDomain))
+			require.Equal(t, test.wantParent, filter.Parent(&test.federationDomain))
 		})
 	}
 }
@@ -242,14 +242,14 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 	const (
 		namespace = "some-namespace"
 
-		opName = "op-name"
-		opUID  = "op-uid"
+		federationDomainName = "federationDomain-name"
+		federationDomainUID  = "federationDomain-uid"
 
 		secretName = "secret-name"
 		secretUID  = "secret-uid"
 	)
 
-	opGVR := schema.GroupVersionResource{
+	federationDomainGVR := schema.GroupVersionResource{
 		Group:    configv1alpha1.SchemeGroupVersion.Group,
 		Version:  configv1alpha1.SchemeGroupVersion.Version,
 		Resource: "federationdomains",
@@ -261,11 +261,11 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 		Resource: "secrets",
 	}
 
-	goodOP := &configv1alpha1.FederationDomain{
+	goodFederationDomain := &configv1alpha1.FederationDomain{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      opName,
+			Name:      federationDomainName,
 			Namespace: namespace,
-			UID:       opUID,
+			UID:       federationDomainUID,
 		},
 	}
 
@@ -276,10 +276,10 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 			UID:       secretUID,
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					APIVersion:         opGVR.GroupVersion().String(),
+					APIVersion:         federationDomainGVR.GroupVersion().String(),
 					Kind:               "FederationDomain",
-					Name:               opName,
-					UID:                opUID,
+					Name:               federationDomainName,
+					UID:                federationDomainUID,
 					BlockOwnerDeletion: boolPtr(true),
 					Controller:         boolPtr(true),
 				},
@@ -295,14 +295,14 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 		},
 	}
 
-	goodOPWithTokenSigningKey := goodOP.DeepCopy()
-	goodOPWithTokenSigningKey.Status.Secrets.TokenSigningKey.Name = goodSecret.Name
+	goodFederationDomainWithTokenSigningKey := goodFederationDomain.DeepCopy()
+	goodFederationDomainWithTokenSigningKey.Status.Secrets.TokenSigningKey.Name = goodSecret.Name
 
-	goodOPWithJWKS := goodOP.DeepCopy()
-	goodOPWithJWKS.Status.Secrets.JWKS.Name = "some-jwks-key"
+	goodFederationDomainWithJWKS := goodFederationDomain.DeepCopy()
+	goodFederationDomainWithJWKS.Status.Secrets.JWKS.Name = "some-jwks-key"
 
-	goodOPWithJWKSAndTokenSigningKey := goodOPWithJWKS.DeepCopy()
-	goodOPWithJWKSAndTokenSigningKey.Status.Secrets.TokenSigningKey = goodOPWithTokenSigningKey.Status.Secrets.TokenSigningKey
+	goodFederationDomainWithJWKSAndTokenSigningKey := goodFederationDomainWithJWKS.DeepCopy()
+	goodFederationDomainWithJWKSAndTokenSigningKey.Status.Secrets.TokenSigningKey = goodFederationDomainWithTokenSigningKey.Status.Secrets.TokenSigningKey
 
 	invalidSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -311,10 +311,10 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 			UID:       secretUID,
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					APIVersion:         opGVR.GroupVersion().String(),
+					APIVersion:         federationDomainGVR.GroupVersion().String(),
 					Kind:               "FederationDomain",
-					Name:               opName,
-					UID:                opUID,
+					Name:               federationDomainName,
+					UID:                federationDomainUID,
 					BlockOwnerDeletion: boolPtr(true),
 					Controller:         boolPtr(true),
 				},
@@ -323,39 +323,39 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 	}
 
 	tests := []struct {
-		name              string
-		storage           func(**configv1alpha1.FederationDomain, **corev1.Secret)
-		client            func(*pinnipedfake.Clientset, *kubernetesfake.Clientset)
-		secretHelper      func(*mocksecrethelper.MockSecretHelper)
-		wantOPActions     []kubetesting.Action
-		wantSecretActions []kubetesting.Action
-		wantError         string
+		name                        string
+		storage                     func(**configv1alpha1.FederationDomain, **corev1.Secret)
+		client                      func(*pinnipedfake.Clientset, *kubernetesfake.Clientset)
+		secretHelper                func(*mocksecrethelper.MockSecretHelper)
+		wantFederationDomainActions []kubetesting.Action
+		wantSecretActions           []kubetesting.Action
+		wantError                   string
 	}{
 		{
 			name: "FederationDomain does not exist and secret does not exist",
-			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
-				*op = nil
+			storage: func(federationDomain **configv1alpha1.FederationDomain, s **corev1.Secret) {
+				*federationDomain = nil
 				*s = nil
 			},
 		},
 		{
 			name: "FederationDomain does not exist and secret exists",
-			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
-				*op = nil
+			storage: func(federationDomain **configv1alpha1.FederationDomain, s **corev1.Secret) {
+				*federationDomain = nil
 			},
 		},
 		{
 			name: "FederationDomain exists and secret does not exist",
-			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
+			storage: func(federationDomain **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*s = nil
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
-				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
-				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodOP, goodSecret).Times(1).Return(goodOPWithTokenSigningKey)
+				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(goodSecret, nil)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodFederationDomain, goodSecret).Times(1).Return(goodFederationDomainWithTokenSigningKey)
 			},
-			wantOPActions: []kubetesting.Action{
-				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
-				kubetesting.NewUpdateAction(opGVR, namespace, goodOPWithTokenSigningKey),
+			wantFederationDomainActions: []kubetesting.Action{
+				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
+				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithTokenSigningKey),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
@@ -364,21 +364,21 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 		},
 		{
 			name: "FederationDomain exists and secret does not exist and upon updating FederationDomain we learn a new status field has been set",
-			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
+			storage: func(federationDomain **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*s = nil
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
-				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
-				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodOP, goodSecret).Times(1).Return(goodOPWithTokenSigningKey)
+				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(goodSecret, nil)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodFederationDomain, goodSecret).Times(1).Return(goodFederationDomainWithTokenSigningKey)
 			},
 			client: func(c *pinnipedfake.Clientset, _ *kubernetesfake.Clientset) {
 				c.PrependReactor("get", "federationdomains", func(_ kubetesting.Action) (bool, runtime.Object, error) {
-					return true, goodOPWithJWKS, nil
+					return true, goodFederationDomainWithJWKS, nil
 				})
 			},
-			wantOPActions: []kubetesting.Action{
-				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
-				kubetesting.NewUpdateAction(opGVR, namespace, goodOPWithJWKSAndTokenSigningKey),
+			wantFederationDomainActions: []kubetesting.Action{
+				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
+				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithJWKSAndTokenSigningKey),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
@@ -387,20 +387,20 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 		},
 		{
 			name: "FederationDomain exists and secret does not exist and upon updating FederationDomain we learn all status fields have been set",
-			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
+			storage: func(federationDomain **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*s = nil
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
-				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
-				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodOP, goodSecret).Times(1).Return(goodOPWithTokenSigningKey)
+				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(goodSecret, nil)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodFederationDomain, goodSecret).Times(1).Return(goodFederationDomainWithTokenSigningKey)
 			},
 			client: func(c *pinnipedfake.Clientset, _ *kubernetesfake.Clientset) {
 				c.PrependReactor("get", "federationdomains", func(_ kubetesting.Action) (bool, runtime.Object, error) {
-					return true, goodOPWithJWKSAndTokenSigningKey, nil
+					return true, goodFederationDomainWithJWKSAndTokenSigningKey, nil
 				})
 			},
-			wantOPActions: []kubetesting.Action{
-				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
+			wantFederationDomainActions: []kubetesting.Action{
+				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
@@ -409,17 +409,17 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 		},
 		{
 			name: "FederationDomain exists and invalid secret exists",
-			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
+			storage: func(federationDomain **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*s = invalidSecret.DeepCopy()
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
-				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
-				secretHelper.EXPECT().IsValid(goodOP, invalidSecret).Times(2).Return(false)
-				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodOP, goodSecret).Times(1).Return(goodOPWithTokenSigningKey)
+				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(goodSecret, nil)
+				secretHelper.EXPECT().IsValid(goodFederationDomain, invalidSecret).Times(2).Return(false)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodFederationDomain, goodSecret).Times(1).Return(goodFederationDomainWithTokenSigningKey)
 			},
-			wantOPActions: []kubetesting.Action{
-				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
-				kubetesting.NewUpdateAction(opGVR, namespace, goodOPWithTokenSigningKey),
+			wantFederationDomainActions: []kubetesting.Action{
+				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
+				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithTokenSigningKey),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
@@ -429,7 +429,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 		{
 			name: "FederationDomain exists and generating a secret fails",
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
-				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(nil, errors.New("some generate error"))
+				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(nil, errors.New("some generate error"))
 			},
 			wantError: "failed to generate secret: some generate error",
 		},
@@ -439,14 +439,14 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 				otherSecret := goodSecret.DeepCopy()
 				otherSecret.UID = "other-secret-uid"
 
-				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(otherSecret, nil)
-				secretHelper.EXPECT().IsValid(goodOP, goodSecret).Times(1).Return(false)
-				secretHelper.EXPECT().IsValid(goodOP, goodSecret).Times(1).Return(true)
-				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodOP, goodSecret).Times(1).Return(goodOPWithTokenSigningKey)
+				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(otherSecret, nil)
+				secretHelper.EXPECT().IsValid(goodFederationDomain, goodSecret).Times(1).Return(false)
+				secretHelper.EXPECT().IsValid(goodFederationDomain, goodSecret).Times(1).Return(true)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodFederationDomain, goodSecret).Times(1).Return(goodFederationDomainWithTokenSigningKey)
 			},
-			wantOPActions: []kubetesting.Action{
-				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
-				kubetesting.NewUpdateAction(opGVR, namespace, goodOPWithTokenSigningKey),
+			wantFederationDomainActions: []kubetesting.Action{
+				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
+				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithTokenSigningKey),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
@@ -455,8 +455,8 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 		{
 			name: "FederationDomain exists and invalid secret exists and getting secret fails",
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
-				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
-				secretHelper.EXPECT().IsValid(goodOP, goodSecret).Times(1).Return(false)
+				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(goodSecret, nil)
+				secretHelper.EXPECT().IsValid(goodFederationDomain, goodSecret).Times(1).Return(false)
 			},
 			client: func(_ *pinnipedfake.Clientset, c *kubernetesfake.Clientset) {
 				c.PrependReactor("get", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
@@ -470,11 +470,11 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 		},
 		{
 			name: "FederationDomain exists and secret does not exist and creating secret fails",
-			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
+			storage: func(federationDomain **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*s = nil
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
-				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
+				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(goodSecret, nil)
 			},
 			client: func(_ *pinnipedfake.Clientset, c *kubernetesfake.Clientset) {
 				c.PrependReactor("create", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
@@ -490,8 +490,8 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 		{
 			name: "FederationDomain exists and invalid secret exists and updating secret fails",
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
-				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
-				secretHelper.EXPECT().IsValid(goodOP, goodSecret).Times(2).Return(false)
+				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(goodSecret, nil)
+				secretHelper.EXPECT().IsValid(goodFederationDomain, goodSecret).Times(2).Return(false)
 			},
 			client: func(_ *pinnipedfake.Clientset, c *kubernetesfake.Clientset) {
 				c.PrependReactor("update", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
@@ -506,13 +506,13 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 		},
 		{
 			name: "FederationDomain exists and invalid secret exists and updating secret fails due to conflict",
-			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
+			storage: func(federationDomain **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*s = invalidSecret.DeepCopy()
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
-				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
-				secretHelper.EXPECT().IsValid(goodOP, invalidSecret).Times(3).Return(false)
-				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodOP, goodSecret).Times(1).Return(goodOPWithTokenSigningKey)
+				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(goodSecret, nil)
+				secretHelper.EXPECT().IsValid(goodFederationDomain, invalidSecret).Times(3).Return(false)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodFederationDomain, goodSecret).Times(1).Return(goodFederationDomainWithTokenSigningKey)
 			},
 			client: func(_ *pinnipedfake.Clientset, c *kubernetesfake.Clientset) {
 				once := sync.Once{}
@@ -522,9 +522,9 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 					return true, nil, err
 				})
 			},
-			wantOPActions: []kubetesting.Action{
-				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
-				kubetesting.NewUpdateAction(opGVR, namespace, goodOPWithTokenSigningKey),
+			wantFederationDomainActions: []kubetesting.Action{
+				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
+				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithTokenSigningKey),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
@@ -535,37 +535,37 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 		},
 		{
 			name: "FederationDomain exists and invalid secret exists and getting FederationDomain fails",
-			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
+			storage: func(federationDomain **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*s = invalidSecret.DeepCopy()
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
-				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
-				secretHelper.EXPECT().IsValid(goodOP, invalidSecret).Times(2).Return(false)
-				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodOP, goodSecret).Times(1).Return(goodOPWithTokenSigningKey)
+				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(goodSecret, nil)
+				secretHelper.EXPECT().IsValid(goodFederationDomain, invalidSecret).Times(2).Return(false)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodFederationDomain, goodSecret).Times(1).Return(goodFederationDomainWithTokenSigningKey)
 			},
 			client: func(c *pinnipedfake.Clientset, _ *kubernetesfake.Clientset) {
 				c.PrependReactor("get", "federationdomains", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New("some get error")
 				})
 			},
-			wantOPActions: []kubetesting.Action{
-				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
+			wantFederationDomainActions: []kubetesting.Action{
+				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
 				kubetesting.NewUpdateAction(secretGVR, namespace, goodSecret),
 			},
-			wantError: fmt.Sprintf("failed to update federationdomain: failed to get federationdomain %s/%s: some get error", goodOPWithTokenSigningKey.Namespace, goodOPWithTokenSigningKey.Name),
+			wantError: fmt.Sprintf("failed to update federationdomain: failed to get federationdomain %s/%s: some get error", goodFederationDomainWithTokenSigningKey.Namespace, goodFederationDomainWithTokenSigningKey.Name),
 		},
 		{
 			name: "FederationDomain exists and invalid secret exists and updating FederationDomain fails due to conflict",
-			storage: func(op **configv1alpha1.FederationDomain, s **corev1.Secret) {
+			storage: func(federationDomain **configv1alpha1.FederationDomain, s **corev1.Secret) {
 				*s = invalidSecret.DeepCopy()
 			},
 			secretHelper: func(secretHelper *mocksecrethelper.MockSecretHelper) {
-				secretHelper.EXPECT().Generate(goodOP).Times(1).Return(goodSecret, nil)
-				secretHelper.EXPECT().IsValid(goodOP, invalidSecret).Times(2).Return(false)
-				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodOP, goodSecret).Times(1).Return(goodOPWithTokenSigningKey)
+				secretHelper.EXPECT().Generate(goodFederationDomain).Times(1).Return(goodSecret, nil)
+				secretHelper.EXPECT().IsValid(goodFederationDomain, invalidSecret).Times(2).Return(false)
+				secretHelper.EXPECT().ObserveActiveSecretAndUpdateParentFederationDomain(goodFederationDomain, goodSecret).Times(1).Return(goodFederationDomainWithTokenSigningKey)
 			},
 			client: func(c *pinnipedfake.Clientset, _ *kubernetesfake.Clientset) {
 				once := sync.Once{}
@@ -575,11 +575,11 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 					return true, nil, err
 				})
 			},
-			wantOPActions: []kubetesting.Action{
-				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
-				kubetesting.NewUpdateAction(opGVR, namespace, goodOPWithTokenSigningKey),
-				kubetesting.NewGetAction(opGVR, namespace, goodOP.Name),
-				kubetesting.NewUpdateAction(opGVR, namespace, goodOPWithTokenSigningKey),
+			wantFederationDomainActions: []kubetesting.Action{
+				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
+				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithTokenSigningKey),
+				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
+				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithTokenSigningKey),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
@@ -601,14 +601,14 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 			kubeAPIClient := kubernetesfake.NewSimpleClientset()
 			kubeInformerClient := kubernetesfake.NewSimpleClientset()
 
-			op := goodOP.DeepCopy()
+			federationDomain := goodFederationDomain.DeepCopy()
 			secret := goodSecret.DeepCopy()
 			if test.storage != nil {
-				test.storage(&op, &secret)
+				test.storage(&federationDomain, &secret)
 			}
-			if op != nil {
-				require.NoError(t, pinnipedAPIClient.Tracker().Add(op))
-				require.NoError(t, pinnipedInformerClient.Tracker().Add(op))
+			if federationDomain != nil {
+				require.NoError(t, pinnipedAPIClient.Tracker().Add(federationDomain))
+				require.NoError(t, pinnipedInformerClient.Tracker().Add(federationDomain))
 			}
 			if secret != nil {
 				require.NoError(t, kubeAPIClient.Tracker().Add(secret))
@@ -657,7 +657,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 				Context: ctx,
 				Key: controllerlib.Key{
 					Namespace: namespace,
-					Name:      opName,
+					Name:      federationDomainName,
 				},
 			})
 			if test.wantError != "" {
@@ -666,10 +666,10 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			if test.wantOPActions == nil {
-				test.wantOPActions = []kubetesting.Action{}
+			if test.wantFederationDomainActions == nil {
+				test.wantFederationDomainActions = []kubetesting.Action{}
 			}
-			require.Equal(t, test.wantOPActions, pinnipedAPIClient.Actions())
+			require.Equal(t, test.wantFederationDomainActions, pinnipedAPIClient.Actions())
 			if test.wantSecretActions == nil {
 				test.wantSecretActions = []kubetesting.Action{}
 			}

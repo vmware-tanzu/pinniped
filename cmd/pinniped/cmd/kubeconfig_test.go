@@ -81,7 +81,7 @@ func TestGetKubeconfig(t *testing.T) {
 			args:             []string{},
 			getPathToSelfErr: fmt.Errorf("some OS error"),
 			wantError:        true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: could not determine the Pinniped executable path: some OS error
 			`),
 		},
@@ -91,7 +91,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--oidc-ca-bundle", "./does/not/exist",
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: could not read --oidc-ca-bundle: open ./does/not/exist: no such file or directory
 			`),
 		},
@@ -101,7 +101,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--kubeconfig", "./does/not/exist",
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: could not load --kubeconfig: stat ./does/not/exist: no such file or directory
 			`),
 		},
@@ -112,7 +112,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--kubeconfig-context", "invalid",
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: could not load --kubeconfig/--kubeconfig-context: no such context "invalid"
 			`),
 		},
@@ -123,7 +123,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			getClientsetErr: fmt.Errorf("some kube error"),
 			wantError:       true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: could not configure Kubernetes client: some kube error
 			`),
 		},
@@ -135,7 +135,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--concierge-authenticator-name", "test-authenticator",
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: webhookauthenticators.authentication.concierge.pinniped.dev "test-authenticator" not found
 			`),
 		},
@@ -147,7 +147,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--concierge-authenticator-name", "test-authenticator",
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: jwtauthenticators.authentication.concierge.pinniped.dev "test-authenticator" not found
 			`),
 		},
@@ -159,7 +159,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--concierge-authenticator-name", "test-authenticator",
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: invalid authenticator type "invalid", supported values are "webhook" and "jwt"
 			`),
 		},
@@ -178,7 +178,7 @@ func TestGetKubeconfig(t *testing.T) {
 				},
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: failed to list JWTAuthenticator objects for autodiscovery: some list error
 			`),
 		},
@@ -197,7 +197,7 @@ func TestGetKubeconfig(t *testing.T) {
 				},
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: failed to list WebhookAuthenticator objects for autodiscovery: some list error
 			`),
 		},
@@ -207,7 +207,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: no authenticators were found in namespace "pinniped-concierge" (try setting --concierge-namespace)
 			`),
 		},
@@ -224,7 +224,7 @@ func TestGetKubeconfig(t *testing.T) {
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-4", Namespace: "test-namespace"}},
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: multiple authenticators were found in namespace "test-namespace", so the --concierge-authenticator-type/--concierge-authenticator-name flags must be specified
 			`),
 		},
@@ -238,7 +238,7 @@ func TestGetKubeconfig(t *testing.T) {
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator", Namespace: "test-namespace"}},
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: could not autodiscover --oidc-issuer, and none was provided
 			`),
 		},
@@ -259,7 +259,7 @@ func TestGetKubeconfig(t *testing.T) {
 				},
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: tried to autodiscover --oidc-ca-bundle, but JWTAuthenticator test-namespace/test-authenticator has invalid spec.tls.certificateAuthorityData: illegal base64 data at input byte 7
 			`),
 		},
@@ -275,7 +275,7 @@ func TestGetKubeconfig(t *testing.T) {
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator", Namespace: "test-namespace"}},
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: only one of --static-token and --static-token-env can be specified
 			`),
 		},

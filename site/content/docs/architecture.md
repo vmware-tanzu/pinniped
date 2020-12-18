@@ -125,9 +125,12 @@ cluster.
 The Supervisor enables users to log in to their external identity provider
 once per day and access each cluster in a domain with a distinct scoped-down token.
 
+The diagram below shows the components involved in the login flow when both the Concierge
+and Supervisor are configured.
+
 ![concierge-with-supervisor-architecture-diagram](/docs/img/pinniped_architecture_concierge_supervisor.svg)
 
-This diagram demonstrates using `kubectl get pods` with the Pinniped CLI
+The diagram below demonstrates using `kubectl get pods` with the Pinniped CLI
 functioning as a [Kubernetes client-go credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins)
 that obtains a federation ID token from the Pinniped Supervisor to be sent to a
 JWT authenticator via the Pinniped Concierge.
@@ -140,9 +143,12 @@ Users can authenticate directly with their OIDC compliant external identity prov
 can be exchanged at the Concierge for a credential that is understood by the host Kubernetes
 cluster.
 
+The diagram below shows the components involved in the login flow when the Concierge is 
+configured.
+
 ![concierge-with-webhook-architecture-diagram](/docs/img/pinniped_architecture_concierge_webhook.svg)
 
-This diagram demonstrates using `kubectl get pods` with a [Kubernetes client-go credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins)
+The diagram below demonstrates using `kubectl get pods` with a [Kubernetes client-go credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins)
 that obtains an external credential to be sent to a webhook authenticator via the Pinniped Concierge.
 
 ![concierge-with-webhook-sequence-diagram](/docs/img/pinniped-concierge-sequence.svg)

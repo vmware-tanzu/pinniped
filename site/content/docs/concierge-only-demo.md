@@ -13,9 +13,9 @@ cascade:
    Don't have a cluster handy? Consider using [kind](https://kind.sigs.k8s.io/) on your local machine.
    See below for an example of using kind.
 
-1. An identity provider of a type supported by Pinniped as described in [architecture](/docs/architecture).
+1. An authenticator of a type supported by Pinniped as described in [architecture](/docs/architecture).
 
-   Don't have an identity provider of a type supported by Pinniped handy? No problem, there is a demo identity provider
+   Don't have an authenticator of a type supported by Pinniped handy? No problem, there is a demo authenticator
    available. Start by installing local-user-authenticator on the same cluster where you would like to try Pinniped
    by following the directions in [deploy/local-user-authenticator/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/local-user-authenticator/README.md).
    See below for an example of deploying this on kind.
@@ -77,7 +77,7 @@ as the identity provider.
 
    ```bash
    # Example of manually choosing a release version...
-   pinniped_version=v0.2.0
+   pinniped_version=v0.3.0
    ```
 
 1. Deploy the local-user-authenticator app. This is a demo identity provider. In production, you would use your

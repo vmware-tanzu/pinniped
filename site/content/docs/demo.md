@@ -5,5 +5,5 @@ cascade:
 ---
 
 # Trying Pinniped
-1. [Concierge demo](/docs/concierge-only-demo) 
-1. [Supervisor and Concierge demo](/docs/concierge-and-supervisor-demo)
+1. [Concierge with webhook demo](/docs/concierge-only-demo) 
+1. [Concierge with supervisor and JWTAuthenticator demo](/docs/concierge-and-supervisor-demo)

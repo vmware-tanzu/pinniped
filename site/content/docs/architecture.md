@@ -11,10 +11,10 @@ clusters. Pinniped hopes to enable this access across a wide range of Kubernetes
 environments with zero configuration.
 
 This integration is composed of two parts. 
-One part, the supervisor, is a service which allows users
+One part, the supervisor, is an OIDC server which allows users
 to authenticate with their external Identity Provider,
-then issues its own federation id tokens based on the information from the external
-Identity Provider's token. 
+then issues its own federation id tokens to be passed on to clusters
+based on the information from the external Identity Provider's token. 
 The other, the concierge, is a credential exchange API which takes as input a token
 (from the supervisor or elsewhere), and returns a credential which is understood by 
 the host Kubernetes cluster.

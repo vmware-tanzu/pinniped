@@ -23,6 +23,7 @@ type SecretHelper interface {
 	Generate(*configv1alpha1.FederationDomain) (*corev1.Secret, error)
 	IsValid(*configv1alpha1.FederationDomain, *corev1.Secret) bool
 	ObserveActiveSecretAndUpdateParentFederationDomain(*configv1alpha1.FederationDomain, *corev1.Secret) *configv1alpha1.FederationDomain
+	Handles(metav1.Object) bool
 }
 
 const (
@@ -81,6 +82,29 @@ type symmetricSecretHelper struct {
 	rand            io.Reader
 	secretUsage     SecretUsage
 	updateCacheFunc func(cacheKey string, cacheValue []byte)
+}
+
+func (s *symmetricSecretHelper) Handles(obj metav1.Object) bool {
+	return IsFederationDomainSecretOfType(obj, s.secretType())
+}
+
+func IsFederationDomainSecretOfType(obj metav1.Object, secretType corev1.SecretType) bool {
+	secret, ok := obj.(*corev1.Secret)
+	if !ok {
+		return false
+	}
+	if secret.Type != secretType {
+		return false
+	}
+	return isFederationDomainControllee(secret)
+}
+
+// isFederationDomainControllee returns whether the provided obj is controlled by an FederationDomain.
+func isFederationDomainControllee(obj metav1.Object) bool {
+	controller := metav1.GetControllerOf(obj)
+	return controller != nil &&
+		controller.APIVersion == configv1alpha1.SchemeGroupVersion.String() &&
+		controller.Kind == federationDomainKind
 }
 
 func (s *symmetricSecretHelper) NamePrefix() string { return s.namePrefix }

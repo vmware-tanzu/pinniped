@@ -52,7 +52,7 @@ func NewJWKSObserverController(
 		},
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.MatchAnythingFilter(nil),
+			pinnipedcontroller.MatchAnySecretOfTypeFilter(jwksSecretTypeValue),
 			controllerlib.InformerOption{},
 		),
 		withInformer(

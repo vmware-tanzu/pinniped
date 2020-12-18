@@ -51,22 +51,31 @@ func TestJWKSObserverControllerInformerFilters(t *testing.T) {
 
 		when("watching Secret objects", func() {
 			var (
-				subject             controllerlib.Filter
-				secret, otherSecret *corev1.Secret
+				subject                 controllerlib.Filter
+				secret, otherTypeSecret *corev1.Secret
 			)
 
 			it.Before(func() {
 				subject = secretsInformerFilter
-				secret = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: "any-namespace"}}
-				otherSecret = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "any-other-name", Namespace: "any-other-namespace"}}
+				secret = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: "any-namespace"}, Type: "secrets.pinniped.dev/federation-domain-jwks"}
+				otherTypeSecret = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "any-other-name", Namespace: "any-other-namespace"}, Type: "other"}
 			})
 
-			when("any Secret changes", func() {
+			when("any Secret of the JWKS type changes", func() {
 				it("returns true to trigger the sync method", func() {
 					r.True(subject.Add(secret))
-					r.True(subject.Update(secret, otherSecret))
-					r.True(subject.Update(otherSecret, secret))
+					r.True(subject.Update(secret, otherTypeSecret))
+					r.True(subject.Update(otherTypeSecret, secret))
 					r.True(subject.Delete(secret))
+				})
+			})
+
+			when("any Secret of some other type changes", func() {
+				it("returns false to skip the sync method", func() {
+					r.False(subject.Add(otherTypeSecret))
+					r.False(subject.Update(otherTypeSecret, otherTypeSecret))
+					r.False(subject.Update(otherTypeSecret, otherTypeSecret))
+					r.False(subject.Delete(otherTypeSecret))
 				})
 			})
 		})

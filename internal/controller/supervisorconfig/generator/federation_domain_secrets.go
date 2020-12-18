@@ -65,16 +65,7 @@ func NewFederationDomainSecretsController(
 		// should get notified via the corresponding FederationDomain key.
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.SimpleFilter(isFederationDomainControllee, func(obj metav1.Object) controllerlib.Key {
-				if isFederationDomainControllee(obj) {
-					controller := metav1.GetControllerOf(obj)
-					return controllerlib.Key{
-						Name:      controller.Name,
-						Namespace: obj.GetNamespace(),
-					}
-				}
-				return controllerlib.Key{}
-			}),
+			pinnipedcontroller.SimpleFilter(secretHelper.Handles, pinnipedcontroller.SecretIsControlledByParentFunc(secretHelper.Handles)),
 			controllerlib.InformerOption{},
 		),
 		// We want to be notified when anything happens to an FederationDomain.
@@ -239,12 +230,4 @@ func (c *federationDomainSecretsController) updateFederationDomain(
 		_, err = federationDomainClient.Update(ctx, oldFederationDomain, metav1.UpdateOptions{})
 		return err
 	})
-}
-
-// isFederationDomainControllee returns whether the provided obj is controlled by an FederationDomain.
-func isFederationDomainControllee(obj metav1.Object) bool {
-	controller := metav1.GetControllerOf(obj)
-	return controller != nil &&
-		controller.APIVersion == configv1alpha1.SchemeGroupVersion.String() &&
-		controller.Kind == federationDomainKind
 }

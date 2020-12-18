@@ -5,6 +5,7 @@ package generator
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"sync"
@@ -35,7 +36,7 @@ func TestFederationDomainControllerFilterSecret(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		secret     corev1.Secret
+		secret     metav1.Object
 		wantAdd    bool
 		wantUpdate bool
 		wantDelete bool
@@ -43,13 +44,15 @@ func TestFederationDomainControllerFilterSecret(t *testing.T) {
 	}{
 		{
 			name: "no owner reference",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type:       "secrets.pinniped.dev/federation-domain-token-signing-key",
 				ObjectMeta: metav1.ObjectMeta{},
 			},
 		},
 		{
 			name: "owner reference without correct APIVersion",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/federation-domain-token-signing-key",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
@@ -64,7 +67,8 @@ func TestFederationDomainControllerFilterSecret(t *testing.T) {
 		},
 		{
 			name: "owner reference without correct Kind",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/federation-domain-token-signing-key",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
@@ -79,7 +83,8 @@ func TestFederationDomainControllerFilterSecret(t *testing.T) {
 		},
 		{
 			name: "owner reference without controller set to true",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/federation-domain-token-signing-key",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
@@ -94,7 +99,8 @@ func TestFederationDomainControllerFilterSecret(t *testing.T) {
 		},
 		{
 			name: "correct owner reference",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/federation-domain-token-signing-key",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
@@ -114,7 +120,8 @@ func TestFederationDomainControllerFilterSecret(t *testing.T) {
 		},
 		{
 			name: "multiple owner references",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/federation-domain-token-signing-key",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
@@ -135,16 +142,44 @@ func TestFederationDomainControllerFilterSecret(t *testing.T) {
 			wantDelete: true,
 			wantParent: controllerlib.Key{Namespace: "some-namespace", Name: "some-name"},
 		},
+		{
+			name: "correct owner reference but wrong secret type",
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/this-is-the-wrong-type",
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "some-namespace",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
+							Kind:       "FederationDomain",
+							Name:       "some-name",
+							Controller: boolPtr(true),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "resource of wrong data type",
+			secret: &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "some-namespace",
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctrl := gomock.NewController(t)
-			t.Cleanup(ctrl.Finish)
-			secretHelper := mocksecrethelper.NewMockSecretHelper(ctrl)
-			secretHelper.EXPECT().NamePrefix().Times(1).Return("some-name")
+			secretHelper := NewSymmetricSecretHelper(
+				"some-name",
+				map[string]string{},
+				rand.Reader,
+				SecretUsageTokenSigningKey,
+				func(cacheKey string, cacheValue []byte) {},
+			)
 
 			secretInformer := kubeinformers.NewSharedInformerFactory(
 				kubernetesfake.NewSimpleClientset(),
@@ -167,11 +202,11 @@ func TestFederationDomainControllerFilterSecret(t *testing.T) {
 
 			unrelated := corev1.Secret{}
 			filter := withInformer.GetFilterForInformer(secretInformer)
-			require.Equal(t, test.wantAdd, filter.Add(&test.secret))
-			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, &test.secret))
-			require.Equal(t, test.wantUpdate, filter.Update(&test.secret, &unrelated))
-			require.Equal(t, test.wantDelete, filter.Delete(&test.secret))
-			require.Equal(t, test.wantParent, filter.Parent(&test.secret))
+			require.Equal(t, test.wantAdd, filter.Add(test.secret))
+			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.secret))
+			require.Equal(t, test.wantUpdate, filter.Update(test.secret, &unrelated))
+			require.Equal(t, test.wantDelete, filter.Delete(test.secret))
+			require.Equal(t, test.wantParent, filter.Parent(test.secret))
 		})
 	}
 }
@@ -201,10 +236,13 @@ func TestNewFederationDomainSecretsControllerFilterFederationDomain(t *testing.T
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctrl := gomock.NewController(t)
-			t.Cleanup(ctrl.Finish)
-			secretHelper := mocksecrethelper.NewMockSecretHelper(ctrl)
-			secretHelper.EXPECT().NamePrefix().Times(1).Return("some-name")
+			secretHelper := NewSymmetricSecretHelper(
+				"some-name",
+				map[string]string{},
+				rand.Reader,
+				SecretUsageTokenSigningKey,
+				func(cacheKey string, cacheValue []byte) {},
+			)
 
 			secretInformer := kubeinformers.NewSharedInformerFactory(
 				kubernetesfake.NewSimpleClientset(),
@@ -635,6 +673,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 			if test.secretHelper != nil {
 				test.secretHelper(secretHelper)
 			}
+			secretHelper.EXPECT().Handles(gomock.Any()).AnyTimes().Return(true)
 
 			c := NewFederationDomainSecretsController(
 				secretHelper,

@@ -40,7 +40,7 @@ func TestSupervisorSecrets(t *testing.T) {
 			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
 				return env.SupervisorAppName + "-key"
 			},
-			ensureValid: ensureValidSymmetricKey,
+			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/supervisor-csrf-signing-key"),
 		},
 		{
 			name: "jwks",
@@ -54,21 +54,21 @@ func TestSupervisorSecrets(t *testing.T) {
 			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.TokenSigningKey.Name
 			},
-			ensureValid: ensureValidSymmetricKey,
+			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/federation-domain-token-signing-key"),
 		},
 		{
 			name: "state signature secret",
 			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.StateSigningKey.Name
 			},
-			ensureValid: ensureValidSymmetricKey,
+			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/federation-domain-state-signing-key"),
 		},
 		{
 			name: "state encryption secret",
 			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.StateEncryptionKey.Name
 			},
-			ensureValid: ensureValidSymmetricKey,
+			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/federation-domain-state-encryption-key"),
 		},
 	}
 	for _, test := range tests {
@@ -129,6 +129,9 @@ func TestSupervisorSecrets(t *testing.T) {
 func ensureValidJWKS(t *testing.T, secret *corev1.Secret) {
 	t.Helper()
 
+	// Ensure the secret has the right type.
+	require.Equal(t, corev1.SecretType("secrets.pinniped.dev/federation-domain-jwks"), secret.Type)
+
 	// Ensure the secret has an active key.
 	jwkData, ok := secret.Data["activeJWK"]
 	require.True(t, ok, "secret is missing active jwk")
@@ -157,10 +160,12 @@ func ensureValidJWKS(t *testing.T, secret *corev1.Secret) {
 	require.True(t, foundActiveJWK, "could not find active JWK in JWKS: %s", jwks)
 }
 
-func ensureValidSymmetricKey(t *testing.T, secret *corev1.Secret) {
-	t.Helper()
-	require.Equal(t, corev1.SecretType("secrets.pinniped.dev/symmetric"), secret.Type)
-	key, ok := secret.Data["key"]
-	require.Truef(t, ok, "secret data does not contain 'key': %s", secret.Data)
-	require.Equal(t, 32, len(key))
+func ensureValidSymmetricSecretOfTypeFunc(secretTypeValue string) func(*testing.T, *corev1.Secret) {
+	return func(t *testing.T, secret *corev1.Secret) {
+		t.Helper()
+		require.Equal(t, corev1.SecretType(secretTypeValue), secret.Type)
+		key, ok := secret.Data["key"]
+		require.Truef(t, ok, "secret data does not contain 'key': %s", secret.Data)
+		require.Equal(t, 32, len(key))
+	}
 }

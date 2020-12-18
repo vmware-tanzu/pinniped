@@ -40,6 +40,8 @@ const (
 	//
 	// Note! The value for this key will contain only public key material!
 	jwksKey = "jwks"
+
+	jwksSecretTypeValue corev1.SecretType = "secrets.pinniped.dev/federation-domain-jwks"
 )
 
 const (
@@ -251,6 +253,7 @@ func (c *jwksWriterController) generateSecret(federationDomain *configv1alpha1.F
 			activeJWKKey: jwkData,
 			jwksKey:      jwksData,
 		},
+		Type: jwksSecretTypeValue,
 	}
 
 	return &s, nil
@@ -285,6 +288,7 @@ func (c *jwksWriterController) createOrUpdateSecret(
 		}
 
 		oldSecret.Data = newSecret.Data
+		oldSecret.Type = jwksSecretTypeValue
 		_, err = secretClient.Update(ctx, oldSecret, metav1.UpdateOptions{})
 		return err
 	})
@@ -322,6 +326,11 @@ func isFederationDomainControllee(obj metav1.Object) bool {
 
 // isValid returns whether the provided secret contains a valid active JWK and verification JWKS.
 func isValid(secret *corev1.Secret) bool {
+	if secret.Type != jwksSecretTypeValue {
+		plog.Debug("secret does not have the expected type", "expectedType", jwksSecretTypeValue, "actualType", secret.Type)
+		return false
+	}
+
 	jwkData, ok := secret.Data[activeJWKKey]
 	if !ok {
 		plog.Debug("secret does not contain active jwk")

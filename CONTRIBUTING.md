@@ -97,16 +97,19 @@ docker build .
 
 1. Install dependencies:
 
+   - [`chromedriver`](https://chromedriver.chromium.org/) (and [Chrome](https://www.google.com/chrome/))
+   - [`docker`](https://www.docker.com/)
+   - `htpasswd` (installed by default on MacOS, usually found in `apache2-utils` package for linux)
+   - [`kapp`](https://carvel.dev/#getting-started)
    - [`kind`](https://kind.sigs.k8s.io/docs/user/quick-start)
+   - [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
    - [`tilt`](https://docs.tilt.dev/install.html)
    - [`ytt`](https://carvel.dev/#getting-started)
-   - [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-   - [`chromedriver`](https://chromedriver.chromium.org/) (and [Chrome](https://www.google.com/chrome/))
 
    On macOS, these tools can be installed with [Homebrew](https://brew.sh/) (assuming you have Chrome installed already):
 
    ```bash
-   brew install kind tilt-dev/tap/tilt k14s/tap/ytt kubectl chromedriver
+   brew install kind tilt-dev/tap/tilt k14s/tap/ytt k14s/tap/kapp kubectl chromedriver && brew cask install docker
    ```
 
 1. Create a local Kubernetes cluster using `kind`:

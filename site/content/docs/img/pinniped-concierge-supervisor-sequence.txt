@@ -1,0 +1,52 @@
+@startuml Login
+
+actor User
+
+box "Workstation"
+participant Browser
+participant Kubectl
+participant "Pinniped CLI"
+end box
+
+box "Supervisor Cluster"
+participant Pinniped as sp
+end box
+
+box "Concierge Cluster"
+participant Pinniped as wp
+end box
+
+box "Corporate Network"
+participant "OIDC IDP" as IDP
+end box
+
+User -> Kubectl: kubectl get pods
+Kubectl -> "Pinniped CLI" : get credential for cluster authentication
+"Pinniped CLI" -> "Pinniped CLI": starts localhost listener
+"Pinniped CLI" -> User: open browser to URL X
+User -> Browser: clicks link
+Browser -> sp : ""GET https://supervisor.com/oauth2/authorize""
+sp -> Browser: 302 to IDP ""/authorize?redirect_uri=https://supervisor.com/callback""
+Browser -> IDP: ""GET /authorize?redirect_uri=https://supervisor.com/callback""
+IDP -> IDP: IDP authenticates user
+IDP -> Browser: 302 to ""https://supervisor.com/callback""
+Browser -> sp: ""GET https://supervisor.com/callback""
+sp -> IDP: ""POST /token""
+IDP -> sp: access token, ID token, refresh token
+sp -> Browser: 302 to ""http://localhost:1234/callback""
+Browser -> "Pinniped CLI": ""GET http://localhost:1234/callback""
+"Pinniped CLI" -> sp: ""POST https://supervisor.com/oauth2/token""
+sp -> sp: lookup auth code
+sp -> sp: issue refresh token
+sp -> sp: issue ID+access tokens
+sp -> "Pinniped CLI": refresh+access+ID tokens
+"Pinniped CLI" -> sp: ""POST /oauth2/token"" (w/ access token per RFC8693)
+sp -> "Pinniped CLI": cluster-specific ID token
+"Pinniped CLI" -> wp: create TokenCredentialRequest (w/ cluster-specific ID token)
+wp -> "Pinniped CLI": cluster-specific certificate and key
+"Pinniped CLI" -> Kubectl: cluster-specific certificate and key
+Kubectl -> wp : ""GET /api/v1/pods""
+wp -> wp : Glean user and group information from\ncluster-specific credential
+wp -> Kubectl : ""200 OK"" with pods
+
+@enduml

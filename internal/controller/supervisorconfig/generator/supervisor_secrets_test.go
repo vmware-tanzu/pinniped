@@ -51,14 +51,15 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		secret     corev1.Secret
+		secret     metav1.Object
 		wantAdd    bool
 		wantUpdate bool
 		wantDelete bool
 	}{
 		{
 			name: "owner reference is missing",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 				},
@@ -66,7 +67,8 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 		},
 		{
 			name: "owner reference with incorrect `APIVersion`",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
@@ -84,7 +86,8 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 		},
 		{
 			name: "owner reference with incorrect `Kind`",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
@@ -102,22 +105,9 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 			wantDelete: true,
 		},
 		{
-			name: "owner reference with `Controller`: true",
-			secret: corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "some-namespace",
-					OwnerReferences: []metav1.OwnerReference{
-						*metav1.NewControllerRef(owner, ownerGVK),
-					},
-				},
-			},
-			wantAdd:    true,
-			wantUpdate: true,
-			wantDelete: true,
-		},
-		{
 			name: "expected owner reference with incorrect `UID`",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
@@ -132,11 +122,15 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 			},
 		},
 		{
-			name: "expected owner reference - where `Controller`: false",
-			secret: corev1.Secret{
+			name: "multiple owner references (expected owner reference, and one more)",
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
+						{
+							Kind: "UnrelatedKind",
+						},
 						{
 							APIVersion: ownerGVK.String(),
 							Name:       owner.GetName(),
@@ -151,14 +145,48 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 			wantDelete: true,
 		},
 		{
-			name: "multiple owner references (expected owner reference, and one more)",
-			secret: corev1.Secret{
+			name: "otherwise happy secret but has the wrong Secret type",
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/this-is-not-supervisor-csrf-signing-key-type",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							Kind: "UnrelatedKind",
+							APIVersion: ownerGVK.String(),
+							Name:       owner.GetName(),
+							Kind:       ownerGVK.Kind,
+							UID:        owner.GetUID(),
 						},
+					},
+				},
+			},
+		},
+		{
+			name:   "not a secret",
+			secret: &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "some-namespace"}},
+		},
+		{
+			name: "owner reference with `Controller`: true",
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "some-namespace",
+					OwnerReferences: []metav1.OwnerReference{
+						*metav1.NewControllerRef(owner, ownerGVK),
+					},
+				},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "expected owner reference - where `Controller`: false",
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "some-namespace",
+					OwnerReferences: []metav1.OwnerReference{
 						{
 							APIVersion: ownerGVK.String(),
 							Name:       owner.GetName(),
@@ -195,10 +223,10 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 
 			unrelated := corev1.Secret{}
 			filter := withInformer.GetFilterForInformer(secretInformer)
-			require.Equal(t, test.wantAdd, filter.Add(&test.secret))
-			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, &test.secret))
-			require.Equal(t, test.wantUpdate, filter.Update(&test.secret, &unrelated))
-			require.Equal(t, test.wantDelete, filter.Delete(&test.secret))
+			require.Equal(t, test.wantAdd, filter.Add(test.secret))
+			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.secret))
+			require.Equal(t, test.wantUpdate, filter.Update(test.secret, &unrelated))
+			require.Equal(t, test.wantDelete, filter.Delete(test.secret))
 		})
 	}
 }

@@ -32,7 +32,7 @@ import (
 // It is thread-safe.
 type Manager struct {
 	mu                  sync.RWMutex
-	providers           []*provider.FederationDomain
+	providers           []*provider.FederationDomainIssuer
 	providerHandlers    map[string]http.Handler  // map of all routes for all providers
 	nextHandler         http.Handler             // the next handler in a chain, called when this manager didn't know how to handle a request
 	dynamicJWKSProvider jwks.DynamicJWKSProvider // in-memory cache of per-issuer JWKS data
@@ -68,9 +68,9 @@ func NewManager(
 // It also removes any providerHandlers that were previously added but were not passed in to
 // the current invocation.
 //
-// This method assumes that all of the FederationDomain arguments have already been validated
+// This method assumes that all of the FederationDomainIssuer arguments have already been validated
 // by someone else before they are passed to this method.
-func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomain) {
+func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIssuer) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

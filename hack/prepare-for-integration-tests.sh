@@ -130,7 +130,7 @@ if ! tilt_mode; then
     fi
   fi
 
-  registry="docker.io"
+  registry="pinniped.local"
   repo="test/build"
   registry_repo="$registry/$repo"
   tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy

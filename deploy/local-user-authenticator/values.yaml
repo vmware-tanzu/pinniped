@@ -5,7 +5,7 @@
 ---
 
 #! Specify either an image_digest or an image_tag. If both are given, only image_digest will be used.
-image_repo: docker.io/getpinniped/pinniped-server
+image_repo: projects.registry.vmware.com/pinniped/pinniped-server
 image_digest: #! e.g. sha256:f3c4fdfd3ef865d4b97a1fd295d94acc3f0c654c46b6f27ffad5cf80216903c8
 image_tag: latest
 

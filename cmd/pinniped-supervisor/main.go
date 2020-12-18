@@ -92,7 +92,7 @@ func startControllers(
 	kubeInformers kubeinformers.SharedInformerFactory,
 	pinnipedInformers pinnipedinformers.SharedInformerFactory,
 ) {
-	opInformer := pinnipedInformers.Config().V1alpha1().FederationDomains()
+	federationDomainInformer := pinnipedInformers.Config().V1alpha1().FederationDomains()
 	secretInformer := kubeInformers.Core().V1().Secrets()
 
 	// Create controller manager.
@@ -102,7 +102,7 @@ func startControllers(
 			supervisorstorage.GarbageCollectorController(
 				clock.RealClock{},
 				kubeClient,
-				kubeInformers.Core().V1().Secrets(),
+				secretInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -112,7 +112,7 @@ func startControllers(
 				issuerManager,
 				clock.RealClock{},
 				pinnipedClient,
-				opInformer,
+				federationDomainInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -123,7 +123,7 @@ func startControllers(
 				kubeClient,
 				pinnipedClient,
 				secretInformer,
-				opInformer,
+				federationDomainInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -132,7 +132,7 @@ func startControllers(
 			supervisorconfig.NewJWKSObserverController(
 				dynamicJWKSProvider,
 				secretInformer,
-				opInformer,
+				federationDomainInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -142,7 +142,7 @@ func startControllers(
 				dynamicTLSCertProvider,
 				cfg.NamesConfig.DefaultTLSCertificateSecret,
 				secretInformer,
-				opInformer,
+				federationDomainInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -180,7 +180,7 @@ func startControllers(
 				kubeClient,
 				pinnipedClient,
 				secretInformer,
-				opInformer,
+				federationDomainInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -203,7 +203,7 @@ func startControllers(
 				kubeClient,
 				pinnipedClient,
 				secretInformer,
-				opInformer,
+				federationDomainInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -226,7 +226,7 @@ func startControllers(
 				kubeClient,
 				pinnipedClient,
 				secretInformer,
-				opInformer,
+				federationDomainInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -236,7 +236,7 @@ func startControllers(
 				dynamicUpstreamIDPProvider,
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
-				kubeInformers.Core().V1().Secrets(),
+				secretInformer,
 				klogr.New()),
 			singletonWorker)
 

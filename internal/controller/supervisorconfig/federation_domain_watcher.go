@@ -29,14 +29,14 @@ import (
 // If there are no longer any valid issuers, then it can be called with no arguments.
 // Implementations of this type should be thread-safe to support calls from multiple goroutines.
 type ProvidersSetter interface {
-	SetProviders(federationDomains ...*provider.FederationDomain)
+	SetProviders(federationDomains ...*provider.FederationDomainIssuer)
 }
 
 type federationDomainWatcherController struct {
-	providerSetter ProvidersSetter
-	clock          clock.Clock
-	client         pinnipedclientset.Interface
-	opcInformer    configinformers.FederationDomainInformer
+	providerSetter           ProvidersSetter
+	clock                    clock.Clock
+	client                   pinnipedclientset.Interface
+	federationDomainInformer configinformers.FederationDomainInformer
 }
 
 // NewFederationDomainWatcherController creates a controllerlib.Controller that watches
@@ -45,21 +45,21 @@ func NewFederationDomainWatcherController(
 	providerSetter ProvidersSetter,
 	clock clock.Clock,
 	client pinnipedclientset.Interface,
-	opcInformer configinformers.FederationDomainInformer,
+	federationDomainInformer configinformers.FederationDomainInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "FederationDomainWatcherController",
 			Syncer: &federationDomainWatcherController{
-				providerSetter: providerSetter,
-				clock:          clock,
-				client:         client,
-				opcInformer:    opcInformer,
+				providerSetter:           providerSetter,
+				clock:                    clock,
+				client:                   client,
+				federationDomainInformer: federationDomainInformer,
 			},
 		},
 		withInformer(
-			opcInformer,
+			federationDomainInformer,
 			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
@@ -68,7 +68,7 @@ func NewFederationDomainWatcherController(
 
 // Sync implements controllerlib.Syncer.
 func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) error {
-	all, err := c.opcInformer.Lister().List(labels.Everything())
+	federationDomains, err := c.federationDomainInformer.Lister().List(labels.Everything())
 	if err != nil {
 		return err
 	}
@@ -89,8 +89,8 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 	uniqueSecretNamesPerIssuerAddress := make(map[string]map[string]bool)
 	issuerURLToHostnameKey := lowercaseHostWithoutPort
 
-	for _, opc := range all {
-		issuerURL, err := url.Parse(opc.Spec.Issuer)
+	for _, federationDomain := range federationDomains {
+		issuerURL, err := url.Parse(federationDomain.Spec.Issuer)
 		if err != nil {
 			continue // Skip url parse errors because they will be validated again below.
 		}
@@ -102,26 +102,26 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 			setOfSecretNames = make(map[string]bool)
 			uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)] = setOfSecretNames
 		}
-		if opc.Spec.TLS != nil {
-			setOfSecretNames[opc.Spec.TLS.SecretName] = true
+		if federationDomain.Spec.TLS != nil {
+			setOfSecretNames[federationDomain.Spec.TLS.SecretName] = true
 		}
 	}
 
 	errs := multierror.New()
 
-	federationDomains := make([]*provider.FederationDomain, 0)
-	for _, opc := range all {
-		issuerURL, urlParseErr := url.Parse(opc.Spec.Issuer)
+	federationDomainIssuers := make([]*provider.FederationDomainIssuer, 0)
+	for _, federationDomain := range federationDomains {
+		issuerURL, urlParseErr := url.Parse(federationDomain.Spec.Issuer)
 
 		// Skip url parse errors because they will be validated below.
 		if urlParseErr == nil {
 			if issuerCount := issuerCounts[issuerURLToIssuerKey(issuerURL)]; issuerCount > 1 {
 				if err := c.updateStatus(
 					ctx.Context,
-					opc.Namespace,
-					opc.Name,
+					federationDomain.Namespace,
+					federationDomain.Name,
 					configv1alpha1.DuplicateFederationDomainStatusCondition,
-					"Duplicate issuer: "+opc.Spec.Issuer,
+					"Duplicate issuer: "+federationDomain.Spec.Issuer,
 				); err != nil {
 					errs.Add(fmt.Errorf("could not update status: %w", err))
 				}
@@ -133,8 +133,8 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 		if urlParseErr == nil && len(uniqueSecretNamesPerIssuerAddress[issuerURLToHostnameKey(issuerURL)]) > 1 {
 			if err := c.updateStatus(
 				ctx.Context,
-				opc.Namespace,
-				opc.Name,
+				federationDomain.Namespace,
+				federationDomain.Name,
 				configv1alpha1.SameIssuerHostMustUseSameSecretFederationDomainStatusCondition,
 				"Issuers with the same DNS hostname (address not including port) must use the same secretName: "+issuerURLToHostnameKey(issuerURL),
 			); err != nil {
@@ -143,12 +143,12 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 			continue
 		}
 
-		federationDomain, err := provider.NewFederationDomain(opc.Spec.Issuer) // This validates the Issuer URL.
+		federationDomainIssuer, err := provider.NewFederationDomainIssuer(federationDomain.Spec.Issuer) // This validates the Issuer URL.
 		if err != nil {
 			if err := c.updateStatus(
 				ctx.Context,
-				opc.Namespace,
-				opc.Name,
+				federationDomain.Namespace,
+				federationDomain.Name,
 				configv1alpha1.InvalidFederationDomainStatusCondition,
 				"Invalid: "+err.Error(),
 			); err != nil {
@@ -159,18 +159,19 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 
 		if err := c.updateStatus(
 			ctx.Context,
-			opc.Namespace,
-			opc.Name,
+			federationDomain.Namespace,
+			federationDomain.Name,
 			configv1alpha1.SuccessFederationDomainStatusCondition,
 			"Provider successfully created",
 		); err != nil {
 			errs.Add(fmt.Errorf("could not update status: %w", err))
 			continue
 		}
-		federationDomains = append(federationDomains, federationDomain)
+
+		federationDomainIssuers = append(federationDomainIssuers, federationDomainIssuer)
 	}
 
-	c.providerSetter.SetProviders(federationDomains...)
+	c.providerSetter.SetProviders(federationDomainIssuers...)
 
 	return errs.ErrOrNil()
 }
@@ -182,28 +183,28 @@ func (c *federationDomainWatcherController) updateStatus(
 	message string,
 ) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		opc, err := c.client.ConfigV1alpha1().FederationDomains(namespace).Get(ctx, name, metav1.GetOptions{})
+		federationDomain, err := c.client.ConfigV1alpha1().FederationDomains(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("get failed: %w", err)
 		}
 
-		if opc.Status.Status == status && opc.Status.Message == message {
+		if federationDomain.Status.Status == status && federationDomain.Status.Message == message {
 			return nil
 		}
 
 		plog.Debug(
 			"attempting status update",
-			"federationdomainconfig",
+			"federationdomain",
 			klog.KRef(namespace, name),
 			"status",
 			status,
 			"message",
 			message,
 		)
-		opc.Status.Status = status
-		opc.Status.Message = message
-		opc.Status.LastUpdateTime = timePtr(metav1.NewTime(c.clock.Now()))
-		_, err = c.client.ConfigV1alpha1().FederationDomains(namespace).Update(ctx, opc, metav1.UpdateOptions{})
+		federationDomain.Status.Status = status
+		federationDomain.Status.Message = message
+		federationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(c.clock.Now()))
+		_, err = c.client.ConfigV1alpha1().FederationDomains(namespace).Update(ctx, federationDomain, metav1.UpdateOptions{})
 		return err
 	})
 }

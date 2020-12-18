@@ -18,6 +18,7 @@ import (
 	"github.com/coreos/go-oidc"
 	"github.com/go-logr/logr"
 	"golang.org/x/oauth2"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -39,9 +40,10 @@ const (
 	controllerName = "upstream-observer"
 
 	// Constants related to the client credentials Secret.
-	oidcClientSecretType = "secrets.pinniped.dev/oidc-client"
-	clientIDDataKey      = "clientID"
-	clientSecretDataKey  = "clientSecret"
+	oidcClientSecretType corev1.SecretType = "secrets.pinniped.dev/oidc-client"
+
+	clientIDDataKey     = "clientID"
+	clientSecretDataKey = "clientSecret"
 
 	// Constants related to the OIDC provider discovery cache. These do not affect the cache of JWKS.
 	validatorCacheTTL = 15 * time.Minute
@@ -97,12 +99,12 @@ func (c *lruValidatorCache) cacheKey(spec *v1alpha1.OIDCIdentityProviderSpec) in
 }
 
 type controller struct {
-	cache          IDPCache
-	log            logr.Logger
-	client         pinnipedclientset.Interface
-	providers      idpinformers.OIDCIdentityProviderInformer
-	secrets        corev1informers.SecretInformer
-	validatorCache interface {
+	cache                        IDPCache
+	log                          logr.Logger
+	client                       pinnipedclientset.Interface
+	oidcIdentityProviderInformer idpinformers.OIDCIdentityProviderInformer
+	secretInformer               corev1informers.SecretInformer
+	validatorCache               interface {
 		getProvider(*v1alpha1.OIDCIdentityProviderSpec) (*oidc.Provider, *http.Client)
 		putProvider(*v1alpha1.OIDCIdentityProviderSpec, *oidc.Provider, *http.Client)
 	}
@@ -112,29 +114,29 @@ type controller struct {
 func New(
 	idpCache IDPCache,
 	client pinnipedclientset.Interface,
-	providers idpinformers.OIDCIdentityProviderInformer,
-	secrets corev1informers.SecretInformer,
+	oidcIdentityProviderInformer idpinformers.OIDCIdentityProviderInformer,
+	secretInformer corev1informers.SecretInformer,
 	log logr.Logger,
 ) controllerlib.Controller {
 	c := controller{
-		cache:          idpCache,
-		log:            log.WithName(controllerName),
-		client:         client,
-		providers:      providers,
-		secrets:        secrets,
-		validatorCache: &lruValidatorCache{cache: cache.NewExpiring()},
+		cache:                        idpCache,
+		log:                          log.WithName(controllerName),
+		client:                       client,
+		oidcIdentityProviderInformer: oidcIdentityProviderInformer,
+		secretInformer:               secretInformer,
+		validatorCache:               &lruValidatorCache{cache: cache.NewExpiring()},
 	}
 	filter := pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue())
 	return controllerlib.New(
 		controllerlib.Config{Name: controllerName, Syncer: &c},
-		controllerlib.WithInformer(providers, filter, controllerlib.InformerOption{}),
-		controllerlib.WithInformer(secrets, filter, controllerlib.InformerOption{}),
+		controllerlib.WithInformer(oidcIdentityProviderInformer, filter, controllerlib.InformerOption{}),
+		controllerlib.WithInformer(secretInformer, filter, controllerlib.InformerOption{}),
 	)
 }
 
 // Sync implements controllerlib.Syncer.
 func (c *controller) Sync(ctx controllerlib.Context) error {
-	actualUpstreams, err := c.providers.Lister().List(labels.Everything())
+	actualUpstreams, err := c.oidcIdentityProviderInformer.Lister().List(labels.Everything())
 	if err != nil {
 		return fmt.Errorf("failed to list OIDCIdentityProviders: %w", err)
 	}
@@ -196,7 +198,7 @@ func (c *controller) validateSecret(upstream *v1alpha1.OIDCIdentityProvider, res
 	secretName := upstream.Spec.Client.SecretName
 
 	// Fetch the Secret from informer cache.
-	secret, err := c.secrets.Lister().Secrets(upstream.Namespace).Get(secretName)
+	secret, err := c.secretInformer.Lister().Secrets(upstream.Namespace).Get(secretName)
 	if err != nil {
 		return &v1alpha1.Condition{
 			Type:    typeClientCredsValid,

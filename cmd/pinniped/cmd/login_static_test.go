@@ -66,7 +66,7 @@ func TestLoginStaticCommand(t *testing.T) {
 			name:      "missing required flags",
 			args:      []string{},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: one of --token or --token-env must be set
 			`),
 		},
@@ -77,7 +77,7 @@ func TestLoginStaticCommand(t *testing.T) {
 				"--enable-concierge",
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: invalid concierge parameters: endpoint must not be empty
 			`),
 		},
@@ -87,7 +87,7 @@ func TestLoginStaticCommand(t *testing.T) {
 				"--token-env", "TEST_TOKEN_ENV",
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: --token-env variable "TEST_TOKEN_ENV" is not set
 			`),
 		},
@@ -100,7 +100,7 @@ func TestLoginStaticCommand(t *testing.T) {
 				"TEST_TOKEN_ENV": "",
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: --token-env variable "TEST_TOKEN_ENV" is empty
 			`),
 		},
@@ -125,7 +125,7 @@ func TestLoginStaticCommand(t *testing.T) {
 			},
 			conciergeErr: fmt.Errorf("some concierge error"),
 			wantError:    true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: could not complete concierge credential exchange: some concierge error
 			`),
 		},

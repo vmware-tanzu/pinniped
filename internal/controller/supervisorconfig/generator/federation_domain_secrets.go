@@ -24,13 +24,17 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
+const (
+	federationDomainKind = "FederationDomain"
+)
+
 type federationDomainSecretsController struct {
-	secretHelper   SecretHelper
-	secretRefFunc  func(domain *configv1alpha1.FederationDomain) *corev1.LocalObjectReference
-	kubeClient     kubernetes.Interface
-	pinnipedClient pinnipedclientset.Interface
-	opcInformer    configinformers.FederationDomainInformer
-	secretInformer corev1informers.SecretInformer
+	secretHelper             SecretHelper
+	secretRefFunc            func(domain *configv1alpha1.FederationDomain) *corev1.LocalObjectReference
+	kubeClient               kubernetes.Interface
+	pinnipedClient           pinnipedclientset.Interface
+	federationDomainInformer configinformers.FederationDomainInformer
+	secretInformer           corev1informers.SecretInformer
 }
 
 // NewFederationDomainSecretsController returns a controllerlib.Controller that ensures a child Secret
@@ -42,27 +46,27 @@ func NewFederationDomainSecretsController(
 	kubeClient kubernetes.Interface,
 	pinnipedClient pinnipedclientset.Interface,
 	secretInformer corev1informers.SecretInformer,
-	opcInformer configinformers.FederationDomainInformer,
+	federationDomainInformer configinformers.FederationDomainInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: fmt.Sprintf("%s%s", secretHelper.NamePrefix(), "controller"),
 			Syncer: &federationDomainSecretsController{
-				secretHelper:   secretHelper,
-				secretRefFunc:  secretRefFunc,
-				kubeClient:     kubeClient,
-				pinnipedClient: pinnipedClient,
-				secretInformer: secretInformer,
-				opcInformer:    opcInformer,
+				secretHelper:             secretHelper,
+				secretRefFunc:            secretRefFunc,
+				kubeClient:               kubeClient,
+				pinnipedClient:           pinnipedClient,
+				secretInformer:           secretInformer,
+				federationDomainInformer: federationDomainInformer,
 			},
 		},
-		// We want to be notified when a OPC's secret gets updated or deleted. When this happens, we
-		// should get notified via the corresponding OPC key.
+		// We want to be notified when a FederationDomain's secret gets updated or deleted. When this happens, we
+		// should get notified via the corresponding FederationDomain key.
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.SimpleFilter(isOPControllee, func(obj metav1.Object) controllerlib.Key {
-				if isOPControllee(obj) {
+			pinnipedcontroller.SimpleFilter(isFederationDomainControllee, func(obj metav1.Object) controllerlib.Key {
+				if isFederationDomainControllee(obj) {
 					controller := metav1.GetControllerOf(obj)
 					return controllerlib.Key{
 						Name:      controller.Name,
@@ -73,9 +77,9 @@ func NewFederationDomainSecretsController(
 			}),
 			controllerlib.InformerOption{},
 		),
-		// We want to be notified when anything happens to an OPC.
+		// We want to be notified when anything happens to an FederationDomain.
 		withInformer(
-			opcInformer,
+			federationDomainInformer,
 			pinnipedcontroller.MatchAnythingFilter(nil), // nil parent func is fine because each event is distinct
 			controllerlib.InformerOption{},
 		),
@@ -83,7 +87,7 @@ func NewFederationDomainSecretsController(
 }
 
 func (c *federationDomainSecretsController) Sync(ctx controllerlib.Context) error {
-	op, err := c.opcInformer.Lister().FederationDomains(ctx.Key.Namespace).Get(ctx.Key.Name)
+	federationDomain, err := c.federationDomainInformer.Lister().FederationDomains(ctx.Key.Namespace).Get(ctx.Key.Name)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return fmt.Errorf(
@@ -95,8 +99,8 @@ func (c *federationDomainSecretsController) Sync(ctx controllerlib.Context) erro
 	}
 
 	if notFound {
-		// The corresponding secret to this OP should have been garbage collected since it should have
-		// had this OP as its owner.
+		// The corresponding secret to this FederationDomain should have been garbage collected since it should have
+		// had this FederationDomain as its owner.
 		plog.Debug(
 			"federationdomain deleted",
 			"federationdomain",
@@ -105,13 +109,13 @@ func (c *federationDomainSecretsController) Sync(ctx controllerlib.Context) erro
 		return nil
 	}
 
-	op = op.DeepCopy()
-	newSecret, err := c.secretHelper.Generate(op)
+	federationDomain = federationDomain.DeepCopy()
+	newSecret, err := c.secretHelper.Generate(federationDomain)
 	if err != nil {
 		return fmt.Errorf("failed to generate secret: %w", err)
 	}
 
-	secretNeedsUpdate, existingSecret, err := c.secretNeedsUpdate(op, newSecret.Name)
+	secretNeedsUpdate, existingSecret, err := c.secretNeedsUpdate(federationDomain, newSecret.Name)
 	if err != nil {
 		return fmt.Errorf("failed to determine secret status: %w", err)
 	}
@@ -120,44 +124,44 @@ func (c *federationDomainSecretsController) Sync(ctx controllerlib.Context) erro
 		plog.Debug(
 			"secret is up to date",
 			"federationdomain",
-			klog.KObj(op),
+			klog.KObj(federationDomain),
 			"secret",
 			klog.KObj(existingSecret),
 		)
 
-		op = c.secretHelper.ObserveActiveSecretAndUpdateParentFederationDomain(op, existingSecret)
-		if err := c.updateFederationDomain(ctx.Context, op); err != nil {
+		federationDomain = c.secretHelper.ObserveActiveSecretAndUpdateParentFederationDomain(federationDomain, existingSecret)
+		if err := c.updateFederationDomain(ctx.Context, federationDomain); err != nil {
 			return fmt.Errorf("failed to update federationdomain: %w", err)
 		}
-		plog.Debug("updated federationdomain", "federationdomain", klog.KObj(op), "secret", klog.KObj(newSecret))
+		plog.Debug("updated federationdomain", "federationdomain", klog.KObj(federationDomain), "secret", klog.KObj(newSecret))
 
 		return nil
 	}
 
-	// If the OP does not have a secret associated with it, that secret does not exist, or the secret
+	// If the FederationDomain does not have a secret associated with it, that secret does not exist, or the secret
 	// is invalid, we will create a new secret.
-	if err := c.createOrUpdateSecret(ctx.Context, op, &newSecret); err != nil {
+	if err := c.createOrUpdateSecret(ctx.Context, federationDomain, &newSecret); err != nil {
 		return fmt.Errorf("failed to create or update secret: %w", err)
 	}
-	plog.Debug("created/updated secret", "federationdomain", klog.KObj(op), "secret", klog.KObj(newSecret))
+	plog.Debug("created/updated secret", "federationdomain", klog.KObj(federationDomain), "secret", klog.KObj(newSecret))
 
-	op = c.secretHelper.ObserveActiveSecretAndUpdateParentFederationDomain(op, newSecret)
-	if err := c.updateFederationDomain(ctx.Context, op); err != nil {
+	federationDomain = c.secretHelper.ObserveActiveSecretAndUpdateParentFederationDomain(federationDomain, newSecret)
+	if err := c.updateFederationDomain(ctx.Context, federationDomain); err != nil {
 		return fmt.Errorf("failed to update federationdomain: %w", err)
 	}
-	plog.Debug("updated federationdomain", "federationdomain", klog.KObj(op), "secret", klog.KObj(newSecret))
+	plog.Debug("updated federationdomain", "federationdomain", klog.KObj(federationDomain), "secret", klog.KObj(newSecret))
 
 	return nil
 }
 
-// secretNeedsUpdate returns whether or not the Secret, with name secretName, for FederationDomain op
+// secretNeedsUpdate returns whether or not the Secret, with name secretName, for the federationDomain param
 // needs to be updated. It returns the existing secret as its second argument.
 func (c *federationDomainSecretsController) secretNeedsUpdate(
-	op *configv1alpha1.FederationDomain,
+	federationDomain *configv1alpha1.FederationDomain,
 	secretName string,
 ) (bool, *corev1.Secret, error) {
-	// This OPC says it has a secret associated with it. Let's try to get it from the cache.
-	secret, err := c.secretInformer.Lister().Secrets(op.Namespace).Get(secretName)
+	// This FederationDomain says it has a secret associated with it. Let's try to get it from the cache.
+	secret, err := c.secretInformer.Lister().Secrets(federationDomain.Namespace).Get(secretName)
 	notFound := k8serrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return false, nil, fmt.Errorf("cannot get secret: %w", err)
@@ -167,7 +171,7 @@ func (c *federationDomainSecretsController) secretNeedsUpdate(
 		return true, nil, nil
 	}
 
-	if !c.secretHelper.IsValid(op, secret) {
+	if !c.secretHelper.IsValid(federationDomain, secret) {
 		// If this secret is invalid, we need to generate a new one.
 		return true, secret, nil
 	}
@@ -177,7 +181,7 @@ func (c *federationDomainSecretsController) secretNeedsUpdate(
 
 func (c *federationDomainSecretsController) createOrUpdateSecret(
 	ctx context.Context,
-	op *configv1alpha1.FederationDomain,
+	federationDomain *configv1alpha1.FederationDomain,
 	newSecret **corev1.Secret,
 ) error {
 	secretClient := c.kubeClient.CoreV1().Secrets((*newSecret).Namespace)
@@ -198,7 +202,7 @@ func (c *federationDomainSecretsController) createOrUpdateSecret(
 		}
 
 		// New secret already exists, so ensure it is up to date.
-		if c.secretHelper.IsValid(op, oldSecret) {
+		if c.secretHelper.IsValid(federationDomain, oldSecret) {
 			// If the secret already has valid a valid Secret, then we are good to go and we don't need an
 			// update.
 			*newSecret = oldSecret
@@ -216,23 +220,31 @@ func (c *federationDomainSecretsController) createOrUpdateSecret(
 
 func (c *federationDomainSecretsController) updateFederationDomain(
 	ctx context.Context,
-	newOP *configv1alpha1.FederationDomain,
+	newFederationDomain *configv1alpha1.FederationDomain,
 ) error {
-	opcClient := c.pinnipedClient.ConfigV1alpha1().FederationDomains(newOP.Namespace)
+	federationDomainClient := c.pinnipedClient.ConfigV1alpha1().FederationDomains(newFederationDomain.Namespace)
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		oldOP, err := opcClient.Get(ctx, newOP.Name, metav1.GetOptions{})
+		oldFederationDomain, err := federationDomainClient.Get(ctx, newFederationDomain.Name, metav1.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("failed to get federationdomain %s/%s: %w", newOP.Namespace, newOP.Name, err)
+			return fmt.Errorf("failed to get federationdomain %s/%s: %w", newFederationDomain.Namespace, newFederationDomain.Name, err)
 		}
 
-		oldOPSecretRef := c.secretRefFunc(oldOP)
-		newOPSecretRef := c.secretRefFunc(newOP)
-		if reflect.DeepEqual(oldOPSecretRef, newOPSecretRef) {
+		oldFederationDomainSecretRef := c.secretRefFunc(oldFederationDomain)
+		newFederationDomainSecretRef := c.secretRefFunc(newFederationDomain)
+		if reflect.DeepEqual(oldFederationDomainSecretRef, newFederationDomainSecretRef) {
 			return nil
 		}
 
-		*oldOPSecretRef = *newOPSecretRef
-		_, err = opcClient.Update(ctx, oldOP, metav1.UpdateOptions{})
+		*oldFederationDomainSecretRef = *newFederationDomainSecretRef
+		_, err = federationDomainClient.Update(ctx, oldFederationDomain, metav1.UpdateOptions{})
 		return err
 	})
+}
+
+// isFederationDomainControllee returns whether the provided obj is controlled by an FederationDomain.
+func isFederationDomainControllee(obj metav1.Object) bool {
+	controller := metav1.GetControllerOf(obj)
+	return controller != nil &&
+		controller.APIVersion == configv1alpha1.SchemeGroupVersion.String() &&
+		controller.Kind == federationDomainKind
 }

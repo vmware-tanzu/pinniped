@@ -249,8 +249,8 @@ func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string
 		issuer = fmt.Sprintf("http://test-issuer-%s.pinniped.dev", RandHex(t, 8))
 	}
 
-	opcs := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
-	opc, err := opcs.Create(createContext, &configv1alpha1.FederationDomain{
+	federationDomains := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
+	federationDomain, err := federationDomains.Create(createContext, &configv1alpha1.FederationDomain{
 		ObjectMeta: testObjectMeta(t, "oidc-provider"),
 		Spec: configv1alpha1.FederationDomainSpec{
 			Issuer: issuer,
@@ -258,31 +258,31 @@ func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string
 		},
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test FederationDomain")
-	t.Logf("created test FederationDomain %s/%s", opc.Namespace, opc.Name)
+	t.Logf("created test FederationDomain %s/%s", federationDomain.Namespace, federationDomain.Name)
 
 	t.Cleanup(func() {
 		t.Helper()
-		t.Logf("cleaning up test FederationDomain %s/%s", opc.Namespace, opc.Name)
+		t.Logf("cleaning up test FederationDomain %s/%s", federationDomain.Namespace, federationDomain.Name)
 		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		err := opcs.Delete(deleteCtx, opc.Name, metav1.DeleteOptions{})
+		err := federationDomains.Delete(deleteCtx, federationDomain.Name, metav1.DeleteOptions{})
 		notFound := k8serrors.IsNotFound(err)
 		// It's okay if it is not found, because it might have been deleted by another part of this test.
 		if !notFound {
-			require.NoErrorf(t, err, "could not cleanup test FederationDomain %s/%s", opc.Namespace, opc.Name)
+			require.NoErrorf(t, err, "could not cleanup test FederationDomain %s/%s", federationDomain.Namespace, federationDomain.Name)
 		}
 	})
 
 	// If we're not expecting any particular status, just return the new FederationDomain immediately.
 	if expectStatus == "" {
-		return opc
+		return federationDomain
 	}
 
 	// Wait for the FederationDomain to enter the expected phase (or time out).
 	var result *configv1alpha1.FederationDomain
 	assert.Eventuallyf(t, func() bool {
 		var err error
-		result, err = opcs.Get(ctx, opc.Name, metav1.GetOptions{})
+		result, err = federationDomains.Get(ctx, federationDomain.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		return result.Status.Status == expectStatus
 	}, 60*time.Second, 1*time.Second, "expected the FederationDomain to have status %q", expectStatus)
@@ -292,7 +292,7 @@ func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string
 	if result.Status.Status == configv1alpha1.SuccessFederationDomainStatusCondition {
 		assert.Eventually(t, func() bool {
 			var err error
-			result, err = opcs.Get(ctx, opc.Name, metav1.GetOptions{})
+			result, err = federationDomains.Get(ctx, federationDomain.Name, metav1.GetOptions{})
 			require.NoError(t, err)
 			return result.Status.Secrets.JWKS.Name != "" &&
 				result.Status.Secrets.TokenSigningKey.Name != "" &&
@@ -304,7 +304,7 @@ func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string
 		require.NotEmpty(t, result.Status.Secrets.StateSigningKey.Name)
 		require.NotEmpty(t, result.Status.Secrets.StateEncryptionKey.Name)
 	}
-	return opc
+	return federationDomain
 }
 
 func RandHex(t *testing.T, numBytes int) string {

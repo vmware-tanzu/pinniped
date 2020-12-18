@@ -6,8 +6,8 @@ go 1.13
 require (
 	github.com/go-openapi/spec v0.19.9
 	go.pinniped.dev/generated/1.19/apis v0.0.0-00010101000000-000000000000
-	k8s.io/apimachinery v0.19.2
-	k8s.io/client-go v0.19.2
+	k8s.io/apimachinery v0.19.5
+	k8s.io/client-go v0.19.5
 	k8s.io/kube-openapi v0.0.0-20200805222855-6aeccd4b50c6
 )
 

@@ -11,15 +11,16 @@ import (
 	"go.pinniped.dev/internal/constable"
 )
 
-// FederationDomain represents all of the settings and state for an OIDC provider.
-type FederationDomain struct {
+// FederationDomainIssuer represents all of the settings and state for a downstream OIDC provider
+// as defined by a FederationDomain.
+type FederationDomainIssuer struct {
 	issuer     string
 	issuerHost string
 	issuerPath string
 }
 
-func NewFederationDomain(issuer string) (*FederationDomain, error) {
-	p := FederationDomain{issuer: issuer}
+func NewFederationDomainIssuer(issuer string) (*FederationDomainIssuer, error) {
+	p := FederationDomainIssuer{issuer: issuer}
 	err := p.validate()
 	if err != nil {
 		return nil, err
@@ -27,9 +28,9 @@ func NewFederationDomain(issuer string) (*FederationDomain, error) {
 	return &p, nil
 }
 
-func (p *FederationDomain) validate() error {
+func (p *FederationDomainIssuer) validate() error {
 	if p.issuer == "" {
-		return constable.Error("provider must have an issuer")
+		return constable.Error("federation domain must have an issuer")
 	}
 
 	issuerURL, err := url.Parse(p.issuer)
@@ -63,14 +64,14 @@ func (p *FederationDomain) validate() error {
 	return nil
 }
 
-func (p *FederationDomain) Issuer() string {
+func (p *FederationDomainIssuer) Issuer() string {
 	return p.issuer
 }
 
-func (p *FederationDomain) IssuerHost() string {
+func (p *FederationDomainIssuer) IssuerHost() string {
 	return p.issuerHost
 }
 
-func (p *FederationDomain) IssuerPath() string {
+func (p *FederationDomainIssuer) IssuerPath() string {
 	return p.issuerPath
 }

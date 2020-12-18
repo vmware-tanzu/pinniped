@@ -266,11 +266,11 @@ func FositeErrorForLog(err error) []interface{} {
 	rfc6749Error := fosite.ErrorToRFC6749Error(err)
 	keysAndValues := make([]interface{}, 0)
 	keysAndValues = append(keysAndValues, "name")
-	keysAndValues = append(keysAndValues, rfc6749Error.Name)
+	keysAndValues = append(keysAndValues, rfc6749Error.ErrorField)
 	keysAndValues = append(keysAndValues, "status")
 	keysAndValues = append(keysAndValues, rfc6749Error.Status())
 	keysAndValues = append(keysAndValues, "description")
-	keysAndValues = append(keysAndValues, rfc6749Error.Description)
+	keysAndValues = append(keysAndValues, rfc6749Error.DescriptionField)
 	return keysAndValues
 }
 

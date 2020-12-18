@@ -79,7 +79,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			name:      "missing required flags",
 			args:      []string{},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: required flag(s) "issuer" not set
 			`),
 		},
@@ -91,7 +91,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--enable-concierge",
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: invalid concierge parameters: endpoint must not be empty
 			`),
 		},
@@ -103,7 +103,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--ca-bundle", "./does/not/exist",
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: could not read --ca-bundle: open ./does/not/exist: no such file or directory
 			`),
 		},
@@ -115,7 +115,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--ca-bundle-data", "invalid-base64",
 			},
 			wantError: true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: could not read --ca-bundle-data: illegal base64 data at input byte 7
 			`),
 		},
@@ -128,7 +128,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			loginErr:         fmt.Errorf("some login error"),
 			wantOptionsCount: 3,
 			wantError:        true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: could not complete Pinniped login: some login error
 			`),
 		},
@@ -145,7 +145,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			conciergeErr:     fmt.Errorf("some concierge error"),
 			wantOptionsCount: 3,
 			wantError:        true,
-			wantStdout: here.Doc(`
+			wantStderr: here.Doc(`
 				Error: could not complete concierge credential exchange: some concierge error
 			`),
 		},

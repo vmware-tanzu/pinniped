@@ -50,7 +50,7 @@ func NewTLSCertObserverController(
 		},
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.MatchAnySecretOfTypeFilter(v1.SecretTypeTLS),
+			pinnipedcontroller.MatchAnySecretOfTypeFilter(v1.SecretTypeTLS, nil),
 			controllerlib.InformerOption{},
 		),
 		withInformer(

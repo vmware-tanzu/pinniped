@@ -33,7 +33,7 @@ func SimpleFilter(match func(metav1.Object) bool, parentFunc controllerlib.Paren
 	}
 }
 
-func MatchAnySecretOfTypeFilter(secretType v1.SecretType) controllerlib.Filter {
+func MatchAnySecretOfTypeFilter(secretType v1.SecretType, parentFunc controllerlib.ParentFunc) controllerlib.Filter {
 	isSecretOfType := func(obj metav1.Object) bool {
 		secret, ok := obj.(*v1.Secret)
 		if !ok {
@@ -41,7 +41,7 @@ func MatchAnySecretOfTypeFilter(secretType v1.SecretType) controllerlib.Filter {
 		}
 		return secret.Type == secretType
 	}
-	return SimpleFilter(isSecretOfType, nil)
+	return SimpleFilter(isSecretOfType, parentFunc)
 }
 
 func SecretIsControlledByParentFunc(matchFunc func(obj metav1.Object) bool) func(obj metav1.Object) controllerlib.Key {

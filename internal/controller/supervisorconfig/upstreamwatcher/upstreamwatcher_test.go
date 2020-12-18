@@ -31,6 +31,76 @@ import (
 	"go.pinniped.dev/internal/upstreamoidc"
 )
 
+func TestControllerFilterSecret(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		secret     metav1.Object
+		wantAdd    bool
+		wantUpdate bool
+		wantDelete bool
+	}{
+		{
+			name: "a secret of the right type",
+			secret: &corev1.Secret{
+				Type:       "secrets.pinniped.dev/oidc-client",
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "a secret of the wrong type",
+			secret: &corev1.Secret{
+				Type:       "secrets.pinniped.dev/not-the-oidc-client-type",
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+		},
+		{
+			name: "resource of wrong data type",
+			secret: &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			fakePinnipedClient := pinnipedfake.NewSimpleClientset()
+			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
+			fakeKubeClient := fake.NewSimpleClientset()
+			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
+			testLog := testlogger.New(t)
+			cache := provider.NewDynamicUpstreamIDPProvider()
+			cache.SetIDPList([]provider.UpstreamOIDCIdentityProviderI{
+				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
+			})
+			secretInformer := kubeInformers.Core().V1().Secrets()
+			withInformer := testutil.NewObservableWithInformerOption()
+
+			New(
+				cache,
+				nil,
+				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
+				secretInformer,
+				testLog,
+				withInformer.WithInformer,
+			)
+
+			unrelated := corev1.Secret{}
+			filter := withInformer.GetFilterForInformer(secretInformer)
+			require.Equal(t, test.wantAdd, filter.Add(test.secret))
+			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.secret))
+			require.Equal(t, test.wantUpdate, filter.Update(test.secret, &unrelated))
+			require.Equal(t, test.wantDelete, filter.Delete(test.secret))
+		})
+	}
+}
+
 func TestController(t *testing.T) {
 	t.Parallel()
 	now := metav1.NewTime(time.Now().UTC())
@@ -550,7 +620,9 @@ func TestController(t *testing.T) {
 				fakePinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				kubeInformers.Core().V1().Secrets(),
-				testLog)
+				testLog,
+				controllerlib.WithInformer,
+			)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()

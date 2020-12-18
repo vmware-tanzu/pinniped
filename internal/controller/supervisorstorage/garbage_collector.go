@@ -34,6 +34,14 @@ func GarbageCollectorController(
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
+	isSecretWithGCAnnotation := func(obj metav1.Object) bool {
+		secret, ok := obj.(*v1.Secret)
+		if !ok {
+			return false
+		}
+		_, ok = secret.Annotations[crud.SecretLifetimeAnnotationKey]
+		return ok
+	}
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "garbage-collector-controller",
@@ -45,7 +53,14 @@ func GarbageCollectorController(
 		},
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.MatchAnythingFilter(nil),
+			controllerlib.FilterFuncs{
+				AddFunc: isSecretWithGCAnnotation,
+				UpdateFunc: func(oldObj, newObj metav1.Object) bool {
+					return isSecretWithGCAnnotation(oldObj) || isSecretWithGCAnnotation(newObj)
+				},
+				DeleteFunc: func(obj metav1.Object) bool { return false }, // ignore all deletes
+				ParentFunc: nil,
+			},
 			controllerlib.InformerOption{},
 		),
 	)

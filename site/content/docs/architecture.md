@@ -10,14 +10,14 @@ The principal purpose of Pinniped is to allow users to access Kubernetes
 clusters. Pinniped hopes to enable this access across a wide range of Kubernetes
 environments with zero configuration.
 
-This integration is composed of two parts. 
-One part, the supervisor, is an OIDC server which allows users
-to authenticate with their external Identity Provider,
-then issues its own federation id tokens to be passed on to clusters
-based on the information from the external Identity Provider's token. 
-The other, the concierge, is a credential exchange API which takes as input a token
-(from the supervisor or elsewhere), and returns a credential which is understood by 
-the host Kubernetes cluster.
+Pinniped is composed of two parts.
+1. The Pinniped Supervisor is an OIDC server which allows users to authenticate
+with an external identity provider (IDP), and then issues its own federation ID tokens
+to be passed on to clusters based on the user information from the IDP.
+1. The Pinniped Concierge is a credential exchange API which takes as input a
+credential from an identity source (e.g., Pinniped Supervisor, proprietary IDP),
+authenticates the user via that credential, and returns another credential which is
+understood by the host Kubernetes cluster.
 
 ![Pinniped Architecture Sketch](/docs/img/pinniped_architecture.svg)
 
@@ -34,15 +34,29 @@ Support for other types of Kubernetes distributions is coming soon.
 
 ## External Identity Provider Integrations
 
-Pinniped will consume identity from one or more external identity providers
-(IDPs). Administrators will configure external IDPs via Kubernetes custom
-resources allowing Pinniped to be managed using GitOps and standard Kubernetes tools.
+The Pinniped Supervisor will federate identity from one or more IDPs.
+Administrators will configure the Pinniped Supervisor to use IDPs via Kubernetes
+custom resources allowing Pinniped to be managed using GitOps and standard
+Kubernetes tools.
+
+Pinniped supports the following IDPs.
+
+1. Any [OIDC-compliant](https://openid.net/specs/openid-connect-core-1_0.html)
+   identity provider (e.g., [Dex](https://github.com/dexidp/dex),
+   [Okta](https://www.okta.com/)).
+
+The
+[`idp.supervisor.pinniped.dev`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-idp-supervisor-pinniped-dev-v1alpha1)
+API group contains the Kubernetes custom resources that configure the Pinniped
+Supervisor's upstream IDPs.
+
+More IDP integrations are coming soon.
 
 ## Authenticators
 
-The Pinniped concierge requires one or more **authenticators** to validate tokens before
-issuing cluster specific certificates. 
-Administrators will configure external IDPs via Kubernetes custom
+The Pinniped Concierge requires one or more **authenticators** to validate external credentials in order to
+issue cluster specific credentials.
+Administrators will configure authenticators via Kubernetes custom
 resources allowing Pinniped to be managed using GitOps and standard Kubernetes tools.
 
 Pinniped supports the following authenticator types.
@@ -56,9 +70,20 @@ Pinniped supports the following authenticator types.
    sample implementation in Golang. See the `ServeHTTP` method of
    [cmd/local-user-authenticator/main.go](https://github.com/vmware-tanzu/pinniped/blob/main/cmd/local-user-authenticator/main.go).
 
-1. A JwtAuthenticator resource, which will validate and parse claims from
-   JWT id tokens.
-   This can be used to validate tokens that are issued by the supervisor.
+1. A JSON Web Token (JWT) authenticator, which will validate and parse claims
+   from JWTs.  This can be used to validate tokens that are issued by the
+   Pinniped Supervisor, any
+   [OIDC-compliant](https://openid.net/specs/openid-connect-core-1_0.html)
+   identity provider, or various other identity sources. The JWT authenticator
+   provides the same functionality as the [Kubernetes OIDC authentication
+   mechanism](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#openid-connect-tokens),
+   but it is configurable at cluster runtime instead of requiring flags to be
+   set on the `kube-apiserver` process.
+
+The
+[`authentication.concierge.pinniped.dev`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-authentication-concierge-pinniped-dev-v1alpha1)
+API group contains the Kubernetes custom resources that configure the Pinniped
+Concierge's authenticators.
 
 ## Cluster Integration Strategies
 
@@ -80,15 +105,26 @@ support more Kubernetes cluster types.
 
 ## kubectl Integration
 
-With any of the above IDPs and integration strategies, `kubectl` commands receive the
+With any of the above IDPs, authentication methods, and cluster integration strategies, `kubectl` commands receive the
 cluster-specific credential via a
 [Kubernetes client-go credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins).
 Users may use the Pinniped CLI as the credential plugin, or they may use any proprietary CLI
 built with the [Pinniped Go client library](https://github.com/vmware-tanzu/pinniped/tree/main/generated).
 
-## Example Cluster Authentication Sequence Diagram
+## Example Cluster Authentication Sequence Diagrams
 
-This diagram demonstrates using `kubectl get pods` with the Pinniped CLI configured as the credential plugin,
-and with a webhook IDP configured as the identity provider for the Pinniped server.
+### Concierge With Webhook
 
-![example-cluster-authentication-sequence-diagram](/docs/img/pinniped.svg)
+This diagram demonstrates using `kubectl get pods` with a [Kubernetes client-go credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins)
+that obtains an external credential to be sent to a webhook authenticator via the Pinniped Concierge.
+
+![concierge-with-webhook-sequence-diagram](/docs/img/pinniped-concierge-sequence.svg)
+
+### Concierge with Supervisor
+
+This diagram demonstrates using `kubectl get pods` with the Pinniped CLI
+functioning as a [Kubernetes client-go credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins)
+that obtains a federation ID token from the Pinniped Supervisor to be sent to a
+JWT authenticator via the Pinniped Concierge.
+
+![concierge-with-supervisor-sequence-diagram](/docs/img/pinniped-concierge-supervisor-sequence.svg)

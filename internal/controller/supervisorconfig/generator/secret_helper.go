@@ -84,10 +84,6 @@ type symmetricSecretHelper struct {
 	updateCacheFunc func(cacheKey string, cacheValue []byte)
 }
 
-func (s *symmetricSecretHelper) Handles(obj metav1.Object) bool {
-	return IsFederationDomainSecretOfType(obj, s.secretType())
-}
-
 func (s *symmetricSecretHelper) NamePrefix() string { return s.namePrefix }
 
 // Generate implements SecretHelper.Generate().
@@ -170,6 +166,10 @@ func (s *symmetricSecretHelper) secretType() corev1.SecretType {
 	default:
 		panic(fmt.Sprintf("unknown secret usage enum value: %d", s.secretUsage))
 	}
+}
+
+func (s *symmetricSecretHelper) Handles(obj metav1.Object) bool {
+	return IsFederationDomainSecretOfType(obj, s.secretType())
 }
 
 func IsFederationDomainSecretOfType(obj metav1.Object, secretType corev1.SecretType) bool {

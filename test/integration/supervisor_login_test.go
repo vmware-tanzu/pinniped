@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
+
 	coreosoidc "github.com/coreos/go-oidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -95,7 +97,7 @@ func TestSupervisorLogin(t *testing.T) {
 	certSecret := library.CreateTestSecret(t,
 		env.SupervisorNamespace,
 		"oidc-provider-tls",
-		"kubernetes.io/tls",
+		v1.SecretTypeTLS,
 		map[string]string{"tls.crt": string(certPEM), "tls.key": string(keyPEM)},
 	)
 

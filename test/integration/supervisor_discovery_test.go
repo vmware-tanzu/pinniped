@@ -287,6 +287,7 @@ func createTLSCertificateSecret(ctx context.Context, t *testing.T, ns string, ho
 	tlsCertChainPEM, tlsPrivateKeyPEM, err := certauthority.ToPEM(tlsCert)
 	require.NoError(t, err)
 	secret := corev1.Secret{
+		Type:     corev1.SecretTypeTLS,
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,

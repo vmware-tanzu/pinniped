@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
+
 	"github.com/stretchr/testify/require"
 	rbacv1 "k8s.io/api/rbac/v1"
 
@@ -84,7 +86,7 @@ func TestE2EFullIntegration(t *testing.T) {
 	certSecret := library.CreateTestSecret(t,
 		env.SupervisorNamespace,
 		"oidc-provider-tls",
-		"kubernetes.io/tls",
+		v1.SecretTypeTLS,
 		map[string]string{"tls.crt": string(certPEM), "tls.key": string(keyPEM)},
 	)
 

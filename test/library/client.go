@@ -314,7 +314,7 @@ func RandHex(t *testing.T, numBytes int) string {
 	return hex.EncodeToString(buf)
 }
 
-func CreateTestSecret(t *testing.T, namespace string, baseName string, secretType string, stringData map[string]string) *corev1.Secret {
+func CreateTestSecret(t *testing.T, namespace string, baseName string, secretType corev1.SecretType, stringData map[string]string) *corev1.Secret {
 	t.Helper()
 	client := NewClientset(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

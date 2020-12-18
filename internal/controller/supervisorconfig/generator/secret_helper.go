@@ -88,25 +88,6 @@ func (s *symmetricSecretHelper) Handles(obj metav1.Object) bool {
 	return IsFederationDomainSecretOfType(obj, s.secretType())
 }
 
-func IsFederationDomainSecretOfType(obj metav1.Object, secretType corev1.SecretType) bool {
-	secret, ok := obj.(*corev1.Secret)
-	if !ok {
-		return false
-	}
-	if secret.Type != secretType {
-		return false
-	}
-	return isFederationDomainControllee(secret)
-}
-
-// isFederationDomainControllee returns whether the provided obj is controlled by an FederationDomain.
-func isFederationDomainControllee(obj metav1.Object) bool {
-	controller := metav1.GetControllerOf(obj)
-	return controller != nil &&
-		controller.APIVersion == configv1alpha1.SchemeGroupVersion.String() &&
-		controller.Kind == federationDomainKind
-}
-
 func (s *symmetricSecretHelper) NamePrefix() string { return s.namePrefix }
 
 // Generate implements SecretHelper.Generate().
@@ -189,4 +170,23 @@ func (s *symmetricSecretHelper) secretType() corev1.SecretType {
 	default:
 		panic(fmt.Sprintf("unknown secret usage enum value: %d", s.secretUsage))
 	}
+}
+
+func IsFederationDomainSecretOfType(obj metav1.Object, secretType corev1.SecretType) bool {
+	secret, ok := obj.(*corev1.Secret)
+	if !ok {
+		return false
+	}
+	if secret.Type != secretType {
+		return false
+	}
+	return isFederationDomainControllee(secret)
+}
+
+// isFederationDomainControllee returns whether the provided obj is controlled by an FederationDomain.
+func isFederationDomainControllee(obj metav1.Object) bool {
+	controller := metav1.GetControllerOf(obj)
+	return controller != nil &&
+		controller.APIVersion == configv1alpha1.SchemeGroupVersion.String() &&
+		controller.Kind == federationDomainKind
 }

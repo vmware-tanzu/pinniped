@@ -19,7 +19,7 @@ credential from an identity source (e.g., Pinniped Supervisor, proprietary IDP),
 authenticates the user via that credential, and returns another credential which is
 understood by the host Kubernetes cluster.
 
-![Pinniped Architecture Sketch](/docs/img/pinniped_architecture.svg)
+![Pinniped Architecture Sketch](/docs/img/pinniped_architecture_concierge_supervisor.svg)
 
 Pinniped supports various IDP types and implements different integration strategies
 for various Kubernetes distributions to make authentication possible.
@@ -111,16 +111,21 @@ cluster-specific credential via a
 Users may use the Pinniped CLI as the credential plugin, or they may use any proprietary CLI
 built with the [Pinniped Go client library](https://github.com/vmware-tanzu/pinniped/tree/main/generated).
 
-## Example Cluster Authentication Sequence Diagrams
 
-### Concierge With Webhook
+## Pinniped Deployment Strategies 
+Pinniped can be configured to authenticate users in a variety of scenarios.
+Depending on the use case, administrators can deploy the Supervisor, the Concierge,
+both, or neither.
 
-This diagram demonstrates using `kubectl get pods` with a [Kubernetes client-go credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins)
-that obtains an external credential to be sent to a webhook authenticator via the Pinniped Concierge.
+### Full Integration-- Concierge, Supervisor, and CLI
 
-![concierge-with-webhook-sequence-diagram](/docs/img/pinniped-concierge-sequence.svg)
+Users can authenticate with the help of the Supervisor, which will issue tokens that
+can be exchanged at the Concierge for a credential that is understood by the host Kubernetes
+cluster. 
+The Supervisor enables users to log in to their external identity provider
+once per day and access each cluster in a domain with a distinct scoped-down token.
 
-### Concierge with Supervisor
+![concierge-with-supervisor-architecture-diagram](/docs/img/pinniped_architecture_concierge_supervisor.svg)
 
 This diagram demonstrates using `kubectl get pods` with the Pinniped CLI
 functioning as a [Kubernetes client-go credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins)
@@ -128,3 +133,31 @@ that obtains a federation ID token from the Pinniped Supervisor to be sent to a
 JWT authenticator via the Pinniped Concierge.
 
 ![concierge-with-supervisor-sequence-diagram](/docs/img/pinniped-concierge-supervisor-sequence.svg)
+
+### Dynamic Cluster Authentication-- Concierge and CLI
+
+Users can authenticate directly with their OIDC compliant external identity provider to get credentials which
+can be exchanged at the Concierge for a credential that is understood by the host Kubernetes
+cluster.
+
+![concierge-with-webhook-architecture-diagram](/docs/img/pinniped_architecture_concierge_webhook.svg)
+
+This diagram demonstrates using `kubectl get pods` with a [Kubernetes client-go credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins)
+that obtains an external credential to be sent to a webhook authenticator via the Pinniped Concierge.
+
+![concierge-with-webhook-sequence-diagram](/docs/img/pinniped-concierge-sequence.svg)
+
+### Static Cluster Integration-- Supervisor and CLI
+
+Users can authenticate with the help of the Supervisor, which will issue tokens that
+can be given directly to a Kubernetes API Server that has been configured with 
+[OIDC Authentication.](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#openid-connect-tokens)
+The Supervisor enables users to log in to their external identity provider
+once per day and access each cluster in a domain with a distinct scoped-down token.
+
+### Minimal-- CLI only
+
+Users can authenticate directly with their OIDC compliant external identity provider to get credentials
+that can be given directly to a Kubernetes API Server that has been configured with
+[OIDC Authentication.](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#openid-connect-tokens)
+

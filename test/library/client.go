@@ -322,7 +322,7 @@ func CreateTestSecret(t *testing.T, namespace string, baseName string, secretTyp
 
 	created, err := client.CoreV1().Secrets(namespace).Create(ctx, &corev1.Secret{
 		ObjectMeta: testObjectMeta(t, baseName),
-		Type:       corev1.SecretType(secretType),
+		Type:       secretType,
 		StringData: stringData,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)

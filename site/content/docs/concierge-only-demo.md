@@ -28,10 +28,10 @@ cascade:
 Installing and trying Pinniped on any cluster will consist of the following general steps. See the next section below
 for a more specific example of installing onto a local kind cluster, including the exact commands to use for that case.
 
-1. Install Pinniped. See [deploy/concierge/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/concierge/README.md).
+1. Install the Pinniped Concierge. See [deploy/concierge/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/concierge/README.md).
 1. Download the Pinniped CLI from [Pinniped's github Releases page](https://github.com/vmware-tanzu/pinniped/releases/latest).
-1. Generate a kubeconfig using the Pinniped CLI. Run `pinniped get-kubeconfig --help` for more information.
-1. Run `kubectl` commands using the generated kubeconfig. Pinniped will automatically be used for authentication during those commands.
+1. Generate a kubeconfig using the Pinniped CLI. Run `pinniped get kubeconfig --help` for more information.
+1. Run `kubectl` commands using the generated kubeconfig. The Pinniped Concierge will automatically be used for authentication during those commands.
 
 ## Example of Deploying on kind
 
@@ -40,11 +40,7 @@ which uses Docker containers as the cluster's "nodes". This is a convenient way 
 non-production cluster.
 
 The following steps will deploy the latest release of Pinniped on kind using the local-user-authenticator component
-as the identity provider.
-
-
-![Pinniped Installation Demo](https://user-images.githubusercontent.com/25013435/95272990-b2ea9780-07f6-11eb-994d-872e3cb68457.gif)
-<!-- The following image was uploaded to GitHub's CDN using this awesome trick: https://gist.github.com/vinkla/dca76249ba6b73c5dd66a4e986df4c8d -->
+as the authenticator.
 
 1. Install the tools required for the following steps.
 
@@ -73,15 +69,15 @@ as the identity provider.
    ```
 
    Alternatively, [any release version](https://github.com/vmware-tanzu/pinniped/releases)
-   number can be manually selected.
+   you can manually select this version of Pinniped.
 
    ```bash
    # Example of manually choosing a release version...
    pinniped_version=v0.3.0
    ```
 
-1. Deploy the local-user-authenticator app. This is a demo identity provider. In production, you would use your
-   real identity provider, and therefore would not need to deploy or configure local-user-authenticator.
+1. Deploy the local-user-authenticator app. This is a demo authenticator. In production, you would configure
+   an authenticator that works with your real identity provider, and therefore would not need to deploy or configure local-user-authenticator.
 
     ```bash
     kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/$pinniped_version/install-local-user-authenticator.yaml
@@ -92,7 +88,7 @@ as the identity provider.
    see [deploy/local-user-authenticator/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/local-user-authenticator/README.md)
    for instructions on how to deploy using `ytt`.
 
-1. Create a test user named `pinny-the-seal` in the local-user-authenticator identity provider.
+1. Create a test user named `pinny-the-seal` in the local-user-authenticator.
 
    ```bash
    kubectl create secret generic pinny-the-seal \
@@ -109,7 +105,7 @@ as the identity provider.
      | tee /tmp/local-user-authenticator-ca-base64-encoded
    ```
 
-1. Deploy Pinniped.
+1. Deploy the Pinniped Concierge.
 
    ```bash
     kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/$pinniped_version/install-pinniped-concierge.yaml
@@ -119,7 +115,7 @@ as the identity provider.
    If you would prefer to customize the available options, please see [deploy/concierge/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/concierge/README.md)
    for instructions on how to deploy using `ytt`.
 
-1. Create a `WebhookAuthenticator` object to configure Pinniped to authenticate using local-user-authenticator.
+1. Create a `WebhookAuthenticator` object to configure the Pinniped Concierge to authenticate using local-user-authenticator.
 
     ```bash
     cat <<EOF | kubectl create --namespace pinniped-concierge -f -
@@ -140,11 +136,11 @@ as the identity provider.
 1. Move the Pinniped CLI binary to your preferred filename and directory. Add the executable bit,
    e.g. `chmod +x /usr/local/bin/pinniped`.
 
-1. Generate a kubeconfig for the current cluster. Use `--token` to include a token which should
+1. Generate a kubeconfig for the current cluster. Use `--static-token` to include a token which should
    allow you to authenticate as the user that you created above.
 
    ```bash
-   pinniped get-kubeconfig --pinniped-namespace pinniped-concierge --token "pinny-the-seal:password123" --authenticator-type webhook --authenticator-name local-user-authenticator > /tmp/pinniped-kubeconfig
+   pinniped get kubeconfig --concierge-namespace pinniped-concierge --static-token "pinny-the-seal:password123" --concierge-authenticator-type webhook --concierge-authenticator-name local-user-authenticator > /tmp/pinniped-kubeconfig
    ```
 
    If you are using MacOS, you may get an error dialog that says
@@ -153,11 +149,6 @@ as the identity provider.
    Run the above command again and another dialog will appear saying
    `macOS cannot verify the developer of “pinniped”. Are you sure you want to open it?`.
    Click Open to allow the command to proceed.
-
-   Note that the above command will print a warning to the screen. You can ignore this warning.
-   Pinniped tries to auto-discover the URL for the Kubernetes API server, but it is not able
-   to do so on kind clusters. The warning is just letting you know that the Pinniped CLI decided
-   to ignore the auto-discovery URL and instead use the URL from your existing kubeconfig.
 
 1. Try using the generated kubeconfig to issue arbitrary `kubectl` commands as
    the `pinny-the-seal` user.

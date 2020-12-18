@@ -21,7 +21,7 @@ understood by the host Kubernetes cluster.
 
 ![Pinniped Architecture Sketch](/docs/img/pinniped_architecture_concierge_supervisor.svg)
 
-Pinniped supports various IDP types and implements different integration strategies
+Pinniped supports various authenticator types and OIDC identity providers and implements different integration strategies
 for various Kubernetes distributions to make authentication possible.
 
 ## Supported Kubernetes Cluster Types

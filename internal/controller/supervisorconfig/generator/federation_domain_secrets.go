@@ -24,10 +24,6 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-const (
-	federationDomainKind = "FederationDomain"
-)
-
 type federationDomainSecretsController struct {
 	secretHelper             SecretHelper
 	secretRefFunc            func(domain *configv1alpha1.FederationDomain) *corev1.LocalObjectReference

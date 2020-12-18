@@ -8,11 +8,7 @@ import (
 )
 
 //nolint: gochecknoglobals
-var getCmd = &cobra.Command{
-	Use:          "get",
-	Short:        "get",
-	SilenceUsage: true, // do not print usage message when commands fail
-}
+var getCmd = &cobra.Command{Use: "get", Short: "get"}
 
 //nolint: gochecknoinits
 func init() {

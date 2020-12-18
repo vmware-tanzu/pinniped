@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/here"
@@ -41,7 +42,7 @@ func TestNewVersionCmd(t *testing.T) {
 		args             []string
 		wantError        bool
 		wantStdoutRegexp string
-		wantStderr       string
+		wantStderrRegexp string
 	}{
 		{
 			name:             "no flags",
@@ -57,7 +58,8 @@ func TestNewVersionCmd(t *testing.T) {
 			name:             "arg passed",
 			args:             []string{"tuna"},
 			wantError:        true,
-			wantStdoutRegexp: `Error: unknown command "tuna" for "version"` + "\n" + knownGoodUsageRegexpForVersion,
+			wantStderrRegexp: `Error: unknown command "tuna" for "version"`,
+			wantStdoutRegexp: knownGoodUsageRegexpForVersion,
 		},
 	}
 	for _, tt := range tests {
@@ -76,8 +78,8 @@ func TestNewVersionCmd(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			require.Regexp(t, tt.wantStdoutRegexp, stdout.String(), "unexpected stdout")
-			require.Equal(t, tt.wantStderr, stderr.String(), "unexpected stderr")
+			assert.Regexp(t, tt.wantStdoutRegexp, stdout.String(), "unexpected stdout")
+			assert.Regexp(t, tt.wantStderrRegexp, stderr.String(), "unexpected stderr")
 		})
 	}
 }

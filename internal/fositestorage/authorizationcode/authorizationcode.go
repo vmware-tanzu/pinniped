@@ -110,7 +110,7 @@ func (a *authorizeCodeStorage) getSession(ctx context.Context, signature string)
 	rv, err := a.storage.Get(ctx, signature, session)
 
 	if errors.IsNotFound(err) {
-		return nil, "", fosite.ErrNotFound.WithCause(err).WithDebug(err.Error())
+		return nil, "", fosite.ErrNotFound.WithWrap(err).WithDebug(err.Error())
 	}
 
 	if err != nil {
@@ -168,161 +168,161 @@ func (e *errSerializationFailureWithCause) Error() string {
 // ExpectedAuthorizeCodeSessionJSONFromFuzzing is used for round tripping tests.
 // It is exported to allow integration tests to use it.
 const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
-	"active": true,
-	"request": {
-		"id": "嫎l蟲aƖ啘艿",
+	  "active": true,
+	  "request": {
+		"id": "曑x螠Gæ鄋楨",
 		"requestedAt": "2082-11-10T18:36:11.627253638Z",
 		"client": {
-			"id": "!ſɄĈp[述齛ʘUȻ.5ȿE",
-			"client_secret": "UQ==",
-			"redirect_uris": [
-				"ǣ珑 ʑ飶畛Ȳ螤Yɫüeɯ紤邥翔勋\\",
-				"Bʒ;",
-				"鿃攴Ųęʍ鎾ʦ©cÏN,Ġ/_"
-			],
-			"grant_types": [
-				"憉sHĒ尥窘挼Ŀŉ"
-			],
-			"response_types": [
-				"4",
-				"ʄÔ@}i{絧遗Ū^ȝĸ谋Vʋ鱴閇T"
-			],
-			"scopes": [
-				"R鴝順諲ŮŚ节ȭŀȋc剠鏯ɽÿ¸"
-			],
-			"audience": [
-				"Ƥ"
-			],
-			"public": true,
-			"jwks_uri": "BA瘪囷ɫCʄɢ雐譄uée'",
-			"jwks": {
-				"keys": [
-					{
-						"kty": "OKP",
-						"crv": "Ed25519",
-						"x": "nK9xgX_iN7u3u_i8YOO7ZRT_WK028Vd_nhtsUu7Eo6E",
-						"x5u": {
-							"Scheme": "",
-							"Opaque": "",
-							"User": null,
-							"Host": "",
-							"Path": "",
-							"RawPath": "",
-							"ForceQuery": false,
-							"RawQuery": "",
-							"Fragment": "",
-							"RawFragment": ""
-						}
-					},
-					{
-						"kty": "OKP",
-						"crv": "Ed25519",
-						"x": "UbbswQgzWhfGCRlwQmMp6fw_HoIoqkIaKT-2XN2fuYU",
-						"x5u": {
-							"Scheme": "",
-							"Opaque": "",
-							"User": null,
-							"Host": "",
-							"Path": "",
-							"RawPath": "",
-							"ForceQuery": false,
-							"RawQuery": "",
-							"Fragment": "",
-							"RawFragment": ""
-						}
-					}
-				]
-			},
-			"token_endpoint_auth_method": "ŚǗƳȕ暭Q0ņP羾,塐",
-			"request_uris": [
-				"ǉ翻LH^俤µǲɹ@©|\u003eɃ",
-				"[:c顎疻紵D"
-			],
-			"request_object_signing_alg": "m1Ì恣S@T嵇ǇV,Æ櫔袆鋹奘",
-			"token_endpoint_auth_signing_alg": "Fãƻʚ肈ą8O+a駣"
+		  "id": ":Ǌ¸Ɣ8(黋馛ÄRɴJa¶z",
+		  "client_secret": "UQ==",
+		  "redirect_uris": [
+			"ǖ枭kʍ切厦ȳ箦;¥ʊXĝ奨誷傥祩d",
+			"zŇZ",
+			"優蒼ĊɌț訫ǄǽeʀO2ƚ&N"
+		  ],
+		  "grant_types": [
+			"唐W6ɻ橩斚薛ɑƐ"
+		  ],
+		  "response_types": [
+			"w",
+			"ǔŭe[u@阽羂ŷ-Ĵ½輢OÅ濲喾H"
+		  ],
+		  "scopes": [
+			"G螩歐湡ƙı唡ɸğƎ&胢輢Ƈĵƚ"
+		  ],
+		  "audience": [
+			"ě"
+		  ],
+		  "public": false,
+		  "jwks_uri": "o*泞羅ʘ Ⱦķ瀊垰7ã\")",
+		  "jwks": {
+			"keys": [
+			  {
+				"kty": "OKP",
+				"crv": "Ed25519",
+				"x": "nK9xgX_iN7u3u_i8YOO7ZRT_WK028Vd_nhtsUu7Eo6E",
+				"x5u": {
+				  "Scheme": "",
+				  "Opaque": "",
+				  "User": null,
+				  "Host": "",
+				  "Path": "",
+				  "RawPath": "",
+				  "ForceQuery": false,
+				  "RawQuery": "",
+				  "Fragment": "",
+				  "RawFragment": ""
+				}
+			  },
+			  {
+				"kty": "OKP",
+				"crv": "Ed25519",
+				"x": "UbbswQgzWhfGCRlwQmMp6fw_HoIoqkIaKT-2XN2fuYU",
+				"x5u": {
+				  "Scheme": "",
+				  "Opaque": "",
+				  "User": null,
+				  "Host": "",
+				  "Path": "",
+				  "RawPath": "",
+				  "ForceQuery": false,
+				  "RawQuery": "",
+				  "Fragment": "",
+				  "RawFragment": ""
+				}
+			  }
+			]
+		  },
+		  "token_endpoint_auth_method": "ƿʥǟȒ伉<x¹T鼓c吏",
+		  "request_uris": [
+			"Ć捘j]=谅ʑɑɮ$Ól4Ȟ",
+			",Q7钎漡臧n"
+		  ],
+		  "request_object_signing_alg": "3@¡廜+v,淬Ʋ4Dʧ呩锏緍场",
+		  "token_endpoint_auth_signing_alg": "(ưƓǴ罷ǹ~]ea胠"
 		},
 		"scopes": [
-			"ɼk瘸'鴵yſǮŁ±\u003eFA曎餄FxD溪",
-			"綻N镪p赌h%桙dĽ"
+		  "ĩv絹b垇IŕĩǀŻQ'k頂箨J-a稆",
+		  "啶#昏Q遐*\\髎bŸ"
 		],
 		"grantedScopes": [
-			"癗E]Ņʘʟ車s"
+		  "慂UFƼĮǡ鑻Z"
 		],
 		"form": {
-			"蹬器ķ8ŷ萒寎廭#疶昄Ą-Ƃƞ轵": [
-				"熞ĝƌĆ1ȇyǴ濎=Tʉȼʁŀ\u003c",
-				"耡q戨稞R÷mȵg釽[ƞ@",
-				"đ[嬧鱒Ȁ彆媚杨嶒ĤGÀ吧Lŷ"
-			],
-			"餟": [
-				"蒍z\u0026(K鵢Kj ŏ9Q韉Ķ%",
-				"輫ǘ(¨Ƞ亱6ě#嫀^xz ",
-				"@耢ɝ^¡!犃ĹĐJí¿ō擫"
-			]
+		  "褾攚ŝlĆ厦駳骪l拁乖¡J¿Ƈ妔": [
+			"懧¥ɂĵ~Čyʊ恀c\"Ǌřðȿ/",
+			"裢?霃谥vƘ:ƿ/濔Aʉ<",
+			"ȭ$奍囀ǅ悷鵱民撲ʓeŘ嬀j¤"
+		  ],
+		  "诞": [
+			"狲N<Cq罉ZPſĝEK郊©l",
+			"餚Ǉ/ɷȑ潠[ĝU噤'pX ",
+			"Y妶ǵ!ȁu狍ɶȳsčɦƦ诱"
+		  ]
 		},
 		"session": {
-			"Claims": {
-				"JTI": "懫砰¿C筽娴ƓaPu镈賆ŗɰ",
-				"Issuer": "皶竇瞍涘¹焕iǢǽɽĺŧ",
-				"Subject": "矠M6ɡǜg炾ʙ$%o6肿Ȫ",
-				"Audience": [
-					"ƌÙ鯆GQơ鮫R嫁ɍUƞ9+u!Ȱ踾$"
+		  "Claims": {
+			"JTI": "攬林Ñz焁糳¿o>Q鱙翑ȲŻ",
+			"Issuer": "锰劝旣樎Ȱ鍌#ȳńƩŴȭ",
+			"Subject": "绝TFǊĆw宵ɚeY48珎²",
+			"Audience": [
+			  "éã越|j¦鲶H股ƲLŋZ-{5£踉4"
+			],
+			"Nonce": "5^驜Ŗ~ů崧軒q腟u尿",
+			"ExpiresAt": "2065-11-30T13:47:03.613000626Z",
+			"IssuedAt": "1976-02-22T09:57:20.479850437Z",
+			"RequestedAt": "2016-04-13T04:18:53.648949323Z",
+			"AuthTime": "2098-07-12T04:38:54.034043015Z",
+			"AccessTokenHash": "嫯R",
+			"AuthenticationContextClassReference": "¤'+ʣ",
+			"AuthenticationMethodsReference": "L&ɽ艄ʬʏ",
+			"CodeHash": "ğǫ\\aȊ4ț髄Al",
+			"Extra": {
+			  "PƢ曰": {
+				"ĸŴB岺Ð嫹Sx镯荫ő": [
+				  843216989
 				],
-				"Nonce": "us旸Ť/Õ薝隧;綡,鼞",
-				"ExpiresAt": "2065-11-30T13:47:03.613000626Z",
-				"IssuedAt": "1976-02-22T09:57:20.479850437Z",
-				"RequestedAt": "2016-04-13T04:18:53.648949323Z",
-				"AuthTime": "2098-07-12T04:38:54.034043015Z",
-				"AccessTokenHash": "滮]",
-				"AuthenticationContextClassReference": "°3\u003eÙ",
-				"AuthenticationMethodsReference": "k?µ鱔ǤÂ",
-				"CodeHash": "Țƒ1v¸KĶ跭};",
-				"Extra": {
-					"=ſ氆": {
-						"Ƿī,廖ʡ彑V\\廳蟕Ț": [
-							843216989
-						],
-						"蔯ʠ浵Ī": {
-							"H\"nǕ=rlƆ褡{ǏSȳŅ": {
-								"Žg": false
-							},
-							"枱鰧ɛ鸁A渇": null
-						}
-					},
-					"斻遟a衪荖舃9闄岈锘肺ńʥƕU}j%": 2520197933
+				"疂ư墫ɓ": {
+				  "\\BRë_g\"ʎ啴SƇMǃļ": {
+					"ʦ4": false
+				  },
+				  "鶡萷ɵ啜s攦": null
 				}
-			},
-			"Headers": {
-				"Extra": {
-					"熒ɘȏıȒ諃龟ŴŠ'耐Ƭ扵ƹ玄ɕwL": {
-						"ýÏʥZq7烱藌\\捀¿őŧQ": {
-							"微'X焌襱ǭɕņ殥!_": null,
-							"荇届UȚ?戋璖$9\u00269舋": {
-								"ɕ餦ÑEǰ哤癨浦浏1Rk頓ć§蚲6": true
-							}
-						},
-						"鲒鿮禗O暒aJP鐜?ĮV嫎h譭ȉ]DĘ": [
-							954647573
-						]
-					},
-					"皩Ƭ}Ɇ.雬Ɨ´唁": 1572524915
-				}
-			},
-			"ExpiresAt": {
-				"\u003cqċ譈8ŪɎP绿MÅ": "2031-10-18T22:07:34.950803105Z",
-				"ȸěaʜD捛?½ʀ+Ċ偢镳ʬÍɷȓ\u003c": "2049-05-13T15:27:20.968432454Z"
-			},
-			"Username": "1藍殙菥趏酱Nʎ\u0026^横懋ƶ峦Fïȫƅw",
-			"Subject": "檾ĩĆ爨4犹|v炩f柏ʒ鴙*鸆偡"
+			  },
+			  "曓蓳n匟鯘磹*金爃鶴滱ůĮǐ_c3#": 2520197933
+			}
+		  },
+		  "Headers": {
+			"Extra": {
+			  "寱ĊƑ÷Ƒ螞费Ďğ~劰û橸ɽ銐ƭ?}": {
+				"ȜʁɁ;Bd謺錳4帳ŅǃĊd": {
+				  "翢砜Fȏl鐉诳DT=3骜": {
+					"ų厷ɁOƪ穋嶿鳈恱va|载ǰɱ汶C": false
+				  },
+				  "鸨EJ毕懴řĬń戹%c": null
+				},
+				"室癑勦e骲v0H晦XŘO溪V蔓Ȍ+~ē": [
+				  954647573
+				]
+			  },
+			  "麈ƵDǀ\\郂üţ垂": 1572524915
+			}
+		  },
+		  "ExpiresAt": {
+			"'=ĸ闒NȢȰ.醋fʜ": "2031-10-18T22:07:34.950803105Z",
+			"ɦüHêQ仏1őƖ2Ė暮唍ǞʜƢú4": "2049-05-13T15:27:20.968432454Z"
+		  },
+		  "Username": "+韁臯氃妪婝rȤ\"h丬鎒ơ娻}ɼƟȥE",
+		  "Subject": "龳ǽÙ龦O亾EW莛8嘶×姮c恭企"
 		},
 		"requestedAudience": [
-			"肯Ûx穞Ƀ",
-			"ź蕴3ǐ薝Ƅ腲=ʐ诂鱰屾Ê窢ɋ鄊qɠ谫"
+		  "邖ɐ5檄¬",
+		  "Ĭ葜SŦ餧Ĭ倏4ĵ嶼仒篻ɥ闣ʬ橳(ý綃"
 		],
 		"grantedAudience": [
-			"ǵƕ牀1鞊\\ȹ)}鉍商OɄƣ圔,xĪ",
-			"悾xn冏裻摼0Ʈ蚵Ȼ塕»£#稏扟X"
+		  "ʚƟ覣k眐4ĈtC嵽痊w©Ź榨Q|ô",
+		  "猊Ia瓕巈環_ɑ彨ƍ蛊ʚ£:設虝2"
 		]
-	},
-	"version": "1"
-}`
+	  },
+	  "version": "1"
+	}`

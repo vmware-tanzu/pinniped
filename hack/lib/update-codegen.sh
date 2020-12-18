@@ -13,7 +13,7 @@ export GO111MODULE="on"
 if [[ -z "${CONTAINED:-}" ]]; then
     for kubeVersion in "${KUBE_VERSIONS[@]}"; do
         # CODEGEN_IMAGE is the container image to use when running
-        CODEGEN_IMAGE="docker.io/getpinniped/k8s-code-generator-$(echo "$kubeVersion" | cut -d"." -f1-2):latest"
+        CODEGEN_IMAGE="projects.registry.vmware.com/pinniped/k8s-code-generator-$(echo "$kubeVersion" | cut -d"." -f1-2):latest"
 
         echo "generating code for ${kubeVersion} using ${CODEGEN_IMAGE}..."
         docker run --rm \

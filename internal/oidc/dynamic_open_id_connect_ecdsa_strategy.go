@@ -50,7 +50,7 @@ func (s *dynamicOpenIDConnectECDSAStrategy) GenerateIDToken(
 	_, activeJwk := s.jwksProvider.GetJWKS(s.fositeConfig.IDTokenIssuer)
 	if activeJwk == nil {
 		plog.Debug("no JWK found for issuer", "issuer", s.fositeConfig.IDTokenIssuer)
-		return "", fosite.ErrTemporarilyUnavailable.WithCause(constable.Error("no JWK found for issuer"))
+		return "", fosite.ErrTemporarilyUnavailable.WithWrap(constable.Error("no JWK found for issuer"))
 	}
 	key, ok := activeJwk.Key.(*ecdsa.PrivateKey)
 	if !ok {
@@ -65,7 +65,7 @@ func (s *dynamicOpenIDConnectECDSAStrategy) GenerateIDToken(
 			"actualType",
 			actualType,
 		)
-		return "", fosite.ErrServerError.WithCause(constable.Error("JWK must be of type ecdsa"))
+		return "", fosite.ErrServerError.WithWrap(constable.Error("JWK must be of type ecdsa"))
 	}
 
 	return compose.NewOpenIDConnectECDSAStrategy(s.fositeConfig, key).GenerateIDToken(ctx, requester)

@@ -78,138 +78,99 @@ var (
 		return here.Docf(`
 			{
 				"error":             "invalid_request",
-				"error_verbose":     "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed",
-				"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nHTTP method is \"%s\", expected \"POST\".",
-				"error_hint":        "HTTP method is \"%s\", expected \"POST\".",
-				"status_code":       400
+				"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. HTTP method is '%s', expected 'POST'."
 			 }
-		`, actual, actual)
+		`, actual)
 	}
 
 	fositeMissingGrantTypeErrorBody = here.Docf(`
 		{
 			"error":             "invalid_request",
-			"error_verbose":     "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed",
-			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nRequest parameter \"grant_type\"\" is missing",
-			"error_hint":        "Request parameter \"grant_type\"\" is missing",
-			"status_code":       400
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Request parameter 'grant_type' is missing"
 		}
 	`)
 
 	fositeEmptyPayloadErrorBody = here.Doc(`
 		{
 			"error":             "invalid_request",
-			"error_verbose":     "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed",
-			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nThe POST body can not be empty.",
-			"error_hint":        "The POST body can not be empty.",
-			"status_code":       400
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. The POST body can not be empty."
 		}
 	`)
 
 	fositeInvalidPayloadErrorBody = here.Doc(`
 		{
 			"error":             "invalid_request",
-			"error_verbose":     "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed",
-			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nUnable to parse HTTP body, make sure to send a properly formatted form request body.",
-			"error_hint":        "Unable to parse HTTP body, make sure to send a properly formatted form request body.",
-			"status_code":       400
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse HTTP body, make sure to send a properly formatted form request body."
 		}
 	`)
 
 	fositeInvalidRequestErrorBody = here.Doc(`
 		{
 			"error":             "invalid_request",
-			"error_verbose":     "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed",
-			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nMake sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified.",
-			"error_hint":        "Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified.",
-			"status_code":       400
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Make sure that the various parameters are correct, be aware of case sensitivity and trim your parameters. Make sure that the client you are using has exactly whitelisted the redirect_uri you specified."
 		}
 	`)
 
 	fositeInvalidRequestMissingGrantTypeErrorBody = here.Doc(`
 		{
 		  "error": "invalid_request",
-		  "error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nRequest parameter \"grant_type\"\" is missing",
-		  "error_hint": "Request parameter \"grant_type\"\" is missing",
-		  "error_verbose": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed",
-		  "status_code": 400
+		  "error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Request parameter 'grant_type' is missing"
 		}
 	`)
 
 	fositeMissingClientErrorBody = here.Doc(`
 		{
 			"error":             "invalid_request",
-			"error_verbose":     "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed",
-			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed\n\nClient credentials missing or malformed in both HTTP Authorization header and HTTP POST body.",
-			"error_hint":        "Client credentials missing or malformed in both HTTP Authorization header and HTTP POST body.",
-			"status_code":       400
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Client credentials missing or malformed in both HTTP Authorization header and HTTP POST body."
 		}
 	`)
 
 	fositeInvalidClientErrorBody = here.Doc(`
 		{
 			"error":             "invalid_client",
-			"error_verbose":     "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)",
-			"error_description": "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)",
-			"status_code":       401
+			"error_description": "Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method)."
 		}
 	`)
 
 	fositeInvalidAuthCodeErrorBody = here.Doc(`
 		{
 			"error":             "invalid_grant",
-			"error_verbose":     "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client",
-			"error_description": "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client",
-			"status_code":       400
+			"error_description": "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client."
 		}
 	`)
 
 	fositeReusedAuthCodeErrorBody = here.Doc(`
 		{
 			"error":             "invalid_grant",
-			"error_verbose":     "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client",
-			"error_description": "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client\n\nThe authorization code has already been used.",
-			"error_hint":        "The authorization code has already been used.",
-			"status_code":       400
+			"error_description": "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The authorization code has already been used."
 		}
 	`)
 
 	fositeInvalidRedirectURIErrorBody = here.Doc(`
 		{
 			"error":             "invalid_grant",
-			"error_verbose":     "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client",
-			"error_description": "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client\n\nThe \"redirect_uri\" from this request does not match the one from the authorize request.",
-			"error_hint":        "The \"redirect_uri\" from this request does not match the one from the authorize request.",
-			"status_code":       400
+			"error_description": "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The 'redirect_uri' from this request does not match the one from the authorize request."
 		}
 	`)
 
 	fositeMissingPKCEVerifierErrorBody = here.Doc(`
 		{
 			"error":             "invalid_grant",
-			"error_verbose":     "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client",
-			"error_description": "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client\n\nThe PKCE code verifier must be at least 43 characters.",
-			"error_hint":        "The PKCE code verifier must be at least 43 characters.",
-			"status_code":       400
+			"error_description": "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code verifier must be at least 43 characters."
 		}
 	`)
 
 	fositeWrongPKCEVerifierErrorBody = here.Doc(`
 		{
 			"error":             "invalid_grant",
-			"error_verbose":     "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client",
-			"error_description": "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client\n\nThe PKCE code challenge did not match the code verifier.",
-			"error_hint":        "The PKCE code challenge did not match the code verifier.",
-			"status_code":       400
+			"error_description": "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The PKCE code challenge did not match the code verifier."
 		}
 	`)
 
 	fositeTemporarilyUnavailableErrorBody = here.Doc(`
 		{
 		  "error": "temporarily_unavailable",
-		  "error_description": "The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server",
-		  "error_verbose": "The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server",
-		  "status_code": 503
+		  "error_description": "The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server."
 		}
 	`)
 
@@ -749,7 +710,7 @@ func TestTokenExchange(t *testing.T) {
 			},
 			requestedAudience:        "some-workload-cluster",
 			wantStatus:               http.StatusForbidden,
-			wantResponseBodyContains: `missing the \"pinniped:request-audience\" scope`,
+			wantResponseBodyContains: `missing the 'pinniped:request-audience' scope`,
 		},
 		{
 			name: "access token missing openid scope",
@@ -766,7 +727,7 @@ func TestTokenExchange(t *testing.T) {
 			},
 			requestedAudience:        "some-workload-cluster",
 			wantStatus:               http.StatusForbidden,
-			wantResponseBodyContains: `missing the \"openid\" scope`,
+			wantResponseBodyContains: `missing the 'openid' scope`,
 		},
 		{
 			name: "token minting failure",

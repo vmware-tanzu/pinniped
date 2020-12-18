@@ -23,25 +23,29 @@ func TestSymmetricSecretHelper(t *testing.T) {
 	tests := []struct {
 		name                         string
 		secretUsage                  SecretUsage
+		wantSecretType               corev1.SecretType
 		wantSetFederationDomainField func(*configv1alpha1.FederationDomain) string
 	}{
 		{
-			name:        "token signing key",
-			secretUsage: SecretUsageTokenSigningKey,
+			name:           "token signing key",
+			secretUsage:    SecretUsageTokenSigningKey,
+			wantSecretType: "secrets.pinniped.dev/federation-domain-token-signing-key",
 			wantSetFederationDomainField: func(federationDomain *configv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.TokenSigningKey.Name
 			},
 		},
 		{
-			name:        "state signing key",
-			secretUsage: SecretUsageStateSigningKey,
+			name:           "state signing key",
+			secretUsage:    SecretUsageStateSigningKey,
+			wantSecretType: "secrets.pinniped.dev/federation-domain-state-signing-key",
 			wantSetFederationDomainField: func(federationDomain *configv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.StateSigningKey.Name
 			},
 		},
 		{
-			name:        "state encryption key",
-			secretUsage: SecretUsageStateEncryptionKey,
+			name:           "state encryption key",
+			secretUsage:    SecretUsageStateEncryptionKey,
+			wantSecretType: "secrets.pinniped.dev/federation-domain-state-encryption-key",
 			wantSetFederationDomainField: func(federationDomain *configv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.StateEncryptionKey.Name
 			},
@@ -92,7 +96,7 @@ func TestSymmetricSecretHelper(t *testing.T) {
 						}),
 					},
 				},
-				Type: "secrets.pinniped.dev/symmetric",
+				Type: test.wantSecretType,
 				Data: map[string][]byte{
 					"key": []byte(keyWith32Bytes),
 				},
@@ -110,55 +114,69 @@ func TestSymmetricSecretHelper(t *testing.T) {
 
 func TestSymmetricSecretHelperIsValid(t *testing.T) {
 	tests := []struct {
-		name   string
-		child  func(*corev1.Secret)
-		parent func(*configv1alpha1.FederationDomain)
-		want   bool
+		name        string
+		secretUsage SecretUsage
+		child       func(*corev1.Secret)
+		parent      func(*configv1alpha1.FederationDomain)
+		want        bool
 	}{
 		{
-			name: "wrong type",
+			name:        "wrong type",
+			secretUsage: SecretUsageTokenSigningKey,
 			child: func(s *corev1.Secret) {
 				s.Type = "wrong"
 			},
 			want: false,
 		},
 		{
-			name: "empty type",
+			name:        "empty type",
+			secretUsage: SecretUsageTokenSigningKey,
 			child: func(s *corev1.Secret) {
 				s.Type = ""
 			},
 			want: false,
 		},
 		{
-			name: "data key is too short",
+			name:        "data key is too short",
+			secretUsage: SecretUsageTokenSigningKey,
 			child: func(s *corev1.Secret) {
+				s.Type = FederationDomainTokenSigningKeyType
 				s.Data["key"] = []byte("short")
 			},
 			want: false,
 		},
 		{
-			name: "data key does not exist",
+			name:        "data key does not exist",
+			secretUsage: SecretUsageTokenSigningKey,
 			child: func(s *corev1.Secret) {
+				s.Type = FederationDomainTokenSigningKeyType
 				delete(s.Data, "key")
 			},
 			want: false,
 		},
 		{
-			name: "child not owned by parent",
+			name:        "child not owned by parent",
+			secretUsage: SecretUsageTokenSigningKey,
+			child: func(s *corev1.Secret) {
+				s.Type = FederationDomainTokenSigningKeyType
+			},
 			parent: func(federationDomain *configv1alpha1.FederationDomain) {
 				federationDomain.UID = "wrong"
 			},
 			want: false,
 		},
 		{
-			name: "happy path",
-			want: true,
+			name:        "happy path",
+			secretUsage: SecretUsageTokenSigningKey,
+			child: func(s *corev1.Secret) {
+				s.Type = FederationDomainTokenSigningKeyType
+			}, want: true,
 		},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			h := NewSymmetricSecretHelper("none of these args matter", nil, nil, SecretUsageTokenSigningKey, nil)
+			h := NewSymmetricSecretHelper("none of these args matter", nil, nil, test.secretUsage, nil)
 
 			parent := &configv1alpha1.FederationDomain{
 				ObjectMeta: metav1.ObjectMeta{
@@ -179,7 +197,7 @@ func TestSymmetricSecretHelperIsValid(t *testing.T) {
 						}),
 					},
 				},
-				Type: "secrets.pinniped.dev/symmetric",
+				Type: "invalid default",
 				Data: map[string][]byte{
 					"key": []byte(keyWith32Bytes),
 				},

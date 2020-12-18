@@ -54,21 +54,21 @@ func TestSupervisorSecrets(t *testing.T) {
 			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.TokenSigningKey.Name
 			},
-			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/symmetric"),
+			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/federation-domain-token-signing-key"),
 		},
 		{
 			name: "state signature secret",
 			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.StateSigningKey.Name
 			},
-			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/symmetric"),
+			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/federation-domain-state-signing-key"),
 		},
 		{
 			name: "state encryption secret",
 			secretName: func(federationDomain *configv1alpha1.FederationDomain) string {
 				return federationDomain.Status.Secrets.StateEncryptionKey.Name
 			},
-			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/symmetric"),
+			ensureValid: ensureValidSymmetricSecretOfTypeFunc("secrets.pinniped.dev/federation-domain-state-encryption-key"),
 		},
 	}
 	for _, test := range tests {

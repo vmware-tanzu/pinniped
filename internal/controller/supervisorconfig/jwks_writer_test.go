@@ -35,7 +35,7 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		secret     corev1.Secret
+		secret     metav1.Object
 		wantAdd    bool
 		wantUpdate bool
 		wantDelete bool
@@ -43,13 +43,15 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 	}{
 		{
 			name: "no owner reference",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type:       "secrets.pinniped.dev/federation-domain-jwks",
 				ObjectMeta: metav1.ObjectMeta{},
 			},
 		},
 		{
 			name: "owner reference without correct APIVersion",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/federation-domain-jwks",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
@@ -64,7 +66,8 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 		},
 		{
 			name: "owner reference without correct Kind",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/federation-domain-jwks",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
@@ -79,7 +82,8 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 		},
 		{
 			name: "owner reference without controller set to true",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/federation-domain-jwks",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
@@ -94,7 +98,8 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 		},
 		{
 			name: "correct owner reference",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/federation-domain-jwks",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
@@ -114,7 +119,8 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 		},
 		{
 			name: "multiple owner references",
-			secret: corev1.Secret{
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/federation-domain-jwks",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
@@ -134,6 +140,31 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 			wantUpdate: true,
 			wantDelete: true,
 			wantParent: controllerlib.Key{Namespace: "some-namespace", Name: "some-name"},
+		},
+		{
+			name: "correct owner reference but wrong type",
+			secret: &corev1.Secret{
+				Type: "secrets.pinniped.dev/some-other-type",
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "some-namespace",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: configv1alpha1.SchemeGroupVersion.String(),
+							Kind:       "FederationDomain",
+							Name:       "some-name",
+							Controller: boolPtr(true),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "resource of wrong data type",
+			secret: &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "some-namespace",
+				},
+			},
 		},
 	}
 	for _, test := range tests {
@@ -161,11 +192,11 @@ func TestJWKSWriterControllerFilterSecret(t *testing.T) {
 
 			unrelated := corev1.Secret{}
 			filter := withInformer.GetFilterForInformer(secretInformer)
-			require.Equal(t, test.wantAdd, filter.Add(&test.secret))
-			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, &test.secret))
-			require.Equal(t, test.wantUpdate, filter.Update(&test.secret, &unrelated))
-			require.Equal(t, test.wantDelete, filter.Delete(&test.secret))
-			require.Equal(t, test.wantParent, filter.Parent(&test.secret))
+			require.Equal(t, test.wantAdd, filter.Add(test.secret))
+			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.secret))
+			require.Equal(t, test.wantUpdate, filter.Update(test.secret, &unrelated))
+			require.Equal(t, test.wantDelete, filter.Delete(test.secret))
+			require.Equal(t, test.wantParent, filter.Parent(test.secret))
 		})
 	}
 }

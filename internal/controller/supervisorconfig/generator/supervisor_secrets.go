@@ -58,8 +58,15 @@ func NewSupervisorSecretsController(
 		withInformer(
 			secretInformer,
 			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
-				ownerReferences := obj.GetOwnerReferences()
-				for i := range obj.GetOwnerReferences() {
+				secret, ok := obj.(*corev1.Secret)
+				if !ok {
+					return false
+				}
+				if secret.Type != SupervisorCSRFSigningKeySecretType {
+					return false
+				}
+				ownerReferences := secret.GetOwnerReferences()
+				for i := range secret.GetOwnerReferences() {
 					if ownerReferences[i].UID == owner.GetUID() {
 						return true
 					}

@@ -4,6 +4,7 @@
 package controller
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/controllerlib"
@@ -29,6 +30,30 @@ func SimpleFilter(match func(metav1.Object) bool, parentFunc controllerlib.Paren
 		UpdateFunc: func(oldObj, newObj metav1.Object) bool { return match(oldObj) || match(newObj) },
 		DeleteFunc: match,
 		ParentFunc: parentFunc,
+	}
+}
+
+func MatchAnySecretOfTypeFilter(secretType v1.SecretType, parentFunc controllerlib.ParentFunc) controllerlib.Filter {
+	isSecretOfType := func(obj metav1.Object) bool {
+		secret, ok := obj.(*v1.Secret)
+		if !ok {
+			return false
+		}
+		return secret.Type == secretType
+	}
+	return SimpleFilter(isSecretOfType, parentFunc)
+}
+
+func SecretIsControlledByParentFunc(matchFunc func(obj metav1.Object) bool) func(obj metav1.Object) controllerlib.Key {
+	return func(obj metav1.Object) controllerlib.Key {
+		if matchFunc(obj) {
+			controller := metav1.GetControllerOf(obj)
+			return controllerlib.Key{
+				Name:      controller.Name,
+				Namespace: obj.GetNamespace(),
+			}
+		}
+		return controllerlib.Key{}
 	}
 }
 

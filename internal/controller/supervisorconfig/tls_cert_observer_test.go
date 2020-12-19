@@ -59,16 +59,24 @@ func TestTLSCertObserverControllerInformerFilters(t *testing.T) {
 
 			it.Before(func() {
 				subject = secretsInformerFilter
-				secret = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: "any-namespace"}}
-				otherSecret = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "any-other-name", Namespace: "any-other-namespace"}}
+				secret = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: "any-namespace"}, Type: corev1.SecretTypeTLS}
+				otherSecret = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "any-other-name", Namespace: "any-other-namespace"}, Type: "other type"}
 			})
 
-			when("any Secret changes", func() {
+			when("any Secret of type TLS changes", func() {
 				it("returns true to trigger the sync method", func() {
 					r.True(subject.Add(secret))
 					r.True(subject.Update(secret, otherSecret))
 					r.True(subject.Update(otherSecret, secret))
 					r.True(subject.Delete(secret))
+				})
+			})
+
+			when("any Secret that is not of type TLS changes", func() {
+				it("returns false to avoid triggering the sync method", func() {
+					r.False(subject.Add(otherSecret))
+					r.False(subject.Update(otherSecret, otherSecret))
+					r.False(subject.Delete(otherSecret))
 				})
 			})
 		})

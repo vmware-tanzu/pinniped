@@ -44,11 +44,12 @@ func TestStorageGarbageCollection(t *testing.T) {
 	}
 
 	// Start a background goroutine which will end as soon as the test ends.
-	// Keep updating a secret in the same namespace just to get the controller to respond faster.
-	// This is just a performance optimization because otherwise this test has to wait
-	// ~3 minutes for the controller's next full-resync.
+	// Keep updating a secret which has the "storage.pinniped.dev/garbage-collect-after" annotation
+	// in the same namespace just to get the controller to respond faster.
+	// This is just a performance optimization to make this test pass faster because otherwise
+	// this test has to wait ~3 minutes for the controller's next full-resync.
 	stopCh := make(chan bool, 1) // It is important that this channel be buffered.
-	go createAndUpdateSecretEveryTwoSeconds(t, stopCh, secrets)
+	go updateSecretEveryTwoSeconds(t, stopCh, secrets, secretNotYetExpired)
 	t.Cleanup(func() {
 		stopCh <- true
 	})
@@ -68,11 +69,9 @@ func TestStorageGarbageCollection(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func createAndUpdateSecretEveryTwoSeconds(t *testing.T, stopCh chan bool, secrets corev1client.SecretInterface) {
+func updateSecretEveryTwoSeconds(t *testing.T, stopCh chan bool, secrets corev1client.SecretInterface, secret *v1.Secret) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-
-	unrelatedSecret := createSecret(ctx, t, secrets, "unrelated-to-gc", time.Time{})
 
 	i := 0
 	for {
@@ -87,9 +86,9 @@ func createAndUpdateSecretEveryTwoSeconds(t *testing.T, stopCh chan bool, secret
 		time.Sleep(2 * time.Second)
 
 		i++
-		unrelatedSecret.Data["foo"] = []byte(fmt.Sprintf("bar-%d", i))
+		secret.Data["foo"] = []byte(fmt.Sprintf("bar-%d", i))
 		var updateErr error
-		unrelatedSecret, updateErr = secrets.Update(ctx, unrelatedSecret, metav1.UpdateOptions{})
+		secret, updateErr = secrets.Update(ctx, secret, metav1.UpdateOptions{})
 		require.NoError(t, updateErr)
 	}
 }
@@ -125,6 +124,6 @@ func newSecret(namePrefix string, expiresAt time.Time) *v1.Secret {
 			Annotations:  annotations,
 		},
 		Data: map[string][]byte{"some-key": []byte("fake-data")},
-		Type: "storage.pinniped.dev/gc-test-integration-test",
+		Type: "storage.pinniped.dev/gc-test-integration-test", // the garbage collector controller doesn't care about the type
 	}
 }

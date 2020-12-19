@@ -9,12 +9,11 @@
 package mocksecrethelper
 
 import (
-	reflect "reflect"
-
 	gomock "github.com/golang/mock/gomock"
-	v1 "k8s.io/api/core/v1"
-
 	v1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
+	v1 "k8s.io/api/core/v1"
+	v10 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	reflect "reflect"
 )
 
 // MockSecretHelper is a mock of SecretHelper interface
@@ -53,6 +52,20 @@ func (m *MockSecretHelper) Generate(arg0 *v1alpha1.FederationDomain) (*v1.Secret
 func (mr *MockSecretHelperMockRecorder) Generate(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Generate", reflect.TypeOf((*MockSecretHelper)(nil).Generate), arg0)
+}
+
+// Handles mocks base method
+func (m *MockSecretHelper) Handles(arg0 v10.Object) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Handles", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Handles indicates an expected call of Handles
+func (mr *MockSecretHelperMockRecorder) Handles(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Handles", reflect.TypeOf((*MockSecretHelper)(nil).Handles), arg0)
 }
 
 // IsValid mocks base method

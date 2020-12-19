@@ -26,6 +26,7 @@ import (
 	pinnipedclientset "go.pinniped.dev/generated/1.19/client/supervisor/clientset/versioned"
 	configinformers "go.pinniped.dev/generated/1.19/client/supervisor/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	"go.pinniped.dev/internal/controller/supervisorconfig/generator"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/plog"
 )
@@ -76,6 +77,10 @@ func NewJWKSWriterController(
 	federationDomainInformer configinformers.FederationDomainInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
+	isSecretToSync := func(obj metav1.Object) bool {
+		return generator.IsFederationDomainSecretOfType(obj, jwksSecretTypeValue)
+	}
+
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "JWKSController",
@@ -91,23 +96,7 @@ func NewJWKSWriterController(
 		// should get notified via the corresponding FederationDomain key.
 		withInformer(
 			secretInformer,
-			controllerlib.FilterFuncs{
-				ParentFunc: func(obj metav1.Object) controllerlib.Key {
-					if isFederationDomainControllee(obj) {
-						controller := metav1.GetControllerOf(obj)
-						return controllerlib.Key{
-							Name:      controller.Name,
-							Namespace: obj.GetNamespace(),
-						}
-					}
-					return controllerlib.Key{}
-				},
-				AddFunc: isFederationDomainControllee,
-				UpdateFunc: func(oldObj, newObj metav1.Object) bool {
-					return isFederationDomainControllee(oldObj) || isFederationDomainControllee(newObj)
-				},
-				DeleteFunc: isFederationDomainControllee,
-			},
+			pinnipedcontroller.SimpleFilter(isSecretToSync, pinnipedcontroller.SecretIsControlledByParentFunc(isSecretToSync)),
 			controllerlib.InformerOption{},
 		),
 		// We want to be notified when anything happens to an FederationDomain.
@@ -314,14 +303,6 @@ func (c *jwksWriterController) updateFederationDomain(
 		_, err = federationDomainClient.Update(ctx, oldFederationDomain, metav1.UpdateOptions{})
 		return err
 	})
-}
-
-// isFederationDomainControlle returns whether the provided obj is controlled by a FederationDomain.
-func isFederationDomainControllee(obj metav1.Object) bool {
-	controller := metav1.GetControllerOf(obj)
-	return controller != nil &&
-		controller.APIVersion == configv1alpha1.SchemeGroupVersion.String() &&
-		controller.Kind == federationDomainKind
 }
 
 // isValid returns whether the provided secret contains a valid active JWK and verification JWKS.

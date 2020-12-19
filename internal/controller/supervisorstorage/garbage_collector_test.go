@@ -48,22 +48,47 @@ func TestGarbageCollectorControllerInformerFilters(t *testing.T) {
 
 		when("watching Secret objects", func() {
 			var (
-				subject             controllerlib.Filter
-				secret, otherSecret *corev1.Secret
+				subject                           controllerlib.Filter
+				secretWithAnnotation, otherSecret *corev1.Secret
 			)
 
 			it.Before(func() {
 				subject = secretsInformerFilter
-				secret = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: "any-namespace"}}
-				otherSecret = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "any-other-name", Namespace: "any-other-namespace"}}
+				secretWithAnnotation = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: "any-namespace", Annotations: map[string]string{
+					"storage.pinniped.dev/garbage-collect-after": "some timestamp",
+				}}}
+				otherSecret = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "any-other-name", Namespace: "any-namespace"}}
 			})
 
-			when("any Secret changes", func() {
-				it("returns true to trigger the sync function for all secrets", func() {
-					r.True(subject.Add(secret))
-					r.True(subject.Update(secret, otherSecret))
-					r.True(subject.Update(otherSecret, secret))
-					r.True(subject.Delete(secret))
+			when("any Secret with the required annotation is added or updated", func() {
+				it("returns true to trigger the sync function", func() {
+					r.True(subject.Add(secretWithAnnotation))
+					r.True(subject.Update(secretWithAnnotation, otherSecret))
+					r.True(subject.Update(otherSecret, secretWithAnnotation))
+				})
+			})
+
+			when("any Secret with the required annotation is deleted", func() {
+				it("returns false to skip the sync function because it does not need to worry about secrets that are already gone", func() {
+					r.False(subject.Delete(secretWithAnnotation))
+				})
+			})
+
+			when("any Secret without the required annotation changes", func() {
+				it("returns false to skip the sync function", func() {
+					r.False(subject.Add(otherSecret))
+					r.False(subject.Update(otherSecret, otherSecret))
+					r.False(subject.Delete(otherSecret))
+				})
+			})
+
+			when("any other type is passed", func() {
+				it("returns false to skip the sync function", func() {
+					wrongType := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "some-ns", Namespace: "some-ns"}}
+
+					r.False(subject.Add(wrongType))
+					r.False(subject.Update(wrongType, wrongType))
+					r.False(subject.Delete(wrongType))
 				})
 			})
 		})

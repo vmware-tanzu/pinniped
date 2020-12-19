@@ -237,7 +237,9 @@ func startControllers(
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				secretInformer,
-				klogr.New()),
+				klogr.New(),
+				controllerlib.WithInformer,
+			),
 			singletonWorker)
 
 	kubeInformers.Start(ctx.Done())

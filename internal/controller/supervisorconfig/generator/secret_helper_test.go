@@ -108,6 +108,14 @@ func TestSymmetricSecretHelper(t *testing.T) {
 			require.Equal(t, parent.Spec.Issuer, federationDomainIssuerValue)
 			require.Equal(t, child.Name, test.wantSetFederationDomainField(parent))
 			require.Equal(t, child.Data["key"], symmetricKeyValue)
+
+			require.True(t, h.Handles(child))
+			wrongTypedChild := child.DeepCopy()
+			wrongTypedChild.Type = "the-wrong-type"
+			require.False(t, h.Handles(wrongTypedChild))
+			wrongOwnerKindChild := child.DeepCopy()
+			wrongOwnerKindChild.OwnerReferences[0].Kind = "WrongKind"
+			require.False(t, h.Handles(wrongOwnerKindChild))
 		})
 	}
 }

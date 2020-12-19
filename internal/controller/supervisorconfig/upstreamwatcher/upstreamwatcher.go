@@ -117,6 +117,7 @@ func New(
 	oidcIdentityProviderInformer idpinformers.OIDCIdentityProviderInformer,
 	secretInformer corev1informers.SecretInformer,
 	log logr.Logger,
+	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	c := controller{
 		cache:                        idpCache,
@@ -126,11 +127,18 @@ func New(
 		secretInformer:               secretInformer,
 		validatorCache:               &lruValidatorCache{cache: cache.NewExpiring()},
 	}
-	filter := pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue())
 	return controllerlib.New(
 		controllerlib.Config{Name: controllerName, Syncer: &c},
-		controllerlib.WithInformer(oidcIdentityProviderInformer, filter, controllerlib.InformerOption{}),
-		controllerlib.WithInformer(secretInformer, filter, controllerlib.InformerOption{}),
+		withInformer(
+			oidcIdentityProviderInformer,
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
+			controllerlib.InformerOption{},
+		),
+		withInformer(
+			secretInformer,
+			pinnipedcontroller.MatchAnySecretOfTypeFilter(oidcClientSecretType, pinnipedcontroller.SingletonQueue()),
+			controllerlib.InformerOption{},
+		),
 	)
 }
 

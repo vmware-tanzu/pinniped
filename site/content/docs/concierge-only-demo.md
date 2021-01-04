@@ -1,10 +1,10 @@
 ---
-title: "Pinniped Demo"
+title: "Pinniped Concierge Only Demo"
 cascade:
   layout: docs
 ---
 
-# Trying Pinniped
+# Trying Pinniped Concierge
 
 ## Prerequisites
 
@@ -88,7 +88,7 @@ as the authenticator.
    see [deploy/local-user-authenticator/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/local-user-authenticator/README.md)
    for instructions on how to deploy using `ytt`.
 
-1. Create a test user named `pinny-the-seal` in the local-user-authenticator.
+1. Create a test user named `pinny-the-seal` in the local-user-authenticator namespace.
 
    ```bash
    kubectl create secret generic pinny-the-seal \

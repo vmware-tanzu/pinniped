@@ -8,31 +8,29 @@ cascade:
 
 ## Prerequisites
 
-1. A Kubernetes clusters of a type supported by Pinniped Concierge as described in [architecture](/docs/architecture).
+1. A Kubernetes cluster of a type supported by Pinniped Concierge as described in [architecture](/docs/architecture).
 
    Don't have a cluster handy? Consider using [kind](https://kind.sigs.k8s.io/) on your local machine.
    See below for an example of using kind.
 
-1. A Kubernetes clusters of a type supported by Pinniped Supervisor (this can be the same cluster as the above, or different).
+1. A Kubernetes cluster of a type supported by Pinniped Supervisor (this can be the same cluster as the above, or different).
 
-1. A kubeconfig where the current context points to the cluster and has admin-like privileges on each cluster.
+1. A kubeconfig that has admin-like privileges on each cluster.
 
 1. An external OIDC identity provider to use as the source of identity for Pinniped.
 
 ## Overview
 
 Installing and trying Pinniped on any cluster will consist of the following general steps. See the next section below
-for a more specific example, including the exact commands to use for that case.
+for a more specific example, including the commands to use for that case.
 
 1. Install the Pinniped Supervisor. See [deploy/supervisor/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/supervisor/README.md).
 1. Create a
    [`FederationDomain`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-config-v1alpha1-federationdomain)
    via the installed Pinniped Supervisor.
-1. Create a
+1. Create an
    [`OIDCIdentityProvider`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcidentityprovider)
-   via the installed Pinniped Supervisor. This
-   [`OIDCIdentityProvider`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcidentityprovider)
-   should point to a valid external OIDC identity provider with a valid client registered.
+   via the installed Pinniped Supervisor.
 1. Install the Pinniped Concierge. See [deploy/concierge/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/concierge/README.md).
 1. Create a
    [`JWTAuthenticator`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-jwtauthenticator)
@@ -44,14 +42,14 @@ for a more specific example, including the exact commands to use for that case.
 ## Example of Deploying on Multiple kind Clusters
 
 [kind](https://kind.sigs.k8s.io) is a tool for creating and managing Kubernetes clusters on your local machine
-which uses Docker containers as the cluster's "nodes". This is a convenient way to try out Pinniped on a local
-non-production cluster.
+which uses Docker containers as the cluster's "nodes". This is a convenient way to try out Pinniped on local
+non-production clusters.
 
 The following steps will deploy the latest release of Pinniped on kind. It will deploy the Pinniped
 Supervisor on one cluster, and the Pinniped Concierge on another cluster. A multi-cluster deployment
-strategy is common for Pinniped. The Pinniped Concierge will use a
+strategy is typical for Pinniped. The Pinniped Concierge will use a
 [`JWTAuthenticator`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-jwtauthenticator)
-to authenticate federated identities from the Supervisor
+to authenticate federated identities from the Supervisor.
 
 1. Install the tools required for the following steps.
 
@@ -80,7 +78,9 @@ to authenticate federated identities from the Supervisor
    This demo uses a `Secret` named `my-federation-domain-tls` to provide the serving certificate for
    the
    [`FederationDomain`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-config-v1alpha1-federationdomain). The
-   service certificate `Secret` must be of type `kubernetes.io/tls`. The CA bundle for this serving
+   serving certificate `Secret` must be of type `kubernetes.io/tls`.
+
+   The CA bundle for this serving
    certificate is assumed to be written, base64-encoded, to a file named
    `/tmp/pinniped-supervisor-ca-bundle-base64-encoded.pem`.
 
@@ -107,7 +107,7 @@ to authenticate federated identities from the Supervisor
    ```bash
    kubectl create secret generic my-oidc-identity-provider-client \
      --context kind-pinniped-supervisor \
-     --namespace local-user-authenticator \
+     --namespace pinniped-supervisor \
      --type secrets.pinniped.dev/oidc-client \
      --from-literal=clientID=xxx \
      --from-literal=clientSecret=yyy
@@ -118,7 +118,8 @@ to authenticate federated identities from the Supervisor
    object to configure the Pinniped Supervisor to federate identities from an upstream OIDC identity
    provider.
 
-   This external OIDC identity provider is specific to this demo.
+   Replace the `issuer` with your external identity provider's issuer and
+   adjust any other configuration on the spec.
 
    ```bash
    cat <<EOF | kubectl create --context kind-pinniped-supervisor --namespace pinniped-supervisor -f -
@@ -127,9 +128,11 @@ to authenticate federated identities from the Supervisor
    metadata:
      name: my-oidc-identity-provider
    spec:
-     issuer: https://dev-xxxxxx.okta.com/oauth2/default
+     issuer: https://dev-zzz.okta.com/oauth2/default
      claims:
        username: email
+     authorizationConfig:
+       additionalScopes: ['email']
      client:
        secretName: my-oidc-identity-provider-client
    EOF
@@ -142,8 +145,8 @@ to authenticate federated identities from the Supervisor
    pinniped_version=$(curl https://api.github.com/repos/vmware-tanzu/pinniped/releases/latest -s | jq .name -r)
    ```
 
-   Alternatively, [any release version](https://github.com/vmware-tanzu/pinniped/releases)
-   you can manually select this version of Pinniped.
+   Alternatively, you can manually select [any release version](https://github.com/vmware-tanzu/pinniped/releases)
+   of Pinniped.
 
    ```bash
    # Example of manually choosing a release version...
@@ -191,12 +194,10 @@ to authenticate federated identities from the Supervisor
 1. Move the Pinniped CLI binary to your preferred filename and directory. Add the executable bit,
    e.g. `chmod +x /usr/local/bin/pinniped`.
 
-1. Generate a kubeconfig for the current cluster. Use `--static-token` to include a token which should
-   allow you to authenticate as the user that you created above.
-
+1. Generate a kubeconfig for the current cluster.
    ```bash
    pinniped get kubeconfig \
-     --context kind-pinniped-concierge \
+     --kubeconfig-context kind-pinniped-concierge \
      --concierge-namespace pinniped-concierge \
      > /tmp/pinniped-kubeconfig
    ```
@@ -209,26 +210,27 @@ to authenticate federated identities from the Supervisor
    Click Open to allow the command to proceed.
 
 1. Try using the generated kubeconfig to issue arbitrary `kubectl` commands. The `pinniped` CLI will
-   open a browser page on which can be used to login to the external OIDC identity provider configured earlier.
+   open a browser page that can be used to login to the external OIDC identity provider configured earlier.
 
    ```bash
-   kubectl --context kind-pinniped-concierge --kubeconfig /tmp/pinniped-kubeconfig get pods -n pinniped-concierge
+   kubectl --kubeconfig /tmp/pinniped-kubeconfig get pods -n pinniped-concierge
    ```
 
-   Because this user has no RBAC permissions on this cluster, the previous command results in the
-   error `Error from server (Forbidden): pods is forbidden: User "xxx" cannot list resource "pods"
-   in API group "" in the namespace "pinniped"`, where `xxx` is the username that was used to login
+   Because this user has no RBAC permissions on this cluster, the previous command results in an
+   error that is similar to 
+   `Error from server (Forbidden): pods is forbidden: User "pinny" cannot list resource "pods"
+   in API group "" in the namespace "pinniped"`, where `pinny` is the username that was used to login
    to the upstream OIDC identity provider. However, this does prove that you are authenticated and
-   acting as the `xxx` user.
+   acting as the `pinny` user.
 
 1. As the admin user, create RBAC rules for the test user to give them permissions to perform actions on the cluster.
    For example, grant the test user permission to view all cluster resources.
 
    ```bash
-   kubectl create clusterrolebinding pinny-can-read --clusterrole view --user xxx
+   kubectl --context kind-pinniped-concierge create clusterrolebinding pinny-can-read --clusterrole view --user pinny
    ```
 
-1. Use the generated kubeconfig to issue arbitrary `kubectl` commands as the `xxx` user.
+1. Use the generated kubeconfig to issue arbitrary `kubectl` commands as the `pinny` user.
 
    ```bash
    kubectl --kubeconfig /tmp/pinniped-kubeconfig get pods -n pinniped-concierge
@@ -237,7 +239,7 @@ to authenticate federated identities from the Supervisor
    The user has permission to list pods, so the command succeeds this time.
    Pinniped has provided authentication into the cluster for your `kubectl` command! 🎉
 
-1. Carry on issuing as many `kubectl` commands as you'd like as the `xxx` user.
+1. Carry on issuing as many `kubectl` commands as you'd like as the `pinny` user.
    Each invocation will use Pinniped for authentication.
    You may find it convenient to set the `KUBECONFIG` environment variable rather than passing `--kubeconfig` to each invocation.
 

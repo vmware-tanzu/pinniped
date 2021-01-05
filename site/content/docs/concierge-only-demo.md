@@ -68,8 +68,8 @@ as the authenticator.
    pinniped_version=$(curl https://api.github.com/repos/vmware-tanzu/pinniped/releases/latest -s | jq .name -r)
    ```
 
-   Alternatively, [any release version](https://github.com/vmware-tanzu/pinniped/releases)
-   you can manually select this version of Pinniped.
+   Alternatively, you can manually select [any release version](https://github.com/vmware-tanzu/pinniped/releases)
+   of Pinniped.
 
    ```bash
    # Example of manually choosing a release version...

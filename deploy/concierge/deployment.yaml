@@ -148,6 +148,9 @@ spec:
               - path: "labels"
                 fieldRef:
                   fieldPath: metadata.labels
+              - path: "name"
+                fieldRef:
+                  fieldPath: metadata.name
               - path: "namespace"
                 fieldRef:
                   fieldPath: metadata.namespace

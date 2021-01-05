@@ -1,3 +1,7 @@
+#!/bin/bash
+
+# Copyright 2021 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Check if copyright statements include the current year
 #
@@ -16,6 +20,6 @@ if [ -n "$missing_copyright_files" ]; then
     echo "$year is missing in the copyright notice of the following files:"
     for f in $missing_copyright_files; do
         echo "    $f"
-    done 
+    done
     exit 1
 fi

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package generator
@@ -25,7 +25,6 @@ import (
 	"go.pinniped.dev/internal/testutil"
 )
 
-// this is a comment
 var (
 	owner = &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{

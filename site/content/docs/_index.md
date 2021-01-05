@@ -36,7 +36,7 @@ distributions to make authentication possible.
 
 To learn more, see [docs/architecture](/docs/architecture).
 
-<img src="docs/img/pinniped_architecture.svg" alt="Pinniped Architecture Sketch" width="300px"/>
+<img src="docs/img/pinniped_architecture_concierge_supervisor.svg" alt="Pinniped Architecture Sketch" width="300px"/>
 
 ## Trying Pinniped
 

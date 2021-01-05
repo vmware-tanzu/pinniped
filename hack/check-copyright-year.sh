@@ -1,8 +1,8 @@
 #
 # Check if copyright statements include the current year
 #
-files=git diff --cached --name-only
-year=date +"%Y"
+files=$(git diff --cached --name-only)
+year=$(date +"%Y")
 
 for f in $files; do
     head -10 $f | grep -i copyright 2>&1 1>/dev/null || continue

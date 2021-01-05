@@ -25,6 +25,7 @@ import (
 	"go.pinniped.dev/internal/testutil"
 )
 
+// this is a comment
 var (
 	owner = &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{

@@ -41,7 +41,7 @@ credentials.
 
 To learn more, see [architecture](https://pinniped.dev/docs/architecture/).
 
-<img src="site/content/docs/img/pinniped_architecture_concierge_supervisor.svg" alt="Pinniped Architecture Sketch" width="300px"/>
+<img src="site/content/docs/img/pinniped_architecture_concierge_supervisor.svg" alt="Pinniped Architecture Sketch"/>
 
 ## Trying Pinniped
 

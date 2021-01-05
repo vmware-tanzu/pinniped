@@ -15,3 +15,7 @@ repos:
   - id: detect-private-key
     exclude: testdata
   - id: mixed-line-ending
+- repo: .
+  rev: main
+  hooks:
+  - id: validate-copyright-year

@@ -268,20 +268,18 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 		generatedSymmetricKey      = []byte("some-neato-32-byte-generated-key")
 		otherGeneratedSymmetricKey = []byte("some-funio-32-byte-generated-key")
 
-		blockOwnerDeletion = true
-		isController       = false
-		generatedSecret    = &corev1.Secret{
+		isController    = false
+		generatedSecret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      generatedSecretName,
 				Namespace: generatedSecretNamespace,
 				OwnerReferences: []metav1.OwnerReference{
 					{
-						APIVersion:         ownerGVK.GroupVersion().String(),
-						Kind:               ownerGVK.Kind,
-						Name:               owner.GetName(),
-						UID:                owner.GetUID(),
-						BlockOwnerDeletion: &blockOwnerDeletion,
-						Controller:         &isController,
+						APIVersion: ownerGVK.GroupVersion().String(),
+						Kind:       ownerGVK.Kind,
+						Name:       owner.GetName(),
+						UID:        owner.GetUID(),
+						Controller: &isController,
 					},
 				},
 				Labels: labels,
@@ -298,12 +296,11 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 				Namespace: generatedSecretNamespace,
 				OwnerReferences: []metav1.OwnerReference{
 					{
-						APIVersion:         ownerGVK.GroupVersion().String(),
-						Kind:               ownerGVK.Kind,
-						Name:               owner.GetName(),
-						UID:                owner.GetUID(),
-						BlockOwnerDeletion: &blockOwnerDeletion,
-						Controller:         &isController,
+						APIVersion: ownerGVK.GroupVersion().String(),
+						Kind:       ownerGVK.Kind,
+						Name:       owner.GetName(),
+						UID:        owner.GetUID(),
+						Controller: &isController,
 					},
 				},
 				Labels: labels,

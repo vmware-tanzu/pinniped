@@ -17,6 +17,7 @@ for f in $files; do
 done
 
 if [ -n "$missing_copyright_files" ]; then
+    echo "Copyright notice should include the year the file was created and the year the file was last modified."
     echo "$year is missing in the copyright notice of the following files:"
     for f in $missing_copyright_files; do
         echo "    $f"

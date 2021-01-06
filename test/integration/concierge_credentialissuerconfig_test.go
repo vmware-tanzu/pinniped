@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -60,6 +60,16 @@ func TestCredentialIssuer(t *testing.T) {
 				},
 				actualStatusKubeConfigInfo,
 			)
+
+			// Only validate LastUpdateTime when cluster signing key is available. The last update time
+			// will be set every time our controllers resync, but only when there exists controller
+			// manager pods (all other pods will be filtered out), hence why this assertion is in this
+			// if branch.
+			//
+			// This behavior is up for debate. We should eventually discuss the contract for this
+			// LastUpdateTime field and ensure that the implementation is the same for when the cluster
+			// signing key is available and not available.
+			require.WithinDuration(t, time.Now(), actualStatusStrategy.LastUpdateTime.Local(), 10*time.Minute)
 		} else {
 			require.Equal(t, configv1alpha1.ErrorStrategyStatus, actualStatusStrategy.Status)
 			require.Equal(t, configv1alpha1.CouldNotFetchKeyStrategyReason, actualStatusStrategy.Reason)
@@ -69,7 +79,5 @@ func TestCredentialIssuer(t *testing.T) {
 			// Require `nil` to remind us to address this later for other types of clusters where it is available.
 			require.Nil(t, actualStatusKubeConfigInfo)
 		}
-
-		require.WithinDuration(t, time.Now(), actualStatusStrategy.LastUpdateTime.Local(), 10*time.Minute)
 	})
 }

@@ -206,7 +206,6 @@ func generateSecret(namespace, name string, labels map[string]string, secretData
 		Kind:    "Deployment",
 	}
 
-	blockOwnerDeletion := true
 	isController := false
 
 	return &corev1.Secret{
@@ -215,12 +214,11 @@ func generateSecret(namespace, name string, labels map[string]string, secretData
 			Namespace: namespace,
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					APIVersion:         deploymentGVK.GroupVersion().String(),
-					Kind:               deploymentGVK.Kind,
-					Name:               owner.GetName(),
-					UID:                owner.GetUID(),
-					BlockOwnerDeletion: &blockOwnerDeletion,
-					Controller:         &isController,
+					APIVersion: deploymentGVK.GroupVersion().String(),
+					Kind:       deploymentGVK.Kind,
+					Name:       owner.GetName(),
+					UID:        owner.GetUID(),
+					Controller: &isController,
 				},
 			},
 			Labels: labels,

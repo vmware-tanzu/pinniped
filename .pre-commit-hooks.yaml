@@ -1,0 +1,4 @@
+- id: validate-copyright-year
+  name: Validate copyright year
+  entry: hack/check-copyright-year.sh
+  language: script

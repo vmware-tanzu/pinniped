@@ -1,0 +1,651 @@
+// Generated documentation. Please do not edit.
+:anchor_prefix: k8s-api
+
+[id="{p}-api-reference"]
+== API Reference
+
+.Packages
+- xref:{anchor_prefix}-authentication-concierge-pinniped-dev-v1alpha1[$$authentication.concierge.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-config-concierge-pinniped-dev-v1alpha1[$$config.concierge.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-config-supervisor-pinniped-dev-v1alpha1[$$config.supervisor.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-idp-supervisor-pinniped-dev-v1alpha1[$$idp.supervisor.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-login-concierge-pinniped-dev-v1alpha1[$$login.concierge.pinniped.dev/v1alpha1$$]
+
+
+[id="{anchor_prefix}-authentication-concierge-pinniped-dev-v1alpha1"]
+=== authentication.concierge.pinniped.dev/v1alpha1
+
+Package v1alpha1 is the v1alpha1 version of the Pinniped concierge authentication API.
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-condition"]
+==== Condition 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-jwtauthenticatorstatus[$$JWTAuthenticatorStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-webhookauthenticatorstatus[$$WebhookAuthenticatorStatus$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`type`* __string__ | type of condition in CamelCase or in foo.example.com/CamelCase. --- Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be useful (see .node.status.conditions), the ability to deconflict is important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+| *`status`* __ConditionStatus__ | status of the condition, one of True, False, Unknown.
+| *`observedGeneration`* __integer__ | observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance.
+| *`lastTransitionTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#time-v1-meta[$$Time$$]__ | lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+| *`reason`* __string__ | reason contains a programmatic identifier indicating the reason for the condition's last transition. Producers of specific condition types may define expected values and meanings for this field, and whether the values are considered a guaranteed API. The value should be a CamelCase string. This field may not be empty.
+| *`message`* __string__ | message is a human readable message indicating details about the transition. This may be an empty string.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-conditionstatus"]
+==== ConditionStatus (string) 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-condition[$$Condition$$]
+****
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-jwtauthenticator"]
+==== JWTAuthenticator 
+
+JWTAuthenticator describes the configuration of a JWT authenticator. 
+ Upon receiving a signed JWT, a JWTAuthenticator will performs some validation on it (e.g., valid signature, existence of claims, etc.) and extract the username and groups from the token.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-jwtauthenticatorlist[$$JWTAuthenticatorList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]__ | Spec for configuring the authenticator.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-jwtauthenticatorstatus[$$JWTAuthenticatorStatus$$]__ | Status of the authenticator.
+|===
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec"]
+==== JWTAuthenticatorSpec 
+
+Spec for configuring a JWT authenticator.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-jwtauthenticator[$$JWTAuthenticator$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`issuer`* __string__ | Issuer is the OIDC issuer URL that will be used to discover public signing keys. Issuer is also used to validate the "iss" JWT claim.
+| *`audience`* __string__ | Audience is the required value of the "aud" JWT claim.
+| *`claims`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-jwttokenclaims[$$JWTTokenClaims$$]__ | Claims allows customization of the claims that will be mapped to user identity for Kubernetes access.
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration for communicating with the OIDC provider.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-jwtauthenticatorstatus"]
+==== JWTAuthenticatorStatus 
+
+Status of a JWT authenticator.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-jwtauthenticator[$$JWTAuthenticator$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-condition[$$Condition$$] array__ | Represents the observations of the authenticator's current state.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-jwttokenclaims"]
+==== JWTTokenClaims 
+
+JWTTokenClaims allows customization of the claims that will be mapped to user identity for Kubernetes access.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`groups`* __string__ | Groups is the name of the claim which should be read to extract the user's group membership from the JWT token. When not specified, it will default to "groups".
+| *`username`* __string__ | Username is the name of the claim which should be read to extract the username from the JWT token. When not specified, it will default to "username".
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-tlsspec"]
+==== TLSSpec 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-webhookauthenticatorspec[$$WebhookAuthenticatorSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`certificateAuthorityData`* __string__ | X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-webhookauthenticator"]
+==== WebhookAuthenticator 
+
+WebhookAuthenticator describes the configuration of a webhook authenticator.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-webhookauthenticatorlist[$$WebhookAuthenticatorList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-webhookauthenticatorspec[$$WebhookAuthenticatorSpec$$]__ | Spec for configuring the authenticator.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-webhookauthenticatorstatus[$$WebhookAuthenticatorStatus$$]__ | Status of the authenticator.
+|===
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-webhookauthenticatorspec"]
+==== WebhookAuthenticatorSpec 
+
+Spec for configuring a webhook authenticator.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-webhookauthenticator[$$WebhookAuthenticator$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`endpoint`* __string__ | Webhook server endpoint URL.
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-webhookauthenticatorstatus"]
+==== WebhookAuthenticatorStatus 
+
+Status of a webhook authenticator.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-webhookauthenticator[$$WebhookAuthenticator$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-authentication-v1alpha1-condition[$$Condition$$] array__ | Represents the observations of the authenticator's current state.
+|===
+
+
+
+[id="{anchor_prefix}-config-concierge-pinniped-dev-v1alpha1"]
+=== config.concierge.pinniped.dev/v1alpha1
+
+Package v1alpha1 is the v1alpha1 version of the Pinniped concierge configuration API.
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuer"]
+==== CredentialIssuer 
+
+Describes the configuration status of a Pinniped credential issuer.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerlist[$$CredentialIssuerList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerstatus[$$CredentialIssuerStatus$$]__ | Status of the credential issuer.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerkubeconfiginfo"]
+==== CredentialIssuerKubeConfigInfo 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerstatus[$$CredentialIssuerStatus$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`server`* __string__ | The K8s API server URL.
+| *`certificateAuthorityData`* __string__ | The K8s API server CA bundle.
+|===
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerstatus"]
+==== CredentialIssuerStatus 
+
+Status of a credential issuer.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuer[$$CredentialIssuer$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`strategies`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$] array__ | List of integration strategies that were attempted by Pinniped.
+| *`kubeConfigInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerkubeconfiginfo[$$CredentialIssuerKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerstrategy"]
+==== CredentialIssuerStrategy 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerstatus[$$CredentialIssuerStatus$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`type`* __StrategyType__ | Type of integration attempted.
+| *`status`* __StrategyStatus__ | Status of the attempted integration strategy.
+| *`reason`* __StrategyReason__ | Reason for the current status.
+| *`message`* __string__ | Human-readable description of the current status.
+| *`lastUpdateTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#time-v1-meta[$$Time$$]__ | When the status was last checked.
+|===
+
+
+
+[id="{anchor_prefix}-config-supervisor-pinniped-dev-v1alpha1"]
+=== config.supervisor.pinniped.dev/v1alpha1
+
+Package v1alpha1 is the v1alpha1 version of the Pinniped supervisor configuration API.
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-federationdomain"]
+==== FederationDomain 
+
+FederationDomain describes the configuration of an OIDC provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-federationdomainlist[$$FederationDomainList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-federationdomainspec[$$FederationDomainSpec$$]__ | Spec of the OIDC provider.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-federationdomainstatus[$$FederationDomainStatus$$]__ | Status of the OIDC provider.
+|===
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-federationdomainsecrets"]
+==== FederationDomainSecrets 
+
+FederationDomainSecrets holds information about this OIDC Provider's secrets.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-federationdomainstatus[$$FederationDomainStatus$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`jwks`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#localobjectreference-v1-core[$$LocalObjectReference$$]__ | JWKS holds the name of the corev1.Secret in which this OIDC Provider's signing/verification keys are stored. If it is empty, then the signing/verification keys are either unknown or they don't exist.
+| *`tokenSigningKey`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#localobjectreference-v1-core[$$LocalObjectReference$$]__ | TokenSigningKey holds the name of the corev1.Secret in which this OIDC Provider's key for signing tokens is stored.
+| *`stateSigningKey`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#localobjectreference-v1-core[$$LocalObjectReference$$]__ | StateSigningKey holds the name of the corev1.Secret in which this OIDC Provider's key for signing state parameters is stored.
+| *`stateEncryptionKey`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#localobjectreference-v1-core[$$LocalObjectReference$$]__ | StateSigningKey holds the name of the corev1.Secret in which this OIDC Provider's key for encrypting state parameters is stored.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-federationdomainspec"]
+==== FederationDomainSpec 
+
+FederationDomainSpec is a struct that describes an OIDC Provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-federationdomain[$$FederationDomain$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`issuer`* __string__ | Issuer is the OIDC Provider's issuer, per the OIDC Discovery Metadata document, as well as the identifier that it will use for the iss claim in issued JWTs. This field will also be used as the base URL for any endpoints used by the OIDC Provider (e.g., if your issuer is https://example.com/foo, then your authorization endpoint will look like https://example.com/foo/some/path/to/auth/endpoint). 
+ See https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.3 for more information.
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-federationdomaintlsspec[$$FederationDomainTLSSpec$$]__ | TLS configures how this FederationDomain is served over Transport Layer Security (TLS).
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-federationdomainstatus"]
+==== FederationDomainStatus 
+
+FederationDomainStatus is a struct that describes the actual state of an OIDC Provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-federationdomain[$$FederationDomain$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`status`* __FederationDomainStatusCondition__ | Status holds an enum that describes the state of this OIDC Provider. Note that this Status can represent success or failure.
+| *`message`* __string__ | Message provides human-readable details about the Status.
+| *`lastUpdateTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#time-v1-meta[$$Time$$]__ | LastUpdateTime holds the time at which the Status was last updated. It is a pointer to get around some undesirable behavior with respect to the empty metav1.Time value (see https://github.com/kubernetes/kubernetes/issues/86811).
+| *`secrets`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-federationdomainsecrets[$$FederationDomainSecrets$$]__ | Secrets contains information about this OIDC Provider's secrets.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-federationdomaintlsspec"]
+==== FederationDomainTLSSpec 
+
+FederationDomainTLSSpec is a struct that describes the TLS configuration for an OIDC Provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-config-v1alpha1-federationdomainspec[$$FederationDomainSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`secretName`* __string__ | SecretName is an optional name of a Secret in the same namespace, of type `kubernetes.io/tls`, which contains the TLS serving certificate for the HTTPS endpoints served by this FederationDomain. When provided, the TLS Secret named here must contain keys named `tls.crt` and `tls.key` that contain the certificate and private key to use for TLS. 
+ Server Name Indication (SNI) is an extension to the Transport Layer Security (TLS) supported by all major browsers. 
+ SecretName is required if you would like to use different TLS certificates for issuers of different hostnames. SNI requests do not include port numbers, so all issuers with the same DNS hostname must use the same SecretName value even if they have different port numbers. 
+ SecretName is not required when you would like to use only the HTTP endpoints (e.g. when terminating TLS at an Ingress). It is also not required when you would like all requests to this OIDC Provider's HTTPS endpoints to use the default TLS certificate, which is configured elsewhere. 
+ When your Issuer URL's host is an IP address, then this field is ignored. SNI does not work for IP addresses.
+|===
+
+
+
+[id="{anchor_prefix}-idp-supervisor-pinniped-dev-v1alpha1"]
+=== idp.supervisor.pinniped.dev/v1alpha1
+
+Package v1alpha1 is the v1alpha1 version of the Pinniped supervisor identity provider (IDP) API.
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-condition"]
+==== Condition 
+
+Condition status of a resource (mirrored from the metav1.Condition type added in Kubernetes 1.19). In a future API version we can switch to using the upstream type. See https://github.com/kubernetes/apimachinery/blob/v0.19.0/pkg/apis/meta/v1/types.go#L1353-L1413.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcidentityproviderstatus[$$OIDCIdentityProviderStatus$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`type`* __string__ | type of condition in CamelCase or in foo.example.com/CamelCase. --- Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be useful (see .node.status.conditions), the ability to deconflict is important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+| *`status`* __ConditionStatus__ | status of the condition, one of True, False, Unknown.
+| *`observedGeneration`* __integer__ | observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance.
+| *`lastTransitionTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#time-v1-meta[$$Time$$]__ | lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+| *`reason`* __string__ | reason contains a programmatic identifier indicating the reason for the condition's last transition. Producers of specific condition types may define expected values and meanings for this field, and whether the values are considered a guaranteed API. The value should be a CamelCase string. This field may not be empty.
+| *`message`* __string__ | message is a human readable message indicating details about the transition. This may be an empty string.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcauthorizationconfig"]
+==== OIDCAuthorizationConfig 
+
+OIDCAuthorizationConfig provides information about how to form the OAuth2 authorization request parameters.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`additionalScopes`* __string array__ | AdditionalScopes are the scopes in addition to "openid" that will be requested as part of the authorization request flow with an OIDC identity provider. By default only the "openid" scope will be requested.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcclaims"]
+==== OIDCClaims 
+
+OIDCClaims provides a mapping from upstream claims into identities.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`groups`* __string__ | Groups provides the name of the token claim that will be used to ascertain the groups to which an identity belongs.
+| *`username`* __string__ | Username provides the name of the token claim that will be used to ascertain an identity's username.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcclient"]
+==== OIDCClient 
+
+OIDCClient contains information about an OIDC client (e.g., client ID and client secret).
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`secretName`* __string__ | SecretName contains the name of a namespace-local Secret object that provides the clientID and clientSecret for an OIDC client. If only the SecretName is specified in an OIDCClient struct, then it is expected that the Secret is of type "secrets.pinniped.dev/oidc-client" with keys "clientID" and "clientSecret".
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcidentityprovider"]
+==== OIDCIdentityProvider 
+
+OIDCIdentityProvider describes the configuration of an upstream OpenID Connect identity provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcidentityproviderlist[$$OIDCIdentityProviderList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]__ | Spec for configuring the identity provider.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcidentityproviderstatus[$$OIDCIdentityProviderStatus$$]__ | Status of the identity provider.
+|===
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec"]
+==== OIDCIdentityProviderSpec 
+
+Spec for configuring an OIDC identity provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcidentityprovider[$$OIDCIdentityProvider$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`issuer`* __string__ | Issuer is the issuer URL of this OIDC identity provider, i.e., where to fetch /.well-known/openid-configuration.
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration for discovery/JWKS requests to the issuer.
+| *`authorizationConfig`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcauthorizationconfig[$$OIDCAuthorizationConfig$$]__ | AuthorizationConfig holds information about how to form the OAuth2 authorization request parameters to be used with this OIDC identity provider.
+| *`claims`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcclaims[$$OIDCClaims$$]__ | Claims provides the names of token claims that will be used when inspecting an identity from this OIDC identity provider.
+| *`client`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcclient[$$OIDCClient$$]__ | OIDCClient contains OIDC client information to be used used with this OIDC identity provider.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcidentityproviderstatus"]
+==== OIDCIdentityProviderStatus 
+
+Status of an OIDC identity provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcidentityprovider[$$OIDCIdentityProvider$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`phase`* __OIDCIdentityProviderPhase__ | Phase summarizes the overall status of the OIDCIdentityProvider.
+| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-condition[$$Condition$$]__ | Represents the observations of an identity provider's current state.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-tlsspec"]
+==== TLSSpec 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`certificateAuthorityData`* __string__ | X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted.
+|===
+
+
+
+[id="{anchor_prefix}-login-concierge-pinniped-dev-v1alpha1"]
+=== login.concierge.pinniped.dev/v1alpha1
+
+Package v1alpha1 is the v1alpha1 version of the Pinniped login API.
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-login-v1alpha1-clustercredential"]
+==== ClusterCredential 
+
+ClusterCredential is the cluster-specific credential returned on a successful credential request. It contains either a valid bearer token or a valid TLS certificate and corresponding private key for the cluster.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-login-v1alpha1-tokencredentialrequeststatus[$$TokenCredentialRequestStatus$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`expirationTimestamp`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#time-v1-meta[$$Time$$]__ | ExpirationTimestamp indicates a time when the provided credentials expire.
+| *`token`* __string__ | Token is a bearer token used by the client for request authentication.
+| *`clientCertificateData`* __string__ | PEM-encoded client TLS certificates (including intermediates, if any).
+| *`clientKeyData`* __string__ | PEM-encoded private key for the above certificate.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-login-v1alpha1-tokencredentialrequest"]
+==== TokenCredentialRequest 
+
+TokenCredentialRequest submits an IDP-specific credential to Pinniped in exchange for a cluster-specific credential.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-login-v1alpha1-tokencredentialrequestlist[$$TokenCredentialRequestList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-login-v1alpha1-tokencredentialrequestspec[$$TokenCredentialRequestSpec$$]__ | 
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-login-v1alpha1-tokencredentialrequeststatus[$$TokenCredentialRequestStatus$$]__ | 
+|===
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-login-v1alpha1-tokencredentialrequestspec"]
+==== TokenCredentialRequestSpec 
+
+TokenCredentialRequestSpec is the specification of a TokenCredentialRequest, expected on requests to the Pinniped API.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-login-v1alpha1-tokencredentialrequest[$$TokenCredentialRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`token`* __string__ | Bearer token supplied with the credential request.
+| *`authenticator`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#typedlocalobjectreference-v1-core[$$TypedLocalObjectReference$$]__ | Reference to an authenticator which can validate this credential request.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-login-v1alpha1-tokencredentialrequeststatus"]
+==== TokenCredentialRequestStatus 
+
+TokenCredentialRequestStatus is the status of a TokenCredentialRequest, returned on responses to the Pinniped API.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-login-v1alpha1-tokencredentialrequest[$$TokenCredentialRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`credential`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-login-v1alpha1-clustercredential[$$ClusterCredential$$]__ | A Credential will be returned for a successful credential request.
+| *`message`* __string__ | An error message will be returned for an unsuccessful credential request.
+|===
+
+

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -22,9 +22,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/clock"
 	coretesting "k8s.io/client-go/testing"
 
-	"go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/1.19/client/supervisor/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/1.19/client/supervisor/informers/externalversions"
+	"go.pinniped.dev/generated/1.20/apis/supervisor/config/v1alpha1"
+	pinnipedfake "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned/fake"
+	pinnipedinformers "go.pinniped.dev/generated/1.20/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc/provider"

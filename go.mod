@@ -5,7 +5,6 @@ go 1.14
 require (
 	cloud.google.com/go v0.60.0 // indirect
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/davecgh/go-spew v1.1.1
 	github.com/go-logr/logr v0.3.0
@@ -26,30 +25,28 @@ require (
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.6.1
-	go.pinniped.dev/generated/1.19/apis v0.0.0-00010101000000-000000000000
-	go.pinniped.dev/generated/1.19/client v0.0.0-00010101000000-000000000000
+	go.pinniped.dev/generated/1.20/apis v0.0.0-20210107184752-9b8e4f4d5b65
+	go.pinniped.dev/generated/1.20/client v0.0.0-20210107184752-9b8e4f4d5b65
 	golang.org/x/crypto v0.0.0-20201217014255-9d1352758620
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	golang.org/x/tools v0.0.0-20200825202427-b303f430e36d // indirect
-	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
-	google.golang.org/genproto v0.0.0-20200825200019-8632dd797987 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
-	k8s.io/api v0.19.5
-	k8s.io/apimachinery v0.19.5
-	k8s.io/apiserver v0.19.5
-	k8s.io/client-go v0.19.5
-	k8s.io/component-base v0.19.5
+	k8s.io/api v0.20.0
+	k8s.io/apimachinery v0.20.0
+	k8s.io/apiserver v0.20.0
+	k8s.io/client-go v0.20.0
+	k8s.io/component-base v0.20.0
 	k8s.io/klog/v2 v2.4.0
-	k8s.io/kube-aggregator v0.19.5
+	k8s.io/kube-aggregator v0.20.0
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
 	sigs.k8s.io/yaml v1.2.0
 )
 
 replace (
-	go.pinniped.dev/generated/1.19/apis => ./generated/1.19/apis
-	go.pinniped.dev/generated/1.19/client => ./generated/1.19/client
+	go.pinniped.dev/generated/1.20/apis => ./generated/1.20/apis
+	go.pinniped.dev/generated/1.20/client => ./generated/1.20/client
 )

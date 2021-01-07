@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -9,11 +9,13 @@
 package mocksecrethelper
 
 import (
+	reflect "reflect"
+
 	gomock "github.com/golang/mock/gomock"
-	v1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	v10 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	reflect "reflect"
+
+	v1alpha1 "go.pinniped.dev/generated/1.20/apis/supervisor/config/v1alpha1"
 )
 
 // MockSecretHelper is a mock of SecretHelper interface

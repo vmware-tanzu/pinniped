@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package authncache
@@ -17,8 +17,8 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 
-	authv1alpha "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
-	loginapi "go.pinniped.dev/generated/1.19/apis/concierge/login"
+	authv1alpha "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
+	loginapi "go.pinniped.dev/generated/1.20/apis/concierge/login"
 	"go.pinniped.dev/internal/mocks/mocktokenauthenticator"
 )
 

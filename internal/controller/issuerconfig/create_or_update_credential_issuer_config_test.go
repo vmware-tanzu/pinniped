@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package issuerconfig
@@ -19,8 +19,8 @@ import (
 	coretesting "k8s.io/client-go/testing"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 
-	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/config/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned/fake"
+	configv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/config/v1alpha1"
+	pinnipedfake "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned/fake"
 )
 
 func TestCreateOrUpdateCredentialIssuer(t *testing.T) {

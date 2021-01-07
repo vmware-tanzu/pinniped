@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package controllermanager provides an entrypoint into running all of the controllers that run as
@@ -19,9 +19,9 @@ import (
 	"k8s.io/klog/v2/klogr"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	loginv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
-	pinnipedinformers "go.pinniped.dev/generated/1.19/client/concierge/informers/externalversions"
+	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
+	pinnipedinformers "go.pinniped.dev/generated/1.20/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/config/concierge"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"

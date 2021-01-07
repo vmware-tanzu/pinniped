@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package upstreamwatcher implements a controller that watches OIDCIdentityProvider objects.
@@ -25,9 +25,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/cache"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
-	"go.pinniped.dev/generated/1.19/apis/supervisor/idp/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.19/client/supervisor/clientset/versioned"
-	idpinformers "go.pinniped.dev/generated/1.19/client/supervisor/informers/externalversions/idp/v1alpha1"
+	"go.pinniped.dev/generated/1.20/apis/supervisor/idp/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned"
+	idpinformers "go.pinniped.dev/generated/1.20/client/supervisor/informers/externalversions/idp/v1alpha1"
 	"go.pinniped.dev/internal/constable"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"

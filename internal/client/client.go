@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package client is a wrapper for interacting with Pinniped's CredentialRequest API.
@@ -15,8 +15,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
-	"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
-	"go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
+	"go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
+	"go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
 )
 
 // ErrLoginFailed is returned by ExchangeToken when the server rejects the login request.

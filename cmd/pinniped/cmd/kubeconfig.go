@@ -129,6 +129,7 @@ func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigPar
 	if err != nil {
 		return fmt.Errorf("could not determine the Pinniped executable path: %w", err)
 	}
+	execConfig.ProvideClusterInfo = true
 
 	oidcCABundle, err := loadCABundlePaths(flags.oidc.caBundlePaths)
 	if err != nil {

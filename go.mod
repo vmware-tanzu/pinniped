@@ -25,8 +25,8 @@ require (
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.6.1
-	go.pinniped.dev/generated/1.20/apis v0.0.0-20210107184752-9b8e4f4d5b65
-	go.pinniped.dev/generated/1.20/client v0.0.0-20210107184752-9b8e4f4d5b65
+	go.pinniped.dev/generated/1.20/apis v0.0.0-00010101000000-000000000000
+	go.pinniped.dev/generated/1.20/client v0.0.0-00010101000000-000000000000
 	golang.org/x/crypto v0.0.0-20201217014255-9d1352758620
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
@@ -35,13 +35,13 @@ require (
 	gopkg.in/square/go-jose.v2 v2.5.1
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
-	k8s.io/api v0.20.0
-	k8s.io/apimachinery v0.20.0
-	k8s.io/apiserver v0.20.0
-	k8s.io/client-go v0.20.0
-	k8s.io/component-base v0.20.0
+	k8s.io/api v0.20.1
+	k8s.io/apimachinery v0.20.1
+	k8s.io/apiserver v0.20.1
+	k8s.io/client-go v0.20.1
+	k8s.io/component-base v0.20.1
 	k8s.io/klog/v2 v2.4.0
-	k8s.io/kube-aggregator v0.20.0
+	k8s.io/kube-aggregator v0.20.1
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
 	sigs.k8s.io/yaml v1.2.0
 )

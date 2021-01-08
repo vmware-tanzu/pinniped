@@ -321,7 +321,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --token=test-token
         		      command: '.../path/to/pinniped'
         		      env: []
-        		      provideClusterInfo: false
+        		      provideClusterInfo: true
 			`),
 		},
 		{
@@ -366,7 +366,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --token-env=TEST_TOKEN
         		      command: '.../path/to/pinniped'
         		      env: []
-        		      provideClusterInfo: false
+        		      provideClusterInfo: true
 			`),
 		},
 		{
@@ -422,7 +422,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --request-audience=test-audience
         		      command: '.../path/to/pinniped'
         		      env: []
-        		      provideClusterInfo: false
+        		      provideClusterInfo: true
 			`, base64.StdEncoding.EncodeToString(testCA.Bundle())),
 		},
 		{
@@ -484,7 +484,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --request-audience=test-audience
         		      command: '.../path/to/pinniped'
         		      env: []
-        		      provideClusterInfo: false
+        		      provideClusterInfo: true
 			`, base64.StdEncoding.EncodeToString(testCA.Bundle())),
 		},
 	}

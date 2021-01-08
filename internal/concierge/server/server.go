@@ -105,7 +105,6 @@ func (a *App) runServer(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("could not read pod metadata: %w", err)
 	}
-	serverInstallationNamespace := podInfo.Namespace
 
 	// Initialize the cache of active authenticators.
 	authenticators := authncache.New()
@@ -125,16 +124,16 @@ func (a *App) runServer(ctx context.Context) error {
 	// post start hook of the aggregated API server.
 	startControllersFunc, err := controllermanager.PrepareControllers(
 		&controllermanager.Config{
-			ServerInstallationNamespace: serverInstallationNamespace,
-			NamesConfig:                 &cfg.NamesConfig,
-			Labels:                      cfg.Labels,
-			KubeCertAgentConfig:         &cfg.KubeCertAgentConfig,
-			DiscoveryURLOverride:        cfg.DiscoveryInfo.URL,
-			DynamicServingCertProvider:  dynamicServingCertProvider,
-			DynamicSigningCertProvider:  dynamicSigningCertProvider,
-			ServingCertDuration:         time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds) * time.Second,
-			ServingCertRenewBefore:      time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds) * time.Second,
-			AuthenticatorCache:          authenticators,
+			ServerInstallationInfo:     podInfo,
+			NamesConfig:                &cfg.NamesConfig,
+			Labels:                     cfg.Labels,
+			KubeCertAgentConfig:        &cfg.KubeCertAgentConfig,
+			DiscoveryURLOverride:       cfg.DiscoveryInfo.URL,
+			DynamicServingCertProvider: dynamicServingCertProvider,
+			DynamicSigningCertProvider: dynamicSigningCertProvider,
+			ServingCertDuration:        time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds) * time.Second,
+			ServingCertRenewBefore:     time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds) * time.Second,
+			AuthenticatorCache:         authenticators,
 		},
 	)
 	if err != nil {

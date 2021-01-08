@@ -17,13 +17,11 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/clock"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/version"
 	"k8s.io/client-go/rest"
-	restclient "k8s.io/client-go/rest"
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
@@ -37,7 +35,9 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorstorage"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/deploymentref"
 	"go.pinniped.dev/internal/downward"
+	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/provider/manager"
@@ -252,81 +252,31 @@ func startControllers(
 	go controllerManager.Start(ctx)
 }
 
-func getSupervisorDeployment(
-	ctx context.Context,
-	kubeClient kubernetes.Interface,
-	podInfo *downward.PodInfo,
-) (*appsv1.Deployment, error) {
-	ns := podInfo.Namespace
-
-	pod, err := kubeClient.CoreV1().Pods(ns).Get(ctx, podInfo.Name, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("could not get pod: %w", err)
-	}
-
-	podOwner := metav1.GetControllerOf(pod)
-	if podOwner == nil {
-		return nil, fmt.Errorf("pod %s/%s is missing owner", ns, podInfo.Name)
-	}
-
-	rs, err := kubeClient.AppsV1().ReplicaSets(ns).Get(ctx, podOwner.Name, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("could not get replicaset: %w", err)
-	}
-
-	rsOwner := metav1.GetControllerOf(rs)
-	if rsOwner == nil {
-		return nil, fmt.Errorf("replicaset %s/%s is missing owner", ns, podInfo.Name)
-	}
-
-	d, err := kubeClient.AppsV1().Deployments(ns).Get(ctx, rsOwner.Name, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("could not get deployment: %w", err)
-	}
-
-	return d, nil
-}
-
-func newClients() (kubernetes.Interface, pinnipedclientset.Interface, error) {
-	kubeConfig, err := restclient.InClusterConfig()
-	if err != nil {
-		return nil, nil, fmt.Errorf("could not load in-cluster configuration: %w", err)
-	}
-
-	// Connect to the core Kubernetes API.
-	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
-	if err != nil {
-		return nil, nil, fmt.Errorf("could not create kube client: %w", err)
-	}
-
-	// Connect to the Pinniped API.
-	pinnipedClient, err := pinnipedclientset.NewForConfig(kubeConfig)
-	if err != nil {
-		return nil, nil, fmt.Errorf("could not create pinniped client: %w", err)
-	}
-
-	return kubeClient, pinnipedClient, nil
-}
-
 func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 	serverInstallationNamespace := podInfo.Namespace
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	kubeClient, pinnipedClient, err := newClients()
+	// TODO remove code that relies on supervisorDeployment directly
+	dref, supervisorDeployment, err := deploymentref.New(podInfo)
+	if err != nil {
+		return fmt.Errorf("cannot create deployment ref: %w", err)
+	}
+
+	client, err := kubeclient.New(dref)
 	if err != nil {
 		return fmt.Errorf("cannot create k8s client: %w", err)
 	}
 
 	kubeInformers := kubeinformers.NewSharedInformerFactoryWithOptions(
-		kubeClient,
+		client.Kubernetes,
 		defaultResyncInterval,
 		kubeinformers.WithNamespace(serverInstallationNamespace),
 	)
 
 	pinnipedInformers := pinnipedinformers.NewSharedInformerFactoryWithOptions(
-		pinnipedClient,
+		client.PinnipedSupervisor,
 		defaultResyncInterval,
 		pinnipedinformers.WithNamespace(serverInstallationNamespace),
 	)
@@ -348,13 +298,8 @@ func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 		dynamicJWKSProvider,
 		dynamicUpstreamIDPProvider,
 		&secretCache,
-		kubeClient.CoreV1().Secrets(serverInstallationNamespace),
+		client.Kubernetes.CoreV1().Secrets(serverInstallationNamespace),
 	)
-
-	supervisorDeployment, err := getSupervisorDeployment(ctx, kubeClient, podInfo)
-	if err != nil {
-		return fmt.Errorf("cannot get supervisor deployment: %w", err)
-	}
 
 	startControllers(
 		ctx,
@@ -365,8 +310,8 @@ func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 		dynamicUpstreamIDPProvider,
 		&secretCache,
 		supervisorDeployment,
-		kubeClient,
-		pinnipedClient,
+		client.Kubernetes,
+		client.PinnipedSupervisor,
 		kubeInformers,
 		pinnipedInformers,
 	)

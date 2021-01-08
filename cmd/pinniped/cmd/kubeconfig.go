@@ -26,6 +26,7 @@ import (
 
 	conciergev1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
+	"go.pinniped.dev/internal/kubeclient"
 )
 
 type kubeconfigDeps struct {
@@ -41,7 +42,11 @@ func kubeconfigRealDeps() kubeconfigDeps {
 			if err != nil {
 				return nil, err
 			}
-			return conciergeclientset.NewForConfig(restConfig)
+			client, err := kubeclient.New(kubeclient.WithConfig(restConfig))
+			if err != nil {
+				return nil, err
+			}
+			return client.PinnipedConcierge, nil
 		},
 	}
 }

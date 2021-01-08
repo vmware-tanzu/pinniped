@@ -22,6 +22,7 @@ import (
 	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/kubeclient"
 )
 
 // ErrLoginFailed is returned by Client.ExchangeToken when the concierge server rejects the login request for any reason.
@@ -150,7 +151,11 @@ func (c *Client) clientset() (conciergeclientset.Interface, error) {
 	if err != nil {
 		return nil, err
 	}
-	return conciergeclientset.NewForConfig(cfg)
+	client, err := kubeclient.New(kubeclient.WithConfig(cfg))
+	if err != nil {
+		return nil, err
+	}
+	return client.PinnipedConcierge, nil
 }
 
 // ExchangeToken performs a TokenCredentialRequest against the Pinniped concierge and returns the result as an ExecCredential.

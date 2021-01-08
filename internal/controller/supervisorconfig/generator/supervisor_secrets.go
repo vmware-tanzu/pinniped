@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package secretgenerator provides a supervisorSecretsController that can ensure existence of a generated secret.
@@ -13,7 +13,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
@@ -200,13 +199,7 @@ func generateSecret(namespace, name string, labels map[string]string, secretData
 		return nil, err
 	}
 
-	deploymentGVK := schema.GroupVersionKind{
-		Group:   appsv1.SchemeGroupVersion.Group,
-		Version: appsv1.SchemeGroupVersion.Version,
-		Kind:    "Deployment",
-	}
-
-	isController := false
+	deploymentGVK := appsv1.SchemeGroupVersion.WithKind("Deployment")
 
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -218,7 +211,6 @@ func generateSecret(namespace, name string, labels map[string]string, secretData
 					Kind:       deploymentGVK.Kind,
 					Name:       owner.GetName(),
 					UID:        owner.GetUID(),
-					Controller: &isController,
 				},
 			},
 			Labels: labels,

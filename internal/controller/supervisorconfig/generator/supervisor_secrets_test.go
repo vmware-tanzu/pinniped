@@ -268,7 +268,6 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 		generatedSymmetricKey      = []byte("some-neato-32-byte-generated-key")
 		otherGeneratedSymmetricKey = []byte("some-funio-32-byte-generated-key")
 
-		isController    = false
 		generatedSecret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      generatedSecretName,
@@ -279,7 +278,6 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 						Kind:       ownerGVK.Kind,
 						Name:       owner.GetName(),
 						UID:        owner.GetUID(),
-						Controller: &isController,
 					},
 				},
 				Labels: labels,
@@ -300,7 +298,6 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 						Kind:       ownerGVK.Kind,
 						Name:       owner.GetName(),
 						UID:        owner.GetUID(),
-						Controller: &isController,
 					},
 				},
 				Labels: labels,

@@ -31,13 +31,13 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
-	restclient "k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/dynamiccert"
+	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -279,21 +279,6 @@ func respondWithAuthenticated(
 	}
 }
 
-func newK8sClient() (kubernetes.Interface, error) {
-	kubeConfig, err := restclient.InClusterConfig()
-	if err != nil {
-		return nil, fmt.Errorf("could not load in-cluster configuration: %w", err)
-	}
-
-	// Connect to the core Kubernetes API.
-	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
-	if err != nil {
-		return nil, fmt.Errorf("could not load in-cluster configuration: %w", err)
-	}
-
-	return kubeClient, nil
-}
-
 func startControllers(
 	ctx context.Context,
 	dynamicCertProvider dynamiccert.Provider,
@@ -359,20 +344,20 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	kubeClient, err := newK8sClient()
+	client, err := kubeclient.New()
 	if err != nil {
 		return fmt.Errorf("cannot create k8s client: %w", err)
 	}
 
 	kubeInformers := kubeinformers.NewSharedInformerFactoryWithOptions(
-		kubeClient,
+		client.Kubernetes,
 		defaultResyncInterval,
 		kubeinformers.WithNamespace(namespace),
 	)
 
 	dynamicCertProvider := dynamiccert.New()
 
-	startControllers(ctx, dynamicCertProvider, kubeClient, kubeInformers)
+	startControllers(ctx, dynamicCertProvider, client.Kubernetes, kubeInformers)
 	plog.Debug("controllers are ready")
 
 	//nolint: gosec // Intentionally binding to all network interfaces.

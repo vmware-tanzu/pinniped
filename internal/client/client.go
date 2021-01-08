@@ -17,6 +17,7 @@ import (
 
 	"go.pinniped.dev/generated/1.19/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
+	"go.pinniped.dev/internal/kubeclient"
 )
 
 // ErrLoginFailed is returned by ExchangeToken when the server rejects the login request.
@@ -84,5 +85,9 @@ func getClient(apiEndpoint string, caBundle string) (versioned.Interface, error)
 	if err != nil {
 		return nil, err
 	}
-	return versioned.NewForConfig(cfg)
+	client, err := kubeclient.New(kubeclient.WithConfig(cfg))
+	if err != nil {
+		return nil, err
+	}
+	return client.PinnipedConcierge, nil
 }

@@ -122,6 +122,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	return &cmd
 }
 
+//nolint:funlen
 func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigParams) error {
 	execConfig := clientcmdapi.ExecConfig{
 		APIVersion: clientauthenticationv1beta1.SchemeGroupVersion.String(),

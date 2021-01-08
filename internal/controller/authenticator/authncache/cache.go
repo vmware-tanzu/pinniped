@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package authncache implements a cache of active authenticators.
@@ -14,7 +14,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/klog/v2"
 
-	loginapi "go.pinniped.dev/generated/1.19/apis/concierge/login"
+	loginapi "go.pinniped.dev/generated/1.20/apis/concierge/login"
 	"go.pinniped.dev/internal/plog"
 )
 

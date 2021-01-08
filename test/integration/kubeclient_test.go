@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -15,8 +15,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 
-	conciergeconfigv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/config/v1alpha1"
-	supervisorconfigv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
+	conciergeconfigv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/1.20/apis/supervisor/config/v1alpha1"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/ownerref"
 	"go.pinniped.dev/test/library"

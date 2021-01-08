@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cachecleaner
@@ -13,9 +13,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	authv1alpha "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/1.19/client/concierge/informers/externalversions"
+	authv1alpha "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
+	pinnipedfake "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned/fake"
+	pinnipedinformers "go.pinniped.dev/generated/1.20/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/mocks/mocktokenauthenticatorcloser"

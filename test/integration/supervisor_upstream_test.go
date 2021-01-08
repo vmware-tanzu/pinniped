@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"go.pinniped.dev/generated/1.19/apis/supervisor/idp/v1alpha1"
+	"go.pinniped.dev/generated/1.20/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/test/library"
 )
 

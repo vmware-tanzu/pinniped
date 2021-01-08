@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -24,8 +24,8 @@ import (
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Adds handlers for various dynamic auth plugins in client-go
 
-	conciergev1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
-	conciergeclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
+	conciergev1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
+	conciergeclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/kubeclient"
 )
 
@@ -122,6 +122,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	return &cmd
 }
 
+//nolint:funlen
 func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigParams) error {
 	execConfig := clientcmdapi.ExecConfig{
 		APIVersion: clientauthenticationv1beta1.SchemeGroupVersion.String(),
@@ -134,6 +135,7 @@ func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigPar
 	if err != nil {
 		return fmt.Errorf("could not determine the Pinniped executable path: %w", err)
 	}
+	execConfig.ProvideClusterInfo = true
 
 	oidcCABundle, err := loadCABundlePaths(flags.oidc.caBundlePaths)
 	if err != nil {

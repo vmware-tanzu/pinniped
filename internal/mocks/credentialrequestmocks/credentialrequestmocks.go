@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -15,8 +15,9 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-	login "go.pinniped.dev/generated/1.19/apis/concierge/login"
 	user "k8s.io/apiserver/pkg/authentication/user"
+
+	login "go.pinniped.dev/generated/1.20/apis/concierge/login"
 )
 
 // MockCertIssuer is a mock of CertIssuer interface

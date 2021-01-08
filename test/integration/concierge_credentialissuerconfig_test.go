@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/config/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/config/v1alpha1"
 	"go.pinniped.dev/test/library"
 )
 

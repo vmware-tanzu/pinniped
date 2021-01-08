@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package library
@@ -26,11 +26,11 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
-	configv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/config/v1alpha1"
-	idpv1alpha1 "go.pinniped.dev/generated/1.19/apis/supervisor/idp/v1alpha1"
-	conciergeclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
-	supervisorclientset "go.pinniped.dev/generated/1.19/client/supervisor/clientset/versioned"
+	auth1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/1.20/apis/supervisor/config/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/1.20/apis/supervisor/idp/v1alpha1"
+	conciergeclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
+	supervisorclientset "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned"
 
 	// Import to initialize client auth plugins - the kubeconfig that we use for
 	// testing may use gcloud, az, oidc, etc.

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package webhookcachefiller implements a controller for filling an authncache.Cache with each added/updated WebhookAuthenticator.
@@ -19,8 +19,8 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/klog/v2"
 
-	auth1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
-	authinformers "go.pinniped.dev/generated/1.19/client/concierge/informers/externalversions/authentication/v1alpha1"
+	auth1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
+	authinformers "go.pinniped.dev/generated/1.20/client/concierge/informers/externalversions/authentication/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	pinnipedauthenticator "go.pinniped.dev/internal/controller/authenticator"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
@@ -119,5 +119,5 @@ func newWebhookAuthenticator(
 	// custom proxy stuff used by the API server.
 	var customDial net.DialFunc
 
-	return webhook.New(temp.Name(), version, implicitAuds, customDial)
+	return webhook.New(temp.Name(), version, implicitAuds, *webhook.DefaultRetryBackoff(), customDial)
 }

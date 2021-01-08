@@ -46,7 +46,7 @@ Pinniped supports the following IDPs.
    [Okta](https://www.okta.com/)).
 
 The
-[`idp.supervisor.pinniped.dev`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-idp-supervisor-pinniped-dev-v1alpha1)
+[`idp.supervisor.pinniped.dev`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-idp-supervisor-pinniped-dev-v1alpha1)
 API group contains the Kubernetes custom resources that configure the Pinniped
 Supervisor's upstream IDPs.
 
@@ -81,7 +81,7 @@ Pinniped supports the following authenticator types.
    set on the `kube-apiserver` process.
 
 The
-[`authentication.concierge.pinniped.dev`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-authentication-concierge-pinniped-dev-v1alpha1)
+[`authentication.concierge.pinniped.dev`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-authentication-concierge-pinniped-dev-v1alpha1)
 API group contains the Kubernetes custom resources that configure the Pinniped
 Concierge's authenticators.
 
@@ -112,7 +112,7 @@ Users may use the Pinniped CLI as the credential plugin, or they may use any pro
 built with the [Pinniped Go client library](https://github.com/vmware-tanzu/pinniped/tree/main/generated).
 
 
-## Pinniped Deployment Strategies 
+## Pinniped Deployment Strategies
 Pinniped can be configured to authenticate users in a variety of scenarios.
 Depending on the use case, administrators can deploy the Supervisor, the Concierge,
 both, or neither.
@@ -121,7 +121,7 @@ both, or neither.
 
 Users can authenticate with the help of the Supervisor, which will issue tokens that
 can be exchanged at the Concierge for a credential that is understood by the host Kubernetes
-cluster. 
+cluster.
 The Supervisor enables users to log in to their external identity provider
 once per day and access each cluster in a domain with a distinct scoped-down token.
 
@@ -143,7 +143,7 @@ Users can authenticate directly with their OIDC compliant external identity prov
 can be exchanged at the Concierge for a credential that is understood by the host Kubernetes
 cluster.
 
-The diagram below shows the components involved in the login flow when the Concierge is 
+The diagram below shows the components involved in the login flow when the Concierge is
 configured.
 
 ![concierge-with-webhook-architecture-diagram](/docs/img/pinniped_architecture_concierge_webhook.svg)
@@ -156,7 +156,7 @@ that obtains an external credential to be sent to a webhook authenticator via th
 ### Static Cluster Integration-- Supervisor and CLI
 
 Users can authenticate with the help of the Supervisor, which will issue tokens that
-can be given directly to a Kubernetes API Server that has been configured with 
+can be given directly to a Kubernetes API Server that has been configured with
 [OIDC Authentication.](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#openid-connect-tokens)
 The Supervisor enables users to log in to their external identity provider
 once per day and access each cluster in a domain with a distinct scoped-down token.
@@ -166,4 +166,3 @@ once per day and access each cluster in a domain with a distinct scoped-down tok
 Users can authenticate directly with their OIDC compliant external identity provider to get credentials
 that can be given directly to a Kubernetes API Server that has been configured with
 [OIDC Authentication.](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#openid-connect-tokens)
-

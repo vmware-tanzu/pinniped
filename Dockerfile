@@ -1,4 +1,4 @@
-# Copyright 2020 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 FROM golang:1.15.6 as build-env
@@ -6,8 +6,8 @@ FROM golang:1.15.6 as build-env
 WORKDIR /work
 # Get dependencies first so they can be cached as a layer
 COPY go.* ./
-COPY generated/1.19/apis/go.* ./generated/1.19/apis/
-COPY generated/1.19/client/go.* ./generated/1.19/client/
+COPY generated/1.20/apis/go.* ./generated/1.20/apis/
+COPY generated/1.20/client/go.* ./generated/1.20/client/
 RUN go mod download
 
 # Copy only the production source code to avoid cache misses when editing other files

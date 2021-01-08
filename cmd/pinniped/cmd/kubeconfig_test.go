@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -19,9 +19,9 @@ import (
 	kubetesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/clientcmd"
 
-	conciergev1alpha1 "go.pinniped.dev/generated/1.19/apis/concierge/authentication/v1alpha1"
-	conciergeclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
-	fakeconciergeclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned/fake"
+	conciergev1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
+	conciergeclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
+	fakeconciergeclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned/fake"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
@@ -321,6 +321,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --token=test-token
         		      command: '.../path/to/pinniped'
         		      env: []
+        		      provideClusterInfo: true
 			`),
 		},
 		{
@@ -365,6 +366,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --token-env=TEST_TOKEN
         		      command: '.../path/to/pinniped'
         		      env: []
+        		      provideClusterInfo: true
 			`),
 		},
 		{
@@ -420,6 +422,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --request-audience=test-audience
         		      command: '.../path/to/pinniped'
         		      env: []
+        		      provideClusterInfo: true
 			`, base64.StdEncoding.EncodeToString(testCA.Bundle())),
 		},
 		{
@@ -481,6 +484,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --request-audience=test-audience
         		      command: '.../path/to/pinniped'
         		      env: []
+        		      provideClusterInfo: true
 			`, base64.StdEncoding.EncodeToString(testCA.Bundle())),
 		},
 	}

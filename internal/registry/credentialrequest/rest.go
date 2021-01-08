@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package credentialrequest provides REST functionality for the CredentialRequest resource.
@@ -18,7 +18,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/utils/trace"
 
-	loginapi "go.pinniped.dev/generated/1.19/apis/concierge/login"
+	loginapi "go.pinniped.dev/generated/1.20/apis/concierge/login"
 )
 
 // clientCertificateTTL is the TTL for short-lived client certificates returned by this API.

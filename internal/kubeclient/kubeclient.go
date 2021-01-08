@@ -14,10 +14,10 @@ import (
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	aggregatorclientscheme "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/scheme"
 
-	pinnipedconciergeclientset "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned"
-	pinnipedconciergeclientsetscheme "go.pinniped.dev/generated/1.19/client/concierge/clientset/versioned/scheme"
-	pinnipedsupervisorclientset "go.pinniped.dev/generated/1.19/client/supervisor/clientset/versioned"
-	pinnipedsupervisorclientsetscheme "go.pinniped.dev/generated/1.19/client/supervisor/clientset/versioned/scheme"
+	pinnipedconciergeclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
+	pinnipedconciergeclientsetscheme "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned/scheme"
+	pinnipedsupervisorclientset "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned"
+	pinnipedsupervisorclientsetscheme "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned/scheme"
 )
 
 type Client struct {

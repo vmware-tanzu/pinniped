@@ -26,12 +26,12 @@ with IDPs, and distribution-specific integration strategies.
 The Pinniped Supervisor component offers identity federation to enable a user to
 access multiple clusters with a single daily login to their external IDP. The
 Pinniped Supervisor supports various external [IDP
-types](https://github.com/vmware-tanzu/pinniped/tree/main/generated/1.19#k8s-api-idp-supervisor-pinniped-dev-v1alpha1).
+types](https://github.com/vmware-tanzu/pinniped/tree/main/generated/1.20#k8s-api-idp-supervisor-pinniped-dev-v1alpha1).
 
 The Pinniped Concierge component offers credential exchange to enable a user to
 exchange an external credential for a short-lived, cluster-specific
 credential. Pinniped supports various [authentication
-methods](https://github.com/vmware-tanzu/pinniped/tree/main/generated/1.19#authenticationconciergepinnipeddevv1alpha1)
+methods](https://github.com/vmware-tanzu/pinniped/tree/main/generated/1.20#authenticationconciergepinnipeddevv1alpha1)
 and implements different integration strategies for various Kubernetes
 distributions to make authentication possible.
 

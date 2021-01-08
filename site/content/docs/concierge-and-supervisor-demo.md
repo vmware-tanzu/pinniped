@@ -26,14 +26,14 @@ for a more specific example, including the commands to use for that case.
 
 1. Install the Pinniped Supervisor. See [deploy/supervisor/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/supervisor/README.md).
 1. Create a
-   [`FederationDomain`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-config-v1alpha1-federationdomain)
+   [`FederationDomain`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-config-v1alpha1-federationdomain)
    via the installed Pinniped Supervisor.
 1. Create an
-   [`OIDCIdentityProvider`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcidentityprovider)
+   [`OIDCIdentityProvider`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcidentityprovider)
    via the installed Pinniped Supervisor.
 1. Install the Pinniped Concierge. See [deploy/concierge/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/concierge/README.md).
 1. Create a
-   [`JWTAuthenticator`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-jwtauthenticator)
+   [`JWTAuthenticator`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-jwtauthenticator)
    via the installed Pinniped Concierge.
 1. Download the Pinniped CLI from [Pinniped's github Releases page](https://github.com/vmware-tanzu/pinniped/releases/latest).
 1. Generate a kubeconfig using the Pinniped CLI. Run `pinniped get kubeconfig --help` for more information.
@@ -48,7 +48,7 @@ non-production clusters.
 The following steps will deploy the latest release of Pinniped on kind. It will deploy the Pinniped
 Supervisor on one cluster, and the Pinniped Concierge on another cluster. A multi-cluster deployment
 strategy is typical for Pinniped. The Pinniped Concierge will use a
-[`JWTAuthenticator`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-jwtauthenticator)
+[`JWTAuthenticator`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-jwtauthenticator)
 to authenticate federated identities from the Supervisor.
 
 1. Install the tools required for the following steps.
@@ -77,7 +77,7 @@ to authenticate federated identities from the Supervisor.
 
    This demo uses a `Secret` named `my-federation-domain-tls` to provide the serving certificate for
    the
-   [`FederationDomain`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-config-v1alpha1-federationdomain). The
+   [`FederationDomain`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-config-v1alpha1-federationdomain). The
    serving certificate `Secret` must be of type `kubernetes.io/tls`.
 
    The CA bundle for this serving
@@ -85,7 +85,7 @@ to authenticate federated identities from the Supervisor.
    `/tmp/pinniped-supervisor-ca-bundle-base64-encoded.pem`.
 
 1. Create a
-   [`FederationDomain`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-config-v1alpha1-federationdomain)
+   [`FederationDomain`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-config-v1alpha1-federationdomain)
    object to configure the Pinniped Supervisor to issue federated identities.
 
    ```bash
@@ -114,7 +114,7 @@ to authenticate federated identities from the Supervisor.
    ```
 
 1. Create an
-   [`OIDCIdentityProvider`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcidentityprovider)
+   [`OIDCIdentityProvider`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcidentityprovider)
    object to configure the Pinniped Supervisor to federate identities from an upstream OIDC identity
    provider.
 
@@ -172,7 +172,7 @@ to authenticate federated identities from the Supervisor.
    ```
 
 1. Create a
-   [`JWTAuthenticator`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.19/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-jwtauthenticator)
+   [`JWTAuthenticator`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-jwtauthenticator)
    object to configure the Pinniped Concierge to authenticate using the Pinniped Supervisor.
 
     ```bash
@@ -217,7 +217,7 @@ to authenticate federated identities from the Supervisor.
    ```
 
    Because this user has no RBAC permissions on this cluster, the previous command results in an
-   error that is similar to 
+   error that is similar to
    `Error from server (Forbidden): pods is forbidden: User "pinny" cannot list resource "pods"
    in API group "" in the namespace "pinniped"`, where `pinny` is the username that was used to login
    to the upstream OIDC identity provider. However, this does prove that you are authenticated and

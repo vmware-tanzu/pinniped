@@ -9,18 +9,19 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/coreos/go-oidc"
+	coreosoidc "github.com/coreos/go-oidc"
 	"golang.org/x/oauth2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/httputil/httperr"
+	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
-func New(config *oauth2.Config, provider *oidc.Provider, client *http.Client) provider.UpstreamOIDCIdentityProviderI {
+func New(config *oauth2.Config, provider *coreosoidc.Provider, client *http.Client) provider.UpstreamOIDCIdentityProviderI {
 	return &ProviderConfig{Config: config, Provider: provider, Client: client}
 }
 
@@ -31,7 +32,8 @@ type ProviderConfig struct {
 	GroupsClaim   string
 	Config        *oauth2.Config
 	Provider      interface {
-		Verifier(*oidc.Config) *oidc.IDTokenVerifier
+		Verifier(*coreosoidc.Config) *coreosoidc.IDTokenVerifier
+		UserInfo(ctx context.Context, tokenSource oauth2.TokenSource) (*coreosoidc.UserInfo, error)
 	}
 	Client *http.Client
 }
@@ -63,7 +65,7 @@ func (p *ProviderConfig) GetGroupsClaim() string {
 
 func (p *ProviderConfig) ExchangeAuthcodeAndValidateTokens(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce, redirectURI string) (*oidctypes.Token, error) {
 	tok, err := p.Config.Exchange(
-		oidc.ClientContext(ctx, p.Client),
+		coreosoidc.ClientContext(ctx, p.Client),
 		authcode,
 		pkceCodeVerifier.Verifier(),
 		oauth2.SetAuthURLParam("redirect_uri", redirectURI),
@@ -80,7 +82,7 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 	if !hasIDTok {
 		return nil, httperr.New(http.StatusBadRequest, "received response missing ID token")
 	}
-	validated, err := p.Provider.Verifier(&oidc.Config{ClientID: p.GetClientID()}).Verify(oidc.ClientContext(ctx, p.Client), idTok)
+	validated, err := p.Provider.Verifier(&coreosoidc.Config{ClientID: p.GetClientID()}).Verify(coreosoidc.ClientContext(ctx, p.Client), idTok)
 	if err != nil {
 		return nil, httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
 	}
@@ -97,7 +99,11 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 
 	var validatedClaims map[string]interface{}
 	if err := validated.Claims(&validatedClaims); err != nil {
-		return nil, httperr.Wrap(http.StatusInternalServerError, "could not unmarshal claims", err)
+		return nil, httperr.Wrap(http.StatusInternalServerError, "could not unmarshal id token claims", err)
+	}
+
+	if err := p.fetchUserInfo(ctx, tok, validatedClaims); err != nil {
+		return nil, httperr.Wrap(http.StatusInternalServerError, "could not fetch user info claims", err)
 	}
 
 	return &oidctypes.Token{
@@ -115,4 +121,41 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 			Claims: validatedClaims,
 		},
 	}, nil
+}
+
+func (p *ProviderConfig) fetchUserInfo(ctx context.Context, tok *oauth2.Token, claims map[string]interface{}) error {
+	idTokenSubject, _ := claims[oidc.IDTokenSubjectClaim].(string)
+	if len(idTokenSubject) == 0 {
+		return nil // defer to existing ID token validation
+	}
+
+	userInfo, err := p.Provider.UserInfo(coreosoidc.ClientContext(ctx, p.Client), oauth2.StaticTokenSource(tok))
+	if err != nil {
+		// the user info endpoint is not required but we do not have a good way to probe if it was provided
+		const userInfoUnsupported = "oidc: user info endpoint is not supported by this provider"
+		if err.Error() == userInfoUnsupported {
+			return nil
+		}
+
+		return httperr.Wrap(http.StatusInternalServerError, "could not get user info", err)
+	}
+
+	// The sub (subject) Claim MUST always be returned in the UserInfo Response.
+	//
+	// NOTE: Due to the possibility of token substitution attacks (see Section 16.11), the UserInfo Response is not
+	// guaranteed to be about the End-User identified by the sub (subject) element of the ID Token. The sub Claim in
+	// the UserInfo Response MUST be verified to exactly match the sub Claim in the ID Token; if they do not match,
+	// the UserInfo Response values MUST NOT be used.
+	//
+	// http://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
+	if len(userInfo.Subject) == 0 || userInfo.Subject != idTokenSubject {
+		return httperr.Newf(http.StatusUnprocessableEntity, "userinfo 'sub' claim (%s) did not match id_token 'sub' claim (%s)", userInfo.Subject, idTokenSubject)
+	}
+
+	// merge existing claims with user info claims
+	if err := userInfo.Claims(&claims); err != nil {
+		return httperr.Wrap(http.StatusInternalServerError, "could not unmarshal user info claims", err)
+	}
+
+	return nil
 }

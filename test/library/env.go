@@ -50,13 +50,17 @@ type TestEnv struct {
 }
 
 type TestOIDCUpstream struct {
-	Issuer       string `json:"issuer"`
-	CABundle     string `json:"caBundle" `
-	ClientID     string `json:"clientID"`
-	ClientSecret string `json:"clientSecret"`
-	CallbackURL  string `json:"callback"`
-	Username     string `json:"username"`
-	Password     string `json:"password"`
+	Issuer           string   `json:"issuer"`
+	CABundle         string   `json:"caBundle"`
+	AdditionalScopes []string `json:"additionalScopes"`
+	UsernameClaim    string   `json:"usernameClaim"`
+	GroupsClaim      string   `json:"groupsClaim"`
+	ClientID         string   `json:"clientID"`
+	ClientSecret     string   `json:"clientSecret"`
+	CallbackURL      string   `json:"callback"`
+	Username         string   `json:"username"`
+	Password         string   `json:"password"`
+	ExpectedGroups   []string `json:"expectedGroups"`
 }
 
 // ProxyEnv returns a set of environment variable strings (e.g., to combine with os.Environ()) which set up the configured test HTTP proxy.
@@ -100,6 +104,16 @@ func needEnv(t *testing.T, key string) string {
 	value := os.Getenv(key)
 	require.NotEmptyf(t, value, "must specify %s env var for integration tests", key)
 	return value
+}
+
+func filterEmpty(ss []string) []string {
+	filtered := []string{}
+	for _, s := range ss {
+		if len(s) != 0 {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
 }
 
 func loadEnvVars(t *testing.T, result *TestEnv) {
@@ -151,13 +165,17 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 	}
 
 	result.SupervisorTestUpstream = TestOIDCUpstream{
-		Issuer:       needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER"),
-		CABundle:     os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER_CA_BUNDLE"),
-		ClientID:     needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CLIENT_ID"),
-		ClientSecret: needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CLIENT_SECRET"),
-		CallbackURL:  needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CALLBACK_URL"),
-		Username:     needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME"),
-		Password:     needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD"),
+		Issuer:           needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER"),
+		CABundle:         os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER_CA_BUNDLE"),
+		AdditionalScopes: strings.Fields(os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ADDITIONAL_SCOPES")),
+		UsernameClaim:    os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME_CLAIM"),
+		GroupsClaim:      os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_GROUPS_CLAIM"),
+		ClientID:         needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CLIENT_ID"),
+		ClientSecret:     needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CLIENT_SECRET"),
+		CallbackURL:      needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CALLBACK_URL"),
+		Username:         needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME"),
+		Password:         needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD"),
+		ExpectedGroups:   filterEmpty(strings.Split(strings.ReplaceAll(os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_EXPECTED_GROUPS"), " ", ""), ",")),
 	}
 }
 

@@ -16,20 +16,24 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
-
+	coreosoidc "github.com/coreos/go-oidc"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
 	authv1alpha "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/1.20/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/1.20/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/pkg/oidcclient"
+	"go.pinniped.dev/pkg/oidcclient/filesession"
 	"go.pinniped.dev/test/library"
 	"go.pinniped.dev/test/library/browsertest"
 )
@@ -86,7 +90,7 @@ func TestE2EFullIntegration(t *testing.T) {
 	certSecret := library.CreateTestSecret(t,
 		env.SupervisorNamespace,
 		"oidc-provider-tls",
-		v1.SecretTypeTLS,
+		corev1.SecretTypeTLS,
 		map[string]string{"tls.crt": string(certPEM), "tls.key": string(keyPEM)},
 	)
 
@@ -104,10 +108,11 @@ func TestE2EFullIntegration(t *testing.T) {
 			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
 		},
 		AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
-			AdditionalScopes: []string{"email"},
+			AdditionalScopes: env.SupervisorTestUpstream.AdditionalScopes,
 		},
 		Claims: idpv1alpha1.OIDCClaims{
-			Username: "email",
+			Username: env.SupervisorTestUpstream.UsernameClaim,
+			Groups:   env.SupervisorTestUpstream.GroupsClaim,
 		},
 		Client: idpv1alpha1.OIDCClient{
 			SecretName: library.CreateClientCredsSecret(t, env.SupervisorTestUpstream.ClientID, env.SupervisorTestUpstream.ClientSecret).Name,
@@ -270,4 +275,31 @@ func TestE2EFullIntegration(t *testing.T) {
 	require.NoError(t, err)
 	require.Greaterf(t, len(bytes.Split(kubectlOutput2, []byte("\n"))), 2, "expected some namespaces to be returned again")
 	t.Logf("second kubectl command took %s", time.Since(start).String())
+
+	// probe our cache for the current ID token as a proxy for a whoami API
+	cache := filesession.New(sessionCachePath, filesession.WithErrorReporter(func(err error) {
+		require.NoError(t, err)
+	}))
+
+	downstreamScopes := []string{coreosoidc.ScopeOfflineAccess, coreosoidc.ScopeOpenID, "pinniped:request-audience"}
+	sort.Strings(downstreamScopes)
+	token := cache.GetToken(oidcclient.SessionCacheKey{
+		Issuer:      downstream.Spec.Issuer,
+		ClientID:    "pinniped-cli",
+		Scopes:      downstreamScopes,
+		RedirectURI: "http://localhost:0/callback",
+	})
+	require.NotNil(t, token)
+
+	idTokenClaims := token.IDToken.Claims
+	username := idTokenClaims[oidc.DownstreamUsernameClaim].(string)
+	groups, _ := idTokenClaims[oidc.DownstreamGroupsClaim].([]string)
+
+	require.Equal(t, env.SupervisorTestUpstream.Username, username)
+	if len(env.SupervisorTestUpstream.ExpectedGroups) == 0 {
+		// We only put a groups claim in our downstream ID token if we got groups from the upstream.
+		require.Nil(t, groups)
+	} else {
+		require.Equal(t, env.SupervisorTestUpstream.ExpectedGroups, groups)
+	}
 }

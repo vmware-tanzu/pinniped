@@ -269,7 +269,7 @@ func getGroupsFromUpstreamIDToken(
 			"configuredGroupsClaim", upstreamIDPConfig.GetGroupsClaim(),
 			"groupsClaim", groupsClaim,
 		)
-		return nil, httperr.New(http.StatusUnprocessableEntity, "no groups claim in upstream ID token")
+		return nil, nil // the upstream IDP may have omitted the claim if the user has no groups
 	}
 
 	groupsAsArray, okAsArray := groupsAsInterface.([]string)

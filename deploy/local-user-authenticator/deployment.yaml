@@ -1,4 +1,4 @@
-#! Copyright 2020 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -48,8 +48,8 @@ spec:
         app: local-user-authenticator
     spec:
       securityContext:
-        runAsUser: 1001
-        runAsGroup: 1001
+        runAsUser: #@ data.values.run_as_user
+        runAsGroup: #@ data.values.run_as_group
       serviceAccountName: local-user-authenticator
       #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
       imagePullSecrets:

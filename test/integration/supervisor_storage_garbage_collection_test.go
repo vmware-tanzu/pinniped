@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -26,7 +26,7 @@ func TestStorageGarbageCollection(t *testing.T) {
 	t.Parallel()
 
 	env := library.IntegrationEnv(t)
-	client := library.NewClientset(t)
+	client := library.NewKubernetesClientset(t)
 	secrets := client.CoreV1().Secrets(env.SupervisorNamespace)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()

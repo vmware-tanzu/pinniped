@@ -46,6 +46,7 @@ func TestGetKubeconfig(t *testing.T) {
 		wantStdout         string
 		wantStderr         string
 		wantOptionsCount   int
+		wantAPIGroupSuffix string
 	}{
 		{
 			name: "help flag passed",
@@ -281,6 +282,17 @@ func TestGetKubeconfig(t *testing.T) {
 			`),
 		},
 		{
+			name: "invalid api group suffix",
+			args: []string{
+				"--concierge-api-group-suffix", ".starts.with.dot",
+			},
+			wantError: true,
+			wantStderr: here.Doc(`
+				Error: invalid api group suffix: 1 error(s):
+				- a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')
+			`),
+		},
+		{
 			name: "valid static token",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
@@ -492,6 +504,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      env: []
         		      provideClusterInfo: true
 			`, base64.StdEncoding.EncodeToString(testCA.Bundle())),
+			wantAPIGroupSuffix: "tuna.io",
 		},
 	}
 	for _, tt := range tests {
@@ -504,7 +517,12 @@ func TestGetKubeconfig(t *testing.T) {
 					}
 					return ".../path/to/pinniped", nil
 				},
-				getClientset: func(clientConfig clientcmd.ClientConfig) (conciergeclientset.Interface, error) {
+				getClientset: func(clientConfig clientcmd.ClientConfig, apiGroupSuffix string) (conciergeclientset.Interface, error) {
+					if tt.wantAPIGroupSuffix == "" {
+						require.Equal(t, "pinniped.dev", apiGroupSuffix) // "pinniped.dev" = api group suffix default
+					} else {
+						require.Equal(t, tt.wantAPIGroupSuffix, apiGroupSuffix)
+					}
 					if tt.getClientsetErr != nil {
 						return nil, tt.getClientsetErr
 					}

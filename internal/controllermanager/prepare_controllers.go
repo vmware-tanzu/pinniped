@@ -18,7 +18,6 @@ import (
 	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
 	pinnipedinformers "go.pinniped.dev/generated/1.20/client/concierge/informers/externalversions"
-	"go.pinniped.dev/internal/apigroup"
 	"go.pinniped.dev/internal/config/concierge"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
@@ -31,6 +30,7 @@ import (
 	"go.pinniped.dev/internal/deploymentref"
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/dynamiccert"
+	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 )
 
@@ -89,8 +89,10 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		return nil, fmt.Errorf("cannot create deployment ref: %w", err)
 	}
 
-	_ = c.APIGroupSuffix // TODO: wire API group into kubeclient.
-	client, err := kubeclient.New(dref)
+	client, err := kubeclient.New(
+		dref,
+		kubeclient.WithMiddleware(groupsuffix.New(c.APIGroupSuffix)),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("could not create clients for the controllers: %w", err)
 	}
@@ -111,7 +113,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		Name:      c.NamesConfig.CredentialIssuer,
 	}
 
-	groupName, ok := apigroup.Make(loginv1alpha1.GroupName, c.APIGroupSuffix)
+	groupName, ok := groupsuffix.Replace(loginv1alpha1.GroupName, c.APIGroupSuffix)
 	if !ok {
 		return nil, fmt.Errorf("cannot make api group from %s/%s", loginv1alpha1.GroupName, c.APIGroupSuffix)
 	}

@@ -46,7 +46,7 @@ func Warning(msg string, keysAndValues ...interface{}) {
 
 // Use WarningErr to issue a Warning message with an error object as part of the message.
 func WarningErr(msg string, err error, keysAndValues ...interface{}) {
-	Warning(msg, append([]interface{}{errorKey, err}, keysAndValues)...)
+	Warning(msg, append([]interface{}{errorKey, err}, keysAndValues...)...)
 }
 
 func Info(msg string, keysAndValues ...interface{}) {
@@ -55,7 +55,7 @@ func Info(msg string, keysAndValues ...interface{}) {
 
 // Use InfoErr to log an expected error, e.g. validation failure of an http parameter.
 func InfoErr(msg string, err error, keysAndValues ...interface{}) {
-	Info(msg, append([]interface{}{errorKey, err}, keysAndValues)...)
+	Info(msg, append([]interface{}{errorKey, err}, keysAndValues...)...)
 }
 
 func Debug(msg string, keysAndValues ...interface{}) {
@@ -64,7 +64,7 @@ func Debug(msg string, keysAndValues ...interface{}) {
 
 // Use DebugErr to issue a Debug message with an error object as part of the message.
 func DebugErr(msg string, err error, keysAndValues ...interface{}) {
-	Debug(msg, append([]interface{}{errorKey, err}, keysAndValues)...)
+	Debug(msg, append([]interface{}{errorKey, err}, keysAndValues...)...)
 }
 
 func Trace(msg string, keysAndValues ...interface{}) {
@@ -73,7 +73,7 @@ func Trace(msg string, keysAndValues ...interface{}) {
 
 // Use TraceErr to issue a Trace message with an error object as part of the message.
 func TraceErr(msg string, err error, keysAndValues ...interface{}) {
-	Trace(msg, append([]interface{}{errorKey, err}, keysAndValues)...)
+	Trace(msg, append([]interface{}{errorKey, err}, keysAndValues...)...)
 }
 
 func All(msg string, keysAndValues ...interface{}) {

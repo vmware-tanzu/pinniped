@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -18,7 +18,7 @@ import (
 
 func TestGetDeployment(t *testing.T) {
 	env := library.IntegrationEnv(t)
-	client := library.NewClientset(t)
+	client := library.NewKubernetesClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

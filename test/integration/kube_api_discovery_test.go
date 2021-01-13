@@ -4,6 +4,7 @@
 package integration
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 
 	"go.pinniped.dev/test/library"
 )
@@ -19,9 +21,21 @@ import (
 func TestGetAPIResourceList(t *testing.T) {
 	env := library.IntegrationEnv(t)
 
-	client := library.NewClientset(t)
+	client := library.NewKubernetesClientset(t)
 	groups, resources, err := client.Discovery().ServerGroupsAndResources()
-	require.NoError(t, err)
+
+	// discovery can have partial failures when an API service is unavailable (i.e. because of TestAPIServingCertificateAutoCreationAndRotation)
+	// we ignore failures for groups that are not relevant to this test
+	if err != nil {
+		discoveryFailed := &discovery.ErrGroupDiscoveryFailed{}
+		isDiscoveryFailed := errors.As(err, &discoveryFailed)
+		require.True(t, isDiscoveryFailed, err)
+		for gv, gvErr := range discoveryFailed.Groups {
+			if strings.HasSuffix(gv.Group, "."+env.APIGroupSuffix) {
+				require.NoError(t, gvErr)
+			}
+		}
+	}
 
 	makeGV := func(firstSegment, secondSegment string) schema.GroupVersion {
 		return schema.GroupVersion{
@@ -195,12 +209,15 @@ func TestGetAPIResourceList(t *testing.T) {
 		for _, tt := range tests {
 			testedGroups[tt.group.Name] = true
 		}
+		foundPinnipedGroups := 0
 		for _, g := range groups {
 			if !strings.Contains(g.Name, env.APIGroupSuffix) {
 				continue
 			}
+			foundPinnipedGroups++
 			assert.Truef(t, testedGroups[g.Name], "expected group %q to have assertions defined", g.Name)
 		}
+		require.Equal(t, len(testedGroups), foundPinnipedGroups)
 	})
 
 	t.Run("every API categorized appropriately", func(t *testing.T) {

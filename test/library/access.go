@@ -6,7 +6,6 @@ package library
 import (
 	"context"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"os/exec"
 	"testing"
@@ -16,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -33,12 +31,11 @@ const (
 // performing a Pinniped credential exchange.
 func AccessAsUserTest(
 	ctx context.Context,
-	adminClient kubernetes.Interface,
 	testUsername string,
 	clientUnderTest kubernetes.Interface,
 ) func(t *testing.T) {
 	return func(t *testing.T) {
-		addTestClusterUserCanViewEverythingRoleBinding(ctx, t, adminClient, testUsername)
+		addTestClusterUserCanViewEverythingRoleBinding(t, testUsername)
 
 		// Use the client which is authenticated as the test user to list namespaces
 		var listNamespaceResponse *v1.NamespaceList
@@ -55,14 +52,12 @@ func AccessAsUserTest(
 }
 
 func AccessAsUserWithKubectlTest(
-	ctx context.Context,
-	adminClient kubernetes.Interface,
 	testKubeConfigYAML string,
 	testUsername string,
 	expectedNamespace string,
 ) func(t *testing.T) {
 	return func(t *testing.T) {
-		addTestClusterUserCanViewEverythingRoleBinding(ctx, t, adminClient, testUsername)
+		addTestClusterUserCanViewEverythingRoleBinding(t, testUsername)
 
 		// Use the given kubeconfig with kubectl to list namespaces as the test user
 		var kubectlCommandOutput string
@@ -85,12 +80,11 @@ func AccessAsUserWithKubectlTest(
 // a group membership) after performing a Pinniped credential exchange.
 func AccessAsGroupTest(
 	ctx context.Context,
-	adminClient kubernetes.Interface,
 	testGroup string,
 	clientUnderTest kubernetes.Interface,
 ) func(t *testing.T) {
 	return func(t *testing.T) {
-		addTestClusterGroupCanViewEverythingRoleBinding(ctx, t, adminClient, testGroup)
+		addTestClusterGroupCanViewEverythingRoleBinding(t, testGroup)
 
 		// Use the client which is authenticated as the test user to list namespaces
 		var listNamespaceResponse *v1.NamespaceList
@@ -107,14 +101,12 @@ func AccessAsGroupTest(
 }
 
 func AccessAsGroupWithKubectlTest(
-	ctx context.Context,
-	adminClient kubernetes.Interface,
 	testKubeConfigYAML string,
 	testGroup string,
 	expectedNamespace string,
 ) func(t *testing.T) {
 	return func(t *testing.T) {
-		addTestClusterGroupCanViewEverythingRoleBinding(ctx, t, adminClient, testGroup)
+		addTestClusterGroupCanViewEverythingRoleBinding(t, testGroup)
 
 		// Use the given kubeconfig with kubectl to list namespaces as the test user
 		var kubectlCommandOutput string
@@ -130,67 +122,38 @@ func AccessAsGroupWithKubectlTest(
 	}
 }
 
-func addTestClusterUserCanViewEverythingRoleBinding(ctx context.Context, t *testing.T, adminClient kubernetes.Interface, testUsername string) {
+func addTestClusterUserCanViewEverythingRoleBinding(t *testing.T, testUsername string) {
 	t.Helper()
 
-	addTestClusterRoleBinding(ctx, t, adminClient, &rbacv1.ClusterRoleBinding{
-		TypeMeta: metav1.TypeMeta{},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "integration-test-user-readonly-role-binding",
-		},
-		Subjects: []rbacv1.Subject{{
+	CreateTestClusterRoleBinding(t,
+		rbacv1.Subject{
 			Kind:     rbacv1.UserKind,
 			APIGroup: rbacv1.GroupName,
 			Name:     testUsername,
-		}},
-		RoleRef: rbacv1.RoleRef{
+		},
+		rbacv1.RoleRef{
 			Kind:     "ClusterRole",
 			APIGroup: rbacv1.GroupName,
 			Name:     "view",
 		},
-	})
+	)
 }
 
-func addTestClusterGroupCanViewEverythingRoleBinding(ctx context.Context, t *testing.T, adminClient kubernetes.Interface, testGroup string) {
+func addTestClusterGroupCanViewEverythingRoleBinding(t *testing.T, testGroup string) {
 	t.Helper()
 
-	addTestClusterRoleBinding(ctx, t, adminClient, &rbacv1.ClusterRoleBinding{
-		TypeMeta: metav1.TypeMeta{},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "integration-test-group-readonly-role-binding",
-		},
-		Subjects: []rbacv1.Subject{{
+	CreateTestClusterRoleBinding(t,
+		rbacv1.Subject{
 			Kind:     rbacv1.GroupKind,
 			APIGroup: rbacv1.GroupName,
 			Name:     testGroup,
-		}},
-		RoleRef: rbacv1.RoleRef{
+		},
+		rbacv1.RoleRef{
 			Kind:     "ClusterRole",
 			APIGroup: rbacv1.GroupName,
 			Name:     "view",
 		},
-	})
-}
-
-func addTestClusterRoleBinding(ctx context.Context, t *testing.T, adminClient kubernetes.Interface, binding *rbacv1.ClusterRoleBinding) {
-	t.Helper()
-
-	_, err := adminClient.RbacV1().ClusterRoleBindings().Get(ctx, binding.Name, metav1.GetOptions{})
-	if err != nil {
-		statusError, isStatus := err.(*errors.StatusError)
-		require.True(t, isStatus, "Only StatusNotFound error would be acceptable, but error was: ", err.Error())
-		require.Equal(t, http.StatusNotFound, int(statusError.Status().Code))
-
-		_, err = adminClient.RbacV1().ClusterRoleBindings().Create(ctx, binding, metav1.CreateOptions{})
-		require.NoError(t, err)
-	}
-
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		err = adminClient.RbacV1().ClusterRoleBindings().Delete(ctx, binding.Name, metav1.DeleteOptions{})
-		require.NoError(t, err, "Test failed to clean up after itself")
-	})
+	)
 }
 
 func runKubectlGetNamespaces(t *testing.T, kubeConfigYAML string) (string, error) {

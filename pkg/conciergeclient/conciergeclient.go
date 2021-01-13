@@ -22,6 +22,7 @@ import (
 	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 )
 
@@ -116,8 +117,8 @@ func WithEndpoint(endpoint string) Option {
 // WithAPIGroupSuffix configures the concierge's API group suffix (e.g., "pinniped.dev").
 func WithAPIGroupSuffix(apiGroupSuffix string) Option {
 	return func(c *Client) error {
-		if apiGroupSuffix == "" {
-			return fmt.Errorf("api group suffix must not be empty")
+		if err := groupsuffix.Validate(apiGroupSuffix); err != nil {
+			return fmt.Errorf("invalid api group suffix: %w", err)
 		}
 		c.apiGroupSuffix = apiGroupSuffix
 		return nil
@@ -163,8 +164,10 @@ func (c *Client) clientset() (conciergeclientset.Interface, error) {
 	if err != nil {
 		return nil, err
 	}
-	_ = c.apiGroupSuffix // TODO: wire API group into kubeclient.
-	client, err := kubeclient.New(kubeclient.WithConfig(cfg))
+	client, err := kubeclient.New(
+		kubeclient.WithConfig(cfg),
+		kubeclient.WithMiddleware(groupsuffix.New(c.apiGroupSuffix)),
+	)
 	if err != nil {
 		return nil, err
 	}

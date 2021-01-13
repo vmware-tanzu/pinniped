@@ -37,6 +37,7 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/deploymentref"
 	"go.pinniped.dev/internal/downward"
+	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
@@ -258,14 +259,15 @@ func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// TODO remove code that relies on supervisorDeployment directly
 	dref, supervisorDeployment, err := deploymentref.New(podInfo)
 	if err != nil {
 		return fmt.Errorf("cannot create deployment ref: %w", err)
 	}
 
-	_ = *cfg.APIGroupSuffix // TODO: wire API group into kubeclient.
-	client, err := kubeclient.New(dref)
+	client, err := kubeclient.New(
+		dref,
+		kubeclient.WithMiddleware(groupsuffix.New(*cfg.APIGroupSuffix)),
+	)
 	if err != nil {
 		return fmt.Errorf("cannot create k8s client: %w", err)
 	}

@@ -175,13 +175,29 @@ func TestFromPath(t *testing.T) {
 				api:
 				  servingCertificate:
 					durationSeconds: 2400
-					renewBeforeSeconds: -10
+					renewBeforeSeconds: 0
 				names:
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
 			`),
 			wantError: "validate api: renewBefore must be positive",
+		},
+		{
+			name: "InvalidAPIGroupSuffix",
+			yaml: here.Doc(`
+				---
+				api:
+				  servingCertificate:
+					durationSeconds: 3600
+					renewBeforeSeconds: 2400
+				apiGroupSuffix: .starts.with.dot
+				names:
+				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
+				  credentialIssuer: pinniped-config
+				  apiService: pinniped-api
+			`),
+			wantError: "validate apiGroupSuffix: 1 error(s):\n- a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')",
 		},
 	}
 	for _, test := range tests {

@@ -73,7 +73,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			kubeClient := library.NewClientset(t)
+			kubeClient := library.NewKubernetesClientset(t)
 			aggregatedClient := library.NewAggregatedClientset(t)
 			conciergeClient := library.NewConciergeClientset(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)

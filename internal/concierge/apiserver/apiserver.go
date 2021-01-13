@@ -10,42 +10,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/pkg/version"
 
-	loginapi "go.pinniped.dev/generated/1.20/apis/concierge/login"
-	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/registry/credentialrequest"
 )
-
-var (
-	//nolint: gochecknoglobals
-	scheme = runtime.NewScheme()
-	//nolint: gochecknoglobals, golint
-	Codecs = serializer.NewCodecFactory(scheme)
-)
-
-//nolint: gochecknoinits
-func init() {
-	utilruntime.Must(loginv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(loginapi.AddToScheme(scheme))
-
-	// add the options to empty v1
-	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
-
-	unversioned := schema.GroupVersion{Group: "", Version: "v1"}
-	scheme.AddUnversionedTypes(unversioned,
-		&metav1.Status{},
-		&metav1.APIVersions{},
-		&metav1.APIGroupList{},
-		&metav1.APIGroup{},
-		&metav1.APIResourceList{},
-	)
-}
 
 type Config struct {
 	GenericConfig *genericapiserver.RecommendedConfig
@@ -56,6 +27,9 @@ type ExtraConfig struct {
 	Authenticator                 credentialrequest.TokenCredentialRequestAuthenticator
 	Issuer                        credentialrequest.CertIssuer
 	StartControllersPostStartHook func(ctx context.Context)
+	Scheme                        *runtime.Scheme
+	NegotiatedSerializer          runtime.NegotiatedSerializer
+	GroupVersion                  schema.GroupVersion
 }
 
 type PinnipedServer struct {
@@ -96,15 +70,15 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 		GenericAPIServer: genericServer,
 	}
 
-	gvr := loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")
+	gvr := c.ExtraConfig.GroupVersion.WithResource("tokencredentialrequests")
 	storage := credentialrequest.NewREST(c.ExtraConfig.Authenticator, c.ExtraConfig.Issuer)
 	if err := s.GenericAPIServer.InstallAPIGroup(&genericapiserver.APIGroupInfo{
 		PrioritizedVersions:          []schema.GroupVersion{gvr.GroupVersion()},
 		VersionedResourcesStorageMap: map[string]map[string]rest.Storage{gvr.Version: {gvr.Resource: storage}},
 		OptionsExternalVersion:       &schema.GroupVersion{Version: "v1"},
-		Scheme:                       scheme,
+		Scheme:                       c.ExtraConfig.Scheme,
 		ParameterCodec:               metav1.ParameterCodec,
-		NegotiatedSerializer:         Codecs,
+		NegotiatedSerializer:         c.ExtraConfig.NegotiatedSerializer,
 	}); err != nil {
 		return nil, fmt.Errorf("could not install API group %s: %w", gvr.String(), err)
 	}

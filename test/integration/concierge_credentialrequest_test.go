@@ -104,9 +104,6 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 			require.NotNil(t, response.Status.Credential.ExpirationTimestamp)
 			require.InDelta(t, 5*time.Minute, time.Until(response.Status.Credential.ExpirationTimestamp.Time), float64(time.Minute))
 
-			// Create a client using the admin kubeconfig.
-			adminClient := library.NewClientset(t)
-
 			// Create a client using the certificate from the CredentialRequest.
 			clientWithCertFromCredentialRequest := library.NewClientsetWithCertAndKey(
 				t,
@@ -116,13 +113,13 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 
 			t.Run(
 				"access as user",
-				library.AccessAsUserTest(ctx, adminClient, username, clientWithCertFromCredentialRequest),
+				library.AccessAsUserTest(ctx, username, clientWithCertFromCredentialRequest),
 			)
 			for _, group := range groups {
 				group := group
 				t.Run(
 					"access as group "+group,
-					library.AccessAsGroupTest(ctx, adminClient, group, clientWithCertFromCredentialRequest),
+					library.AccessAsGroupTest(ctx, group, clientWithCertFromCredentialRequest),
 				)
 			}
 		})

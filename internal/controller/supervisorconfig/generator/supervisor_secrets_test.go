@@ -34,12 +34,6 @@ var (
 		},
 	}
 
-	ownerGVK = schema.GroupVersionKind{
-		Group:   appsv1.SchemeGroupVersion.Group,
-		Version: appsv1.SchemeGroupVersion.Version,
-		Kind:    "Deployment",
-	}
-
 	labels = map[string]string{
 		"some-label-key-1": "some-label-value-1",
 		"some-label-key-2": "some-label-value-2",
@@ -57,87 +51,11 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 		wantDelete bool
 	}{
 		{
-			name: "owner reference is missing",
+			name: "owner reference is missing but Secret type is correct",
 			secret: &corev1.Secret{
 				Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
-				},
-			},
-		},
-		{
-			name: "owner reference with incorrect `APIVersion`",
-			secret: &corev1.Secret{
-				Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "some-namespace",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							Name: owner.GetName(),
-							Kind: ownerGVK.Kind,
-							UID:  owner.GetUID(),
-						},
-					},
-				},
-			},
-			wantAdd:    true,
-			wantUpdate: true,
-			wantDelete: true,
-		},
-		{
-			name: "owner reference with incorrect `Kind`",
-			secret: &corev1.Secret{
-				Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "some-namespace",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: ownerGVK.String(),
-							Name:       owner.GetName(),
-							Kind:       "IncorrectKind",
-							UID:        owner.GetUID(),
-						},
-					},
-				},
-			},
-			wantAdd:    true,
-			wantUpdate: true,
-			wantDelete: true,
-		},
-		{
-			name: "expected owner reference with incorrect `UID`",
-			secret: &corev1.Secret{
-				Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "some-namespace",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: ownerGVK.String(),
-							Name:       owner.GetName(),
-							Kind:       ownerGVK.Kind,
-							UID:        "DOES_NOT_MATCH",
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "multiple owner references (expected owner reference, and one more)",
-			secret: &corev1.Secret{
-				Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "some-namespace",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							Kind: "UnrelatedKind",
-						},
-						{
-							APIVersion: ownerGVK.String(),
-							Name:       owner.GetName(),
-							Kind:       ownerGVK.Kind,
-							UID:        owner.GetUID(),
-						},
-					},
 				},
 			},
 			wantAdd:    true,
@@ -152,10 +70,8 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							APIVersion: ownerGVK.String(),
-							Name:       owner.GetName(),
-							Kind:       ownerGVK.Kind,
-							UID:        owner.GetUID(),
+							Name: owner.GetName(),
+							UID:  owner.GetUID(),
 						},
 					},
 				},
@@ -166,32 +82,15 @@ func TestSupervisorSecretsControllerFilterSecret(t *testing.T) {
 			secret: &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "some-namespace"}},
 		},
 		{
-			name: "owner reference with `Controller`: true",
-			secret: &corev1.Secret{
-				Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "some-namespace",
-					OwnerReferences: []metav1.OwnerReference{
-						*metav1.NewControllerRef(owner, ownerGVK),
-					},
-				},
-			},
-			wantAdd:    true,
-			wantUpdate: true,
-			wantDelete: true,
-		},
-		{
-			name: "expected owner reference - where `Controller`: false",
+			name: "realistic owner reference and correct Secret type",
 			secret: &corev1.Secret{
 				Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "some-namespace",
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							APIVersion: ownerGVK.String(),
-							Name:       owner.GetName(),
-							Kind:       ownerGVK.Kind,
-							UID:        owner.GetUID(),
+							Name: owner.GetName(),
+							UID:  owner.GetUID(),
 						},
 					},
 				},
@@ -272,15 +171,7 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      generatedSecretName,
 				Namespace: generatedSecretNamespace,
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						APIVersion: ownerGVK.GroupVersion().String(),
-						Kind:       ownerGVK.Kind,
-						Name:       owner.GetName(),
-						UID:        owner.GetUID(),
-					},
-				},
-				Labels: labels,
+				Labels:    labels,
 			},
 			Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
 			Data: map[string][]byte{
@@ -292,15 +183,7 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      generatedSecretName,
 				Namespace: generatedSecretNamespace,
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						APIVersion: ownerGVK.GroupVersion().String(),
-						Kind:       ownerGVK.Kind,
-						Name:       owner.GetName(),
-						UID:        owner.GetUID(),
-					},
-				},
-				Labels: labels,
+				Labels:    labels,
 			},
 			Type: "secrets.pinniped.dev/supervisor-csrf-signing-key",
 			Data: map[string][]byte{

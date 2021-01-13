@@ -17,6 +17,7 @@ import (
 
 	conciergeconfigv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/config/v1alpha1"
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/1.20/apis/supervisor/config/v1alpha1"
+	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/ownerref"
 	"go.pinniped.dev/test/library"
@@ -25,7 +26,7 @@ import (
 func TestKubeClientOwnerRef(t *testing.T) {
 	env := library.IntegrationEnv(t)
 
-	regularClient := library.NewClientset(t)
+	regularClient := library.NewKubernetesClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -62,16 +63,20 @@ func TestKubeClientOwnerRef(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, parentSecret.OwnerReferences, 0)
 
-	// create a client that should set an owner ref back to parent on create
+	// work around stupid behavior of WithoutVersionDecoder.Decode
+	parentSecret.APIVersion, parentSecret.Kind = corev1.SchemeGroupVersion.WithKind("Secret").ToAPIVersionAndKind()
+
 	ref := metav1.OwnerReference{
-		APIVersion: "v1",
-		Kind:       "Secret",
+		APIVersion: parentSecret.APIVersion,
+		Kind:       parentSecret.Kind,
 		Name:       parentSecret.Name,
 		UID:        parentSecret.UID,
 	}
-	_ = env.APIGroupSuffix // TODO: wire API group into kubeclient.
+
+	// create a client that should set an owner ref back to parent on create
 	ownerRefClient, err := kubeclient.New(
-		kubeclient.WithMiddleware(ownerref.New(ref)),
+		kubeclient.WithMiddleware(ownerref.New(parentSecret)),
+		kubeclient.WithMiddleware(groupsuffix.New(env.APIGroupSuffix)),
 		kubeclient.WithConfig(library.NewClientConfig(t)),
 	)
 	require.NoError(t, err)
@@ -137,44 +142,29 @@ func TestKubeClientOwnerRef(t *testing.T) {
 		return err
 	})
 
-	// TODO: update middleware code to not set owner references on cluster-scoped objects.
-	//
-	// The Kube 1.20 garbage collector asserts some new behavior in regards to invalid owner
-	// references (i.e., when you have a namespace-scoped owner references for a cluster-scoped
-	// dependent, the cluster-scoped dependent is not removed). We also found a bug in the 1.20
-	// garbage collector where namespace-scoped dependents are not garbage collected if their owner
-	// had been used as an invalid owner reference before - this bug causes our test to fallover
-	// because we are setting a namespace-scoped owner ref on this APIService.
-	//
-	// We believe that the best way to get around this problem is to update our kubeclient code to
-	// never set owner references on cluster-scoped objects. After we do that, we will uncomment this
-	// part of the test.
-	if false {
-		// sanity check API service client
-		apiService, err := ownerRefClient.Aggregation.ApiregistrationV1().APIServices().Create(
-			ctx,
-			&apiregistrationv1.APIService{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:            "v1.pandas.dev",
-					OwnerReferences: nil, // no owner refs set
-				},
-				Spec: apiregistrationv1.APIServiceSpec{
-					Version:              "v1",
-					Group:                "pandas.dev",
-					GroupPriorityMinimum: 10_000,
-					VersionPriority:      500,
-				},
+	// sanity check API service client - the middleware code shouldn't add an owner reference to this
+	// APIService because the APIService is cluster-scoped and the parent object is namespace-scoped,
+	// which is invalid in Kubernetes
+	apiService, err := ownerRefClient.Aggregation.ApiregistrationV1().APIServices().Create(
+		ctx,
+		&apiregistrationv1.APIService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "v1.pandas.dev",
+				OwnerReferences: nil, // no owner refs set
 			},
-			metav1.CreateOptions{},
-		)
-		require.NoError(t, err)
-		hasOwnerRef(t, apiService, ref)
-		// this owner ref is invalid for an API service so it should be immediately deleted
-		isEventuallyDeleted(t, func() error {
-			_, err := ownerRefClient.Aggregation.ApiregistrationV1().APIServices().Get(ctx, apiService.Name, metav1.GetOptions{})
-			return err
-		})
-	}
+			Spec: apiregistrationv1.APIServiceSpec{
+				Version:              "v1",
+				Group:                "pandas.dev",
+				GroupPriorityMinimum: 10_000,
+				VersionPriority:      500,
+			},
+		},
+		metav1.CreateOptions{},
+	)
+	require.NoError(t, err)
+	hasNoOwnerRef(t, apiService)
+	err = ownerRefClient.Aggregation.ApiregistrationV1().APIServices().Delete(ctx, apiService.Name, metav1.DeleteOptions{})
+	require.NoError(t, err)
 
 	// sanity check concierge client
 	credentialIssuer, err := ownerRefClient.PinnipedConcierge.ConfigV1alpha1().CredentialIssuers(namespace.Name).Create(
@@ -254,6 +244,13 @@ func hasOwnerRef(t *testing.T, obj metav1.Object, ref metav1.OwnerReference) {
 	ownerReferences := obj.GetOwnerReferences()
 	require.Len(t, ownerReferences, 1)
 	require.Equal(t, ref, ownerReferences[0])
+}
+
+func hasNoOwnerRef(t *testing.T, obj metav1.Object) {
+	t.Helper()
+
+	ownerReferences := obj.GetOwnerReferences()
+	require.Len(t, ownerReferences, 0)
 }
 
 func isEventuallyDeleted(t *testing.T, f func() error) {

@@ -57,6 +57,7 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 				"--pinniped-namespace", env.ConciergeNamespace,
 				"--authenticator-type", "webhook",
 				"--authenticator-name", authenticator.Name,
+				"--api-group-suffix", env.APIGroupSuffix,
 			},
 			expectStderr: "Command \"get-kubeconfig\" is deprecated, Please use `pinniped get kubeconfig` instead.\n",
 		},
@@ -84,16 +85,15 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 
 			// In addition to the client-go based testing below, also try the kubeconfig
 			// with kubectl to validate that it works.
-			adminClient := library.NewClientset(t)
 			t.Run(
 				"access as user with kubectl",
-				library.AccessAsUserWithKubectlTest(ctx, adminClient, stdout, env.TestUser.ExpectedUsername, env.ConciergeNamespace),
+				library.AccessAsUserWithKubectlTest(stdout, env.TestUser.ExpectedUsername, env.ConciergeNamespace),
 			)
 			for _, group := range env.TestUser.ExpectedGroups {
 				group := group
 				t.Run(
 					"access as group "+group+" with kubectl",
-					library.AccessAsGroupWithKubectlTest(ctx, adminClient, stdout, group, env.ConciergeNamespace),
+					library.AccessAsGroupWithKubectlTest(stdout, group, env.ConciergeNamespace),
 				)
 			}
 
@@ -101,10 +101,10 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 			kubeClient := library.NewClientsetForKubeConfig(t, stdout)
 
 			// Validate that we can auth to the API via our user.
-			t.Run("access as user with client-go", library.AccessAsUserTest(ctx, adminClient, env.TestUser.ExpectedUsername, kubeClient))
+			t.Run("access as user with client-go", library.AccessAsUserTest(ctx, env.TestUser.ExpectedUsername, kubeClient))
 			for _, group := range env.TestUser.ExpectedGroups {
 				group := group
-				t.Run("access as group "+group+" with client-go", library.AccessAsGroupTest(ctx, adminClient, group, kubeClient))
+				t.Run("access as group "+group+" with client-go", library.AccessAsGroupTest(ctx, group, kubeClient))
 			}
 		})
 	}

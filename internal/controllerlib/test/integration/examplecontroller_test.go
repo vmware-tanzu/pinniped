@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
 
 	"go.pinniped.dev/internal/controllerlib/test/integration/examplecontroller/api"
 	examplestart "go.pinniped.dev/internal/controllerlib/test/integration/examplecontroller/starter"
@@ -31,7 +32,8 @@ func TestExampleController(t *testing.T) {
 	err := examplestart.StartExampleController(ctx, config, secretData)
 	require.NoError(t, err)
 
-	client := library.NewClientset(t)
+	client, err := kubernetes.NewForConfig(config)
+	require.NoError(t, err, "unexpected failure from kubernetes.NewForConfig()")
 
 	namespaces := client.CoreV1().Namespaces()
 

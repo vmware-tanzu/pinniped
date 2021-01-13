@@ -11,11 +11,16 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 
+	loginapi "go.pinniped.dev/generated/1.20/apis/concierge/login"
 	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
-	"go.pinniped.dev/internal/apigroup"
 	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
 	"go.pinniped.dev/internal/concierge/apiserver"
 	"go.pinniped.dev/internal/config/concierge"
@@ -23,6 +28,7 @@ import (
 	"go.pinniped.dev/internal/controllermanager"
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/dynamiccert"
+	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/registry/credentialrequest"
@@ -168,24 +174,80 @@ func getAggregatedAPIServerConfig(
 	startControllersPostStartHook func(context.Context),
 	apiGroupSuffix string,
 ) (*apiserver.Config, error) {
-	// This is ignored for now because we turn off etcd storage below, but this is
-	// the right prefix in case we turn it back on.
-	apiGroup, ok := apigroup.Make(loginv1alpha1.GroupName, apiGroupSuffix)
+	apiGroup, ok := groupsuffix.Replace(loginv1alpha1.GroupName, apiGroupSuffix)
 	if !ok {
 		return nil, fmt.Errorf("cannot make api group from %s/%s", loginv1alpha1.GroupName, apiGroupSuffix)
 	}
+
+	// standard set up of the server side scheme
+	scheme := runtime.NewScheme()
+	codecs := serializer.NewCodecFactory(scheme)
+
+	utilruntime.Must(loginv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(loginapi.AddToScheme(scheme))
+
+	// add the options to empty v1
+	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
+
+	unversioned := schema.GroupVersion{Group: "", Version: "v1"}
+	scheme.AddUnversionedTypes(unversioned,
+		&metav1.Status{},
+		&metav1.APIVersions{},
+		&metav1.APIGroupList{},
+		&metav1.APIGroup{},
+		&metav1.APIResourceList{},
+	)
+
+	// use closure to avoid mutating scheme during iteration
+	var addPinnipedTypeToAPIGroup []func() //nolint: prealloc  // expected slice size is unknown
+	for gvk := range scheme.AllKnownTypes() {
+		gvk := gvk
+
+		if apiGroup == loginv1alpha1.GroupName {
+			break // bail out early if using the standard group
+		}
+
+		if gvk.Group != loginv1alpha1.GroupName {
+			continue // ignore types that are not in the aggregated API group
+		}
+
+		// re-register the existing type but with the new group
+		f := func() {
+			obj, err := scheme.New(gvk)
+			if err != nil {
+				panic(err) // programmer error, scheme internal code is broken
+			}
+			newGVK := schema.GroupVersionKind{
+				Group:   apiGroup,
+				Version: gvk.Version,
+				Kind:    gvk.Kind,
+			}
+			scheme.AddKnownTypeWithName(newGVK, obj)
+		}
+
+		addPinnipedTypeToAPIGroup = append(addPinnipedTypeToAPIGroup, f)
+	}
+
+	// run the closures to mutate the scheme to understand the types at the new group
+	for _, f := range addPinnipedTypeToAPIGroup {
+		f()
+	}
+
 	defaultEtcdPathPrefix := fmt.Sprintf("/registry/%s", apiGroup)
+	groupVersion := schema.GroupVersion{
+		Group:   apiGroup,
+		Version: loginv1alpha1.SchemeGroupVersion.Version,
+	}
 
 	recommendedOptions := genericoptions.NewRecommendedOptions(
 		defaultEtcdPathPrefix,
-		apiserver.Codecs.LegacyCodec(loginv1alpha1.SchemeGroupVersion),
-		// TODO we should check to see if all the other default settings are acceptable for us
+		codecs.LegacyCodec(groupVersion),
 	)
 	recommendedOptions.Etcd = nil // turn off etcd storage because we don't need it yet
 	recommendedOptions.SecureServing.ServerCert.GeneratedCert = dynamicCertProvider
 	recommendedOptions.SecureServing.BindPort = 8443 // Don't run on default 443 because that requires root
 
-	serverConfig := genericapiserver.NewRecommendedConfig(apiserver.Codecs)
+	serverConfig := genericapiserver.NewRecommendedConfig(codecs)
 	// Note that among other things, this ApplyTo() function copies
 	// `recommendedOptions.SecureServing.ServerCert.GeneratedCert` into
 	// `serverConfig.SecureServing.Cert` thus making `dynamicCertProvider`
@@ -205,6 +267,9 @@ func getAggregatedAPIServerConfig(
 			Authenticator:                 authenticator,
 			Issuer:                        issuer,
 			StartControllersPostStartHook: startControllersPostStartHook,
+			Scheme:                        scheme,
+			NegotiatedSerializer:          codecs,
+			GroupVersion:                  groupVersion,
 		},
 	}
 	return apiServerConfig, nil

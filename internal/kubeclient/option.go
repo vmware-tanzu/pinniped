@@ -20,6 +20,10 @@ func WithConfig(config *restclient.Config) Option {
 
 func WithMiddleware(middleware Middleware) Option {
 	return func(c *clientConfig) {
+		if middleware == nil {
+			return // support passing in a nil middleware as a no-op
+		}
+
 		c.middlewares = append(c.middlewares, middleware)
 	}
 }

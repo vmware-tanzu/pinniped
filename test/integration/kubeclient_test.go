@@ -258,16 +258,15 @@ func hasOwnerRef(t *testing.T, obj metav1.Object, ref metav1.OwnerReference) {
 func isEventuallyDeleted(t *testing.T, f func() error) {
 	t.Helper()
 
-	require.Eventually(t, func() bool {
+	library.RequireEventuallyWithoutError(t, func() (bool, error) {
 		err := f()
 		switch {
 		case err == nil:
-			return false
+			return false, nil
 		case errors.IsNotFound(err):
-			return true
+			return true, nil
 		default:
-			require.NoError(t, err)
-			return false
+			return false, err
 		}
 	}, time.Minute, time.Second)
 }

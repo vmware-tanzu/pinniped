@@ -258,7 +258,7 @@ func getGroupsFromUpstreamIDToken(
 ) ([]string, error) {
 	groupsClaim := upstreamIDPConfig.GetGroupsClaim()
 	if groupsClaim == "" {
-		return []string{}, nil
+		return nil, nil
 	}
 
 	groupsAsInterface, ok := idTokenClaims[groupsClaim]
@@ -269,7 +269,7 @@ func getGroupsFromUpstreamIDToken(
 			"configuredGroupsClaim", upstreamIDPConfig.GetGroupsClaim(),
 			"groupsClaim", groupsClaim,
 		)
-		return []string{}, nil // the upstream IDP may have omitted the claim if the user has no groups
+		return nil, nil // the upstream IDP may have omitted the claim if the user has no groups
 	}
 
 	groupsAsArray, okAsArray := extractGroups(groupsAsInterface)
@@ -302,13 +302,15 @@ func extractGroups(groupsAsInterface interface{}) ([]string, bool) {
 		return nil, false
 	}
 
-	groupsAsStrings := make([]string, len(groupsAsInterfaceArray))
-	for i, groupAsInterface := range groupsAsInterfaceArray {
+	var groupsAsStrings []string
+	for _, groupAsInterface := range groupsAsInterfaceArray {
 		groupAsString, okAsString := groupAsInterface.(string)
 		if !okAsString {
 			return nil, false
 		}
-		groupsAsStrings[i] = groupAsString
+		if groupAsString != "" {
+			groupsAsStrings = append(groupsAsStrings, groupAsString)
+		}
 	}
 
 	return groupsAsStrings, true
@@ -322,6 +324,9 @@ func makeDownstreamSession(subject string, username string, groups []string) *op
 			RequestedAt: now,
 			AuthTime:    now,
 		},
+	}
+	if groups == nil {
+		groups = []string{}
 	}
 	openIDSession.Claims.Extra = map[string]interface{}{
 		oidc.DownstreamUsernameClaim: username,

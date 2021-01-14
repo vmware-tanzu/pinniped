@@ -102,12 +102,12 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 	if err := validated.Claims(&validatedClaims); err != nil {
 		return nil, httperr.Wrap(http.StatusInternalServerError, "could not unmarshal id token claims", err)
 	}
-	plog.All("claims from ID token", "providerName", p.Name, "claims", listClaims(validatedClaims))
+	plog.All("claims from ID token", "providerName", p.Name, "claims", validatedClaims)
 
 	if err := p.fetchUserInfo(ctx, tok, validatedClaims); err != nil {
 		return nil, httperr.Wrap(http.StatusInternalServerError, "could not fetch user info claims", err)
 	}
-	plog.All("claims from ID token and userinfo", "providerName", p.Name, "claims", listClaims(validatedClaims))
+	plog.All("claims from ID token and userinfo", "providerName", p.Name, "claims", validatedClaims)
 
 	return &oidctypes.Token{
 		AccessToken: &oidctypes.AccessToken{
@@ -161,14 +161,4 @@ func (p *ProviderConfig) fetchUserInfo(ctx context.Context, tok *oauth2.Token, c
 	}
 
 	return nil
-}
-
-func listClaims(claims map[string]interface{}) []string {
-	list := make([]string, len(claims))
-	i := 0
-	for claim := range claims {
-		list[i] = claim
-		i++
-	}
-	return list
 }

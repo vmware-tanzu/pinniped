@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package callback
@@ -134,7 +134,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantDownstreamGrantedScopes       []string
 		wantDownstreamIDTokenSubject      string
 		wantDownstreamIDTokenUsername     string
-		wantDownstreamIDTokenGroups       interface{}
+		wantDownstreamIDTokenGroups       []string
 		wantDownstreamRequestedScopes     []string
 		wantDownstreamNonce               string
 		wantDownstreamPKCEChallenge       string
@@ -172,7 +172,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantBody:                          "",
 			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
 			wantDownstreamIDTokenUsername:     upstreamIssuer + "?sub=" + upstreamSubject,
-			wantDownstreamIDTokenGroups:       nil,
+			wantDownstreamIDTokenGroups:       []string{},
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
@@ -210,7 +210,26 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantBody:                          "",
 			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
 			wantDownstreamIDTokenUsername:     upstreamUsername,
-			wantDownstreamIDTokenGroups:       "notAnArrayGroup1 notAnArrayGroup2",
+			wantDownstreamIDTokenGroups:       []string{"notAnArrayGroup1 notAnArrayGroup2"},
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
+			name:                              "upstream IDP's configured groups claim in the ID token is a slice of interfaces",
+			idp:                               happyUpstream().WithIDTokenClaim(upstreamGroupsClaim, []interface{}{"group1", "group2"}).Build(),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusFound,
+			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenUsername:     upstreamUsername,
+			wantDownstreamIDTokenGroups:       []string{"group1", "group2"},
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
@@ -437,6 +456,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamIDTokenUsername:     upstreamUsername,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamIDTokenGroups:       []string{},
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
@@ -475,6 +495,26 @@ func TestCallbackEndpoint(t *testing.T) {
 		{
 			name:                              "upstream ID token contains groups claim with weird format",
 			idp:                               happyUpstream().WithIDTokenClaim(upstreamGroupsClaim, 42).Build(),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusUnprocessableEntity,
+			wantBody:                          "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
+			name:                              "upstream ID token contains groups claim where one element is invalid",
+			idp:                               happyUpstream().WithIDTokenClaim(upstreamGroupsClaim, []interface{}{"foo", 7}).Build(),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusUnprocessableEntity,
+			wantBody:                          "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
+			name:                              "upstream ID token contains groups claim with invalid null type",
+			idp:                               happyUpstream().WithIDTokenClaim(upstreamGroupsClaim, nil).Build(),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
@@ -779,7 +819,7 @@ func validateAuthcodeStorage(
 	wantDownstreamGrantedScopes []string,
 	wantDownstreamIDTokenSubject string,
 	wantDownstreamIDTokenUsername string,
-	wantDownstreamIDTokenGroups interface{},
+	wantDownstreamIDTokenGroups []string,
 	wantDownstreamRequestedScopes []string,
 ) (*fosite.Request, *openid.DefaultSession) {
 	t.Helper()
@@ -818,23 +858,10 @@ func validateAuthcodeStorage(
 	// Check the user's identity, which are put into the downstream ID token's subject, username and groups claims.
 	require.Equal(t, wantDownstreamIDTokenSubject, actualClaims.Subject)
 	require.Equal(t, wantDownstreamIDTokenUsername, actualClaims.Extra["username"])
-	if wantDownstreamIDTokenGroups != nil { //nolint:nestif // there are some nested if's here but its probably fine for a test
-		require.Len(t, actualClaims.Extra, 2)
-		wantArray, ok := wantDownstreamIDTokenGroups.([]string)
-		if ok {
-			require.ElementsMatch(t, wantArray, actualClaims.Extra["groups"])
-		} else {
-			wantString, ok := wantDownstreamIDTokenGroups.(string)
-			if ok {
-				require.Equal(t, wantString, actualClaims.Extra["groups"])
-			} else {
-				require.Fail(t, "wantDownstreamIDTokenGroups should be of type: either []string or string")
-			}
-		}
-	} else {
-		require.Len(t, actualClaims.Extra, 1)
-		require.NotContains(t, actualClaims.Extra, "groups")
-	}
+	require.Len(t, actualClaims.Extra, 2)
+	actualDownstreamIDTokenGroups := actualClaims.Extra["groups"]
+	require.NotNil(t, actualDownstreamIDTokenGroups)
+	require.ElementsMatch(t, wantDownstreamIDTokenGroups, actualDownstreamIDTokenGroups)
 
 	// Check the rest of the downstream ID token's claims. Fosite wants us to set these (in UTC time).
 	testutil.RequireTimeInDelta(t, time.Now().UTC(), actualClaims.RequestedAt, timeComparisonFudgeFactor)

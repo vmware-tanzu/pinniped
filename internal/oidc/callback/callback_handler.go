@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package callback provides a handler for the OIDC callback endpoint.
@@ -255,10 +255,10 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 func getGroupsFromUpstreamIDToken(
 	upstreamIDPConfig provider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
-) (interface{}, error) {
+) ([]string, error) {
 	groupsClaim := upstreamIDPConfig.GetGroupsClaim()
 	if groupsClaim == "" {
-		return nil, nil
+		return []string{}, nil
 	}
 
 	groupsAsInterface, ok := idTokenClaims[groupsClaim]
@@ -269,12 +269,11 @@ func getGroupsFromUpstreamIDToken(
 			"configuredGroupsClaim", upstreamIDPConfig.GetGroupsClaim(),
 			"groupsClaim", groupsClaim,
 		)
-		return nil, nil // the upstream IDP may have omitted the claim if the user has no groups
+		return []string{}, nil // the upstream IDP may have omitted the claim if the user has no groups
 	}
 
-	groupsAsArray, okAsArray := groupsAsInterface.([]string)
-	groupsAsString, okAsString := groupsAsInterface.(string)
-	if !okAsArray && !okAsString {
+	groupsAsArray, okAsArray := extractGroups(groupsAsInterface)
+	if !okAsArray {
 		plog.Warning(
 			"groups claim in upstream ID token has invalid format",
 			"upstreamName", upstreamIDPConfig.GetName(),
@@ -284,13 +283,38 @@ func getGroupsFromUpstreamIDToken(
 		return nil, httperr.New(http.StatusUnprocessableEntity, "groups claim in upstream ID token has invalid format")
 	}
 
-	if okAsArray {
-		return groupsAsArray, nil
-	}
-	return groupsAsString, nil
+	return groupsAsArray, nil
 }
 
-func makeDownstreamSession(subject string, username string, groups interface{}) *openid.DefaultSession {
+func extractGroups(groupsAsInterface interface{}) ([]string, bool) {
+	groupsAsString, okAsString := groupsAsInterface.(string)
+	if okAsString {
+		return []string{groupsAsString}, true
+	}
+
+	groupsAsStringArray, okAsStringArray := groupsAsInterface.([]string)
+	if okAsStringArray {
+		return groupsAsStringArray, true
+	}
+
+	groupsAsInterfaceArray, okAsArray := groupsAsInterface.([]interface{})
+	if !okAsArray {
+		return nil, false
+	}
+
+	groupsAsStrings := make([]string, len(groupsAsInterfaceArray))
+	for i, groupAsInterface := range groupsAsInterfaceArray {
+		groupAsString, okAsString := groupAsInterface.(string)
+		if !okAsString {
+			return nil, false
+		}
+		groupsAsStrings[i] = groupAsString
+	}
+
+	return groupsAsStrings, true
+}
+
+func makeDownstreamSession(subject string, username string, groups []string) *openid.DefaultSession {
 	now := time.Now().UTC()
 	openIDSession := &openid.DefaultSession{
 		Claims: &jwt.IDTokenClaims{
@@ -301,9 +325,7 @@ func makeDownstreamSession(subject string, username string, groups interface{}) 
 	}
 	openIDSession.Claims.Extra = map[string]interface{}{
 		oidc.DownstreamUsernameClaim: username,
-	}
-	if groups != nil {
-		openIDSession.Claims.Extra[oidc.DownstreamGroupsClaim] = groups
+		oidc.DownstreamGroupsClaim:   groups,
 	}
 	return openIDSession
 }

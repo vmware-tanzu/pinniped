@@ -292,14 +292,12 @@ func TestE2EFullIntegration(t *testing.T) {
 	require.NotNil(t, token)
 
 	idTokenClaims := token.IDToken.Claims
-	username := idTokenClaims[oidc.DownstreamUsernameClaim].(string)
-	groups, _ := idTokenClaims[oidc.DownstreamGroupsClaim].([]string)
+	require.Equal(t, env.SupervisorTestUpstream.Username, idTokenClaims[oidc.DownstreamUsernameClaim])
 
-	require.Equal(t, env.SupervisorTestUpstream.Username, username)
-	if len(env.SupervisorTestUpstream.ExpectedGroups) == 0 {
-		// We only put a groups claim in our downstream ID token if we got groups from the upstream.
-		require.Nil(t, groups)
-	} else {
-		require.Equal(t, env.SupervisorTestUpstream.ExpectedGroups, groups)
+	// The groups claim in the file ends up as an []interface{}, so adjust our expectation to match.
+	expectedGroups := make([]interface{}, 0, len(env.SupervisorTestUpstream.ExpectedGroups))
+	for _, g := range env.SupervisorTestUpstream.ExpectedGroups {
+		expectedGroups = append(expectedGroups, g)
 	}
+	require.Equal(t, expectedGroups, idTokenClaims[oidc.DownstreamGroupsClaim])
 }

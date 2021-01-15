@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package upstreamoidc implements an abstraction of upstream OIDC provider interactions.
@@ -16,6 +16,7 @@ import (
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -101,10 +102,12 @@ func (p *ProviderConfig) ValidateToken(ctx context.Context, tok *oauth2.Token, e
 	if err := validated.Claims(&validatedClaims); err != nil {
 		return nil, httperr.Wrap(http.StatusInternalServerError, "could not unmarshal id token claims", err)
 	}
+	plog.All("claims from ID token", "providerName", p.Name, "claims", validatedClaims)
 
 	if err := p.fetchUserInfo(ctx, tok, validatedClaims); err != nil {
 		return nil, httperr.Wrap(http.StatusInternalServerError, "could not fetch user info claims", err)
 	}
+	plog.All("claims from ID token and userinfo", "providerName", p.Name, "claims", validatedClaims)
 
 	return &oidctypes.Token{
 		AccessToken: &oidctypes.AccessToken{

@@ -1,25 +1,39 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"go.pinniped.dev/test/library"
 )
 
 func TestGetAPIResourceList(t *testing.T) {
-	library.SkipUnlessIntegration(t)
+	env := library.IntegrationEnv(t)
 
 	client := library.NewClientset(t)
 	groups, resources, err := client.Discovery().ServerGroupsAndResources()
 	require.NoError(t, err)
+
+	makeGV := func(firstSegment, secondSegment string) schema.GroupVersion {
+		return schema.GroupVersion{
+			Group:   fmt.Sprintf("%s.%s.%s", firstSegment, secondSegment, env.APIGroupSuffix),
+			Version: "v1alpha1",
+		}
+	}
+	loginConciergeGV := makeGV("login", "concierge")
+	authenticationConciergeGV := makeGV("authentication", "concierge")
+	configConciergeGV := makeGV("config", "concierge")
+	idpSupervisorGV := makeGV("idp", "supervisor")
+	configSupervisorGV := makeGV("config", "supervisor")
 
 	tests := []struct {
 		group             metav1.APIGroup
@@ -27,20 +41,20 @@ func TestGetAPIResourceList(t *testing.T) {
 	}{
 		{
 			group: metav1.APIGroup{
-				Name: "login.concierge.pinniped.dev",
+				Name: loginConciergeGV.Group,
 				Versions: []metav1.GroupVersionForDiscovery{
 					{
-						GroupVersion: "login.concierge.pinniped.dev/v1alpha1",
-						Version:      "v1alpha1",
+						GroupVersion: loginConciergeGV.String(),
+						Version:      loginConciergeGV.Version,
 					},
 				},
 				PreferredVersion: metav1.GroupVersionForDiscovery{
-					GroupVersion: "login.concierge.pinniped.dev/v1alpha1",
-					Version:      "v1alpha1",
+					GroupVersion: loginConciergeGV.String(),
+					Version:      loginConciergeGV.Version,
 				},
 			},
 			resourceByVersion: map[string][]metav1.APIResource{
-				"login.concierge.pinniped.dev/v1alpha1": {
+				loginConciergeGV.String(): {
 					{
 						Name:       "tokencredentialrequests",
 						Kind:       "TokenCredentialRequest",
@@ -53,20 +67,20 @@ func TestGetAPIResourceList(t *testing.T) {
 		},
 		{
 			group: metav1.APIGroup{
-				Name: "config.supervisor.pinniped.dev",
+				Name: configSupervisorGV.Group,
 				Versions: []metav1.GroupVersionForDiscovery{
 					{
-						GroupVersion: "config.supervisor.pinniped.dev/v1alpha1",
-						Version:      "v1alpha1",
+						GroupVersion: configSupervisorGV.String(),
+						Version:      configSupervisorGV.Version,
 					},
 				},
 				PreferredVersion: metav1.GroupVersionForDiscovery{
-					GroupVersion: "config.supervisor.pinniped.dev/v1alpha1",
-					Version:      "v1alpha1",
+					GroupVersion: configSupervisorGV.String(),
+					Version:      configSupervisorGV.Version,
 				},
 			},
 			resourceByVersion: map[string][]metav1.APIResource{
-				"config.supervisor.pinniped.dev/v1alpha1": {
+				configSupervisorGV.String(): {
 					{
 						Name:         "federationdomains",
 						SingularName: "federationdomain",
@@ -80,20 +94,20 @@ func TestGetAPIResourceList(t *testing.T) {
 		},
 		{
 			group: metav1.APIGroup{
-				Name: "idp.supervisor.pinniped.dev",
+				Name: idpSupervisorGV.Group,
 				Versions: []metav1.GroupVersionForDiscovery{
 					{
-						GroupVersion: "idp.supervisor.pinniped.dev/v1alpha1",
-						Version:      "v1alpha1",
+						GroupVersion: idpSupervisorGV.String(),
+						Version:      idpSupervisorGV.Version,
 					},
 				},
 				PreferredVersion: metav1.GroupVersionForDiscovery{
-					GroupVersion: "idp.supervisor.pinniped.dev/v1alpha1",
-					Version:      "v1alpha1",
+					GroupVersion: idpSupervisorGV.String(),
+					Version:      idpSupervisorGV.Version,
 				},
 			},
 			resourceByVersion: map[string][]metav1.APIResource{
-				"idp.supervisor.pinniped.dev/v1alpha1": {
+				idpSupervisorGV.String(): {
 					{
 						Name:         "oidcidentityproviders",
 						SingularName: "oidcidentityprovider",
@@ -113,20 +127,20 @@ func TestGetAPIResourceList(t *testing.T) {
 		},
 		{
 			group: metav1.APIGroup{
-				Name: "config.concierge.pinniped.dev",
+				Name: configConciergeGV.Group,
 				Versions: []metav1.GroupVersionForDiscovery{
 					{
-						GroupVersion: "config.concierge.pinniped.dev/v1alpha1",
-						Version:      "v1alpha1",
+						GroupVersion: configConciergeGV.String(),
+						Version:      configConciergeGV.Version,
 					},
 				},
 				PreferredVersion: metav1.GroupVersionForDiscovery{
-					GroupVersion: "config.concierge.pinniped.dev/v1alpha1",
-					Version:      "v1alpha1",
+					GroupVersion: configConciergeGV.String(),
+					Version:      configConciergeGV.Version,
 				},
 			},
 			resourceByVersion: map[string][]metav1.APIResource{
-				"config.concierge.pinniped.dev/v1alpha1": {
+				configConciergeGV.String(): {
 					{
 						Name:         "credentialissuers",
 						SingularName: "credentialissuer",
@@ -140,20 +154,20 @@ func TestGetAPIResourceList(t *testing.T) {
 		},
 		{
 			group: metav1.APIGroup{
-				Name: "authentication.concierge.pinniped.dev",
+				Name: authenticationConciergeGV.Group,
 				Versions: []metav1.GroupVersionForDiscovery{
 					{
-						GroupVersion: "authentication.concierge.pinniped.dev/v1alpha1",
-						Version:      "v1alpha1",
+						GroupVersion: authenticationConciergeGV.String(),
+						Version:      authenticationConciergeGV.Version,
 					},
 				},
 				PreferredVersion: metav1.GroupVersionForDiscovery{
-					GroupVersion: "authentication.concierge.pinniped.dev/v1alpha1",
-					Version:      "v1alpha1",
+					GroupVersion: authenticationConciergeGV.String(),
+					Version:      authenticationConciergeGV.Version,
 				},
 			},
 			resourceByVersion: map[string][]metav1.APIResource{
-				"authentication.concierge.pinniped.dev/v1alpha1": {
+				authenticationConciergeGV.String(): {
 					{
 						Name:         "webhookauthenticators",
 						SingularName: "webhookauthenticator",
@@ -182,7 +196,7 @@ func TestGetAPIResourceList(t *testing.T) {
 			testedGroups[tt.group.Name] = true
 		}
 		for _, g := range groups {
-			if !strings.Contains(g.Name, "pinniped.dev") {
+			if !strings.Contains(g.Name, env.APIGroupSuffix) {
 				continue
 			}
 			assert.Truef(t, testedGroups[g.Name], "expected group %q to have assertions defined", g.Name)
@@ -192,7 +206,7 @@ func TestGetAPIResourceList(t *testing.T) {
 	t.Run("every API categorized appropriately", func(t *testing.T) {
 		t.Parallel()
 		for _, r := range resources {
-			if !strings.Contains(r.GroupVersion, "pinniped.dev") {
+			if !strings.Contains(r.GroupVersion, env.APIGroupSuffix) {
 				continue
 			}
 			for _, a := range r.APIResources {
@@ -208,7 +222,7 @@ func TestGetAPIResourceList(t *testing.T) {
 	t.Run("Pinniped resources do not have short names", func(t *testing.T) {
 		t.Parallel()
 		for _, r := range resources {
-			if !strings.Contains(r.GroupVersion, "pinniped.dev") {
+			if !strings.Contains(r.GroupVersion, env.APIGroupSuffix) {
 				continue
 			}
 			for _, a := range r.APIResources {

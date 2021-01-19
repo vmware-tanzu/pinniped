@@ -31,6 +31,7 @@ import (
 	idpv1alpha1 "go.pinniped.dev/generated/1.20/apis/supervisor/idp/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
 	supervisorclientset "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned"
+	"go.pinniped.dev/internal/kubeclient"
 
 	// Import to initialize client auth plugins - the kubeconfig that we use for
 	// testing may use gcloud, az, oidc, etc.
@@ -76,19 +77,19 @@ func NewClientsetWithCertAndKey(t *testing.T, clientCertificateData, clientKeyDa
 func NewSupervisorClientset(t *testing.T) supervisorclientset.Interface {
 	t.Helper()
 
-	return supervisorclientset.NewForConfigOrDie(NewClientConfig(t))
+	return newKubeclient(t, NewClientConfig(t)).PinnipedSupervisor
 }
 
 func NewConciergeClientset(t *testing.T) conciergeclientset.Interface {
 	t.Helper()
 
-	return conciergeclientset.NewForConfigOrDie(NewClientConfig(t))
+	return newKubeclient(t, NewClientConfig(t)).PinnipedConcierge
 }
 
 func NewAnonymousConciergeClientset(t *testing.T) conciergeclientset.Interface {
 	t.Helper()
 
-	return conciergeclientset.NewForConfigOrDie(newAnonymousClientRestConfig(t))
+	return newKubeclient(t, newAnonymousClientRestConfig(t)).PinnipedConcierge
 }
 
 func NewAggregatedClientset(t *testing.T) aggregatorclient.Interface {
@@ -130,6 +131,14 @@ func newAnonymousClientRestConfigWithCertAndKeyAdded(t *testing.T, clientCertifi
 	config.CertData = []byte(clientCertificateData)
 	config.KeyData = []byte(clientKeyData)
 	return config
+}
+
+func newKubeclient(t *testing.T, config *rest.Config) *kubeclient.Client {
+	t.Helper()
+	_ = IntegrationEnv(t).APIGroupSuffix // TODO: wire API group into kubeclient.
+	client, err := kubeclient.New(kubeclient.WithConfig(config))
+	require.NoError(t, err)
+	return client
 }
 
 // CreateTestWebhookAuthenticator creates and returns a test WebhookAuthenticator in $PINNIPED_TEST_CONCIERGE_NAMESPACE, which will be

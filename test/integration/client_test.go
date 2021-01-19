@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
-	"go.pinniped.dev/internal/client"
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/pkg/conciergeclient"
 	"go.pinniped.dev/test/library"
 )
 
@@ -69,10 +69,18 @@ func TestClient(t *testing.T) {
 
 	// Using the CA bundle and host from the current (admin) kubeconfig, do the token exchange.
 	clientConfig := library.NewClientConfig(t)
+	client, err := conciergeclient.New(
+		conciergeclient.WithNamespace(env.ConciergeNamespace),
+		conciergeclient.WithCABundle(string(clientConfig.CAData)),
+		conciergeclient.WithEndpoint(clientConfig.Host),
+		conciergeclient.WithAuthenticator("webhook", webhook.Name),
+		conciergeclient.WithAPIGroupSuffix(env.APIGroupSuffix),
+	)
+	require.NoError(t, err)
 
 	var resp *clientauthenticationv1beta1.ExecCredential
 	assert.Eventually(t, func() bool {
-		resp, err = client.ExchangeToken(ctx, env.ConciergeNamespace, webhook, env.TestUser.Token, string(clientConfig.CAData), clientConfig.Host)
+		resp, err = client.ExchangeToken(ctx, env.TestUser.Token)
 		return err == nil
 	}, 10*time.Second, 500*time.Millisecond)
 	require.NoError(t, err)

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package concierge
@@ -30,6 +30,7 @@ func TestFromPath(t *testing.T) {
 				  servingCertificate:
 					durationSeconds: 3600
 					renewBeforeSeconds: 2400
+				apiGroupSuffix: some.suffix.com
 				names:
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  credentialIssuer: pinniped-config
@@ -53,6 +54,7 @@ func TestFromPath(t *testing.T) {
 						RenewBeforeSeconds: int64Ptr(2400),
 					},
 				},
+				APIGroupSuffix: stringPtr("some.suffix.com"),
 				NamesConfig: NamesConfigSpec{
 					ServingCertificateSecret: "pinniped-concierge-api-tls-serving-certificate",
 					CredentialIssuer:         "pinniped-config",
@@ -82,6 +84,7 @@ func TestFromPath(t *testing.T) {
 				DiscoveryInfo: DiscoveryInfoSpec{
 					URL: nil,
 				},
+				APIGroupSuffix: stringPtr("pinniped.dev"),
 				APIConfig: APIConfigSpec{
 					ServingCertificateConfig: ServingCertificateConfigSpec{
 						DurationSeconds:    int64Ptr(60 * 60 * 24 * 365),    // about a year

@@ -3,7 +3,7 @@
 
 #@ load("@ytt:data", "data")
 #@ load("@ytt:json", "json")
-#@ load("helpers.lib.yaml", "defaultLabel", "labels", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix", "getAndValidateLogLevel")
+#@ load("helpers.lib.yaml", "defaultLabel", "labels", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix", "getAndValidateLogLevel", "pinnipedDevAPIGroupWithPrefix")
 
 #@ if not data.values.into_namespace:
 ---
@@ -37,6 +37,7 @@ data:
       servingCertificate:
         durationSeconds: (@= str(data.values.api_serving_certificate_duration_seconds) @)
         renewBeforeSeconds: (@= str(data.values.api_serving_certificate_renew_before_seconds) @)
+    apiGroupSuffix: (@= data.values.api_group_suffix @)
     names:
       servingCertificateSecret: (@= defaultResourceNameWithSuffix("api-tls-serving-certificate") @)
       credentialIssuer: (@= defaultResourceNameWithSuffix("config") @)
@@ -191,11 +192,11 @@ spec:
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
 metadata:
-  name: v1alpha1.login.concierge.pinniped.dev
+  name: #@ pinnipedDevAPIGroupWithPrefix("v1alpha1.login.concierge")
   labels: #@ labels()
 spec:
   version: v1alpha1
-  group: login.concierge.pinniped.dev
+  group: #@ pinnipedDevAPIGroupWithPrefix("login.concierge")
   groupPriorityMinimum: 2500
   versionPriority: 10
   #! caBundle: Do not include this key here. Starts out null, will be updated/owned by the golang code.

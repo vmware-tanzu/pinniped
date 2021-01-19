@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -64,6 +64,7 @@ type oidcLoginFlags struct {
 	conciergeAuthenticatorName string
 	conciergeEndpoint          string
 	conciergeCABundle          string
+	conciergeAPIGroupSuffix    string
 }
 
 func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
@@ -92,6 +93,7 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeAuthenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name")
 	cmd.Flags().StringVar(&flags.conciergeEndpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")
 	cmd.Flags().StringVar(&flags.conciergeCABundle, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the concierge")
+	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", "pinniped.dev", "Concierge API group suffix")
 
 	mustMarkHidden(&cmd, "debug-session-cache")
 	mustMarkRequired(&cmd, "issuer")
@@ -135,6 +137,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 			conciergeclient.WithEndpoint(flags.conciergeEndpoint),
 			conciergeclient.WithBase64CABundle(flags.conciergeCABundle),
 			conciergeclient.WithAuthenticator(flags.conciergeAuthenticatorType, flags.conciergeAuthenticatorName),
+			conciergeclient.WithAPIGroupSuffix(flags.conciergeAPIGroupSuffix),
 		)
 		if err != nil {
 			return fmt.Errorf("invalid concierge parameters: %w", err)

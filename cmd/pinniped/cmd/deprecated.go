@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -70,6 +70,7 @@ func legacyGetKubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 				namespace:         namespace,
 				authenticatorName: authenticatorName,
 				authenticatorType: authenticatorType,
+				apiGroupSuffix:    "pinniped.dev",
 			},
 		})
 	}

@@ -38,6 +38,7 @@ type TestEnv struct {
 	SupervisorHTTPSIngressAddress  string                               `json:"supervisorHttpsIngressAddress"`
 	SupervisorHTTPSIngressCABundle string                               `json:"supervisorHttpsIngressCABundle"`
 	Proxy                          string                               `json:"proxy"`
+	APIGroupSuffix                 string                               `json:"apiGroupSuffix"`
 
 	TestUser struct {
 		Token            string   `json:"token"`
@@ -106,6 +107,14 @@ func needEnv(t *testing.T, key string) string {
 	return value
 }
 
+func wantEnv(key, dephault string) string {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return dephault
+	}
+	return value
+}
+
 func filterEmpty(ss []string) []string {
 	filtered := []string{}
 	for _, s := range ss {
@@ -154,6 +163,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 	result.SupervisorCustomLabels = supervisorCustomLabels
 	require.NotEmpty(t, result.SupervisorCustomLabels, "PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS cannot be empty")
 	result.Proxy = os.Getenv("PINNIPED_TEST_PROXY")
+	result.APIGroupSuffix = wantEnv("PINNIPED_TEST_API_GROUP_SUFFIX", "pinniped.dev")
 
 	result.CLITestUpstream = TestOIDCUpstream{
 		Issuer:      needEnv(t, "PINNIPED_TEST_CLI_OIDC_ISSUER"),

@@ -69,6 +69,7 @@ func TestKubeClientOwnerRef(t *testing.T) {
 		Name:       parentSecret.Name,
 		UID:        parentSecret.UID,
 	}
+	_ = env.APIGroupSuffix // TODO: wire API group into kubeclient.
 	ownerRefClient, err := kubeclient.New(
 		kubeclient.WithMiddleware(ownerref.New(ref)),
 		kubeclient.WithConfig(library.NewClientConfig(t)),

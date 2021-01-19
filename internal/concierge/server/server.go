@@ -15,6 +15,7 @@ import (
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 
 	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
+	"go.pinniped.dev/internal/apigroup"
 	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
 	"go.pinniped.dev/internal/concierge/apiserver"
 	"go.pinniped.dev/internal/config/concierge"
@@ -35,10 +36,6 @@ type App struct {
 	configPath      string
 	downwardAPIPath string
 }
-
-// This is ignored for now because we turn off etcd storage below, but this is
-// the right prefix in case we turn it back on.
-const defaultEtcdPathPrefix = "/registry/" + loginv1alpha1.GroupName
 
 // New constructs a new App with command line args, stdout and stderr.
 func New(ctx context.Context, args []string, stdout, stderr io.Writer) *App {
@@ -125,6 +122,7 @@ func (a *App) runServer(ctx context.Context) error {
 	startControllersFunc, err := controllermanager.PrepareControllers(
 		&controllermanager.Config{
 			ServerInstallationInfo:     podInfo,
+			APIGroupSuffix:             *cfg.APIGroupSuffix,
 			NamesConfig:                &cfg.NamesConfig,
 			Labels:                     cfg.Labels,
 			KubeCertAgentConfig:        &cfg.KubeCertAgentConfig,
@@ -146,6 +144,7 @@ func (a *App) runServer(ctx context.Context) error {
 		authenticators,
 		dynamiccertauthority.New(dynamicSigningCertProvider),
 		startControllersFunc,
+		*cfg.APIGroupSuffix,
 	)
 	if err != nil {
 		return fmt.Errorf("could not configure aggregated API server: %w", err)
@@ -167,7 +166,16 @@ func getAggregatedAPIServerConfig(
 	authenticator credentialrequest.TokenCredentialRequestAuthenticator,
 	issuer credentialrequest.CertIssuer,
 	startControllersPostStartHook func(context.Context),
+	apiGroupSuffix string,
 ) (*apiserver.Config, error) {
+	// This is ignored for now because we turn off etcd storage below, but this is
+	// the right prefix in case we turn it back on.
+	apiGroup, ok := apigroup.Make(loginv1alpha1.GroupName, apiGroupSuffix)
+	if !ok {
+		return nil, fmt.Errorf("cannot make api group from %s/%s", loginv1alpha1.GroupName, apiGroupSuffix)
+	}
+	defaultEtcdPathPrefix := fmt.Sprintf("/registry/%s", apiGroup)
+
 	recommendedOptions := genericoptions.NewRecommendedOptions(
 		defaultEtcdPathPrefix,
 		apiserver.Codecs.LegacyCodec(loginv1alpha1.SchemeGroupVersion),

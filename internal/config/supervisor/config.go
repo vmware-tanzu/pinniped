@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package supervisor contains functionality to load/store Config's from/to
@@ -34,6 +34,8 @@ func FromPath(path string) (*Config, error) {
 		config.Labels = make(map[string]string)
 	}
 
+	maybeSetAPIGroupSuffixDefault(&config.APIGroupSuffix)
+
 	if err := validateNames(&config.NamesConfig); err != nil {
 		return nil, fmt.Errorf("validate names: %w", err)
 	}
@@ -45,6 +47,12 @@ func FromPath(path string) (*Config, error) {
 	return &config, nil
 }
 
+func maybeSetAPIGroupSuffixDefault(apiGroupSuffix **string) {
+	if *apiGroupSuffix == nil {
+		*apiGroupSuffix = stringPtr("pinniped.dev")
+	}
+}
+
 func validateNames(names *NamesConfigSpec) error {
 	missingNames := []string{}
 	if names.DefaultTLSCertificateSecret == "" {
@@ -54,4 +62,8 @@ func validateNames(names *NamesConfigSpec) error {
 		return constable.Error("missing required names: " + strings.Join(missingNames, ", "))
 	}
 	return nil
+}
+
+func stringPtr(s string) *string {
+	return &s
 }

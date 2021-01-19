@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package concierge contains functionality to load/store Config's from/to
@@ -40,6 +40,7 @@ func FromPath(path string) (*Config, error) {
 	}
 
 	maybeSetAPIDefaults(&config.APIConfig)
+	maybeSetAPIGroupSuffixDefault(&config.APIGroupSuffix)
 	maybeSetKubeCertAgentDefaults(&config.KubeCertAgentConfig)
 
 	if err := validateAPI(&config.APIConfig); err != nil {
@@ -68,6 +69,12 @@ func maybeSetAPIDefaults(apiConfig *APIConfigSpec) {
 
 	if apiConfig.ServingCertificateConfig.RenewBeforeSeconds == nil {
 		apiConfig.ServingCertificateConfig.RenewBeforeSeconds = int64Ptr(about9Months)
+	}
+}
+
+func maybeSetAPIGroupSuffixDefault(apiGroupSuffix **string) {
+	if *apiGroupSuffix == nil {
+		*apiGroupSuffix = stringPtr("pinniped.dev")
 	}
 }
 

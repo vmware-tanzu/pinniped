@@ -18,6 +18,7 @@ import (
 	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
 	pinnipedinformers "go.pinniped.dev/generated/1.20/client/concierge/informers/externalversions"
+	"go.pinniped.dev/internal/apigroup"
 	"go.pinniped.dev/internal/config/concierge"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
@@ -44,6 +45,9 @@ const (
 type Config struct {
 	// ServerInstallationInfo provides the name of the pod in which Pinniped is running and the namespace in which Pinniped is deployed.
 	ServerInstallationInfo *downward.PodInfo
+
+	// APIGroupSuffix is the suffix of the Pinniped API that should be targeted by these controllers.
+	APIGroupSuffix string
 
 	// NamesConfig comes from the Pinniped config API (see api.Config). It specifies how Kubernetes
 	// objects should be named.
@@ -85,6 +89,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		return nil, fmt.Errorf("cannot create deployment ref: %w", err)
 	}
 
+	_ = c.APIGroupSuffix // TODO: wire API group into kubeclient.
 	client, err := kubeclient.New(dref)
 	if err != nil {
 		return nil, fmt.Errorf("could not create clients for the controllers: %w", err)
@@ -105,6 +110,12 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		Namespace: c.ServerInstallationInfo.Namespace,
 		Name:      c.NamesConfig.CredentialIssuer,
 	}
+
+	groupName, ok := apigroup.Make(loginv1alpha1.GroupName, c.APIGroupSuffix)
+	if !ok {
+		return nil, fmt.Errorf("cannot make api group from %s/%s", loginv1alpha1.GroupName, c.APIGroupSuffix)
+	}
+	apiServiceName := loginv1alpha1.SchemeGroupVersion.Version + "." + groupName
 
 	// Create controller manager.
 	controllerManager := controllerlib.
@@ -145,7 +156,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			apicerts.NewAPIServiceUpdaterController(
 				c.ServerInstallationInfo.Namespace,
 				c.NamesConfig.ServingCertificateSecret,
-				loginv1alpha1.SchemeGroupVersion.Version+"."+loginv1alpha1.GroupName,
+				apiServiceName,
 				client.Aggregation,
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
 				controllerlib.WithInformer,

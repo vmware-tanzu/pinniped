@@ -264,6 +264,7 @@ func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 		return fmt.Errorf("cannot create deployment ref: %w", err)
 	}
 
+	_ = *cfg.APIGroupSuffix // TODO: wire API group into kubeclient.
 	client, err := kubeclient.New(dref)
 	if err != nil {
 		return fmt.Errorf("cannot create k8s client: %w", err)

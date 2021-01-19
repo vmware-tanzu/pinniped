@@ -90,8 +90,8 @@ spec:
         scheduler.alpha.kubernetes.io/critical-pod: ""
     spec:
       securityContext:
-        runAsUser: 1001
-        runAsGroup: 1001
+        runAsUser: #@ data.values.run_as_user
+        runAsGroup: #@ data.values.run_as_group
       serviceAccountName: #@ defaultResourceName()
       #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
       imagePullSecrets:

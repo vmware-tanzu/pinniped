@@ -79,7 +79,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
 
-			const apiServiceName = "v1alpha1.login.concierge.pinniped.dev"
+			apiServiceName := "v1alpha1.login.concierge." + env.APIGroupSuffix
 
 			// Get the initial auto-generated version of the Secret.
 			secret, err := kubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})

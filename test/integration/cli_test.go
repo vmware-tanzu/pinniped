@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package integration
 
@@ -65,6 +65,7 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 			args: []string{
 				"get", "kubeconfig",
 				"--static-token", env.TestUser.Token,
+				"--concierge-api-group-suffix", env.APIGroupSuffix,
 				"--concierge-namespace", env.ConciergeNamespace,
 				"--concierge-authenticator-type", "webhook",
 				"--concierge-authenticator-name", authenticator.Name,

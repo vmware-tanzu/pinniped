@@ -199,13 +199,6 @@ func getAggregatedAPIServerConfig(
 		return nil, err
 	}
 
-	// temporarily disable max inflight checks for mutating requests until we
-	// pick up a fix for https://github.com/kubernetes/kubernetes/issues/95300
-	// we do not need to set MaxRequestsInFlight to 0 because we are constantly
-	// hammered by the kubelet for /healthz and the api server for discovery
-	// which keeps the non-mutating request watermark histograms up to date
-	serverConfig.Config.MaxMutatingRequestsInFlight = 0
-
 	apiServerConfig := &apiserver.Config{
 		GenericConfig: serverConfig,
 		ExtraConfig: apiserver.ExtraConfig{

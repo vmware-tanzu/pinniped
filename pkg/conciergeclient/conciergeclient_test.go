@@ -105,6 +105,15 @@ func TestNew(t *testing.T) {
 			wantErr: "WithEndpoint must be specified",
 		},
 		{
+			name: "empty api group suffix",
+			opts: []Option{
+				WithAuthenticator("jwt", "test-authenticator"),
+				WithEndpoint("https://example.com"),
+				WithAPIGroupSuffix(""),
+			},
+			wantErr: "api group suffix must not be empty",
+		},
+		{
 			name: "valid",
 			opts: []Option{
 				WithNamespace("test-namespace"),
@@ -114,6 +123,7 @@ func TestNew(t *testing.T) {
 				WithBase64CABundle(base64.StdEncoding.EncodeToString(testCA.Bundle())),
 				WithAuthenticator("jwt", "test-authenticator"),
 				WithAuthenticator("webhook", "test-authenticator"),
+				WithAPIGroupSuffix("suffix.com"),
 			},
 		},
 	}

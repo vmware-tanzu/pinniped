@@ -73,6 +73,7 @@ type getKubeconfigConciergeParams struct {
 	namespace         string
 	authenticatorName string
 	authenticatorType string
+	apiGroupSuffix    string
 }
 
 type getKubeconfigParams struct {
@@ -103,6 +104,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.StringVar(&flags.concierge.namespace, "concierge-namespace", "pinniped-concierge", "Namespace in which the concierge was installed")
 	f.StringVar(&flags.concierge.authenticatorType, "concierge-authenticator-type", "", "Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)")
 	f.StringVar(&flags.concierge.authenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name (default: autodiscover)")
+	f.StringVar(&flags.concierge.apiGroupSuffix, "concierge-api-group-suffix", "pinniped.dev", "Concierge API group suffix")
 
 	f.StringVar(&flags.oidc.issuer, "oidc-issuer", "", "OpenID Connect issuer URL (default: autodiscover)")
 	f.StringVar(&flags.oidc.clientID, "oidc-client-id", "pinniped-cli", "OpenID Connect client ID (default: autodiscover)")
@@ -258,6 +260,7 @@ func configureConcierge(authenticator metav1.Object, flags *getKubeconfigParams,
 	// Append the flags to configure the Concierge credential exchange at runtime.
 	execConfig.Args = append(execConfig.Args,
 		"--enable-concierge",
+		"--concierge-api-group-suffix="+flags.concierge.apiGroupSuffix,
 		"--concierge-namespace="+flags.concierge.namespace,
 		"--concierge-authenticator-name="+flags.concierge.authenticatorName,
 		"--concierge-authenticator-type="+flags.concierge.authenticatorType,

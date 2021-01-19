@@ -33,10 +33,11 @@ type Option func(*Client) error
 
 // Client is a configuration for talking to the Pinniped concierge.
 type Client struct {
-	namespace     string
-	authenticator *corev1.TypedLocalObjectReference
-	caBundle      string
-	endpoint      *url.URL
+	namespace      string
+	authenticator  *corev1.TypedLocalObjectReference
+	caBundle       string
+	endpoint       *url.URL
+	apiGroupSuffix string
 }
 
 // WithNamespace configures the namespace where the TokenCredentialRequest is to be sent.
@@ -112,9 +113,20 @@ func WithEndpoint(endpoint string) Option {
 	}
 }
 
+// WithAPIGroupSuffix configures the concierge's API group suffix (e.g., "pinniped.dev").
+func WithAPIGroupSuffix(apiGroupSuffix string) Option {
+	return func(c *Client) error {
+		if apiGroupSuffix == "" {
+			return fmt.Errorf("api group suffix must not be empty")
+		}
+		c.apiGroupSuffix = apiGroupSuffix
+		return nil
+	}
+}
+
 // New validates the specified options and returns a newly initialized *Client.
 func New(opts ...Option) (*Client, error) {
-	c := Client{namespace: "pinniped-concierge"}
+	c := Client{namespace: "pinniped-concierge", apiGroupSuffix: "pinniped.dev"}
 	for _, opt := range opts {
 		if err := opt(&c); err != nil {
 			return nil, err
@@ -151,6 +163,7 @@ func (c *Client) clientset() (conciergeclientset.Interface, error) {
 	if err != nil {
 		return nil, err
 	}
+	_ = c.apiGroupSuffix // TODO: wire API group into kubeclient.
 	client, err := kubeclient.New(kubeclient.WithConfig(cfg))
 	if err != nil {
 		return nil, err

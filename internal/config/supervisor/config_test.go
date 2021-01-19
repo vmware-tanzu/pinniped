@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisor
@@ -24,6 +24,7 @@ func TestFromPath(t *testing.T) {
 			name: "Happy",
 			yaml: here.Doc(`
 				---
+				apiGroupSuffix: some.suffix.com
 				labels:
 				  myLabelKey1: myLabelValue1
 				  myLabelKey2: myLabelValue2
@@ -31,6 +32,7 @@ func TestFromPath(t *testing.T) {
 				  defaultTLSCertificateSecret: my-secret-name
 			`),
 			wantConfig: &Config{
+				APIGroupSuffix: stringPtr("some.suffix.com"),
 				Labels: map[string]string{
 					"myLabelKey1": "myLabelValue1",
 					"myLabelKey2": "myLabelValue2",
@@ -48,7 +50,8 @@ func TestFromPath(t *testing.T) {
 				  defaultTLSCertificateSecret: my-secret-name
 			`),
 			wantConfig: &Config{
-				Labels: map[string]string{},
+				APIGroupSuffix: stringPtr("pinniped.dev"),
+				Labels:         map[string]string{},
 				NamesConfig: NamesConfigSpec{
 					DefaultTLSCertificateSecret: "my-secret-name",
 				},

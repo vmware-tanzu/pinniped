@@ -57,6 +57,7 @@ func TestGetKubeconfig(t *testing.T) {
 				  kubeconfig [flags]
 
 				Flags:
+				      --concierge-api-group-suffix string     Concierge API group suffix (default "pinniped.dev")
 				      --concierge-authenticator-name string   Concierge authenticator name (default: autodiscover)
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)
 				      --concierge-namespace string            Namespace in which the concierge was installed (default "pinniped-concierge")
@@ -313,6 +314,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - login
         		      - static
         		      - --enable-concierge
+        		      - --concierge-api-group-suffix=pinniped.dev
         		      - --concierge-namespace=test-namespace
         		      - --concierge-authenticator-name=test-authenticator
         		      - --concierge-authenticator-type=webhook
@@ -358,6 +360,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - login
         		      - static
         		      - --enable-concierge
+        		      - --concierge-api-group-suffix=pinniped.dev
         		      - --concierge-namespace=test-namespace
         		      - --concierge-authenticator-name=test-authenticator
         		      - --concierge-authenticator-type=webhook
@@ -410,6 +413,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - login
         		      - oidc
         		      - --enable-concierge
+        		      - --concierge-api-group-suffix=pinniped.dev
         		      - --concierge-namespace=pinniped-concierge
         		      - --concierge-authenticator-name=test-authenticator
         		      - --concierge-authenticator-type=jwt
@@ -429,6 +433,7 @@ func TestGetKubeconfig(t *testing.T) {
 			name: "autodetect nothing, set a bunch of options",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
+				"--concierge-api-group-suffix", "tuna.io",
 				"--concierge-authenticator-type", "webhook",
 				"--concierge-authenticator-name", "test-authenticator",
 				"--oidc-issuer", "https://example.com/issuer",
@@ -468,6 +473,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - login
         		      - oidc
         		      - --enable-concierge
+        		      - --concierge-api-group-suffix=tuna.io
         		      - --concierge-namespace=pinniped-concierge
         		      - --concierge-authenticator-name=test-authenticator
         		      - --concierge-authenticator-type=webhook

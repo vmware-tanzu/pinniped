@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -46,6 +46,7 @@ type staticLoginParams struct {
 	conciergeAuthenticatorName string
 	conciergeEndpoint          string
 	conciergeCABundle          string
+	conciergeAPIGroupSuffix    string
 }
 
 func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
@@ -66,6 +67,7 @@ func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeAuthenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name")
 	cmd.Flags().StringVar(&flags.conciergeEndpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")
 	cmd.Flags().StringVar(&flags.conciergeCABundle, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the concierge")
+	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", "pinniped.dev", "Concierge API group suffix")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runStaticLogin(cmd.OutOrStdout(), deps, flags) }
 	return &cmd
 }
@@ -83,6 +85,7 @@ func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams
 			conciergeclient.WithEndpoint(flags.conciergeEndpoint),
 			conciergeclient.WithBase64CABundle(flags.conciergeCABundle),
 			conciergeclient.WithAuthenticator(flags.conciergeAuthenticatorType, flags.conciergeAuthenticatorName),
+			conciergeclient.WithAPIGroupSuffix(flags.conciergeAPIGroupSuffix),
 		)
 		if err != nil {
 			return fmt.Errorf("invalid concierge parameters: %w", err)

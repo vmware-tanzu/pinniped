@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -60,6 +60,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				      --ca-bundle strings                     Path to TLS certificate authority bundle (PEM format, optional, can be repeated)
 				      --ca-bundle-data strings                Base64 endcoded TLS certificate authority bundle (base64 encoded PEM format, optional, can be repeated)
 				      --client-id string                      OpenID Connect client ID (default "pinniped-cli")
+				      --concierge-api-group-suffix string     Concierge API group suffix (default "pinniped.dev")
 				      --concierge-authenticator-name string   Concierge authenticator name
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt')
 				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the concierge
@@ -175,6 +176,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--concierge-authenticator-name", "test-authenticator",
 				"--concierge-endpoint", "https://127.0.0.1:1234/",
 				"--concierge-ca-bundle-data", base64.StdEncoding.EncodeToString(testCA.Bundle()),
+				"--concierge-api-group-suffix", "some.suffix.com",
 			},
 			wantOptionsCount: 7,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"exchanged-token"}}` + "\n",

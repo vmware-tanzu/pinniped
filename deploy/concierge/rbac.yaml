@@ -2,7 +2,7 @@
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
-#@ load("helpers.lib.yaml", "labels", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix")
+#@ load("helpers.lib.yaml", "labels", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix", "pinnipedDevAPIGroupWithPrefix")
 
 #! Give permission to various cluster-scoped objects
 ---
@@ -66,7 +66,9 @@ rules:
   - apiGroups: [ "" ]
     resources: [ pods/exec ]
     verbs: [ create ]
-  - apiGroups: [ config.concierge.pinniped.dev, authentication.concierge.pinniped.dev ]
+  - apiGroups:
+      - #@ pinnipedDevAPIGroupWithPrefix("config.concierge")
+      - #@ pinnipedDevAPIGroupWithPrefix("authentication.concierge")
     resources: [ "*" ]
     verbs: [ create, get, list, update, watch ]
   - apiGroups: [apps]
@@ -124,7 +126,8 @@ metadata:
   name: #@ defaultResourceNameWithSuffix("create-token-credential-requests")
   labels: #@ labels()
 rules:
-  - apiGroups: [ login.concierge.pinniped.dev ]
+  - apiGroups:
+      - #@ pinnipedDevAPIGroupWithPrefix("login.concierge")
     resources: [ tokencredentialrequests ]
     verbs: [ create ]
 ---

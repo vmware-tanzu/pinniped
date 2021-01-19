@@ -30,6 +30,7 @@ metadata:
 data:
   #@yaml/text-templated-strings
   pinniped.yaml: |
+    apiGroupSuffix: (@= data.values.api_group_suffix @)
     names:
       defaultTLSCertificateSecret: (@= defaultResourceNameWithSuffix("default-tls-certificate") @)
     labels: (@= json.encode(labels()).rstrip() @)

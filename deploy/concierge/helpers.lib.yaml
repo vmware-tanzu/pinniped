@@ -1,4 +1,4 @@
-#! Copyright 2020 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -10,6 +10,10 @@
 
 #@ def defaultResourceNameWithSuffix(suffix):
 #@   return data.values.app_name + "-" + suffix
+#@ end
+
+#@ def pinnipedDevAPIGroupWithPrefix(prefix):
+#@   return prefix + "." + data.values.api_group_suffix
 #@ end
 
 #@ def namespace():

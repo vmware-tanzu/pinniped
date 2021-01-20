@@ -1,4 +1,4 @@
-#! Copyright 2020 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -27,8 +27,7 @@ staticClients:
 - id: pinniped-supervisor
   name: 'Pinniped Supervisor'
   secret: pinniped-supervisor-secret
-  redirectURIs:
-  - #@ data.values.supervisor_redirect_uri
+  redirectURIs: #@ data.values.supervisor_redirect_uris
 enablePasswordDB: true
 staticPasswords:
 - username: "pinny"
@@ -114,4 +113,3 @@ spec:
   - name: https
     port: 443
     targetPort: 8443
-

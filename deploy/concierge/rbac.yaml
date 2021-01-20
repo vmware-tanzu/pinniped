@@ -28,6 +28,9 @@ rules:
     resources: [ securitycontextconstraints ]
     verbs: [ use ]
     resourceNames: [ nonroot ]
+  - apiGroups: [""]
+    resources: ["users", "groups"]
+    verbs: ["impersonate"]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

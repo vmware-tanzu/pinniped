@@ -6,8 +6,11 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509/pkix"
 	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -18,11 +21,15 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
 
 	loginapi "go.pinniped.dev/generated/1.20/apis/concierge/login"
 	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
+	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
 	"go.pinniped.dev/internal/concierge/apiserver"
+	"go.pinniped.dev/internal/concierge/impersonator"
 	"go.pinniped.dev/internal/config/concierge"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllermanager"
@@ -161,6 +168,34 @@ func (a *App) runServer(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("could not create aggregated API server: %w", err)
 	}
+
+	// run proxy handler
+	impersonationCA, err := certauthority.New(pkix.Name{CommonName: "test CA"}, 24*time.Hour)
+	if err != nil {
+		return fmt.Errorf("could not create impersonation CA: %w", err)
+	}
+	impersonationCert, err := impersonationCA.Issue(pkix.Name{}, []string{"impersonation-proxy"}, nil, 24*time.Hour)
+	if err != nil {
+		return fmt.Errorf("could not create impersonation cert: %w", err)
+	}
+	impersonationProxy, err := impersonator.New(authenticators, klogr.New().WithName("impersonation-proxy"))
+	if err != nil {
+		return fmt.Errorf("could not create impersonation proxy: %w", err)
+	}
+
+	impersonationProxyServer := http.Server{
+		Addr:    "0.0.0.0:8444",
+		Handler: impersonationProxy,
+		TLSConfig: &tls.Config{
+			MinVersion:   tls.VersionTLS12,
+			Certificates: []tls.Certificate{*impersonationCert},
+		},
+	}
+	go func() {
+		if err := impersonationProxyServer.ListenAndServeTLS("", ""); err != nil {
+			klog.ErrorS(err, "could not serve impersonation proxy")
+		}
+	}()
 
 	// Run the server. Its post-start hook will start the controllers.
 	return server.GenericAPIServer.PrepareRun().Run(ctx.Done())

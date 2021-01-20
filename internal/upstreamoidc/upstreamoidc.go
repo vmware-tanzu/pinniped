@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"net/url"
 
-	coreosoidc "github.com/coreos/go-oidc"
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 

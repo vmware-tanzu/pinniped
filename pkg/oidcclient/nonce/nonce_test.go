@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/coreos/go-oidc"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 )

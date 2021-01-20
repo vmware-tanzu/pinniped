@@ -20,7 +20,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 
-	coreosoidc "github.com/coreos/go-oidc"
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"

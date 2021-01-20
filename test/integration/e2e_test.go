@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	coreosoidc "github.com/coreos/go-oidc"
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"

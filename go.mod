@@ -5,7 +5,7 @@ go 1.14
 require (
 	cloud.google.com/go v0.60.0 // indirect
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/coreos/go-oidc v2.2.1+incompatible
+	github.com/coreos/go-oidc/v3 v3.0.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/go-logr/logr v0.3.0
 	github.com/go-logr/stdr v0.2.0

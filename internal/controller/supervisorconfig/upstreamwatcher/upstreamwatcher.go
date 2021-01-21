@@ -15,7 +15,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/coreos/go-oidc"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-logr/logr"
 	"golang.org/x/oauth2"
 	corev1 "k8s.io/api/core/v1"

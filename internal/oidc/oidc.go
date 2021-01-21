@@ -7,7 +7,7 @@ package oidc
 import (
 	"time"
 
-	coreosoidc "github.com/coreos/go-oidc"
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 

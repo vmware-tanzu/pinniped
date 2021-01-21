@@ -3,4 +3,4 @@
 
 package mockkeyset
 
-//go:generate go run -v github.com/golang/mock/mockgen  -destination=mockkeyset.go -package=mockkeyset -copyright_file=../../../hack/header.txt github.com/coreos/go-oidc KeySet
+//go:generate go run -v github.com/golang/mock/mockgen  -destination=mockkeyset.go -package=mockkeyset -copyright_file=../../../hack/header.txt github.com/coreos/go-oidc/v3/oidc KeySet

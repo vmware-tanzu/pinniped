@@ -11,7 +11,7 @@ import (
 	"net/url"
 	"testing"
 
-	coreosoidc "github.com/coreos/go-oidc"
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 	"gopkg.in/square/go-jose.v2"

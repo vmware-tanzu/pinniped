@@ -103,10 +103,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not authenticated", http.StatusUnauthorized)
 		return
 	}
-	log = log.WithValues(
-		"user", userInfo.GetName(),
-		"groups", userInfo.GetGroups(),
-	)
+	log = log.WithValues("userID", userInfo.GetUID())
 
 	newHeaders := getProxyHeaders(userInfo, r.Header)
 	r.Header = newHeaders

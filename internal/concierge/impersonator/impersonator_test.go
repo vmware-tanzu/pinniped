@@ -190,13 +190,17 @@ func TestImpersonator(t *testing.T) {
 				URL: validURL,
 			},
 			expectMockToken: func(t *testing.T, recorder *mocktokenauthenticator.MockTokenMockRecorder) {
-				userInfo := user.DefaultInfo{Name: "test-user", Groups: []string{"test-group-1", "test-group-2"}}
+				userInfo := user.DefaultInfo{
+					Name:   "test-user",
+					Groups: []string{"test-group-1", "test-group-2"},
+					UID:    "test-uid",
+				}
 				response := &authenticator.Response{User: &userInfo}
 				recorder.AuthenticateToken(gomock.Any(), "test-token").Return(response, true, nil)
 			},
 			wantHTTPBody:   "successful proxied response",
 			wantHTTPStatus: http.StatusOK,
-			wantLogs:       []string{"\"level\"=0 \"msg\"=\"proxying authenticated request\" \"authenticator\"={\"apiGroup\":null,\"kind\":\"\",\"name\":\"authenticator-one\"} \"authenticatorNamespace\"=\"foo\" \"groups\"=[\"test-group-1\",\"test-group-2\"] \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\" \"user\"=\"test-user\""},
+			wantLogs:       []string{"\"level\"=0 \"msg\"=\"proxying authenticated request\" \"authenticator\"={\"apiGroup\":null,\"kind\":\"\",\"name\":\"authenticator-one\"} \"authenticatorNamespace\"=\"foo\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\" \"userID\"=\"test-uid\""},
 		},
 	}
 

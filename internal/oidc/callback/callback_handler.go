@@ -24,6 +24,14 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
+const (
+	// The name of the email claim from https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims
+	emailClaimName = "email"
+
+	// The name of the email_verified claim from https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims
+	emailVerifiedClaimName = "email_verified"
+)
+
 func NewHandler(
 	idpListGetter oidc.IDPListGetter,
 	oauthHelper fosite.OAuth2Provider,
@@ -222,18 +230,41 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 
 	subject := fmt.Sprintf("%s?%s=%s", upstreamIssuerAsString, oidc.IDTokenSubjectClaim, upstreamSubject)
 
-	usernameClaim := upstreamIDPConfig.GetUsernameClaim()
-	if usernameClaim == "" {
+	usernameClaimName := upstreamIDPConfig.GetUsernameClaim()
+	if usernameClaimName == "" {
 		return subject, subject, nil
 	}
 
-	usernameAsInterface, ok := idTokenClaims[usernameClaim]
+	// If the upstream username claim is configured to be the special "email" claim and the upstream "email_verified"
+	// claim is present, then validate that the "email_verified" claim is true.
+	emailVerifiedAsInterface, ok := idTokenClaims[emailVerifiedClaimName]
+	if usernameClaimName == emailClaimName && ok {
+		emailVerified, ok := emailVerifiedAsInterface.(bool)
+		if !ok {
+			plog.Warning(
+				"username claim configured as \"email\" and upstream email_verified claim is not a boolean",
+				"upstreamName", upstreamIDPConfig.GetName(),
+				"configuredUsernameClaim", usernameClaimName,
+				"emailVerifiedClaim", emailVerifiedAsInterface,
+			)
+			return "", "", httperr.New(http.StatusUnprocessableEntity, "email_verified claim in upstream ID token has invalid format")
+		}
+		if !emailVerified {
+			plog.Warning(
+				"username claim configured as \"email\" and upstream email_verified claim has false value",
+				"upstreamName", upstreamIDPConfig.GetName(),
+				"configuredUsernameClaim", usernameClaimName,
+			)
+			return "", "", httperr.New(http.StatusUnprocessableEntity, "email_verified claim in upstream ID token has false value")
+		}
+	}
+
+	usernameAsInterface, ok := idTokenClaims[usernameClaimName]
 	if !ok {
 		plog.Warning(
 			"no username claim in upstream ID token",
 			"upstreamName", upstreamIDPConfig.GetName(),
-			"configuredUsernameClaim", upstreamIDPConfig.GetUsernameClaim(),
-			"usernameClaim", usernameClaim,
+			"configuredUsernameClaim", usernameClaimName,
 		)
 		return "", "", httperr.New(http.StatusUnprocessableEntity, "no username claim in upstream ID token")
 	}
@@ -243,8 +274,7 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 		plog.Warning(
 			"username claim in upstream ID token has invalid format",
 			"upstreamName", upstreamIDPConfig.GetName(),
-			"configuredUsernameClaim", upstreamIDPConfig.GetUsernameClaim(),
-			"usernameClaim", usernameClaim,
+			"configuredUsernameClaim", usernameClaimName,
 		)
 		return "", "", httperr.New(http.StatusUnprocessableEntity, "username claim in upstream ID token has invalid format")
 	}
@@ -256,18 +286,17 @@ func getGroupsFromUpstreamIDToken(
 	upstreamIDPConfig provider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
 ) ([]string, error) {
-	groupsClaim := upstreamIDPConfig.GetGroupsClaim()
-	if groupsClaim == "" {
+	groupsClaimName := upstreamIDPConfig.GetGroupsClaim()
+	if groupsClaimName == "" {
 		return nil, nil
 	}
 
-	groupsAsInterface, ok := idTokenClaims[groupsClaim]
+	groupsAsInterface, ok := idTokenClaims[groupsClaimName]
 	if !ok {
 		plog.Warning(
 			"no groups claim in upstream ID token",
 			"upstreamName", upstreamIDPConfig.GetName(),
-			"configuredGroupsClaim", upstreamIDPConfig.GetGroupsClaim(),
-			"groupsClaim", groupsClaim,
+			"configuredGroupsClaim", groupsClaimName,
 		)
 		return nil, nil // the upstream IDP may have omitted the claim if the user has no groups
 	}
@@ -277,8 +306,7 @@ func getGroupsFromUpstreamIDToken(
 		plog.Warning(
 			"groups claim in upstream ID token has invalid format",
 			"upstreamName", upstreamIDPConfig.GetName(),
-			"configuredGroupsClaim", upstreamIDPConfig.GetGroupsClaim(),
-			"groupsClaim", groupsClaim,
+			"configuredGroupsClaim", groupsClaimName,
 		)
 		return nil, httperr.New(http.StatusUnprocessableEntity, "groups claim in upstream ID token has invalid format")
 	}

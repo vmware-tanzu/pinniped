@@ -181,6 +181,93 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 		{
+			name: "upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is missing",
+			idp: happyUpstream().WithUsernameClaim("email").
+				WithIDTokenClaim("email", "joe@whitehouse.gov").Build(),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusFound,
+			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenUsername:     "joe@whitehouse.gov",
+			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
+			name: "upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with true value",
+			idp: happyUpstream().WithUsernameClaim("email").
+				WithIDTokenClaim("email", "joe@whitehouse.gov").
+				WithIDTokenClaim("email_verified", true).Build(),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusFound,
+			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenUsername:     "joe@whitehouse.gov",
+			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
+			name: "upstream IDP configures username claim as anything other than special claim `email` and `email_verified` upstream claim is present with false value",
+			idp: happyUpstream().WithUsernameClaim("some-claim").
+				WithIDTokenClaim("some-claim", "joe").
+				WithIDTokenClaim("email", "joe@whitehouse.gov").
+				WithIDTokenClaim("email_verified", false).Build(),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusFound, // succeed despite `email_verified=false` because we're not using the email claim for anything
+			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenUsername:     "joe",
+			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
+			name: "upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with illegal value",
+			idp: happyUpstream().WithUsernameClaim("email").
+				WithIDTokenClaim("email", "joe@whitehouse.gov").
+				WithIDTokenClaim("email_verified", "supposed to be boolean").Build(),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusUnprocessableEntity,
+			wantBody:                          "Unprocessable Entity: email_verified claim in upstream ID token has invalid format\n",
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
+			name: "upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with false value",
+			idp: happyUpstream().WithUsernameClaim("email").
+				WithIDTokenClaim("email", "joe@whitehouse.gov").
+				WithIDTokenClaim("email_verified", false).Build(),
+			method:                            http.MethodGet,
+			path:                              newRequestPath().WithState(happyState).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusUnprocessableEntity,
+			wantBody:                          "Unprocessable Entity: email_verified claim in upstream ID token has false value\n",
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
+		{
 			name:                              "upstream IDP provides username claim configuration as `sub`, so the downstream token subject should be exactly what they asked for",
 			idp:                               happyUpstream().WithUsernameClaim("sub").Build(),
 			method:                            http.MethodGet,

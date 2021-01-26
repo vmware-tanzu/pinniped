@@ -74,6 +74,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				      --scopes strings                        OIDC scopes to request during login (default [offline_access,openid,pinniped:request-audience])
 				      --session-cache string                  Path to session cache file (default "` + cfgDir + `/sessions.yaml")
 				      --skip-browser                          Skip opening the browser (just print the URL)
+				      --use-impersonation-proxy               Whether the concierge cluster uses an impersonation proxy
 			`),
 		},
 		{

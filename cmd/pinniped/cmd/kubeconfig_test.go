@@ -61,6 +61,8 @@ func TestGetKubeconfig(t *testing.T) {
 				      --concierge-api-group-suffix string     Concierge API group suffix (default "pinniped.dev")
 				      --concierge-authenticator-name string   Concierge authenticator name (default: autodiscover)
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)
+				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the concierge
+				      --concierge-endpoint string             API base for the Pinniped concierge endpoint
 				      --concierge-namespace string            Namespace in which the concierge was installed (default "pinniped-concierge")
 				  -h, --help                                  help for kubeconfig
 				      --kubeconfig string                     Path to kubeconfig file
@@ -76,6 +78,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --oidc-skip-browser                     During OpenID Connect login, skip opening the browser (just print the URL)
 				      --static-token string                   Instead of doing an OIDC-based login, specify a static token
 				      --static-token-env string               Instead of doing an OIDC-based login, read a static token from the environment
+					  --use-impersonation-proxy               Whether the concierge cluster uses an impersonation proxy
 			`),
 		},
 		{
@@ -505,6 +508,67 @@ func TestGetKubeconfig(t *testing.T) {
         		      provideClusterInfo: true
 			`, base64.StdEncoding.EncodeToString(testCA.Bundle())),
 			wantAPIGroupSuffix: "tuna.io",
+		},
+		{
+			name: "configure impersonation proxy with autodetected JWT authenticator",
+			args: []string{
+				"--kubeconfig", "./testdata/kubeconfig.yaml",
+				"--concierge-ca-bundle-data", "blah", // TODO make this more realistic, maybe do some validation?
+				"--concierge-endpoint", "https://impersonation-proxy-endpoint.test",
+				"--use-impersonation-proxy",
+			},
+			conciergeObjects: []runtime.Object{
+				&conciergev1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator", Namespace: "pinniped-concierge"},
+					Spec: conciergev1alpha1.JWTAuthenticatorSpec{
+						Issuer:   "https://example.com/issuer",
+						Audience: "test-audience",
+						TLS: &conciergev1alpha1.TLSSpec{
+							CertificateAuthorityData: base64.StdEncoding.EncodeToString(testCA.Bundle()),
+						},
+					},
+				},
+			},
+			wantStdout: here.Docf(`
+        		apiVersion: v1
+        		clusters:
+        		- cluster:
+        		    certificate-authority-data: YmxhaA==
+        		    server: https://impersonation-proxy-endpoint.test
+        		  name: pinniped
+        		contexts:
+        		- context:
+        		    cluster: pinniped
+        		    user: pinniped
+        		  name: pinniped
+        		current-context: pinniped
+        		kind: Config
+        		preferences: {}
+        		users:
+        		- name: pinniped
+        		  user:
+        		    exec:
+        		      apiVersion: client.authentication.k8s.io/v1beta1
+        		      args:
+        		      - login
+        		      - oidc
+        		      - --enable-concierge
+        		      - --concierge-api-group-suffix=pinniped.dev
+        		      - --concierge-namespace=pinniped-concierge
+        		      - --concierge-authenticator-name=test-authenticator
+        		      - --concierge-authenticator-type=jwt
+        		      - --concierge-endpoint=https://impersonation-proxy-endpoint.test
+        		      - --concierge-ca-bundle-data=blah
+        		      - --use-impersonation-proxy
+        		      - --issuer=https://example.com/issuer
+        		      - --client-id=pinniped-cli
+        		      - --scopes=offline_access,openid,pinniped:request-audience
+        		      - --ca-bundle-data=%s
+        		      - --request-audience=test-audience
+        		      command: '.../path/to/pinniped'
+        		      env: []
+        		      provideClusterInfo: true
+			`, base64.StdEncoding.EncodeToString(testCA.Bundle())),
 		},
 	}
 	for _, tt := range tests {

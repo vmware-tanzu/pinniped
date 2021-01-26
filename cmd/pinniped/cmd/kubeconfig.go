@@ -73,11 +73,14 @@ type getKubeconfigOIDCParams struct {
 }
 
 type getKubeconfigConciergeParams struct {
-	disabled          bool
-	namespace         string
-	authenticatorName string
-	authenticatorType string
-	apiGroupSuffix    string
+	disabled              bool
+	namespace             string
+	authenticatorName     string
+	authenticatorType     string
+	apiGroupSuffix        string
+	caBundleData          string
+	endpoint              string
+	useImpersonationProxy bool
 }
 
 type getKubeconfigParams struct {
@@ -109,6 +112,10 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.StringVar(&flags.concierge.authenticatorType, "concierge-authenticator-type", "", "Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)")
 	f.StringVar(&flags.concierge.authenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name (default: autodiscover)")
 	f.StringVar(&flags.concierge.apiGroupSuffix, "concierge-api-group-suffix", "pinniped.dev", "Concierge API group suffix")
+
+	f.StringVar(&flags.concierge.caBundleData, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the concierge")
+	f.StringVar(&flags.concierge.endpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")
+	f.BoolVar(&flags.concierge.useImpersonationProxy, "use-impersonation-proxy", false, "Whether the concierge cluster uses an impersonation proxy")
 
 	f.StringVar(&flags.oidc.issuer, "oidc-issuer", "", "OpenID Connect issuer URL (default: autodiscover)")
 	f.StringVar(&flags.oidc.clientID, "oidc-client-id", "pinniped-cli", "OpenID Connect client ID (default: autodiscover)")
@@ -161,6 +168,10 @@ func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigPar
 	cluster, err := copyCurrentClusterFromExistingKubeConfig(currentKubeConfig, flags.kubeconfigContextOverride)
 	if err != nil {
 		return fmt.Errorf("could not load --kubeconfig/--kubeconfig-context: %w", err)
+	}
+	if flags.concierge.useImpersonationProxy {
+		cluster.CertificateAuthorityData = []byte(flags.concierge.caBundleData)
+		cluster.Server = flags.concierge.endpoint
 	}
 	clientset, err := deps.getClientset(clientConfig, flags.concierge.apiGroupSuffix)
 	if err != nil {
@@ -266,6 +277,13 @@ func configureConcierge(authenticator metav1.Object, flags *getKubeconfigParams,
 		}
 	}
 
+	if flags.concierge.endpoint == "" {
+		flags.concierge.endpoint = v1Cluster.Server
+	}
+	if flags.concierge.caBundleData == "" {
+		flags.concierge.caBundleData = base64.StdEncoding.EncodeToString(v1Cluster.CertificateAuthorityData)
+	}
+
 	// Append the flags to configure the Concierge credential exchange at runtime.
 	execConfig.Args = append(execConfig.Args,
 		"--enable-concierge",
@@ -273,9 +291,14 @@ func configureConcierge(authenticator metav1.Object, flags *getKubeconfigParams,
 		"--concierge-namespace="+flags.concierge.namespace,
 		"--concierge-authenticator-name="+flags.concierge.authenticatorName,
 		"--concierge-authenticator-type="+flags.concierge.authenticatorType,
-		"--concierge-endpoint="+v1Cluster.Server,
-		"--concierge-ca-bundle-data="+base64.StdEncoding.EncodeToString(v1Cluster.CertificateAuthorityData),
+		"--concierge-endpoint="+flags.concierge.endpoint,
+		"--concierge-ca-bundle-data="+flags.concierge.caBundleData,
 	)
+	if flags.concierge.useImpersonationProxy {
+		execConfig.Args = append(execConfig.Args,
+			"--use-impersonation-proxy",
+		)
+	}
 	return nil
 }
 

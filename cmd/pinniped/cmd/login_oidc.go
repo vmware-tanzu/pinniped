@@ -16,6 +16,11 @@ import (
 	"path/filepath"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+
+	authenticationv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
+
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -65,6 +70,7 @@ type oidcLoginFlags struct {
 	conciergeEndpoint          string
 	conciergeCABundle          string
 	conciergeAPIGroupSuffix    string
+	useImpersonationProxy      bool
 }
 
 func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
@@ -94,6 +100,7 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeEndpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")
 	cmd.Flags().StringVar(&flags.conciergeCABundle, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the concierge")
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", "pinniped.dev", "Concierge API group suffix")
+	cmd.Flags().BoolVar(&flags.useImpersonationProxy, "use-impersonation-proxy", false, "Whether the concierge cluster uses an impersonation proxy")
 
 	mustMarkHidden(&cmd, "debug-session-cache")
 	mustMarkRequired(&cmd, "issuer")
@@ -171,11 +178,20 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if concierge != nil {
+	// do a credential exchange request, unless impersonation proxy is configured
+	if concierge != nil && !flags.useImpersonationProxy {
 		cred, err = deps.exchangeToken(ctx, concierge, token.IDToken.Token)
 		if err != nil {
 			return fmt.Errorf("could not complete concierge credential exchange: %w", err)
 		}
+	}
+	if concierge != nil && flags.useImpersonationProxy {
+		// TODO add the right header???
+		req, err := execCredentialForImpersonationProxy(token, flags)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(req)
 	}
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(cred)
 }
@@ -237,4 +253,37 @@ func mustGetConfigDir() string {
 		panic(err)
 	}
 	return filepath.Join(home, ".config", xdgAppName)
+}
+
+func execCredentialForImpersonationProxy(token *oidctypes.Token, flags oidcLoginFlags) (*clientauthv1beta1.ExecCredential, error) {
+	reqJSON, err := json.Marshal(&loginv1alpha1.TokenCredentialRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: flags.conciergeNamespace,
+		},
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "TokenCredentialRequest",
+			APIVersion: loginv1alpha1.GroupName + "/v1alpha1",
+		},
+		Spec: loginv1alpha1.TokenCredentialRequestSpec{
+			Token: token.AccessToken.Token, // TODO
+			Authenticator: corev1.TypedLocalObjectReference{
+				APIGroup: &authenticationv1alpha1.SchemeGroupVersion.Group,
+				Kind:     os.Getenv(flags.conciergeAuthenticatorType),
+				Name:     os.Getenv(flags.conciergeAuthenticatorName),
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	encodedToken := base64.RawURLEncoding.EncodeToString(reqJSON)
+	return &clientauthv1beta1.ExecCredential{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ExecCredential",
+			APIVersion: "client.authentication.k8s.io/v1beta1",
+		},
+		Status: &clientauthv1beta1.ExecCredentialStatus{
+			Token: encodedToken,
+		},
+	}, nil
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package plog
@@ -13,42 +13,50 @@ import (
 )
 
 func TestValidateAndSetLogLevelGlobally(t *testing.T) {
-	originalLogLevel := getKlogLevel(t)
+	originalLogLevel := getKlogLevel()
+	require.GreaterOrEqual(t, int(originalLogLevel), int(klog.Level(0)), "cannot get klog level")
 
 	tests := []struct {
-		name      string
-		level     LogLevel
-		wantLevel klog.Level
-		wantErr   string
+		name        string
+		level       LogLevel
+		wantLevel   klog.Level
+		wantEnabled []LogLevel
+		wantErr     string
 	}{
 		{
-			name:      "unset",
-			wantLevel: 0,
+			name:        "unset",
+			wantLevel:   0,
+			wantEnabled: []LogLevel{LevelWarning},
 		},
 		{
-			name:      "warning",
-			level:     LevelWarning,
-			wantLevel: 0,
+			name:        "warning",
+			level:       LevelWarning,
+			wantLevel:   0,
+			wantEnabled: []LogLevel{LevelWarning},
 		},
 		{
-			name:      "info",
-			level:     LevelInfo,
-			wantLevel: 2,
+			name:        "info",
+			level:       LevelInfo,
+			wantLevel:   2,
+			wantEnabled: []LogLevel{LevelWarning, LevelInfo},
 		},
 		{
-			name:      "debug",
-			level:     LevelDebug,
-			wantLevel: 4,
+			name:        "debug",
+			level:       LevelDebug,
+			wantLevel:   4,
+			wantEnabled: []LogLevel{LevelWarning, LevelInfo, LevelDebug},
 		},
 		{
-			name:      "trace",
-			level:     LevelTrace,
-			wantLevel: 6,
+			name:        "trace",
+			level:       LevelTrace,
+			wantLevel:   6,
+			wantEnabled: []LogLevel{LevelWarning, LevelInfo, LevelDebug, LevelTrace},
 		},
 		{
-			name:      "all",
-			level:     LevelAll,
-			wantLevel: 108,
+			name:        "all",
+			level:       LevelAll,
+			wantLevel:   108,
+			wantEnabled: []LogLevel{LevelWarning, LevelInfo, LevelDebug, LevelTrace, LevelAll},
 		},
 		{
 			name:      "invalid level",
@@ -66,26 +74,31 @@ func TestValidateAndSetLogLevelGlobally(t *testing.T) {
 
 			err := ValidateAndSetLogLevelGlobally(tt.level)
 			require.Equal(t, tt.wantErr, errString(err))
-			require.Equal(t, tt.wantLevel, getKlogLevel(t))
+			require.Equal(t, tt.wantLevel, getKlogLevel())
+
+			if tt.wantEnabled != nil {
+				allLevels := []LogLevel{LevelWarning, LevelInfo, LevelDebug, LevelTrace, LevelAll}
+				for _, level := range allLevels {
+					if contains(tt.wantEnabled, level) {
+						require.Truef(t, Enabled(level), "wanted %q to be enabled", level)
+					} else {
+						require.False(t, Enabled(level), "did not want %q to be enabled", level)
+					}
+				}
+			}
 		})
 	}
 
-	require.Equal(t, originalLogLevel, getKlogLevel(t))
+	require.Equal(t, originalLogLevel, getKlogLevel())
 }
 
-func getKlogLevel(t *testing.T) klog.Level {
-	t.Helper()
-
-	// hack around klog not exposing a Get method
-	for i := klog.Level(0); i < 256; i++ {
-		if klog.V(i).Enabled() {
-			continue
+func contains(haystack []LogLevel, needle LogLevel) bool {
+	for _, hay := range haystack {
+		if hay == needle {
+			return true
 		}
-		return i - 1
 	}
-
-	t.Fatal("unknown log level")
-	return 0
+	return false
 }
 
 func errString(err error) string {

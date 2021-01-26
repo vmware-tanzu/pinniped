@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -256,6 +257,16 @@ func mustGetConfigDir() string {
 }
 
 func execCredentialForImpersonationProxy(token *oidctypes.Token, flags oidcLoginFlags) (*clientauthv1beta1.ExecCredential, error) {
+	// TODO maybe de-dup this with conciergeclient.go
+	var kind string
+	switch strings.ToLower(flags.conciergeAuthenticatorType) {
+	case "webhook":
+		kind = "WebhookAuthenticator"
+	case "jwt":
+		kind = "JWTAuthenticator"
+	default:
+		return nil, fmt.Errorf(`invalid authenticator type: %q, supported values are "webhook" and "jwt"`, kind)
+	}
 	reqJSON, err := json.Marshal(&loginv1alpha1.TokenCredentialRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: flags.conciergeNamespace,
@@ -265,11 +276,11 @@ func execCredentialForImpersonationProxy(token *oidctypes.Token, flags oidcLogin
 			APIVersion: loginv1alpha1.GroupName + "/v1alpha1",
 		},
 		Spec: loginv1alpha1.TokenCredentialRequestSpec{
-			Token: token.AccessToken.Token, // TODO
+			Token: token.IDToken.Token, // TODO
 			Authenticator: corev1.TypedLocalObjectReference{
 				APIGroup: &authenticationv1alpha1.SchemeGroupVersion.Group,
-				Kind:     os.Getenv(flags.conciergeAuthenticatorType),
-				Name:     os.Getenv(flags.conciergeAuthenticatorName),
+				Kind:     kind,
+				Name:     flags.conciergeAuthenticatorName,
 			},
 		},
 	})
@@ -277,7 +288,7 @@ func execCredentialForImpersonationProxy(token *oidctypes.Token, flags oidcLogin
 		return nil, err
 	}
 	encodedToken := base64.RawURLEncoding.EncodeToString(reqJSON)
-	return &clientauthv1beta1.ExecCredential{
+	cred := &clientauthv1beta1.ExecCredential{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ExecCredential",
 			APIVersion: "client.authentication.k8s.io/v1beta1",
@@ -285,5 +296,9 @@ func execCredentialForImpersonationProxy(token *oidctypes.Token, flags oidcLogin
 		Status: &clientauthv1beta1.ExecCredentialStatus{
 			Token: encodedToken,
 		},
-	}, nil
+	}
+	if !token.IDToken.Expiry.IsZero() {
+		cred.Status.ExpirationTimestamp = &token.IDToken.Expiry
+	}
+	return cred, nil
 }

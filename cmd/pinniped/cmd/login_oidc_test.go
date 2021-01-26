@@ -8,11 +8,17 @@ import (
 	"context"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
+
+	authenticationv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -198,6 +204,21 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantOptionsCount: 7,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"exchanged-token"}}` + "\n",
 		},
+		{
+			name: "success with impersonation proxy",
+			args: []string{
+				"--client-id", "test-client-id",
+				"--issuer", "test-issuer",
+				"--enable-concierge",
+				"--use-impersonation-proxy",
+				"--concierge-authenticator-type", "webhook",
+				"--concierge-authenticator-name", "test-authenticator",
+				"--concierge-endpoint", "https://127.0.0.1:1234/",
+				"--concierge-ca-bundle-data", base64.StdEncoding.EncodeToString(testCA.Bundle()),
+			},
+			wantOptionsCount: 3,
+			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"` + impersonationProxyToken("test-id-token") + `"}}` + "\n",
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -253,4 +274,25 @@ func TestLoginOIDCCommand(t *testing.T) {
 			require.Len(t, gotOptions, tt.wantOptionsCount)
 		})
 	}
+}
+
+func impersonationProxyToken(token string) string {
+	reqJSON, _ := json.Marshal(&loginv1alpha1.TokenCredentialRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "pinniped-concierge",
+		},
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "TokenCredentialRequest",
+			APIVersion: loginv1alpha1.GroupName + "/v1alpha1",
+		},
+		Spec: loginv1alpha1.TokenCredentialRequestSpec{
+			Token: token,
+			Authenticator: corev1.TypedLocalObjectReference{
+				APIGroup: &authenticationv1alpha1.SchemeGroupVersion.Group,
+				Kind:     "WebhookAuthenticator",
+				Name:     "test-authenticator",
+			},
+		},
+	})
+	return base64.RawURLEncoding.EncodeToString(reqJSON)
 }

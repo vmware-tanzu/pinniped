@@ -115,7 +115,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 
 	f.StringVar(&flags.concierge.caBundleData, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the concierge")
 	f.StringVar(&flags.concierge.endpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")
-	f.BoolVar(&flags.concierge.useImpersonationProxy, "use-impersonation-proxy", false, "Whether the concierge cluster uses an impersonation proxy")
+	f.BoolVar(&flags.concierge.useImpersonationProxy, "concierge-use-impersonation-proxy", false, "Whether the concierge cluster uses an impersonation proxy")
 
 	f.StringVar(&flags.oidc.issuer, "oidc-issuer", "", "OpenID Connect issuer URL (default: autodiscover)")
 	f.StringVar(&flags.oidc.clientID, "oidc-client-id", "pinniped-cli", "OpenID Connect client ID (default: autodiscover)")
@@ -296,7 +296,7 @@ func configureConcierge(authenticator metav1.Object, flags *getKubeconfigParams,
 	)
 	if flags.concierge.useImpersonationProxy {
 		execConfig.Args = append(execConfig.Args,
-			"--use-impersonation-proxy",
+			"--concierge-use-impersonation-proxy",
 		)
 	}
 	return nil

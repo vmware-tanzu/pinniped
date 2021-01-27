@@ -5,15 +5,22 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/spf13/cobra"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
+	authenticationv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/pkg/conciergeclient"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
@@ -47,6 +54,7 @@ type staticLoginParams struct {
 	conciergeEndpoint          string
 	conciergeCABundle          string
 	conciergeAPIGroupSuffix    string
+	useImpersonationProxy      bool
 }
 
 func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
@@ -68,6 +76,7 @@ func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeEndpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")
 	cmd.Flags().StringVar(&flags.conciergeCABundle, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the concierge")
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", "pinniped.dev", "Concierge API group suffix")
+	cmd.Flags().BoolVar(&flags.useImpersonationProxy, "concierge-use-impersonation-proxy", false, "Whether the concierge cluster uses an impersonation proxy")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runStaticLogin(cmd.OutOrStdout(), deps, flags) }
 	return &cmd
 }
@@ -109,7 +118,7 @@ func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams
 	cred := tokenCredential(&oidctypes.Token{IDToken: &oidctypes.IDToken{Token: token}})
 
 	// Exchange that token with the concierge, if configured.
-	if concierge != nil {
+	if concierge != nil && !flags.useImpersonationProxy {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
@@ -119,5 +128,58 @@ func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams
 			return fmt.Errorf("could not complete concierge credential exchange: %w", err)
 		}
 	}
+	if concierge != nil && flags.useImpersonationProxy {
+		// Put the token into a TokenCredentialRequest
+		// put the TokenCredentialRequest in an ExecCredential
+		req, err := execCredentialForImpersonationProxyStatic(token, flags)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(out).Encode(req)
+	}
 	return json.NewEncoder(out).Encode(cred)
+}
+
+func execCredentialForImpersonationProxyStatic(token string, flags staticLoginParams) (*clientauthv1beta1.ExecCredential, error) {
+	// TODO maybe de-dup this with conciergeclient.go
+	var kind string
+	switch strings.ToLower(flags.conciergeAuthenticatorType) {
+	case "webhook":
+		kind = "WebhookAuthenticator"
+	case "jwt":
+		kind = "JWTAuthenticator"
+	default:
+		return nil, fmt.Errorf(`invalid authenticator type: %q, supported values are "webhook" and "jwt"`, kind)
+	}
+	reqJSON, err := json.Marshal(&loginv1alpha1.TokenCredentialRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: flags.conciergeNamespace,
+		},
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "TokenCredentialRequest",
+			APIVersion: loginv1alpha1.GroupName + "/v1alpha1",
+		},
+		Spec: loginv1alpha1.TokenCredentialRequestSpec{
+			Token: token, // TODO
+			Authenticator: corev1.TypedLocalObjectReference{
+				APIGroup: &authenticationv1alpha1.SchemeGroupVersion.Group,
+				Kind:     kind,
+				Name:     flags.conciergeAuthenticatorName,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	encodedToken := base64.RawURLEncoding.EncodeToString(reqJSON)
+	cred := &clientauthv1beta1.ExecCredential{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ExecCredential",
+			APIVersion: "client.authentication.k8s.io/v1beta1",
+		},
+		Status: &clientauthv1beta1.ExecCredentialStatus{
+			Token: encodedToken,
+		},
+	}
+	return cred, nil
 }

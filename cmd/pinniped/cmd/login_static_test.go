@@ -57,6 +57,7 @@ func TestLoginStaticCommand(t *testing.T) {
 				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the concierge
 				      --concierge-endpoint string             API base for the Pinniped concierge endpoint
 				      --concierge-namespace string            Namespace in which the concierge was installed (default "pinniped-concierge")
+				      --concierge-use-impersonation-proxy     Whether the concierge cluster uses an impersonation proxy
 				      --enable-concierge                      Exchange the token with the Pinniped concierge during login
 				  -h, --help                                  help for static
 				      --token string                          Static token to present during login
@@ -152,6 +153,18 @@ func TestLoginStaticCommand(t *testing.T) {
 				"--token", "test-token",
 			},
 			wantStdout: `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"test-token"}}` + "\n",
+		},
+		{
+			name: "impersonation proxy success",
+			args: []string{
+				"--enable-concierge",
+				"--concierge-use-impersonation-proxy",
+				"--token", "test-token",
+				"--concierge-endpoint", "https://127.0.0.1/",
+				"--concierge-authenticator-type", "webhook",
+				"--concierge-authenticator-name", "test-authenticator",
+			},
+			wantStdout: `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"` + impersonationProxyTestToken("test-token") + `"}}` + "\n",
 		},
 	}
 	for _, tt := range tests {

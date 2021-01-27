@@ -64,6 +64,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the concierge
 				      --concierge-endpoint string             API base for the Pinniped concierge endpoint
 				      --concierge-namespace string            Namespace in which the concierge was installed (default "pinniped-concierge")
+					  --concierge-use-impersonation-proxy     Whether the concierge cluster uses an impersonation proxy
 				  -h, --help                                  help for kubeconfig
 				      --kubeconfig string                     Path to kubeconfig file
 				      --kubeconfig-context string             Kubeconfig context name (default: current active context)
@@ -78,7 +79,6 @@ func TestGetKubeconfig(t *testing.T) {
 				      --oidc-skip-browser                     During OpenID Connect login, skip opening the browser (just print the URL)
 				      --static-token string                   Instead of doing an OIDC-based login, specify a static token
 				      --static-token-env string               Instead of doing an OIDC-based login, read a static token from the environment
-					  --use-impersonation-proxy               Whether the concierge cluster uses an impersonation proxy
 			`),
 		},
 		{
@@ -515,7 +515,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 				"--concierge-ca-bundle-data", "blah", // TODO make this more realistic, maybe do some validation?
 				"--concierge-endpoint", "https://impersonation-proxy-endpoint.test",
-				"--use-impersonation-proxy",
+				"--concierge-use-impersonation-proxy",
 			},
 			conciergeObjects: []runtime.Object{
 				&conciergev1alpha1.JWTAuthenticator{
@@ -559,7 +559,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-type=jwt
         		      - --concierge-endpoint=https://impersonation-proxy-endpoint.test
         		      - --concierge-ca-bundle-data=blah
-        		      - --use-impersonation-proxy
+        		      - --concierge-use-impersonation-proxy
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
         		      - --scopes=offline_access,openid,pinniped:request-audience

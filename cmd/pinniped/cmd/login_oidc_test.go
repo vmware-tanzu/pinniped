@@ -72,6 +72,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the concierge
 				      --concierge-endpoint string             API base for the Pinniped concierge endpoint
 				      --concierge-namespace string            Namespace in which the concierge was installed (default "pinniped-concierge")
+				      --concierge-use-impersonation-proxy     Whether the concierge cluster uses an impersonation proxy
 				      --enable-concierge                      Exchange the OIDC ID token with the Pinniped concierge during login
 				  -h, --help                                  help for oidc
 				      --issuer string                         OpenID Connect issuer URL
@@ -80,7 +81,6 @@ func TestLoginOIDCCommand(t *testing.T) {
 				      --scopes strings                        OIDC scopes to request during login (default [offline_access,openid,pinniped:request-audience])
 				      --session-cache string                  Path to session cache file (default "` + cfgDir + `/sessions.yaml")
 				      --skip-browser                          Skip opening the browser (just print the URL)
-				      --use-impersonation-proxy               Whether the concierge cluster uses an impersonation proxy
 			`),
 		},
 		{
@@ -210,14 +210,14 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--client-id", "test-client-id",
 				"--issuer", "test-issuer",
 				"--enable-concierge",
-				"--use-impersonation-proxy",
+				"--concierge-use-impersonation-proxy",
 				"--concierge-authenticator-type", "webhook",
 				"--concierge-authenticator-name", "test-authenticator",
 				"--concierge-endpoint", "https://127.0.0.1:1234/",
 				"--concierge-ca-bundle-data", base64.StdEncoding.EncodeToString(testCA.Bundle()),
 			},
 			wantOptionsCount: 3,
-			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"` + impersonationProxyToken("test-id-token") + `"}}` + "\n",
+			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"` + impersonationProxyTestToken("test-id-token") + `"}}` + "\n",
 		},
 	}
 	for _, tt := range tests {
@@ -276,7 +276,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 	}
 }
 
-func impersonationProxyToken(token string) string {
+func impersonationProxyTestToken(token string) string {
 	reqJSON, _ := json.Marshal(&loginv1alpha1.TokenCredentialRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "pinniped-concierge",

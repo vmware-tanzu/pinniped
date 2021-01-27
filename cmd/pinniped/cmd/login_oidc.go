@@ -101,7 +101,7 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeEndpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")
 	cmd.Flags().StringVar(&flags.conciergeCABundle, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the concierge")
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", "pinniped.dev", "Concierge API group suffix")
-	cmd.Flags().BoolVar(&flags.useImpersonationProxy, "use-impersonation-proxy", false, "Whether the concierge cluster uses an impersonation proxy")
+	cmd.Flags().BoolVar(&flags.useImpersonationProxy, "concierge-use-impersonation-proxy", false, "Whether the concierge cluster uses an impersonation proxy")
 
 	mustMarkHidden(&cmd, "debug-session-cache")
 	mustMarkRequired(&cmd, "issuer")
@@ -187,7 +187,8 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		}
 	}
 	if concierge != nil && flags.useImpersonationProxy {
-		// TODO add the right header???
+		// Put the token into a TokenCredentialRequest
+		// put the TokenCredentialRequest in an ExecCredential
 		req, err := execCredentialForImpersonationProxy(token, flags)
 		if err != nil {
 			return err

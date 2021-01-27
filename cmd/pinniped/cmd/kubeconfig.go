@@ -78,7 +78,7 @@ type getKubeconfigConciergeParams struct {
 	authenticatorName     string
 	authenticatorType     string
 	apiGroupSuffix        string
-	caBundleData          string
+	caBundlePath          string
 	endpoint              string
 	useImpersonationProxy bool
 }
@@ -113,7 +113,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.StringVar(&flags.concierge.authenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name (default: autodiscover)")
 	f.StringVar(&flags.concierge.apiGroupSuffix, "concierge-api-group-suffix", "pinniped.dev", "Concierge API group suffix")
 
-	f.StringVar(&flags.concierge.caBundleData, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the concierge")
+	f.StringVar(&flags.concierge.caBundlePath, "concierge-ca-bundle", "", "Path to TLS certificate authority bundle (PEM format, optional, can be repeated) to use when connecting to the concierge")
 	f.StringVar(&flags.concierge.endpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")
 	f.BoolVar(&flags.concierge.useImpersonationProxy, "concierge-use-impersonation-proxy", false, "Whether the concierge cluster uses an impersonation proxy")
 
@@ -170,7 +170,14 @@ func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigPar
 		return fmt.Errorf("could not load --kubeconfig/--kubeconfig-context: %w", err)
 	}
 	if flags.concierge.useImpersonationProxy {
-		cluster.CertificateAuthorityData = []byte(flags.concierge.caBundleData)
+		// TODO what to do if --use-impersonation-proxy is set but flags.concierge.caBundlePath is not???
+		// TODO dont do this twice
+		conciergeCaBundleData, err := loadCABundlePaths([]string{flags.concierge.caBundlePath})
+		if err != nil {
+			return fmt.Errorf("could not read --concierge-ca-bundle: %w", err)
+		}
+
+		cluster.CertificateAuthorityData = []byte(conciergeCaBundleData)
 		cluster.Server = flags.concierge.endpoint
 	}
 	clientset, err := deps.getClientset(clientConfig, flags.concierge.apiGroupSuffix)
@@ -280,8 +287,16 @@ func configureConcierge(authenticator metav1.Object, flags *getKubeconfigParams,
 	if flags.concierge.endpoint == "" {
 		flags.concierge.endpoint = v1Cluster.Server
 	}
-	if flags.concierge.caBundleData == "" {
-		flags.concierge.caBundleData = base64.StdEncoding.EncodeToString(v1Cluster.CertificateAuthorityData)
+
+	var encodedConciergeCaBundleData string
+	if flags.concierge.caBundlePath == "" {
+		encodedConciergeCaBundleData = base64.StdEncoding.EncodeToString(v1Cluster.CertificateAuthorityData)
+	} else {
+		conciergeCaBundleData, err := loadCABundlePaths([]string{flags.concierge.caBundlePath})
+		if err != nil {
+			return fmt.Errorf("could not read --concierge-ca-bundle: %w", err)
+		}
+		encodedConciergeCaBundleData = base64.StdEncoding.EncodeToString([]byte(conciergeCaBundleData))
 	}
 
 	// Append the flags to configure the Concierge credential exchange at runtime.
@@ -292,7 +307,7 @@ func configureConcierge(authenticator metav1.Object, flags *getKubeconfigParams,
 		"--concierge-authenticator-name="+flags.concierge.authenticatorName,
 		"--concierge-authenticator-type="+flags.concierge.authenticatorType,
 		"--concierge-endpoint="+flags.concierge.endpoint,
-		"--concierge-ca-bundle-data="+flags.concierge.caBundleData,
+		"--concierge-ca-bundle-data="+encodedConciergeCaBundleData,
 	)
 	if flags.concierge.useImpersonationProxy {
 		execConfig.Args = append(execConfig.Args,

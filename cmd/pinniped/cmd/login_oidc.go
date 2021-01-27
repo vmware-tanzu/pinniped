@@ -189,7 +189,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	if concierge != nil && flags.useImpersonationProxy {
 		// Put the token into a TokenCredentialRequest
 		// put the TokenCredentialRequest in an ExecCredential
-		req, err := execCredentialForImpersonationProxy(token.IDToken.Token, flags.conciergeAuthenticatorType, flags.conciergeNamespace, flags.conciergeAuthenticatorName, token.IDToken.Expiry)
+		req, err := execCredentialForImpersonationProxy(token.IDToken.Token, flags.conciergeAuthenticatorType, flags.conciergeNamespace, flags.conciergeAuthenticatorName, &token.IDToken.Expiry)
 		if err != nil {
 			return err
 		}
@@ -262,7 +262,7 @@ func execCredentialForImpersonationProxy(
 	conciergeAuthenticatorType string,
 	conciergeNamespace string,
 	conciergeAuthenticatorName string,
-	tokenExpiry metav1.Time,
+	tokenExpiry *metav1.Time,
 ) (*clientauthv1beta1.ExecCredential, error) {
 	// TODO maybe de-dup this with conciergeclient.go
 	var kind string
@@ -292,7 +292,7 @@ func execCredentialForImpersonationProxy(
 		},
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error creating TokenCredentialRequest for impersonation proxy: %w", err)
 	}
 	encodedToken := base64.RawURLEncoding.EncodeToString(reqJSON)
 	cred := &clientauthv1beta1.ExecCredential{
@@ -305,7 +305,7 @@ func execCredentialForImpersonationProxy(
 		},
 	}
 	if !tokenExpiry.IsZero() {
-		cred.Status.ExpirationTimestamp = &tokenExpiry
+		cred.Status.ExpirationTimestamp = tokenExpiry
 	}
 	return cred, nil
 }

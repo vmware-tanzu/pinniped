@@ -28,11 +28,14 @@ import (
 )
 
 func TestGetKubeconfig(t *testing.T) {
-	testCA, err := certauthority.New(pkix.Name{CommonName: "Test CA"}, 1*time.Hour)
+	testOIDCCA, err := certauthority.New(pkix.Name{CommonName: "Test CA"}, 1*time.Hour)
 	require.NoError(t, err)
 	tmpdir := testutil.TempDir(t)
-	testCABundlePath := filepath.Join(tmpdir, "testca.pem")
-	require.NoError(t, ioutil.WriteFile(testCABundlePath, testCA.Bundle(), 0600))
+	testOIDCCABundlePath := filepath.Join(tmpdir, "testca.pem")
+	require.NoError(t, ioutil.WriteFile(testOIDCCABundlePath, testOIDCCA.Bundle(), 0600))
+
+	testConciergeCABundlePath := filepath.Join(tmpdir, "testconciergeca.pem")
+	require.NoError(t, ioutil.WriteFile(testConciergeCABundlePath, []byte("test-concierge-ca"), 0600))
 
 	tests := []struct {
 		name               string
@@ -61,7 +64,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --concierge-api-group-suffix string     Concierge API group suffix (default "pinniped.dev")
 				      --concierge-authenticator-name string   Concierge authenticator name (default: autodiscover)
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)
-				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the concierge
+				      --concierge-ca-bundle string            Path to TLS certificate authority bundle (PEM format, optional, can be repeated) to use when connecting to the concierge
 				      --concierge-endpoint string             API base for the Pinniped concierge endpoint
 				      --concierge-namespace string            Namespace in which the concierge was installed (default "pinniped-concierge")
 					  --concierge-use-impersonation-proxy     Whether the concierge cluster uses an impersonation proxy
@@ -269,6 +272,19 @@ func TestGetKubeconfig(t *testing.T) {
 			`),
 		},
 		{
+			name: " invalid concierge ca bundle",
+			args: []string{
+				"--kubeconfig", "./testdata/kubeconfig.yaml",
+				"--concierge-ca-bundle", "./does/not/exist",
+				"--concierge-endpoint", "https://impersonation-proxy-endpoint.test",
+				"--concierge-use-impersonation-proxy",
+			},
+			wantError: true,
+			wantStderr: here.Doc(`
+				Error: could not read --concierge-ca-bundle: open ./does/not/exist: no such file or directory
+			`),
+		},
+		{
 			name: "invalid static token flags",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
@@ -399,7 +415,7 @@ func TestGetKubeconfig(t *testing.T) {
 						Issuer:   "https://example.com/issuer",
 						Audience: "test-audience",
 						TLS: &conciergev1alpha1.TLSSpec{
-							CertificateAuthorityData: base64.StdEncoding.EncodeToString(testCA.Bundle()),
+							CertificateAuthorityData: base64.StdEncoding.EncodeToString(testOIDCCA.Bundle()),
 						},
 					},
 				},
@@ -442,7 +458,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      command: '.../path/to/pinniped'
         		      env: []
         		      provideClusterInfo: true
-			`, base64.StdEncoding.EncodeToString(testCA.Bundle())),
+			`, base64.StdEncoding.EncodeToString(testOIDCCA.Bundle())),
 		},
 		{
 			name: "autodetect nothing, set a bunch of options",
@@ -454,7 +470,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--oidc-issuer", "https://example.com/issuer",
 				"--oidc-skip-browser",
 				"--oidc-listen-port", "1234",
-				"--oidc-ca-bundle", testCABundlePath,
+				"--oidc-ca-bundle", testOIDCCABundlePath,
 				"--oidc-session-cache", "/path/to/cache/dir/sessions.yaml",
 				"--oidc-debug-session-cache",
 				"--oidc-request-audience", "test-audience",
@@ -506,14 +522,14 @@ func TestGetKubeconfig(t *testing.T) {
         		      command: '.../path/to/pinniped'
         		      env: []
         		      provideClusterInfo: true
-			`, base64.StdEncoding.EncodeToString(testCA.Bundle())),
+			`, base64.StdEncoding.EncodeToString(testOIDCCA.Bundle())),
 			wantAPIGroupSuffix: "tuna.io",
 		},
 		{
 			name: "configure impersonation proxy with autodetected JWT authenticator",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
-				"--concierge-ca-bundle-data", "blah", // TODO make this more realistic, maybe do some validation?
+				"--concierge-ca-bundle", testConciergeCABundlePath,
 				"--concierge-endpoint", "https://impersonation-proxy-endpoint.test",
 				"--concierge-use-impersonation-proxy",
 			},
@@ -524,7 +540,7 @@ func TestGetKubeconfig(t *testing.T) {
 						Issuer:   "https://example.com/issuer",
 						Audience: "test-audience",
 						TLS: &conciergev1alpha1.TLSSpec{
-							CertificateAuthorityData: base64.StdEncoding.EncodeToString(testCA.Bundle()),
+							CertificateAuthorityData: base64.StdEncoding.EncodeToString(testOIDCCA.Bundle()),
 						},
 					},
 				},
@@ -533,7 +549,7 @@ func TestGetKubeconfig(t *testing.T) {
         		apiVersion: v1
         		clusters:
         		- cluster:
-        		    certificate-authority-data: YmxhaA==
+        		    certificate-authority-data: dGVzdC1jb25jaWVyZ2UtY2E=
         		    server: https://impersonation-proxy-endpoint.test
         		  name: pinniped
         		contexts:
@@ -558,7 +574,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-name=test-authenticator
         		      - --concierge-authenticator-type=jwt
         		      - --concierge-endpoint=https://impersonation-proxy-endpoint.test
-        		      - --concierge-ca-bundle-data=blah
+        		      - --concierge-ca-bundle-data=dGVzdC1jb25jaWVyZ2UtY2E=
         		      - --concierge-use-impersonation-proxy
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
@@ -568,7 +584,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      command: '.../path/to/pinniped'
         		      env: []
         		      provideClusterInfo: true
-			`, base64.StdEncoding.EncodeToString(testCA.Bundle())),
+			`, base64.StdEncoding.EncodeToString(testOIDCCA.Bundle())),
 		},
 	}
 	for _, tt := range tests {

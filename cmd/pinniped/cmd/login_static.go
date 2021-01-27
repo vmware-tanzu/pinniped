@@ -11,8 +11,6 @@ import (
 	"os"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/spf13/cobra"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
@@ -124,10 +122,9 @@ func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams
 		}
 	}
 	if concierge != nil && flags.useImpersonationProxy {
-		var nilExpiry metav1.Time
 		// Put the token into a TokenCredentialRequest
 		// put the TokenCredentialRequest in an ExecCredential
-		req, err := execCredentialForImpersonationProxy(token, flags.conciergeAuthenticatorType, flags.conciergeNamespace, flags.conciergeAuthenticatorName, nilExpiry)
+		req, err := execCredentialForImpersonationProxy(token, flags.conciergeAuthenticatorType, flags.conciergeNamespace, flags.conciergeAuthenticatorName, nil)
 		if err != nil {
 			return err
 		}

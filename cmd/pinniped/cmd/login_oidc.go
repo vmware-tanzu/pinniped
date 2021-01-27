@@ -189,7 +189,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	if concierge != nil && flags.useImpersonationProxy {
 		// Put the token into a TokenCredentialRequest
 		// put the TokenCredentialRequest in an ExecCredential
-		req, err := execCredentialForImpersonationProxy(token, flags)
+		req, err := execCredentialForImpersonationProxy(token.IDToken.Token, flags.conciergeAuthenticatorType, flags.conciergeNamespace, flags.conciergeAuthenticatorName, token.IDToken.Expiry)
 		if err != nil {
 			return err
 		}
@@ -257,10 +257,16 @@ func mustGetConfigDir() string {
 	return filepath.Join(home, ".config", xdgAppName)
 }
 
-func execCredentialForImpersonationProxy(token *oidctypes.Token, flags oidcLoginFlags) (*clientauthv1beta1.ExecCredential, error) {
+func execCredentialForImpersonationProxy(
+	idToken string,
+	conciergeAuthenticatorType string,
+	conciergeNamespace string,
+	conciergeAuthenticatorName string,
+	tokenExpiry metav1.Time,
+) (*clientauthv1beta1.ExecCredential, error) {
 	// TODO maybe de-dup this with conciergeclient.go
 	var kind string
-	switch strings.ToLower(flags.conciergeAuthenticatorType) {
+	switch strings.ToLower(conciergeAuthenticatorType) {
 	case "webhook":
 		kind = "WebhookAuthenticator"
 	case "jwt":
@@ -270,18 +276,18 @@ func execCredentialForImpersonationProxy(token *oidctypes.Token, flags oidcLogin
 	}
 	reqJSON, err := json.Marshal(&loginv1alpha1.TokenCredentialRequest{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: flags.conciergeNamespace,
+			Namespace: conciergeNamespace,
 		},
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "TokenCredentialRequest",
 			APIVersion: loginv1alpha1.GroupName + "/v1alpha1",
 		},
 		Spec: loginv1alpha1.TokenCredentialRequestSpec{
-			Token: token.IDToken.Token, // TODO
+			Token: idToken, // TODO
 			Authenticator: corev1.TypedLocalObjectReference{
 				APIGroup: &authenticationv1alpha1.SchemeGroupVersion.Group,
 				Kind:     kind,
-				Name:     flags.conciergeAuthenticatorName,
+				Name:     conciergeAuthenticatorName,
 			},
 		},
 	})
@@ -298,8 +304,8 @@ func execCredentialForImpersonationProxy(token *oidctypes.Token, flags oidcLogin
 			Token: encodedToken,
 		},
 	}
-	if !token.IDToken.Expiry.IsZero() {
-		cred.Status.ExpirationTimestamp = &token.IDToken.Expiry
+	if !tokenExpiry.IsZero() {
+		cred.Status.ExpirationTimestamp = &tokenExpiry
 	}
 	return cred, nil
 }

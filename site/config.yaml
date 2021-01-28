@@ -20,7 +20,7 @@ markup:
     lineNos: false
     lineNumbersInTable: true
     noClasses: false
-    style: monokai
+    style: monokailight
     tabWidth: 4
 menu:
   docs:

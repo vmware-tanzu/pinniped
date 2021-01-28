@@ -138,32 +138,19 @@ to authenticate federated identities from the Supervisor.
    EOF
    ```
 
-1. Query GitHub's API for the git tag of the latest Pinniped
-   [release](https://github.com/vmware-tanzu/pinniped/releases/latest).
-
-   ```bash
-   pinniped_version=$(curl https://api.github.com/repos/vmware-tanzu/pinniped/releases/latest -s | jq .name -r)
-   ```
-
-   Alternatively, you can manually select [any release version](https://github.com/vmware-tanzu/pinniped/releases)
-   of Pinniped.
-
-   ```bash
-   # Example of manually choosing a release version...
-   pinniped_version=v0.3.0
-   ```
-
 1. Deploy the Pinniped Concierge.
 
    ```bash
    kubectl apply \
      --context kind-pinniped-concierge \
-     -f https://github.com/vmware-tanzu/pinniped/releases/download/$pinniped_version/install-pinniped-concierge.yaml
+     -f https://get.pinniped.dev/latest/install-pinniped-concierge.yaml
    ```
 
    The `install-pinniped-concierge.yaml` file includes the default deployment options.
    If you would prefer to customize the available options, please see [deploy/concierge/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/concierge/README.md)
    for instructions on how to deploy using `ytt`.
+
+   If you prefer to install a specific version, replace `latest` in the above URL with the version number such as `v0.4.1`.
 
 1. Generate a random audience value for this cluster.
 

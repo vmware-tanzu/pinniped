@@ -10,17 +10,17 @@ for details.
 ## Installing the Latest Version with Default Options
 
 ```bash
-kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/$(curl https://api.github.com/repos/vmware-tanzu/pinniped/releases/latest -s | jq .name -r)/install-pinniped-concierge.yaml
+kubectl apply -f https://get.pinniped.dev/latest/install-pinniped-concierge.yaml
 ```
 
-## Installing an Older Version with Default Options
+## Installing a Specific Version with Default Options
 
 Choose your preferred [release](https://github.com/vmware-tanzu/pinniped/releases) version number
 and use it to replace the version number in the URL below.
 
 ```bash
-# Replace v0.2.0 with your preferred version in the URL below
-kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/v0.2.0/install-pinniped-concierge.yaml
+# Replace v0.4.1 with your preferred version in the URL below
+kubectl apply -f https://get.pinniped.dev/v0.4.1/install-pinniped-concierge.yaml
 ```
 
 ## Installing with Custom Options

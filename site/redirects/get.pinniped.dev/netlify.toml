@@ -1,7 +1,7 @@
 
 [[redirects]]
   from = "/latest/*"
-  to = "https://github.com/vmware-tanzu/pinniped/releases/download/v0.4.1/:splat"
+  to = "https://github.com/vmware-tanzu/pinniped/releases/download/latest/:splat"
   status = 302
   force = true
 

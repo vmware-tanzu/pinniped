@@ -55,38 +55,22 @@ as the authenticator.
      installed on some Linux systems via the `apache2-utils` package (e.g., `apt-get install
      apache2-utils`).
 
-   - One of the steps below optionally uses `jq` to help find the latest release version number. It is not required.
-     Install `jq` if you would like, e.g. `brew install jq` on MacOS.
-
 1. Create a new Kubernetes cluster using `kind create cluster`. Optionally provide a cluster name using the `--name` flag.
    kind will automatically update your kubeconfig to point to the new cluster as a user with admin-like permissions.
-
-1. Query GitHub's API for the git tag of the latest Pinniped
-   [release](https://github.com/vmware-tanzu/pinniped/releases/latest).
-
-   ```bash
-   pinniped_version=$(curl https://api.github.com/repos/vmware-tanzu/pinniped/releases/latest -s | jq .name -r)
-   ```
-
-   Alternatively, you can manually select [any release version](https://github.com/vmware-tanzu/pinniped/releases)
-   of Pinniped.
-
-   ```bash
-   # Example of manually choosing a release version...
-   pinniped_version=v0.3.0
-   ```
 
 1. Deploy the local-user-authenticator app. This is a demo authenticator. In production, you would configure
    an authenticator that works with your real identity provider, and therefore would not need to deploy or configure local-user-authenticator.
 
     ```bash
-    kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/$pinniped_version/install-local-user-authenticator.yaml
+    kubectl apply -f https://get.pinniped.dev/latest/install-local-user-authenticator.yaml
     ```
 
    The `install-local-user-authenticator.yaml` file includes the default deployment options.
    If you would prefer to customize the available options, please
    see [deploy/local-user-authenticator/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/local-user-authenticator/README.md)
    for instructions on how to deploy using `ytt`.
+
+   If you prefer to install a specific version, replace `latest` in the above URL with the version number such as `v0.4.1`.
 
 1. Create a test user named `pinny-the-seal` in the local-user-authenticator namespace.
 
@@ -108,7 +92,7 @@ as the authenticator.
 1. Deploy the Pinniped Concierge.
 
    ```bash
-    kubectl apply -f https://github.com/vmware-tanzu/pinniped/releases/download/$pinniped_version/install-pinniped-concierge.yaml
+   kubectl apply -f https://get.pinniped.dev/latest/install-pinniped-concierge.yaml
    ```
 
    The `install-pinniped-concierge.yaml` file includes the default deployment options.

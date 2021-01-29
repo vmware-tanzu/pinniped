@@ -47,9 +47,15 @@ To learn more, see [architecture](https://pinniped.dev/docs/architecture/).
 
 Care to kick the tires? It's easy to [install and try Pinniped](https://pinniped.dev/docs/demo/).
 
+## Community Meetings
+
+Pinniped is better because of our contributors and maintainers. It is because of you that we can bring great software to the community. Please join us during our online community meetings, occuring every first and third Thursday of the month at 9AM PT / 12PM PT. Use [this Zoom Link](https://vmware.zoom.us/j/93798188973?pwd=T3pIMWxReEQvcWljNm1admRoZTFSZz09) to attend and add any agenda items you wish to discuss to [the notes document](https://hackmd.io/rd_kVJhjQfOvfAWzK8A3tQ?view). Join our [Google Group](https://groups.google.com/u/1/g/project-pinniped) to receive invites to this meeting.
+
+If the meeting day falls on a US holiday, please consider that occurrence of the meeting to be canceled.
+
 ## Discussion
 
-Got a question, comment, or idea? Please don't hesitate to reach out via the GitHub [Discussions](https://github.com/vmware-tanzu/pinniped/discussions) tab at the top of this page.
+Got a question, comment, or idea? Please don't hesitate to reach out via the GitHub [Discussions](https://github.com/vmware-tanzu/pinniped/discussions) tab at the top of this page or reach out in Kubernetes Slack Workspace within the [#pinniped channel](https://kubernetes.slack.com/archives/C01BW364RJA).
 
 ## Contributions
 

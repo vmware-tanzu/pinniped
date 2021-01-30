@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
@@ -65,6 +65,25 @@ type CredentialIssuerStrategy struct {
 	LastUpdateTime metav1.Time `json:"lastUpdateTime"`
 }
 
+type TLSConfig struct {
+    // The CA that clients should validate when connecting to the impersonation proxy endpoint
+	CertificateAuthorityData string `json:"certificateAuthorityData"`
+	// The name of a secret of type "kubernetes.io/tls" that will be used to serve the endpoint
+	SecretName string `json:"secretName"`
+}
+
+type ImpersonationProxySpec struct {
+	// specify the external endpoint name that will route to the impersonation proxy port
+	ExternalEndpoint string `json:"externalEndpoint"`
+	// TLS configuration to communicate with the impersonation proxy
+	TLS TLSConfig `json:"tls"`
+}
+
+// Spec for the credential issuer
+type CredentialIssuerSpec struct {
+	ImpersonationProxy ImpersonationProxySpec `json:"impersonationProxy"`
+}
+
 // Describes the configuration status of a Pinniped credential issuer.
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -75,6 +94,8 @@ type CredentialIssuer struct {
 
 	// Status of the credential issuer.
 	Status CredentialIssuerStatus `json:"status"`
+
+	Spec CredentialIssuerSpec `json:"spec"`
 }
 
 // List of CredentialIssuer objects.

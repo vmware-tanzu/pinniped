@@ -231,7 +231,6 @@ Describes the configuration status of a Pinniped credential issuer.
 | *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
 | *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerstatus[$$CredentialIssuerStatus$$]__ | Status of the credential issuer.
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerspec[$$CredentialIssuerSpec$$]__ | 
 |===
 
 
@@ -253,23 +252,6 @@ Describes the configuration status of a Pinniped credential issuer.
 |===
 
 
-
-
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerspec"]
-==== CredentialIssuerSpec 
-
-Spec for the credential issuer
-
-.Appears In:
-****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuer[$$CredentialIssuer$$]
-****
-
-[cols="25a,75a", options="header"]
-|===
-| Field | Description
-| *`impersonationProxy`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-impersonationproxyspec[$$ImpersonationProxySpec$$]__ | 
-|===
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerstatus"]
@@ -308,42 +290,6 @@ Status of a credential issuer.
 | *`reason`* __StrategyReason__ | Reason for the current status.
 | *`message`* __string__ | Human-readable description of the current status.
 | *`lastUpdateTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#time-v1-meta[$$Time$$]__ | When the status was last checked.
-|===
-
-
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-impersonationproxyspec"]
-==== ImpersonationProxySpec 
-
-
-
-.Appears In:
-****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerspec[$$CredentialIssuerSpec$$]
-****
-
-[cols="25a,75a", options="header"]
-|===
-| Field | Description
-| *`externalEndpoint`* __string__ | specify the external endpoint name that will route to the impersonation proxy port
-| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-tlsconfig[$$TLSConfig$$]__ | TLS configuration to communicate with the impersonation proxy
-|===
-
-
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-tlsconfig"]
-==== TLSConfig 
-
-
-
-.Appears In:
-****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-impersonationproxyspec[$$ImpersonationProxySpec$$]
-****
-
-[cols="25a,75a", options="header"]
-|===
-| Field | Description
-| *`certificateAuthorityData`* __string__ | The CA that clients should validate when connecting to the impersonation proxy endpoint
-| *`secretName`* __string__ | The name of a secret of type "kubernetes.io/tls" that will be used to serve the endpoint
 |===
 
 

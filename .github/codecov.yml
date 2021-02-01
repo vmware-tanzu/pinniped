@@ -1,0 +1,13 @@
+codecov:
+  strict_yaml_branch: main
+  require_ci_to_pass: no
+  notify:
+    wait_for_ci: no  
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true

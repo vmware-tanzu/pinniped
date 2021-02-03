@@ -110,7 +110,7 @@ func (a *App) runServer(ctx context.Context) error {
 	}
 
 	// Initialize the cache of active authenticators.
-	authenticators := authncache.New()
+	authenticators := authncache.New(*cfg.APIGroupSuffix)
 
 	// This cert provider will provide certs to the API server and will
 	// be mutated by a controller to keep the certs up to date with what

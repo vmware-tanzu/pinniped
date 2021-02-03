@@ -441,10 +441,12 @@ func TestMiddlware(t *testing.T) {
 }
 
 func TestReplaceError(t *testing.T) {
-	_, ok := Replace("bad-suffix-that-doesnt-end-in-pinniped-dot-dev", "shouldnt-matter.com")
+	s, ok := Replace("bad-suffix-that-doesnt-end-in-pinniped-dot-dev", "shouldnt-matter.com")
+	require.Equal(t, "", s)
 	require.False(t, ok)
 
-	_, ok = Replace("bad-suffix-that-end-in.prefixed-pinniped.dev", "shouldnt-matter.com")
+	s, ok = Replace("bad-suffix-that-end-in.prefixed-pinniped.dev", "shouldnt-matter.com")
+	require.Equal(t, "", s)
 	require.False(t, ok)
 }
 
@@ -452,6 +454,27 @@ func TestReplaceSuffix(t *testing.T) {
 	s, ok := Replace("something.pinniped.dev.something-else.pinniped.dev", "tuna.io")
 	require.Equal(t, "something.pinniped.dev.something-else.tuna.io", s)
 	require.True(t, ok)
+
+	// When the replace wasn't actually needed, it still returns true.
+	s, ok = Unreplace("something.pinniped.dev", "pinniped.dev")
+	require.Equal(t, "something.pinniped.dev", s)
+	require.True(t, ok)
+}
+
+func TestUnreplaceSuffix(t *testing.T) {
+	s, ok := Unreplace("something.pinniped.dev.something-else.tuna.io", "tuna.io")
+	require.Equal(t, "something.pinniped.dev.something-else.pinniped.dev", s)
+	require.True(t, ok)
+
+	// When the unreplace wasn't actually needed, it still returns true.
+	s, ok = Unreplace("something.pinniped.dev", "pinniped.dev")
+	require.Equal(t, "something.pinniped.dev", s)
+	require.True(t, ok)
+
+	// When the unreplace was needed but did not work, return false.
+	s, ok = Unreplace("something.pinniped.dev.something-else.tuna.io", "salmon.io")
+	require.Equal(t, "", s)
+	require.False(t, ok)
 }
 
 func TestValidate(t *testing.T) {

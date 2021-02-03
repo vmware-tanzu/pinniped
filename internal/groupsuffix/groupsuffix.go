@@ -63,7 +63,7 @@ func New(apiGroupSuffix string) kubeclient.Middleware {
 
 		kubeclient.MiddlewareFunc(func(_ context.Context, rt kubeclient.RoundTrip) {
 			// always unreplace owner refs with apiGroupSuffix because we can consume those objects across all verbs
-			rt.MutateResponse(mutateOwnerRefs(unreplace, apiGroupSuffix))
+			rt.MutateResponse(mutateOwnerRefs(Unreplace, apiGroupSuffix))
 		}),
 	}
 }
@@ -115,7 +115,8 @@ func Replace(baseAPIGroup, apiGroupSuffix string) (string, bool) {
 	return strings.TrimSuffix(baseAPIGroup, pinnipedDefaultSuffix) + apiGroupSuffix, true
 }
 
-func unreplace(baseAPIGroup, apiGroupSuffix string) (string, bool) {
+// Unreplace is like performing an undo of Replace().
+func Unreplace(baseAPIGroup, apiGroupSuffix string) (string, bool) {
 	if !strings.HasSuffix(baseAPIGroup, "."+apiGroupSuffix) {
 		return "", false
 	}

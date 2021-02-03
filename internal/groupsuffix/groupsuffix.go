@@ -43,7 +43,8 @@ func New(apiGroupSuffix string) kubeclient.Middleware {
 					Version: origGVK.Version,
 					Kind:    origGVK.Kind,
 				}
-				typeMeta.SetGroupVersionKind(newGVK)
+				_ = newGVK
+				// typeMeta.SetGroupVersionKind(newGVK)
 			})
 		}),
 

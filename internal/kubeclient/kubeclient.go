@@ -51,13 +51,13 @@ func New(opts ...Option) (*Client, error) {
 	protoKubeConfig := createProtoKubeConfig(c.config)
 
 	// Connect to the core Kubernetes API.
-	k8sClient, err := kubernetes.NewForConfig(configWithWrapper(protoKubeConfig, kubescheme.Scheme, kubescheme.Codecs, c.middlewares))
+	k8sClient, err := kubernetes.NewForConfig(configWithWrapper(protoKubeConfig, kubescheme.Scheme, kubescheme.Codecs, c.middlewares, c.transportWrapper))
 	if err != nil {
 		return nil, fmt.Errorf("could not initialize Kubernetes client: %w", err)
 	}
 
 	// Connect to the Kubernetes aggregation API.
-	aggregatorClient, err := aggregatorclient.NewForConfig(configWithWrapper(protoKubeConfig, aggregatorclientscheme.Scheme, aggregatorclientscheme.Codecs, c.middlewares))
+	aggregatorClient, err := aggregatorclient.NewForConfig(configWithWrapper(protoKubeConfig, aggregatorclientscheme.Scheme, aggregatorclientscheme.Codecs, c.middlewares, c.transportWrapper))
 	if err != nil {
 		return nil, fmt.Errorf("could not initialize aggregation client: %w", err)
 	}
@@ -65,7 +65,7 @@ func New(opts ...Option) (*Client, error) {
 	// Connect to the pinniped concierge API.
 	// We cannot use protobuf encoding here because we are using CRDs
 	// (for which protobuf encoding is not yet supported).
-	pinnipedConciergeClient, err := pinnipedconciergeclientset.NewForConfig(configWithWrapper(jsonKubeConfig, pinnipedconciergeclientsetscheme.Scheme, pinnipedconciergeclientsetscheme.Codecs, c.middlewares))
+	pinnipedConciergeClient, err := pinnipedconciergeclientset.NewForConfig(configWithWrapper(jsonKubeConfig, pinnipedconciergeclientsetscheme.Scheme, pinnipedconciergeclientsetscheme.Codecs, c.middlewares, c.transportWrapper))
 	if err != nil {
 		return nil, fmt.Errorf("could not initialize pinniped client: %w", err)
 	}
@@ -73,7 +73,7 @@ func New(opts ...Option) (*Client, error) {
 	// Connect to the pinniped supervisor API.
 	// We cannot use protobuf encoding here because we are using CRDs
 	// (for which protobuf encoding is not yet supported).
-	pinnipedSupervisorClient, err := pinnipedsupervisorclientset.NewForConfig(configWithWrapper(jsonKubeConfig, pinnipedsupervisorclientsetscheme.Scheme, pinnipedsupervisorclientsetscheme.Codecs, c.middlewares))
+	pinnipedSupervisorClient, err := pinnipedsupervisorclientset.NewForConfig(configWithWrapper(jsonKubeConfig, pinnipedsupervisorclientsetscheme.Scheme, pinnipedsupervisorclientsetscheme.Codecs, c.middlewares, c.transportWrapper))
 	if err != nil {
 		return nil, fmt.Errorf("could not initialize pinniped client: %w", err)
 	}

@@ -66,12 +66,6 @@ var (
 	middlewareLabels      = map[string]string{"some-label": "thing 2"}
 )
 
-// TestKubeclient tests a subset of kubeclient functionality (from the public interface down). We
-// intend for the following list of things to be tested with the integration tests:
-//   list (running in every informer cache)
-//   watch (running in every informer cache)
-//   discovery
-//   api errors
 func TestKubeclient(t *testing.T) {
 	// plog.ValidateAndSetLogLevelGlobally(plog.LevelDebug) // uncomment me to get some more debug logs
 
@@ -109,7 +103,7 @@ func TestKubeclient(t *testing.T) {
 					CoreV1().
 					Pods(pod.Namespace).
 					Get(context.Background(), "this-pod-does-not-exist", metav1.GetOptions{})
-				require.EqualError(t, err, "the server could not find the requested resource (get pods this-pod-does-not-exist)")
+				require.EqualError(t, err, `couldn't find object for path "/api/v1/namespaces/good-namespace/pods/this-pod-does-not-exist"`)
 
 				// update
 				goodPodWithAnnotationsAndLabelsAndClusterName := with(goodPod, annotations(), labels(), clusterName()).(*corev1.Pod)
@@ -546,16 +540,15 @@ func TestKubeclient(t *testing.T) {
 				test.editRestConfig(t, restConfig)
 			}
 
-			// our rt chain is:
-			//  kubeclient -> wantCloseResp -> http.DefaultTransport -> wantCloseResp -> kubeclient
-			restConfig.Wrap(wantCloseRespWrapper(t))
-
 			var middlewares []*spyMiddleware
 			if test.middlewares != nil {
 				middlewares = test.middlewares(t)
 			}
 
-			opts := []Option{WithConfig(restConfig)}
+			// our rt chain is:
+			//  wantCloseReq -> kubeclient -> wantCloseResp -> http.DefaultTransport -> wantCloseResp -> kubeclient -> wantCloseReq
+			restConfig.Wrap(wantCloseRespWrapper(t))
+			opts := []Option{WithConfig(restConfig), WithTransportWrapper(wantCloseReqWrapper(t))}
 			for _, middleware := range middlewares {
 				opts = append(opts, WithMiddleware(middleware))
 			}
@@ -675,11 +668,13 @@ func newSimpleMiddleware(t *testing.T, hasMutateReqFunc, mutatedReq, hasMutateRe
 type wantCloser struct {
 	io.ReadCloser
 	closeCount                      int
+	closeCalls                      []string
 	couldReadBytesJustBeforeClosing bool
 }
 
 func (wc *wantCloser) Close() error {
 	wc.closeCount++
+	wc.closeCalls = append(wc.closeCalls, getCaller())
 	n, _ := wc.ReadCloser.Read([]byte{0})
 	if n > 0 {
 		// there were still bytes left to be read
@@ -688,14 +683,53 @@ func (wc *wantCloser) Close() error {
 	return wc.ReadCloser.Close()
 }
 
-// wantCloseRespWrapper returns a transport.WrapperFunc that validates that the http.Response
-// returned by the underlying http.RoundTripper is closed properly.
-func wantCloseRespWrapper(t *testing.T) transport.WrapperFunc {
-	_, file, line, ok := runtime.Caller(1)
+func getCaller() string {
+	_, file, line, ok := runtime.Caller(2)
 	if !ok {
 		file = "???"
 		line = 0
 	}
+	return fmt.Sprintf("%s:%d", file, line)
+}
+
+// wantCloseReqWrapper returns a transport.WrapperFunc that validates that the http.Request
+// passed to the underlying http.RoundTripper is closed properly.
+func wantCloseReqWrapper(t *testing.T) transport.WrapperFunc {
+	caller := getCaller()
+	return func(rt http.RoundTripper) http.RoundTripper {
+		return roundTripperFunc(func(req *http.Request) (bool, *http.Response, error) {
+			if req.Body != nil {
+				wc := &wantCloser{ReadCloser: req.Body}
+				t.Cleanup(func() {
+					require.Equalf(t, wc.closeCount, 1, "did not close req body expected number of times at %s for req %#v; actual calls = %s", caller, req, wc.closeCalls)
+				})
+				req.Body = wc
+			}
+
+			if req.GetBody != nil {
+				originalBodyCopy, originalErr := req.GetBody()
+				req.GetBody = func() (io.ReadCloser, error) {
+					if originalErr != nil {
+						return nil, originalErr
+					}
+					wc := &wantCloser{ReadCloser: originalBodyCopy}
+					t.Cleanup(func() {
+						require.Equalf(t, wc.closeCount, 1, "did not close req body copy expected number of times at %s for req %#v; actual calls = %s", caller, req, wc.closeCalls)
+					})
+					return wc, nil
+				}
+			}
+
+			resp, err := rt.RoundTrip(req)
+			return false, resp, err
+		})
+	}
+}
+
+// wantCloseRespWrapper returns a transport.WrapperFunc that validates that the http.Response
+// returned by the underlying http.RoundTripper is closed properly.
+func wantCloseRespWrapper(t *testing.T) transport.WrapperFunc {
+	caller := getCaller()
 	return func(rt http.RoundTripper) http.RoundTripper {
 		return roundTripperFunc(func(req *http.Request) (bool, *http.Response, error) {
 			resp, err := rt.RoundTrip(req)
@@ -705,8 +739,8 @@ func wantCloseRespWrapper(t *testing.T) transport.WrapperFunc {
 			}
 			wc := &wantCloser{ReadCloser: resp.Body}
 			t.Cleanup(func() {
-				require.False(t, wc.couldReadBytesJustBeforeClosing, "did not consume all response body bytes before closing %s:%d", file, line)
-				require.Equalf(t, wc.closeCount, 1, "did not close resp body at %s:%d", file, line)
+				require.False(t, wc.couldReadBytesJustBeforeClosing, "did not consume all response body bytes before closing %s", caller)
+				require.Equalf(t, wc.closeCount, 1, "did not close resp body expected number of times at %s for req %#v; actual calls = %s", caller, req, wc.closeCalls)
 			})
 			resp.Body = wc
 			return false, resp, err

@@ -19,6 +19,7 @@ package fakekubeapi
 
 import (
 	"encoding/pem"
+	"fmt"
 	"io/ioutil"
 	"mime"
 	"net/http"
@@ -39,20 +40,6 @@ import (
 	"go.pinniped.dev/internal/multierror"
 )
 
-// Unlike the standard httperr.New(), this one does not prepend error messages with any prefix.
-type plainHTTPErr struct {
-	code int
-	msg  string
-}
-
-func (e plainHTTPErr) Error() string {
-	return e.msg
-}
-
-func (e plainHTTPErr) Respond(w http.ResponseWriter) {
-	http.Error(w, e.msg, e.code)
-}
-
 // Start starts an httptest.Server (with TLS) that pretends to be a Kube API server.
 //
 // The server uses the provided resources map to store API Object's. The map should be from API path
@@ -62,9 +49,9 @@ func (e plainHTTPErr) Respond(w http.ResponseWriter) {
 // to the server.
 //
 // Note! Only these following verbs are (partially) supported: create, get, update, delete.
-func Start(t *testing.T, resources map[string]metav1.Object) (*httptest.Server, *restclient.Config) {
+func Start(t *testing.T, resources map[string]runtime.Object) (*httptest.Server, *restclient.Config) {
 	if resources == nil {
-		resources = make(map[string]metav1.Object)
+		resources = make(map[string]runtime.Object)
 	}
 
 	server := httptest.NewTLSServer(httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) (err error) {
@@ -78,12 +65,8 @@ func Start(t *testing.T, resources map[string]metav1.Object) (*httptest.Server, 
 			return err
 		}
 
-		if r.Method != http.MethodDelete && obj == nil {
-			return &plainHTTPErr{
-				code: http.StatusNotFound,
-				// This is representative of a real Kube 404 message body.
-				msg: `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"not found","reason":"NotFound","details":{"name":"not-found","kind":"pods"},"code":404}`,
-			}
+		if obj == nil {
+			obj = newNotFoundStatus(r.URL.Path)
 		}
 
 		if err := encodeObj(w, r, obj); err != nil {
@@ -101,7 +84,7 @@ func Start(t *testing.T, resources map[string]metav1.Object) (*httptest.Server, 
 	return server, restConfig
 }
 
-func decodeObj(r *http.Request) (metav1.Object, error) {
+func decodeObj(r *http.Request) (runtime.Object, error) {
 	switch r.Method {
 	case http.MethodPut, http.MethodPost:
 	default:
@@ -123,7 +106,7 @@ func decodeObj(r *http.Request) (metav1.Object, error) {
 		return nil, httperr.Wrap(http.StatusInternalServerError, "read body", err)
 	}
 
-	var obj metav1.Object
+	var obj runtime.Object
 	multiErr := multierror.New()
 	codecsThatWeUseInOurCode := []runtime.NegotiatedSerializer{
 		kubescheme.Codecs,
@@ -145,7 +128,7 @@ func tryDecodeObj(
 	mediaType string,
 	body []byte,
 	negotiatedSerializer runtime.NegotiatedSerializer,
-) (metav1.Object, error) {
+) (runtime.Object, error) {
 	serializerInfo, ok := runtime.SerializerInfoForMediaType(negotiatedSerializer.SupportedMediaTypes(), mediaType)
 	if !ok {
 		return nil, httperr.Newf(http.StatusInternalServerError, "unable to find serialier with content-type %s", mediaType)
@@ -156,19 +139,17 @@ func tryDecodeObj(
 		return nil, httperr.Wrap(http.StatusInternalServerError, "decode obj", err)
 	}
 
-	return obj.(metav1.Object), nil
+	return obj, nil
 }
 
-func handleObj(r *http.Request, obj metav1.Object, resources map[string]metav1.Object) (metav1.Object, error) {
+func handleObj(r *http.Request, obj runtime.Object, resources map[string]runtime.Object) (runtime.Object, error) {
 	switch r.Method {
 	case http.MethodGet:
 		obj = resources[r.URL.Path]
 	case http.MethodPost, http.MethodPut:
-		resources[path.Join(r.URL.Path, obj.GetName())] = obj
+		resources[path.Join(r.URL.Path, obj.(metav1.Object).GetName())] = obj
 	case http.MethodDelete:
-		if _, ok := resources[r.URL.Path]; !ok {
-			return nil, httperr.Newf(http.StatusNotFound, "no resource with path %q", r.URL.Path)
-		}
+		obj = resources[r.URL.Path]
 		delete(resources, r.URL.Path)
 	default:
 		return nil, httperr.New(http.StatusMethodNotAllowed, "check source code for methods supported")
@@ -177,7 +158,18 @@ func handleObj(r *http.Request, obj metav1.Object, resources map[string]metav1.O
 	return obj, nil
 }
 
-func encodeObj(w http.ResponseWriter, r *http.Request, obj metav1.Object) error {
+func newNotFoundStatus(path string) runtime.Object {
+	status := &metav1.Status{
+		Status:  metav1.StatusFailure,
+		Message: fmt.Sprintf("couldn't find object for path %q", path),
+		Reason:  metav1.StatusReasonNotFound,
+		Code:    http.StatusNotFound,
+	}
+	status.APIVersion, status.Kind = metav1.SchemeGroupVersion.WithKind("Status").ToAPIVersionAndKind()
+	return status
+}
+
+func encodeObj(w http.ResponseWriter, r *http.Request, obj runtime.Object) error {
 	if r.Method == http.MethodDelete {
 		return nil
 	}

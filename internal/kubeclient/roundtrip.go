@@ -23,7 +23,7 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-func configWithWrapper(config *restclient.Config, scheme *runtime.Scheme, negotiatedSerializer runtime.NegotiatedSerializer, middlewares []Middleware) *restclient.Config {
+func configWithWrapper(config *restclient.Config, scheme *runtime.Scheme, negotiatedSerializer runtime.NegotiatedSerializer, middlewares []Middleware, wrapper transport.WrapperFunc) *restclient.Config {
 	hostURL, apiPathPrefix, err := getHostAndAPIPathPrefix(config)
 	if err != nil {
 		plog.DebugErr("invalid rest config", err)
@@ -49,6 +49,9 @@ func configWithWrapper(config *restclient.Config, scheme *runtime.Scheme, negoti
 
 	cc := restclient.CopyConfig(config)
 	cc.Wrap(f)
+	if wrapper != nil {
+		cc.Wrap(wrapper)
+	}
 	return cc
 }
 
@@ -173,20 +176,20 @@ func handleOtherVerbs(
 
 	resp, err := rt.RoundTrip(newReq)
 	if err != nil {
-		return true, nil, fmt.Errorf("middleware request for %#v failed: %w", middlewareReq, err)
+		return false, nil, fmt.Errorf("middleware request for %#v failed: %w", middlewareReq, err)
 	}
 
 	switch v {
 	case VerbDelete, VerbDeleteCollection:
-		return true, resp, nil // we do not need to fix the response on delete
+		return false, resp, nil // we do not need to fix the response on delete
 
 	case VerbWatch:
 		resp, err := handleWatchResponseNewGVK(config, negotiatedSerializer, resp, middlewareReq, result)
-		return true, resp, err
+		return false, resp, err
 
 	default: // VerbGet, VerbList, VerbPatch
 		resp, err := handleResponseNewGVK(config, negotiatedSerializer, resp, middlewareReq, result)
-		return true, resp, err
+		return false, resp, err
 	}
 }
 

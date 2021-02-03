@@ -229,16 +229,7 @@ func getAggregatedAPIServerScheme(apiGroup string) *runtime.Scheme {
 	scheme := runtime.NewScheme()
 
 	// add the options to empty v1
-	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
-
-	unversioned := schema.GroupVersion{Group: "", Version: "v1"}
-	scheme.AddUnversionedTypes(unversioned,
-		&metav1.Status{},
-		&metav1.APIVersions{},
-		&metav1.APIGroupList{},
-		&metav1.APIGroup{},
-		&metav1.APIResourceList{},
-	)
+	metav1.AddToGroupVersion(scheme, metav1.Unversioned)
 
 	// nothing fancy is required if using the standard group
 	if apiGroup == loginv1alpha1.GroupName {

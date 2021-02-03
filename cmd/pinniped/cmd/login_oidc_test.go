@@ -121,6 +121,22 @@ func TestLoginOIDCCommand(t *testing.T) {
 			`),
 		},
 		{
+			name: "invalid api group suffix",
+			args: []string{
+				"--issuer", "test-issuer",
+				"--enable-concierge",
+				"--concierge-api-group-suffix", ".starts.with.dot",
+				"--concierge-authenticator-type", "jwt",
+				"--concierge-authenticator-name", "test-authenticator",
+				"--concierge-endpoint", "https://127.0.0.1:1234/",
+			},
+			wantError: true,
+			wantStderr: here.Doc(`
+				Error: invalid concierge parameters: invalid api group suffix: 1 error(s):
+				- a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')
+			`),
+		},
+		{
 			name: "login error",
 			args: []string{
 				"--client-id", "test-client-id",

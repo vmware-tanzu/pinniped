@@ -17,24 +17,35 @@ import (
 	"go.pinniped.dev/internal/ownerref"
 )
 
+// getTempClient is stubbed out for testing.
+//
+// We would normally inject a kubernetes.Interface into New(), but the client we want to create in
+// the calling code depends on the return value of New() (i.e., on the kubeclient.Option for the
+// OwnerReference).
+//nolint: gochecknoglobals
+var getTempClient = func() (kubernetes.Interface, error) {
+	client, err := kubeclient.New()
+	if err != nil {
+		return nil, err
+	}
+	return client.Kubernetes, nil
+}
+
 func New(podInfo *downward.PodInfo) (kubeclient.Option, *appsv1.Deployment, error) {
-	tempClient, err := kubeclient.New()
+	tempClient, err := getTempClient()
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot create temp client: %w", err)
 	}
 
-	deployment, err := getDeployment(tempClient.Kubernetes, podInfo)
+	deployment, err := getDeployment(tempClient, podInfo)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot get deployment: %w", err)
 	}
 
-	ref := metav1.OwnerReference{
-		Name: deployment.Name,
-		UID:  deployment.UID,
-	}
-	ref.APIVersion, ref.Kind = appsv1.SchemeGroupVersion.WithKind("Deployment").ToAPIVersionAndKind()
+	// work around stupid behavior of WithoutVersionDecoder.Decode
+	deployment.APIVersion, deployment.Kind = appsv1.SchemeGroupVersion.WithKind("Deployment").ToAPIVersionAndKind()
 
-	return kubeclient.WithMiddleware(ownerref.New(ref)), deployment, nil
+	return kubeclient.WithMiddleware(ownerref.New(deployment)), deployment, nil
 }
 
 func getDeployment(kubeClient kubernetes.Interface, podInfo *downward.PodInfo) (*appsv1.Deployment, error) {

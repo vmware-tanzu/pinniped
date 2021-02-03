@@ -28,7 +28,6 @@ import (
 var generateKey = generateSymmetricKey
 
 type supervisorSecretsController struct {
-	owner          *appsv1.Deployment
 	labels         map[string]string
 	kubeClient     kubernetes.Interface
 	secretInformer corev1informers.SecretInformer
@@ -46,7 +45,6 @@ func NewSupervisorSecretsController(
 	initialEventFunc pinnipedcontroller.WithInitialEventOptionFunc,
 ) controllerlib.Controller {
 	c := supervisorSecretsController{
-		owner:          owner,
 		labels:         labels,
 		kubeClient:     kubeClient,
 		secretInformer: secretInformer,
@@ -64,13 +62,7 @@ func NewSupervisorSecretsController(
 				if secret.Type != SupervisorCSRFSigningKeySecretType {
 					return false
 				}
-				ownerReferences := secret.GetOwnerReferences()
-				for i := range secret.GetOwnerReferences() {
-					if ownerReferences[i].UID == owner.GetUID() {
-						return true
-					}
-				}
-				return false
+				return true
 			}, nil),
 			controllerlib.InformerOption{},
 		),
@@ -96,7 +88,7 @@ func (c *supervisorSecretsController) Sync(ctx controllerlib.Context) error {
 		return nil
 	}
 
-	newSecret, err := generateSecret(ctx.Key.Namespace, ctx.Key.Name, c.labels, secretDataFunc, c.owner)
+	newSecret, err := generateSecret(ctx.Key.Namespace, ctx.Key.Name, c.labels, secretDataFunc)
 	if err != nil {
 		return fmt.Errorf("failed to generate secret: %w", err)
 	}
@@ -193,27 +185,17 @@ func secretDataFunc() (map[string][]byte, error) {
 	}, nil
 }
 
-func generateSecret(namespace, name string, labels map[string]string, secretDataFunc func() (map[string][]byte, error), owner metav1.Object) (*corev1.Secret, error) {
+func generateSecret(namespace, name string, labels map[string]string, secretDataFunc func() (map[string][]byte, error)) (*corev1.Secret, error) {
 	secretData, err := secretDataFunc()
 	if err != nil {
 		return nil, err
 	}
 
-	deploymentGVK := appsv1.SchemeGroupVersion.WithKind("Deployment")
-
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: deploymentGVK.GroupVersion().String(),
-					Kind:       deploymentGVK.Kind,
-					Name:       owner.GetName(),
-					UID:        owner.GetUID(),
-				},
-			},
-			Labels: labels,
+			Labels:    labels,
 		},
 		Type: SupervisorCSRFSigningKeySecretType,
 		Data: secretData,

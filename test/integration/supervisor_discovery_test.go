@@ -48,7 +48,7 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), client, library.NewClientset(t))
+	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), client, library.NewKubernetesClientset(t))
 
 	tests := []struct {
 		Scheme   string
@@ -146,7 +146,7 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	env := library.IntegrationEnv(t)
 	pinnipedClient := library.NewSupervisorClientset(t)
-	kubeClient := library.NewClientset(t)
+	kubeClient := library.NewKubernetesClientset(t)
 
 	ns := env.SupervisorNamespace
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
@@ -213,7 +213,7 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	env := library.IntegrationEnv(t)
 	pinnipedClient := library.NewSupervisorClientset(t)
-	kubeClient := library.NewClientset(t)
+	kubeClient := library.NewKubernetesClientset(t)
 
 	ns := env.SupervisorNamespace
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)

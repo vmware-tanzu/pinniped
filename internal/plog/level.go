@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package plog
@@ -39,26 +39,20 @@ const (
 )
 
 func ValidateAndSetLogLevelGlobally(level LogLevel) error {
-	var klogLogLevel int
-
-	switch level {
-	case LevelWarning:
-		klogLogLevel = klogLevelWarning // unset means minimal logs (Error and Warning)
-	case LevelInfo:
-		klogLogLevel = klogLevelInfo
-	case LevelDebug:
-		klogLogLevel = klogLevelDebug
-	case LevelTrace:
-		klogLogLevel = klogLevelTrace
-	case LevelAll:
-		klogLogLevel = klogLevelAll + 100 // make all really mean all
-	default:
+	klogLevel := klogLevelForPlogLevel(level)
+	if klogLevel < 0 {
 		return errInvalidLogLevel
 	}
 
-	if _, err := logs.GlogSetter(strconv.Itoa(klogLogLevel)); err != nil {
+	if _, err := logs.GlogSetter(strconv.Itoa(int(klogLevel))); err != nil {
 		panic(err) // programmer error
 	}
 
 	return nil
+}
+
+// Enabled returns whether the provided plog level is enabled, i.e., whether print statements at the
+// provided level will show up.
+func Enabled(level LogLevel) bool {
+	return getKlogLevel() >= klogLevelForPlogLevel(level)
 }

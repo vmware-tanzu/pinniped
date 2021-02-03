@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -30,7 +30,7 @@ func TestKubeCertAgent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	kubeClient := library.NewClientset(t)
+	kubeClient := library.NewKubernetesClientset(t)
 
 	// Get the current number of kube-cert-agent pods.
 	//

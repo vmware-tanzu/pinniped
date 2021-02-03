@@ -21,7 +21,7 @@ import (
 
 func TestSupervisorSecrets(t *testing.T) {
 	env := library.IntegrationEnv(t)
-	kubeClient := library.NewClientset(t)
+	kubeClient := library.NewKubernetesClientset(t)
 	supervisorClient := library.NewSupervisorClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)

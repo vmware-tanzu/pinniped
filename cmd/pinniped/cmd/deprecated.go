@@ -51,6 +51,7 @@ func legacyGetKubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 		namespace         string
 		authenticatorType string
 		authenticatorName string
+		apiGroupSuffix    string
 	)
 
 	cmd.Flags().StringVar(&token, "token", "", "Credential to include in the resulting kubeconfig output (Required)")
@@ -59,6 +60,8 @@ func legacyGetKubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	cmd.Flags().StringVar(&namespace, "pinniped-namespace", "pinniped-concierge", "Namespace in which Pinniped was installed")
 	cmd.Flags().StringVar(&authenticatorType, "authenticator-type", "", "Authenticator type (e.g., 'webhook', 'jwt')")
 	cmd.Flags().StringVar(&authenticatorName, "authenticator-name", "", "Authenticator name")
+	cmd.Flags().StringVar(&apiGroupSuffix, "api-group-suffix", "pinniped.dev", "Concierge API group suffix")
+
 	mustMarkRequired(cmd, "token")
 	plog.RemoveKlogGlobalFlags()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
@@ -70,7 +73,7 @@ func legacyGetKubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 				namespace:         namespace,
 				authenticatorName: authenticatorName,
 				authenticatorType: authenticatorType,
-				apiGroupSuffix:    "pinniped.dev",
+				apiGroupSuffix:    apiGroupSuffix,
 			},
 		})
 	}

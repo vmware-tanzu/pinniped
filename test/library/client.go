@@ -31,6 +31,7 @@ import (
 	idpv1alpha1 "go.pinniped.dev/generated/1.20/apis/supervisor/idp/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
 	supervisorclientset "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned"
+	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 
 	// Import to initialize client auth plugins - the kubeconfig that we use for
@@ -42,12 +43,6 @@ func NewClientConfig(t *testing.T) *rest.Config {
 	t.Helper()
 
 	return newClientConfigWithOverrides(t, &clientcmd.ConfigOverrides{})
-}
-
-func NewClientset(t *testing.T) kubernetes.Interface {
-	t.Helper()
-
-	return newClientsetWithConfig(t, NewClientConfig(t))
 }
 
 func NewClientsetForKubeConfig(t *testing.T, kubeConfig string) kubernetes.Interface {
@@ -72,6 +67,12 @@ func NewClientsetWithCertAndKey(t *testing.T, clientCertificateData, clientKeyDa
 	t.Helper()
 
 	return newClientsetWithConfig(t, newAnonymousClientRestConfigWithCertAndKeyAdded(t, clientCertificateData, clientKeyData))
+}
+
+func NewKubernetesClientset(t *testing.T) kubernetes.Interface {
+	t.Helper()
+
+	return newKubeclient(t, NewClientConfig(t)).Kubernetes
 }
 
 func NewSupervisorClientset(t *testing.T) supervisorclientset.Interface {
@@ -135,8 +136,11 @@ func newAnonymousClientRestConfigWithCertAndKeyAdded(t *testing.T, clientCertifi
 
 func newKubeclient(t *testing.T, config *rest.Config) *kubeclient.Client {
 	t.Helper()
-	_ = IntegrationEnv(t).APIGroupSuffix // TODO: wire API group into kubeclient.
-	client, err := kubeclient.New(kubeclient.WithConfig(config))
+	env := IntegrationEnv(t)
+	client, err := kubeclient.New(
+		kubeclient.WithConfig(config),
+		kubeclient.WithMiddleware(groupsuffix.New(env.APIGroupSuffix)),
+	)
 	require.NoError(t, err)
 	return client
 }
@@ -163,6 +167,12 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 
 	t.Cleanup(func() {
 		t.Helper()
+
+		if t.Failed() {
+			t.Logf("skipping deletion of test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
+			return
+		}
+
 		t.Logf("cleaning up test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
 		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -227,6 +237,12 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 
 	t.Cleanup(func() {
 		t.Helper()
+
+		if t.Failed() {
+			t.Logf("skipping deletion of test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
+			return
+		}
+
 		t.Logf("cleaning up test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
 		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -325,7 +341,7 @@ func RandHex(t *testing.T, numBytes int) string {
 
 func CreateTestSecret(t *testing.T, namespace string, baseName string, secretType corev1.SecretType, stringData map[string]string) *corev1.Secret {
 	t.Helper()
-	client := NewClientset(t)
+	client := NewKubernetesClientset(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -396,7 +412,7 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 
 func CreateTestClusterRoleBinding(t *testing.T, subject rbacv1.Subject, roleRef rbacv1.RoleRef) *rbacv1.ClusterRoleBinding {
 	t.Helper()
-	client := NewClientset(t)
+	client := NewKubernetesClientset(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

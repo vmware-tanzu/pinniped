@@ -26,23 +26,27 @@ import (
 
 	conciergev1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
+	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 )
 
 type kubeconfigDeps struct {
 	getPathToSelf func() (string, error)
-	getClientset  func(clientcmd.ClientConfig) (conciergeclientset.Interface, error)
+	getClientset  func(clientConfig clientcmd.ClientConfig, apiGroupSuffix string) (conciergeclientset.Interface, error)
 }
 
 func kubeconfigRealDeps() kubeconfigDeps {
 	return kubeconfigDeps{
 		getPathToSelf: os.Executable,
-		getClientset: func(clientConfig clientcmd.ClientConfig) (conciergeclientset.Interface, error) {
+		getClientset: func(clientConfig clientcmd.ClientConfig, apiGroupSuffix string) (conciergeclientset.Interface, error) {
 			restConfig, err := clientConfig.ClientConfig()
 			if err != nil {
 				return nil, err
 			}
-			client, err := kubeclient.New(kubeclient.WithConfig(restConfig))
+			client, err := kubeclient.New(
+				kubeclient.WithConfig(restConfig),
+				kubeclient.WithMiddleware(groupsuffix.New(apiGroupSuffix)),
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -126,6 +130,11 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 
 //nolint:funlen
 func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigParams) error {
+	// Validate api group suffix and immediately return an error if it is invalid.
+	if err := groupsuffix.Validate(flags.concierge.apiGroupSuffix); err != nil {
+		return fmt.Errorf("invalid api group suffix: %w", err)
+	}
+
 	execConfig := clientcmdapi.ExecConfig{
 		APIVersion: clientauthenticationv1beta1.SchemeGroupVersion.String(),
 		Args:       []string{},
@@ -153,7 +162,7 @@ func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigPar
 	if err != nil {
 		return fmt.Errorf("could not load --kubeconfig/--kubeconfig-context: %w", err)
 	}
-	clientset, err := deps.getClientset(clientConfig)
+	clientset, err := deps.getClientset(clientConfig, flags.concierge.apiGroupSuffix)
 	if err != nil {
 		return fmt.Errorf("could not configure Kubernetes client: %w", err)
 	}

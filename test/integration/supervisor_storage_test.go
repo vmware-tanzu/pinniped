@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -25,7 +25,7 @@ import (
 
 func TestAuthorizeCodeStorage(t *testing.T) {
 	env := library.IntegrationEnv(t)
-	client := library.NewClientset(t)
+	client := library.NewKubernetesClientset(t)
 
 	const (
 		// randomly generated HMAC authorization code (see below)

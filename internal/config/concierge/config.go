@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -45,6 +46,10 @@ func FromPath(path string) (*Config, error) {
 
 	if err := validateAPI(&config.APIConfig); err != nil {
 		return nil, fmt.Errorf("validate api: %w", err)
+	}
+
+	if err := validateAPIGroupSuffix(*config.APIGroupSuffix); err != nil {
+		return nil, fmt.Errorf("validate apiGroupSuffix: %w", err)
 	}
 
 	if err := validateNames(&config.NamesConfig); err != nil {
@@ -119,6 +124,10 @@ func validateAPI(apiConfig *APIConfigSpec) error {
 	}
 
 	return nil
+}
+
+func validateAPIGroupSuffix(apiGroupSuffix string) error {
+	return groupsuffix.Validate(apiGroupSuffix)
 }
 
 func int64Ptr(i int64) *int64 {

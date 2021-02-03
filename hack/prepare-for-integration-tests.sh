@@ -136,7 +136,7 @@ if ! tilt_mode; then
   tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
 
   if [[ "$skip_build" == "yes" ]]; then
-    most_recent_tag=$(docker images "$repo" --format "{{.Tag}}" | head -1)
+    most_recent_tag=$(docker images "$registry/$repo" --format "{{.Tag}}" | head -1)
     if [[ -n "$most_recent_tag" ]]; then
       tag="$most_recent_tag"
       do_build=no

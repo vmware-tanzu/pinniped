@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package plog
@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/spf13/pflag"
+	"k8s.io/klog/v2"
 )
 
 //nolint: gochecknoglobals
@@ -29,4 +30,35 @@ func RemoveKlogGlobalFlags() {
 	if pflag.CommandLine.Changed(globalLogFlushFlag) {
 		panic("unsupported global klog flag set")
 	}
+}
+
+func klogLevelForPlogLevel(plogLevel LogLevel) (klogLevel klog.Level) {
+	switch plogLevel {
+	case LevelWarning:
+		klogLevel = klogLevelWarning // unset means minimal logs (Error and Warning)
+	case LevelInfo:
+		klogLevel = klogLevelInfo
+	case LevelDebug:
+		klogLevel = klogLevelDebug
+	case LevelTrace:
+		klogLevel = klogLevelTrace
+	case LevelAll:
+		klogLevel = klogLevelAll + 100 // make all really mean all
+	default:
+		klogLevel = -1
+	}
+
+	return
+}
+
+func getKlogLevel() klog.Level {
+	// hack around klog not exposing a Get method
+	for i := klog.Level(0); i < 256; i++ {
+		if klog.V(i).Enabled() {
+			continue
+		}
+		return i - 1
+	}
+
+	return -1
 }

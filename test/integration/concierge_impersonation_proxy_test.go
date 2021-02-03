@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -35,7 +35,7 @@ func TestImpersonationProxy(t *testing.T) {
 	defer cancel()
 
 	// Create a client using the admin kubeconfig.
-	adminClient := library.NewClientset(t)
+	// adminClient := library.NewClientset(t)
 
 	// Create a WebhookAuthenticator.
 	authenticator := library.CreateTestWebhookAuthenticator(ctx, t)
@@ -61,13 +61,13 @@ func TestImpersonationProxy(t *testing.T) {
 
 	t.Run(
 		"access as user",
-		library.AccessAsUserTest(ctx, adminClient, env.TestUser.ExpectedUsername, clientset),
+		library.AccessAsUserTest(ctx, env.TestUser.ExpectedUsername, clientset),
 	)
 	for _, group := range env.TestUser.ExpectedGroups {
 		group := group
 		t.Run(
 			"access as group "+group,
-			library.AccessAsGroupTest(ctx, adminClient, group, clientset),
+			library.AccessAsGroupTest(ctx, group, clientset),
 		)
 	}
 }

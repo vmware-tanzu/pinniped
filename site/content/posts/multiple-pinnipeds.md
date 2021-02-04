@@ -9,7 +9,7 @@ tags: ['Matt Moyer', 'api', 'release']
 ---
 
 ![toy robots](https://images.unsplash.com/photo-1558060370-d644479cb6f7?ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=2000&q=80)
-*Photo by [TRINH HUY HUNG](https://unsplash.com/@hungthdsn?utm_source=unsplash&amp;utm_medium=referral&amp;utm_content=creditCopyText) on [Unsplash](https://unsplash.com/?utm_source=unsplash&amp;utm_medium=referral&amp;utm_content=creditCopyText)*
+*Photo by [TRINH HUY HUNG](https://unsplash.com/@hungthdsn) on [Unsplash](https://unsplash.com/)*
 
 ## Motivation
 
@@ -27,7 +27,7 @@ You may have a similar need for several reasons, such as:
 
 With [Pinniped v0.5.0](https://github.com/vmware-tanzu/pinniped/releases/v0.5.0), we wanted to be able to bundle an opinionated configuration of Pinniped into our downstream commercial products while also allowing our customers to install their own Pinniped instance and configure it however they like.
 
-This post describes how we’ve approached the need for multiple Pinnipeds in v0.5.0.
+This post describes how we approached the need for multiple Pinnipeds in v0.5.0.
    
 ## Existing Approaches
 
@@ -116,8 +116,10 @@ As a team, we have no immediate plans for either of these ideas, but if you are 
 ## Join the Pinniped Community!
 Pinniped is better because of our contributors and maintainers.
 It is because of you that we can bring great software to the community.
+
 Please join us during our online community meetings, occurring every first and third Thursday of the month at 9AM PT / 12PM PT.
 Use [this Zoom link][zoom] to attend and add any agenda items you wish to discuss to [the notes document][meeting-notes].
+
 Join our [Google Group][google-group] to receive invites to this meeting.
 
 [api-aggregation]: https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/apiserver-aggregation/

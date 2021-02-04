@@ -21,6 +21,8 @@ func TestCredentialIssuer(t *testing.T) {
 	config := library.NewClientConfig(t)
 	client := library.NewConciergeClientset(t)
 
+	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

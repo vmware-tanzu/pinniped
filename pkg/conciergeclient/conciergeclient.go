@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"strings"
 
-	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 	"k8s.io/client-go/tools/clientcmd"
@@ -34,11 +34,12 @@ type Option func(*Client) error
 
 // Client is a configuration for talking to the Pinniped concierge.
 type Client struct {
-	namespace      string
-	authenticator  *corev1.TypedLocalObjectReference
-	caBundle       string
-	endpoint       *url.URL
-	apiGroupSuffix string
+	namespace         string
+	authenticatorName string
+	authenticatorKind string
+	caBundle          string
+	endpoint          *url.URL
+	apiGroupSuffix    string
 }
 
 // WithNamespace configures the namespace where the TokenCredentialRequest is to be sent.
@@ -55,18 +56,15 @@ func WithAuthenticator(authType, authName string) Option {
 		if authName == "" {
 			return fmt.Errorf("authenticator name must not be empty")
 		}
-		authenticator := corev1.TypedLocalObjectReference{Name: authName}
+		c.authenticatorName = authName
 		switch strings.ToLower(authType) {
 		case "webhook":
-			authenticator.APIGroup = &auth1alpha1.SchemeGroupVersion.Group
-			authenticator.Kind = "WebhookAuthenticator"
+			c.authenticatorKind = "WebhookAuthenticator"
 		case "jwt":
-			authenticator.APIGroup = &auth1alpha1.SchemeGroupVersion.Group
-			authenticator.Kind = "JWTAuthenticator"
+			c.authenticatorKind = "JWTAuthenticator"
 		default:
 			return fmt.Errorf(`invalid authenticator type: %q, supported values are "webhook" and "jwt"`, authType)
 		}
-		c.authenticator = &authenticator
 		return nil
 	}
 }
@@ -133,7 +131,7 @@ func New(opts ...Option) (*Client, error) {
 			return nil, err
 		}
 	}
-	if c.authenticator == nil {
+	if c.authenticatorName == "" {
 		return nil, fmt.Errorf("WithAuthenticator must be specified")
 	}
 	if c.endpoint == nil {
@@ -180,13 +178,18 @@ func (c *Client) ExchangeToken(ctx context.Context, token string) (*clientauthen
 	if err != nil {
 		return nil, err
 	}
+	replacedAPIGroupName, _ := groupsuffix.Replace(auth1alpha1.SchemeGroupVersion.Group, c.apiGroupSuffix)
 	resp, err := clientset.LoginV1alpha1().TokenCredentialRequests(c.namespace).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: c.namespace,
 		},
 		Spec: loginv1alpha1.TokenCredentialRequestSpec{
-			Token:         token,
-			Authenticator: *c.authenticator,
+			Token: token,
+			Authenticator: v1.TypedLocalObjectReference{
+				APIGroup: &replacedAPIGroupName,
+				Kind:     c.authenticatorKind,
+				Name:     c.authenticatorName,
+			},
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {

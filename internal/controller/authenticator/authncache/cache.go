@@ -15,6 +15,7 @@ import (
 	"k8s.io/klog/v2"
 
 	loginapi "go.pinniped.dev/generated/1.20/apis/concierge/login"
+	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -26,7 +27,8 @@ var (
 // Cache implements the authenticator.Token interface by multiplexing across a dynamic set of authenticators
 // loaded from authenticator resources.
 type Cache struct {
-	cache sync.Map
+	cache          sync.Map
+	apiGroupSuffix string
 }
 
 type Key struct {
@@ -41,8 +43,8 @@ type Value interface {
 }
 
 // New returns an empty cache.
-func New() *Cache {
-	return &Cache{}
+func New(apiGroupSuffix string) *Cache {
+	return &Cache{apiGroupSuffix: apiGroupSuffix}
 }
 
 // Get an authenticator by key.
@@ -90,7 +92,12 @@ func (c *Cache) AuthenticateTokenCredentialRequest(ctx context.Context, req *log
 		Kind:      req.Spec.Authenticator.Kind,
 	}
 	if req.Spec.Authenticator.APIGroup != nil {
-		key.APIGroup = *req.Spec.Authenticator.APIGroup
+		// The key must always be API group pinniped.dev because that's what the cache filler will always use.
+		apiGroup, replaced := groupsuffix.Unreplace(*req.Spec.Authenticator.APIGroup, c.apiGroupSuffix)
+		if !replaced {
+			return nil, ErrNoSuchAuthenticator
+		}
+		key.APIGroup = apiGroup
 	}
 
 	val := c.Get(key)

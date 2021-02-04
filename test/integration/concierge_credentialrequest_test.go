@@ -23,7 +23,9 @@ import (
 )
 
 func TestUnsuccessfulCredentialRequest(t *testing.T) {
-	library.SkipUnlessIntegration(t)
+	env := library.IntegrationEnv(t)
+
+	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -41,6 +43,8 @@ func TestUnsuccessfulCredentialRequest(t *testing.T) {
 
 func TestSuccessfulCredentialRequest(t *testing.T) {
 	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+
+	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
@@ -127,7 +131,9 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 }
 
 func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
-	library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+
+	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
 	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token"})
 
@@ -139,7 +145,9 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 }
 
 func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
-	library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+
+	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
 	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{Token: ""})
 
@@ -158,7 +166,9 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T
 }
 
 func TestCredentialRequest_OtherwiseValidRequestWithRealTokenShouldFailWhenTheClusterIsNotCapable(t *testing.T) {
-	library.IntegrationEnv(t).WithoutCapability(library.ClusterSigningKeyIsAvailable)
+	env := library.IntegrationEnv(t).WithoutCapability(library.ClusterSigningKeyIsAvailable)
+
+	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

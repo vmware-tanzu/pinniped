@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -28,6 +28,8 @@ func TestSupervisorHealthz(t *testing.T) {
 	if env.SupervisorHTTPAddress == "" {
 		t.Skip("PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS not defined")
 	}
+
+	library.AssertNoRestartsDuringTest(t, env.SupervisorNamespace, "")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()

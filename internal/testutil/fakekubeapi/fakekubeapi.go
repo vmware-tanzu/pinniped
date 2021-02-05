@@ -30,6 +30,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/errors"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	restclient "k8s.io/client-go/rest"
 	aggregatorclientscheme "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/scheme"
@@ -37,7 +38,6 @@ import (
 	pinnipedconciergeclientsetscheme "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned/scheme"
 	pinnipedsupervisorclientsetscheme "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned/scheme"
 	"go.pinniped.dev/internal/httputil/httperr"
-	"go.pinniped.dev/internal/multierror"
 )
 
 // Start starts an httptest.Server (with TLS) that pretends to be a Kube API server.
@@ -107,7 +107,7 @@ func decodeObj(r *http.Request) (runtime.Object, error) {
 	}
 
 	var obj runtime.Object
-	multiErr := multierror.New()
+	var errs []error //nolint: prealloc
 	codecsThatWeUseInOurCode := []runtime.NegotiatedSerializer{
 		kubescheme.Codecs,
 		aggregatorclientscheme.Codecs,
@@ -119,9 +119,9 @@ func decodeObj(r *http.Request) (runtime.Object, error) {
 		if err == nil {
 			return obj, nil
 		}
-		multiErr.Add(err)
+		errs = append(errs, err)
 	}
-	return nil, multiErr.ErrOrNil()
+	return nil, errors.NewAggregate(errs)
 }
 
 func tryDecodeObj(

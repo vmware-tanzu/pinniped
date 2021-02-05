@@ -11,8 +11,10 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -32,16 +34,18 @@ type TokenCredentialRequestAuthenticator interface {
 	AuthenticateTokenCredentialRequest(ctx context.Context, req *loginapi.TokenCredentialRequest) (user.Info, error)
 }
 
-func NewREST(authenticator TokenCredentialRequestAuthenticator, issuer CertIssuer) *REST {
+func NewREST(authenticator TokenCredentialRequestAuthenticator, issuer CertIssuer, resource schema.GroupResource) *REST {
 	return &REST{
-		authenticator: authenticator,
-		issuer:        issuer,
+		authenticator:  authenticator,
+		issuer:         issuer,
+		tableConvertor: rest.NewDefaultTableConvertor(resource),
 	}
 }
 
 type REST struct {
-	authenticator TokenCredentialRequestAuthenticator
-	issuer        CertIssuer
+	authenticator  TokenCredentialRequestAuthenticator
+	issuer         CertIssuer
+	tableConvertor rest.TableConvertor
 }
 
 // Assert that our *REST implements all the optional interfaces that we expect it to implement.
@@ -51,10 +55,28 @@ var _ interface {
 	rest.Scoper
 	rest.Storage
 	rest.CategoriesProvider
+	rest.Lister
 } = (*REST)(nil)
 
 func (*REST) New() runtime.Object {
 	return &loginapi.TokenCredentialRequest{}
+}
+
+func (*REST) NewList() runtime.Object {
+	return &loginapi.TokenCredentialRequestList{}
+}
+
+func (*REST) List(_ context.Context, _ *metainternalversion.ListOptions) (runtime.Object, error) {
+	return &loginapi.TokenCredentialRequestList{
+		ListMeta: metav1.ListMeta{
+			ResourceVersion: "0", // this resource version means "from the API server cache"
+		},
+		Items: []loginapi.TokenCredentialRequest{}, // avoid sending nil items list
+	}, nil
+}
+
+func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	return r.tableConvertor.ConvertToTable(ctx, obj, tableOptions)
 }
 
 func (*REST) NamespaceScoped() bool {

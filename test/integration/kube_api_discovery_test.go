@@ -72,7 +72,7 @@ func TestGetAPIResourceList(t *testing.T) {
 					{
 						Name:       "tokencredentialrequests",
 						Kind:       "TokenCredentialRequest",
-						Verbs:      []string{"create"},
+						Verbs:      []string{"create", "list"},
 						Namespaced: true,
 						Categories: []string{"pinniped"},
 					},

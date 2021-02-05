@@ -15,7 +15,7 @@ import (
 func Test_request_mutate(t *testing.T) {
 	tests := []struct {
 		name     string
-		reqFuncs []func(Object)
+		reqFuncs []func(Object) error
 		obj      Object
 		want     *mutationResult
 		wantObj  Object
@@ -23,10 +23,11 @@ func Test_request_mutate(t *testing.T) {
 	}{
 		{
 			name: "mutate config map data",
-			reqFuncs: []func(Object){
-				func(obj Object) {
+			reqFuncs: []func(Object) error{
+				func(obj Object) error {
 					cm := obj.(*corev1.ConfigMap)
 					cm.Data = map[string]string{"new": "stuff"}
+					return nil
 				},
 			},
 			obj: &corev1.ConfigMap{

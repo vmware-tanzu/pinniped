@@ -180,11 +180,8 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 		require.NoErrorf(t, err, "could not cleanup test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
 	})
 
-	apiGroup, replacedSuffix := groupsuffix.Replace(auth1alpha1.SchemeGroupVersion.Group, testEnv.APIGroupSuffix)
-	require.True(t, replacedSuffix)
-
 	return corev1.TypedLocalObjectReference{
-		APIGroup: &apiGroup,
+		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
 		Kind:     "WebhookAuthenticator",
 		Name:     webhook.Name,
 	}
@@ -253,11 +250,8 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 		require.NoErrorf(t, err, "could not cleanup test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
 	})
 
-	apiGroup, replacedSuffix := groupsuffix.Replace(auth1alpha1.SchemeGroupVersion.Group, testEnv.APIGroupSuffix)
-	require.True(t, replacedSuffix)
-
 	return corev1.TypedLocalObjectReference{
-		APIGroup: &apiGroup,
+		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
 		Kind:     "JWTAuthenticator",
 		Name:     jwtAuthenticator.Name,
 	}

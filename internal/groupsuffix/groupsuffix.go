@@ -5,6 +5,7 @@ package groupsuffix
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,8 +13,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation"
 
+	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/kubeclient"
+	"go.pinniped.dev/internal/plog"
 )
 
 const (
@@ -35,7 +38,7 @@ func New(apiGroupSuffix string) kubeclient.Middleware {
 				return // ignore APIs that do not have our group
 			}
 
-			rt.MutateRequest(func(obj kubeclient.Object) {
+			rt.MutateRequest(func(obj kubeclient.Object) error {
 				typeMeta := obj.GetObjectKind()
 				origGVK := typeMeta.GroupVersionKind()
 				newGVK := schema.GroupVersionKind{
@@ -44,6 +47,7 @@ func New(apiGroupSuffix string) kubeclient.Middleware {
 					Kind:    origGVK.Kind,
 				}
 				typeMeta.SetGroupVersionKind(newGVK)
+				return nil
 			})
 		}),
 
@@ -62,18 +66,61 @@ func New(apiGroupSuffix string) kubeclient.Middleware {
 		}),
 
 		kubeclient.MiddlewareFunc(func(_ context.Context, rt kubeclient.RoundTrip) {
+			// we only care if this is a create on a TokenCredentialRequest without a subresource
+			if rt.Resource() != loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests") ||
+				rt.Verb() != kubeclient.VerbCreate ||
+				rt.Subresource() != "" {
+				return
+			}
+
+			// we only do this on the way out, since on the way back in we don't set a spec in our
+			// TokenCredentialRequest
+			rt.MutateRequest(func(obj kubeclient.Object) error {
+				tokenCredentialRequest, ok := obj.(*loginv1alpha1.TokenCredentialRequest)
+				if !ok {
+					return fmt.Errorf("cannot cast obj of type %T to *loginv1alpha1.TokenCredentialRequest", obj)
+				}
+
+				if tokenCredentialRequest.Spec.Authenticator.APIGroup == nil {
+					// technically, the APIGroup field is optional, so clients are free to do this, but we
+					// want our middleware to be opinionated so that it can be really good at a specific task
+					// and give us specific feedback when it can't do that specific task
+					return fmt.Errorf(
+						"cannot replace token credential request %q without authenticator API group",
+						plog.KObj(obj),
+					)
+				}
+
+				mutatedAuthenticatorAPIGroup, ok := Replace(*tokenCredentialRequest.Spec.Authenticator.APIGroup, apiGroupSuffix)
+				if !ok {
+					// see comment above about specificity of middleware
+					return fmt.Errorf(
+						"cannot replace token credential request %q authenticator API group %q with group suffix %q",
+						plog.KObj(obj),
+						*tokenCredentialRequest.Spec.Authenticator.APIGroup,
+						apiGroupSuffix,
+					)
+				}
+
+				tokenCredentialRequest.Spec.Authenticator.APIGroup = &mutatedAuthenticatorAPIGroup
+
+				return nil
+			})
+		}),
+
+		kubeclient.MiddlewareFunc(func(_ context.Context, rt kubeclient.RoundTrip) {
 			// always unreplace owner refs with apiGroupSuffix because we can consume those objects across all verbs
 			rt.MutateResponse(mutateOwnerRefs(Unreplace, apiGroupSuffix))
 		}),
 	}
 }
 
-func mutateOwnerRefs(replaceFunc func(baseAPIGroup, apiGroupSuffix string) (string, bool), apiGroupSuffix string) func(kubeclient.Object) {
-	return func(obj kubeclient.Object) {
+func mutateOwnerRefs(replaceFunc func(baseAPIGroup, apiGroupSuffix string) (string, bool), apiGroupSuffix string) func(kubeclient.Object) error {
+	return func(obj kubeclient.Object) error {
 		// fix up owner refs because they are consumed by external and internal actors
 		oldRefs := obj.GetOwnerReferences()
 		if len(oldRefs) == 0 {
-			return
+			return nil
 		}
 
 		var changedGroup bool
@@ -94,10 +141,12 @@ func mutateOwnerRefs(replaceFunc func(baseAPIGroup, apiGroupSuffix string) (stri
 		}
 
 		if !changedGroup {
-			return
+			return nil
 		}
 
 		obj.SetOwnerReferences(newRefs)
+
+		return nil
 	}
 }
 

@@ -135,7 +135,16 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 
 	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
-	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token"})
+	// Create a testWebhook so we have a legitimate authenticator to pass to the
+	// TokenCredentialRequest API.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
+
+	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{
+		Token:         "not a good token",
+		Authenticator: testWebhook,
+	})
 
 	require.NoError(t, err)
 
@@ -149,7 +158,16 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T
 
 	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
-	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{Token: ""})
+	// Create a testWebhook so we have a legitimate authenticator to pass to the
+	// TokenCredentialRequest API.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
+
+	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{
+		Token:         "",
+		Authenticator: testWebhook,
+	})
 
 	require.Error(t, err)
 	statusError, isStatus := err.(*errors.StatusError)

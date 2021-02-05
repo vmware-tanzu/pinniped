@@ -71,7 +71,7 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 	}
 
 	gvr := c.ExtraConfig.GroupVersion.WithResource("tokencredentialrequests")
-	storage := credentialrequest.NewREST(c.ExtraConfig.Authenticator, c.ExtraConfig.Issuer)
+	storage := credentialrequest.NewREST(c.ExtraConfig.Authenticator, c.ExtraConfig.Issuer, gvr.GroupResource())
 	if err := s.GenericAPIServer.InstallAPIGroup(&genericapiserver.APIGroupInfo{
 		PrioritizedVersions:          []schema.GroupVersion{gvr.GroupVersion()},
 		VersionedResourcesStorageMap: map[string]map[string]rest.Storage{gvr.Version: {gvr.Resource: storage}},

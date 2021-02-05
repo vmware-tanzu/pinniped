@@ -487,19 +487,19 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			apiGroupSuffix:  "no-dots",
-			wantErrorPrefix: "1 error(s):\n- must contain '.'",
+			wantErrorPrefix: "must contain '.'",
 		},
 		{
 			apiGroupSuffix:  ".starts.with.dot",
-			wantErrorPrefix: "1 error(s):\n- a lowercase RFC 1123 subdomain must consist",
+			wantErrorPrefix: "a lowercase RFC 1123 subdomain must consist",
 		},
 		{
 			apiGroupSuffix:  "ends.with.dot.",
-			wantErrorPrefix: "1 error(s):\n- a lowercase RFC 1123 subdomain must consist",
+			wantErrorPrefix: "a lowercase RFC 1123 subdomain must consist",
 		},
 		{
 			apiGroupSuffix:  ".multiple-issues.because-this-string-is-longer-than-the-253-character-limit-of-a-dns-1123-identifier-" + chars(253),
-			wantErrorPrefix: "2 error(s):\n- must be no more than 253 characters\n- a lowercase RFC 1123 subdomain must consist",
+			wantErrorPrefix: "[must be no more than 253 characters, a lowercase RFC 1123 subdomain must consist",
 		},
 	}
 	for _, test := range tests {

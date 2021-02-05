@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 
@@ -20,7 +21,6 @@ import (
 	configinformers "go.pinniped.dev/generated/1.20/client/supervisor/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/multierror"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 )
@@ -107,7 +107,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 		}
 	}
 
-	errs := multierror.New()
+	var errs []error
 
 	federationDomainIssuers := make([]*provider.FederationDomainIssuer, 0)
 	for _, federationDomain := range federationDomains {
@@ -123,7 +123,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 					configv1alpha1.DuplicateFederationDomainStatusCondition,
 					"Duplicate issuer: "+federationDomain.Spec.Issuer,
 				); err != nil {
-					errs.Add(fmt.Errorf("could not update status: %w", err))
+					errs = append(errs, fmt.Errorf("could not update status: %w", err))
 				}
 				continue
 			}
@@ -138,7 +138,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 				configv1alpha1.SameIssuerHostMustUseSameSecretFederationDomainStatusCondition,
 				"Issuers with the same DNS hostname (address not including port) must use the same secretName: "+issuerURLToHostnameKey(issuerURL),
 			); err != nil {
-				errs.Add(fmt.Errorf("could not update status: %w", err))
+				errs = append(errs, fmt.Errorf("could not update status: %w", err))
 			}
 			continue
 		}
@@ -152,7 +152,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 				configv1alpha1.InvalidFederationDomainStatusCondition,
 				"Invalid: "+err.Error(),
 			); err != nil {
-				errs.Add(fmt.Errorf("could not update status: %w", err))
+				errs = append(errs, fmt.Errorf("could not update status: %w", err))
 			}
 			continue
 		}
@@ -164,7 +164,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 			configv1alpha1.SuccessFederationDomainStatusCondition,
 			"Provider successfully created",
 		); err != nil {
-			errs.Add(fmt.Errorf("could not update status: %w", err))
+			errs = append(errs, fmt.Errorf("could not update status: %w", err))
 			continue
 		}
 
@@ -173,7 +173,7 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 
 	c.providerSetter.SetProviders(federationDomainIssuers...)
 
-	return errs.ErrOrNil()
+	return errors.NewAggregate(errs)
 }
 
 func (c *federationDomainWatcherController) updateStatus(

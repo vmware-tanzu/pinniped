@@ -6,6 +6,7 @@ package supervisorconfig
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"reflect"
 	"sync"
@@ -320,7 +321,7 @@ func TestSync(t *testing.T) {
 				it("sets the provider that it could actually update in the API", func() {
 					startInformersAndController()
 					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, "1 error(s):\n- could not update status: some update error")
+					r.EqualError(err, "could not update status: some update error")
 
 					provider1, err := provider.NewFederationDomainIssuer(federationDomain1.Spec.Issuer)
 					r.NoError(err)
@@ -339,7 +340,7 @@ func TestSync(t *testing.T) {
 				it("returns an error", func() {
 					startInformersAndController()
 					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, "1 error(s):\n- could not update status: some update error")
+					r.EqualError(err, "could not update status: some update error")
 
 					federationDomain1.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
 					federationDomain1.Status.Message = "Provider successfully created"
@@ -455,7 +456,7 @@ func TestSync(t *testing.T) {
 				it("returns an error", func() {
 					startInformersAndController()
 					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, "1 error(s):\n- could not update status: some update error")
+					r.EqualError(err, "could not update status: some update error")
 
 					federationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
 					federationDomain.Status.Message = "Provider successfully created"
@@ -491,7 +492,7 @@ func TestSync(t *testing.T) {
 				it("returns the get error", func() {
 					startInformersAndController()
 					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, "1 error(s):\n- could not update status: get failed: some get error")
+					r.EqualError(err, "could not update status: get failed: some get error")
 
 					federationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
 					federationDomain.Status.Message = "Provider successfully created"
@@ -606,7 +607,7 @@ func TestSync(t *testing.T) {
 				it("sets the provider that it could actually update in the API", func() {
 					startInformersAndController()
 					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, "1 error(s):\n- could not update status: some update error")
+					r.EqualError(err, "could not update status: some update error")
 
 					validProvider, err := provider.NewFederationDomainIssuer(validFederationDomain.Spec.Issuer)
 					r.NoError(err)
@@ -623,7 +624,7 @@ func TestSync(t *testing.T) {
 				it("returns an error", func() {
 					startInformersAndController()
 					err := controllerlib.TestSync(t, subject, *syncContext)
-					r.EqualError(err, "1 error(s):\n- could not update status: some update error")
+					r.EqualError(err, "could not update status: some update error")
 
 					validFederationDomain.Status.Status = v1alpha1.SuccessFederationDomainStatusCondition
 					validFederationDomain.Status.Message = "Provider successfully created"
@@ -761,22 +762,20 @@ func TestSync(t *testing.T) {
 			})
 
 			when("we cannot talk to the API", func() {
+				var count int
 				it.Before(func() {
 					pinnipedAPIClient.PrependReactor(
 						"get",
 						"federationdomains",
 						func(_ coretesting.Action) (bool, runtime.Object, error) {
-							return true, nil, errors.New("some get error")
+							count++
+							return true, nil, fmt.Errorf("some get error %d", count)
 						},
 					)
 				})
 
 				it("returns the get errors", func() {
-					expectedError := here.Doc(`
-						3 error(s):
-						- could not update status: get failed: some get error
-						- could not update status: get failed: some get error
-						- could not update status: get failed: some get error`)
+					expectedError := here.Doc(`[could not update status: get failed: some get error 1, could not update status: get failed: some get error 2, could not update status: get failed: some get error 3]`)
 					startInformersAndController()
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.EqualError(err, expectedError)
@@ -947,23 +946,20 @@ func TestSync(t *testing.T) {
 			})
 
 			when("we cannot talk to the API", func() {
+				var count int
 				it.Before(func() {
 					pinnipedAPIClient.PrependReactor(
 						"get",
 						"federationdomains",
 						func(_ coretesting.Action) (bool, runtime.Object, error) {
-							return true, nil, errors.New("some get error")
+							count++
+							return true, nil, fmt.Errorf("some get error %d", count)
 						},
 					)
 				})
 
 				it("returns the get errors", func() {
-					expectedError := here.Doc(`
-						4 error(s):
-						- could not update status: get failed: some get error
-						- could not update status: get failed: some get error
-						- could not update status: get failed: some get error
-						- could not update status: get failed: some get error`)
+					expectedError := here.Doc(`[could not update status: get failed: some get error 1, could not update status: get failed: some get error 2, could not update status: get failed: some get error 3, could not update status: get failed: some get error 4]`)
 					startInformersAndController()
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.EqualError(err, expectedError)

@@ -18,7 +18,8 @@ import (
 type Capability string
 
 const (
-	ClusterSigningKeyIsAvailable Capability = "clusterSigningKeyIsAvailable"
+	ClusterSigningKeyIsAvailable    Capability = "clusterSigningKeyIsAvailable"
+	HasExternalLoadBalancerProvider Capability = "hasExternalLoadBalancerProvider"
 )
 
 // TestEnv captures all the external parameters consumed by our integration tests.

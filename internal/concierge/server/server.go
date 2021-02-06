@@ -13,6 +13,12 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/intstr"
+
+	v1 "k8s.io/api/core/v1"
+
+	"go.pinniped.dev/internal/kubeclient"
+
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -169,6 +175,35 @@ func (a *App) runServer(ctx context.Context) error {
 		return fmt.Errorf("could not create aggregated API server: %w", err)
 	}
 
+	client, err := kubeclient.New()
+	if err != nil {
+		plog.WarningErr("could not create client", err)
+	} else {
+		appNameLabel := cfg.Labels["app"]
+		loadBalancer := v1.Service{
+			Spec: v1.ServiceSpec{
+				Type: "LoadBalancer",
+				Ports: []v1.ServicePort{
+					{
+						TargetPort: intstr.FromInt(8444),
+						Port:       443,
+						Protocol:   v1.ProtocolTCP,
+					},
+				},
+				Selector: map[string]string{"app": appNameLabel},
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "impersonation-proxy-load-balancer",
+				Namespace: podInfo.Namespace,
+				Labels:    cfg.Labels,
+			},
+		}
+		_, err = client.Kubernetes.CoreV1().Services(podInfo.Namespace).Create(ctx, &loadBalancer, metav1.CreateOptions{})
+		if err != nil {
+			plog.WarningErr("could not create load balancer", err)
+		}
+	}
+
 	// run proxy handler
 	impersonationCA, err := certauthority.New(pkix.Name{CommonName: "test CA"}, 24*time.Hour)
 	if err != nil {
@@ -191,6 +226,7 @@ func (a *App) runServer(ctx context.Context) error {
 			Certificates: []tls.Certificate{*impersonationCert},
 		},
 	}
+	// todo store CA, cert etc. on the authenticator status
 	go func() {
 		if err := impersonationProxyServer.ListenAndServeTLS("", ""); err != nil {
 			klog.ErrorS(err, "could not serve impersonation proxy")

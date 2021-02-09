@@ -98,10 +98,9 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 	}
 
 	cacheKey := authncache.Key{
-		APIGroup:  auth1alpha1.GroupName,
-		Kind:      "JWTAuthenticator",
-		Namespace: ctx.Key.Namespace,
-		Name:      ctx.Key.Name,
+		APIGroup: auth1alpha1.GroupName,
+		Kind:     "JWTAuthenticator",
+		Name:     ctx.Key.Name,
 	}
 
 	// If this authenticator already exists, then only recreate it if is different from the desired

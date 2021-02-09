@@ -69,10 +69,9 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 	}
 
 	c.cache.Store(authncache.Key{
-		APIGroup:  auth1alpha1.GroupName,
-		Kind:      "WebhookAuthenticator",
-		Namespace: ctx.Key.Namespace,
-		Name:      ctx.Key.Name,
+		APIGroup: auth1alpha1.GroupName,
+		Kind:     "WebhookAuthenticator",
+		Name:     ctx.Key.Name,
 	}, webhookAuthenticator)
 	c.log.WithValues("webhook", klog.KObj(obj), "endpoint", obj.Spec.Endpoint).Info("added new webhook authenticator")
 	return nil

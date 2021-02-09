@@ -356,10 +356,9 @@ func TestController(t *testing.T) {
 
 			// We expected the cache to have an entry, so pull that entry from the cache and test it.
 			expectedCacheKey := authncache.Key{
-				APIGroup:  auth1alpha1.GroupName,
-				Kind:      "JWTAuthenticator",
-				Namespace: syncCtx.Key.Namespace,
-				Name:      syncCtx.Key.Name,
+				APIGroup: auth1alpha1.GroupName,
+				Kind:     "JWTAuthenticator",
+				Name:     syncCtx.Key.Name,
 			}
 			cachedAuthenticator := cache.Get(expectedCacheKey)
 			require.NotNil(t, cachedAuthenticator)

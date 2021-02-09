@@ -31,13 +31,13 @@ func TestCache(t *testing.T) {
 	cache := New()
 	require.NotNil(t, cache)
 
-	key1 := Key{Namespace: "foo", Name: "authenticator-one"}
+	key1 := Key{Name: "authenticator-one"}
 	mockToken1 := mocktokenauthenticator.NewMockToken(ctrl)
 	cache.Store(key1, mockToken1)
 	require.Equal(t, mockToken1, cache.Get(key1))
 	require.Equal(t, 1, len(cache.Keys()))
 
-	key2 := Key{Namespace: "foo", Name: "authenticator-two"}
+	key2 := Key{Name: "authenticator-two"}
 	mockToken2 := mocktokenauthenticator.NewMockToken(ctrl)
 	cache.Store(key2, mockToken2)
 	require.Equal(t, mockToken2, cache.Get(key2))
@@ -50,11 +50,10 @@ func TestCache(t *testing.T) {
 
 	// Fill the cache back up with a fixed set of keys, but inserted in shuffled order.
 	keysInExpectedOrder := []Key{
-		{APIGroup: "a", Kind: "a", Namespace: "a", Name: "a"},
-		{APIGroup: "b", Kind: "a", Namespace: "a", Name: "a"},
-		{APIGroup: "b", Kind: "b", Namespace: "a", Name: "a"},
-		{APIGroup: "b", Kind: "b", Namespace: "b", Name: "a"},
-		{APIGroup: "b", Kind: "b", Namespace: "b", Name: "b"},
+		{APIGroup: "a", Kind: "a", Name: "a"},
+		{APIGroup: "b", Kind: "a", Name: "a"},
+		{APIGroup: "b", Kind: "b", Name: "a"},
+		{APIGroup: "b", Kind: "b", Name: "b"},
 	}
 	for tries := 0; tries < 10; tries++ {
 		cache := New()
@@ -85,10 +84,9 @@ func TestAuthenticateTokenCredentialRequest(t *testing.T) {
 		Status: loginapi.TokenCredentialRequestStatus{},
 	}
 	validRequestKey := Key{
-		APIGroup:  *validRequest.Spec.Authenticator.APIGroup,
-		Kind:      validRequest.Spec.Authenticator.Kind,
-		Namespace: validRequest.Namespace,
-		Name:      validRequest.Spec.Authenticator.Name,
+		APIGroup: *validRequest.Spec.Authenticator.APIGroup,
+		Kind:     validRequest.Spec.Authenticator.Kind,
+		Name:     validRequest.Spec.Authenticator.Name,
 	}
 
 	mockCache := func(t *testing.T, res *authenticator.Response, authenticated bool, err error) *Cache {

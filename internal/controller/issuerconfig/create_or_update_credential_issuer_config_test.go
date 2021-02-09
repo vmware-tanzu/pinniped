@@ -29,7 +29,6 @@ func TestCreateOrUpdateCredentialIssuer(t *testing.T) {
 		var ctx context.Context
 		var pinnipedAPIClient *pinnipedfake.Clientset
 		var credentialIssuerGVR schema.GroupVersionResource
-		const installationNamespace = "some-namespace"
 		const credentialIssuerResourceName = "some-resource-name"
 
 		it.Before(func() {
@@ -47,7 +46,6 @@ func TestCreateOrUpdateCredentialIssuer(t *testing.T) {
 			it("creates a new config which includes only the updates made by the func parameter", func() {
 				err := CreateOrUpdateCredentialIssuer(
 					ctx,
-					installationNamespace,
 					credentialIssuerResourceName,
 					map[string]string{
 						"myLabelKey1": "myLabelValue1",
@@ -62,16 +60,14 @@ func TestCreateOrUpdateCredentialIssuer(t *testing.T) {
 				)
 				r.NoError(err)
 
-				expectedGetAction := coretesting.NewGetAction(credentialIssuerGVR, installationNamespace, credentialIssuerResourceName)
+				expectedGetAction := coretesting.NewRootGetAction(credentialIssuerGVR, credentialIssuerResourceName)
 
-				expectedCreateAction := coretesting.NewCreateAction(
+				expectedCreateAction := coretesting.NewRootCreateAction(
 					credentialIssuerGVR,
-					installationNamespace,
 					&configv1alpha1.CredentialIssuer{
 						TypeMeta: metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      credentialIssuerResourceName,
-							Namespace: installationNamespace,
+							Name: credentialIssuerResourceName,
 							Labels: map[string]string{
 								"myLabelKey1": "myLabelValue1",
 								"myLabelKey2": "myLabelValue2",
@@ -100,7 +96,6 @@ func TestCreateOrUpdateCredentialIssuer(t *testing.T) {
 				it("returns an error", func() {
 					err := CreateOrUpdateCredentialIssuer(
 						ctx,
-						installationNamespace,
 						credentialIssuerResourceName,
 						map[string]string{},
 						pinnipedAPIClient,
@@ -118,8 +113,7 @@ func TestCreateOrUpdateCredentialIssuer(t *testing.T) {
 				existingConfig = &configv1alpha1.CredentialIssuer{
 					TypeMeta: metav1.TypeMeta{},
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      credentialIssuerResourceName,
-						Namespace: installationNamespace,
+						Name: credentialIssuerResourceName,
 						Labels: map[string]string{
 							"myLabelKey1": "myLabelValue1",
 						},
@@ -146,7 +140,6 @@ func TestCreateOrUpdateCredentialIssuer(t *testing.T) {
 			it("updates the existing config to only apply the updates made by the func parameter", func() {
 				err := CreateOrUpdateCredentialIssuer(
 					ctx,
-					installationNamespace,
 					credentialIssuerResourceName,
 					map[string]string{
 						"myLabelKey1": "myLabelValue1",
@@ -159,12 +152,12 @@ func TestCreateOrUpdateCredentialIssuer(t *testing.T) {
 				)
 				r.NoError(err)
 
-				expectedGetAction := coretesting.NewGetAction(credentialIssuerGVR, installationNamespace, credentialIssuerResourceName)
+				expectedGetAction := coretesting.NewRootGetAction(credentialIssuerGVR, credentialIssuerResourceName)
 
 				// Only the edited field should be changed.
 				expectedUpdatedConfig := existingConfig.DeepCopy()
 				expectedUpdatedConfig.Status.KubeConfigInfo.CertificateAuthorityData = "new-ca-value"
-				expectedUpdateAction := coretesting.NewUpdateAction(credentialIssuerGVR, installationNamespace, expectedUpdatedConfig)
+				expectedUpdateAction := coretesting.NewRootUpdateAction(credentialIssuerGVR, expectedUpdatedConfig)
 
 				r.Equal([]coretesting.Action{expectedGetAction, expectedUpdateAction}, pinnipedAPIClient.Actions())
 			})
@@ -172,7 +165,6 @@ func TestCreateOrUpdateCredentialIssuer(t *testing.T) {
 			it("avoids the cost of an update if the local updates made by the func parameter did not actually change anything", func() {
 				err := CreateOrUpdateCredentialIssuer(
 					ctx,
-					installationNamespace,
 					credentialIssuerResourceName,
 					map[string]string{},
 					pinnipedAPIClient,
@@ -187,7 +179,7 @@ func TestCreateOrUpdateCredentialIssuer(t *testing.T) {
 				)
 				r.NoError(err)
 
-				expectedGetAction := coretesting.NewGetAction(credentialIssuerGVR, installationNamespace, credentialIssuerResourceName)
+				expectedGetAction := coretesting.NewRootGetAction(credentialIssuerGVR, credentialIssuerResourceName)
 				r.Equal([]coretesting.Action{expectedGetAction}, pinnipedAPIClient.Actions())
 			})
 
@@ -201,7 +193,6 @@ func TestCreateOrUpdateCredentialIssuer(t *testing.T) {
 				it("returns an error", func() {
 					err := CreateOrUpdateCredentialIssuer(
 						ctx,
-						installationNamespace,
 						credentialIssuerResourceName,
 						map[string]string{},
 						pinnipedAPIClient,
@@ -221,7 +212,6 @@ func TestCreateOrUpdateCredentialIssuer(t *testing.T) {
 				it("returns an error", func() {
 					err := CreateOrUpdateCredentialIssuer(
 						ctx,
-						installationNamespace,
 						credentialIssuerResourceName,
 						map[string]string{},
 						pinnipedAPIClient,
@@ -246,7 +236,7 @@ func TestCreateOrUpdateCredentialIssuer(t *testing.T) {
 						if !hit {
 							// Before the update fails, also change the object that will be returned by the next Get(),
 							// to make sure that the production code does a fresh Get() after detecting a conflict.
-							r.NoError(pinnipedAPIClient.Tracker().Update(credentialIssuerGVR, slightlyDifferentExistingConfig, installationNamespace))
+							r.NoError(pinnipedAPIClient.Tracker().Update(credentialIssuerGVR, slightlyDifferentExistingConfig, ""))
 							hit = true
 							return true, nil, apierrors.NewConflict(schema.GroupResource{
 								Group:    apiregistrationv1.GroupName,
@@ -260,7 +250,6 @@ func TestCreateOrUpdateCredentialIssuer(t *testing.T) {
 				it("retries updates on conflict", func() {
 					err := CreateOrUpdateCredentialIssuer(
 						ctx,
-						installationNamespace,
 						credentialIssuerResourceName,
 						map[string]string{
 							"myLabelKey1": "myLabelValue1",
@@ -273,18 +262,18 @@ func TestCreateOrUpdateCredentialIssuer(t *testing.T) {
 					)
 					r.NoError(err)
 
-					expectedGetAction := coretesting.NewGetAction(credentialIssuerGVR, installationNamespace, credentialIssuerResourceName)
+					expectedGetAction := coretesting.NewRootGetAction(credentialIssuerGVR, credentialIssuerResourceName)
 
 					// The first attempted update only includes its own edits.
 					firstExpectedUpdatedConfig := existingConfig.DeepCopy()
 					firstExpectedUpdatedConfig.Status.KubeConfigInfo.CertificateAuthorityData = "new-ca-value"
-					firstExpectedUpdateAction := coretesting.NewUpdateAction(credentialIssuerGVR, installationNamespace, firstExpectedUpdatedConfig)
+					firstExpectedUpdateAction := coretesting.NewRootUpdateAction(credentialIssuerGVR, firstExpectedUpdatedConfig)
 
 					// Both the edits made by this update and the edits made by the conflicting update should be included.
 					secondExpectedUpdatedConfig := existingConfig.DeepCopy()
 					secondExpectedUpdatedConfig.Status.KubeConfigInfo.Server = "some-other-server-value-from-conflicting-update"
 					secondExpectedUpdatedConfig.Status.KubeConfigInfo.CertificateAuthorityData = "new-ca-value"
-					secondExpectedUpdateAction := coretesting.NewUpdateAction(credentialIssuerGVR, installationNamespace, secondExpectedUpdatedConfig)
+					secondExpectedUpdateAction := coretesting.NewRootUpdateAction(credentialIssuerGVR, secondExpectedUpdatedConfig)
 
 					expectedActions := []coretesting.Action{
 						expectedGetAction,

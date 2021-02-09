@@ -72,7 +72,6 @@ func TestClient(t *testing.T) {
 	// Using the CA bundle and host from the current (admin) kubeconfig, do the token exchange.
 	clientConfig := library.NewClientConfig(t)
 	client, err := conciergeclient.New(
-		conciergeclient.WithNamespace(env.ConciergeNamespace),
 		conciergeclient.WithCABundle(string(clientConfig.CAData)),
 		conciergeclient.WithEndpoint(clientConfig.Host),
 		conciergeclient.WithAuthenticator("webhook", webhook.Name),

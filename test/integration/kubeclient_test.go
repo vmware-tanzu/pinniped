@@ -167,7 +167,7 @@ func TestKubeClientOwnerRef(t *testing.T) {
 	require.NoError(t, err)
 
 	// sanity check concierge client
-	credentialIssuer, err := ownerRefClient.PinnipedConcierge.ConfigV1alpha1().CredentialIssuers(namespace.Name).Create(
+	credentialIssuer, err := ownerRefClient.PinnipedConcierge.ConfigV1alpha1().CredentialIssuers().Create(
 		ctx,
 		&conciergeconfigv1alpha1.CredentialIssuer{
 			ObjectMeta: metav1.ObjectMeta{
@@ -184,7 +184,7 @@ func TestKubeClientOwnerRef(t *testing.T) {
 	hasOwnerRef(t, credentialIssuer, ref)
 	// this owner has already been deleted so the cred issuer should be immediately deleted
 	isEventuallyDeleted(t, func() error {
-		_, err := ownerRefClient.PinnipedConcierge.ConfigV1alpha1().CredentialIssuers(namespace.Name).Get(ctx, credentialIssuer.Name, metav1.GetOptions{})
+		_, err := ownerRefClient.PinnipedConcierge.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuer.Name, metav1.GetOptions{})
 		return err
 	})
 

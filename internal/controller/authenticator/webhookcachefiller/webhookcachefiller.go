@@ -54,7 +54,7 @@ type controller struct {
 
 // Sync implements controllerlib.Syncer.
 func (c *controller) Sync(ctx controllerlib.Context) error {
-	obj, err := c.webhooks.Lister().WebhookAuthenticators(ctx.Key.Namespace).Get(ctx.Key.Name)
+	obj, err := c.webhooks.Lister().Get(ctx.Key.Name)
 	if err != nil && errors.IsNotFound(err) {
 		c.log.Info("Sync() found that the WebhookAuthenticator does not exist yet or was deleted")
 		return nil

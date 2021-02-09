@@ -83,7 +83,6 @@ func TestCreaterControllerSync(t *testing.T) {
 	spec.Run(t, "CreaterControllerSync", func(t *testing.T, when spec.G, it spec.S) {
 		const kubeSystemNamespace = "kube-system"
 		const agentPodNamespace = "agent-pod-namespace"
-		const credentialIssuerNamespaceName = "ci-namespace-name"
 		const credentialIssuerResourceName = "ci-resource-name"
 
 		var r *require.Assertions
@@ -119,8 +118,7 @@ func TestCreaterControllerSync(t *testing.T) {
 					},
 				},
 				&CredentialIssuerLocationConfig{
-					Namespace: credentialIssuerNamespaceName,
-					Name:      credentialIssuerResourceName,
+					Name: credentialIssuerResourceName,
 				},
 				map[string]string{
 					"myLabelKey1": "myLabelValue1",
@@ -307,8 +305,7 @@ func TestCreaterControllerSync(t *testing.T) {
 							initialCredentialIssuer = &configv1alpha1.CredentialIssuer{
 								TypeMeta: metav1.TypeMeta{},
 								ObjectMeta: metav1.ObjectMeta{
-									Name:      credentialIssuerResourceName,
-									Namespace: credentialIssuerNamespaceName,
+									Name: credentialIssuerResourceName,
 								},
 								Status: configv1alpha1.CredentialIssuerStatus{
 									Strategies: []configv1alpha1.CredentialIssuerStrategy{},
@@ -335,14 +332,12 @@ func TestCreaterControllerSync(t *testing.T) {
 									LastUpdateTime: metav1.NewTime(frozenNow),
 								},
 							}
-							expectedGetAction := coretesting.NewGetAction(
+							expectedGetAction := coretesting.NewRootGetAction(
 								credentialIssuerGVR,
-								credentialIssuerNamespaceName,
 								credentialIssuerResourceName,
 							)
-							expectedUpdateAction := coretesting.NewUpdateAction(
+							expectedUpdateAction := coretesting.NewRootUpdateAction(
 								credentialIssuerGVR,
-								credentialIssuerNamespaceName,
 								expectedCredentialIssuer,
 							)
 
@@ -383,8 +378,7 @@ func TestCreaterControllerSync(t *testing.T) {
 							expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
 								TypeMeta: metav1.TypeMeta{},
 								ObjectMeta: metav1.ObjectMeta{
-									Name:      credentialIssuerResourceName,
-									Namespace: credentialIssuerNamespaceName,
+									Name: credentialIssuerResourceName,
 									Labels: map[string]string{
 										"myLabelKey1": "myLabelValue1",
 										"myLabelKey2": "myLabelValue2",
@@ -402,14 +396,12 @@ func TestCreaterControllerSync(t *testing.T) {
 									},
 								},
 							}
-							expectedGetAction := coretesting.NewGetAction(
+							expectedGetAction := coretesting.NewRootGetAction(
 								credentialIssuerGVR,
-								credentialIssuerNamespaceName,
 								credentialIssuerResourceName,
 							)
-							expectedCreateAction := coretesting.NewCreateAction(
+							expectedCreateAction := coretesting.NewRootCreateAction(
 								credentialIssuerGVR,
-								credentialIssuerNamespaceName,
 								expectedCredentialIssuer,
 							)
 
@@ -435,8 +427,7 @@ func TestCreaterControllerSync(t *testing.T) {
 					initialCredentialIssuer = &configv1alpha1.CredentialIssuer{
 						TypeMeta: metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      credentialIssuerResourceName,
-							Namespace: credentialIssuerNamespaceName,
+							Name: credentialIssuerResourceName,
 						},
 						Status: configv1alpha1.CredentialIssuerStatus{
 							Strategies: []configv1alpha1.CredentialIssuerStrategy{},
@@ -463,14 +454,12 @@ func TestCreaterControllerSync(t *testing.T) {
 							LastUpdateTime: metav1.NewTime(frozenNow),
 						},
 					}
-					expectedGetAction := coretesting.NewGetAction(
+					expectedGetAction := coretesting.NewRootGetAction(
 						credentialIssuerGVR,
-						credentialIssuerNamespaceName,
 						credentialIssuerResourceName,
 					)
-					expectedUpdateAction := coretesting.NewUpdateAction(
+					expectedUpdateAction := coretesting.NewRootUpdateAction(
 						credentialIssuerGVR,
-						credentialIssuerNamespaceName,
 						expectedCredentialIssuer,
 					)
 
@@ -528,8 +517,7 @@ func TestCreaterControllerSync(t *testing.T) {
 					expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
 						TypeMeta: metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      credentialIssuerResourceName,
-							Namespace: credentialIssuerNamespaceName,
+							Name: credentialIssuerResourceName,
 							Labels: map[string]string{
 								"myLabelKey1": "myLabelValue1",
 								"myLabelKey2": "myLabelValue2",
@@ -547,14 +535,12 @@ func TestCreaterControllerSync(t *testing.T) {
 							},
 						},
 					}
-					expectedGetAction := coretesting.NewGetAction(
+					expectedGetAction := coretesting.NewRootGetAction(
 						credentialIssuerGVR,
-						credentialIssuerNamespaceName,
 						credentialIssuerResourceName,
 					)
-					expectedCreateAction := coretesting.NewCreateAction(
+					expectedCreateAction := coretesting.NewRootCreateAction(
 						credentialIssuerGVR,
-						credentialIssuerNamespaceName,
 						expectedCredentialIssuer,
 					)
 

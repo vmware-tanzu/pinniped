@@ -59,7 +59,6 @@ type oidcLoginFlags struct {
 	debugSessionCache          bool
 	requestAudience            string
 	conciergeEnabled           bool
-	conciergeNamespace         string
 	conciergeAuthenticatorType string
 	conciergeAuthenticatorName string
 	conciergeEndpoint          string
@@ -69,13 +68,14 @@ type oidcLoginFlags struct {
 
 func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	var (
-		cmd = cobra.Command{
+		cmd = &cobra.Command{
 			Args:         cobra.NoArgs,
 			Use:          "oidc --issuer ISSUER",
 			Short:        "Login using an OpenID Connect provider",
 			SilenceUsage: true,
 		}
-		flags oidcLoginFlags
+		flags              oidcLoginFlags
+		conciergeNamespace string // unused now
 	)
 	cmd.Flags().StringVar(&flags.issuer, "issuer", "", "OpenID Connect issuer URL")
 	cmd.Flags().StringVar(&flags.clientID, "client-id", "pinniped-cli", "OpenID Connect client ID")
@@ -88,17 +88,21 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().BoolVar(&flags.debugSessionCache, "debug-session-cache", false, "Print debug logs related to the session cache")
 	cmd.Flags().StringVar(&flags.requestAudience, "request-audience", "", "Request a token with an alternate audience using RFC8693 token exchange")
 	cmd.Flags().BoolVar(&flags.conciergeEnabled, "enable-concierge", false, "Exchange the OIDC ID token with the Pinniped concierge during login")
-	cmd.Flags().StringVar(&flags.conciergeNamespace, "concierge-namespace", "pinniped-concierge", "Namespace in which the concierge was installed")
+	cmd.Flags().StringVar(&conciergeNamespace, "concierge-namespace", "pinniped-concierge", "Namespace in which the concierge was installed")
 	cmd.Flags().StringVar(&flags.conciergeAuthenticatorType, "concierge-authenticator-type", "", "Concierge authenticator type (e.g., 'webhook', 'jwt')")
 	cmd.Flags().StringVar(&flags.conciergeAuthenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name")
 	cmd.Flags().StringVar(&flags.conciergeEndpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")
 	cmd.Flags().StringVar(&flags.conciergeCABundle, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the concierge")
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", "pinniped.dev", "Concierge API group suffix")
 
-	mustMarkHidden(&cmd, "debug-session-cache")
-	mustMarkRequired(&cmd, "issuer")
+	mustMarkHidden(cmd, "debug-session-cache")
+	mustMarkRequired(cmd, "issuer")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runOIDCLogin(cmd, deps, flags) }
-	return &cmd
+
+	mustMarkDeprecated(cmd, "concierge-namespace", "not needed anymore")
+	mustMarkHidden(cmd, "concierge-namespace")
+
+	return cmd
 }
 
 func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLoginFlags) error {
@@ -133,7 +137,6 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	if flags.conciergeEnabled {
 		var err error
 		concierge, err = conciergeclient.New(
-			conciergeclient.WithNamespace(flags.conciergeNamespace),
 			conciergeclient.WithEndpoint(flags.conciergeEndpoint),
 			conciergeclient.WithBase64CABundle(flags.conciergeCABundle),
 			conciergeclient.WithAuthenticator(flags.conciergeAuthenticatorType, flags.conciergeAuthenticatorName),

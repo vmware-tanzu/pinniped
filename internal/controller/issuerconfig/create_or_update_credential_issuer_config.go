@@ -19,7 +19,6 @@ import (
 
 func CreateOrUpdateCredentialIssuer(
 	ctx context.Context,
-	credentialIssuerNamespace string,
 	credentialIssuerResourceName string,
 	credentialIssuerLabels map[string]string,
 	pinnipedClient pinnipedclientset.Interface,
@@ -28,7 +27,7 @@ func CreateOrUpdateCredentialIssuer(
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		existingCredentialIssuer, err := pinnipedClient.
 			ConfigV1alpha1().
-			CredentialIssuers(credentialIssuerNamespace).
+			CredentialIssuers().
 			Get(ctx, credentialIssuerResourceName, metav1.GetOptions{})
 
 		notFound := k8serrors.IsNotFound(err)
@@ -36,12 +35,12 @@ func CreateOrUpdateCredentialIssuer(
 			return fmt.Errorf("get failed: %w", err)
 		}
 
-		credentialIssuersClient := pinnipedClient.ConfigV1alpha1().CredentialIssuers(credentialIssuerNamespace)
+		credentialIssuersClient := pinnipedClient.ConfigV1alpha1().CredentialIssuers()
 
 		if notFound {
 			// Create it
 			credentialIssuer := minimalValidCredentialIssuer(
-				credentialIssuerResourceName, credentialIssuerNamespace, credentialIssuerLabels,
+				credentialIssuerResourceName, credentialIssuerLabels,
 			)
 			applyUpdatesToCredentialIssuerFunc(credentialIssuer)
 
@@ -73,15 +72,13 @@ func CreateOrUpdateCredentialIssuer(
 
 func minimalValidCredentialIssuer(
 	credentialIssuerName string,
-	credentialIssuerNamespace string,
 	credentialIssuerLabels map[string]string,
 ) *configv1alpha1.CredentialIssuer {
 	return &configv1alpha1.CredentialIssuer{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      credentialIssuerName,
-			Namespace: credentialIssuerNamespace,
-			Labels:    credentialIssuerLabels,
+			Name:   credentialIssuerName,
+			Labels: credentialIssuerLabels,
 		},
 		Status: configv1alpha1.CredentialIssuerStatus{
 			Strategies:     []configv1alpha1.CredentialIssuerStrategy{},

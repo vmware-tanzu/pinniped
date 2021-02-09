@@ -74,7 +74,6 @@ type getKubeconfigOIDCParams struct {
 
 type getKubeconfigConciergeParams struct {
 	disabled          bool
-	namespace         string
 	authenticatorName string
 	authenticatorType string
 	apiGroupSuffix    string
@@ -91,13 +90,14 @@ type getKubeconfigParams struct {
 
 func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	var (
-		cmd = cobra.Command{
+		cmd = &cobra.Command{
 			Args:         cobra.NoArgs,
 			Use:          "kubeconfig",
 			Short:        "Generate a Pinniped-based kubeconfig for a cluster",
 			SilenceUsage: true,
 		}
-		flags getKubeconfigParams
+		flags     getKubeconfigParams
+		namespace string // unused now
 	)
 
 	f := cmd.Flags()
@@ -105,7 +105,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.StringVar(&flags.staticTokenEnvName, "static-token-env", "", "Instead of doing an OIDC-based login, read a static token from the environment")
 
 	f.BoolVar(&flags.concierge.disabled, "no-concierge", false, "Generate a configuration which does not use the concierge, but sends the credential to the cluster directly")
-	f.StringVar(&flags.concierge.namespace, "concierge-namespace", "pinniped-concierge", "Namespace in which the concierge was installed")
+	f.StringVar(&namespace, "concierge-namespace", "pinniped-concierge", "Namespace in which the concierge was installed")
 	f.StringVar(&flags.concierge.authenticatorType, "concierge-authenticator-type", "", "Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)")
 	f.StringVar(&flags.concierge.authenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name (default: autodiscover)")
 	f.StringVar(&flags.concierge.apiGroupSuffix, "concierge-api-group-suffix", "pinniped.dev", "Concierge API group suffix")
@@ -122,10 +122,13 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.StringVar(&flags.kubeconfigPath, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to kubeconfig file")
 	f.StringVar(&flags.kubeconfigContextOverride, "kubeconfig-context", "", "Kubeconfig context name (default: current active context)")
 
-	mustMarkHidden(&cmd, "oidc-debug-session-cache")
+	mustMarkHidden(cmd, "oidc-debug-session-cache")
+
+	mustMarkDeprecated(cmd, "concierge-namespace", "not needed anymore")
+	mustMarkHidden(cmd, "concierge-namespace")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runGetKubeconfig(cmd.OutOrStdout(), deps, flags) }
-	return &cmd
+	return cmd
 }
 
 //nolint:funlen
@@ -170,7 +173,6 @@ func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigPar
 	if !flags.concierge.disabled {
 		authenticator, err := lookupAuthenticator(
 			clientset,
-			flags.concierge.namespace,
 			flags.concierge.authenticatorType,
 			flags.concierge.authenticatorName,
 		)
@@ -260,7 +262,7 @@ func configureConcierge(authenticator metav1.Object, flags *getKubeconfigParams,
 		if *oidcCABundle == "" && auth.Spec.TLS != nil && auth.Spec.TLS.CertificateAuthorityData != "" {
 			decoded, err := base64.StdEncoding.DecodeString(auth.Spec.TLS.CertificateAuthorityData)
 			if err != nil {
-				return fmt.Errorf("tried to autodiscover --oidc-ca-bundle, but JWTAuthenticator %s/%s has invalid spec.tls.certificateAuthorityData: %w", auth.Namespace, auth.Name, err)
+				return fmt.Errorf("tried to autodiscover --oidc-ca-bundle, but JWTAuthenticator %s has invalid spec.tls.certificateAuthorityData: %w", auth.Name, err)
 			}
 			*oidcCABundle = string(decoded)
 		}
@@ -270,7 +272,6 @@ func configureConcierge(authenticator metav1.Object, flags *getKubeconfigParams,
 	execConfig.Args = append(execConfig.Args,
 		"--enable-concierge",
 		"--concierge-api-group-suffix="+flags.concierge.apiGroupSuffix,
-		"--concierge-namespace="+flags.concierge.namespace,
 		"--concierge-authenticator-name="+flags.concierge.authenticatorName,
 		"--concierge-authenticator-type="+flags.concierge.authenticatorType,
 		"--concierge-endpoint="+v1Cluster.Server,
@@ -306,7 +307,7 @@ func newExecKubeconfig(cluster *clientcmdapi.Cluster, execConfig *clientcmdapi.E
 	}
 }
 
-func lookupAuthenticator(clientset conciergeclientset.Interface, namespace, authType, authName string) (metav1.Object, error) {
+func lookupAuthenticator(clientset conciergeclientset.Interface, authType, authName string) (metav1.Object, error) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancelFunc()
 
@@ -314,9 +315,9 @@ func lookupAuthenticator(clientset conciergeclientset.Interface, namespace, auth
 	if authName != "" && authType != "" {
 		switch strings.ToLower(authType) {
 		case "webhook":
-			return clientset.AuthenticationV1alpha1().WebhookAuthenticators(namespace).Get(ctx, authName, metav1.GetOptions{})
+			return clientset.AuthenticationV1alpha1().WebhookAuthenticators().Get(ctx, authName, metav1.GetOptions{})
 		case "jwt":
-			return clientset.AuthenticationV1alpha1().JWTAuthenticators(namespace).Get(ctx, authName, metav1.GetOptions{})
+			return clientset.AuthenticationV1alpha1().JWTAuthenticators().Get(ctx, authName, metav1.GetOptions{})
 		default:
 			return nil, fmt.Errorf(`invalid authenticator type %q, supported values are "webhook" and "jwt"`, authType)
 		}
@@ -324,11 +325,11 @@ func lookupAuthenticator(clientset conciergeclientset.Interface, namespace, auth
 
 	// Otherwise list all the available authenticators and hope there's just a single one.
 
-	jwtAuths, err := clientset.AuthenticationV1alpha1().JWTAuthenticators(namespace).List(ctx, metav1.ListOptions{})
+	jwtAuths, err := clientset.AuthenticationV1alpha1().JWTAuthenticators().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list JWTAuthenticator objects for autodiscovery: %w", err)
 	}
-	webhooks, err := clientset.AuthenticationV1alpha1().WebhookAuthenticators(namespace).List(ctx, metav1.ListOptions{})
+	webhooks, err := clientset.AuthenticationV1alpha1().WebhookAuthenticators().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list WebhookAuthenticator objects for autodiscovery: %w", err)
 	}
@@ -341,10 +342,10 @@ func lookupAuthenticator(clientset conciergeclientset.Interface, namespace, auth
 		results = append(results, &webhooks.Items[i])
 	}
 	if len(results) == 0 {
-		return nil, fmt.Errorf("no authenticators were found in namespace %q (try setting --concierge-namespace)", namespace)
+		return nil, fmt.Errorf("no authenticators were found")
 	}
 	if len(results) > 1 {
-		return nil, fmt.Errorf("multiple authenticators were found in namespace %q, so the --concierge-authenticator-type/--concierge-authenticator-name flags must be specified", namespace)
+		return nil, fmt.Errorf("multiple authenticators were found, so the --concierge-authenticator-type/--concierge-authenticator-name flags must be specified")
 	}
 	return results[0], nil
 }

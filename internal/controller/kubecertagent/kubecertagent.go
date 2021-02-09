@@ -74,9 +74,6 @@ type AgentPodConfig struct {
 }
 
 type CredentialIssuerLocationConfig struct {
-	// The namespace in which the CredentialIssuer should be created/updated.
-	Namespace string
-
 	// The resource name for the CredentialIssuer to be created/updated.
 	Name string
 }
@@ -292,7 +289,6 @@ func createOrUpdateCredentialIssuer(ctx context.Context,
 ) error {
 	return issuerconfig.CreateOrUpdateCredentialIssuer(
 		ctx,
-		ciConfig.Namespace,
 		ciConfig.Name,
 		credentialIssuerLabels,
 		pinnipedAPIClient,

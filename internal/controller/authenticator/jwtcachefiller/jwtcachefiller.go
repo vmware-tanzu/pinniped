@@ -88,7 +88,7 @@ type controller struct {
 
 // Sync implements controllerlib.Syncer.
 func (c *controller) Sync(ctx controllerlib.Context) error {
-	obj, err := c.jwtAuthenticators.Lister().JWTAuthenticators(ctx.Key.Namespace).Get(ctx.Key.Name)
+	obj, err := c.jwtAuthenticators.Lister().Get(ctx.Key.Name)
 	if err != nil && errors.IsNotFound(err) {
 		c.log.Info("Sync() found that the JWTAuthenticator does not exist yet or was deleted")
 		return nil

@@ -59,7 +59,6 @@ func TestAnnotaterControllerSync(t *testing.T) {
 		const agentPodNamespace = "agent-pod-namespace"
 		const defaultKubeControllerManagerClusterSigningCertFileFlagValue = "/etc/kubernetes/ca/ca.pem"
 		const defaultKubeControllerManagerClusterSigningKeyFileFlagValue = "/etc/kubernetes/ca/ca.key"
-		const credentialIssuerNamespaceName = "ci-namespace-name"
 		const credentialIssuerResourceName = "ci-resource-name"
 
 		const (
@@ -102,8 +101,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 					},
 				},
 				&CredentialIssuerLocationConfig{
-					Namespace: credentialIssuerNamespaceName,
-					Name:      credentialIssuerResourceName,
+					Name: credentialIssuerResourceName,
 				},
 				clock.NewFakeClock(frozenNow),
 				kubeAPIClient,
@@ -236,8 +234,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 							initialCredentialIssuer = &configv1alpha1.CredentialIssuer{
 								TypeMeta: metav1.TypeMeta{},
 								ObjectMeta: metav1.ObjectMeta{
-									Name:      credentialIssuerResourceName,
-									Namespace: credentialIssuerNamespaceName,
+									Name: credentialIssuerResourceName,
 								},
 								Status: configv1alpha1.CredentialIssuerStatus{
 									Strategies: []configv1alpha1.CredentialIssuerStrategy{},
@@ -264,14 +261,12 @@ func TestAnnotaterControllerSync(t *testing.T) {
 									LastUpdateTime: metav1.NewTime(frozenNow),
 								},
 							}
-							expectedGetAction := coretesting.NewGetAction(
+							expectedGetAction := coretesting.NewRootGetAction(
 								credentialIssuerGVR,
-								credentialIssuerNamespaceName,
 								credentialIssuerResourceName,
 							)
-							expectedUpdateAction := coretesting.NewUpdateAction(
+							expectedUpdateAction := coretesting.NewRootUpdateAction(
 								credentialIssuerGVR,
-								credentialIssuerNamespaceName,
 								expectedCredentialIssuer,
 							)
 
@@ -312,8 +307,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 							expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
 								TypeMeta: metav1.TypeMeta{},
 								ObjectMeta: metav1.ObjectMeta{
-									Name:      credentialIssuerResourceName,
-									Namespace: credentialIssuerNamespaceName,
+									Name: credentialIssuerResourceName,
 								},
 								Status: configv1alpha1.CredentialIssuerStatus{
 									Strategies: []configv1alpha1.CredentialIssuerStrategy{
@@ -327,14 +321,12 @@ func TestAnnotaterControllerSync(t *testing.T) {
 									},
 								},
 							}
-							expectedGetAction := coretesting.NewGetAction(
+							expectedGetAction := coretesting.NewRootGetAction(
 								credentialIssuerGVR,
-								credentialIssuerNamespaceName,
 								credentialIssuerResourceName,
 							)
-							expectedCreateAction := coretesting.NewCreateAction(
+							expectedCreateAction := coretesting.NewRootCreateAction(
 								credentialIssuerGVR,
-								credentialIssuerNamespaceName,
 								expectedCredentialIssuer,
 							)
 

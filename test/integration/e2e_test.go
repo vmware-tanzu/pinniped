@@ -142,7 +142,6 @@ func TestE2EFullIntegration(t *testing.T) {
 	// Run "pinniped get kubeconfig" to get a kubeconfig YAML.
 	kubeconfigYAML, stderr := runPinnipedCLI(t, pinnipedExe, "get", "kubeconfig",
 		"--concierge-api-group-suffix", env.APIGroupSuffix,
-		"--concierge-namespace", env.ConciergeNamespace,
 		"--concierge-authenticator-type", "jwt",
 		"--concierge-authenticator-name", authenticator.Name,
 		"--oidc-skip-browser",

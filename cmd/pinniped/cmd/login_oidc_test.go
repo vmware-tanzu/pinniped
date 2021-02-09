@@ -65,7 +65,6 @@ func TestLoginOIDCCommand(t *testing.T) {
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt')
 				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the concierge
 				      --concierge-endpoint string             API base for the Pinniped concierge endpoint
-				      --concierge-namespace string            Namespace in which the concierge was installed (default "pinniped-concierge")
 				      --enable-concierge                      Exchange the OIDC ID token with the Pinniped concierge during login
 				  -h, --help                                  help for oidc
 				      --issuer string                         OpenID Connect issuer URL
@@ -186,7 +185,6 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--ca-bundle-data", base64.StdEncoding.EncodeToString(testCA.Bundle()),
 				"--ca-bundle", testCABundlePath,
 				"--enable-concierge",
-				"--concierge-namespace", "test-namespace",
 				"--concierge-authenticator-type", "webhook",
 				"--concierge-authenticator-name", "test-authenticator",
 				"--concierge-endpoint", "https://127.0.0.1:1234/",

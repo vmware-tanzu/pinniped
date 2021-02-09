@@ -27,26 +27,17 @@ import (
 )
 
 // ErrLoginFailed is returned by Client.ExchangeToken when the concierge server rejects the login request for any reason.
-var ErrLoginFailed = constable.Error("login failed")
+const ErrLoginFailed = constable.Error("login failed")
 
 // Option is an optional configuration for New().
 type Option func(*Client) error
 
 // Client is a configuration for talking to the Pinniped concierge.
 type Client struct {
-	namespace      string
 	authenticator  *corev1.TypedLocalObjectReference
 	caBundle       string
 	endpoint       *url.URL
 	apiGroupSuffix string
-}
-
-// WithNamespace configures the namespace where the TokenCredentialRequest is to be sent.
-func WithNamespace(namespace string) Option {
-	return func(c *Client) error {
-		c.namespace = namespace
-		return nil
-	}
 }
 
 // WithAuthenticator configures the authenticator reference (spec.authenticator) of the TokenCredentialRequests.
@@ -127,7 +118,7 @@ func WithAPIGroupSuffix(apiGroupSuffix string) Option {
 
 // New validates the specified options and returns a newly initialized *Client.
 func New(opts ...Option) (*Client, error) {
-	c := Client{namespace: "pinniped-concierge", apiGroupSuffix: "pinniped.dev"}
+	c := Client{apiGroupSuffix: "pinniped.dev"}
 	for _, opt := range opts {
 		if err := opt(&c); err != nil {
 			return nil, err
@@ -180,10 +171,7 @@ func (c *Client) ExchangeToken(ctx context.Context, token string) (*clientauthen
 	if err != nil {
 		return nil, err
 	}
-	resp, err := clientset.LoginV1alpha1().TokenCredentialRequests(c.namespace).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: c.namespace,
-		},
+	resp, err := clientset.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 		Spec: loginv1alpha1.TokenCredentialRequestSpec{
 			Token:         token,
 			Authenticator: *c.authenticator,

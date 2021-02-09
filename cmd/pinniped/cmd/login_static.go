@@ -41,7 +41,6 @@ type staticLoginParams struct {
 	staticToken                string
 	staticTokenEnvName         string
 	conciergeEnabled           bool
-	conciergeNamespace         string
 	conciergeAuthenticatorType string
 	conciergeAuthenticatorName string
 	conciergeEndpoint          string
@@ -51,25 +50,30 @@ type staticLoginParams struct {
 
 func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
 	var (
-		cmd = cobra.Command{
+		cmd = &cobra.Command{
 			Args:         cobra.NoArgs,
 			Use:          "static [--token TOKEN] [--token-env TOKEN_NAME]",
 			Short:        "Login using a static token",
 			SilenceUsage: true,
 		}
-		flags staticLoginParams
+		flags              staticLoginParams
+		conciergeNamespace string // unused now
 	)
 	cmd.Flags().StringVar(&flags.staticToken, "token", "", "Static token to present during login")
 	cmd.Flags().StringVar(&flags.staticTokenEnvName, "token-env", "", "Environment variable containing a static token")
 	cmd.Flags().BoolVar(&flags.conciergeEnabled, "enable-concierge", false, "Exchange the token with the Pinniped concierge during login")
-	cmd.Flags().StringVar(&flags.conciergeNamespace, "concierge-namespace", "pinniped-concierge", "Namespace in which the concierge was installed")
+	cmd.Flags().StringVar(&conciergeNamespace, "concierge-namespace", "pinniped-concierge", "Namespace in which the concierge was installed")
 	cmd.Flags().StringVar(&flags.conciergeAuthenticatorType, "concierge-authenticator-type", "", "Concierge authenticator type (e.g., 'webhook', 'jwt')")
 	cmd.Flags().StringVar(&flags.conciergeAuthenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name")
 	cmd.Flags().StringVar(&flags.conciergeEndpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")
 	cmd.Flags().StringVar(&flags.conciergeCABundle, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the concierge")
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", "pinniped.dev", "Concierge API group suffix")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runStaticLogin(cmd.OutOrStdout(), deps, flags) }
-	return &cmd
+
+	mustMarkDeprecated(cmd, "concierge-namespace", "not needed anymore")
+	mustMarkHidden(cmd, "concierge-namespace")
+
+	return cmd
 }
 
 func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams) error {
@@ -81,7 +85,6 @@ func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams
 	if flags.conciergeEnabled {
 		var err error
 		concierge, err = conciergeclient.New(
-			conciergeclient.WithNamespace(flags.conciergeNamespace),
 			conciergeclient.WithEndpoint(flags.conciergeEndpoint),
 			conciergeclient.WithBase64CABundle(flags.conciergeCABundle),
 			conciergeclient.WithAuthenticator(flags.conciergeAuthenticatorType, flags.conciergeAuthenticatorName),

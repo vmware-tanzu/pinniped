@@ -73,7 +73,7 @@ func TestGetAPIResourceList(t *testing.T) {
 						Name:       "tokencredentialrequests",
 						Kind:       "TokenCredentialRequest",
 						Verbs:      []string{"create", "list"},
-						Namespaced: true,
+						Namespaced: false,
 						Categories: []string{"pinniped"},
 					},
 				},
@@ -158,7 +158,7 @@ func TestGetAPIResourceList(t *testing.T) {
 					{
 						Name:         "credentialissuers",
 						SingularName: "credentialissuer",
-						Namespaced:   true,
+						Namespaced:   false,
 						Kind:         "CredentialIssuer",
 						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
 						Categories:   []string{"pinniped"},
@@ -185,7 +185,7 @@ func TestGetAPIResourceList(t *testing.T) {
 					{
 						Name:         "webhookauthenticators",
 						SingularName: "webhookauthenticator",
-						Namespaced:   true,
+						Namespaced:   false,
 						Kind:         "WebhookAuthenticator",
 						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
 						Categories:   []string{"pinniped", "pinniped-authenticator", "pinniped-authenticators"},
@@ -193,7 +193,7 @@ func TestGetAPIResourceList(t *testing.T) {
 					{
 						Name:         "jwtauthenticators",
 						SingularName: "jwtauthenticator",
-						Namespaced:   true,
+						Namespaced:   false,
 						Kind:         "JWTAuthenticator",
 						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
 						Categories:   []string{"pinniped", "pinniped-authenticator", "pinniped-authenticators"},
@@ -232,6 +232,23 @@ func TestGetAPIResourceList(t *testing.T) {
 				}
 				assert.Containsf(t, a.Categories, "pinniped", "expected resource %q to be in the 'pinniped' category", a.Name)
 				assert.NotContainsf(t, a.Categories, "all", "expected resource %q not to be in the 'all' category", a.Name)
+			}
+		}
+	})
+
+	t.Run("every concierge API is cluster scoped", func(t *testing.T) {
+		t.Parallel()
+		for _, r := range resources {
+			if !strings.Contains(r.GroupVersion, env.APIGroupSuffix) {
+				continue
+			}
+
+			if !strings.Contains(r.GroupVersion, ".concierge.") {
+				continue
+			}
+
+			for _, a := range r.APIResources {
+				assert.False(t, a.Namespaced, "concierge APIs must be cluster scoped: %#v", a)
 			}
 		}
 	})

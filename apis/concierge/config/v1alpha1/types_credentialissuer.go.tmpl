@@ -67,6 +67,7 @@ type CredentialIssuerStrategy struct {
 
 // Describes the configuration status of a Pinniped credential issuer.
 // +genclient
+// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:categories=pinniped
 type CredentialIssuer struct {

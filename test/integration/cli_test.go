@@ -52,18 +52,6 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 		expectStderr string
 	}{
 		{
-			name: "deprecated command",
-			args: []string{
-				"get-kubeconfig",
-				"--token", env.TestUser.Token,
-				"--pinniped-namespace", env.ConciergeNamespace,
-				"--authenticator-type", "webhook",
-				"--authenticator-name", authenticator.Name,
-				"--api-group-suffix", env.APIGroupSuffix,
-			},
-			expectStderr: "Command \"get-kubeconfig\" is deprecated, Please use `pinniped get kubeconfig` instead.\n",
-		},
-		{
 			name: "newer command, but still using static parameters",
 			args: []string{
 				"get", "kubeconfig",

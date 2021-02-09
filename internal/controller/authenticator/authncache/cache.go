@@ -6,7 +6,6 @@ package authncache
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"sync"
 
@@ -15,13 +14,12 @@ import (
 	"k8s.io/klog/v2"
 
 	loginapi "go.pinniped.dev/generated/1.20/apis/concierge/login"
+	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/plog"
 )
 
-var (
-	// ErrNoSuchAuthenticator is returned by Cache.AuthenticateTokenCredentialRequest() when the requested authenticator is not configured.
-	ErrNoSuchAuthenticator = fmt.Errorf("no such authenticator")
-)
+// ErrNoSuchAuthenticator is returned by Cache.AuthenticateTokenCredentialRequest() when the requested authenticator is not configured.
+const ErrNoSuchAuthenticator = constable.Error("no such authenticator")
 
 // Cache implements the authenticator.Token interface by multiplexing across a dynamic set of authenticators
 // loaded from authenticator resources.

@@ -174,17 +174,17 @@ func getAggregatedAPIServerConfig(
 	startControllersPostStartHook func(context.Context),
 	apiGroupSuffix string,
 ) (*apiserver.Config, error) {
-	apiGroup, ok := groupsuffix.Replace(loginv1alpha1.GroupName, apiGroupSuffix)
+	loginConciergeAPIGroup, ok := groupsuffix.Replace(loginv1alpha1.GroupName, apiGroupSuffix)
 	if !ok {
 		return nil, fmt.Errorf("cannot make api group from %s/%s", loginv1alpha1.GroupName, apiGroupSuffix)
 	}
 
-	scheme := getAggregatedAPIServerScheme(apiGroup)
+	scheme := getAggregatedAPIServerScheme(loginConciergeAPIGroup, apiGroupSuffix)
 	codecs := serializer.NewCodecFactory(scheme)
 
-	defaultEtcdPathPrefix := fmt.Sprintf("/registry/%s", apiGroup)
+	defaultEtcdPathPrefix := fmt.Sprintf("/registry/%s", loginConciergeAPIGroup)
 	groupVersion := schema.GroupVersion{
-		Group:   apiGroup,
+		Group:   loginConciergeAPIGroup,
 		Version: loginv1alpha1.SchemeGroupVersion.Version,
 	}
 
@@ -224,7 +224,7 @@ func getAggregatedAPIServerConfig(
 	return apiServerConfig, nil
 }
 
-func getAggregatedAPIServerScheme(apiGroup string) *runtime.Scheme {
+func getAggregatedAPIServerScheme(loginConciergeAPIGroup, apiGroupSuffix string) *runtime.Scheme {
 	// standard set up of the server side scheme
 	scheme := runtime.NewScheme()
 
@@ -232,7 +232,7 @@ func getAggregatedAPIServerScheme(apiGroup string) *runtime.Scheme {
 	metav1.AddToGroupVersion(scheme, metav1.Unversioned)
 
 	// nothing fancy is required if using the standard group
-	if apiGroup == loginv1alpha1.GroupName {
+	if loginConciergeAPIGroup == loginv1alpha1.GroupName {
 		utilruntime.Must(loginv1alpha1.AddToScheme(scheme))
 		utilruntime.Must(loginapi.AddToScheme(scheme))
 		return scheme
@@ -257,7 +257,7 @@ func getAggregatedAPIServerScheme(apiGroup string) *runtime.Scheme {
 			panic(err) // programmer error, scheme internal code is broken
 		}
 		newGVK := schema.GroupVersionKind{
-			Group:   apiGroup,
+			Group:   loginConciergeAPIGroup,
 			Version: gvk.Version,
 			Kind:    gvk.Kind,
 		}
@@ -269,6 +269,45 @@ func getAggregatedAPIServerScheme(apiGroup string) *runtime.Scheme {
 	// manually register conversions and defaulting into the correct scheme since we cannot directly call loginv1alpha1.AddToScheme
 	utilruntime.Must(loginv1alpha1.RegisterConversions(scheme))
 	utilruntime.Must(loginv1alpha1.RegisterDefaults(scheme))
+
+	// we do not want to return errors from the scheme and instead would prefer to defer
+	// to the REST storage layer for consistency.  The simplest way to do this is to force
+	// a cache miss from the authenticator cache.  Kube API groups are validated via the
+	// IsDNS1123Subdomain func thus we can easily create a group that is guaranteed never
+	// to be in the authenticator cache.  Add a timestamp just to be extra sure.
+	const authenticatorCacheMissPrefix = "_INVALID_API_GROUP_"
+	authenticatorCacheMiss := authenticatorCacheMissPrefix + time.Now().UTC().String()
+
+	// we do not have any defaulting functions for *loginv1alpha1.TokenCredentialRequest
+	// today, but we may have some in the future.  Calling AddTypeDefaultingFunc overwrites
+	// any previously registered defaulting function.  Thus to make sure that we catch
+	// a situation where we add a defaulting func, we attempt to call it here with a nil
+	// *loginv1alpha1.TokenCredentialRequest.  This will do nothing when there is no
+	// defaulting func registered, but it will almost certainly panic if one is added.
+	scheme.Default((*loginv1alpha1.TokenCredentialRequest)(nil))
+
+	// on incoming requests, restore the authenticator API group to the standard group
+	// note that we are responsible for duplicating this logic for every external API version
+	scheme.AddTypeDefaultingFunc(&loginv1alpha1.TokenCredentialRequest{}, func(obj interface{}) {
+		credentialRequest := obj.(*loginv1alpha1.TokenCredentialRequest)
+
+		if credentialRequest.Spec.Authenticator.APIGroup == nil {
+			// force a cache miss because this is an invalid request
+			plog.Debug("invalid token credential request, nil group", "authenticator", credentialRequest.Spec.Authenticator)
+			credentialRequest.Spec.Authenticator.APIGroup = &authenticatorCacheMiss
+			return
+		}
+
+		restoredGroup, ok := groupsuffix.Unreplace(*credentialRequest.Spec.Authenticator.APIGroup, apiGroupSuffix)
+		if !ok {
+			// force a cache miss because this is an invalid request
+			plog.Debug("invalid token credential request, wrong group", "authenticator", credentialRequest.Spec.Authenticator)
+			credentialRequest.Spec.Authenticator.APIGroup = &authenticatorCacheMiss
+			return
+		}
+
+		credentialRequest.Spec.Authenticator.APIGroup = &restoredGroup
+	})
 
 	return scheme
 }

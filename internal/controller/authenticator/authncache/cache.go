@@ -6,7 +6,6 @@ package authncache
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"sync"
 
@@ -15,20 +14,17 @@ import (
 	"k8s.io/klog/v2"
 
 	loginapi "go.pinniped.dev/generated/1.20/apis/concierge/login"
-	"go.pinniped.dev/internal/groupsuffix"
+	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/plog"
 )
 
-var (
-	// ErrNoSuchAuthenticator is returned by Cache.AuthenticateTokenCredentialRequest() when the requested authenticator is not configured.
-	ErrNoSuchAuthenticator = fmt.Errorf("no such authenticator")
-)
+// ErrNoSuchAuthenticator is returned by Cache.AuthenticateTokenCredentialRequest() when the requested authenticator is not configured.
+const ErrNoSuchAuthenticator = constable.Error("no such authenticator")
 
 // Cache implements the authenticator.Token interface by multiplexing across a dynamic set of authenticators
 // loaded from authenticator resources.
 type Cache struct {
-	cache          sync.Map
-	apiGroupSuffix string
+	cache sync.Map
 }
 
 type Key struct {
@@ -43,8 +39,8 @@ type Value interface {
 }
 
 // New returns an empty cache.
-func New(apiGroupSuffix string) *Cache {
-	return &Cache{apiGroupSuffix: apiGroupSuffix}
+func New() *Cache {
+	return &Cache{}
 }
 
 // Get an authenticator by key.
@@ -92,12 +88,7 @@ func (c *Cache) AuthenticateTokenCredentialRequest(ctx context.Context, req *log
 		Kind:      req.Spec.Authenticator.Kind,
 	}
 	if req.Spec.Authenticator.APIGroup != nil {
-		// The key must always be API group pinniped.dev because that's what the cache filler will always use.
-		apiGroup, replaced := groupsuffix.Unreplace(*req.Spec.Authenticator.APIGroup, c.apiGroupSuffix)
-		if !replaced {
-			return nil, ErrNoSuchAuthenticator
-		}
-		key.APIGroup = apiGroup
+		key.APIGroup = *req.Spec.Authenticator.APIGroup
 	}
 
 	val := c.Get(key)

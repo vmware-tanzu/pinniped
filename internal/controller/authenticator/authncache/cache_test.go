@@ -28,7 +28,7 @@ func TestCache(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	cache := New("pinniped.dev")
+	cache := New()
 	require.NotNil(t, cache)
 
 	key1 := Key{Namespace: "foo", Name: "authenticator-one"}
@@ -57,7 +57,7 @@ func TestCache(t *testing.T) {
 		{APIGroup: "b", Kind: "b", Namespace: "b", Name: "b"},
 	}
 	for tries := 0; tries < 10; tries++ {
-		cache := New("pinniped.dev")
+		cache := New()
 		for _, i := range rand.Perm(len(keysInExpectedOrder)) {
 			cache.Store(keysInExpectedOrder[i], nil)
 		}
@@ -91,48 +91,46 @@ func TestAuthenticateTokenCredentialRequest(t *testing.T) {
 		Name:      validRequest.Spec.Authenticator.Name,
 	}
 
-	mockCache := func(t *testing.T, apiGroupSuffix string, expectAuthenticatorToBeCalled bool, res *authenticator.Response, authenticated bool, err error) *Cache {
+	mockCache := func(t *testing.T, res *authenticator.Response, authenticated bool, err error) *Cache {
 		ctrl := gomock.NewController(t)
 		t.Cleanup(ctrl.Finish)
 		m := mocktokenauthenticator.NewMockToken(ctrl)
-		if expectAuthenticatorToBeCalled {
-			m.EXPECT().AuthenticateToken(audienceFreeContext{}, validRequest.Spec.Token).Return(res, authenticated, err)
-		}
-		c := New(apiGroupSuffix)
+		m.EXPECT().AuthenticateToken(audienceFreeContext{}, validRequest.Spec.Token).Return(res, authenticated, err)
+		c := New()
 		c.Store(validRequestKey, m)
 		return c
 	}
 
 	t.Run("no such authenticator", func(t *testing.T) {
-		c := New("pinniped.dev")
+		c := New()
 		res, err := c.AuthenticateTokenCredentialRequest(context.Background(), validRequest.DeepCopy())
 		require.EqualError(t, err, "no such authenticator")
 		require.Nil(t, res)
 	})
 
 	t.Run("authenticator returns error", func(t *testing.T) {
-		c := mockCache(t, "pinniped.dev", true, nil, false, fmt.Errorf("some authenticator error"))
+		c := mockCache(t, nil, false, fmt.Errorf("some authenticator error"))
 		res, err := c.AuthenticateTokenCredentialRequest(context.Background(), validRequest.DeepCopy())
 		require.EqualError(t, err, "some authenticator error")
 		require.Nil(t, res)
 	})
 
 	t.Run("authenticator returns unauthenticated without error", func(t *testing.T) {
-		c := mockCache(t, "pinniped.dev", true, &authenticator.Response{}, false, nil)
+		c := mockCache(t, &authenticator.Response{}, false, nil)
 		res, err := c.AuthenticateTokenCredentialRequest(context.Background(), validRequest.DeepCopy())
 		require.NoError(t, err)
 		require.Nil(t, res)
 	})
 
 	t.Run("authenticator returns nil response without error", func(t *testing.T) {
-		c := mockCache(t, "pinniped.dev", true, nil, true, nil)
+		c := mockCache(t, nil, true, nil)
 		res, err := c.AuthenticateTokenCredentialRequest(context.Background(), validRequest.DeepCopy())
 		require.NoError(t, err)
 		require.Nil(t, res)
 	})
 
 	t.Run("authenticator returns response with nil user", func(t *testing.T) {
-		c := mockCache(t, "pinniped.dev", true, &authenticator.Response{}, true, nil)
+		c := mockCache(t, &authenticator.Response{}, true, nil)
 		res, err := c.AuthenticateTokenCredentialRequest(context.Background(), validRequest.DeepCopy())
 		require.NoError(t, err)
 		require.Nil(t, res)
@@ -153,7 +151,7 @@ func TestAuthenticateTokenCredentialRequest(t *testing.T) {
 				}
 			},
 		)
-		c := New("pinniped.dev")
+		c := New()
 		c.Store(validRequestKey, m)
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -173,7 +171,7 @@ func TestAuthenticateTokenCredentialRequest(t *testing.T) {
 			Groups: []string{"test-group-1", "test-group-2"},
 			Extra:  map[string][]string{"extra-key-1": {"extra-value-1", "extra-value-2"}},
 		}
-		c := mockCache(t, "pinniped.dev", true, &authenticator.Response{User: &userInfo}, true, nil)
+		c := mockCache(t, &authenticator.Response{User: &userInfo}, true, nil)
 
 		audienceCtx := authenticator.WithAudiences(context.Background(), authenticator.Audiences{"test-audience-1"})
 		res, err := c.AuthenticateTokenCredentialRequest(audienceCtx, validRequest.DeepCopy())
@@ -183,50 +181,6 @@ func TestAuthenticateTokenCredentialRequest(t *testing.T) {
 		require.Equal(t, "test-uid", res.GetUID())
 		require.Equal(t, []string{"test-group-1", "test-group-2"}, res.GetGroups())
 		require.Equal(t, map[string][]string{"extra-key-1": {"extra-value-1", "extra-value-2"}}, res.GetExtra())
-	})
-
-	t.Run("using a non-default API group suffix still performs the cache lookup using the pinniped.dev suffix", func(t *testing.T) {
-		authenticationGroupWithCustomSuffix := "authentication.concierge.custom-suffix.com"
-		validRequestForAlternateAPIGroup := loginapi.TokenCredentialRequest{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "test-namespace",
-			},
-			Spec: loginapi.TokenCredentialRequestSpec{
-				Authenticator: corev1.TypedLocalObjectReference{
-					APIGroup: &authenticationGroupWithCustomSuffix,
-					Kind:     "WebhookAuthenticator",
-					Name:     "test-name",
-				},
-				Token: "test-token",
-			},
-			Status: loginapi.TokenCredentialRequestStatus{},
-		}
-
-		userInfo := user.DefaultInfo{
-			Name:   "test-user",
-			UID:    "test-uid",
-			Groups: []string{"test-group-1", "test-group-2"},
-			Extra:  map[string][]string{"extra-key-1": {"extra-value-1", "extra-value-2"}},
-		}
-		c := mockCache(t, "custom-suffix.com", true, &authenticator.Response{User: &userInfo}, true, nil)
-
-		audienceCtx := authenticator.WithAudiences(context.Background(), authenticator.Audiences{"test-audience-1"})
-		res, err := c.AuthenticateTokenCredentialRequest(audienceCtx, validRequestForAlternateAPIGroup.DeepCopy())
-		require.NoError(t, err)
-		require.NotNil(t, res)
-		require.Equal(t, "test-user", res.GetName())
-		require.Equal(t, "test-uid", res.GetUID())
-		require.Equal(t, []string{"test-group-1", "test-group-2"}, res.GetGroups())
-		require.Equal(t, map[string][]string{"extra-key-1": {"extra-value-1", "extra-value-2"}}, res.GetExtra())
-	})
-
-	t.Run("using a non-default API group suffix and the incoming request mentions a different API group, results in no such authenticator", func(t *testing.T) {
-		c := mockCache(t, "custom-suffix.com", false, &authenticator.Response{User: &user.DefaultInfo{Name: "someone"}}, true, nil)
-
-		// Note that the validRequest.Spec.Authenticator.APIGroup value uses "pinniped.dev", not "custom-suffix.com"
-		res, err := c.AuthenticateTokenCredentialRequest(context.Background(), validRequest.DeepCopy())
-		require.EqualError(t, err, "no such authenticator")
-		require.Nil(t, res)
 	})
 }
 

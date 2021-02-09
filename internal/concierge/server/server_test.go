@@ -13,12 +13,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	loginapi "go.pinniped.dev/generated/1.20/apis/concierge/login"
 	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
+	"go.pinniped.dev/internal/groupsuffix"
 )
 
 const knownGoodUsage = `
@@ -124,13 +126,13 @@ func Test_getAggregatedAPIServerScheme(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		apiGroup string
-		want     map[schema.GroupVersionKind]reflect.Type
+		name           string
+		apiGroupSuffix string
+		want           map[schema.GroupVersionKind]reflect.Type
 	}{
 		{
-			name:     "regular api group",
-			apiGroup: "login.concierge.pinniped.dev",
+			name:           "regular api group",
+			apiGroupSuffix: "pinniped.dev",
 			want: map[schema.GroupVersionKind]reflect.Type{
 				// all the types that are in the aggregated API group
 
@@ -171,8 +173,8 @@ func Test_getAggregatedAPIServerScheme(t *testing.T) {
 			},
 		},
 		{
-			name:     "other api group",
-			apiGroup: "login.concierge.walrus.tld",
+			name:           "other api group",
+			apiGroupSuffix: "walrus.tld",
 			want: map[schema.GroupVersionKind]reflect.Type{
 				// all the types that are in the aggregated API group
 
@@ -216,8 +218,46 @@ func Test_getAggregatedAPIServerScheme(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			scheme := getAggregatedAPIServerScheme(tt.apiGroup)
+			loginConciergeAPIGroup, ok := groupsuffix.Replace("login.concierge.pinniped.dev", tt.apiGroupSuffix)
+			require.True(t, ok)
+
+			scheme := getAggregatedAPIServerScheme(loginConciergeAPIGroup, tt.apiGroupSuffix)
 			require.Equal(t, tt.want, scheme.AllKnownTypes())
+
+			// make a credential request like a client would send
+			authenticationConciergeAPIGroup := "authentication.concierge." + tt.apiGroupSuffix
+			credentialRequest := &loginv1alpha1.TokenCredentialRequest{
+				Spec: loginv1alpha1.TokenCredentialRequestSpec{
+					Authenticator: corev1.TypedLocalObjectReference{
+						APIGroup: &authenticationConciergeAPIGroup,
+					},
+				},
+			}
+
+			// run defaulting on it
+			scheme.Default(credentialRequest)
+
+			// make sure the group is restored if needed
+			require.Equal(t, "authentication.concierge.pinniped.dev", *credentialRequest.Spec.Authenticator.APIGroup)
+
+			// make a credential request in the standard group
+			defaultAuthenticationConciergeAPIGroup := "authentication.concierge.pinniped.dev"
+			defaultCredentialRequest := &loginv1alpha1.TokenCredentialRequest{
+				Spec: loginv1alpha1.TokenCredentialRequestSpec{
+					Authenticator: corev1.TypedLocalObjectReference{
+						APIGroup: &defaultAuthenticationConciergeAPIGroup,
+					},
+				},
+			}
+
+			// run defaulting on it
+			scheme.Default(defaultCredentialRequest)
+
+			if tt.apiGroupSuffix == "pinniped.dev" { // when using the standard group, this should just work
+				require.Equal(t, "authentication.concierge.pinniped.dev", *defaultCredentialRequest.Spec.Authenticator.APIGroup)
+			} else { // when using any other group, this should always be a cache miss
+				require.True(t, strings.HasPrefix(*defaultCredentialRequest.Spec.Authenticator.APIGroup, "_INVALID_API_GROUP_2"))
+			}
 		})
 	}
 }

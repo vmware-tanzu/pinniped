@@ -327,7 +327,7 @@ func TestController(t *testing.T) {
 
 			fakeClient := pinnipedfake.NewSimpleClientset(tt.jwtAuthenticators...)
 			informers := pinnipedinformers.NewSharedInformerFactory(fakeClient, 0)
-			cache := authncache.New("pinniped.dev")
+			cache := authncache.New()
 			testLog := testlogger.New(t)
 
 			if tt.cache != nil {

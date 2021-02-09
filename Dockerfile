@@ -27,11 +27,11 @@ RUN \
     ./cmd/local-user-authenticator/...
 
 # Use a Debian slim image to grab a reasonable default CA bundle.
-FROM debian:10.7-slim AS get-ca-bundle-env
+FROM debian:10.8-slim AS get-ca-bundle-env
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* /var/cache/debconf/*
 
 # Use a runtime image based on Debian slim.
-FROM debian:10.7-slim
+FROM debian:10.8-slim
 COPY --from=get-ca-bundle-env /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 # Copy the binaries from the build-env stage.

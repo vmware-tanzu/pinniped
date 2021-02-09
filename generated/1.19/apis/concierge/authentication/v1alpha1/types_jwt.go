@@ -59,7 +59,7 @@ type JWTTokenClaims struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:categories=pinniped;pinniped-authenticator;pinniped-authenticators
+// +kubebuilder:resource:categories=pinniped;pinniped-authenticator;pinniped-authenticators,scope=Cluster
 // +kubebuilder:printcolumn:name="Issuer",type=string,JSONPath=`.spec.issuer`
 type JWTAuthenticator struct {
 	metav1.TypeMeta   `json:",inline"`

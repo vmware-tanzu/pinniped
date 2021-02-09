@@ -57,6 +57,7 @@ type JWTTokenClaims struct {
 // signature, existence of claims, etc.) and extract the username and groups from the token.
 //
 // +genclient
+// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:categories=pinniped;pinniped-authenticator;pinniped-authenticators
 // +kubebuilder:printcolumn:name="Issuer",type=string,JSONPath=`.spec.issuer`

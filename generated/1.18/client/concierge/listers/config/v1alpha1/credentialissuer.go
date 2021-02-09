@@ -16,8 +16,8 @@ import (
 type CredentialIssuerLister interface {
 	// List lists all CredentialIssuers in the indexer.
 	List(selector labels.Selector) (ret []*v1alpha1.CredentialIssuer, err error)
-	// CredentialIssuers returns an object that can list and get CredentialIssuers.
-	CredentialIssuers(namespace string) CredentialIssuerNamespaceLister
+	// Get retrieves the CredentialIssuer from the index for a given name.
+	Get(name string) (*v1alpha1.CredentialIssuer, error)
 	CredentialIssuerListerExpansion
 }
 
@@ -39,38 +39,9 @@ func (s *credentialIssuerLister) List(selector labels.Selector) (ret []*v1alpha1
 	return ret, err
 }
 
-// CredentialIssuers returns an object that can list and get CredentialIssuers.
-func (s *credentialIssuerLister) CredentialIssuers(namespace string) CredentialIssuerNamespaceLister {
-	return credentialIssuerNamespaceLister{indexer: s.indexer, namespace: namespace}
-}
-
-// CredentialIssuerNamespaceLister helps list and get CredentialIssuers.
-type CredentialIssuerNamespaceLister interface {
-	// List lists all CredentialIssuers in the indexer for a given namespace.
-	List(selector labels.Selector) (ret []*v1alpha1.CredentialIssuer, err error)
-	// Get retrieves the CredentialIssuer from the indexer for a given namespace and name.
-	Get(name string) (*v1alpha1.CredentialIssuer, error)
-	CredentialIssuerNamespaceListerExpansion
-}
-
-// credentialIssuerNamespaceLister implements the CredentialIssuerNamespaceLister
-// interface.
-type credentialIssuerNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all CredentialIssuers in the indexer for a given namespace.
-func (s credentialIssuerNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.CredentialIssuer, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.CredentialIssuer))
-	})
-	return ret, err
-}
-
-// Get retrieves the CredentialIssuer from the indexer for a given namespace and name.
-func (s credentialIssuerNamespaceLister) Get(name string) (*v1alpha1.CredentialIssuer, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+// Get retrieves the CredentialIssuer from the index for a given name.
+func (s *credentialIssuerLister) Get(name string) (*v1alpha1.CredentialIssuer, error) {
+	obj, exists, err := s.indexer.GetByKey(name)
 	if err != nil {
 		return nil, err
 	}

@@ -19,7 +19,7 @@ import (
 // TokenCredentialRequestsGetter has a method to return a TokenCredentialRequestInterface.
 // A group's client should implement this interface.
 type TokenCredentialRequestsGetter interface {
-	TokenCredentialRequests(namespace string) TokenCredentialRequestInterface
+	TokenCredentialRequests() TokenCredentialRequestInterface
 }
 
 // TokenCredentialRequestInterface has methods to work with TokenCredentialRequest resources.
@@ -39,14 +39,12 @@ type TokenCredentialRequestInterface interface {
 // tokenCredentialRequests implements TokenCredentialRequestInterface
 type tokenCredentialRequests struct {
 	client rest.Interface
-	ns     string
 }
 
 // newTokenCredentialRequests returns a TokenCredentialRequests
-func newTokenCredentialRequests(c *LoginV1alpha1Client, namespace string) *tokenCredentialRequests {
+func newTokenCredentialRequests(c *LoginV1alpha1Client) *tokenCredentialRequests {
 	return &tokenCredentialRequests{
 		client: c.RESTClient(),
-		ns:     namespace,
 	}
 }
 
@@ -54,7 +52,6 @@ func newTokenCredentialRequests(c *LoginV1alpha1Client, namespace string) *token
 func (c *tokenCredentialRequests) Get(name string, options v1.GetOptions) (result *v1alpha1.TokenCredentialRequest, err error) {
 	result = &v1alpha1.TokenCredentialRequest{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
@@ -71,7 +68,6 @@ func (c *tokenCredentialRequests) List(opts v1.ListOptions) (result *v1alpha1.To
 	}
 	result = &v1alpha1.TokenCredentialRequestList{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -88,7 +84,6 @@ func (c *tokenCredentialRequests) Watch(opts v1.ListOptions) (watch.Interface, e
 	}
 	opts.Watch = true
 	return c.client.Get().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -99,7 +94,6 @@ func (c *tokenCredentialRequests) Watch(opts v1.ListOptions) (watch.Interface, e
 func (c *tokenCredentialRequests) Create(tokenCredentialRequest *v1alpha1.TokenCredentialRequest) (result *v1alpha1.TokenCredentialRequest, err error) {
 	result = &v1alpha1.TokenCredentialRequest{}
 	err = c.client.Post().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		Body(tokenCredentialRequest).
 		Do().
@@ -111,7 +105,6 @@ func (c *tokenCredentialRequests) Create(tokenCredentialRequest *v1alpha1.TokenC
 func (c *tokenCredentialRequests) Update(tokenCredentialRequest *v1alpha1.TokenCredentialRequest) (result *v1alpha1.TokenCredentialRequest, err error) {
 	result = &v1alpha1.TokenCredentialRequest{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		Name(tokenCredentialRequest.Name).
 		Body(tokenCredentialRequest).
@@ -126,7 +119,6 @@ func (c *tokenCredentialRequests) Update(tokenCredentialRequest *v1alpha1.TokenC
 func (c *tokenCredentialRequests) UpdateStatus(tokenCredentialRequest *v1alpha1.TokenCredentialRequest) (result *v1alpha1.TokenCredentialRequest, err error) {
 	result = &v1alpha1.TokenCredentialRequest{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		Name(tokenCredentialRequest.Name).
 		SubResource("status").
@@ -139,7 +131,6 @@ func (c *tokenCredentialRequests) UpdateStatus(tokenCredentialRequest *v1alpha1.
 // Delete takes name of the tokenCredentialRequest and deletes it. Returns an error if one occurs.
 func (c *tokenCredentialRequests) Delete(name string, options *v1.DeleteOptions) error {
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		Name(name).
 		Body(options).
@@ -154,7 +145,6 @@ func (c *tokenCredentialRequests) DeleteCollection(options *v1.DeleteOptions, li
 		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -167,7 +157,6 @@ func (c *tokenCredentialRequests) DeleteCollection(options *v1.DeleteOptions, li
 func (c *tokenCredentialRequests) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.TokenCredentialRequest, err error) {
 	result = &v1alpha1.TokenCredentialRequest{}
 	err = c.client.Patch(pt).
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		SubResource(subresources...).
 		Name(name).

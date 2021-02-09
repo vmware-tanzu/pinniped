@@ -21,8 +21,8 @@ type ConfigV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *ConfigV1alpha1Client) CredentialIssuers(namespace string) CredentialIssuerInterface {
-	return newCredentialIssuers(c, namespace)
+func (c *ConfigV1alpha1Client) CredentialIssuers() CredentialIssuerInterface {
+	return newCredentialIssuers(c)
 }
 
 // NewForConfig creates a new ConfigV1alpha1Client for the given config.

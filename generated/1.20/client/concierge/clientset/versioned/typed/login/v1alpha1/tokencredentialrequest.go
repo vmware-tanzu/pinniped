@@ -20,7 +20,7 @@ import (
 // TokenCredentialRequestsGetter has a method to return a TokenCredentialRequestInterface.
 // A group's client should implement this interface.
 type TokenCredentialRequestsGetter interface {
-	TokenCredentialRequests(namespace string) TokenCredentialRequestInterface
+	TokenCredentialRequests() TokenCredentialRequestInterface
 }
 
 // TokenCredentialRequestInterface has methods to work with TokenCredentialRequest resources.
@@ -40,14 +40,12 @@ type TokenCredentialRequestInterface interface {
 // tokenCredentialRequests implements TokenCredentialRequestInterface
 type tokenCredentialRequests struct {
 	client rest.Interface
-	ns     string
 }
 
 // newTokenCredentialRequests returns a TokenCredentialRequests
-func newTokenCredentialRequests(c *LoginV1alpha1Client, namespace string) *tokenCredentialRequests {
+func newTokenCredentialRequests(c *LoginV1alpha1Client) *tokenCredentialRequests {
 	return &tokenCredentialRequests{
 		client: c.RESTClient(),
-		ns:     namespace,
 	}
 }
 
@@ -55,7 +53,6 @@ func newTokenCredentialRequests(c *LoginV1alpha1Client, namespace string) *token
 func (c *tokenCredentialRequests) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.TokenCredentialRequest, err error) {
 	result = &v1alpha1.TokenCredentialRequest{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
@@ -72,7 +69,6 @@ func (c *tokenCredentialRequests) List(ctx context.Context, opts v1.ListOptions)
 	}
 	result = &v1alpha1.TokenCredentialRequestList{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -89,7 +85,6 @@ func (c *tokenCredentialRequests) Watch(ctx context.Context, opts v1.ListOptions
 	}
 	opts.Watch = true
 	return c.client.Get().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -100,7 +95,6 @@ func (c *tokenCredentialRequests) Watch(ctx context.Context, opts v1.ListOptions
 func (c *tokenCredentialRequests) Create(ctx context.Context, tokenCredentialRequest *v1alpha1.TokenCredentialRequest, opts v1.CreateOptions) (result *v1alpha1.TokenCredentialRequest, err error) {
 	result = &v1alpha1.TokenCredentialRequest{}
 	err = c.client.Post().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(tokenCredentialRequest).
@@ -113,7 +107,6 @@ func (c *tokenCredentialRequests) Create(ctx context.Context, tokenCredentialReq
 func (c *tokenCredentialRequests) Update(ctx context.Context, tokenCredentialRequest *v1alpha1.TokenCredentialRequest, opts v1.UpdateOptions) (result *v1alpha1.TokenCredentialRequest, err error) {
 	result = &v1alpha1.TokenCredentialRequest{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		Name(tokenCredentialRequest.Name).
 		VersionedParams(&opts, scheme.ParameterCodec).
@@ -128,7 +121,6 @@ func (c *tokenCredentialRequests) Update(ctx context.Context, tokenCredentialReq
 func (c *tokenCredentialRequests) UpdateStatus(ctx context.Context, tokenCredentialRequest *v1alpha1.TokenCredentialRequest, opts v1.UpdateOptions) (result *v1alpha1.TokenCredentialRequest, err error) {
 	result = &v1alpha1.TokenCredentialRequest{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		Name(tokenCredentialRequest.Name).
 		SubResource("status").
@@ -142,7 +134,6 @@ func (c *tokenCredentialRequests) UpdateStatus(ctx context.Context, tokenCredent
 // Delete takes name of the tokenCredentialRequest and deletes it. Returns an error if one occurs.
 func (c *tokenCredentialRequests) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		Name(name).
 		Body(&opts).
@@ -157,7 +148,6 @@ func (c *tokenCredentialRequests) DeleteCollection(ctx context.Context, opts v1.
 		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -170,7 +160,6 @@ func (c *tokenCredentialRequests) DeleteCollection(ctx context.Context, opts v1.
 func (c *tokenCredentialRequests) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.TokenCredentialRequest, err error) {
 	result = &v1alpha1.TokenCredentialRequest{}
 	err = c.client.Patch(pt).
-		Namespace(c.ns).
 		Resource("tokencredentialrequests").
 		Name(name).
 		SubResource(subresources...).

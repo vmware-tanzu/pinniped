@@ -27,7 +27,6 @@ type TokenCredentialRequestStatus struct {
 }
 
 // TokenCredentialRequest submits an IDP-specific credential to Pinniped in exchange for a cluster-specific credential.
-// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type TokenCredentialRequest struct {
 	metav1.TypeMeta

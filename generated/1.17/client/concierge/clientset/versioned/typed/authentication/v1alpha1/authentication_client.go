@@ -22,12 +22,12 @@ type AuthenticationV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *AuthenticationV1alpha1Client) JWTAuthenticators(namespace string) JWTAuthenticatorInterface {
-	return newJWTAuthenticators(c, namespace)
+func (c *AuthenticationV1alpha1Client) JWTAuthenticators() JWTAuthenticatorInterface {
+	return newJWTAuthenticators(c)
 }
 
-func (c *AuthenticationV1alpha1Client) WebhookAuthenticators(namespace string) WebhookAuthenticatorInterface {
-	return newWebhookAuthenticators(c, namespace)
+func (c *AuthenticationV1alpha1Client) WebhookAuthenticators() WebhookAuthenticatorInterface {
+	return newWebhookAuthenticators(c)
 }
 
 // NewForConfig creates a new AuthenticationV1alpha1Client for the given config.

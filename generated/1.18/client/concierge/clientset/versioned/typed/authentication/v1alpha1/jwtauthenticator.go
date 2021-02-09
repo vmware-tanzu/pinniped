@@ -20,7 +20,7 @@ import (
 // JWTAuthenticatorsGetter has a method to return a JWTAuthenticatorInterface.
 // A group's client should implement this interface.
 type JWTAuthenticatorsGetter interface {
-	JWTAuthenticators(namespace string) JWTAuthenticatorInterface
+	JWTAuthenticators() JWTAuthenticatorInterface
 }
 
 // JWTAuthenticatorInterface has methods to work with JWTAuthenticator resources.
@@ -40,14 +40,12 @@ type JWTAuthenticatorInterface interface {
 // jWTAuthenticators implements JWTAuthenticatorInterface
 type jWTAuthenticators struct {
 	client rest.Interface
-	ns     string
 }
 
 // newJWTAuthenticators returns a JWTAuthenticators
-func newJWTAuthenticators(c *AuthenticationV1alpha1Client, namespace string) *jWTAuthenticators {
+func newJWTAuthenticators(c *AuthenticationV1alpha1Client) *jWTAuthenticators {
 	return &jWTAuthenticators{
 		client: c.RESTClient(),
-		ns:     namespace,
 	}
 }
 
@@ -55,7 +53,6 @@ func newJWTAuthenticators(c *AuthenticationV1alpha1Client, namespace string) *jW
 func (c *jWTAuthenticators) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.JWTAuthenticator, err error) {
 	result = &v1alpha1.JWTAuthenticator{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("jwtauthenticators").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
@@ -72,7 +69,6 @@ func (c *jWTAuthenticators) List(ctx context.Context, opts v1.ListOptions) (resu
 	}
 	result = &v1alpha1.JWTAuthenticatorList{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("jwtauthenticators").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -89,7 +85,6 @@ func (c *jWTAuthenticators) Watch(ctx context.Context, opts v1.ListOptions) (wat
 	}
 	opts.Watch = true
 	return c.client.Get().
-		Namespace(c.ns).
 		Resource("jwtauthenticators").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -100,7 +95,6 @@ func (c *jWTAuthenticators) Watch(ctx context.Context, opts v1.ListOptions) (wat
 func (c *jWTAuthenticators) Create(ctx context.Context, jWTAuthenticator *v1alpha1.JWTAuthenticator, opts v1.CreateOptions) (result *v1alpha1.JWTAuthenticator, err error) {
 	result = &v1alpha1.JWTAuthenticator{}
 	err = c.client.Post().
-		Namespace(c.ns).
 		Resource("jwtauthenticators").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(jWTAuthenticator).
@@ -113,7 +107,6 @@ func (c *jWTAuthenticators) Create(ctx context.Context, jWTAuthenticator *v1alph
 func (c *jWTAuthenticators) Update(ctx context.Context, jWTAuthenticator *v1alpha1.JWTAuthenticator, opts v1.UpdateOptions) (result *v1alpha1.JWTAuthenticator, err error) {
 	result = &v1alpha1.JWTAuthenticator{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("jwtauthenticators").
 		Name(jWTAuthenticator.Name).
 		VersionedParams(&opts, scheme.ParameterCodec).
@@ -128,7 +121,6 @@ func (c *jWTAuthenticators) Update(ctx context.Context, jWTAuthenticator *v1alph
 func (c *jWTAuthenticators) UpdateStatus(ctx context.Context, jWTAuthenticator *v1alpha1.JWTAuthenticator, opts v1.UpdateOptions) (result *v1alpha1.JWTAuthenticator, err error) {
 	result = &v1alpha1.JWTAuthenticator{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("jwtauthenticators").
 		Name(jWTAuthenticator.Name).
 		SubResource("status").
@@ -142,7 +134,6 @@ func (c *jWTAuthenticators) UpdateStatus(ctx context.Context, jWTAuthenticator *
 // Delete takes name of the jWTAuthenticator and deletes it. Returns an error if one occurs.
 func (c *jWTAuthenticators) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("jwtauthenticators").
 		Name(name).
 		Body(&opts).
@@ -157,7 +148,6 @@ func (c *jWTAuthenticators) DeleteCollection(ctx context.Context, opts v1.Delete
 		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("jwtauthenticators").
 		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -170,7 +160,6 @@ func (c *jWTAuthenticators) DeleteCollection(ctx context.Context, opts v1.Delete
 func (c *jWTAuthenticators) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.JWTAuthenticator, err error) {
 	result = &v1alpha1.JWTAuthenticator{}
 	err = c.client.Patch(pt).
-		Namespace(c.ns).
 		Resource("jwtauthenticators").
 		Name(name).
 		SubResource(subresources...).

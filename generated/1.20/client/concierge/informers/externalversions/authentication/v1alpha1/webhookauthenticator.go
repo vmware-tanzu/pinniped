@@ -29,33 +29,32 @@ type WebhookAuthenticatorInformer interface {
 type webhookAuthenticatorInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
-	namespace        string
 }
 
 // NewWebhookAuthenticatorInformer constructs a new informer for WebhookAuthenticator type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewWebhookAuthenticatorInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredWebhookAuthenticatorInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewWebhookAuthenticatorInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredWebhookAuthenticatorInformer(client, resyncPeriod, indexers, nil)
 }
 
 // NewFilteredWebhookAuthenticatorInformer constructs a new informer for WebhookAuthenticator type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredWebhookAuthenticatorInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredWebhookAuthenticatorInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AuthenticationV1alpha1().WebhookAuthenticators(namespace).List(context.TODO(), options)
+				return client.AuthenticationV1alpha1().WebhookAuthenticators().List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AuthenticationV1alpha1().WebhookAuthenticators(namespace).Watch(context.TODO(), options)
+				return client.AuthenticationV1alpha1().WebhookAuthenticators().Watch(context.TODO(), options)
 			},
 		},
 		&authenticationv1alpha1.WebhookAuthenticator{},
@@ -65,7 +64,7 @@ func NewFilteredWebhookAuthenticatorInformer(client versioned.Interface, namespa
 }
 
 func (f *webhookAuthenticatorInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredWebhookAuthenticatorInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	return NewFilteredWebhookAuthenticatorInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
 func (f *webhookAuthenticatorInformer) Informer() cache.SharedIndexInformer {

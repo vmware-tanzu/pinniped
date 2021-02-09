@@ -18,7 +18,7 @@ spec:
     listKind: JWTAuthenticatorList
     plural: jwtauthenticators
     singular: jwtauthenticator
-  scope: Cluster
+  scope: Namespaced
   versions:
   - additionalPrinterColumns:
     - jsonPath: .spec.issuer

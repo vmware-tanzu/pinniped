@@ -28,5 +28,5 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 
 // TokenCredentialRequests returns a TokenCredentialRequestInformer.
 func (v *version) TokenCredentialRequests() TokenCredentialRequestInformer {
-	return &tokenCredentialRequestInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+	return &tokenCredentialRequestInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

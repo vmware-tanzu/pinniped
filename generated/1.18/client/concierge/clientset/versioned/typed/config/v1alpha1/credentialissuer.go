@@ -20,7 +20,7 @@ import (
 // CredentialIssuersGetter has a method to return a CredentialIssuerInterface.
 // A group's client should implement this interface.
 type CredentialIssuersGetter interface {
-	CredentialIssuers(namespace string) CredentialIssuerInterface
+	CredentialIssuers() CredentialIssuerInterface
 }
 
 // CredentialIssuerInterface has methods to work with CredentialIssuer resources.
@@ -40,14 +40,12 @@ type CredentialIssuerInterface interface {
 // credentialIssuers implements CredentialIssuerInterface
 type credentialIssuers struct {
 	client rest.Interface
-	ns     string
 }
 
 // newCredentialIssuers returns a CredentialIssuers
-func newCredentialIssuers(c *ConfigV1alpha1Client, namespace string) *credentialIssuers {
+func newCredentialIssuers(c *ConfigV1alpha1Client) *credentialIssuers {
 	return &credentialIssuers{
 		client: c.RESTClient(),
-		ns:     namespace,
 	}
 }
 
@@ -55,7 +53,6 @@ func newCredentialIssuers(c *ConfigV1alpha1Client, namespace string) *credential
 func (c *credentialIssuers) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.CredentialIssuer, err error) {
 	result = &v1alpha1.CredentialIssuer{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
@@ -72,7 +69,6 @@ func (c *credentialIssuers) List(ctx context.Context, opts v1.ListOptions) (resu
 	}
 	result = &v1alpha1.CredentialIssuerList{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -89,7 +85,6 @@ func (c *credentialIssuers) Watch(ctx context.Context, opts v1.ListOptions) (wat
 	}
 	opts.Watch = true
 	return c.client.Get().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -100,7 +95,6 @@ func (c *credentialIssuers) Watch(ctx context.Context, opts v1.ListOptions) (wat
 func (c *credentialIssuers) Create(ctx context.Context, credentialIssuer *v1alpha1.CredentialIssuer, opts v1.CreateOptions) (result *v1alpha1.CredentialIssuer, err error) {
 	result = &v1alpha1.CredentialIssuer{}
 	err = c.client.Post().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(credentialIssuer).
@@ -113,7 +107,6 @@ func (c *credentialIssuers) Create(ctx context.Context, credentialIssuer *v1alph
 func (c *credentialIssuers) Update(ctx context.Context, credentialIssuer *v1alpha1.CredentialIssuer, opts v1.UpdateOptions) (result *v1alpha1.CredentialIssuer, err error) {
 	result = &v1alpha1.CredentialIssuer{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		Name(credentialIssuer.Name).
 		VersionedParams(&opts, scheme.ParameterCodec).
@@ -128,7 +121,6 @@ func (c *credentialIssuers) Update(ctx context.Context, credentialIssuer *v1alph
 func (c *credentialIssuers) UpdateStatus(ctx context.Context, credentialIssuer *v1alpha1.CredentialIssuer, opts v1.UpdateOptions) (result *v1alpha1.CredentialIssuer, err error) {
 	result = &v1alpha1.CredentialIssuer{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		Name(credentialIssuer.Name).
 		SubResource("status").
@@ -142,7 +134,6 @@ func (c *credentialIssuers) UpdateStatus(ctx context.Context, credentialIssuer *
 // Delete takes name of the credentialIssuer and deletes it. Returns an error if one occurs.
 func (c *credentialIssuers) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		Name(name).
 		Body(&opts).
@@ -157,7 +148,6 @@ func (c *credentialIssuers) DeleteCollection(ctx context.Context, opts v1.Delete
 		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -170,7 +160,6 @@ func (c *credentialIssuers) DeleteCollection(ctx context.Context, opts v1.Delete
 func (c *credentialIssuers) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.CredentialIssuer, err error) {
 	result = &v1alpha1.CredentialIssuer{}
 	err = c.client.Patch(pt).
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		Name(name).
 		SubResource(subresources...).

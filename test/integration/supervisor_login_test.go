@@ -44,6 +44,8 @@ func TestSupervisorLogin(t *testing.T) {
 	defer library.DumpLogs(t, env.SupervisorNamespace, "")
 	defer library.DumpLogs(t, "dex", "app=proxy")
 
+	library.AssertNoRestartsDuringTest(t, env.SupervisorNamespace, "")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 

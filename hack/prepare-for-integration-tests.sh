@@ -51,6 +51,7 @@ function check_dependency() {
 help=no
 skip_build=no
 clean_kind=no
+api_group_suffix="pinniped.dev" # same default as in the values.yaml ytt file
 
 while (("$#")); do
   case "$1" in
@@ -64,6 +65,16 @@ while (("$#")); do
     ;;
   -c | --clean)
     clean_kind=yes
+    shift
+    ;;
+  -g | --api-group-suffix)
+    shift
+    # If there are no more command line arguments, or there is another command line argument but it starts with a dash, then error
+    if [[ "$#" == "0" || "$1" == -* ]]; then
+      log_error "-g|--api-group-suffix requires a group name to be specified"
+      exit 1
+    fi
+    api_group_suffix=$1
     shift
     ;;
   -*)
@@ -84,6 +95,8 @@ if [[ "$help" == "yes" ]]; then
   log_note
   log_note "Flags:"
   log_note "   -h, --help:              print this usage"
+  log_note "   -c, --clean:             destroy the current kind cluster and make a new one"
+  log_note "   -g, --api-group-suffix:  deploy Pinniped with an alternate API group suffix"
   log_note "   -s, --skip-build:        reuse the most recently built image of the app instead of building"
   exit 1
 fi
@@ -226,6 +239,7 @@ if ! tilt_mode; then
   ytt --file . \
     --data-value "app_name=$supervisor_app_name" \
     --data-value "namespace=$supervisor_namespace" \
+    --data-value "api_group_suffix=$api_group_suffix" \
     --data-value "image_repo=$registry_repo" \
     --data-value "image_tag=$tag" \
     --data-value "log_level=debug" \
@@ -259,6 +273,7 @@ if ! tilt_mode; then
   ytt --file . \
     --data-value "app_name=$concierge_app_name" \
     --data-value "namespace=$concierge_namespace" \
+    --data-value "api_group_suffix=$api_group_suffix" \
     --data-value "log_level=debug" \
     --data-value-yaml "custom_labels=$concierge_custom_labels" \
     --data-value "image_repo=$registry_repo" \
@@ -314,6 +329,7 @@ export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CALLBACK_URL=https://pinniped-supe
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME=pinny@example.com
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD=password
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_EXPECTED_GROUPS= # Dex's local user store does not let us configure groups.
+export PINNIPED_TEST_API_GROUP_SUFFIX='${api_group_suffix}'
 
 read -r -d '' PINNIPED_TEST_CLUSTER_CAPABILITY_YAML << PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF || true
 ${pinniped_cluster_capability_file_content}

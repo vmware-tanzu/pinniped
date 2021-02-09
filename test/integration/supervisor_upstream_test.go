@@ -17,6 +17,8 @@ import (
 func TestSupervisorUpstreamOIDCDiscovery(t *testing.T) {
 	env := library.IntegrationEnv(t)
 
+	library.AssertNoRestartsDuringTest(t, env.SupervisorNamespace, "")
+
 	t.Run("invalid missing secret and bad issuer", func(t *testing.T) {
 		t.Parallel()
 		spec := v1alpha1.OIDCIdentityProviderSpec{

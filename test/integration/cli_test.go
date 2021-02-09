@@ -35,6 +35,8 @@ import (
 func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
+	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
+
 	// Create a test webhook configuration to use with the CLI.
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancelFunc()

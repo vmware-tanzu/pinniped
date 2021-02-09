@@ -9,11 +9,11 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/kubeclient"
-	"go.pinniped.dev/internal/multierror"
 )
 
 const (
@@ -63,7 +63,7 @@ func New(apiGroupSuffix string) kubeclient.Middleware {
 
 		kubeclient.MiddlewareFunc(func(_ context.Context, rt kubeclient.RoundTrip) {
 			// always unreplace owner refs with apiGroupSuffix because we can consume those objects across all verbs
-			rt.MutateResponse(mutateOwnerRefs(unreplace, apiGroupSuffix))
+			rt.MutateResponse(mutateOwnerRefs(Unreplace, apiGroupSuffix))
 		}),
 	}
 }
@@ -115,7 +115,8 @@ func Replace(baseAPIGroup, apiGroupSuffix string) (string, bool) {
 	return strings.TrimSuffix(baseAPIGroup, pinnipedDefaultSuffix) + apiGroupSuffix, true
 }
 
-func unreplace(baseAPIGroup, apiGroupSuffix string) (string, bool) {
+// Unreplace is like performing an undo of Replace().
+func Unreplace(baseAPIGroup, apiGroupSuffix string) (string, bool) {
 	if !strings.HasSuffix(baseAPIGroup, "."+apiGroupSuffix) {
 		return "", false
 	}
@@ -126,17 +127,17 @@ func unreplace(baseAPIGroup, apiGroupSuffix string) (string, bool) {
 // makes sure that the provided apiGroupSuffix is a valid DNS-1123 subdomain with at least one dot,
 // to match Kubernetes behavior.
 func Validate(apiGroupSuffix string) error {
-	err := multierror.New()
+	var errs []error //nolint: prealloc
 
 	if len(strings.Split(apiGroupSuffix, ".")) < 2 {
-		err.Add(constable.Error("must contain '.'"))
+		errs = append(errs, constable.Error("must contain '.'"))
 	}
 
 	errorStrings := validation.IsDNS1123Subdomain(apiGroupSuffix)
 	for _, errorString := range errorStrings {
 		errorString := errorString
-		err.Add(constable.Error(errorString))
+		errs = append(errs, constable.Error(errorString))
 	}
 
-	return err.ErrOrNil()
+	return errors.NewAggregate(errs)
 }

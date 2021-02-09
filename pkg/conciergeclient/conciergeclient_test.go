@@ -21,6 +21,7 @@ import (
 
 	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
 )
 
@@ -111,7 +112,7 @@ func TestNew(t *testing.T) {
 				WithEndpoint("https://example.com"),
 				WithAPIGroupSuffix(""),
 			},
-			wantErr: "invalid api group suffix: 2 error(s):\n- must contain '.'\n- a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')",
+			wantErr: "invalid api group suffix: [must contain '.', a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')]",
 		},
 		{
 			name: "invalid api group suffix",
@@ -120,7 +121,7 @@ func TestNew(t *testing.T) {
 				WithEndpoint("https://example.com"),
 				WithAPIGroupSuffix(".starts.with.dot"),
 			},
-			wantErr: "invalid api group suffix: 1 error(s):\n- a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')",
+			wantErr: "invalid api group suffix: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')",
 		},
 		{
 			name: "valid",
@@ -220,47 +221,7 @@ func TestExchangeToken(t *testing.T) {
 		t.Parallel()
 		expires := metav1.NewTime(time.Now().Truncate(time.Second))
 
-		// Start a test server that returns successfully and asserts various properties of the request.
-		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-			require.Equal(t, http.MethodPost, r.Method)
-			require.Equal(t, "/apis/login.concierge.pinniped.dev/v1alpha1/namespaces/test-namespace/tokencredentialrequests", r.URL.Path)
-			require.Equal(t, "application/json", r.Header.Get("content-type"))
-
-			body, err := ioutil.ReadAll(r.Body)
-			require.NoError(t, err)
-			require.JSONEq(t,
-				`{
-				  "kind": "TokenCredentialRequest",
-				  "apiVersion": "login.concierge.pinniped.dev/v1alpha1",
-				  "metadata": {
-					"creationTimestamp": null,
-					"namespace": "test-namespace"
-				  },
-				  "spec": {
-					"token": "test-token",
-					"authenticator": {
-						"apiGroup": "authentication.concierge.pinniped.dev",
-						"kind": "WebhookAuthenticator",
-						"name": "test-webhook"
-					}
-				  },
-				  "status": {}
-				}`,
-				string(body),
-			)
-
-			w.Header().Set("content-type", "application/json")
-			_ = json.NewEncoder(w).Encode(&loginv1alpha1.TokenCredentialRequest{
-				TypeMeta: metav1.TypeMeta{APIVersion: "login.concierge.pinniped.dev/v1alpha1", Kind: "TokenCredentialRequest"},
-				Status: loginv1alpha1.TokenCredentialRequestStatus{
-					Credential: &loginv1alpha1.ClusterCredential{
-						ExpirationTimestamp:   expires,
-						ClientCertificateData: "test-certificate",
-						ClientKeyData:         "test-key",
-					},
-				},
-			})
-		})
+		caBundle, endpoint := runFakeServer(t, expires, "pinniped.dev")
 
 		client, err := New(WithNamespace("test-namespace"), WithEndpoint(endpoint), WithCABundle(caBundle), WithAuthenticator("webhook", "test-webhook"))
 		require.NoError(t, err)
@@ -279,4 +240,78 @@ func TestExchangeToken(t *testing.T) {
 			},
 		}, got)
 	})
+
+	t.Run("changing the API group suffix for the client sends the custom suffix on the CredentialRequest's APIGroup and on its spec.Authenticator.APIGroup", func(t *testing.T) {
+		t.Parallel()
+		expires := metav1.NewTime(time.Now().Truncate(time.Second))
+
+		caBundle, endpoint := runFakeServer(t, expires, "suffix.com")
+
+		client, err := New(WithAPIGroupSuffix("suffix.com"), WithNamespace("test-namespace"), WithEndpoint(endpoint), WithCABundle(caBundle), WithAuthenticator("webhook", "test-webhook"))
+		require.NoError(t, err)
+
+		got, err := client.ExchangeToken(ctx, "test-token")
+		require.NoError(t, err)
+		require.Equal(t, &clientauthenticationv1beta1.ExecCredential{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ExecCredential",
+				APIVersion: "client.authentication.k8s.io/v1beta1",
+			},
+			Status: &clientauthenticationv1beta1.ExecCredentialStatus{
+				ClientCertificateData: "test-certificate",
+				ClientKeyData:         "test-key",
+				ExpirationTimestamp:   &expires,
+			},
+		}, got)
+	})
+}
+
+// Start a test server that returns successfully and asserts various properties of the request.
+func runFakeServer(t *testing.T, expires metav1.Time, pinnipedAPIGroupSuffix string) (string, string) {
+	caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		require.Equal(t,
+			fmt.Sprintf("/apis/login.concierge.%s/v1alpha1/namespaces/test-namespace/tokencredentialrequests", pinnipedAPIGroupSuffix),
+			r.URL.Path)
+		require.Equal(t, "application/json", r.Header.Get("content-type"))
+
+		body, err := ioutil.ReadAll(r.Body)
+		require.NoError(t, err)
+		require.JSONEq(t, here.Docf(
+			`{
+				  "kind": "TokenCredentialRequest",
+				  "apiVersion": "login.concierge.%s/v1alpha1",
+				  "metadata": {
+					"creationTimestamp": null,
+					"namespace": "test-namespace"
+				  },
+				  "spec": {
+					"token": "test-token",
+					"authenticator": {
+						"apiGroup": "authentication.concierge.%s",
+						"kind": "WebhookAuthenticator",
+						"name": "test-webhook"
+					}
+				  },
+				  "status": {}
+				}`, pinnipedAPIGroupSuffix, pinnipedAPIGroupSuffix),
+			string(body),
+		)
+
+		w.Header().Set("content-type", "application/json")
+		_ = json.NewEncoder(w).Encode(&loginv1alpha1.TokenCredentialRequest{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: fmt.Sprintf("login.concierge.%s/v1alpha1", pinnipedAPIGroupSuffix),
+				Kind:       "TokenCredentialRequest",
+			},
+			Status: loginv1alpha1.TokenCredentialRequestStatus{
+				Credential: &loginv1alpha1.ClusterCredential{
+					ExpirationTimestamp:   expires,
+					ClientCertificateData: "test-certificate",
+					ClientKeyData:         "test-key",
+				},
+			},
+		})
+	})
+	return caBundle, endpoint
 }

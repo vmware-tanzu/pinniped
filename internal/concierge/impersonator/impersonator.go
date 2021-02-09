@@ -20,6 +20,7 @@ import (
 	"go.pinniped.dev/generated/1.20/apis/concierge/login"
 	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
+	"go.pinniped.dev/internal/kubeclient"
 )
 
 // allowedHeaders are the set of HTTP headers that are allowed to be forwarded through the impersonation proxy.
@@ -39,7 +40,13 @@ type Proxy struct {
 }
 
 func New(cache *authncache.Cache, log logr.Logger) (*Proxy, error) {
-	return newInternal(cache, log, rest.InClusterConfig)
+	return newInternal(cache, log, func() (*rest.Config, error) {
+		client, err := kubeclient.New()
+		if err != nil {
+			return nil, err
+		}
+		return client.JSONConfig, nil
+	})
 }
 
 func newInternal(cache *authncache.Cache, log logr.Logger, getConfig func() (*rest.Config, error)) (*Proxy, error) {

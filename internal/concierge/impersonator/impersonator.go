@@ -105,11 +105,12 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	log = log.WithValues("userID", userInfo.GetUID())
 
-	newHeaders := getProxyHeaders(userInfo, r.Header)
-	r.Header = newHeaders
+	// Never mutate request (see http.Handler docs).
+	newR := r.WithContext(r.Context())
+	newR.Header = getProxyHeaders(userInfo, r.Header)
 
 	log.Info("proxying authenticated request")
-	p.proxy.ServeHTTP(w, r)
+	p.proxy.ServeHTTP(w, newR)
 }
 
 func getProxyHeaders(userInfo user.Info, requestHeaders http.Header) http.Header {

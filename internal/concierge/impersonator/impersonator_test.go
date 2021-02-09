@@ -4,6 +4,7 @@
 package impersonator
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -52,6 +53,12 @@ func TestImpersonator(t *testing.T) {
 		Host:            testServerURL,
 		BearerToken:     "some-service-account-token",
 		TLSClientConfig: rest.TLSClientConfig{CAData: []byte(testServerCA)},
+	}
+	newRequest := func(h http.Header) *http.Request {
+		r, err := http.NewRequestWithContext(context.Background(), http.MethodGet, validURL.String(), nil)
+		require.NoError(t, err)
+		r.Header = h
+		return r
 	}
 
 	tests := []struct {
@@ -102,61 +109,41 @@ func TestImpersonator(t *testing.T) {
 			wantCreationErr: "could not get in-cluster transport: using a custom transport with TLS certificate options or the insecure flag is not allowed",
 		},
 		{
-			name:          "missing authorization header",
-			getKubeconfig: func() (*rest.Config, error) { return &testServerKubeconfig, nil },
-			request: &http.Request{
-				Method: "GET",
-				Header: map[string][]string{},
-				URL:    validURL,
-			},
+			name:           "missing authorization header",
+			getKubeconfig:  func() (*rest.Config, error) { return &testServerKubeconfig, nil },
+			request:        newRequest(map[string][]string{}),
 			wantHTTPBody:   "invalid token encoding\n",
 			wantHTTPStatus: http.StatusBadRequest,
 			wantLogs:       []string{"\"error\"=\"missing authorization header\" \"msg\"=\"invalid token encoding\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
 		},
 		{
-			name:          "authorization header missing bearer prefix",
-			getKubeconfig: func() (*rest.Config, error) { return &testServerKubeconfig, nil },
-			request: &http.Request{
-				Method: "GET",
-				Header: map[string][]string{"Authorization": {makeTestTokenRequest("foo", "authenticator-one", "test-token")}},
-				URL:    validURL,
-			},
+			name:           "authorization header missing bearer prefix",
+			getKubeconfig:  func() (*rest.Config, error) { return &testServerKubeconfig, nil },
+			request:        newRequest(map[string][]string{"Authorization": {makeTestTokenRequest("foo", "authenticator-one", "test-token")}}),
 			wantHTTPBody:   "invalid token encoding\n",
 			wantHTTPStatus: http.StatusBadRequest,
 			wantLogs:       []string{"\"error\"=\"authorization header must be of type Bearer\" \"msg\"=\"invalid token encoding\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
 		},
 		{
-			name:          "token is not base64 encoded",
-			getKubeconfig: func() (*rest.Config, error) { return &testServerKubeconfig, nil },
-			request: &http.Request{
-				Method: "GET",
-				Header: map[string][]string{"Authorization": {"Bearer !!!"}},
-				URL:    validURL,
-			},
+			name:           "token is not base64 encoded",
+			getKubeconfig:  func() (*rest.Config, error) { return &testServerKubeconfig, nil },
+			request:        newRequest(map[string][]string{"Authorization": {"Bearer !!!"}}),
 			wantHTTPBody:   "invalid token encoding\n",
 			wantHTTPStatus: http.StatusBadRequest,
 			wantLogs:       []string{"\"error\"=\"invalid base64 in encoded bearer token: illegal base64 data at input byte 0\" \"msg\"=\"invalid token encoding\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
 		},
 		{
-			name:          "base64 encoded token is not valid json",
-			getKubeconfig: func() (*rest.Config, error) { return &testServerKubeconfig, nil },
-			request: &http.Request{
-				Method: "GET",
-				Header: map[string][]string{"Authorization": {"Bearer abc"}},
-				URL:    validURL,
-			},
+			name:           "base64 encoded token is not valid json",
+			getKubeconfig:  func() (*rest.Config, error) { return &testServerKubeconfig, nil },
+			request:        newRequest(map[string][]string{"Authorization": {"Bearer abc"}}),
 			wantHTTPBody:   "invalid token encoding\n",
 			wantHTTPStatus: http.StatusBadRequest,
 			wantLogs:       []string{"\"error\"=\"invalid TokenCredentialRequest encoded in bearer token: invalid character 'i' looking for beginning of value\" \"msg\"=\"invalid token encoding\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
 		},
 		{
-			name:          "token could not be authenticated",
-			getKubeconfig: func() (*rest.Config, error) { return &testServerKubeconfig, nil },
-			request: &http.Request{
-				Method: "GET",
-				Header: map[string][]string{"Authorization": {"Bearer " + makeTestTokenRequest("", "", "")}},
-				URL:    validURL,
-			},
+			name:           "token could not be authenticated",
+			getKubeconfig:  func() (*rest.Config, error) { return &testServerKubeconfig, nil },
+			request:        newRequest(map[string][]string{"Authorization": {"Bearer " + makeTestTokenRequest("", "", "")}}),
 			wantHTTPBody:   "invalid token\n",
 			wantHTTPStatus: http.StatusUnauthorized,
 			wantLogs:       []string{"\"error\"=\"no such authenticator\" \"msg\"=\"received invalid token\" \"authenticator\"={\"apiGroup\":null,\"kind\":\"\",\"name\":\"\"} \"authenticatorNamespace\"=\"\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
@@ -164,11 +151,7 @@ func TestImpersonator(t *testing.T) {
 		{
 			name:          "token authenticates as nil",
 			getKubeconfig: func() (*rest.Config, error) { return &testServerKubeconfig, nil },
-			request: &http.Request{
-				Method: "GET",
-				Header: map[string][]string{"Authorization": {"Bearer " + makeTestTokenRequest("foo", "authenticator-one", "test-token")}},
-				URL:    validURL,
-			},
+			request:       newRequest(map[string][]string{"Authorization": {"Bearer " + makeTestTokenRequest("foo", "authenticator-one", "test-token")}}),
 			expectMockToken: func(t *testing.T, recorder *mocktokenauthenticator.MockTokenMockRecorder) {
 				recorder.AuthenticateToken(gomock.Any(), "test-token").Return(nil, false, nil)
 			},
@@ -180,15 +163,11 @@ func TestImpersonator(t *testing.T) {
 		{
 			name:          "token validates",
 			getKubeconfig: func() (*rest.Config, error) { return &testServerKubeconfig, nil },
-			request: &http.Request{
-				Method: "GET",
-				Header: map[string][]string{
-					"Authorization":    {"Bearer " + makeTestTokenRequest("foo", "authenticator-one", "test-token")},
-					"Malicious-Header": {"test-header-value-1"},
-					"User-Agent":       {"test-user-agent"},
-				},
-				URL: validURL,
-			},
+			request: newRequest(map[string][]string{
+				"Authorization":    {"Bearer " + makeTestTokenRequest("foo", "authenticator-one", "test-token")},
+				"Malicious-Header": {"test-header-value-1"},
+				"User-Agent":       {"test-user-agent"},
+			}),
 			expectMockToken: func(t *testing.T, recorder *mocktokenauthenticator.MockTokenMockRecorder) {
 				userInfo := user.DefaultInfo{
 					Name:   "test-user",
@@ -228,7 +207,9 @@ func TestImpersonator(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, proxy)
 			w := httptest.NewRecorder()
+			requestBeforeServe := tt.request.Clone(tt.request.Context())
 			proxy.ServeHTTP(w, tt.request)
+			require.Equal(t, requestBeforeServe, tt.request, "ServeHTTP() mutated the request, and it should not per http.Handler docs")
 			if tt.wantHTTPStatus != 0 {
 				require.Equal(t, tt.wantHTTPStatus, w.Code)
 			}

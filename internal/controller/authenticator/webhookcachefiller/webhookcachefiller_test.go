@@ -90,7 +90,7 @@ func TestController(t *testing.T) {
 
 			fakeClient := pinnipedfake.NewSimpleClientset(tt.webhooks...)
 			informers := pinnipedinformers.NewSharedInformerFactory(fakeClient, 0)
-			cache := authncache.New("pinniped.dev")
+			cache := authncache.New()
 			testLog := testlogger.New(t)
 
 			controller := New(cache, informers.Authentication().V1alpha1().WebhookAuthenticators(), testLog)

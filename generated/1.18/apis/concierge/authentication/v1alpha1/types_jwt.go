@@ -61,6 +61,7 @@ type JWTTokenClaims struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:categories=pinniped;pinniped-authenticator;pinniped-authenticators,scope=Cluster
 // +kubebuilder:printcolumn:name="Issuer",type=string,JSONPath=`.spec.issuer`
+// +kubebuilder:subresource:status
 type JWTAuthenticator struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

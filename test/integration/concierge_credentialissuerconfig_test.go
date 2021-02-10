@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 
 	configv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/config/v1alpha1"
 	"go.pinniped.dev/test/library"
@@ -20,6 +21,7 @@ func TestCredentialIssuer(t *testing.T) {
 	env := library.IntegrationEnv(t)
 	config := library.NewClientConfig(t)
 	client := library.NewConciergeClientset(t)
+	aggregatedClientset := library.NewAggregatedClientset(t)
 
 	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
@@ -42,6 +44,23 @@ func TestCredentialIssuer(t *testing.T) {
 			require.Equalf(t, v, actualConfig.Labels[k], "expected ci to have label `%s: %s`", k, v)
 		}
 		require.Equal(t, env.ConciergeAppName, actualConfig.Labels["app"])
+
+		// verify owner ref is set
+		require.Len(t, actualConfig.OwnerReferences, 1)
+
+		apiService, err := aggregatedClientset.ApiregistrationV1().APIServices().Get(ctx, "v1alpha1.login.concierge."+env.APIGroupSuffix, metav1.GetOptions{})
+		require.NoError(t, err)
+
+		// work around stupid behavior of WithoutVersionDecoder.Decode
+		apiService.APIVersion, apiService.Kind = apiregistrationv1.SchemeGroupVersion.WithKind("APIService").ToAPIVersionAndKind()
+
+		ref := metav1.OwnerReference{
+			APIVersion: apiService.APIVersion,
+			Kind:       apiService.Kind,
+			Name:       apiService.Name,
+			UID:        apiService.UID,
+		}
+		require.Equal(t, ref, actualConfig.OwnerReferences[0])
 
 		// Verify the cluster strategy status based on what's expected of the test cluster's ability to share signing keys.
 		actualStatusStrategies := actualConfigList.Items[0].Status.Strategies

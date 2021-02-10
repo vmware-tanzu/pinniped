@@ -18,6 +18,7 @@ import (
 	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
 	pinnipedinformers "go.pinniped.dev/generated/1.20/client/concierge/informers/externalversions"
+	"go.pinniped.dev/internal/apiserviceref"
 	"go.pinniped.dev/internal/config/concierge"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
@@ -84,13 +85,25 @@ type Config struct {
 // Prepare the controllers and their informers and return a function that will start them when called.
 //nolint:funlen // Eh, fair, it is a really long function...but it is wiring the world...so...
 func PrepareControllers(c *Config) (func(ctx context.Context), error) {
+	groupName, ok := groupsuffix.Replace(loginv1alpha1.GroupName, c.APIGroupSuffix)
+	if !ok {
+		return nil, fmt.Errorf("cannot make api group from %s/%s", loginv1alpha1.GroupName, c.APIGroupSuffix)
+	}
+	apiServiceName := loginv1alpha1.SchemeGroupVersion.Version + "." + groupName
+
 	dref, _, err := deploymentref.New(c.ServerInstallationInfo)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create deployment ref: %w", err)
 	}
 
+	apiServiceRef, err := apiserviceref.New(apiServiceName)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create API service ref: %w", err)
+	}
+
 	client, err := kubeclient.New(
-		dref,
+		dref,          // first try to use the deployment as an owner ref (for namespace scoped resources)
+		apiServiceRef, // fallback to our API service (for everything else we create)
 		kubeclient.WithMiddleware(groupsuffix.New(c.APIGroupSuffix)),
 	)
 	if err != nil {
@@ -111,12 +124,6 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 	credentialIssuerLocationConfig := &kubecertagent.CredentialIssuerLocationConfig{
 		Name: c.NamesConfig.CredentialIssuer,
 	}
-
-	groupName, ok := groupsuffix.Replace(loginv1alpha1.GroupName, c.APIGroupSuffix)
-	if !ok {
-		return nil, fmt.Errorf("cannot make api group from %s/%s", loginv1alpha1.GroupName, c.APIGroupSuffix)
-	}
-	apiServiceName := loginv1alpha1.SchemeGroupVersion.Version + "." + groupName
 
 	// Create controller manager.
 	controllerManager := controllerlib.

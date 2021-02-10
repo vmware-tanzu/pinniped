@@ -17,7 +17,7 @@ rules:
     verbs: [ get, list, watch ]
   - apiGroups: [ apiregistration.k8s.io ]
     resources: [ apiservices ]
-    verbs: [ create, get, list, patch, update, watch ]
+    verbs: [ get, list, patch, update, watch ]
   - apiGroups: [ admissionregistration.k8s.io ]
     resources: [ validatingwebhookconfigurations, mutatingwebhookconfigurations ]
     verbs: [ get, list, watch ]
@@ -34,7 +34,11 @@ rules:
   - apiGroups:
       - #@ pinnipedDevAPIGroupWithPrefix("config.concierge")
     resources: [ credentialissuers ]
-    verbs: [ get, list, watch, create, update ]
+    verbs: [ get, list, watch, create ]
+  - apiGroups:
+      - #@ pinnipedDevAPIGroupWithPrefix("config.concierge")
+    resources: [ credentialissuers/status ]
+    verbs: [get, patch, update]
   - apiGroups:
       - #@ pinnipedDevAPIGroupWithPrefix("authentication.concierge")
     resources: [ jwtauthenticators, webhookauthenticators ]

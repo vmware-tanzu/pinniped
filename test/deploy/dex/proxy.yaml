@@ -48,7 +48,7 @@ spec:
             periodSeconds: 5
             failureThreshold: 2
         - name: accesslogs
-          image: debian:10.7-slim
+          image: debian:10.8-slim
           command:
             - "/bin/sh"
             - "-c"

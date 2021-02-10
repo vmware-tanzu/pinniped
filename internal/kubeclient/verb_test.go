@@ -42,7 +42,7 @@ func Test_verb(t *testing.T) {
 			f: func() string {
 				return fmt.Errorf("%#v", request{verb: VerbPatch}).Error()
 			},
-			want: `kubeclient.request{verb:"patch", namespace:"", resource:schema.GroupVersionResource{Group:"", Version:"", Resource:""}, reqFuncs:[]func(kubeclient.Object)(nil), respFuncs:[]func(kubeclient.Object)(nil), subresource:""}`,
+			want: `kubeclient.request{verb:"patch", namespace:"", resource:schema.GroupVersionResource{Group:"", Version:"", Resource:""}, reqFuncs:[]func(kubeclient.Object) error(nil), respFuncs:[]func(kubeclient.Object) error(nil), subresource:""}`,
 		},
 	}
 	for _, tt := range tests {

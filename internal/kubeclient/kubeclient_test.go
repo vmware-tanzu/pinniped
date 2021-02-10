@@ -492,8 +492,9 @@ func TestKubeclient(t *testing.T) {
 				return []*spyMiddleware{{
 					name: "non-pertinent mutater",
 					t:    t,
-					mutateReq: func(rt RoundTrip, obj Object) {
+					mutateReq: func(rt RoundTrip, obj Object) error {
 						clusterName()(obj)
+						return nil
 					},
 				}}
 			},
@@ -528,6 +529,64 @@ func TestKubeclient(t *testing.T) {
 			},
 			wantMiddlewareReqs:  [][]Object{{with(&metav1.PartialObjectMetadata{}, gvk(federationDomainGVK))}},
 			wantMiddlewareResps: [][]Object{nil},
+		},
+		{
+			name: "when there are request middleware failures, we return an error and don't send the request",
+			middlewares: func(t *testing.T) []*spyMiddleware {
+				return []*spyMiddleware{
+					// use 3 middleware to ensure that we collect all errors from all middlewares
+					newFailingMiddleware(t, "aaa", true, false),
+					newFailingMiddleware(t, "bbb", false, false),
+					newFailingMiddleware(t, "ccc", true, false),
+				}
+			},
+			reallyRunTest: func(t *testing.T, c *Client) {
+				_, err := c.PinnipedSupervisor.
+					ConfigV1alpha1().
+					FederationDomains(goodFederationDomain.Namespace).
+					Get(context.Background(), goodFederationDomain.Name, metav1.GetOptions{})
+				require.Error(t, err)
+				require.Contains(t, err.Error(), ": request mutation failed: [aaa: request error, ccc: request error]")
+			},
+			wantMiddlewareReqs: [][]Object{
+				{with(&metav1.PartialObjectMetadata{}, gvk(federationDomainGVK))},
+				{with(&metav1.PartialObjectMetadata{}, gvk(federationDomainGVK))},
+				{with(&metav1.PartialObjectMetadata{}, gvk(federationDomainGVK))},
+			},
+			wantMiddlewareResps: [][]Object{
+				nil,
+				nil,
+				nil,
+			},
+		},
+		{
+			name: "when there are response middleware failures, we return an error",
+			middlewares: func(t *testing.T) []*spyMiddleware {
+				return []*spyMiddleware{
+					// use 3 middleware to ensure that we collect all errors from all middlewares
+					newFailingMiddleware(t, "aaa", false, true),
+					newFailingMiddleware(t, "bbb", false, false),
+					newFailingMiddleware(t, "ccc", false, true),
+				}
+			},
+			reallyRunTest: func(t *testing.T, c *Client) {
+				_, err := c.PinnipedSupervisor.
+					ConfigV1alpha1().
+					FederationDomains(goodFederationDomain.Namespace).
+					Create(context.Background(), goodFederationDomain, metav1.CreateOptions{})
+				require.Error(t, err)
+				require.Contains(t, err.Error(), ": response mutation failed: [aaa: response error, ccc: response error]")
+			},
+			wantMiddlewareReqs: [][]Object{
+				{with(goodFederationDomain, gvk(federationDomainGVK))},
+				{with(goodFederationDomain, gvk(federationDomainGVK))},
+				{with(goodFederationDomain, gvk(federationDomainGVK))},
+			},
+			wantMiddlewareResps: [][]Object{
+				{with(goodFederationDomain, gvk(federationDomainGVK))},
+				{with(goodFederationDomain, gvk(federationDomainGVK))},
+				{with(goodFederationDomain, gvk(federationDomainGVK))},
+			},
 		},
 	}
 	for _, test := range tests {
@@ -568,8 +627,8 @@ func TestKubeclient(t *testing.T) {
 type spyMiddleware struct {
 	name       string
 	t          *testing.T
-	mutateReq  func(RoundTrip, Object)
-	mutateResp func(RoundTrip, Object)
+	mutateReq  func(RoundTrip, Object) error
+	mutateResp func(RoundTrip, Object) error
 	reqObjs    []Object
 	respObjs   []Object
 }
@@ -578,18 +637,18 @@ func (s *spyMiddleware) Handle(_ context.Context, rt RoundTrip) {
 	s.t.Log(s.name, "handling", reqStr(rt, nil))
 
 	if s.mutateReq != nil {
-		rt.MutateRequest(func(obj Object) {
+		rt.MutateRequest(func(obj Object) error {
 			s.t.Log(s.name, "mutating request", reqStr(rt, obj))
 			s.reqObjs = append(s.reqObjs, obj.DeepCopyObject().(Object))
-			s.mutateReq(rt, obj)
+			return s.mutateReq(rt, obj)
 		})
 	}
 
 	if s.mutateResp != nil {
-		rt.MutateResponse(func(obj Object) {
+		rt.MutateResponse(func(obj Object) error {
 			s.t.Log(s.name, "mutating response", reqStr(rt, obj))
 			s.respObjs = append(s.respObjs, obj.DeepCopyObject().(Object))
-			s.mutateResp(rt, obj)
+			return s.mutateResp(rt, obj)
 		})
 	}
 }
@@ -611,17 +670,19 @@ func newAnnotationMiddleware(t *testing.T) *spyMiddleware {
 	return &spyMiddleware{
 		name: "annotater",
 		t:    t,
-		mutateReq: func(rt RoundTrip, obj Object) {
+		mutateReq: func(rt RoundTrip, obj Object) error {
 			if rt.Verb() == VerbCreate {
 				annotations()(obj)
 			}
+			return nil
 		},
-		mutateResp: func(rt RoundTrip, obj Object) {
+		mutateResp: func(rt RoundTrip, obj Object) error {
 			if rt.Verb() == VerbCreate {
 				for key := range middlewareAnnotations {
 					delete(obj.GetAnnotations(), key)
 				}
 			}
+			return nil
 		},
 	}
 }
@@ -630,38 +691,66 @@ func newLabelMiddleware(t *testing.T) *spyMiddleware {
 	return &spyMiddleware{
 		name: "labeler",
 		t:    t,
-		mutateReq: func(rt RoundTrip, obj Object) {
+		mutateReq: func(rt RoundTrip, obj Object) error {
 			if rt.Verb() == VerbCreate {
 				labels()(obj)
 			}
+			return nil
 		},
-		mutateResp: func(rt RoundTrip, obj Object) {
+		mutateResp: func(rt RoundTrip, obj Object) error {
 			if rt.Verb() == VerbCreate {
 				for key := range middlewareLabels {
 					delete(obj.GetLabels(), key)
 				}
 			}
+			return nil
 		},
 	}
 }
 
 func newSimpleMiddleware(t *testing.T, hasMutateReqFunc, mutatedReq, hasMutateRespFunc bool) *spyMiddleware {
 	m := &spyMiddleware{
-		name: "nop",
+		name: "simple",
 		t:    t,
 	}
 	if hasMutateReqFunc {
-		m.mutateReq = func(rt RoundTrip, obj Object) {
+		m.mutateReq = func(rt RoundTrip, obj Object) error {
 			if mutatedReq {
 				if rt.Verb() == VerbCreate {
 					obj.SetClusterName(someClusterName)
 				}
 			}
+			return nil
 		}
 	}
 	if hasMutateRespFunc {
-		m.mutateResp = func(rt RoundTrip, obj Object) {}
+		m.mutateResp = func(rt RoundTrip, obj Object) error {
+			return nil
+		}
 	}
+	return m
+}
+
+func newFailingMiddleware(t *testing.T, name string, mutateReqFails, mutateRespFails bool) *spyMiddleware {
+	m := &spyMiddleware{
+		name: "failing-middleware-" + name,
+		t:    t,
+	}
+
+	m.mutateReq = func(rt RoundTrip, obj Object) error {
+		if mutateReqFails {
+			return fmt.Errorf("%s: request error", name)
+		}
+		return nil
+	}
+
+	m.mutateResp = func(rt RoundTrip, obj Object) error {
+		if mutateRespFails {
+			return fmt.Errorf("%s: response error", name)
+		}
+		return nil
+	}
+
 	return m
 }
 

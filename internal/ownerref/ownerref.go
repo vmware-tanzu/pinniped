@@ -51,13 +51,15 @@ func New(refObj kubeclient.Object) kubeclient.Middleware {
 			return
 		}
 
-		rt.MutateRequest(func(obj kubeclient.Object) {
+		rt.MutateRequest(func(obj kubeclient.Object) error {
 			// we only want to set the owner ref on create and when one is not already present
 			if len(obj.GetOwnerReferences()) != 0 {
-				return
+				return nil
 			}
 
 			obj.SetOwnerReferences([]metav1.OwnerReference{ref})
+
+			return nil
 		})
 	})
 }

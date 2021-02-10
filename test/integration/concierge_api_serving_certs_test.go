@@ -78,10 +78,14 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			kubeClient := library.NewKubernetesClientset(t)
 			aggregatedClient := library.NewAggregatedClientset(t)
 			conciergeClient := library.NewConciergeClientset(t)
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 			defer cancel()
 
 			apiServiceName := "v1alpha1.login.concierge." + env.APIGroupSuffix
+
+			// Create a testWebhook so we have a legitimate authenticator to pass to the
+			// TokenCredentialRequest API.
+			testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
 
 			// Get the initial auto-generated version of the Secret.
 			secret, err := kubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})
@@ -145,7 +149,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 					_, err = conciergeClient.LoginV1alpha1().TokenCredentialRequests(env.ConciergeNamespace).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 						TypeMeta:   metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{},
-						Spec:       loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token"},
+						Spec:       loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token", Authenticator: testWebhook},
 					}, metav1.CreateOptions{})
 					if err != nil {
 						break

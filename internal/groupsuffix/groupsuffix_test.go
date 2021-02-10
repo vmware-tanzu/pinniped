@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
+	authv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/1.20/apis/supervisor/config/v1alpha1"
 	"go.pinniped.dev/internal/kubeclient"
@@ -31,6 +32,7 @@ func ExampleReplace_string() {
 	fmt.Println(s)
 	// Output: idp.supervisor.marlin.io
 }
+
 func TestMiddlware(t *testing.T) {
 	const newSuffix = "some.suffix.com"
 
@@ -117,14 +119,14 @@ func TestMiddlware(t *testing.T) {
 			},
 		},
 	}
-	federationDomainWithPinnipedOwnerWithNewGroup := &configv1alpha1.FederationDomain{
+	federationDomainWithNewGroupAndPinnipedOwner := &configv1alpha1.FederationDomain{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: configv1alpha1.SchemeGroupVersion.String(),
+			APIVersion: replaceGV(t, configv1alpha1.SchemeGroupVersion, newSuffix).String(),
 			Kind:       "FederationDomain",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(pinnipedOwner, pinnipedOwnerWithNewGroupGVK),
+				*metav1.NewControllerRef(pinnipedOwner, pinnipedOwnerGVK),
 
 				// make sure we don't update the non-pinniped owner
 				*metav1.NewControllerRef(nonPinnipedOwner, nonPinnipedOwnerGVK),
@@ -133,7 +135,7 @@ func TestMiddlware(t *testing.T) {
 	}
 	federationDomainWithNewGroupAndPinnipedOwnerWithNewGroup := &configv1alpha1.FederationDomain{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: replaceGV(t, configv1alpha1.SchemeGroupVersion, newSuffix),
+			APIVersion: replaceGV(t, configv1alpha1.SchemeGroupVersion, newSuffix).String(),
 			Kind:       "FederationDomain",
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -146,29 +148,40 @@ func TestMiddlware(t *testing.T) {
 		},
 	}
 
-	tokenCredentialRequest := &loginv1alpha1.TokenCredentialRequest{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: loginv1alpha1.SchemeGroupVersion.String(),
-			Kind:       "TokenCredentialRequest",
-		},
-	}
-	tokenCredentialRequestWithNewGroup := &loginv1alpha1.TokenCredentialRequest{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: replaceGV(t, loginv1alpha1.SchemeGroupVersion, newSuffix),
-			Kind:       "TokenCredentialRequest",
-		},
-	}
+	tokenCredentialRequest := with(
+		&loginv1alpha1.TokenCredentialRequest{},
+		gvk(replaceGV(t, loginv1alpha1.SchemeGroupVersion, newSuffix).WithKind("TokenCredentialRequest")),
+	)
+	tokenCredentialRequestWithPinnipedAuthenticator := with(
+		tokenCredentialRequest,
+		authenticatorAPIGroup(authv1alpha1.SchemeGroupVersion.Group),
+	)
+	tokenCredentialRequestWithCustomAPIGroupAuthenticator := with(
+		tokenCredentialRequest,
+		authenticatorAPIGroup(replaceGV(t, authv1alpha1.SchemeGroupVersion, newSuffix).Group),
+	)
+	tokenCredentialRequestWithNewGroup := with(
+		tokenCredentialRequest,
+		gvk(replaceGV(t, loginv1alpha1.SchemeGroupVersion, newSuffix).WithKind("TokenCredentialRequest")),
+	)
+	tokenCredentialRequestWithNewGroupAndPinnipedAuthenticator := with(
+		tokenCredentialRequestWithNewGroup,
+		authenticatorAPIGroup(authv1alpha1.SchemeGroupVersion.Group),
+	)
+	tokenCredentialRequestWithNewGroupAndCustomAPIGroupAuthenticator := with(
+		tokenCredentialRequestWithNewGroup,
+		authenticatorAPIGroup(replaceGV(t, authv1alpha1.SchemeGroupVersion, newSuffix).Group),
+	)
 
 	tests := []struct {
-		name                                    string
-		apiGroupSuffix                          string
-		rt                                      *testutil.RoundTrip
-		requestObj, responseObj                 kubeclient.Object
-		wantNilMiddleware                       bool
-		wantMutateRequests, wantMutateResponses int
-		wantRequestObj, wantResponseObj         kubeclient.Object
-
-		skip bool
+		name                                              string
+		apiGroupSuffix                                    string
+		rt                                                *testutil.RoundTrip
+		requestObj, responseObj                           kubeclient.Object
+		wantNilMiddleware                                 bool
+		wantMutateRequests, wantMutateResponses           int
+		wantMutateRequestErrors, wantMutateResponseErrors []string
+		wantRequestObj, wantResponseObj                   kubeclient.Object
 	}{
 		{
 			name:           "api group suffix is empty",
@@ -227,12 +240,12 @@ func TestMiddlware(t *testing.T) {
 			rt: (&testutil.RoundTrip{}).
 				WithVerb(kubeclient.VerbGet).
 				WithResource(loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")),
-			requestObj:          tokenCredentialRequest,
-			responseObj:         tokenCredentialRequest,
+			requestObj:          with(&metav1.PartialObjectMetadata{}, gvk(loginv1alpha1.SchemeGroupVersion.WithKind("TokenCredentialRequest"))),
+			responseObj:         tokenCredentialRequestWithNewGroup,
 			wantMutateRequests:  1,
 			wantMutateResponses: 1,
-			wantRequestObj:      tokenCredentialRequestWithNewGroup,
-			wantResponseObj:     tokenCredentialRequest,
+			wantRequestObj:      with(&metav1.PartialObjectMetadata{}, gvk(replaceGV(t, loginv1alpha1.SchemeGroupVersion, newSuffix).WithKind("TokenCredentialRequest"))),
+			wantResponseObj:     tokenCredentialRequestWithNewGroup, // the middleware will reset object GVK for us
 		},
 		{
 			name:           "create resource without pinniped.dev and without owner ref",
@@ -289,7 +302,7 @@ func TestMiddlware(t *testing.T) {
 			wantResponseObj:     podWithPinnipedOwner,
 		},
 		{
-			// test that both of our middleware request mutations play nicely with each other
+			// test that multiple of our middleware request mutations play nicely with each other
 			name:           "create resource with pinniped.dev and with owner ref that has pinniped.dev owner",
 			apiGroupSuffix: newSuffix,
 			rt: (&testutil.RoundTrip{}).
@@ -297,11 +310,11 @@ func TestMiddlware(t *testing.T) {
 				WithNamespace("some-namespace").
 				WithResource(configv1alpha1.SchemeGroupVersion.WithResource("federationdomains")),
 			requestObj:          federationDomainWithPinnipedOwner,
-			responseObj:         federationDomainWithPinnipedOwnerWithNewGroup,
+			responseObj:         federationDomainWithNewGroupAndPinnipedOwnerWithNewGroup,
 			wantMutateRequests:  2,
 			wantMutateResponses: 1,
 			wantRequestObj:      federationDomainWithNewGroupAndPinnipedOwnerWithNewGroup,
-			wantResponseObj:     federationDomainWithPinnipedOwner,
+			wantResponseObj:     federationDomainWithNewGroupAndPinnipedOwner, // the middleware will reset object GVK for us
 		},
 		{
 			name:           "update resource without pinniped.dev",
@@ -321,11 +334,11 @@ func TestMiddlware(t *testing.T) {
 				WithVerb(kubeclient.VerbUpdate).
 				WithResource(loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")),
 			requestObj:          tokenCredentialRequest,
-			responseObj:         tokenCredentialRequest,
+			responseObj:         tokenCredentialRequestWithNewGroup,
 			wantMutateRequests:  1,
 			wantMutateResponses: 1,
 			wantRequestObj:      tokenCredentialRequestWithNewGroup,
-			wantResponseObj:     tokenCredentialRequest,
+			wantResponseObj:     tokenCredentialRequestWithNewGroup, // the middleware will reset object GVK for us
 		},
 		{
 			name:           "list resource without pinniped.dev",
@@ -345,11 +358,11 @@ func TestMiddlware(t *testing.T) {
 				WithVerb(kubeclient.VerbList).
 				WithResource(loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")),
 			requestObj:          tokenCredentialRequest,
-			responseObj:         tokenCredentialRequest,
+			responseObj:         tokenCredentialRequestWithNewGroup,
 			wantMutateRequests:  1,
 			wantMutateResponses: 1,
 			wantRequestObj:      tokenCredentialRequestWithNewGroup,
-			wantResponseObj:     tokenCredentialRequest,
+			wantResponseObj:     tokenCredentialRequestWithNewGroup, // the middleware will reset object GVK for us
 		},
 		{
 			name:           "watch resource without pinniped.dev",
@@ -369,11 +382,11 @@ func TestMiddlware(t *testing.T) {
 				WithVerb(kubeclient.VerbList).
 				WithResource(loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")),
 			requestObj:          tokenCredentialRequest,
-			responseObj:         tokenCredentialRequest,
+			responseObj:         tokenCredentialRequestWithNewGroup,
 			wantMutateRequests:  1,
 			wantMutateResponses: 1,
 			wantRequestObj:      tokenCredentialRequestWithNewGroup,
-			wantResponseObj:     tokenCredentialRequest,
+			wantResponseObj:     tokenCredentialRequestWithNewGroup, // the middleware will reset object GVK for us
 		},
 		{
 			name:           "patch resource without pinniped.dev",
@@ -390,23 +403,98 @@ func TestMiddlware(t *testing.T) {
 			name:           "patch resource with pinniped.dev",
 			apiGroupSuffix: newSuffix,
 			rt: (&testutil.RoundTrip{}).
-				WithVerb(kubeclient.VerbList).
+				WithVerb(kubeclient.VerbPatch).
 				WithResource(loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")),
 			requestObj:          tokenCredentialRequest,
-			responseObj:         tokenCredentialRequest,
+			responseObj:         tokenCredentialRequestWithNewGroup,
 			wantMutateRequests:  1,
 			wantMutateResponses: 1,
 			wantRequestObj:      tokenCredentialRequestWithNewGroup,
-			wantResponseObj:     tokenCredentialRequest,
+			wantResponseObj:     tokenCredentialRequestWithNewGroup, // the middleware will reset object GVK for us
+		},
+		{
+			name:           "create tokencredentialrequest with pinniped.dev authenticator api group",
+			apiGroupSuffix: newSuffix,
+			rt: (&testutil.RoundTrip{}).
+				WithVerb(kubeclient.VerbCreate).
+				WithResource(loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")),
+			requestObj:          tokenCredentialRequestWithPinnipedAuthenticator,
+			responseObj:         tokenCredentialRequestWithNewGroup, // a token credential response does not contain a spec
+			wantMutateRequests:  3,
+			wantMutateResponses: 1,
+			wantRequestObj:      tokenCredentialRequestWithNewGroupAndCustomAPIGroupAuthenticator,
+			wantResponseObj:     tokenCredentialRequestWithNewGroup, // the middleware will reset object GVK for us
+		},
+		{
+			name:           "create tokencredentialrequest with custom authenticator api group fails because api group is expected to be pinniped.dev",
+			apiGroupSuffix: newSuffix,
+			rt: (&testutil.RoundTrip{}).
+				WithVerb(kubeclient.VerbCreate).
+				WithResource(loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")),
+			requestObj:              tokenCredentialRequestWithCustomAPIGroupAuthenticator,
+			responseObj:             tokenCredentialRequestWithNewGroup, // a token credential response does not contain a spec
+			wantMutateRequests:      3,
+			wantMutateResponses:     1,
+			wantMutateRequestErrors: []string{`cannot replace token credential request "/" authenticator API group "authentication.concierge.some.suffix.com" with group suffix "some.suffix.com"`},
+			wantResponseObj:         tokenCredentialRequestWithNewGroup, // the middleware will reset object GVK for us
+		},
+		{
+			name:           "create tokencredentialrequest with pinniped.dev authenticator api group and subresource",
+			apiGroupSuffix: newSuffix,
+			rt: (&testutil.RoundTrip{}).
+				WithVerb(kubeclient.VerbCreate).
+				WithResource(loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")).
+				WithSubresource("some-subresource"),
+			requestObj:          tokenCredentialRequestWithPinnipedAuthenticator,
+			responseObj:         tokenCredentialRequestWithNewGroup, // a token credential response does not contain a spec
+			wantMutateRequests:  1,
+			wantMutateResponses: 1,
+			wantRequestObj:      tokenCredentialRequestWithNewGroupAndPinnipedAuthenticator,
+			wantResponseObj:     tokenCredentialRequestWithNewGroup, // the middleware will reset object GVK for us
+		},
+		{
+			name:           "non-create tokencredentialrequest with pinniped.dev authenticator api group",
+			apiGroupSuffix: newSuffix,
+			rt: (&testutil.RoundTrip{}).
+				WithVerb(kubeclient.VerbList).
+				WithResource(loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")),
+			requestObj:          tokenCredentialRequestWithPinnipedAuthenticator,
+			responseObj:         tokenCredentialRequestWithNewGroup, // a token credential response does not contain a spec
+			wantMutateRequests:  1,
+			wantMutateResponses: 1,
+			wantRequestObj:      tokenCredentialRequestWithNewGroupAndPinnipedAuthenticator,
+			wantResponseObj:     tokenCredentialRequestWithNewGroup, // the middleware will reset object GVK for us
+		},
+		{
+			name:           "create tokencredentialrequest with nil authenticator api group",
+			apiGroupSuffix: newSuffix,
+			rt: (&testutil.RoundTrip{}).
+				WithVerb(kubeclient.VerbCreate).
+				WithResource(loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")),
+			requestObj:              tokenCredentialRequest,
+			responseObj:             tokenCredentialRequestWithNewGroup, // a token credential response does not contain a spec
+			wantMutateRequests:      3,
+			wantMutateResponses:     1,
+			wantMutateRequestErrors: []string{`cannot replace token credential request "/" without authenticator API group`},
+			wantResponseObj:         tokenCredentialRequestWithNewGroup, // the middleware will reset object GVK for us
+		},
+		{
+			name:           "create tokencredentialrequest with non-*loginv1alpha1.TokenCredentialRequest",
+			apiGroupSuffix: newSuffix,
+			rt: (&testutil.RoundTrip{}).
+				WithVerb(kubeclient.VerbCreate).
+				WithResource(loginv1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")),
+			requestObj:              podWithoutOwner,
+			responseObj:             podWithoutOwner,
+			wantMutateRequests:      3,
+			wantMutateResponses:     1,
+			wantMutateRequestErrors: []string{`cannot cast obj of type *v1.Pod to *loginv1alpha1.TokenCredentialRequest`},
+			wantResponseObj:         podWithoutOwner,
 		},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			if test.skip {
-				t.Skip()
-			}
-
 			m := New(test.apiGroupSuffix)
 			if test.wantNilMiddleware {
 				require.Nil(t, m, "wanted nil middleware")
@@ -414,27 +502,41 @@ func TestMiddlware(t *testing.T) {
 			}
 
 			m.Handle(context.Background(), test.rt)
-			require.Len(t, test.rt.MutateRequests, test.wantMutateRequests)
-			require.Len(t, test.rt.MutateResponses, test.wantMutateResponses)
+			require.Len(t, test.rt.MutateRequests, test.wantMutateRequests, "undesired request mutation count")
+			require.Len(t, test.rt.MutateResponses, test.wantMutateResponses, "undesired response mutation count")
 
 			if test.wantMutateRequests != 0 {
 				require.NotNil(t, test.requestObj, "expected test.requestObj to be set")
 				objMutated := test.requestObj.DeepCopyObject().(kubeclient.Object)
+				var mutateRequestErrors []string
 				for _, mutateRequest := range test.rt.MutateRequests {
 					mutateRequest := mutateRequest
-					mutateRequest(objMutated)
+					if err := mutateRequest(objMutated); err != nil {
+						mutateRequestErrors = append(mutateRequestErrors, err.Error())
+					}
 				}
-				require.Equal(t, test.wantRequestObj, objMutated, "request obj did not match")
+				if len(test.wantMutateRequestErrors) > 0 {
+					require.Equal(t, test.wantMutateRequestErrors, mutateRequestErrors, "mutate request errors did not match")
+				} else {
+					require.Equal(t, test.wantRequestObj, objMutated, "request obj did not match")
+				}
 			}
 
 			if test.wantMutateResponses != 0 {
 				require.NotNil(t, test.responseObj, "expected test.responseObj to be set")
 				objMutated := test.responseObj.DeepCopyObject().(kubeclient.Object)
+				var mutateResponseErrors []string
 				for _, mutateResponse := range test.rt.MutateResponses {
 					mutateResponse := mutateResponse
-					mutateResponse(objMutated)
+					if err := mutateResponse(objMutated); err != nil {
+						mutateResponseErrors = append(mutateResponseErrors, err.Error())
+					}
 				}
-				require.Equal(t, test.wantResponseObj, objMutated, "response obj did not match")
+				if len(test.wantMutateRequestErrors) > 0 {
+					require.Equal(t, test.wantMutateResponseErrors, mutateResponseErrors, "mutate response errors did not match")
+				} else {
+					require.Equal(t, test.wantResponseObj, objMutated, "response obj did not match")
+				}
 			}
 		})
 	}
@@ -519,11 +621,35 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-func replaceGV(t *testing.T, baseGV schema.GroupVersion, apiGroupSuffix string) string {
+type withFunc func(obj kubeclient.Object)
+
+func with(obj kubeclient.Object, withFuncs ...withFunc) kubeclient.Object {
+	obj = obj.DeepCopyObject().(kubeclient.Object)
+	for _, withFunc := range withFuncs {
+		withFunc(obj)
+	}
+	return obj
+}
+
+func gvk(gvk schema.GroupVersionKind) withFunc {
+	return func(obj kubeclient.Object) {
+		obj.GetObjectKind().SetGroupVersionKind(gvk)
+	}
+}
+
+func authenticatorAPIGroup(apiGroup string) withFunc {
+	return func(obj kubeclient.Object) {
+		tokenCredentialRequest := obj.(*loginv1alpha1.TokenCredentialRequest)
+		tokenCredentialRequest.Spec.Authenticator.APIGroup = &apiGroup
+	}
+}
+
+//nolint:unparam // the apiGroupSuffix parameter might always be the same, but this is nice for test readability
+func replaceGV(t *testing.T, baseGV schema.GroupVersion, apiGroupSuffix string) schema.GroupVersion {
 	t.Helper()
 	groupName, ok := Replace(baseGV.Group, apiGroupSuffix)
 	require.True(t, ok, "expected to be able to replace %q's suffix with %q", baseGV.Group, apiGroupSuffix)
-	return schema.GroupVersion{Group: groupName, Version: baseGV.Version}.String()
+	return schema.GroupVersion{Group: groupName, Version: baseGV.Version}
 }
 
 func chars(count int) string {

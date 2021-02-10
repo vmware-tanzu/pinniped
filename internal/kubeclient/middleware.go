@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/errors"
 )
 
 type Middleware interface {
@@ -43,8 +44,8 @@ type RoundTrip interface {
 	NamespaceScoped() bool
 	Resource() schema.GroupVersionResource
 	Subresource() string
-	MutateRequest(f func(obj Object))
-	MutateResponse(f func(obj Object))
+	MutateRequest(f func(obj Object) error)
+	MutateResponse(f func(obj Object) error)
 }
 
 type Object interface {
@@ -58,7 +59,7 @@ type request struct {
 	verb                Verb
 	namespace           string
 	resource            schema.GroupVersionResource
-	reqFuncs, respFuncs []func(obj Object)
+	reqFuncs, respFuncs []func(obj Object) error
 	subresource         string
 }
 
@@ -89,11 +90,11 @@ func (r *request) Subresource() string {
 	return r.subresource
 }
 
-func (r *request) MutateRequest(f func(obj Object)) {
+func (r *request) MutateRequest(f func(obj Object) error) {
 	r.reqFuncs = append(r.reqFuncs, f)
 }
 
-func (r *request) MutateResponse(f func(obj Object)) {
+func (r *request) MutateResponse(f func(obj Object) error) {
 	r.respFuncs = append(r.respFuncs, f)
 }
 
@@ -113,9 +114,15 @@ func (r *request) mutateRequest(obj Object) (*mutationResult, error) {
 		return nil, fmt.Errorf("invalid deep copy semantics for %T: %#v", obj, r)
 	}
 
+	var errs []error
 	for _, reqFunc := range r.reqFuncs {
 		reqFunc := reqFunc
-		reqFunc(obj)
+		if err := reqFunc(obj); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if err := errors.NewAggregate(errs); err != nil {
+		return nil, fmt.Errorf("request mutation failed: %w", err)
 	}
 
 	newGVK := obj.GetObjectKind().GroupVersionKind()
@@ -137,9 +144,15 @@ func (r *request) mutateResponse(obj Object) (bool, error) {
 		return false, fmt.Errorf("invalid deep copy semantics for %T: %#v", obj, r)
 	}
 
+	var errs []error
 	for _, respFunc := range r.respFuncs {
 		respFunc := respFunc
-		respFunc(obj)
+		if err := respFunc(obj); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if err := errors.NewAggregate(errs); err != nil {
+		return false, fmt.Errorf("response mutation failed: %w", err)
 	}
 
 	mutated := !apiequality.Semantic.DeepEqual(origObj, obj)

@@ -125,7 +125,6 @@ func TestNew(t *testing.T) {
 		{
 			name: "valid",
 			opts: []Option{
-				WithNamespace("test-namespace"),
 				WithEndpoint("https://example.com"),
 				WithCABundle(""),
 				WithCABundle(string(testCA.Bundle())),
@@ -223,7 +222,7 @@ func TestExchangeToken(t *testing.T) {
 		// Start a test server that returns successfully and asserts various properties of the request.
 		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 			require.Equal(t, http.MethodPost, r.Method)
-			require.Equal(t, "/apis/login.concierge.pinniped.dev/v1alpha1/namespaces/test-namespace/tokencredentialrequests", r.URL.Path)
+			require.Equal(t, "/apis/login.concierge.pinniped.dev/v1alpha1/tokencredentialrequests", r.URL.Path)
 			require.Equal(t, "application/json", r.Header.Get("content-type"))
 
 			body, err := ioutil.ReadAll(r.Body)
@@ -233,8 +232,7 @@ func TestExchangeToken(t *testing.T) {
 				  "kind": "TokenCredentialRequest",
 				  "apiVersion": "login.concierge.pinniped.dev/v1alpha1",
 				  "metadata": {
-					"creationTimestamp": null,
-					"namespace": "test-namespace"
+					"creationTimestamp": null
 				  },
 				  "spec": {
 					"token": "test-token",
@@ -262,7 +260,7 @@ func TestExchangeToken(t *testing.T) {
 			})
 		})
 
-		client, err := New(WithNamespace("test-namespace"), WithEndpoint(endpoint), WithCABundle(caBundle), WithAuthenticator("webhook", "test-webhook"))
+		client, err := New(WithEndpoint(endpoint), WithCABundle(caBundle), WithAuthenticator("webhook", "test-webhook"))
 		require.NoError(t, err)
 
 		got, err := client.ExchangeToken(ctx, "test-token")

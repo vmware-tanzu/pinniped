@@ -19,7 +19,11 @@ rules:
   - apiGroups:
       - #@ pinnipedDevAPIGroupWithPrefix("config.supervisor")
     resources: [federationdomains]
-    verbs: [update, get, list, watch]
+    verbs: [get, list, watch]
+  - apiGroups:
+      - #@ pinnipedDevAPIGroupWithPrefix("config.supervisor")
+    resources: [federationdomains/status]
+    verbs: [get, patch, update]
   - apiGroups:
       - #@ pinnipedDevAPIGroupWithPrefix("idp.supervisor")
     resources: [oidcidentityproviders]

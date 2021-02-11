@@ -28,10 +28,9 @@ type Cache struct {
 }
 
 type Key struct {
-	APIGroup  string
-	Kind      string
-	Namespace string
-	Name      string
+	APIGroup string
+	Kind     string
+	Name     string
 }
 
 type Value interface {
@@ -74,7 +73,6 @@ func (c *Cache) Keys() []Key {
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].APIGroup < result[j].APIGroup ||
 			result[i].Kind < result[j].Kind ||
-			result[i].Namespace < result[j].Namespace ||
 			result[i].Name < result[j].Name
 	})
 	return result
@@ -83,9 +81,8 @@ func (c *Cache) Keys() []Key {
 func (c *Cache) AuthenticateTokenCredentialRequest(ctx context.Context, req *loginapi.TokenCredentialRequest) (user.Info, error) {
 	// Map the incoming request to a cache key.
 	key := Key{
-		Namespace: req.Namespace,
-		Name:      req.Spec.Authenticator.Name,
-		Kind:      req.Spec.Authenticator.Kind,
+		Name: req.Spec.Authenticator.Name,
+		Kind: req.Spec.Authenticator.Kind,
 	}
 	if req.Spec.Authenticator.APIGroup != nil {
 		key.APIGroup = *req.Spec.Authenticator.APIGroup
@@ -95,7 +92,7 @@ func (c *Cache) AuthenticateTokenCredentialRequest(ctx context.Context, req *log
 	if val == nil {
 		plog.Debug(
 			"authenticator does not exist",
-			"authenticator", klog.KRef(key.Namespace, key.Name),
+			"authenticator", klog.KRef("", key.Name),
 			"kind", key.Kind,
 			"apiGroup", key.APIGroup,
 		)

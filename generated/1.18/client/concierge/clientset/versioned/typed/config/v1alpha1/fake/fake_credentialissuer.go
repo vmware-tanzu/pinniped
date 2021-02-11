@@ -20,7 +20,6 @@ import (
 // FakeCredentialIssuers implements CredentialIssuerInterface
 type FakeCredentialIssuers struct {
 	Fake *FakeConfigV1alpha1
-	ns   string
 }
 
 var credentialissuersResource = schema.GroupVersionResource{Group: "config.concierge.pinniped.dev", Version: "v1alpha1", Resource: "credentialissuers"}
@@ -30,8 +29,7 @@ var credentialissuersKind = schema.GroupVersionKind{Group: "config.concierge.pin
 // Get takes name of the credentialIssuer, and returns the corresponding credentialIssuer object, and an error if there is any.
 func (c *FakeCredentialIssuers) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.CredentialIssuer, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(credentialissuersResource, c.ns, name), &v1alpha1.CredentialIssuer{})
-
+		Invokes(testing.NewRootGetAction(credentialissuersResource, name), &v1alpha1.CredentialIssuer{})
 	if obj == nil {
 		return nil, err
 	}
@@ -41,8 +39,7 @@ func (c *FakeCredentialIssuers) Get(ctx context.Context, name string, options v1
 // List takes label and field selectors, and returns the list of CredentialIssuers that match those selectors.
 func (c *FakeCredentialIssuers) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.CredentialIssuerList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(credentialissuersResource, credentialissuersKind, c.ns, opts), &v1alpha1.CredentialIssuerList{})
-
+		Invokes(testing.NewRootListAction(credentialissuersResource, credentialissuersKind, opts), &v1alpha1.CredentialIssuerList{})
 	if obj == nil {
 		return nil, err
 	}
@@ -63,15 +60,13 @@ func (c *FakeCredentialIssuers) List(ctx context.Context, opts v1.ListOptions) (
 // Watch returns a watch.Interface that watches the requested credentialIssuers.
 func (c *FakeCredentialIssuers) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(credentialissuersResource, c.ns, opts))
-
+		InvokesWatch(testing.NewRootWatchAction(credentialissuersResource, opts))
 }
 
 // Create takes the representation of a credentialIssuer and creates it.  Returns the server's representation of the credentialIssuer, and an error, if there is any.
 func (c *FakeCredentialIssuers) Create(ctx context.Context, credentialIssuer *v1alpha1.CredentialIssuer, opts v1.CreateOptions) (result *v1alpha1.CredentialIssuer, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(credentialissuersResource, c.ns, credentialIssuer), &v1alpha1.CredentialIssuer{})
-
+		Invokes(testing.NewRootCreateAction(credentialissuersResource, credentialIssuer), &v1alpha1.CredentialIssuer{})
 	if obj == nil {
 		return nil, err
 	}
@@ -81,8 +76,7 @@ func (c *FakeCredentialIssuers) Create(ctx context.Context, credentialIssuer *v1
 // Update takes the representation of a credentialIssuer and updates it. Returns the server's representation of the credentialIssuer, and an error, if there is any.
 func (c *FakeCredentialIssuers) Update(ctx context.Context, credentialIssuer *v1alpha1.CredentialIssuer, opts v1.UpdateOptions) (result *v1alpha1.CredentialIssuer, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(credentialissuersResource, c.ns, credentialIssuer), &v1alpha1.CredentialIssuer{})
-
+		Invokes(testing.NewRootUpdateAction(credentialissuersResource, credentialIssuer), &v1alpha1.CredentialIssuer{})
 	if obj == nil {
 		return nil, err
 	}
@@ -93,8 +87,7 @@ func (c *FakeCredentialIssuers) Update(ctx context.Context, credentialIssuer *v1
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
 func (c *FakeCredentialIssuers) UpdateStatus(ctx context.Context, credentialIssuer *v1alpha1.CredentialIssuer, opts v1.UpdateOptions) (*v1alpha1.CredentialIssuer, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(credentialissuersResource, "status", c.ns, credentialIssuer), &v1alpha1.CredentialIssuer{})
-
+		Invokes(testing.NewRootUpdateSubresourceAction(credentialissuersResource, "status", credentialIssuer), &v1alpha1.CredentialIssuer{})
 	if obj == nil {
 		return nil, err
 	}
@@ -104,14 +97,13 @@ func (c *FakeCredentialIssuers) UpdateStatus(ctx context.Context, credentialIssu
 // Delete takes name of the credentialIssuer and deletes it. Returns an error if one occurs.
 func (c *FakeCredentialIssuers) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(credentialissuersResource, c.ns, name), &v1alpha1.CredentialIssuer{})
-
+		Invokes(testing.NewRootDeleteAction(credentialissuersResource, name), &v1alpha1.CredentialIssuer{})
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeCredentialIssuers) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(credentialissuersResource, c.ns, listOpts)
+	action := testing.NewRootDeleteCollectionAction(credentialissuersResource, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.CredentialIssuerList{})
 	return err
@@ -120,8 +112,7 @@ func (c *FakeCredentialIssuers) DeleteCollection(ctx context.Context, opts v1.De
 // Patch applies the patch and returns the patched credentialIssuer.
 func (c *FakeCredentialIssuers) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.CredentialIssuer, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(credentialissuersResource, c.ns, name, pt, data, subresources...), &v1alpha1.CredentialIssuer{})
-
+		Invokes(testing.NewRootPatchSubresourceAction(credentialissuersResource, name, pt, data, subresources...), &v1alpha1.CredentialIssuer{})
 	if obj == nil {
 		return nil, err
 	}

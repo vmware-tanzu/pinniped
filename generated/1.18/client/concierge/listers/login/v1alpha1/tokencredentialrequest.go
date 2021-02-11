@@ -16,8 +16,8 @@ import (
 type TokenCredentialRequestLister interface {
 	// List lists all TokenCredentialRequests in the indexer.
 	List(selector labels.Selector) (ret []*v1alpha1.TokenCredentialRequest, err error)
-	// TokenCredentialRequests returns an object that can list and get TokenCredentialRequests.
-	TokenCredentialRequests(namespace string) TokenCredentialRequestNamespaceLister
+	// Get retrieves the TokenCredentialRequest from the index for a given name.
+	Get(name string) (*v1alpha1.TokenCredentialRequest, error)
 	TokenCredentialRequestListerExpansion
 }
 
@@ -39,38 +39,9 @@ func (s *tokenCredentialRequestLister) List(selector labels.Selector) (ret []*v1
 	return ret, err
 }
 
-// TokenCredentialRequests returns an object that can list and get TokenCredentialRequests.
-func (s *tokenCredentialRequestLister) TokenCredentialRequests(namespace string) TokenCredentialRequestNamespaceLister {
-	return tokenCredentialRequestNamespaceLister{indexer: s.indexer, namespace: namespace}
-}
-
-// TokenCredentialRequestNamespaceLister helps list and get TokenCredentialRequests.
-type TokenCredentialRequestNamespaceLister interface {
-	// List lists all TokenCredentialRequests in the indexer for a given namespace.
-	List(selector labels.Selector) (ret []*v1alpha1.TokenCredentialRequest, err error)
-	// Get retrieves the TokenCredentialRequest from the indexer for a given namespace and name.
-	Get(name string) (*v1alpha1.TokenCredentialRequest, error)
-	TokenCredentialRequestNamespaceListerExpansion
-}
-
-// tokenCredentialRequestNamespaceLister implements the TokenCredentialRequestNamespaceLister
-// interface.
-type tokenCredentialRequestNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all TokenCredentialRequests in the indexer for a given namespace.
-func (s tokenCredentialRequestNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.TokenCredentialRequest, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.TokenCredentialRequest))
-	})
-	return ret, err
-}
-
-// Get retrieves the TokenCredentialRequest from the indexer for a given namespace and name.
-func (s tokenCredentialRequestNamespaceLister) Get(name string) (*v1alpha1.TokenCredentialRequest, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+// Get retrieves the TokenCredentialRequest from the index for a given name.
+func (s *tokenCredentialRequestLister) Get(name string) (*v1alpha1.TokenCredentialRequest, error) {
+	obj, exists, err := s.indexer.GetByKey(name)
 	if err != nil {
 		return nil, err
 	}

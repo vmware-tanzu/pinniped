@@ -57,7 +57,6 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 				"get", "kubeconfig",
 				"--static-token", env.TestUser.Token,
 				"--concierge-api-group-suffix", env.APIGroupSuffix,
-				"--concierge-namespace", env.ConciergeNamespace,
 				"--concierge-authenticator-type", "webhook",
 				"--concierge-authenticator-name", authenticator.Name,
 			},

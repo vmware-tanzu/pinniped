@@ -153,7 +153,7 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 	testEnv := IntegrationEnv(t)
 
 	client := NewConciergeClientset(t)
-	webhooks := client.AuthenticationV1alpha1().WebhookAuthenticators(testEnv.ConciergeNamespace)
+	webhooks := client.AuthenticationV1alpha1().WebhookAuthenticators()
 
 	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -220,10 +220,9 @@ func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T)
 // authenticator within the test namespace.
 func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alpha1.JWTAuthenticatorSpec) corev1.TypedLocalObjectReference {
 	t.Helper()
-	testEnv := IntegrationEnv(t)
 
 	client := NewConciergeClientset(t)
-	jwtAuthenticators := client.AuthenticationV1alpha1().JWTAuthenticators(testEnv.ConciergeNamespace)
+	jwtAuthenticators := client.AuthenticationV1alpha1().JWTAuthenticators()
 
 	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()

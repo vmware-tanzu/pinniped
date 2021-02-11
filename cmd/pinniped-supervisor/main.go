@@ -175,8 +175,8 @@ func startControllers(
 						secretCache.SetTokenHMACKey(federationDomainIssuer, symmetricKey)
 					},
 				),
-				func(fd *configv1alpha1.FederationDomain) *corev1.LocalObjectReference {
-					return &fd.Status.Secrets.TokenSigningKey
+				func(fd *configv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference {
+					return &fd.Secrets.TokenSigningKey
 				},
 				kubeClient,
 				pinnipedClient,
@@ -198,8 +198,8 @@ func startControllers(
 						secretCache.SetStateEncoderHashKey(federationDomainIssuer, symmetricKey)
 					},
 				),
-				func(fd *configv1alpha1.FederationDomain) *corev1.LocalObjectReference {
-					return &fd.Status.Secrets.StateSigningKey
+				func(fd *configv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference {
+					return &fd.Secrets.StateSigningKey
 				},
 				kubeClient,
 				pinnipedClient,
@@ -221,8 +221,8 @@ func startControllers(
 						secretCache.SetStateEncoderBlockKey(federationDomainIssuer, symmetricKey)
 					},
 				),
-				func(fd *configv1alpha1.FederationDomain) *corev1.LocalObjectReference {
-					return &fd.Status.Secrets.StateEncryptionKey
+				func(fd *configv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference {
+					return &fd.Secrets.StateEncryptionKey
 				},
 				kubeClient,
 				pinnipedClient,

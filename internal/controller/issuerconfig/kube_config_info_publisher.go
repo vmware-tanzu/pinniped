@@ -26,19 +26,17 @@ const (
 )
 
 type kubeConigInfoPublisherController struct {
-	credentialIssuerNamespaceName string
-	credentialIssuerResourceName  string
-	credentialIssuerLabels        map[string]string
-	serverOverride                *string
-	pinnipedClient                pinnipedclientset.Interface
-	configMapInformer             corev1informers.ConfigMapInformer
+	credentialIssuerResourceName string
+	credentialIssuerLabels       map[string]string
+	serverOverride               *string
+	pinnipedClient               pinnipedclientset.Interface
+	configMapInformer            corev1informers.ConfigMapInformer
 }
 
 // NewKubeConfigInfoPublisherController returns a controller that syncs the
 // configv1alpha1.CredentialIssuer.Status.KubeConfigInfo field with the cluster-info ConfigMap
 // in the kube-public namespace.
 func NewKubeConfigInfoPublisherController(
-	credentialIssuerNamespaceName string,
 	credentialIssuerResourceName string,
 	credentialIssuerLabels map[string]string,
 	serverOverride *string,
@@ -50,12 +48,11 @@ func NewKubeConfigInfoPublisherController(
 		controllerlib.Config{
 			Name: "publisher-controller",
 			Syncer: &kubeConigInfoPublisherController{
-				credentialIssuerResourceName:  credentialIssuerResourceName,
-				credentialIssuerNamespaceName: credentialIssuerNamespaceName,
-				credentialIssuerLabels:        credentialIssuerLabels,
-				serverOverride:                serverOverride,
-				pinnipedClient:                pinnipedClient,
-				configMapInformer:             configMapInformer,
+				credentialIssuerResourceName: credentialIssuerResourceName,
+				credentialIssuerLabels:       credentialIssuerLabels,
+				serverOverride:               serverOverride,
+				pinnipedClient:               pinnipedClient,
+				configMapInformer:            configMapInformer,
 			},
 		},
 		withInformer(
@@ -107,16 +104,15 @@ func (c *kubeConigInfoPublisherController) Sync(ctx controllerlib.Context) error
 		server = *c.serverOverride
 	}
 
-	updateServerAndCAFunc := func(c *configv1alpha1.CredentialIssuer) {
-		c.Status.KubeConfigInfo = &configv1alpha1.CredentialIssuerKubeConfigInfo{
+	updateServerAndCAFunc := func(c *configv1alpha1.CredentialIssuerStatus) {
+		c.KubeConfigInfo = &configv1alpha1.CredentialIssuerKubeConfigInfo{
 			Server:                   server,
 			CertificateAuthorityData: certificateAuthorityData,
 		}
 	}
 
-	return CreateOrUpdateCredentialIssuer(
+	return CreateOrUpdateCredentialIssuerStatus(
 		ctx.Context,
-		c.credentialIssuerNamespaceName,
 		c.credentialIssuerResourceName,
 		c.credentialIssuerLabels,
 		c.pinnipedClient,

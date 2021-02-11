@@ -259,7 +259,7 @@ func TestKubeclient(t *testing.T) {
 				// create
 				tokenCredentialRequest, err := c.PinnipedConcierge.
 					LoginV1alpha1().
-					TokenCredentialRequests(goodTokenCredentialRequest.Namespace).
+					TokenCredentialRequests().
 					Create(context.Background(), goodTokenCredentialRequest, metav1.CreateOptions{})
 				require.NoError(t, err)
 				require.Equal(t, goodTokenCredentialRequest, tokenCredentialRequest)
@@ -267,7 +267,7 @@ func TestKubeclient(t *testing.T) {
 				// read
 				tokenCredentialRequest, err = c.PinnipedConcierge.
 					LoginV1alpha1().
-					TokenCredentialRequests(tokenCredentialRequest.Namespace).
+					TokenCredentialRequests().
 					Get(context.Background(), tokenCredentialRequest.Name, metav1.GetOptions{})
 				require.NoError(t, err)
 				require.Equal(t, with(goodTokenCredentialRequest, annotations(), labels()), tokenCredentialRequest)
@@ -276,7 +276,7 @@ func TestKubeclient(t *testing.T) {
 				goodTokenCredentialRequestWithAnnotationsAndLabelsAndClusterName := with(goodTokenCredentialRequest, annotations(), labels(), clusterName()).(*loginv1alpha1.TokenCredentialRequest)
 				tokenCredentialRequest, err = c.PinnipedConcierge.
 					LoginV1alpha1().
-					TokenCredentialRequests(tokenCredentialRequest.Namespace).
+					TokenCredentialRequests().
 					Update(context.Background(), goodTokenCredentialRequestWithAnnotationsAndLabelsAndClusterName, metav1.UpdateOptions{})
 				require.NoError(t, err)
 				require.Equal(t, goodTokenCredentialRequestWithAnnotationsAndLabelsAndClusterName, tokenCredentialRequest)
@@ -284,7 +284,7 @@ func TestKubeclient(t *testing.T) {
 				// delete
 				err = c.PinnipedConcierge.
 					LoginV1alpha1().
-					TokenCredentialRequests(tokenCredentialRequest.Namespace).
+					TokenCredentialRequests().
 					Delete(context.Background(), tokenCredentialRequest.Name, metav1.DeleteOptions{})
 				require.NoError(t, err)
 			},

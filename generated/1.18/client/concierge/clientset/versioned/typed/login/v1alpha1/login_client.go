@@ -21,8 +21,8 @@ type LoginV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *LoginV1alpha1Client) TokenCredentialRequests(namespace string) TokenCredentialRequestInterface {
-	return newTokenCredentialRequests(c, namespace)
+func (c *LoginV1alpha1Client) TokenCredentialRequests() TokenCredentialRequestInterface {
+	return newTokenCredentialRequests(c)
 }
 
 // NewForConfig creates a new LoginV1alpha1Client for the given config.

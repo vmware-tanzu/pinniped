@@ -30,7 +30,6 @@ import (
 func TestInformerFilters(t *testing.T) {
 	spec.Run(t, "informer filters", func(t *testing.T, when spec.G, it spec.S) {
 		const credentialIssuerResourceName = "some-resource-name"
-		const installedInNamespace = "some-namespace"
 
 		var r *require.Assertions
 		var observableWithInformerOption *testutil.ObservableWithInformerOption
@@ -41,7 +40,6 @@ func TestInformerFilters(t *testing.T) {
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			configMapInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().ConfigMaps()
 			_ = NewKubeConfigInfoPublisherController(
-				installedInNamespace,
 				credentialIssuerResourceName,
 				map[string]string{},
 				nil,
@@ -105,7 +103,6 @@ func TestInformerFilters(t *testing.T) {
 func TestSync(t *testing.T) {
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const credentialIssuerResourceName = "some-resource-name"
-		const installedInNamespace = "some-namespace"
 
 		var r *require.Assertions
 
@@ -118,30 +115,39 @@ func TestSync(t *testing.T) {
 		var timeoutContextCancel context.CancelFunc
 		var syncContext *controllerlib.Context
 
-		var expectedCredentialIssuer = func(expectedNamespace, expectedServerURL, expectedCAData string) (schema.GroupVersionResource, *configv1alpha1.CredentialIssuer) {
+		var expectedCredentialIssuer = func(expectedServerURL, expectedCAData string) (schema.GroupVersionResource, *configv1alpha1.CredentialIssuer, *configv1alpha1.CredentialIssuer) {
 			expectedCredentialIssuerGVR := schema.GroupVersionResource{
 				Group:    configv1alpha1.GroupName,
 				Version:  "v1alpha1",
 				Resource: "credentialissuers",
 			}
+
+			expectedCreateCredentialIssuer := &configv1alpha1.CredentialIssuer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: credentialIssuerResourceName,
+					Labels: map[string]string{
+						"myLabelKey1": "myLabelValue1",
+						"myLabelKey2": "myLabelValue2",
+					},
+				},
+			}
+
 			expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      credentialIssuerResourceName,
-					Namespace: expectedNamespace,
+					Name: credentialIssuerResourceName,
 					Labels: map[string]string{
 						"myLabelKey1": "myLabelValue1",
 						"myLabelKey2": "myLabelValue2",
 					},
 				},
 				Status: configv1alpha1.CredentialIssuerStatus{
-					Strategies: []configv1alpha1.CredentialIssuerStrategy{},
 					KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
 						Server:                   expectedServerURL,
 						CertificateAuthorityData: expectedCAData,
 					},
 				},
 			}
-			return expectedCredentialIssuerGVR, expectedCredentialIssuer
+			return expectedCredentialIssuerGVR, expectedCreateCredentialIssuer, expectedCredentialIssuer
 		}
 
 		// Defer starting the informers until the last possible moment so that the
@@ -149,7 +155,6 @@ func TestSync(t *testing.T) {
 		var startInformersAndController = func() {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewKubeConfigInfoPublisherController(
-				installedInNamespace,
 				credentialIssuerResourceName,
 				map[string]string{
 					"myLabelKey1": "myLabelValue1",
@@ -222,18 +227,21 @@ func TestSync(t *testing.T) {
 						err := controllerlib.TestSync(t, subject, *syncContext)
 						r.NoError(err)
 
-						expectedCredentialIssuerGVR, expectedCredentialIssuer := expectedCredentialIssuer(
-							installedInNamespace,
+						expectedCredentialIssuerGVR, expectedCreateCredentialIssuer, expectedCredentialIssuer := expectedCredentialIssuer(
 							kubeServerURL,
 							caData,
 						)
 
 						r.Equal(
 							[]coretesting.Action{
-								coretesting.NewGetAction(expectedCredentialIssuerGVR, installedInNamespace, expectedCredentialIssuer.Name),
-								coretesting.NewCreateAction(
+								coretesting.NewRootGetAction(expectedCredentialIssuerGVR, expectedCreateCredentialIssuer.Name),
+								coretesting.NewRootCreateAction(
 									expectedCredentialIssuerGVR,
-									installedInNamespace,
+									expectedCreateCredentialIssuer,
+								),
+								coretesting.NewRootUpdateSubresourceAction(
+									expectedCredentialIssuerGVR,
+									"status",
 									expectedCredentialIssuer,
 								),
 							},
@@ -268,8 +276,7 @@ func TestSync(t *testing.T) {
 							err := controllerlib.TestSync(t, subject, *syncContext)
 							r.NoError(err)
 
-							expectedCredentialIssuerGVR, expectedCredentialIssuer := expectedCredentialIssuer(
-								installedInNamespace,
+							expectedCredentialIssuerGVR, expectedCreateCredentialIssuer, expectedCredentialIssuer := expectedCredentialIssuer(
 								kubeServerURL,
 								caData,
 							)
@@ -277,10 +284,14 @@ func TestSync(t *testing.T) {
 
 							r.Equal(
 								[]coretesting.Action{
-									coretesting.NewGetAction(expectedCredentialIssuerGVR, installedInNamespace, expectedCredentialIssuer.Name),
-									coretesting.NewCreateAction(
+									coretesting.NewRootGetAction(expectedCredentialIssuerGVR, expectedCreateCredentialIssuer.Name),
+									coretesting.NewRootCreateAction(
 										expectedCredentialIssuerGVR,
-										installedInNamespace,
+										expectedCreateCredentialIssuer,
+									),
+									coretesting.NewRootUpdateSubresourceAction(
+										expectedCredentialIssuerGVR,
+										"status",
 										expectedCredentialIssuer,
 									),
 								},
@@ -296,8 +307,7 @@ func TestSync(t *testing.T) {
 						var credentialIssuer *configv1alpha1.CredentialIssuer
 
 						it.Before(func() {
-							credentialIssuerGVR, credentialIssuer = expectedCredentialIssuer(
-								installedInNamespace,
+							credentialIssuerGVR, _, credentialIssuer = expectedCredentialIssuer(
 								kubeServerURL,
 								caData,
 							)
@@ -312,7 +322,7 @@ func TestSync(t *testing.T) {
 
 							r.Equal(
 								[]coretesting.Action{
-									coretesting.NewGetAction(credentialIssuerGVR, installedInNamespace, credentialIssuer.Name),
+									coretesting.NewRootGetAction(credentialIssuerGVR, credentialIssuer.Name),
 								},
 								pinnipedAPIClient.Actions(),
 							)
@@ -321,8 +331,7 @@ func TestSync(t *testing.T) {
 
 					when("the CredentialIssuer is stale compared to the data in the ConfigMap", func() {
 						it.Before(func() {
-							_, expectedCredentialIssuer := expectedCredentialIssuer(
-								installedInNamespace,
+							_, _, expectedCredentialIssuer := expectedCredentialIssuer(
 								kubeServerURL,
 								caData,
 							)
@@ -335,16 +344,15 @@ func TestSync(t *testing.T) {
 							err := controllerlib.TestSync(t, subject, *syncContext)
 							r.NoError(err)
 
-							expectedCredentialIssuerGVR, expectedCredentialIssuer := expectedCredentialIssuer(
-								installedInNamespace,
+							expectedCredentialIssuerGVR, _, expectedCredentialIssuer := expectedCredentialIssuer(
 								kubeServerURL,
 								caData,
 							)
 							expectedActions := []coretesting.Action{
-								coretesting.NewGetAction(expectedCredentialIssuerGVR, installedInNamespace, expectedCredentialIssuer.Name),
-								coretesting.NewUpdateAction(
+								coretesting.NewRootGetAction(expectedCredentialIssuerGVR, expectedCredentialIssuer.Name),
+								coretesting.NewRootUpdateSubresourceAction(
 									expectedCredentialIssuerGVR,
-									installedInNamespace,
+									"status",
 									expectedCredentialIssuer,
 								),
 							}

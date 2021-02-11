@@ -16,8 +16,8 @@ import (
 type WebhookAuthenticatorLister interface {
 	// List lists all WebhookAuthenticators in the indexer.
 	List(selector labels.Selector) (ret []*v1alpha1.WebhookAuthenticator, err error)
-	// WebhookAuthenticators returns an object that can list and get WebhookAuthenticators.
-	WebhookAuthenticators(namespace string) WebhookAuthenticatorNamespaceLister
+	// Get retrieves the WebhookAuthenticator from the index for a given name.
+	Get(name string) (*v1alpha1.WebhookAuthenticator, error)
 	WebhookAuthenticatorListerExpansion
 }
 
@@ -39,38 +39,9 @@ func (s *webhookAuthenticatorLister) List(selector labels.Selector) (ret []*v1al
 	return ret, err
 }
 
-// WebhookAuthenticators returns an object that can list and get WebhookAuthenticators.
-func (s *webhookAuthenticatorLister) WebhookAuthenticators(namespace string) WebhookAuthenticatorNamespaceLister {
-	return webhookAuthenticatorNamespaceLister{indexer: s.indexer, namespace: namespace}
-}
-
-// WebhookAuthenticatorNamespaceLister helps list and get WebhookAuthenticators.
-type WebhookAuthenticatorNamespaceLister interface {
-	// List lists all WebhookAuthenticators in the indexer for a given namespace.
-	List(selector labels.Selector) (ret []*v1alpha1.WebhookAuthenticator, err error)
-	// Get retrieves the WebhookAuthenticator from the indexer for a given namespace and name.
-	Get(name string) (*v1alpha1.WebhookAuthenticator, error)
-	WebhookAuthenticatorNamespaceListerExpansion
-}
-
-// webhookAuthenticatorNamespaceLister implements the WebhookAuthenticatorNamespaceLister
-// interface.
-type webhookAuthenticatorNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all WebhookAuthenticators in the indexer for a given namespace.
-func (s webhookAuthenticatorNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.WebhookAuthenticator, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.WebhookAuthenticator))
-	})
-	return ret, err
-}
-
-// Get retrieves the WebhookAuthenticator from the indexer for a given namespace and name.
-func (s webhookAuthenticatorNamespaceLister) Get(name string) (*v1alpha1.WebhookAuthenticator, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+// Get retrieves the WebhookAuthenticator from the index for a given name.
+func (s *webhookAuthenticatorLister) Get(name string) (*v1alpha1.WebhookAuthenticator, error) {
+	obj, exists, err := s.indexer.GetByKey(name)
 	if err != nil {
 		return nil, err
 	}

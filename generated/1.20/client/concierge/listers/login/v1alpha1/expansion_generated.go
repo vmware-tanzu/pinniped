@@ -8,7 +8,3 @@ package v1alpha1
 // TokenCredentialRequestListerExpansion allows custom methods to be added to
 // TokenCredentialRequestLister.
 type TokenCredentialRequestListerExpansion interface{}
-
-// TokenCredentialRequestNamespaceListerExpansion allows custom methods to be added to
-// TokenCredentialRequestNamespaceLister.
-type TokenCredentialRequestNamespaceListerExpansion interface{}

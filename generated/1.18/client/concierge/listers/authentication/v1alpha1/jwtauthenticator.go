@@ -16,8 +16,8 @@ import (
 type JWTAuthenticatorLister interface {
 	// List lists all JWTAuthenticators in the indexer.
 	List(selector labels.Selector) (ret []*v1alpha1.JWTAuthenticator, err error)
-	// JWTAuthenticators returns an object that can list and get JWTAuthenticators.
-	JWTAuthenticators(namespace string) JWTAuthenticatorNamespaceLister
+	// Get retrieves the JWTAuthenticator from the index for a given name.
+	Get(name string) (*v1alpha1.JWTAuthenticator, error)
 	JWTAuthenticatorListerExpansion
 }
 
@@ -39,38 +39,9 @@ func (s *jWTAuthenticatorLister) List(selector labels.Selector) (ret []*v1alpha1
 	return ret, err
 }
 
-// JWTAuthenticators returns an object that can list and get JWTAuthenticators.
-func (s *jWTAuthenticatorLister) JWTAuthenticators(namespace string) JWTAuthenticatorNamespaceLister {
-	return jWTAuthenticatorNamespaceLister{indexer: s.indexer, namespace: namespace}
-}
-
-// JWTAuthenticatorNamespaceLister helps list and get JWTAuthenticators.
-type JWTAuthenticatorNamespaceLister interface {
-	// List lists all JWTAuthenticators in the indexer for a given namespace.
-	List(selector labels.Selector) (ret []*v1alpha1.JWTAuthenticator, err error)
-	// Get retrieves the JWTAuthenticator from the indexer for a given namespace and name.
-	Get(name string) (*v1alpha1.JWTAuthenticator, error)
-	JWTAuthenticatorNamespaceListerExpansion
-}
-
-// jWTAuthenticatorNamespaceLister implements the JWTAuthenticatorNamespaceLister
-// interface.
-type jWTAuthenticatorNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all JWTAuthenticators in the indexer for a given namespace.
-func (s jWTAuthenticatorNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.JWTAuthenticator, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.JWTAuthenticator))
-	})
-	return ret, err
-}
-
-// Get retrieves the JWTAuthenticator from the indexer for a given namespace and name.
-func (s jWTAuthenticatorNamespaceLister) Get(name string) (*v1alpha1.JWTAuthenticator, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+// Get retrieves the JWTAuthenticator from the index for a given name.
+func (s *jWTAuthenticatorLister) Get(name string) (*v1alpha1.JWTAuthenticator, error) {
+	obj, exists, err := s.indexer.GetByKey(name)
 	if err != nil {
 		return nil, err
 	}

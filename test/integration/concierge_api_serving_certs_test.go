@@ -146,7 +146,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			// pod has rotated their cert, but not the other ones sitting behind the service.
 			aggregatedAPIWorking := func() bool {
 				for i := 0; i < 10; i++ {
-					_, err = conciergeClient.LoginV1alpha1().TokenCredentialRequests(env.ConciergeNamespace).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
+					_, err = conciergeClient.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 						TypeMeta:   metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{},
 						Spec:       loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token", Authenticator: testWebhook},

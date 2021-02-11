@@ -80,7 +80,7 @@ func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOpti
 }
 
 func (*REST) NamespaceScoped() bool {
-	return true
+	return false
 }
 
 func (*REST) Categories() []string {

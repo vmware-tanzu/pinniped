@@ -41,19 +41,18 @@ func TestController(t *testing.T) {
 	}{
 		{
 			name:    "not found",
-			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			syncKey: controllerlib.Key{Name: "test-name"},
 			wantLogs: []string{
 				`webhookcachefiller-controller "level"=0 "msg"="Sync() found that the WebhookAuthenticator does not exist yet or was deleted"`,
 			},
 		},
 		{
 			name:    "invalid webhook",
-			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			syncKey: controllerlib.Key{Name: "test-name"},
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test-namespace",
-						Name:      "test-name",
+						Name: "test-name",
 					},
 					Spec: auth1alpha1.WebhookAuthenticatorSpec{
 						Endpoint: "invalid url",
@@ -64,12 +63,11 @@ func TestController(t *testing.T) {
 		},
 		{
 			name:    "valid webhook",
-			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			syncKey: controllerlib.Key{Name: "test-name"},
 			webhooks: []runtime.Object{
 				&auth1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test-namespace",
-						Name:      "test-name",
+						Name: "test-name",
 					},
 					Spec: auth1alpha1.WebhookAuthenticatorSpec{
 						Endpoint: "https://example.com",
@@ -78,7 +76,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				`webhookcachefiller-controller "level"=0 "msg"="added new webhook authenticator" "endpoint"="https://example.com" "webhook"={"name":"test-name","namespace":"test-namespace"}`,
+				`webhookcachefiller-controller "level"=0 "msg"="added new webhook authenticator" "endpoint"="https://example.com" "webhook"={"name":"test-name"}`,
 			},
 			wantCacheEntries: 1,
 		},

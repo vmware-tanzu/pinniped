@@ -88,7 +88,7 @@ type controller struct {
 
 // Sync implements controllerlib.Syncer.
 func (c *controller) Sync(ctx controllerlib.Context) error {
-	obj, err := c.jwtAuthenticators.Lister().JWTAuthenticators(ctx.Key.Namespace).Get(ctx.Key.Name)
+	obj, err := c.jwtAuthenticators.Lister().Get(ctx.Key.Name)
 	if err != nil && errors.IsNotFound(err) {
 		c.log.Info("Sync() found that the JWTAuthenticator does not exist yet or was deleted")
 		return nil
@@ -98,10 +98,9 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 	}
 
 	cacheKey := authncache.Key{
-		APIGroup:  auth1alpha1.GroupName,
-		Kind:      "JWTAuthenticator",
-		Namespace: ctx.Key.Namespace,
-		Name:      ctx.Key.Name,
+		APIGroup: auth1alpha1.GroupName,
+		Kind:     "JWTAuthenticator",
+		Name:     ctx.Key.Name,
 	}
 
 	// If this authenticator already exists, then only recreate it if is different from the desired

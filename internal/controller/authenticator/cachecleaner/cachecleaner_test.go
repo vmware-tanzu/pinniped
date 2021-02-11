@@ -26,34 +26,29 @@ func TestController(t *testing.T) {
 	t.Parallel()
 
 	testWebhookKey1 := authncache.Key{
-		APIGroup:  "authentication.concierge.pinniped.dev",
-		Kind:      "WebhookAuthenticator",
-		Namespace: "test-namespace",
-		Name:      "test-webhook-name-one",
+		APIGroup: "authentication.concierge.pinniped.dev",
+		Kind:     "WebhookAuthenticator",
+		Name:     "test-webhook-name-one",
 	}
 	testWebhookKey2 := authncache.Key{
-		APIGroup:  "authentication.concierge.pinniped.dev",
-		Kind:      "WebhookAuthenticator",
-		Namespace: "test-namespace",
-		Name:      "test-webhook-name-two",
+		APIGroup: "authentication.concierge.pinniped.dev",
+		Kind:     "WebhookAuthenticator",
+		Name:     "test-webhook-name-two",
 	}
 	testJWTAuthenticatorKey1 := authncache.Key{
-		APIGroup:  "authentication.concierge.pinniped.dev",
-		Kind:      "JWTAuthenticator",
-		Namespace: "test-namespace",
-		Name:      "test-jwt-authenticator-name-one",
+		APIGroup: "authentication.concierge.pinniped.dev",
+		Kind:     "JWTAuthenticator",
+		Name:     "test-jwt-authenticator-name-one",
 	}
 	testJWTAuthenticatorKey2 := authncache.Key{
-		APIGroup:  "authentication.concierge.pinniped.dev",
-		Kind:      "JWTAuthenticator",
-		Namespace: "test-namespace",
-		Name:      "test-jwt-authenticator-name-two",
+		APIGroup: "authentication.concierge.pinniped.dev",
+		Kind:     "JWTAuthenticator",
+		Name:     "test-jwt-authenticator-name-two",
 	}
 	testKeyUnknownType := authncache.Key{
-		APIGroup:  "authentication.concierge.pinniped.dev",
-		Kind:      "SomeOtherAuthenticator",
-		Namespace: "test-namespace",
-		Name:      "test-name-one",
+		APIGroup: "authentication.concierge.pinniped.dev",
+		Kind:     "SomeOtherAuthenticator",
+		Name:     "test-name-one",
 	}
 
 	tests := []struct {
@@ -73,14 +68,12 @@ func TestController(t *testing.T) {
 			objects: []runtime.Object{
 				&authv1alpha.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: testWebhookKey1.Namespace,
-						Name:      testWebhookKey1.Name,
+						Name: testWebhookKey1.Name,
 					},
 				},
 				&authv1alpha.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: testJWTAuthenticatorKey1.Namespace,
-						Name:      testJWTAuthenticatorKey1.Name,
+						Name: testJWTAuthenticatorKey1.Name,
 					},
 				},
 			},
@@ -91,26 +84,22 @@ func TestController(t *testing.T) {
 			objects: []runtime.Object{
 				&authv1alpha.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: testWebhookKey1.Namespace,
-						Name:      testWebhookKey1.Name,
+						Name: testWebhookKey1.Name,
 					},
 				},
 				&authv1alpha.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: testWebhookKey2.Namespace,
-						Name:      testWebhookKey2.Name,
+						Name: testWebhookKey2.Name,
 					},
 				},
 				&authv1alpha.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: testJWTAuthenticatorKey1.Namespace,
-						Name:      testJWTAuthenticatorKey1.Name,
+						Name: testJWTAuthenticatorKey1.Name,
 					},
 				},
 				&authv1alpha.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: testJWTAuthenticatorKey2.Namespace,
-						Name:      testJWTAuthenticatorKey2.Name,
+						Name: testJWTAuthenticatorKey2.Name,
 					},
 				},
 			},
@@ -128,20 +117,18 @@ func TestController(t *testing.T) {
 			objects: []runtime.Object{
 				&authv1alpha.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: testWebhookKey1.Namespace,
-						Name:      testWebhookKey1.Name,
+						Name: testWebhookKey1.Name,
 					},
 				},
 				&authv1alpha.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: testJWTAuthenticatorKey1.Namespace,
-						Name:      testJWTAuthenticatorKey1.Name,
+						Name: testJWTAuthenticatorKey1.Name,
 					},
 				},
 			},
 			wantLogs: []string{
-				`cachecleaner-controller "level"=0 "msg"="deleting authenticator from cache" "authenticator"={"name":"test-jwt-authenticator-name-two","namespace":"test-namespace"} "kind"="JWTAuthenticator"`,
-				`cachecleaner-controller "level"=0 "msg"="deleting authenticator from cache" "authenticator"={"name":"test-webhook-name-two","namespace":"test-namespace"} "kind"="WebhookAuthenticator"`,
+				`cachecleaner-controller "level"=0 "msg"="deleting authenticator from cache" "authenticator"={"name":"test-jwt-authenticator-name-two"} "kind"="JWTAuthenticator"`,
+				`cachecleaner-controller "level"=0 "msg"="deleting authenticator from cache" "authenticator"={"name":"test-webhook-name-two"} "kind"="WebhookAuthenticator"`,
 			},
 			wantCacheKeys: []authncache.Key{testWebhookKey1, testJWTAuthenticatorKey1, testKeyUnknownType},
 		},
@@ -173,8 +160,7 @@ func TestController(t *testing.T) {
 			syncCtx := controllerlib.Context{
 				Context: ctx,
 				Key: controllerlib.Key{
-					Namespace: "test-namespace",
-					Name:      "test-webhook-name-one",
+					Name: "test-webhook-name-one",
 				},
 			}
 

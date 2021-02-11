@@ -29,33 +29,32 @@ type TokenCredentialRequestInformer interface {
 type tokenCredentialRequestInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
-	namespace        string
 }
 
 // NewTokenCredentialRequestInformer constructs a new informer for TokenCredentialRequest type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewTokenCredentialRequestInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredTokenCredentialRequestInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewTokenCredentialRequestInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredTokenCredentialRequestInformer(client, resyncPeriod, indexers, nil)
 }
 
 // NewFilteredTokenCredentialRequestInformer constructs a new informer for TokenCredentialRequest type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredTokenCredentialRequestInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredTokenCredentialRequestInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.LoginV1alpha1().TokenCredentialRequests(namespace).List(context.TODO(), options)
+				return client.LoginV1alpha1().TokenCredentialRequests().List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.LoginV1alpha1().TokenCredentialRequests(namespace).Watch(context.TODO(), options)
+				return client.LoginV1alpha1().TokenCredentialRequests().Watch(context.TODO(), options)
 			},
 		},
 		&loginv1alpha1.TokenCredentialRequest{},
@@ -65,7 +64,7 @@ func NewFilteredTokenCredentialRequestInformer(client versioned.Interface, names
 }
 
 func (f *tokenCredentialRequestInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredTokenCredentialRequestInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	return NewFilteredTokenCredentialRequestInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
 func (f *tokenCredentialRequestInformer) Informer() cache.SharedIndexInformer {

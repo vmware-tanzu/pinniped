@@ -56,7 +56,6 @@ func TestLoginStaticCommand(t *testing.T) {
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt')
 				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the concierge
 				      --concierge-endpoint string             API base for the Pinniped concierge endpoint
-				      --concierge-namespace string            Namespace in which the concierge was installed (default "pinniped-concierge")
 				      --enable-concierge                      Exchange the token with the Pinniped concierge during login
 				  -h, --help                                  help for static
 				      --token string                          Static token to present during login

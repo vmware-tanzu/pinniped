@@ -28,33 +28,32 @@ type JWTAuthenticatorInformer interface {
 type jWTAuthenticatorInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
-	namespace        string
 }
 
 // NewJWTAuthenticatorInformer constructs a new informer for JWTAuthenticator type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewJWTAuthenticatorInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredJWTAuthenticatorInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewJWTAuthenticatorInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredJWTAuthenticatorInformer(client, resyncPeriod, indexers, nil)
 }
 
 // NewFilteredJWTAuthenticatorInformer constructs a new informer for JWTAuthenticator type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredJWTAuthenticatorInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredJWTAuthenticatorInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AuthenticationV1alpha1().JWTAuthenticators(namespace).List(options)
+				return client.AuthenticationV1alpha1().JWTAuthenticators().List(options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AuthenticationV1alpha1().JWTAuthenticators(namespace).Watch(options)
+				return client.AuthenticationV1alpha1().JWTAuthenticators().Watch(options)
 			},
 		},
 		&authenticationv1alpha1.JWTAuthenticator{},
@@ -64,7 +63,7 @@ func NewFilteredJWTAuthenticatorInformer(client versioned.Interface, namespace s
 }
 
 func (f *jWTAuthenticatorInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredJWTAuthenticatorInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	return NewFilteredJWTAuthenticatorInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
 func (f *jWTAuthenticatorInformer) Informer() cache.SharedIndexInformer {

@@ -204,7 +204,7 @@ func (c *federationDomainWatcherController) updateStatus(
 		federationDomain.Status.Status = status
 		federationDomain.Status.Message = message
 		federationDomain.Status.LastUpdateTime = timePtr(metav1.NewTime(c.clock.Now()))
-		_, err = c.client.ConfigV1alpha1().FederationDomains(namespace).Update(ctx, federationDomain, metav1.UpdateOptions{})
+		_, err = c.client.ConfigV1alpha1().FederationDomains(namespace).UpdateStatus(ctx, federationDomain, metav1.UpdateOptions{})
 		return err
 	})
 }

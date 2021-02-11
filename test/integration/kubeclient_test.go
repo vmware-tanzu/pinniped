@@ -17,6 +17,7 @@ import (
 
 	conciergeconfigv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/config/v1alpha1"
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/1.20/apis/supervisor/config/v1alpha1"
+	"go.pinniped.dev/internal/apiserviceref"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/ownerref"
@@ -27,6 +28,7 @@ func TestKubeClientOwnerRef(t *testing.T) {
 	env := library.IntegrationEnv(t)
 
 	regularClient := library.NewKubernetesClientset(t)
+	regularAggregationClient := library.NewAggregatedClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -73,9 +75,47 @@ func TestKubeClientOwnerRef(t *testing.T) {
 		UID:        parentSecret.UID,
 	}
 
+	parentAPIService, err := regularAggregationClient.ApiregistrationV1().APIServices().Create(
+		ctx,
+		&apiregistrationv1.APIService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "v1.snorlax.dev",
+			},
+			Spec: apiregistrationv1.APIServiceSpec{
+				Version:              "v1",
+				Group:                "snorlax.dev",
+				GroupPriorityMinimum: 10_000,
+				VersionPriority:      500,
+			},
+		},
+		metav1.CreateOptions{},
+	)
+	require.NoError(t, err)
+	defer func() {
+		err := regularAggregationClient.ApiregistrationV1().APIServices().Delete(ctx, parentAPIService.Name, metav1.DeleteOptions{})
+		if errors.IsNotFound(err) {
+			return
+		}
+		require.NoError(t, err)
+	}()
+
+	// work around stupid behavior of WithoutVersionDecoder.Decode
+	parentAPIService.APIVersion, parentAPIService.Kind = apiregistrationv1.SchemeGroupVersion.WithKind("APIService").ToAPIVersionAndKind()
+
+	parentAPIServiceRef := metav1.OwnerReference{
+		APIVersion: parentAPIService.APIVersion,
+		Kind:       parentAPIService.Kind,
+		Name:       parentAPIService.Name,
+		UID:        parentAPIService.UID,
+	}
+
+	apiServiceRef, err := apiserviceref.New(parentAPIService.Name, kubeclient.WithConfig(library.NewClientConfig(t)))
+	require.NoError(t, err)
+
 	// create a client that should set an owner ref back to parent on create
 	ownerRefClient, err := kubeclient.New(
-		kubeclient.WithMiddleware(ownerref.New(parentSecret)),
+		kubeclient.WithMiddleware(ownerref.New(parentSecret)), // secret owner ref first when possible
+		apiServiceRef, // api service for everything else
 		kubeclient.WithMiddleware(groupsuffix.New(env.APIGroupSuffix)),
 		kubeclient.WithConfig(library.NewClientConfig(t)),
 	)
@@ -132,7 +172,7 @@ func TestKubeClientOwnerRef(t *testing.T) {
 	require.NotEqual(t, parentSecret.ResourceVersion, updatedParentSecret.ResourceVersion)
 	require.Len(t, updatedParentSecret.OwnerReferences, 0)
 
-	// delete the parent object
+	// delete the parent secret object
 	err = ownerRefSecrets.Delete(ctx, parentSecret.Name, metav1.DeleteOptions{})
 	require.NoError(t, err)
 
@@ -142,9 +182,7 @@ func TestKubeClientOwnerRef(t *testing.T) {
 		return err
 	})
 
-	// sanity check API service client - the middleware code shouldn't add an owner reference to this
-	// APIService because the APIService is cluster-scoped and the parent object is namespace-scoped,
-	// which is invalid in Kubernetes
+	// cluster scoped API service should be owned by the other one we created above
 	apiService, err := ownerRefClient.Aggregation.ApiregistrationV1().APIServices().Create(
 		ctx,
 		&apiregistrationv1.APIService{
@@ -162,29 +200,34 @@ func TestKubeClientOwnerRef(t *testing.T) {
 		metav1.CreateOptions{},
 	)
 	require.NoError(t, err)
-	hasNoOwnerRef(t, apiService)
-	err = ownerRefClient.Aggregation.ApiregistrationV1().APIServices().Delete(ctx, apiService.Name, metav1.DeleteOptions{})
+	hasOwnerRef(t, apiService, parentAPIServiceRef)
+
+	// delete the parent API service object
+	err = ownerRefClient.Aggregation.ApiregistrationV1().APIServices().Delete(ctx, parentAPIService.Name, metav1.DeleteOptions{})
 	require.NoError(t, err)
 
+	// the child object should be cleaned up on its own
+	isEventuallyDeleted(t, func() error {
+		_, err := ownerRefClient.Aggregation.ApiregistrationV1().APIServices().Get(ctx, apiService.Name, metav1.GetOptions{})
+		return err
+	})
+
 	// sanity check concierge client
-	credentialIssuer, err := ownerRefClient.PinnipedConcierge.ConfigV1alpha1().CredentialIssuers(namespace.Name).Create(
+	credentialIssuer, err := ownerRefClient.PinnipedConcierge.ConfigV1alpha1().CredentialIssuers().Create(
 		ctx,
 		&conciergeconfigv1alpha1.CredentialIssuer{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName:    "owner-ref-test-",
 				OwnerReferences: nil, // no owner refs set
 			},
-			Status: conciergeconfigv1alpha1.CredentialIssuerStatus{
-				Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{},
-			},
 		},
 		metav1.CreateOptions{},
 	)
 	require.NoError(t, err)
-	hasOwnerRef(t, credentialIssuer, ref)
+	hasOwnerRef(t, credentialIssuer, parentAPIServiceRef)
 	// this owner has already been deleted so the cred issuer should be immediately deleted
 	isEventuallyDeleted(t, func() error {
-		_, err := ownerRefClient.PinnipedConcierge.ConfigV1alpha1().CredentialIssuers(namespace.Name).Get(ctx, credentialIssuer.Name, metav1.GetOptions{})
+		_, err := ownerRefClient.PinnipedConcierge.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuer.Name, metav1.GetOptions{})
 		return err
 	})
 
@@ -244,13 +287,6 @@ func hasOwnerRef(t *testing.T, obj metav1.Object, ref metav1.OwnerReference) {
 	ownerReferences := obj.GetOwnerReferences()
 	require.Len(t, ownerReferences, 1)
 	require.Equal(t, ref, ownerReferences[0])
-}
-
-func hasNoOwnerRef(t *testing.T, obj metav1.Object) {
-	t.Helper()
-
-	ownerReferences := obj.GetOwnerReferences()
-	require.Len(t, ownerReferences, 0)
 }
 
 func isEventuallyDeleted(t *testing.T, f func() error) {

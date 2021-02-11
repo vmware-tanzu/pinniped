@@ -30,10 +30,10 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 
 // JWTAuthenticators returns a JWTAuthenticatorInformer.
 func (v *version) JWTAuthenticators() JWTAuthenticatorInformer {
-	return &jWTAuthenticatorInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+	return &jWTAuthenticatorInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // WebhookAuthenticators returns a WebhookAuthenticatorInformer.
 func (v *version) WebhookAuthenticators() WebhookAuthenticatorInformer {
-	return &webhookAuthenticatorInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+	return &webhookAuthenticatorInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

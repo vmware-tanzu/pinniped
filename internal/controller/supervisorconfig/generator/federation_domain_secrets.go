@@ -26,7 +26,7 @@ import (
 
 type federationDomainSecretsController struct {
 	secretHelper             SecretHelper
-	secretRefFunc            func(domain *configv1alpha1.FederationDomain) *corev1.LocalObjectReference
+	secretRefFunc            func(domain *configv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference
 	kubeClient               kubernetes.Interface
 	pinnipedClient           pinnipedclientset.Interface
 	federationDomainInformer configinformers.FederationDomainInformer
@@ -38,7 +38,7 @@ type federationDomainSecretsController struct {
 // provides the parent/child mapping logic.
 func NewFederationDomainSecretsController(
 	secretHelper SecretHelper,
-	secretRefFunc func(domain *configv1alpha1.FederationDomain) *corev1.LocalObjectReference,
+	secretRefFunc func(domain *configv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference,
 	kubeClient kubernetes.Interface,
 	pinnipedClient pinnipedclientset.Interface,
 	secretInformer corev1informers.SecretInformer,
@@ -117,7 +117,7 @@ func (c *federationDomainSecretsController) Sync(ctx controllerlib.Context) erro
 		)
 
 		federationDomain = c.secretHelper.ObserveActiveSecretAndUpdateParentFederationDomain(federationDomain, existingSecret)
-		if err := c.updateFederationDomain(ctx.Context, federationDomain); err != nil {
+		if err := c.updateFederationDomainStatus(ctx.Context, federationDomain); err != nil {
 			return fmt.Errorf("failed to update federationdomain: %w", err)
 		}
 		plog.Debug("updated federationdomain", "federationdomain", klog.KObj(federationDomain), "secret", klog.KObj(newSecret))
@@ -133,7 +133,7 @@ func (c *federationDomainSecretsController) Sync(ctx controllerlib.Context) erro
 	plog.Debug("created/updated secret", "federationdomain", klog.KObj(federationDomain), "secret", klog.KObj(newSecret))
 
 	federationDomain = c.secretHelper.ObserveActiveSecretAndUpdateParentFederationDomain(federationDomain, newSecret)
-	if err := c.updateFederationDomain(ctx.Context, federationDomain); err != nil {
+	if err := c.updateFederationDomainStatus(ctx.Context, federationDomain); err != nil {
 		return fmt.Errorf("failed to update federationdomain: %w", err)
 	}
 	plog.Debug("updated federationdomain", "federationdomain", klog.KObj(federationDomain), "secret", klog.KObj(newSecret))
@@ -205,7 +205,7 @@ func (c *federationDomainSecretsController) createOrUpdateSecret(
 	})
 }
 
-func (c *federationDomainSecretsController) updateFederationDomain(
+func (c *federationDomainSecretsController) updateFederationDomainStatus(
 	ctx context.Context,
 	newFederationDomain *configv1alpha1.FederationDomain,
 ) error {
@@ -216,14 +216,14 @@ func (c *federationDomainSecretsController) updateFederationDomain(
 			return fmt.Errorf("failed to get federationdomain %s/%s: %w", newFederationDomain.Namespace, newFederationDomain.Name, err)
 		}
 
-		oldFederationDomainSecretRef := c.secretRefFunc(oldFederationDomain)
-		newFederationDomainSecretRef := c.secretRefFunc(newFederationDomain)
+		oldFederationDomainSecretRef := c.secretRefFunc(&oldFederationDomain.Status)
+		newFederationDomainSecretRef := c.secretRefFunc(&newFederationDomain.Status)
 		if reflect.DeepEqual(oldFederationDomainSecretRef, newFederationDomainSecretRef) {
 			return nil
 		}
 
 		*oldFederationDomainSecretRef = *newFederationDomainSecretRef
-		_, err = federationDomainClient.Update(ctx, oldFederationDomain, metav1.UpdateOptions{})
+		_, err = federationDomainClient.UpdateStatus(ctx, oldFederationDomain, metav1.UpdateOptions{})
 		return err
 	})
 }

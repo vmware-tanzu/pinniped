@@ -135,43 +135,41 @@ func TestController(t *testing.T) {
 	}{
 		{
 			name:    "not found",
-			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			syncKey: controllerlib.Key{Name: "test-name"},
 			wantLogs: []string{
 				`jwtcachefiller-controller "level"=0 "msg"="Sync() found that the JWTAuthenticator does not exist yet or was deleted"`,
 			},
 		},
 		{
 			name:    "valid jwt authenticator with CA",
-			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test-namespace",
-						Name:      "test-name",
+						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpec,
 				},
 			},
 			wantLogs: []string{
-				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
+				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name"}`,
 			},
 			wantCacheEntries:                 1,
 			runTestsOnResultingAuthenticator: true,
 		},
 		{
 			name:    "valid jwt authenticator with custom username claim",
-			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test-namespace",
-						Name:      "test-name",
+						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpecWithUsernameClaim,
 				},
 			},
 			wantLogs: []string{
-				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
+				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name"}`,
 			},
 			wantCacheEntries:                 1,
 			wantUsernameClaim:                someJWTAuthenticatorSpecWithUsernameClaim.Claims.Username,
@@ -179,18 +177,17 @@ func TestController(t *testing.T) {
 		},
 		{
 			name:    "valid jwt authenticator with custom groups claim",
-			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test-namespace",
-						Name:      "test-name",
+						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpecWithGroupsClaim,
 				},
 			},
 			wantLogs: []string{
-				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
+				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name"}`,
 			},
 			wantCacheEntries:                 1,
 			wantGroupsClaim:                  someJWTAuthenticatorSpecWithGroupsClaim.Claims.Groups,
@@ -201,27 +198,25 @@ func TestController(t *testing.T) {
 			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
 				cache.Store(
 					authncache.Key{
-						Name:      "test-name",
-						Namespace: "test-namespace",
-						Kind:      "JWTAuthenticator",
-						APIGroup:  auth1alpha1.SchemeGroupVersion.Group,
+						Name:     "test-name",
+						Kind:     "JWTAuthenticator",
+						APIGroup: auth1alpha1.SchemeGroupVersion.Group,
 					},
 					newCacheValue(t, *otherJWTAuthenticatorSpec, wantClose),
 				)
 			},
 			wantClose: true,
-			syncKey:   controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			syncKey:   controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test-namespace",
-						Name:      "test-name",
+						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpec,
 				},
 			},
 			wantLogs: []string{
-				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
+				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name"}`,
 			},
 			wantCacheEntries:                 1,
 			runTestsOnResultingAuthenticator: true,
@@ -231,27 +226,25 @@ func TestController(t *testing.T) {
 			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
 				cache.Store(
 					authncache.Key{
-						Name:      "test-name",
-						Namespace: "test-namespace",
-						Kind:      "JWTAuthenticator",
-						APIGroup:  auth1alpha1.SchemeGroupVersion.Group,
+						Name:     "test-name",
+						Kind:     "JWTAuthenticator",
+						APIGroup: auth1alpha1.SchemeGroupVersion.Group,
 					},
 					newCacheValue(t, *someJWTAuthenticatorSpec, wantClose),
 				)
 			},
 			wantClose: false,
-			syncKey:   controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			syncKey:   controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test-namespace",
-						Name:      "test-name",
+						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpec,
 				},
 			},
 			wantLogs: []string{
-				`jwtcachefiller-controller "level"=0 "msg"="actual jwt authenticator and desired jwt authenticator are the same" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
+				`jwtcachefiller-controller "level"=0 "msg"="actual jwt authenticator and desired jwt authenticator are the same" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name"}`,
 			},
 			wantCacheEntries:                 1,
 			runTestsOnResultingAuthenticator: false, // skip the tests because the authenticator left in the cache is the mock version that was added above
@@ -261,57 +254,53 @@ func TestController(t *testing.T) {
 			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
 				cache.Store(
 					authncache.Key{
-						Name:      "test-name",
-						Namespace: "test-namespace",
-						Kind:      "JWTAuthenticator",
-						APIGroup:  auth1alpha1.SchemeGroupVersion.Group,
+						Name:     "test-name",
+						Kind:     "JWTAuthenticator",
+						APIGroup: auth1alpha1.SchemeGroupVersion.Group,
 					},
 					struct{ authenticator.Token }{},
 				)
 			},
-			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test-namespace",
-						Name:      "test-name",
+						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpec,
 				},
 			},
 			wantLogs: []string{
 				`jwtcachefiller-controller "level"=0 "msg"="wrong JWT authenticator type in cache" "actualType"="struct { authenticator.Token }"`,
-				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
+				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name"}`,
 			},
 			wantCacheEntries:                 1,
 			runTestsOnResultingAuthenticator: true,
 		},
 		{
 			name:    "valid jwt authenticator without CA",
-			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test-namespace",
-						Name:      "test-name",
+						Name: "test-name",
 					},
 					Spec: *missingTLSJWTAuthenticatorSpec,
 				},
 			},
 			wantLogs: []string{
-				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name","namespace":"test-namespace"}`,
+				`jwtcachefiller-controller "level"=0 "msg"="added new jwt authenticator" "issuer"="` + goodIssuer + `" "jwtAuthenticator"={"name":"test-name"}`,
 			},
 			wantCacheEntries:                 1,
 			runTestsOnResultingAuthenticator: false, // skip the tests because the authenticator left in the cache doesn't have the CA for our test discovery server
 		},
 		{
 			name:    "invalid jwt authenticator CA",
-			syncKey: controllerlib.Key{Namespace: "test-namespace", Name: "test-name"},
+			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&auth1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace: "test-namespace",
-						Name:      "test-name",
+						Name: "test-name",
 					},
 					Spec: *invalidTLSJWTAuthenticatorSpec,
 				},
@@ -367,10 +356,9 @@ func TestController(t *testing.T) {
 
 			// We expected the cache to have an entry, so pull that entry from the cache and test it.
 			expectedCacheKey := authncache.Key{
-				APIGroup:  auth1alpha1.GroupName,
-				Kind:      "JWTAuthenticator",
-				Namespace: syncCtx.Key.Namespace,
-				Name:      syncCtx.Key.Name,
+				APIGroup: auth1alpha1.GroupName,
+				Kind:     "JWTAuthenticator",
+				Name:     syncCtx.Key.Name,
 			}
 			cachedAuthenticator := cache.Get(expectedCacheKey)
 			require.NotNil(t, cachedAuthenticator)

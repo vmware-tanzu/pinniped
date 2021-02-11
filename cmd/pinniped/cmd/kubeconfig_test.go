@@ -61,7 +61,6 @@ func TestGetKubeconfig(t *testing.T) {
 				      --concierge-api-group-suffix string     Concierge API group suffix (default "pinniped.dev")
 				      --concierge-authenticator-name string   Concierge authenticator name (default: autodiscover)
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)
-				      --concierge-namespace string            Namespace in which the concierge was installed (default "pinniped-concierge")
 				  -h, --help                                  help for kubeconfig
 				      --kubeconfig string                     Path to kubeconfig file
 				      --kubeconfig-context string             Kubeconfig context name (default: current active context)
@@ -210,34 +209,32 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: no authenticators were found in namespace "pinniped-concierge" (try setting --concierge-namespace)
+				Error: no authenticators were found
 			`),
 		},
 		{
 			name: "fail to autodetect authenticator, multiple found",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
-				"--concierge-namespace", "test-namespace",
 			},
 			conciergeObjects: []runtime.Object{
-				&conciergev1alpha1.JWTAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-1", Namespace: "test-namespace"}},
-				&conciergev1alpha1.JWTAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-2", Namespace: "test-namespace"}},
-				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-3", Namespace: "test-namespace"}},
-				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-4", Namespace: "test-namespace"}},
+				&conciergev1alpha1.JWTAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-1"}},
+				&conciergev1alpha1.JWTAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-2"}},
+				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-3"}},
+				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-4"}},
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: multiple authenticators were found in namespace "test-namespace", so the --concierge-authenticator-type/--concierge-authenticator-name flags must be specified
+				Error: multiple authenticators were found, so the --concierge-authenticator-type/--concierge-authenticator-name flags must be specified
 			`),
 		},
 		{
 			name: "autodetect webhook authenticator, missing --oidc-issuer",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
-				"--concierge-namespace", "test-namespace",
 			},
 			conciergeObjects: []runtime.Object{
-				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator", Namespace: "test-namespace"}},
+				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
@@ -248,11 +245,10 @@ func TestGetKubeconfig(t *testing.T) {
 			name: "autodetect JWT authenticator, invalid TLS bundle",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
-				"--concierge-namespace", "test-namespace",
 			},
 			conciergeObjects: []runtime.Object{
 				&conciergev1alpha1.JWTAuthenticator{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator", Namespace: "test-namespace"},
+					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
 					Spec: conciergev1alpha1.JWTAuthenticatorSpec{
 						TLS: &conciergev1alpha1.TLSSpec{
 							CertificateAuthorityData: "invalid-base64",
@@ -262,19 +258,18 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: tried to autodiscover --oidc-ca-bundle, but JWTAuthenticator test-namespace/test-authenticator has invalid spec.tls.certificateAuthorityData: illegal base64 data at input byte 7
+				Error: tried to autodiscover --oidc-ca-bundle, but JWTAuthenticator test-authenticator has invalid spec.tls.certificateAuthorityData: illegal base64 data at input byte 7
 			`),
 		},
 		{
 			name: "invalid static token flags",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
-				"--concierge-namespace", "test-namespace",
 				"--static-token", "test-token",
 				"--static-token-env", "TEST_TOKEN",
 			},
 			conciergeObjects: []runtime.Object{
-				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator", Namespace: "test-namespace"}},
+				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
@@ -295,11 +290,10 @@ func TestGetKubeconfig(t *testing.T) {
 			name: "valid static token",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
-				"--concierge-namespace", "test-namespace",
 				"--static-token", "test-token",
 			},
 			conciergeObjects: []runtime.Object{
-				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator", Namespace: "test-namespace"}},
+				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
 			wantStdout: here.Doc(`
         		apiVersion: v1
@@ -326,7 +320,6 @@ func TestGetKubeconfig(t *testing.T) {
         		      - static
         		      - --enable-concierge
         		      - --concierge-api-group-suffix=pinniped.dev
-        		      - --concierge-namespace=test-namespace
         		      - --concierge-authenticator-name=test-authenticator
         		      - --concierge-authenticator-type=webhook
         		      - --concierge-endpoint=https://fake-server-url-value
@@ -341,11 +334,10 @@ func TestGetKubeconfig(t *testing.T) {
 			name: "valid static token from env var",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
-				"--concierge-namespace", "test-namespace",
 				"--static-token-env", "TEST_TOKEN",
 			},
 			conciergeObjects: []runtime.Object{
-				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator", Namespace: "test-namespace"}},
+				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
 			wantStdout: here.Doc(`
         		apiVersion: v1
@@ -372,7 +364,6 @@ func TestGetKubeconfig(t *testing.T) {
         		      - static
         		      - --enable-concierge
         		      - --concierge-api-group-suffix=pinniped.dev
-        		      - --concierge-namespace=test-namespace
         		      - --concierge-authenticator-name=test-authenticator
         		      - --concierge-authenticator-type=webhook
         		      - --concierge-endpoint=https://fake-server-url-value
@@ -390,7 +381,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: []runtime.Object{
 				&conciergev1alpha1.JWTAuthenticator{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator", Namespace: "pinniped-concierge"},
+					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
 					Spec: conciergev1alpha1.JWTAuthenticatorSpec{
 						Issuer:   "https://example.com/issuer",
 						Audience: "test-audience",
@@ -425,7 +416,6 @@ func TestGetKubeconfig(t *testing.T) {
         		      - oidc
         		      - --enable-concierge
         		      - --concierge-api-group-suffix=pinniped.dev
-        		      - --concierge-namespace=pinniped-concierge
         		      - --concierge-authenticator-name=test-authenticator
         		      - --concierge-authenticator-type=jwt
         		      - --concierge-endpoint=https://fake-server-url-value
@@ -457,7 +447,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: []runtime.Object{
 				&conciergev1alpha1.WebhookAuthenticator{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator", Namespace: "pinniped-concierge"},
+					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
 				},
 			},
 			wantStdout: here.Docf(`
@@ -485,7 +475,6 @@ func TestGetKubeconfig(t *testing.T) {
         		      - oidc
         		      - --enable-concierge
         		      - --concierge-api-group-suffix=tuna.io
-        		      - --concierge-namespace=pinniped-concierge
         		      - --concierge-authenticator-name=test-authenticator
         		      - --concierge-authenticator-type=webhook
         		      - --concierge-endpoint=https://fake-server-url-value

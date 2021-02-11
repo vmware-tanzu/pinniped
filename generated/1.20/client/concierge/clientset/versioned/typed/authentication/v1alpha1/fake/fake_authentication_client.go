@@ -15,12 +15,12 @@ type FakeAuthenticationV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeAuthenticationV1alpha1) JWTAuthenticators(namespace string) v1alpha1.JWTAuthenticatorInterface {
-	return &FakeJWTAuthenticators{c, namespace}
+func (c *FakeAuthenticationV1alpha1) JWTAuthenticators() v1alpha1.JWTAuthenticatorInterface {
+	return &FakeJWTAuthenticators{c}
 }
 
-func (c *FakeAuthenticationV1alpha1) WebhookAuthenticators(namespace string) v1alpha1.WebhookAuthenticatorInterface {
-	return &FakeWebhookAuthenticators{c, namespace}
+func (c *FakeAuthenticationV1alpha1) WebhookAuthenticators() v1alpha1.WebhookAuthenticatorInterface {
+	return &FakeWebhookAuthenticators{c}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

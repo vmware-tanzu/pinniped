@@ -161,7 +161,7 @@ func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
 	// Ensure that the FederationDomain points to the secret.
 	newFederationDomain := federationDomain.DeepCopy()
 	newFederationDomain.Status.Secrets.JWKS.Name = secret.Name
-	if err := c.updateFederationDomain(ctx.Context, newFederationDomain); err != nil {
+	if err := c.updateFederationDomainStatus(ctx.Context, newFederationDomain); err != nil {
 		return fmt.Errorf("cannot update FederationDomain: %w", err)
 	}
 	plog.Debug("updated FederationDomain", "federationdomain", klog.KObj(newFederationDomain))
@@ -283,7 +283,7 @@ func (c *jwksWriterController) createOrUpdateSecret(
 	})
 }
 
-func (c *jwksWriterController) updateFederationDomain(
+func (c *jwksWriterController) updateFederationDomainStatus(
 	ctx context.Context,
 	newFederationDomain *configv1alpha1.FederationDomain,
 ) error {
@@ -300,7 +300,7 @@ func (c *jwksWriterController) updateFederationDomain(
 		}
 
 		oldFederationDomain.Status.Secrets.JWKS.Name = newFederationDomain.Status.Secrets.JWKS.Name
-		_, err = federationDomainClient.Update(ctx, oldFederationDomain, metav1.UpdateOptions{})
+		_, err = federationDomainClient.UpdateStatus(ctx, oldFederationDomain, metav1.UpdateOptions{})
 		return err
 	})
 }

@@ -358,7 +358,7 @@ func TestManagerControllerSync(t *testing.T) {
 							},
 						}
 						expectedGetAction := coretesting.NewRootGetAction(credentialIssuerGVR, credentialIssuerResourceName)
-						expectedCreateAction := coretesting.NewRootUpdateAction(credentialIssuerGVR, expectedCredentialIssuer)
+						expectedCreateAction := coretesting.NewRootUpdateSubresourceAction(credentialIssuerGVR, "status", expectedCredentialIssuer)
 						r.Equal([]coretesting.Action{expectedGetAction, expectedCreateAction}, pinnipedAPIClient.Actions())
 					})
 
@@ -389,6 +389,13 @@ func TestManagerControllerSync(t *testing.T) {
 					it("also creates the the CredentialIssuer with the appropriate status field", func() {
 						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
+						expectedCreateCredentialIssuer := &configv1alpha1.CredentialIssuer{
+							TypeMeta: metav1.TypeMeta{},
+							ObjectMeta: metav1.ObjectMeta{
+								Name: credentialIssuerResourceName,
+							},
+						}
+
 						expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
 							TypeMeta: metav1.TypeMeta{},
 							ObjectMeta: metav1.ObjectMeta{
@@ -407,8 +414,9 @@ func TestManagerControllerSync(t *testing.T) {
 							},
 						}
 						expectedGetAction := coretesting.NewRootGetAction(credentialIssuerGVR, credentialIssuerResourceName)
-						expectedCreateAction := coretesting.NewRootCreateAction(credentialIssuerGVR, expectedCredentialIssuer)
-						r.Equal([]coretesting.Action{expectedGetAction, expectedCreateAction}, pinnipedAPIClient.Actions())
+						expectedCreateAction := coretesting.NewRootCreateAction(credentialIssuerGVR, expectedCreateCredentialIssuer)
+						expectedUpdateAction := coretesting.NewRootUpdateSubresourceAction(credentialIssuerGVR, "status", expectedCredentialIssuer)
+						r.Equal([]coretesting.Action{expectedGetAction, expectedCreateAction, expectedUpdateAction}, pinnipedAPIClient.Actions())
 					})
 				})
 			})
@@ -431,6 +439,13 @@ func TestManagerControllerSync(t *testing.T) {
 				it("creates or updates the the CredentialIssuer status field with an error", func() {
 					r.EqualError(controllerlib.TestSync(t, subject, *syncContext), podExecErrorMessage)
 
+					expectedCreateCredentialIssuer := &configv1alpha1.CredentialIssuer{
+						TypeMeta: metav1.TypeMeta{},
+						ObjectMeta: metav1.ObjectMeta{
+							Name: credentialIssuerResourceName,
+						},
+					}
+
 					expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
 						TypeMeta: metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{
@@ -449,8 +464,9 @@ func TestManagerControllerSync(t *testing.T) {
 						},
 					}
 					expectedGetAction := coretesting.NewRootGetAction(credentialIssuerGVR, credentialIssuerResourceName)
-					expectedCreateAction := coretesting.NewRootCreateAction(credentialIssuerGVR, expectedCredentialIssuer)
-					r.Equal([]coretesting.Action{expectedGetAction, expectedCreateAction}, pinnipedAPIClient.Actions())
+					expectedCreateAction := coretesting.NewRootCreateAction(credentialIssuerGVR, expectedCreateCredentialIssuer)
+					expectedUpdateAction := coretesting.NewRootUpdateSubresourceAction(credentialIssuerGVR, "status", expectedCredentialIssuer)
+					r.Equal([]coretesting.Action{expectedGetAction, expectedCreateAction, expectedUpdateAction}, pinnipedAPIClient.Actions())
 				})
 			})
 
@@ -472,6 +488,13 @@ func TestManagerControllerSync(t *testing.T) {
 				it("creates or updates the the CredentialIssuer status field with an error", func() {
 					r.EqualError(controllerlib.TestSync(t, subject, *syncContext), podExecErrorMessage)
 
+					expectedCreateCredentialIssuer := &configv1alpha1.CredentialIssuer{
+						TypeMeta: metav1.TypeMeta{},
+						ObjectMeta: metav1.ObjectMeta{
+							Name: credentialIssuerResourceName,
+						},
+					}
+
 					expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
 						TypeMeta: metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{
@@ -490,8 +513,9 @@ func TestManagerControllerSync(t *testing.T) {
 						},
 					}
 					expectedGetAction := coretesting.NewRootGetAction(credentialIssuerGVR, credentialIssuerResourceName)
-					expectedCreateAction := coretesting.NewRootCreateAction(credentialIssuerGVR, expectedCredentialIssuer)
-					r.Equal([]coretesting.Action{expectedGetAction, expectedCreateAction}, pinnipedAPIClient.Actions())
+					expectedCreateAction := coretesting.NewRootCreateAction(credentialIssuerGVR, expectedCreateCredentialIssuer)
+					expectedUpdateAction := coretesting.NewRootUpdateSubresourceAction(credentialIssuerGVR, "status", expectedCredentialIssuer)
+					r.Equal([]coretesting.Action{expectedGetAction, expectedCreateAction, expectedUpdateAction}, pinnipedAPIClient.Actions())
 				})
 			})
 		})

@@ -336,8 +336,9 @@ func TestCreaterControllerSync(t *testing.T) {
 								credentialIssuerGVR,
 								credentialIssuerResourceName,
 							)
-							expectedUpdateAction := coretesting.NewRootUpdateAction(
+							expectedUpdateAction := coretesting.NewRootUpdateSubresourceAction(
 								credentialIssuerGVR,
+								"status",
 								expectedCredentialIssuer,
 							)
 
@@ -375,6 +376,17 @@ func TestCreaterControllerSync(t *testing.T) {
 							startInformersAndController()
 							err := controllerlib.TestSync(t, subject, *syncContext)
 
+							expectedCreateCredentialIssuer := &configv1alpha1.CredentialIssuer{
+								TypeMeta: metav1.TypeMeta{},
+								ObjectMeta: metav1.ObjectMeta{
+									Name: credentialIssuerResourceName,
+									Labels: map[string]string{
+										"myLabelKey1": "myLabelValue1",
+										"myLabelKey2": "myLabelValue2",
+									},
+								},
+							}
+
 							expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
 								TypeMeta: metav1.TypeMeta{},
 								ObjectMeta: metav1.ObjectMeta{
@@ -402,6 +414,11 @@ func TestCreaterControllerSync(t *testing.T) {
 							)
 							expectedCreateAction := coretesting.NewRootCreateAction(
 								credentialIssuerGVR,
+								expectedCreateCredentialIssuer,
+							)
+							expectedUpdateAction := coretesting.NewRootUpdateSubresourceAction(
+								credentialIssuerGVR,
+								"status",
 								expectedCredentialIssuer,
 							)
 
@@ -410,6 +427,7 @@ func TestCreaterControllerSync(t *testing.T) {
 								[]coretesting.Action{
 									expectedGetAction,
 									expectedCreateAction,
+									expectedUpdateAction,
 								},
 								pinnipedAPIClient.Actions(),
 							)
@@ -458,8 +476,9 @@ func TestCreaterControllerSync(t *testing.T) {
 						credentialIssuerGVR,
 						credentialIssuerResourceName,
 					)
-					expectedUpdateAction := coretesting.NewRootUpdateAction(
+					expectedUpdateAction := coretesting.NewRootUpdateSubresourceAction(
 						credentialIssuerGVR,
+						"status",
 						expectedCredentialIssuer,
 					)
 
@@ -514,6 +533,17 @@ func TestCreaterControllerSync(t *testing.T) {
 					startInformersAndController()
 					err := controllerlib.TestSync(t, subject, *syncContext)
 
+					expectedCreateCredentialIssuer := &configv1alpha1.CredentialIssuer{
+						TypeMeta: metav1.TypeMeta{},
+						ObjectMeta: metav1.ObjectMeta{
+							Name: credentialIssuerResourceName,
+							Labels: map[string]string{
+								"myLabelKey1": "myLabelValue1",
+								"myLabelKey2": "myLabelValue2",
+							},
+						},
+					}
+
 					expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
 						TypeMeta: metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{
@@ -541,6 +571,11 @@ func TestCreaterControllerSync(t *testing.T) {
 					)
 					expectedCreateAction := coretesting.NewRootCreateAction(
 						credentialIssuerGVR,
+						expectedCreateCredentialIssuer,
+					)
+					expectedUpdateAction := coretesting.NewRootUpdateSubresourceAction(
+						credentialIssuerGVR,
+						"status",
 						expectedCredentialIssuer,
 					)
 
@@ -549,6 +584,7 @@ func TestCreaterControllerSync(t *testing.T) {
 						[]coretesting.Action{
 							expectedGetAction,
 							expectedCreateAction,
+							expectedUpdateAction,
 						},
 						pinnipedAPIClient.Actions(),
 					)

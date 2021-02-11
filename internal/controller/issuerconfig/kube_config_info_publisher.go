@@ -104,14 +104,14 @@ func (c *kubeConigInfoPublisherController) Sync(ctx controllerlib.Context) error
 		server = *c.serverOverride
 	}
 
-	updateServerAndCAFunc := func(c *configv1alpha1.CredentialIssuer) {
-		c.Status.KubeConfigInfo = &configv1alpha1.CredentialIssuerKubeConfigInfo{
+	updateServerAndCAFunc := func(c *configv1alpha1.CredentialIssuerStatus) {
+		c.KubeConfigInfo = &configv1alpha1.CredentialIssuerKubeConfigInfo{
 			Server:                   server,
 			CertificateAuthorityData: certificateAuthorityData,
 		}
 	}
 
-	return CreateOrUpdateCredentialIssuer(
+	return CreateOrUpdateCredentialIssuerStatus(
 		ctx.Context,
 		c.credentialIssuerResourceName,
 		c.credentialIssuerLabels,

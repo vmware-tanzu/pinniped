@@ -287,19 +287,19 @@ func createOrUpdateCredentialIssuer(ctx context.Context,
 	pinnipedAPIClient pinnipedclientset.Interface,
 	err error,
 ) error {
-	return issuerconfig.CreateOrUpdateCredentialIssuer(
+	return issuerconfig.CreateOrUpdateCredentialIssuerStatus(
 		ctx,
 		ciConfig.Name,
 		credentialIssuerLabels,
 		pinnipedAPIClient,
-		func(configToUpdate *configv1alpha1.CredentialIssuer) {
+		func(configToUpdate *configv1alpha1.CredentialIssuerStatus) {
 			var strategyResult configv1alpha1.CredentialIssuerStrategy
 			if err == nil {
 				strategyResult = strategySuccess(clock)
 			} else {
 				strategyResult = strategyError(clock, err)
 			}
-			configToUpdate.Status.Strategies = []configv1alpha1.CredentialIssuerStrategy{
+			configToUpdate.Strategies = []configv1alpha1.CredentialIssuerStrategy{
 				strategyResult,
 			}
 		},

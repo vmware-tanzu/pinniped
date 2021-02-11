@@ -220,9 +220,6 @@ func TestKubeClientOwnerRef(t *testing.T) {
 				GenerateName:    "owner-ref-test-",
 				OwnerReferences: nil, // no owner refs set
 			},
-			Status: conciergeconfigv1alpha1.CredentialIssuerStatus{
-				Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{},
-			},
 		},
 		metav1.CreateOptions{},
 	)

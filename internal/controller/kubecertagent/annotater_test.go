@@ -265,8 +265,9 @@ func TestAnnotaterControllerSync(t *testing.T) {
 								credentialIssuerGVR,
 								credentialIssuerResourceName,
 							)
-							expectedUpdateAction := coretesting.NewRootUpdateAction(
+							expectedUpdateAction := coretesting.NewRootUpdateSubresourceAction(
 								credentialIssuerGVR,
+								"status",
 								expectedCredentialIssuer,
 							)
 
@@ -304,6 +305,13 @@ func TestAnnotaterControllerSync(t *testing.T) {
 							startInformersAndController()
 							err := controllerlib.TestSync(t, subject, *syncContext)
 
+							expectedCreateCredentialIssuer := &configv1alpha1.CredentialIssuer{
+								TypeMeta: metav1.TypeMeta{},
+								ObjectMeta: metav1.ObjectMeta{
+									Name: credentialIssuerResourceName,
+								},
+							}
+
 							expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
 								TypeMeta: metav1.TypeMeta{},
 								ObjectMeta: metav1.ObjectMeta{
@@ -327,6 +335,11 @@ func TestAnnotaterControllerSync(t *testing.T) {
 							)
 							expectedCreateAction := coretesting.NewRootCreateAction(
 								credentialIssuerGVR,
+								expectedCreateCredentialIssuer,
+							)
+							expectedUpdateAction := coretesting.NewRootUpdateSubresourceAction(
+								credentialIssuerGVR,
+								"status",
 								expectedCredentialIssuer,
 							)
 
@@ -335,6 +348,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 								[]coretesting.Action{
 									expectedGetAction,
 									expectedCreateAction,
+									expectedUpdateAction,
 								},
 								pinnipedAPIClient.Actions(),
 							)

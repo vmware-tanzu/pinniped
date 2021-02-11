@@ -17,12 +17,12 @@ import (
 	pinnipedclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
 )
 
-func CreateOrUpdateCredentialIssuer(
+func CreateOrUpdateCredentialIssuerStatus(
 	ctx context.Context,
 	credentialIssuerResourceName string,
 	credentialIssuerLabels map[string]string,
 	pinnipedClient pinnipedclientset.Interface,
-	applyUpdatesToCredentialIssuerFunc func(configToUpdate *configv1alpha1.CredentialIssuer),
+	applyUpdatesToCredentialIssuerFunc func(configToUpdate *configv1alpha1.CredentialIssuerStatus),
 ) error {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		existingCredentialIssuer, err := pinnipedClient.
@@ -38,29 +38,30 @@ func CreateOrUpdateCredentialIssuer(
 		credentialIssuersClient := pinnipedClient.ConfigV1alpha1().CredentialIssuers()
 
 		if notFound {
-			// Create it
-			credentialIssuer := minimalValidCredentialIssuer(
-				credentialIssuerResourceName, credentialIssuerLabels,
-			)
-			applyUpdatesToCredentialIssuerFunc(credentialIssuer)
+			// create an empty credential issuer
+			minCredentialIssuer := minimalValidCredentialIssuer(credentialIssuerResourceName, credentialIssuerLabels)
 
-			if _, err := credentialIssuersClient.Create(ctx, credentialIssuer, metav1.CreateOptions{}); err != nil {
+			newCredentialIssuer, err := credentialIssuersClient.Create(ctx, minCredentialIssuer, metav1.CreateOptions{})
+			if err != nil {
 				return fmt.Errorf("create failed: %w", err)
 			}
-		} else {
-			// Already exists, so check to see if we need to update it
-			credentialIssuer := existingCredentialIssuer.DeepCopy()
-			applyUpdatesToCredentialIssuerFunc(credentialIssuer)
 
-			if equality.Semantic.DeepEqual(existingCredentialIssuer, credentialIssuer) {
-				// Nothing interesting would change as a result of this update, so skip it
-				return nil
-			}
-
-			if _, err := credentialIssuersClient.Update(ctx, credentialIssuer, metav1.UpdateOptions{}); err != nil {
-				return err
-			}
+			existingCredentialIssuer = newCredentialIssuer
 		}
+
+		// check to see if we need to update the status
+		credentialIssuer := existingCredentialIssuer.DeepCopy()
+		applyUpdatesToCredentialIssuerFunc(&credentialIssuer.Status)
+
+		if equality.Semantic.DeepEqual(existingCredentialIssuer, credentialIssuer) {
+			// Nothing interesting would change as a result of this update, so skip it
+			return nil
+		}
+
+		if _, err := credentialIssuersClient.UpdateStatus(ctx, credentialIssuer, metav1.UpdateOptions{}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 
@@ -79,10 +80,6 @@ func minimalValidCredentialIssuer(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   credentialIssuerName,
 			Labels: credentialIssuerLabels,
-		},
-		Status: configv1alpha1.CredentialIssuerStatus{
-			Strategies:     []configv1alpha1.CredentialIssuerStrategy{},
-			KubeConfigInfo: nil,
 		},
 	}
 }

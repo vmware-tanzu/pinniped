@@ -76,6 +76,7 @@ type CredentialIssuer struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Status of the credential issuer.
+	// +optional
 	Status CredentialIssuerStatus `json:"status"`
 }
 

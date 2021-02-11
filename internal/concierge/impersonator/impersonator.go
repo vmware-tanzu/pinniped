@@ -95,7 +95,6 @@ func (p *proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	log = log.WithValues(
 		"authenticator", tokenCredentialReq.Spec.Authenticator,
-		"authenticatorNamespace", tokenCredentialReq.Namespace,
 	)
 
 	userInfo, err := p.cache.AuthenticateTokenCredentialRequest(r.Context(), tokenCredentialReq)

@@ -146,7 +146,7 @@ func TestImpersonator(t *testing.T) {
 			request:        newRequest(map[string][]string{"Authorization": {"Bearer " + makeTestTokenRequest("", "", "")}}),
 			wantHTTPBody:   "invalid token\n",
 			wantHTTPStatus: http.StatusUnauthorized,
-			wantLogs:       []string{"\"error\"=\"no such authenticator\" \"msg\"=\"received invalid token\" \"authenticator\"={\"apiGroup\":null,\"kind\":\"\",\"name\":\"\"} \"authenticatorNamespace\"=\"\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
+			wantLogs:       []string{"\"error\"=\"no such authenticator\" \"msg\"=\"received invalid token\" \"authenticator\"={\"apiGroup\":null,\"kind\":\"\",\"name\":\"\"} \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
 		},
 		{
 			name:          "token authenticates as nil",
@@ -157,7 +157,7 @@ func TestImpersonator(t *testing.T) {
 			},
 			wantHTTPBody:   "not authenticated\n",
 			wantHTTPStatus: http.StatusUnauthorized,
-			wantLogs:       []string{"\"level\"=0 \"msg\"=\"received token that did not authenticate\" \"authenticator\"={\"apiGroup\":null,\"kind\":\"\",\"name\":\"authenticator-one\"} \"authenticatorNamespace\"=\"foo\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
+			wantLogs:       []string{"\"level\"=0 \"msg\"=\"received token that did not authenticate\" \"authenticator\"={\"apiGroup\":null,\"kind\":\"\",\"name\":\"authenticator-one\"} \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
 		},
 		// happy path
 		{
@@ -179,7 +179,7 @@ func TestImpersonator(t *testing.T) {
 			},
 			wantHTTPBody:   "successful proxied response",
 			wantHTTPStatus: http.StatusOK,
-			wantLogs:       []string{"\"level\"=0 \"msg\"=\"proxying authenticated request\" \"authenticator\"={\"apiGroup\":null,\"kind\":\"\",\"name\":\"authenticator-one\"} \"authenticatorNamespace\"=\"foo\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\" \"userID\"=\"test-uid\""},
+			wantLogs:       []string{"\"level\"=0 \"msg\"=\"proxying authenticated request\" \"authenticator\"={\"apiGroup\":null,\"kind\":\"\",\"name\":\"authenticator-one\"} \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\" \"userID\"=\"test-uid\""},
 		},
 	}
 

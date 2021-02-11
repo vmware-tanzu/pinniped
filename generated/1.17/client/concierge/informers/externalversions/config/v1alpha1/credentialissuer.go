@@ -28,33 +28,32 @@ type CredentialIssuerInformer interface {
 type credentialIssuerInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
-	namespace        string
 }
 
 // NewCredentialIssuerInformer constructs a new informer for CredentialIssuer type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewCredentialIssuerInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredCredentialIssuerInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewCredentialIssuerInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredCredentialIssuerInformer(client, resyncPeriod, indexers, nil)
 }
 
 // NewFilteredCredentialIssuerInformer constructs a new informer for CredentialIssuer type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredCredentialIssuerInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredCredentialIssuerInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ConfigV1alpha1().CredentialIssuers(namespace).List(options)
+				return client.ConfigV1alpha1().CredentialIssuers().List(options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ConfigV1alpha1().CredentialIssuers(namespace).Watch(options)
+				return client.ConfigV1alpha1().CredentialIssuers().Watch(options)
 			},
 		},
 		&configv1alpha1.CredentialIssuer{},
@@ -64,7 +63,7 @@ func NewFilteredCredentialIssuerInformer(client versioned.Interface, namespace s
 }
 
 func (f *credentialIssuerInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredCredentialIssuerInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	return NewFilteredCredentialIssuerInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
 func (f *credentialIssuerInformer) Informer() cache.SharedIndexInformer {

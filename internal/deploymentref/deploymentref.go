@@ -19,7 +19,7 @@ import (
 
 // getTempClient is stubbed out for testing.
 //
-// We would normally inject a kubernetes.Interface into New(), but the client we want to create in
+// We would normally pass a kubernetes.Interface into New(), but the client we want to create in
 // the calling code depends on the return value of New() (i.e., on the kubeclient.Option for the
 // OwnerReference).
 //nolint: gochecknoglobals

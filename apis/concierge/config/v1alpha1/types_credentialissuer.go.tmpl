@@ -67,13 +67,16 @@ type CredentialIssuerStrategy struct {
 
 // Describes the configuration status of a Pinniped credential issuer.
 // +genclient
+// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:categories=pinniped
+// +kubebuilder:resource:categories=pinniped,scope=Cluster
+// +kubebuilder:subresource:status
 type CredentialIssuer struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Status of the credential issuer.
+	// +optional
 	Status CredentialIssuerStatus `json:"status"`
 }
 

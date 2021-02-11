@@ -17,7 +17,7 @@ type RoundTrip struct {
 	resource        schema.GroupVersionResource
 	subresource     string
 
-	MutateRequests, MutateResponses []func(kubeclient.Object)
+	MutateRequests, MutateResponses []func(kubeclient.Object) error
 }
 
 func (rt *RoundTrip) WithVerb(verb kubeclient.Verb) *RoundTrip {
@@ -61,10 +61,10 @@ func (rt *RoundTrip) Subresource() string {
 	return rt.subresource
 }
 
-func (rt *RoundTrip) MutateRequest(fn func(kubeclient.Object)) {
+func (rt *RoundTrip) MutateRequest(fn func(kubeclient.Object) error) {
 	rt.MutateRequests = append(rt.MutateRequests, fn)
 }
 
-func (rt *RoundTrip) MutateResponse(fn func(kubeclient.Object)) {
+func (rt *RoundTrip) MutateResponse(fn func(kubeclient.Object) error) {
 	rt.MutateResponses = append(rt.MutateResponses, fn)
 }

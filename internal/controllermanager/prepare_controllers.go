@@ -18,6 +18,7 @@ import (
 	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
 	pinnipedinformers "go.pinniped.dev/generated/1.20/client/concierge/informers/externalversions"
+	"go.pinniped.dev/internal/apiserviceref"
 	"go.pinniped.dev/internal/config/concierge"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
@@ -84,13 +85,25 @@ type Config struct {
 // Prepare the controllers and their informers and return a function that will start them when called.
 //nolint:funlen // Eh, fair, it is a really long function...but it is wiring the world...so...
 func PrepareControllers(c *Config) (func(ctx context.Context), error) {
+	groupName, ok := groupsuffix.Replace(loginv1alpha1.GroupName, c.APIGroupSuffix)
+	if !ok {
+		return nil, fmt.Errorf("cannot make api group from %s/%s", loginv1alpha1.GroupName, c.APIGroupSuffix)
+	}
+	apiServiceName := loginv1alpha1.SchemeGroupVersion.Version + "." + groupName
+
 	dref, _, err := deploymentref.New(c.ServerInstallationInfo)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create deployment ref: %w", err)
 	}
 
+	apiServiceRef, err := apiserviceref.New(apiServiceName)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create API service ref: %w", err)
+	}
+
 	client, err := kubeclient.New(
-		dref,
+		dref,          // first try to use the deployment as an owner ref (for namespace scoped resources)
+		apiServiceRef, // fallback to our API service (for everything else we create)
 		kubeclient.WithMiddleware(groupsuffix.New(c.APIGroupSuffix)),
 	)
 	if err != nil {
@@ -109,15 +122,8 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		AdditionalLabels:          c.Labels,
 	}
 	credentialIssuerLocationConfig := &kubecertagent.CredentialIssuerLocationConfig{
-		Namespace: c.ServerInstallationInfo.Namespace,
-		Name:      c.NamesConfig.CredentialIssuer,
+		Name: c.NamesConfig.CredentialIssuer,
 	}
-
-	groupName, ok := groupsuffix.Replace(loginv1alpha1.GroupName, c.APIGroupSuffix)
-	if !ok {
-		return nil, fmt.Errorf("cannot make api group from %s/%s", loginv1alpha1.GroupName, c.APIGroupSuffix)
-	}
-	apiServiceName := loginv1alpha1.SchemeGroupVersion.Version + "." + groupName
 
 	// Create controller manager.
 	controllerManager := controllerlib.
@@ -127,7 +133,6 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		// CredentialIssuer resource and keeping that information up to date.
 		WithController(
 			issuerconfig.NewKubeConfigInfoPublisherController(
-				c.ServerInstallationInfo.Namespace,
 				c.NamesConfig.CredentialIssuer,
 				c.Labels,
 				c.DiscoveryURLOverride,
@@ -245,7 +250,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		WithController(
 			webhookcachefiller.New(
 				c.AuthenticatorCache,
-				informers.installationNamespacePinniped.Authentication().V1alpha1().WebhookAuthenticators(),
+				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
 				klogr.New(),
 			),
 			singletonWorker,
@@ -253,7 +258,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		WithController(
 			jwtcachefiller.New(
 				c.AuthenticatorCache,
-				informers.installationNamespacePinniped.Authentication().V1alpha1().JWTAuthenticators(),
+				informers.pinniped.Authentication().V1alpha1().JWTAuthenticators(),
 				klogr.New(),
 			),
 			singletonWorker,
@@ -261,8 +266,8 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		WithController(
 			cachecleaner.New(
 				c.AuthenticatorCache,
-				informers.installationNamespacePinniped.Authentication().V1alpha1().WebhookAuthenticators(),
-				informers.installationNamespacePinniped.Authentication().V1alpha1().JWTAuthenticators(),
+				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
+				informers.pinniped.Authentication().V1alpha1().JWTAuthenticators(),
 				klogr.New(),
 			),
 			singletonWorker,
@@ -276,10 +281,10 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 }
 
 type informers struct {
-	kubePublicNamespaceK8s        k8sinformers.SharedInformerFactory
-	kubeSystemNamespaceK8s        k8sinformers.SharedInformerFactory
-	installationNamespaceK8s      k8sinformers.SharedInformerFactory
-	installationNamespacePinniped pinnipedinformers.SharedInformerFactory
+	kubePublicNamespaceK8s   k8sinformers.SharedInformerFactory
+	kubeSystemNamespaceK8s   k8sinformers.SharedInformerFactory
+	installationNamespaceK8s k8sinformers.SharedInformerFactory
+	pinniped                 pinnipedinformers.SharedInformerFactory
 }
 
 // Create the informers that will be used by the controllers.
@@ -304,10 +309,9 @@ func createInformers(
 			defaultResyncInterval,
 			k8sinformers.WithNamespace(serverInstallationNamespace),
 		),
-		installationNamespacePinniped: pinnipedinformers.NewSharedInformerFactoryWithOptions(
+		pinniped: pinnipedinformers.NewSharedInformerFactoryWithOptions(
 			pinnipedClient,
 			defaultResyncInterval,
-			pinnipedinformers.WithNamespace(serverInstallationNamespace),
 		),
 	}
 }
@@ -316,10 +320,10 @@ func (i *informers) startAndWaitForSync(ctx context.Context) {
 	i.kubePublicNamespaceK8s.Start(ctx.Done())
 	i.kubeSystemNamespaceK8s.Start(ctx.Done())
 	i.installationNamespaceK8s.Start(ctx.Done())
-	i.installationNamespacePinniped.Start(ctx.Done())
+	i.pinniped.Start(ctx.Done())
 
 	i.kubePublicNamespaceK8s.WaitForCacheSync(ctx.Done())
 	i.kubeSystemNamespaceK8s.WaitForCacheSync(ctx.Done())
 	i.installationNamespaceK8s.WaitForCacheSync(ctx.Done())
-	i.installationNamespacePinniped.WaitForCacheSync(ctx.Done())
+	i.pinniped.WaitForCacheSync(ctx.Done())
 }

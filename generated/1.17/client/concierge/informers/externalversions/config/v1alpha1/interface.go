@@ -28,5 +28,5 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 
 // CredentialIssuers returns a CredentialIssuerInformer.
 func (v *version) CredentialIssuers() CredentialIssuerInformer {
-	return &credentialIssuerInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+	return &credentialIssuerInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

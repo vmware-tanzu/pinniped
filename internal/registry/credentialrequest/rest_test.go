@@ -31,7 +31,7 @@ import (
 func TestNew(t *testing.T) {
 	r := NewREST(nil, nil, schema.GroupResource{Group: "bears", Resource: "panda"})
 	require.NotNil(t, r)
-	require.True(t, r.NamespaceScoped())
+	require.False(t, r.NamespaceScoped())
 	require.Equal(t, []string{"pinniped"}, r.Categories())
 	require.IsType(t, &loginapi.TokenCredentialRequest{}, r.New())
 	require.IsType(t, &loginapi.TokenCredentialRequestList{}, r.NewList())

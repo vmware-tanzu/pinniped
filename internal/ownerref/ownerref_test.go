@@ -213,7 +213,7 @@ func TestOwnerReferenceMiddleware(t *testing.T) {
 			orig := tt.args.obj.DeepCopyObject().(kubeclient.Object)
 			for _, mutateRequest := range rt.MutateRequests {
 				mutateRequest := mutateRequest
-				mutateRequest(tt.args.obj)
+				require.NoError(t, mutateRequest(tt.args.obj))
 			}
 			if !tt.wantMutates {
 				require.Equal(t, orig, tt.args.obj)

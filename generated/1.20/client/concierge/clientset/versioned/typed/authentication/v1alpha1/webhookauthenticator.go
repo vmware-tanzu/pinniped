@@ -20,7 +20,7 @@ import (
 // WebhookAuthenticatorsGetter has a method to return a WebhookAuthenticatorInterface.
 // A group's client should implement this interface.
 type WebhookAuthenticatorsGetter interface {
-	WebhookAuthenticators(namespace string) WebhookAuthenticatorInterface
+	WebhookAuthenticators() WebhookAuthenticatorInterface
 }
 
 // WebhookAuthenticatorInterface has methods to work with WebhookAuthenticator resources.
@@ -40,14 +40,12 @@ type WebhookAuthenticatorInterface interface {
 // webhookAuthenticators implements WebhookAuthenticatorInterface
 type webhookAuthenticators struct {
 	client rest.Interface
-	ns     string
 }
 
 // newWebhookAuthenticators returns a WebhookAuthenticators
-func newWebhookAuthenticators(c *AuthenticationV1alpha1Client, namespace string) *webhookAuthenticators {
+func newWebhookAuthenticators(c *AuthenticationV1alpha1Client) *webhookAuthenticators {
 	return &webhookAuthenticators{
 		client: c.RESTClient(),
-		ns:     namespace,
 	}
 }
 
@@ -55,7 +53,6 @@ func newWebhookAuthenticators(c *AuthenticationV1alpha1Client, namespace string)
 func (c *webhookAuthenticators) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.WebhookAuthenticator, err error) {
 	result = &v1alpha1.WebhookAuthenticator{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("webhookauthenticators").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
@@ -72,7 +69,6 @@ func (c *webhookAuthenticators) List(ctx context.Context, opts v1.ListOptions) (
 	}
 	result = &v1alpha1.WebhookAuthenticatorList{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("webhookauthenticators").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -89,7 +85,6 @@ func (c *webhookAuthenticators) Watch(ctx context.Context, opts v1.ListOptions) 
 	}
 	opts.Watch = true
 	return c.client.Get().
-		Namespace(c.ns).
 		Resource("webhookauthenticators").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -100,7 +95,6 @@ func (c *webhookAuthenticators) Watch(ctx context.Context, opts v1.ListOptions) 
 func (c *webhookAuthenticators) Create(ctx context.Context, webhookAuthenticator *v1alpha1.WebhookAuthenticator, opts v1.CreateOptions) (result *v1alpha1.WebhookAuthenticator, err error) {
 	result = &v1alpha1.WebhookAuthenticator{}
 	err = c.client.Post().
-		Namespace(c.ns).
 		Resource("webhookauthenticators").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(webhookAuthenticator).
@@ -113,7 +107,6 @@ func (c *webhookAuthenticators) Create(ctx context.Context, webhookAuthenticator
 func (c *webhookAuthenticators) Update(ctx context.Context, webhookAuthenticator *v1alpha1.WebhookAuthenticator, opts v1.UpdateOptions) (result *v1alpha1.WebhookAuthenticator, err error) {
 	result = &v1alpha1.WebhookAuthenticator{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("webhookauthenticators").
 		Name(webhookAuthenticator.Name).
 		VersionedParams(&opts, scheme.ParameterCodec).
@@ -128,7 +121,6 @@ func (c *webhookAuthenticators) Update(ctx context.Context, webhookAuthenticator
 func (c *webhookAuthenticators) UpdateStatus(ctx context.Context, webhookAuthenticator *v1alpha1.WebhookAuthenticator, opts v1.UpdateOptions) (result *v1alpha1.WebhookAuthenticator, err error) {
 	result = &v1alpha1.WebhookAuthenticator{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("webhookauthenticators").
 		Name(webhookAuthenticator.Name).
 		SubResource("status").
@@ -142,7 +134,6 @@ func (c *webhookAuthenticators) UpdateStatus(ctx context.Context, webhookAuthent
 // Delete takes name of the webhookAuthenticator and deletes it. Returns an error if one occurs.
 func (c *webhookAuthenticators) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("webhookauthenticators").
 		Name(name).
 		Body(&opts).
@@ -157,7 +148,6 @@ func (c *webhookAuthenticators) DeleteCollection(ctx context.Context, opts v1.De
 		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("webhookauthenticators").
 		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -170,7 +160,6 @@ func (c *webhookAuthenticators) DeleteCollection(ctx context.Context, opts v1.De
 func (c *webhookAuthenticators) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.WebhookAuthenticator, err error) {
 	result = &v1alpha1.WebhookAuthenticator{}
 	err = c.client.Patch(pt).
-		Namespace(c.ns).
 		Resource("webhookauthenticators").
 		Name(name).
 		SubResource(subresources...).

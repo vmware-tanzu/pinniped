@@ -153,7 +153,7 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 	testEnv := IntegrationEnv(t)
 
 	client := NewConciergeClientset(t)
-	webhooks := client.AuthenticationV1alpha1().WebhookAuthenticators(testEnv.ConciergeNamespace)
+	webhooks := client.AuthenticationV1alpha1().WebhookAuthenticators()
 
 	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -180,11 +180,8 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 		require.NoErrorf(t, err, "could not cleanup test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
 	})
 
-	apiGroup, replacedSuffix := groupsuffix.Replace(auth1alpha1.SchemeGroupVersion.Group, testEnv.APIGroupSuffix)
-	require.True(t, replacedSuffix)
-
 	return corev1.TypedLocalObjectReference{
-		APIGroup: &apiGroup,
+		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
 		Kind:     "WebhookAuthenticator",
 		Name:     webhook.Name,
 	}
@@ -223,10 +220,9 @@ func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T)
 // authenticator within the test namespace.
 func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alpha1.JWTAuthenticatorSpec) corev1.TypedLocalObjectReference {
 	t.Helper()
-	testEnv := IntegrationEnv(t)
 
 	client := NewConciergeClientset(t)
-	jwtAuthenticators := client.AuthenticationV1alpha1().JWTAuthenticators(testEnv.ConciergeNamespace)
+	jwtAuthenticators := client.AuthenticationV1alpha1().JWTAuthenticators()
 
 	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -253,11 +249,8 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 		require.NoErrorf(t, err, "could not cleanup test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
 	})
 
-	apiGroup, replacedSuffix := groupsuffix.Replace(auth1alpha1.SchemeGroupVersion.Group, testEnv.APIGroupSuffix)
-	require.True(t, replacedSuffix)
-
 	return corev1.TypedLocalObjectReference{
-		APIGroup: &apiGroup,
+		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
 		Kind:     "JWTAuthenticator",
 		Name:     jwtAuthenticator.Name,
 	}

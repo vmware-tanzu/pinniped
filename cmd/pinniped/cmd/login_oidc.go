@@ -65,7 +65,6 @@ type oidcLoginFlags struct {
 	debugSessionCache          bool
 	requestAudience            string
 	conciergeEnabled           bool
-	conciergeNamespace         string
 	conciergeAuthenticatorType string
 	conciergeAuthenticatorName string
 	conciergeEndpoint          string
@@ -76,13 +75,14 @@ type oidcLoginFlags struct {
 
 func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	var (
-		cmd = cobra.Command{
+		cmd = &cobra.Command{
 			Args:         cobra.NoArgs,
 			Use:          "oidc --issuer ISSUER",
 			Short:        "Login using an OpenID Connect provider",
 			SilenceUsage: true,
 		}
-		flags oidcLoginFlags
+		flags              oidcLoginFlags
+		conciergeNamespace string // unused now
 	)
 	cmd.Flags().StringVar(&flags.issuer, "issuer", "", "OpenID Connect issuer URL")
 	cmd.Flags().StringVar(&flags.clientID, "client-id", "pinniped-cli", "OpenID Connect client ID")
@@ -95,7 +95,7 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().BoolVar(&flags.debugSessionCache, "debug-session-cache", false, "Print debug logs related to the session cache")
 	cmd.Flags().StringVar(&flags.requestAudience, "request-audience", "", "Request a token with an alternate audience using RFC8693 token exchange")
 	cmd.Flags().BoolVar(&flags.conciergeEnabled, "enable-concierge", false, "Exchange the OIDC ID token with the Pinniped concierge during login")
-	cmd.Flags().StringVar(&flags.conciergeNamespace, "concierge-namespace", "pinniped-concierge", "Namespace in which the concierge was installed")
+	cmd.Flags().StringVar(&conciergeNamespace, "concierge-namespace", "pinniped-concierge", "Namespace in which the concierge was installed")
 	cmd.Flags().StringVar(&flags.conciergeAuthenticatorType, "concierge-authenticator-type", "", "Concierge authenticator type (e.g., 'webhook', 'jwt')")
 	cmd.Flags().StringVar(&flags.conciergeAuthenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name")
 	cmd.Flags().StringVar(&flags.conciergeEndpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")
@@ -103,10 +103,14 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", "pinniped.dev", "Concierge API group suffix")
 	cmd.Flags().BoolVar(&flags.useImpersonationProxy, "concierge-use-impersonation-proxy", false, "Whether the concierge cluster uses an impersonation proxy")
 
-	mustMarkHidden(&cmd, "debug-session-cache")
-	mustMarkRequired(&cmd, "issuer")
+	mustMarkHidden(cmd, "debug-session-cache")
+	mustMarkRequired(cmd, "issuer")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runOIDCLogin(cmd, deps, flags) }
-	return &cmd
+
+	mustMarkDeprecated(cmd, "concierge-namespace", "not needed anymore")
+	mustMarkHidden(cmd, "concierge-namespace")
+
+	return cmd
 }
 
 func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLoginFlags) error {
@@ -141,7 +145,6 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	if flags.conciergeEnabled {
 		var err error
 		concierge, err = conciergeclient.New(
-			conciergeclient.WithNamespace(flags.conciergeNamespace),
 			conciergeclient.WithEndpoint(flags.conciergeEndpoint),
 			conciergeclient.WithBase64CABundle(flags.conciergeCABundle),
 			conciergeclient.WithAuthenticator(flags.conciergeAuthenticatorType, flags.conciergeAuthenticatorName),
@@ -189,7 +192,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	if concierge != nil && flags.useImpersonationProxy {
 		// Put the token into a TokenCredentialRequest
 		// put the TokenCredentialRequest in an ExecCredential
-		req, err := execCredentialForImpersonationProxy(token.IDToken.Token, flags.conciergeAuthenticatorType, flags.conciergeNamespace, flags.conciergeAuthenticatorName, &token.IDToken.Expiry)
+		req, err := execCredentialForImpersonationProxy(token.IDToken.Token, flags.conciergeAuthenticatorType, flags.conciergeAuthenticatorName, &token.IDToken.Expiry)
 		if err != nil {
 			return err
 		}
@@ -260,7 +263,6 @@ func mustGetConfigDir() string {
 func execCredentialForImpersonationProxy(
 	idToken string,
 	conciergeAuthenticatorType string,
-	conciergeNamespace string,
 	conciergeAuthenticatorName string,
 	tokenExpiry *metav1.Time,
 ) (*clientauthv1beta1.ExecCredential, error) {
@@ -275,9 +277,6 @@ func execCredentialForImpersonationProxy(
 		return nil, fmt.Errorf(`invalid authenticator type: %q, supported values are "webhook" and "jwt"`, kind)
 	}
 	reqJSON, err := json.Marshal(&loginv1alpha1.TokenCredentialRequest{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: conciergeNamespace,
-		},
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "TokenCredentialRequest",
 			APIVersion: loginv1alpha1.GroupName + "/v1alpha1",

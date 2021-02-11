@@ -163,7 +163,7 @@ to authenticate federated identities from the Supervisor.
    object to configure the Pinniped Concierge to authenticate using the Pinniped Supervisor.
 
     ```bash
-    cat <<EOF | kubectl create --context kind-pinniped-concierge --namespace pinniped-concierge -f -
+    cat <<EOF | kubectl create --context kind-pinniped-concierge -f -
     apiVersion: authentication.concierge.pinniped.dev/v1alpha1
     kind: JWTAuthenticator
     metadata:
@@ -185,7 +185,6 @@ to authenticate federated identities from the Supervisor.
    ```bash
    pinniped get kubeconfig \
      --kubeconfig-context kind-pinniped-concierge \
-     --concierge-namespace pinniped-concierge \
      > /tmp/pinniped-kubeconfig
    ```
 

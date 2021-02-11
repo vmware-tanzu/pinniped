@@ -19,7 +19,7 @@ import (
 // CredentialIssuersGetter has a method to return a CredentialIssuerInterface.
 // A group's client should implement this interface.
 type CredentialIssuersGetter interface {
-	CredentialIssuers(namespace string) CredentialIssuerInterface
+	CredentialIssuers() CredentialIssuerInterface
 }
 
 // CredentialIssuerInterface has methods to work with CredentialIssuer resources.
@@ -39,14 +39,12 @@ type CredentialIssuerInterface interface {
 // credentialIssuers implements CredentialIssuerInterface
 type credentialIssuers struct {
 	client rest.Interface
-	ns     string
 }
 
 // newCredentialIssuers returns a CredentialIssuers
-func newCredentialIssuers(c *ConfigV1alpha1Client, namespace string) *credentialIssuers {
+func newCredentialIssuers(c *ConfigV1alpha1Client) *credentialIssuers {
 	return &credentialIssuers{
 		client: c.RESTClient(),
-		ns:     namespace,
 	}
 }
 
@@ -54,7 +52,6 @@ func newCredentialIssuers(c *ConfigV1alpha1Client, namespace string) *credential
 func (c *credentialIssuers) Get(name string, options v1.GetOptions) (result *v1alpha1.CredentialIssuer, err error) {
 	result = &v1alpha1.CredentialIssuer{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
@@ -71,7 +68,6 @@ func (c *credentialIssuers) List(opts v1.ListOptions) (result *v1alpha1.Credenti
 	}
 	result = &v1alpha1.CredentialIssuerList{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -88,7 +84,6 @@ func (c *credentialIssuers) Watch(opts v1.ListOptions) (watch.Interface, error) 
 	}
 	opts.Watch = true
 	return c.client.Get().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -99,7 +94,6 @@ func (c *credentialIssuers) Watch(opts v1.ListOptions) (watch.Interface, error) 
 func (c *credentialIssuers) Create(credentialIssuer *v1alpha1.CredentialIssuer) (result *v1alpha1.CredentialIssuer, err error) {
 	result = &v1alpha1.CredentialIssuer{}
 	err = c.client.Post().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		Body(credentialIssuer).
 		Do().
@@ -111,7 +105,6 @@ func (c *credentialIssuers) Create(credentialIssuer *v1alpha1.CredentialIssuer) 
 func (c *credentialIssuers) Update(credentialIssuer *v1alpha1.CredentialIssuer) (result *v1alpha1.CredentialIssuer, err error) {
 	result = &v1alpha1.CredentialIssuer{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		Name(credentialIssuer.Name).
 		Body(credentialIssuer).
@@ -126,7 +119,6 @@ func (c *credentialIssuers) Update(credentialIssuer *v1alpha1.CredentialIssuer) 
 func (c *credentialIssuers) UpdateStatus(credentialIssuer *v1alpha1.CredentialIssuer) (result *v1alpha1.CredentialIssuer, err error) {
 	result = &v1alpha1.CredentialIssuer{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		Name(credentialIssuer.Name).
 		SubResource("status").
@@ -139,7 +131,6 @@ func (c *credentialIssuers) UpdateStatus(credentialIssuer *v1alpha1.CredentialIs
 // Delete takes name of the credentialIssuer and deletes it. Returns an error if one occurs.
 func (c *credentialIssuers) Delete(name string, options *v1.DeleteOptions) error {
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		Name(name).
 		Body(options).
@@ -154,7 +145,6 @@ func (c *credentialIssuers) DeleteCollection(options *v1.DeleteOptions, listOpti
 		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -167,7 +157,6 @@ func (c *credentialIssuers) DeleteCollection(options *v1.DeleteOptions, listOpti
 func (c *credentialIssuers) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.CredentialIssuer, err error) {
 	result = &v1alpha1.CredentialIssuer{}
 	err = c.client.Patch(pt).
-		Namespace(c.ns).
 		Resource("credentialissuers").
 		SubResource(subresources...).
 		Name(name).

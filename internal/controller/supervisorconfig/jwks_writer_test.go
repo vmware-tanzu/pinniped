@@ -355,7 +355,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 			},
 			wantFederationDomainActions: []kubetesting.Action{
 				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
-				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithStatus),
+				kubetesting.NewUpdateSubresourceAction(federationDomainGVR, "status", namespace, goodFederationDomainWithStatus),
 			},
 		},
 		{
@@ -373,7 +373,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 			},
 			wantFederationDomainActions: []kubetesting.Action{
 				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
-				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithStatus),
+				kubetesting.NewUpdateSubresourceAction(federationDomainGVR, "status", namespace, goodFederationDomainWithStatus),
 			},
 		},
 		{

@@ -393,7 +393,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 			},
 			wantFederationDomainActions: []kubetesting.Action{
 				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
-				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithTokenSigningKey),
+				kubetesting.NewUpdateSubresourceAction(federationDomainGVR, "status", namespace, goodFederationDomainWithTokenSigningKey),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
@@ -416,7 +416,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 			},
 			wantFederationDomainActions: []kubetesting.Action{
 				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
-				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithJWKSAndTokenSigningKey),
+				kubetesting.NewUpdateSubresourceAction(federationDomainGVR, "status", namespace, goodFederationDomainWithJWKSAndTokenSigningKey),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
@@ -457,7 +457,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 			},
 			wantFederationDomainActions: []kubetesting.Action{
 				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
-				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithTokenSigningKey),
+				kubetesting.NewUpdateSubresourceAction(federationDomainGVR, "status", namespace, goodFederationDomainWithTokenSigningKey),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
@@ -484,7 +484,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 			},
 			wantFederationDomainActions: []kubetesting.Action{
 				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
-				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithTokenSigningKey),
+				kubetesting.NewUpdateSubresourceAction(federationDomainGVR, "status", namespace, goodFederationDomainWithTokenSigningKey),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
@@ -562,7 +562,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 			},
 			wantFederationDomainActions: []kubetesting.Action{
 				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
-				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithTokenSigningKey),
+				kubetesting.NewUpdateSubresourceAction(federationDomainGVR, "status", namespace, goodFederationDomainWithTokenSigningKey),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
@@ -615,9 +615,9 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 			},
 			wantFederationDomainActions: []kubetesting.Action{
 				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
-				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithTokenSigningKey),
+				kubetesting.NewUpdateSubresourceAction(federationDomainGVR, "status", namespace, goodFederationDomainWithTokenSigningKey),
 				kubetesting.NewGetAction(federationDomainGVR, namespace, goodFederationDomain.Name),
-				kubetesting.NewUpdateAction(federationDomainGVR, namespace, goodFederationDomainWithTokenSigningKey),
+				kubetesting.NewUpdateSubresourceAction(federationDomainGVR, "status", namespace, goodFederationDomainWithTokenSigningKey),
 			},
 			wantSecretActions: []kubetesting.Action{
 				kubetesting.NewGetAction(secretGVR, namespace, goodSecret.Name),
@@ -677,8 +677,8 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 
 			c := NewFederationDomainSecretsController(
 				secretHelper,
-				func(fd *configv1alpha1.FederationDomain) *corev1.LocalObjectReference {
-					return &fd.Status.Secrets.TokenSigningKey
+				func(fd *configv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference {
+					return &fd.Secrets.TokenSigningKey
 				},
 				kubeAPIClient,
 				pinnipedAPIClient,

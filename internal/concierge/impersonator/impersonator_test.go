@@ -191,7 +191,7 @@ func TestImpersonator(t *testing.T) {
 			cacheWithMockAuthenticator := authncache.New()
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			key := authncache.Key{Namespace: "foo", Name: "authenticator-one"}
+			key := authncache.Key{Name: "authenticator-one"}
 			mockToken := mocktokenauthenticator.NewMockToken(ctrl)
 			cacheWithMockAuthenticator.Store(key, mockToken)
 

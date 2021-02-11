@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"strings"
 
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 	"k8s.io/client-go/tools/clientcmd"
@@ -27,27 +27,17 @@ import (
 )
 
 // ErrLoginFailed is returned by Client.ExchangeToken when the concierge server rejects the login request for any reason.
-var ErrLoginFailed = constable.Error("login failed")
+const ErrLoginFailed = constable.Error("login failed")
 
 // Option is an optional configuration for New().
 type Option func(*Client) error
 
 // Client is a configuration for talking to the Pinniped concierge.
 type Client struct {
-	namespace         string
-	authenticatorName string
-	authenticatorKind string
-	caBundle          string
-	endpoint          *url.URL
-	apiGroupSuffix    string
-}
-
-// WithNamespace configures the namespace where the TokenCredentialRequest is to be sent.
-func WithNamespace(namespace string) Option {
-	return func(c *Client) error {
-		c.namespace = namespace
-		return nil
-	}
+	authenticator  *corev1.TypedLocalObjectReference
+	caBundle       string
+	endpoint       *url.URL
+	apiGroupSuffix string
 }
 
 // WithAuthenticator configures the authenticator reference (spec.authenticator) of the TokenCredentialRequests.
@@ -56,15 +46,18 @@ func WithAuthenticator(authType, authName string) Option {
 		if authName == "" {
 			return fmt.Errorf("authenticator name must not be empty")
 		}
-		c.authenticatorName = authName
+		authenticator := corev1.TypedLocalObjectReference{Name: authName}
 		switch strings.ToLower(authType) {
 		case "webhook":
-			c.authenticatorKind = "WebhookAuthenticator"
+			authenticator.APIGroup = &auth1alpha1.SchemeGroupVersion.Group
+			authenticator.Kind = "WebhookAuthenticator"
 		case "jwt":
-			c.authenticatorKind = "JWTAuthenticator"
+			authenticator.APIGroup = &auth1alpha1.SchemeGroupVersion.Group
+			authenticator.Kind = "JWTAuthenticator"
 		default:
 			return fmt.Errorf(`invalid authenticator type: %q, supported values are "webhook" and "jwt"`, authType)
 		}
+		c.authenticator = &authenticator
 		return nil
 	}
 }
@@ -125,13 +118,13 @@ func WithAPIGroupSuffix(apiGroupSuffix string) Option {
 
 // New validates the specified options and returns a newly initialized *Client.
 func New(opts ...Option) (*Client, error) {
-	c := Client{namespace: "pinniped-concierge", apiGroupSuffix: "pinniped.dev"}
+	c := Client{apiGroupSuffix: "pinniped.dev"}
 	for _, opt := range opts {
 		if err := opt(&c); err != nil {
 			return nil, err
 		}
 	}
-	if c.authenticatorName == "" {
+	if c.authenticator == nil {
 		return nil, fmt.Errorf("WithAuthenticator must be specified")
 	}
 	if c.endpoint == nil {
@@ -178,18 +171,10 @@ func (c *Client) ExchangeToken(ctx context.Context, token string) (*clientauthen
 	if err != nil {
 		return nil, err
 	}
-	replacedAPIGroupName, _ := groupsuffix.Replace(auth1alpha1.SchemeGroupVersion.Group, c.apiGroupSuffix)
-	resp, err := clientset.LoginV1alpha1().TokenCredentialRequests(c.namespace).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: c.namespace,
-		},
+	resp, err := clientset.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 		Spec: loginv1alpha1.TokenCredentialRequestSpec{
-			Token: token,
-			Authenticator: v1.TypedLocalObjectReference{
-				APIGroup: &replacedAPIGroupName,
-				Kind:     c.authenticatorKind,
-				Name:     c.authenticatorName,
-			},
+			Token:         token,
+			Authenticator: *c.authenticator,
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {

@@ -15,8 +15,8 @@ type FakeLoginV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeLoginV1alpha1) TokenCredentialRequests(namespace string) v1alpha1.TokenCredentialRequestInterface {
-	return &FakeTokenCredentialRequests{c, namespace}
+func (c *FakeLoginV1alpha1) TokenCredentialRequests() v1alpha1.TokenCredentialRequestInterface {
+	return &FakeTokenCredentialRequests{c}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

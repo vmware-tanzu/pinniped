@@ -18,7 +18,7 @@ spec:
     listKind: WebhookAuthenticatorList
     plural: webhookauthenticators
     singular: webhookauthenticator
-  scope: Namespaced
+  scope: Cluster
   versions:
   - additionalPrinterColumns:
     - jsonPath: .spec.endpoint
@@ -137,7 +137,8 @@ spec:
         type: object
     served: true
     storage: true
-    subresources: {}
+    subresources:
+      status: {}
 status:
   acceptedNames:
     kind: ""

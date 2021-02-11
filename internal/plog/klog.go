@@ -4,6 +4,7 @@
 package plog
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/spf13/pflag"
@@ -30,6 +31,17 @@ func RemoveKlogGlobalFlags() {
 	if pflag.CommandLine.Changed(globalLogFlushFlag) {
 		panic("unsupported global klog flag set")
 	}
+}
+
+// KRef is (mostly) copied from klog - it is a standard way to represent a a metav1.Object in logs
+// when you only have access to the namespace and name of the object.
+func KRef(namespace, name string) string {
+	return fmt.Sprintf("%s/%s", namespace, name)
+}
+
+// KObj is (mostly) copied from klog - it is a standard way to represent a metav1.Object in logs.
+func KObj(obj klog.KMetadata) string {
+	return fmt.Sprintf("%s/%s", obj.GetNamespace(), obj.GetName())
 }
 
 func klogLevelForPlogLevel(plogLevel LogLevel) (klogLevel klog.Level) {

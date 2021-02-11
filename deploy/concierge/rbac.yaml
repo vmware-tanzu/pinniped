@@ -17,7 +17,7 @@ rules:
     verbs: [ get, list, watch ]
   - apiGroups: [ apiregistration.k8s.io ]
     resources: [ apiservices ]
-    verbs: [ create, get, list, patch, update, watch ]
+    verbs: [ get, list, patch, update, watch ]
   - apiGroups: [ admissionregistration.k8s.io ]
     resources: [ validatingwebhookconfigurations, mutatingwebhookconfigurations ]
     verbs: [ get, list, watch ]
@@ -34,6 +34,18 @@ rules:
   - apiGroups: [""]
     resources: ["users", "groups"]
     verbs: ["impersonate"]
+  - apiGroups:
+      - #@ pinnipedDevAPIGroupWithPrefix("config.concierge")
+    resources: [ credentialissuers ]
+    verbs: [ get, list, watch, create ]
+  - apiGroups:
+      - #@ pinnipedDevAPIGroupWithPrefix("config.concierge")
+    resources: [ credentialissuers/status ]
+    verbs: [get, patch, update]
+  - apiGroups:
+      - #@ pinnipedDevAPIGroupWithPrefix("authentication.concierge")
+    resources: [ jwtauthenticators, webhookauthenticators ]
+    verbs: [ get, list, watch ]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -72,11 +84,6 @@ rules:
   - apiGroups: [ "" ]
     resources: [ pods/exec ]
     verbs: [ create ]
-  - apiGroups:
-      - #@ pinnipedDevAPIGroupWithPrefix("config.concierge")
-      - #@ pinnipedDevAPIGroupWithPrefix("authentication.concierge")
-    resources: [ "*" ]
-    verbs: [ create, get, list, update, watch ]
   - apiGroups: [apps]
     resources: [replicasets,deployments]
     verbs: [get]

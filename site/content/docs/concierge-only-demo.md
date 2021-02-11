@@ -102,7 +102,7 @@ as the authenticator.
 1. Create a `WebhookAuthenticator` object to configure the Pinniped Concierge to authenticate using local-user-authenticator.
 
     ```bash
-    cat <<EOF | kubectl create --namespace pinniped-concierge -f -
+    cat <<EOF | kubectl create -f -
     apiVersion: authentication.concierge.pinniped.dev/v1alpha1
     kind: WebhookAuthenticator
     metadata:
@@ -124,7 +124,7 @@ as the authenticator.
    allow you to authenticate as the user that you created above.
 
    ```bash
-   pinniped get kubeconfig --concierge-namespace pinniped-concierge --static-token "pinny-the-seal:password123" --concierge-authenticator-type webhook --concierge-authenticator-name local-user-authenticator > /tmp/pinniped-kubeconfig
+   pinniped get kubeconfig --static-token "pinny-the-seal:password123" --concierge-authenticator-type webhook --concierge-authenticator-name local-user-authenticator > /tmp/pinniped-kubeconfig
    ```
 
    If you are using MacOS, you may get an error dialog that says

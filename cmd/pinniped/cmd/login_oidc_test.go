@@ -71,7 +71,6 @@ func TestLoginOIDCCommand(t *testing.T) {
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt')
 				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the concierge
 				      --concierge-endpoint string             API base for the Pinniped concierge endpoint
-				      --concierge-namespace string            Namespace in which the concierge was installed (default "pinniped-concierge")
 				      --concierge-use-impersonation-proxy     Whether the concierge cluster uses an impersonation proxy
 				      --enable-concierge                      Exchange the OIDC ID token with the Pinniped concierge during login
 				  -h, --help                                  help for oidc
@@ -193,7 +192,6 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--ca-bundle-data", base64.StdEncoding.EncodeToString(testCA.Bundle()),
 				"--ca-bundle", testCABundlePath,
 				"--enable-concierge",
-				"--concierge-namespace", "test-namespace",
 				"--concierge-authenticator-type", "webhook",
 				"--concierge-authenticator-name", "test-authenticator",
 				"--concierge-endpoint", "https://127.0.0.1:1234/",
@@ -277,9 +275,6 @@ func TestLoginOIDCCommand(t *testing.T) {
 
 func impersonationProxyTestToken(token string) string {
 	reqJSON, _ := json.Marshal(&loginv1alpha1.TokenCredentialRequest{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "pinniped-concierge",
-		},
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "TokenCredentialRequest",
 			APIVersion: loginv1alpha1.GroupName + "/v1alpha1",

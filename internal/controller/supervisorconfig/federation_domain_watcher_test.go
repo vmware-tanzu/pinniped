@@ -222,8 +222,9 @@ func TestSync(t *testing.T) {
 						federationDomain1.Namespace,
 						federationDomain1.Name,
 					),
-					coretesting.NewUpdateAction(
+					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
+						"status",
 						federationDomain1.Namespace,
 						federationDomain1,
 					),
@@ -232,8 +233,9 @@ func TestSync(t *testing.T) {
 						federationDomain2.Namespace,
 						federationDomain2.Name,
 					),
-					coretesting.NewUpdateAction(
+					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
+						"status",
 						federationDomain2.Namespace,
 						federationDomain2,
 					),
@@ -271,8 +273,9 @@ func TestSync(t *testing.T) {
 							federationDomain2.Namespace,
 							federationDomain2.Name,
 						),
-						coretesting.NewUpdateAction(
+						coretesting.NewUpdateSubresourceAction(
 							federationDomainGVR,
+							"status",
 							federationDomain2.Namespace,
 							federationDomain2,
 						),
@@ -356,8 +359,9 @@ func TestSync(t *testing.T) {
 							federationDomain1.Namespace,
 							federationDomain1.Name,
 						),
-						coretesting.NewUpdateAction(
+						coretesting.NewUpdateSubresourceAction(
 							federationDomainGVR,
+							"status",
 							federationDomain1.Namespace,
 							federationDomain1,
 						),
@@ -366,8 +370,9 @@ func TestSync(t *testing.T) {
 							federationDomain2.Namespace,
 							federationDomain2.Name,
 						),
-						coretesting.NewUpdateAction(
+						coretesting.NewUpdateSubresourceAction(
 							federationDomainGVR,
+							"status",
 							federationDomain2.Namespace,
 							federationDomain2,
 						),
@@ -422,8 +427,9 @@ func TestSync(t *testing.T) {
 							federationDomain.Namespace,
 							federationDomain.Name,
 						),
-						coretesting.NewUpdateAction(
+						coretesting.NewUpdateSubresourceAction(
 							federationDomainGVR,
+							"status",
 							federationDomain.Namespace,
 							federationDomain,
 						),
@@ -432,8 +438,9 @@ func TestSync(t *testing.T) {
 							federationDomain.Namespace,
 							federationDomain.Name,
 						),
-						coretesting.NewUpdateAction(
+						coretesting.NewUpdateSubresourceAction(
 							federationDomainGVR,
+							"status",
 							federationDomain.Namespace,
 							federationDomain,
 						),
@@ -468,8 +475,9 @@ func TestSync(t *testing.T) {
 							federationDomain.Namespace,
 							federationDomain.Name,
 						),
-						coretesting.NewUpdateAction(
+						coretesting.NewUpdateSubresourceAction(
 							federationDomainGVR,
+							"status",
 							federationDomain.Namespace,
 							federationDomain,
 						),
@@ -568,8 +576,9 @@ func TestSync(t *testing.T) {
 						invalidFederationDomain.Namespace,
 						invalidFederationDomain.Name,
 					),
-					coretesting.NewUpdateAction(
+					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
+						"status",
 						invalidFederationDomain.Namespace,
 						invalidFederationDomain,
 					),
@@ -578,8 +587,9 @@ func TestSync(t *testing.T) {
 						validFederationDomain.Namespace,
 						validFederationDomain.Name,
 					),
-					coretesting.NewUpdateAction(
+					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
+						"status",
 						validFederationDomain.Namespace,
 						validFederationDomain,
 					),
@@ -640,8 +650,9 @@ func TestSync(t *testing.T) {
 							invalidFederationDomain.Namespace,
 							invalidFederationDomain.Name,
 						),
-						coretesting.NewUpdateAction(
+						coretesting.NewUpdateSubresourceAction(
 							federationDomainGVR,
+							"status",
 							invalidFederationDomain.Namespace,
 							invalidFederationDomain,
 						),
@@ -650,8 +661,9 @@ func TestSync(t *testing.T) {
 							validFederationDomain.Namespace,
 							validFederationDomain.Name,
 						),
-						coretesting.NewUpdateAction(
+						coretesting.NewUpdateSubresourceAction(
 							federationDomainGVR,
+							"status",
 							validFederationDomain.Namespace,
 							validFederationDomain,
 						),
@@ -732,8 +744,9 @@ func TestSync(t *testing.T) {
 						federationDomainDuplicate1.Namespace,
 						federationDomainDuplicate1.Name,
 					),
-					coretesting.NewUpdateAction(
+					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
+						"status",
 						federationDomainDuplicate1.Namespace,
 						federationDomainDuplicate1,
 					),
@@ -742,8 +755,9 @@ func TestSync(t *testing.T) {
 						federationDomainDuplicate2.Namespace,
 						federationDomainDuplicate2.Name,
 					),
-					coretesting.NewUpdateAction(
+					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
+						"status",
 						federationDomainDuplicate2.Namespace,
 						federationDomainDuplicate2,
 					),
@@ -752,8 +766,9 @@ func TestSync(t *testing.T) {
 						federationDomain.Namespace,
 						federationDomain.Name,
 					),
-					coretesting.NewUpdateAction(
+					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
+						"status",
 						federationDomain.Namespace,
 						federationDomain,
 					),
@@ -906,8 +921,9 @@ func TestSync(t *testing.T) {
 						federationDomainSameIssuerAddress1.Namespace,
 						federationDomainSameIssuerAddress1.Name,
 					),
-					coretesting.NewUpdateAction(
+					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
+						"status",
 						federationDomainSameIssuerAddress1.Namespace,
 						federationDomainSameIssuerAddress1,
 					),
@@ -916,8 +932,9 @@ func TestSync(t *testing.T) {
 						federationDomainSameIssuerAddress2.Namespace,
 						federationDomainSameIssuerAddress2.Name,
 					),
-					coretesting.NewUpdateAction(
+					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
+						"status",
 						federationDomainSameIssuerAddress2.Namespace,
 						federationDomainSameIssuerAddress2,
 					),
@@ -926,8 +943,9 @@ func TestSync(t *testing.T) {
 						federationDomainDifferentIssuerAddress.Namespace,
 						federationDomainDifferentIssuerAddress.Name,
 					),
-					coretesting.NewUpdateAction(
+					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
+						"status",
 						federationDomainDifferentIssuerAddress.Namespace,
 						federationDomainDifferentIssuerAddress,
 					),
@@ -936,8 +954,9 @@ func TestSync(t *testing.T) {
 						federationDomainWithInvalidIssuerURL.Namespace,
 						federationDomainWithInvalidIssuerURL.Name,
 					),
-					coretesting.NewUpdateAction(
+					coretesting.NewUpdateSubresourceAction(
 						federationDomainGVR,
+						"status",
 						federationDomainWithInvalidIssuerURL.Namespace,
 						federationDomainWithInvalidIssuerURL,
 					),

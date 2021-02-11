@@ -135,7 +135,16 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 
 	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
-	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token"})
+	// Create a testWebhook so we have a legitimate authenticator to pass to the
+	// TokenCredentialRequest API.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
+
+	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{
+		Token:         "not a good token",
+		Authenticator: testWebhook,
+	})
 
 	require.NoError(t, err)
 
@@ -149,7 +158,16 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T
 
 	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
-	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{Token: ""})
+	// Create a testWebhook so we have a legitimate authenticator to pass to the
+	// TokenCredentialRequest API.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
+
+	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{
+		Token:         "",
+		Authenticator: testWebhook,
+	})
 
 	require.Error(t, err)
 	statusError, isStatus := err.(*errors.StatusError)
@@ -193,7 +211,7 @@ func makeRequest(ctx context.Context, t *testing.T, spec loginv1alpha1.TokenCred
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	return client.LoginV1alpha1().TokenCredentialRequests(env.ConciergeNamespace).Create(ctx, &loginv1alpha1.TokenCredentialRequest{
+	return client.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 		TypeMeta:   metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{Namespace: env.ConciergeNamespace},
 		Spec:       spec,

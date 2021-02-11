@@ -72,19 +72,17 @@ func (c *controller) Sync(_ controllerlib.Context) error {
 	authenticatorSet := map[authncache.Key]bool{}
 	for _, webhook := range webhooks {
 		key := authncache.Key{
-			Namespace: webhook.Namespace,
-			Name:      webhook.Name,
-			Kind:      "WebhookAuthenticator",
-			APIGroup:  auth1alpha1.SchemeGroupVersion.Group,
+			Name:     webhook.Name,
+			Kind:     "WebhookAuthenticator",
+			APIGroup: auth1alpha1.SchemeGroupVersion.Group,
 		}
 		authenticatorSet[key] = true
 	}
 	for _, jwtAuthenticator := range jwtAuthenticators {
 		key := authncache.Key{
-			Namespace: jwtAuthenticator.Namespace,
-			Name:      jwtAuthenticator.Name,
-			Kind:      "JWTAuthenticator",
-			APIGroup:  auth1alpha1.SchemeGroupVersion.Group,
+			Name:     jwtAuthenticator.Name,
+			Kind:     "JWTAuthenticator",
+			APIGroup: auth1alpha1.SchemeGroupVersion.Group,
 		}
 		authenticatorSet[key] = true
 	}
@@ -97,7 +95,7 @@ func (c *controller) Sync(_ controllerlib.Context) error {
 		if _, exists := authenticatorSet[key]; !exists {
 			c.log.WithValues(
 				"authenticator",
-				klog.KRef(key.Namespace, key.Name),
+				klog.KRef("", key.Name),
 				"kind",
 				key.Kind,
 			).Info("deleting authenticator from cache")

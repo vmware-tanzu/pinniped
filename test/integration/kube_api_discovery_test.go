@@ -103,6 +103,12 @@ func TestGetAPIResourceList(t *testing.T) {
 						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
 						Categories:   []string{"pinniped"},
 					},
+					{
+						Name:       "federationdomains/status",
+						Namespaced: true,
+						Kind:       "FederationDomain",
+						Verbs:      []string{"get", "patch", "update"},
+					},
 				},
 			},
 		},
@@ -163,6 +169,12 @@ func TestGetAPIResourceList(t *testing.T) {
 						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
 						Categories:   []string{"pinniped"},
 					},
+					{
+						Name:       "credentialissuers/status",
+						Namespaced: false,
+						Kind:       "CredentialIssuer",
+						Verbs:      []string{"get", "patch", "update"},
+					},
 				},
 			},
 		},
@@ -191,12 +203,24 @@ func TestGetAPIResourceList(t *testing.T) {
 						Categories:   []string{"pinniped", "pinniped-authenticator", "pinniped-authenticators"},
 					},
 					{
+						Name:       "webhookauthenticators/status",
+						Namespaced: false,
+						Kind:       "WebhookAuthenticator",
+						Verbs:      []string{"get", "patch", "update"},
+					},
+					{
 						Name:         "jwtauthenticators",
 						SingularName: "jwtauthenticator",
 						Namespaced:   false,
 						Kind:         "JWTAuthenticator",
 						Verbs:        []string{"delete", "deletecollection", "get", "list", "patch", "create", "update", "watch"},
 						Categories:   []string{"pinniped", "pinniped-authenticator", "pinniped-authenticators"},
+					},
+					{
+						Name:       "jwtauthenticators/status",
+						Namespaced: false,
+						Kind:       "JWTAuthenticator",
+						Verbs:      []string{"get", "patch", "update"},
 					},
 				},
 			},
@@ -251,6 +275,32 @@ func TestGetAPIResourceList(t *testing.T) {
 				assert.False(t, a.Namespaced, "concierge APIs must be cluster scoped: %#v", a)
 			}
 		}
+	})
+
+	t.Run("every API has a status subresource", func(t *testing.T) {
+		t.Parallel()
+
+		var regular, status []string
+
+		for _, r := range resources {
+			if !strings.Contains(r.GroupVersion, env.APIGroupSuffix) {
+				continue
+			}
+
+			for _, a := range r.APIResources {
+				if a.Name == "tokencredentialrequests" {
+					continue // our special aggregated API with its own magical properties
+				}
+
+				if strings.HasSuffix(a.Name, "/status") {
+					status = append(status, strings.TrimSuffix(a.Name, "/status"))
+				} else {
+					regular = append(regular, a.Name)
+				}
+			}
+		}
+
+		assert.Equal(t, regular, status)
 	})
 
 	t.Run("Pinniped resources do not have short names", func(t *testing.T) {

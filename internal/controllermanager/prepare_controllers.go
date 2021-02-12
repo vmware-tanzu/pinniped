@@ -7,7 +7,9 @@ package controllermanager
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net/http"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/clock"
@@ -19,12 +21,14 @@ import (
 	pinnipedclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
 	pinnipedinformers "go.pinniped.dev/generated/1.20/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/apiserviceref"
+	"go.pinniped.dev/internal/concierge/impersonator"
 	"go.pinniped.dev/internal/config/concierge"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controller/authenticator/cachecleaner"
 	"go.pinniped.dev/internal/controller/authenticator/jwtcachefiller"
 	"go.pinniped.dev/internal/controller/authenticator/webhookcachefiller"
+	"go.pinniped.dev/internal/controller/impersonatorconfig"
 	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controller/kubecertagent"
 	"go.pinniped.dev/internal/controllerlib"
@@ -269,6 +273,28 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
 				informers.pinniped.Authentication().V1alpha1().JWTAuthenticators(),
 				klogr.New(),
+			),
+			singletonWorker,
+		).
+
+		// The impersonation proxy configuration controllers dynamically configure the impersonation proxy feature.
+		WithController(
+			impersonatorconfig.NewImpersonatorConfigController(
+				c.ServerInstallationInfo.Namespace,
+				"pinniped-concierge-impersonation-proxy-config", // TODO this string should come from `c.NamesConfig`
+				client.Kubernetes,
+				informers.installationNamespaceK8s.Core().V1().ConfigMaps(),
+				controllerlib.WithInformer,
+				controllerlib.WithInitialEvent,
+				"pinniped-concierge-impersonation-proxy-load-balancer", // TODO this string should come from `c.NamesConfig`
+				tls.Listen,
+				func() (http.Handler, error) {
+					impersonationProxyHandler, err := impersonator.New(c.AuthenticatorCache, klogr.New().WithName("impersonation-proxy"))
+					if err != nil {
+						return nil, fmt.Errorf("could not create impersonation proxy: %w", err)
+					}
+					return impersonationProxyHandler, nil
+				},
 			),
 			singletonWorker,
 		)

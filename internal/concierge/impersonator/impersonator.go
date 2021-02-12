@@ -33,13 +33,13 @@ var allowedHeaders = []string{
 	"Upgrade",
 }
 
-type Proxy struct {
+type proxy struct {
 	cache *authncache.Cache
 	proxy *httputil.ReverseProxy
 	log   logr.Logger
 }
 
-func New(cache *authncache.Cache, log logr.Logger) (*Proxy, error) {
+func New(cache *authncache.Cache, log logr.Logger) (http.Handler, error) {
 	return newInternal(cache, log, func() (*rest.Config, error) {
 		client, err := kubeclient.New()
 		if err != nil {
@@ -49,7 +49,7 @@ func New(cache *authncache.Cache, log logr.Logger) (*Proxy, error) {
 	})
 }
 
-func newInternal(cache *authncache.Cache, log logr.Logger, getConfig func() (*rest.Config, error)) (*Proxy, error) {
+func newInternal(cache *authncache.Cache, log logr.Logger, getConfig func() (*rest.Config, error)) (*proxy, error) {
 	kubeconfig, err := getConfig()
 	if err != nil {
 		return nil, fmt.Errorf("could not get in-cluster config: %w", err)
@@ -71,17 +71,17 @@ func newInternal(cache *authncache.Cache, log logr.Logger, getConfig func() (*re
 		return nil, fmt.Errorf("could not get in-cluster transport: %w", err)
 	}
 
-	proxy := httputil.NewSingleHostReverseProxy(serverURL)
-	proxy.Transport = kubeRoundTripper
+	reverseProxy := httputil.NewSingleHostReverseProxy(serverURL)
+	reverseProxy.Transport = kubeRoundTripper
 
-	return &Proxy{
+	return &proxy{
 		cache: cache,
-		proxy: proxy,
+		proxy: reverseProxy,
 		log:   log,
 	}, nil
 }
 
-func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log := p.log.WithValues(
 		"url", r.URL.String(),
 		"method", r.Method,

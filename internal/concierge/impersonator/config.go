@@ -55,17 +55,21 @@ type Config struct {
 	TLS *TLSConfig `json:"tls,omitempty"`
 }
 
-func FromConfigMap(configMap *v1.ConfigMap) (*Config, error) {
+func NewConfig() *Config {
+	return &Config{Mode: ModeAuto}
+}
+
+func ConfigFromConfigMap(configMap *v1.ConfigMap) (*Config, error) {
 	stringConfig, ok := configMap.Data[ConfigMapDataKey]
 	if !ok {
 		return nil, fmt.Errorf(`ConfigMap is missing expected key "%s"`, ConfigMapDataKey)
 	}
-	var config Config
-	if err := yaml.Unmarshal([]byte(stringConfig), &config); err != nil {
+	config := NewConfig()
+	if err := yaml.Unmarshal([]byte(stringConfig), config); err != nil {
 		return nil, fmt.Errorf("decode yaml: %w", err)
 	}
-	if config.Mode == "" {
-		config.Mode = ModeAuto // set the default value
+	if config.Mode != ModeAuto && config.Mode != ModeEnabled && config.Mode != ModeDisabled {
+		return nil, fmt.Errorf(`illegal value for "mode": %s`, config.Mode)
 	}
-	return &config, nil
+	return config, nil
 }

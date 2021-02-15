@@ -64,6 +64,7 @@ func TestImpersonationProxy(t *testing.T) {
 	// TODO if there is already a ConfigMap, remember its contents and delete it, which puts the proxy into its default settings
 	// TODO and in a t.Cleanup() if there was already a ConfigMap at the start of the test, then restore the original contents
 
+	serviceUnavailableError := fmt.Sprintf(`Get "%s/api/v1/namespaces": Service Unavailable`, proxyServiceURL)
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
 		// Check that load balancer has been created
 		require.Eventually(t, func() bool {
@@ -77,7 +78,7 @@ func TestImpersonationProxy(t *testing.T) {
 
 		// Check that we can't use the impersonation proxy to execute kubectl commands yet
 		_, err = impersonationProxyClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-		require.EqualError(t, err, "Get \"https://pinniped-concierge-proxy.concierge.svc.cluster.local/api/v1/namespaces\": Service Unavailable")
+		require.EqualError(t, err, serviceUnavailableError)
 
 		// Create configuration to make the impersonation proxy turn on with a hard coded endpoint (without a LoadBalancer)
 		configMap := configMapForConfig(t, impersonator.Config{
@@ -112,7 +113,7 @@ func TestImpersonationProxy(t *testing.T) {
 
 	// Check that we can't use the impersonation proxy to execute kubectl commands again
 	_, err = impersonationProxyClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-	require.EqualError(t, err, "Get \"https://pinniped-concierge-proxy.concierge.svc.cluster.local/api/v1/namespaces\": Service Unavailable")
+	require.EqualError(t, err, serviceUnavailableError)
 
 	// if env.HasCapability(library.HasExternalLoadBalancerProvider) {
 	// TODO we started the test with a load balancer, so after forcing the proxy to disable, assert that the LoadBalancer was deleted

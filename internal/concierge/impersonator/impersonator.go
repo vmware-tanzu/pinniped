@@ -5,7 +5,6 @@ package impersonator
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
@@ -13,12 +12,12 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 
 	"go.pinniped.dev/generated/1.20/apis/concierge/login"
-	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/kubeclient"
 )
@@ -34,13 +33,14 @@ var allowedHeaders = []string{
 }
 
 type proxy struct {
-	cache *authncache.Cache
-	proxy *httputil.ReverseProxy
-	log   logr.Logger
+	cache       *authncache.Cache
+	jsonDecoder runtime.Decoder
+	proxy       *httputil.ReverseProxy
+	log         logr.Logger
 }
 
-func New(cache *authncache.Cache, log logr.Logger) (http.Handler, error) {
-	return newInternal(cache, log, func() (*rest.Config, error) {
+func New(cache *authncache.Cache, jsonDecoder runtime.Decoder, log logr.Logger) (http.Handler, error) {
+	return newInternal(cache, jsonDecoder, log, func() (*rest.Config, error) {
 		client, err := kubeclient.New()
 		if err != nil {
 			return nil, err
@@ -49,7 +49,7 @@ func New(cache *authncache.Cache, log logr.Logger) (http.Handler, error) {
 	})
 }
 
-func newInternal(cache *authncache.Cache, log logr.Logger, getConfig func() (*rest.Config, error)) (*proxy, error) {
+func newInternal(cache *authncache.Cache, jsonDecoder runtime.Decoder, log logr.Logger, getConfig func() (*rest.Config, error)) (*proxy, error) {
 	kubeconfig, err := getConfig()
 	if err != nil {
 		return nil, fmt.Errorf("could not get in-cluster config: %w", err)
@@ -75,9 +75,10 @@ func newInternal(cache *authncache.Cache, log logr.Logger, getConfig func() (*re
 	reverseProxy.Transport = kubeRoundTripper
 
 	return &proxy{
-		cache: cache,
-		proxy: reverseProxy,
-		log:   log,
+		cache:       cache,
+		jsonDecoder: jsonDecoder,
+		proxy:       reverseProxy,
+		log:         log,
 	}, nil
 }
 
@@ -87,7 +88,7 @@ func (p *proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"method", r.Method,
 	)
 
-	tokenCredentialReq, err := extractToken(r)
+	tokenCredentialReq, err := extractToken(r, p.jsonDecoder)
 	if err != nil {
 		log.Error(err, "invalid token encoding")
 		http.Error(w, "invalid token encoding", http.StatusBadRequest)
@@ -134,7 +135,7 @@ func getProxyHeaders(userInfo user.Info, requestHeaders http.Header) http.Header
 	return newHeaders
 }
 
-func extractToken(req *http.Request) (*login.TokenCredentialRequest, error) {
+func extractToken(req *http.Request, jsonDecoder runtime.Decoder) (*login.TokenCredentialRequest, error) {
 	authHeader := req.Header.Get("Authorization")
 	if authHeader == "" {
 		return nil, fmt.Errorf("missing authorization header")
@@ -148,13 +149,14 @@ func extractToken(req *http.Request) (*login.TokenCredentialRequest, error) {
 		return nil, fmt.Errorf("invalid base64 in encoded bearer token: %w", err)
 	}
 
-	var v1alpha1Req loginv1alpha1.TokenCredentialRequest
-	if err := json.Unmarshal(tokenCredentialRequestJSON, &v1alpha1Req); err != nil {
-		return nil, fmt.Errorf("invalid TokenCredentialRequest encoded in bearer token: %w", err)
+	obj, err := runtime.Decode(jsonDecoder, tokenCredentialRequestJSON)
+	if err != nil {
+		return nil, fmt.Errorf("invalid object encoded in bearer token: %w", err)
 	}
-	var internalReq login.TokenCredentialRequest
-	if err := loginv1alpha1.Convert_v1alpha1_TokenCredentialRequest_To_login_TokenCredentialRequest(&v1alpha1Req, &internalReq, nil); err != nil {
-		return nil, fmt.Errorf("failed to convert v1alpha1 TokenCredentialRequest to internal version: %w", err)
+	tokenCredentialRequest, ok := obj.(*login.TokenCredentialRequest)
+	if !ok {
+		return nil, fmt.Errorf("invalid TokenCredentialRequest encoded in bearer token: got %T", obj)
 	}
-	return &internalReq, nil
+
+	return tokenCredentialRequest, nil
 }

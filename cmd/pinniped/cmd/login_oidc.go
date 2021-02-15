@@ -267,6 +267,7 @@ func execCredentialForImpersonationProxy(
 	tokenExpiry *metav1.Time,
 ) (*clientauthv1beta1.ExecCredential, error) {
 	// TODO maybe de-dup this with conciergeclient.go
+	// TODO reuse code from internal/testutil/impersonationtoken here to create token
 	var kind string
 	switch strings.ToLower(conciergeAuthenticatorType) {
 	case "webhook":

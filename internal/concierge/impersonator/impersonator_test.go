@@ -5,8 +5,6 @@ package impersonator
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -16,20 +14,31 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd/api"
 
-	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
+	"go.pinniped.dev/generated/1.20/apis/concierge/login"
+	conciergescheme "go.pinniped.dev/internal/concierge/scheme"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
+	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/mocks/mocktokenauthenticator"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/testutil/impersonationtoken"
 	"go.pinniped.dev/internal/testutil/testlogger"
 )
 
 func TestImpersonator(t *testing.T) {
+	const (
+		defaultAPIGroup = "pinniped.dev"
+		customAPIGroup  = "walrus.tld"
+	)
+
 	validURL, _ := url.Parse("http://pinniped.dev/blah")
 	testServerCA, testServerURL := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		// Expect that the request is authenticated based on the kubeconfig credential.
@@ -61,15 +70,25 @@ func TestImpersonator(t *testing.T) {
 		return r
 	}
 
+	goodAuthenticator := corev1.TypedLocalObjectReference{
+		Name:     "authenticator-one",
+		APIGroup: stringPtr(authenticationv1alpha1.GroupName),
+	}
+	badAuthenticator := corev1.TypedLocalObjectReference{
+		Name:     "",
+		APIGroup: stringPtr(authenticationv1alpha1.GroupName),
+	}
+
 	tests := []struct {
-		name            string
-		getKubeconfig   func() (*rest.Config, error)
-		wantCreationErr string
-		request         *http.Request
-		wantHTTPBody    string
-		wantHTTPStatus  int
-		wantLogs        []string
-		expectMockToken func(*testing.T, *mocktokenauthenticator.MockTokenMockRecorder)
+		name             string
+		apiGroupOverride string
+		getKubeconfig    func() (*rest.Config, error)
+		wantCreationErr  string
+		request          *http.Request
+		wantHTTPBody     string
+		wantHTTPStatus   int
+		wantLogs         []string
+		expectMockToken  func(*testing.T, *mocktokenauthenticator.MockTokenMockRecorder)
 	}{
 		{
 			name: "fail to get in-cluster config",
@@ -119,7 +138,7 @@ func TestImpersonator(t *testing.T) {
 		{
 			name:           "authorization header missing bearer prefix",
 			getKubeconfig:  func() (*rest.Config, error) { return &testServerKubeconfig, nil },
-			request:        newRequest(map[string][]string{"Authorization": {makeTestTokenRequest("foo", "authenticator-one", "test-token")}}),
+			request:        newRequest(map[string][]string{"Authorization": {impersonationtoken.Make(t, "test-token", &goodAuthenticator, defaultAPIGroup)}}),
 			wantHTTPBody:   "invalid token encoding\n",
 			wantHTTPStatus: http.StatusBadRequest,
 			wantLogs:       []string{"\"error\"=\"authorization header must be of type Bearer\" \"msg\"=\"invalid token encoding\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
@@ -138,33 +157,50 @@ func TestImpersonator(t *testing.T) {
 			request:        newRequest(map[string][]string{"Authorization": {"Bearer abc"}}),
 			wantHTTPBody:   "invalid token encoding\n",
 			wantHTTPStatus: http.StatusBadRequest,
-			wantLogs:       []string{"\"error\"=\"invalid TokenCredentialRequest encoded in bearer token: invalid character 'i' looking for beginning of value\" \"msg\"=\"invalid token encoding\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
+			wantLogs:       []string{"\"error\"=\"invalid object encoded in bearer token: couldn't get version/kind; json parse error: invalid character 'i' looking for beginning of value\" \"msg\"=\"invalid token encoding\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
+		},
+		{
+			name:             "base64 encoded token is encoded with default api group but we are expecting custom api group",
+			apiGroupOverride: customAPIGroup,
+			getKubeconfig:    func() (*rest.Config, error) { return &testServerKubeconfig, nil },
+			request:          newRequest(map[string][]string{"Authorization": {"Bearer " + impersonationtoken.Make(t, "test-token", &goodAuthenticator, defaultAPIGroup)}}),
+			wantHTTPBody:     "invalid token encoding\n",
+			wantHTTPStatus:   http.StatusBadRequest,
+			wantLogs:         []string{"\"error\"=\"invalid object encoded in bearer token: no kind \\\"TokenCredentialRequest\\\" is registered for version \\\"login.concierge.pinniped.dev/v1alpha1\\\" in scheme \\\"pkg/runtime/scheme.go:100\\\"\" \"msg\"=\"invalid token encoding\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
+		},
+		{
+			name:           "base64 encoded token is encoded with custom api group but we are expecting default api group",
+			getKubeconfig:  func() (*rest.Config, error) { return &testServerKubeconfig, nil },
+			request:        newRequest(map[string][]string{"Authorization": {"Bearer " + impersonationtoken.Make(t, "test-token", &goodAuthenticator, customAPIGroup)}}),
+			wantHTTPBody:   "invalid token encoding\n",
+			wantHTTPStatus: http.StatusBadRequest,
+			wantLogs:       []string{"\"error\"=\"invalid object encoded in bearer token: no kind \\\"TokenCredentialRequest\\\" is registered for version \\\"login.concierge.walrus.tld/v1alpha1\\\" in scheme \\\"pkg/runtime/scheme.go:100\\\"\" \"msg\"=\"invalid token encoding\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
 		},
 		{
 			name:           "token could not be authenticated",
 			getKubeconfig:  func() (*rest.Config, error) { return &testServerKubeconfig, nil },
-			request:        newRequest(map[string][]string{"Authorization": {"Bearer " + makeTestTokenRequest("", "", "")}}),
+			request:        newRequest(map[string][]string{"Authorization": {"Bearer " + impersonationtoken.Make(t, "", &badAuthenticator, defaultAPIGroup)}}),
 			wantHTTPBody:   "invalid token\n",
 			wantHTTPStatus: http.StatusUnauthorized,
-			wantLogs:       []string{"\"error\"=\"no such authenticator\" \"msg\"=\"received invalid token\" \"authenticator\"={\"apiGroup\":null,\"kind\":\"\",\"name\":\"\"} \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
+			wantLogs:       []string{"\"error\"=\"no such authenticator\" \"msg\"=\"received invalid token\" \"authenticator\"={\"apiGroup\":\"authentication.concierge.pinniped.dev\",\"kind\":\"\",\"name\":\"\"} \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
 		},
 		{
 			name:          "token authenticates as nil",
 			getKubeconfig: func() (*rest.Config, error) { return &testServerKubeconfig, nil },
-			request:       newRequest(map[string][]string{"Authorization": {"Bearer " + makeTestTokenRequest("foo", "authenticator-one", "test-token")}}),
+			request:       newRequest(map[string][]string{"Authorization": {"Bearer " + impersonationtoken.Make(t, "test-token", &goodAuthenticator, defaultAPIGroup)}}),
 			expectMockToken: func(t *testing.T, recorder *mocktokenauthenticator.MockTokenMockRecorder) {
 				recorder.AuthenticateToken(gomock.Any(), "test-token").Return(nil, false, nil)
 			},
 			wantHTTPBody:   "not authenticated\n",
 			wantHTTPStatus: http.StatusUnauthorized,
-			wantLogs:       []string{"\"level\"=0 \"msg\"=\"received token that did not authenticate\" \"authenticator\"={\"apiGroup\":null,\"kind\":\"\",\"name\":\"authenticator-one\"} \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
+			wantLogs:       []string{"\"level\"=0 \"msg\"=\"received token that did not authenticate\" \"authenticator\"={\"apiGroup\":\"authentication.concierge.pinniped.dev\",\"kind\":\"\",\"name\":\"authenticator-one\"} \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
 		},
 		// happy path
 		{
 			name:          "token validates",
 			getKubeconfig: func() (*rest.Config, error) { return &testServerKubeconfig, nil },
 			request: newRequest(map[string][]string{
-				"Authorization":    {"Bearer " + makeTestTokenRequest("foo", "authenticator-one", "test-token")},
+				"Authorization":    {"Bearer " + impersonationtoken.Make(t, "test-token", &goodAuthenticator, defaultAPIGroup)},
 				"Malicious-Header": {"test-header-value-1"},
 				"User-Agent":       {"test-user-agent"},
 			}),
@@ -179,7 +215,29 @@ func TestImpersonator(t *testing.T) {
 			},
 			wantHTTPBody:   "successful proxied response",
 			wantHTTPStatus: http.StatusOK,
-			wantLogs:       []string{"\"level\"=0 \"msg\"=\"proxying authenticated request\" \"authenticator\"={\"apiGroup\":null,\"kind\":\"\",\"name\":\"authenticator-one\"} \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\" \"userID\"=\"test-uid\""},
+			wantLogs:       []string{"\"level\"=0 \"msg\"=\"proxying authenticated request\" \"authenticator\"={\"apiGroup\":\"authentication.concierge.pinniped.dev\",\"kind\":\"\",\"name\":\"authenticator-one\"} \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\" \"userID\"=\"test-uid\""},
+		},
+		{
+			name:             "token validates with custom api group",
+			apiGroupOverride: customAPIGroup,
+			getKubeconfig:    func() (*rest.Config, error) { return &testServerKubeconfig, nil },
+			request: newRequest(map[string][]string{
+				"Authorization":    {"Bearer " + impersonationtoken.Make(t, "test-token", &goodAuthenticator, customAPIGroup)},
+				"Malicious-Header": {"test-header-value-1"},
+				"User-Agent":       {"test-user-agent"},
+			}),
+			expectMockToken: func(t *testing.T, recorder *mocktokenauthenticator.MockTokenMockRecorder) {
+				userInfo := user.DefaultInfo{
+					Name:   "test-user",
+					Groups: []string{"test-group-1", "test-group-2"},
+					UID:    "test-uid",
+				}
+				response := &authenticator.Response{User: &userInfo}
+				recorder.AuthenticateToken(gomock.Any(), "test-token").Return(response, true, nil)
+			},
+			wantHTTPBody:   "successful proxied response",
+			wantHTTPStatus: http.StatusOK,
+			wantLogs:       []string{"\"level\"=0 \"msg\"=\"proxying authenticated request\" \"authenticator\"={\"apiGroup\":\"authentication.concierge.pinniped.dev\",\"kind\":\"\",\"name\":\"authenticator-one\"} \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\" \"userID\"=\"test-uid\""},
 		},
 	}
 
@@ -187,11 +245,19 @@ func TestImpersonator(t *testing.T) {
 		tt := tt
 		testLog := testlogger.New(t)
 		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if t.Failed() {
+					for i, line := range testLog.Lines() {
+						t.Logf("testLog line %d: %q", i+1, line)
+					}
+				}
+			}()
+
 			// stole this from cache_test, hopefully it is sufficient
 			cacheWithMockAuthenticator := authncache.New()
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			key := authncache.Key{Name: "authenticator-one"}
+			key := authncache.Key{Name: "authenticator-one", APIGroup: *goodAuthenticator.APIGroup}
 			mockToken := mocktokenauthenticator.NewMockToken(ctrl)
 			cacheWithMockAuthenticator.Store(key, mockToken)
 
@@ -199,7 +265,12 @@ func TestImpersonator(t *testing.T) {
 				tt.expectMockToken(t, mockToken.EXPECT())
 			}
 
-			proxy, err := newInternal(cacheWithMockAuthenticator, testLog, tt.getKubeconfig)
+			apiGroup := defaultAPIGroup
+			if tt.apiGroupOverride != "" {
+				apiGroup = tt.apiGroupOverride
+			}
+
+			proxy, err := newInternal(cacheWithMockAuthenticator, makeDecoder(t, apiGroup), testLog, tt.getKubeconfig)
 			if tt.wantCreationErr != "" {
 				require.EqualError(t, err, tt.wantCreationErr)
 				return
@@ -223,22 +294,21 @@ func TestImpersonator(t *testing.T) {
 	}
 }
 
-func makeTestTokenRequest(namespace string, name string, token string) string {
-	reqJSON, err := json.Marshal(&loginv1alpha1.TokenCredentialRequest{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-		},
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "TokenCredentialRequest",
-			APIVersion: loginv1alpha1.GroupName + "/v1alpha1",
-		},
-		Spec: loginv1alpha1.TokenCredentialRequestSpec{
-			Token:         token,
-			Authenticator: corev1.TypedLocalObjectReference{Name: name},
-		},
+func stringPtr(s string) *string { return &s }
+
+func makeDecoder(t *testing.T, apiGroupSuffix string) runtime.Decoder {
+	t.Helper()
+
+	loginConciergeGroupName, ok := groupsuffix.Replace(login.GroupName, apiGroupSuffix)
+	require.True(t, ok, "couldn't replace suffix of %q with %q", login.GroupName, apiGroupSuffix)
+
+	scheme := conciergescheme.New(loginConciergeGroupName, apiGroupSuffix)
+	codecs := serializer.NewCodecFactory(scheme)
+	respInfo, ok := runtime.SerializerInfoForMediaType(codecs.SupportedMediaTypes(), runtime.ContentTypeJSON)
+	require.True(t, ok, "couldn't find serializer info for media type")
+
+	return codecs.DecoderToVersion(respInfo.Serializer, schema.GroupVersion{
+		Group:   loginConciergeGroupName,
+		Version: login.SchemeGroupVersion.Version,
 	})
-	if err != nil {
-		panic(err)
-	}
-	return base64.RawURLEncoding.EncodeToString(reqJSON)
 }

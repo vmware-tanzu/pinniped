@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/clock"
 	k8sinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -81,6 +82,10 @@ type Config struct {
 
 	// AuthenticatorCache is a cache of authenticators shared amongst various authenticated-related controllers.
 	AuthenticatorCache *authncache.Cache
+
+	// LoginJSONDecoder can decode login.concierge.pinniped.dev types (e.g., TokenCredentialRequest)
+	// into their internal representation.
+	LoginJSONDecoder runtime.Decoder
 
 	// Labels are labels that should be added to any resources created by the controllers.
 	Labels map[string]string
@@ -289,7 +294,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				"pinniped-concierge-impersonation-proxy-load-balancer", // TODO this string should come from `c.NamesConfig`
 				tls.Listen,
 				func() (http.Handler, error) {
-					impersonationProxyHandler, err := impersonator.New(c.AuthenticatorCache, klogr.New().WithName("impersonation-proxy"))
+					impersonationProxyHandler, err := impersonator.New(c.AuthenticatorCache, c.LoginJSONDecoder, klogr.New().WithName("impersonation-proxy"))
 					if err != nil {
 						return nil, fmt.Errorf("could not create impersonation proxy: %w", err)
 					}

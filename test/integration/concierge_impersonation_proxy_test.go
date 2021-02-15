@@ -5,8 +5,6 @@ package integration
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -20,8 +18,8 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
 
-	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/concierge/impersonator"
+	"go.pinniped.dev/internal/testutil/impersonationtoken"
 	"go.pinniped.dev/test/library"
 )
 
@@ -49,7 +47,7 @@ func TestImpersonationProxy(t *testing.T) {
 	kubeconfig := &rest.Config{
 		Host:            proxyServiceURL,
 		TLSClientConfig: rest.TLSClientConfig{Insecure: true},
-		BearerToken:     makeImpersonationTestToken(t, authenticator),
+		BearerToken:     impersonationtoken.Make(t, env.TestUser.Token, &authenticator, env.APIGroupSuffix),
 		Proxy: func(req *http.Request) (*url.URL, error) {
 			proxyURL, err := url.Parse(env.Proxy)
 			require.NoError(t, err)
@@ -142,25 +140,4 @@ func hasLoadBalancerService(ctx context.Context, t *testing.T, client kubernetes
 		}
 	}
 	return false
-}
-
-func makeImpersonationTestToken(t *testing.T, authenticator corev1.TypedLocalObjectReference) string {
-	t.Helper()
-
-	env := library.IntegrationEnv(t)
-	reqJSON, err := json.Marshal(&loginv1alpha1.TokenCredentialRequest{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: env.ConciergeNamespace,
-		},
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "TokenCredentialRequest",
-			APIVersion: loginv1alpha1.GroupName + "/v1alpha1",
-		},
-		Spec: loginv1alpha1.TokenCredentialRequestSpec{
-			Token:         env.TestUser.Token,
-			Authenticator: authenticator,
-		},
-	})
-	require.NoError(t, err)
-	return base64.RawURLEncoding.EncodeToString(reqJSON)
 }

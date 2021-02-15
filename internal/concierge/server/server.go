@@ -11,18 +11,17 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 
-	loginapi "go.pinniped.dev/generated/1.20/apis/concierge/login"
+	"go.pinniped.dev/generated/1.20/apis/concierge/login"
 	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
 	"go.pinniped.dev/internal/concierge/apiserver"
+	conciergescheme "go.pinniped.dev/internal/concierge/scheme"
 	"go.pinniped.dev/internal/config/concierge"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllermanager"
@@ -123,6 +122,14 @@ func (a *App) runServer(ctx context.Context) error {
 	// cert issuer used to issue certs to Pinniped clients wishing to login.
 	dynamicSigningCertProvider := dynamiccert.New()
 
+	// Get the "real" name of the login concierge API group (i.e., the API group name with the
+	// injected suffix).
+	loginConciergeAPIGroup, ok := groupsuffix.Replace(loginv1alpha1.GroupName, *cfg.APIGroupSuffix)
+	if !ok {
+		return fmt.Errorf("cannot make api group from %s/%s", loginv1alpha1.GroupName, *cfg.APIGroupSuffix)
+	}
+	loginConciergeScheme := conciergescheme.New(loginConciergeAPIGroup, *cfg.APIGroupSuffix)
+
 	// Prepare to start the controllers, but defer actually starting them until the
 	// post start hook of the aggregated API server.
 	startControllersFunc, err := controllermanager.PrepareControllers(
@@ -138,6 +145,7 @@ func (a *App) runServer(ctx context.Context) error {
 			ServingCertDuration:        time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds) * time.Second,
 			ServingCertRenewBefore:     time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds) * time.Second,
 			AuthenticatorCache:         authenticators,
+			LoginJSONDecoder:           getLoginJSONDecoder(loginConciergeAPIGroup, loginConciergeScheme),
 		},
 	)
 	if err != nil {
@@ -150,7 +158,8 @@ func (a *App) runServer(ctx context.Context) error {
 		authenticators,
 		dynamiccertauthority.New(dynamicSigningCertProvider),
 		startControllersFunc,
-		*cfg.APIGroupSuffix,
+		loginConciergeAPIGroup,
+		loginConciergeScheme,
 	)
 	if err != nil {
 		return fmt.Errorf("could not configure aggregated API server: %w", err)
@@ -172,14 +181,10 @@ func getAggregatedAPIServerConfig(
 	authenticator credentialrequest.TokenCredentialRequestAuthenticator,
 	issuer credentialrequest.CertIssuer,
 	startControllersPostStartHook func(context.Context),
-	apiGroupSuffix string,
+	loginConciergeAPIGroup string,
+	loginConciergeScheme *runtime.Scheme,
 ) (*apiserver.Config, error) {
-	loginConciergeAPIGroup, ok := groupsuffix.Replace(loginv1alpha1.GroupName, apiGroupSuffix)
-	if !ok {
-		return nil, fmt.Errorf("cannot make api group from %s/%s", loginv1alpha1.GroupName, apiGroupSuffix)
-	}
-
-	scheme := getAggregatedAPIServerScheme(loginConciergeAPIGroup, apiGroupSuffix)
+	scheme := loginConciergeScheme
 	codecs := serializer.NewCodecFactory(scheme)
 
 	defaultEtcdPathPrefix := fmt.Sprintf("/registry/%s", loginConciergeAPIGroup)
@@ -224,90 +229,15 @@ func getAggregatedAPIServerConfig(
 	return apiServerConfig, nil
 }
 
-func getAggregatedAPIServerScheme(loginConciergeAPIGroup, apiGroupSuffix string) *runtime.Scheme {
-	// standard set up of the server side scheme
-	scheme := runtime.NewScheme()
-
-	// add the options to empty v1
-	metav1.AddToGroupVersion(scheme, metav1.Unversioned)
-
-	// nothing fancy is required if using the standard group
-	if loginConciergeAPIGroup == loginv1alpha1.GroupName {
-		utilruntime.Must(loginv1alpha1.AddToScheme(scheme))
-		utilruntime.Must(loginapi.AddToScheme(scheme))
-		return scheme
+func getLoginJSONDecoder(loginConciergeAPIGroup string, loginConciergeScheme *runtime.Scheme) runtime.Decoder {
+	scheme := loginConciergeScheme
+	codecs := serializer.NewCodecFactory(scheme)
+	respInfo, ok := runtime.SerializerInfoForMediaType(codecs.SupportedMediaTypes(), runtime.ContentTypeJSON)
+	if !ok {
+		panic(fmt.Errorf("unknown content type: %s ", runtime.ContentTypeJSON)) // static input, programmer error
 	}
-
-	// we need a temporary place to register our types to avoid double registering them
-	tmpScheme := runtime.NewScheme()
-	utilruntime.Must(loginv1alpha1.AddToScheme(tmpScheme))
-	utilruntime.Must(loginapi.AddToScheme(tmpScheme))
-
-	for gvk := range tmpScheme.AllKnownTypes() {
-		if gvk.GroupVersion() == metav1.Unversioned {
-			continue // metav1.AddToGroupVersion registers types outside of our aggregated API group that we need to ignore
-		}
-
-		if gvk.Group != loginv1alpha1.GroupName {
-			panic("tmp scheme has types not in the aggregated API group: " + gvk.Group) // programmer error
-		}
-
-		obj, err := tmpScheme.New(gvk)
-		if err != nil {
-			panic(err) // programmer error, scheme internal code is broken
-		}
-		newGVK := schema.GroupVersionKind{
-			Group:   loginConciergeAPIGroup,
-			Version: gvk.Version,
-			Kind:    gvk.Kind,
-		}
-
-		// register the existing type but with the new group in the correct scheme
-		scheme.AddKnownTypeWithName(newGVK, obj)
-	}
-
-	// manually register conversions and defaulting into the correct scheme since we cannot directly call loginv1alpha1.AddToScheme
-	utilruntime.Must(loginv1alpha1.RegisterConversions(scheme))
-	utilruntime.Must(loginv1alpha1.RegisterDefaults(scheme))
-
-	// we do not want to return errors from the scheme and instead would prefer to defer
-	// to the REST storage layer for consistency.  The simplest way to do this is to force
-	// a cache miss from the authenticator cache.  Kube API groups are validated via the
-	// IsDNS1123Subdomain func thus we can easily create a group that is guaranteed never
-	// to be in the authenticator cache.  Add a timestamp just to be extra sure.
-	const authenticatorCacheMissPrefix = "_INVALID_API_GROUP_"
-	authenticatorCacheMiss := authenticatorCacheMissPrefix + time.Now().UTC().String()
-
-	// we do not have any defaulting functions for *loginv1alpha1.TokenCredentialRequest
-	// today, but we may have some in the future.  Calling AddTypeDefaultingFunc overwrites
-	// any previously registered defaulting function.  Thus to make sure that we catch
-	// a situation where we add a defaulting func, we attempt to call it here with a nil
-	// *loginv1alpha1.TokenCredentialRequest.  This will do nothing when there is no
-	// defaulting func registered, but it will almost certainly panic if one is added.
-	scheme.Default((*loginv1alpha1.TokenCredentialRequest)(nil))
-
-	// on incoming requests, restore the authenticator API group to the standard group
-	// note that we are responsible for duplicating this logic for every external API version
-	scheme.AddTypeDefaultingFunc(&loginv1alpha1.TokenCredentialRequest{}, func(obj interface{}) {
-		credentialRequest := obj.(*loginv1alpha1.TokenCredentialRequest)
-
-		if credentialRequest.Spec.Authenticator.APIGroup == nil {
-			// force a cache miss because this is an invalid request
-			plog.Debug("invalid token credential request, nil group", "authenticator", credentialRequest.Spec.Authenticator)
-			credentialRequest.Spec.Authenticator.APIGroup = &authenticatorCacheMiss
-			return
-		}
-
-		restoredGroup, ok := groupsuffix.Unreplace(*credentialRequest.Spec.Authenticator.APIGroup, apiGroupSuffix)
-		if !ok {
-			// force a cache miss because this is an invalid request
-			plog.Debug("invalid token credential request, wrong group", "authenticator", credentialRequest.Spec.Authenticator)
-			credentialRequest.Spec.Authenticator.APIGroup = &authenticatorCacheMiss
-			return
-		}
-
-		credentialRequest.Spec.Authenticator.APIGroup = &restoredGroup
+	return codecs.DecoderToVersion(respInfo.Serializer, schema.GroupVersion{
+		Group:   loginConciergeAPIGroup,
+		Version: login.SchemeGroupVersion.Version,
 	})
-
-	return scheme
 }

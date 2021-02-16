@@ -19,8 +19,8 @@ import (
 	coretesting "k8s.io/client-go/testing"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 
-	configv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/config/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned/fake"
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	pinnipedfake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
 )
 
 func TestCreateOrUpdateCredentialIssuerStatus(t *testing.T) {

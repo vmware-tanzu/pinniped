@@ -13,7 +13,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/klog/v2"
 
-	loginapi "go.pinniped.dev/generated/1.20/apis/concierge/login"
+	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/plog"
 )

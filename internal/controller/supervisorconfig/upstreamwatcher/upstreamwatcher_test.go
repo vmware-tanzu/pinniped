@@ -20,9 +20,9 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"go.pinniped.dev/generated/1.20/apis/supervisor/idp/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/1.20/client/supervisor/informers/externalversions"
+	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/oidc/oidctestutil"
 	"go.pinniped.dev/internal/oidc/provider"

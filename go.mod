@@ -8,7 +8,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.0.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/go-logr/logr v0.3.0
-	github.com/go-logr/stdr v0.2.0
+	github.com/go-logr/stdr v0.4.0
 	github.com/go-openapi/spec v0.19.9
 	github.com/gofrs/flock v0.8.0
 	github.com/golang/mock v1.4.4

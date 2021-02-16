@@ -4,6 +4,7 @@
 package impersonatorconfig
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509/pkix"
 	"errors"
@@ -12,7 +13,10 @@ import (
 	"net/http"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -34,10 +38,12 @@ type impersonatorConfigController struct {
 	k8sClient                        kubernetes.Interface
 	configMapsInformer               corev1informers.ConfigMapInformer
 	generatedLoadBalancerServiceName string
+	labels                           map[string]string
 	startTLSListenerFunc             StartTLSListenerFunc
 	httpHandlerFactory               func() (http.Handler, error)
 
 	server               *http.Server
+	loadBalancer         *v1.Service
 	hasControlPlaneNodes *bool
 }
 
@@ -51,6 +57,7 @@ func NewImpersonatorConfigController(
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	withInitialEvent pinnipedcontroller.WithInitialEventOptionFunc,
 	generatedLoadBalancerServiceName string,
+	labels map[string]string,
 	startTLSListenerFunc StartTLSListenerFunc,
 	httpHandlerFactory func() (http.Handler, error),
 ) controllerlib.Controller {
@@ -63,6 +70,7 @@ func NewImpersonatorConfigController(
 				k8sClient:                        k8sClient,
 				configMapsInformer:               configMapsInformer,
 				generatedLoadBalancerServiceName: generatedLoadBalancerServiceName,
+				labels:                           labels,
 				startTLSListenerFunc:             startTLSListenerFunc,
 				httpHandlerFactory:               httpHandlerFactory,
 			},
@@ -130,38 +138,19 @@ func (c *impersonatorConfigController) Sync(ctx controllerlib.Context) error {
 		}
 	}
 
-	// TODO when the proxy is going to run, and the endpoint goes from being not specified to being specified, then the LoadBalancer is deleted
-	// TODO when the proxy is going to run, and when the endpoint goes from being specified to being not specified, then the LoadBalancer is created
-	// TODO when auto mode decides that the proxy should be disabled, then it also does not create the LoadBalancer (or it deletes it)
-
-	// client, err := kubeclient.New()
-	// if err != nil {
-	// 	plog.WarningErr("could not create client", err)
-	// } else {
-	// 	appNameLabel := cfg.Labels["app"]
-	// 	loadBalancer := v1.Service{
-	// 		Spec: v1.ServiceSpec{
-	// 			Type: "LoadBalancer",
-	// 			Ports: []v1.ServicePort{
-	// 				{
-	// 					TargetPort: intstr.FromInt(8444),
-	// 					Port:       443,
-	// 					Protocol:   v1.ProtocolTCP,
-	// 				},
-	// 			},
-	// 			Selector: map[string]string{"app": appNameLabel},
-	// 		},
-	// 		ObjectMeta: metav1.ObjectMeta{
-	// 			Name:      "impersonation-proxy-load-balancer",
-	// 			Namespace: podInfo.Namespace,
-	// 			Labels:    cfg.Labels,
-	// 		},
-	// 	}
-	// 	_, err = client.Kubernetes.CoreV1().Services(podInfo.Namespace).Create(ctx, &loadBalancer, metav1.CreateOptions{})
-	// 	if err != nil {
-	// 		plog.WarningErr("could not create load balancer", err)
-	// 	}
-	// }
+	// start the load balancer only if:
+	// - the impersonator is running
+	// - the cluster is cloud hosted
+	// - there is no endpoint specified in the config
+	if c.server != nil && !*c.hasControlPlaneNodes && config.Endpoint == "" {
+		if err = c.startLoadBalancer(ctx.Context); err != nil {
+			return err
+		}
+	} else {
+		if err = c.stopLoadBalancer(ctx.Context); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -218,5 +207,47 @@ func (c *impersonatorConfigController) startImpersonator() error {
 			plog.Error("Unexpected shutdown of the impersonation proxy server", err)
 		}
 	}()
+	return nil
+}
+
+func (c *impersonatorConfigController) stopLoadBalancer(ctx context.Context) error {
+	if c.loadBalancer != nil {
+		err := c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedLoadBalancerServiceName, metav1.DeleteOptions{})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *impersonatorConfigController) startLoadBalancer(ctx context.Context) error {
+	if c.loadBalancer != nil {
+		return nil
+	}
+
+	appNameLabel := c.labels["app"] // TODO what if this doesn't exist
+	loadBalancer := v1.Service{
+		Spec: v1.ServiceSpec{
+			Type: "LoadBalancer",
+			Ports: []v1.ServicePort{
+				{
+					TargetPort: intstr.FromInt(8444),
+					Port:       443,
+					Protocol:   v1.ProtocolTCP,
+				},
+			},
+			Selector: map[string]string{"app": appNameLabel},
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      c.generatedLoadBalancerServiceName,
+			Namespace: c.namespace,
+			Labels:    c.labels,
+		},
+	}
+	createdLoadBalancer, err := c.k8sClient.CoreV1().Services(c.namespace).Create(ctx, &loadBalancer, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("could not create load balancer: %w", err)
+	}
+	c.loadBalancer = createdLoadBalancer
 	return nil
 }

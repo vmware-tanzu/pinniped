@@ -292,6 +292,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				controllerlib.WithInformer,
 				controllerlib.WithInitialEvent,
 				"pinniped-concierge-impersonation-proxy-load-balancer", // TODO this string should come from `c.NamesConfig`
+				c.Labels,
 				tls.Listen,
 				func() (http.Handler, error) {
 					impersonationProxyHandler, err := impersonator.New(c.AuthenticatorCache, c.LoginJSONDecoder, klogr.New().WithName("impersonation-proxy"))

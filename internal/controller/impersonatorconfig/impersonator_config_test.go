@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
@@ -77,6 +78,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 				observableWithInformerOption.WithInformer,
 				observableWithInitialEventOption.WithInitialEvent,
 				generatedLoadBalancerServiceName,
+				nil,
 				nil,
 				nil,
 			)
@@ -147,6 +149,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		const installedInNamespace = "some-namespace"
 		const configMapResourceName = "some-configmap-resource-name"
 		const generatedLoadBalancerServiceName = "some-service-resource-name"
+		var labels = map[string]string{"app": "app-name", "other-key": "other-value"}
 
 		var r *require.Assertions
 
@@ -242,6 +245,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				controllerlib.WithInformer,
 				controllerlib.WithInitialEvent,
 				generatedLoadBalancerServiceName,
+				labels,
 				startTLSListenerFunc,
 				func() (http.Handler, error) {
 					return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -351,12 +355,26 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			when("there are not visible control plane nodes", func() {
 				it.Before(func() {
 					addNodeWithRoleToTracker("worker")
+					startInformersAndController()
+					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 				})
 
 				it("automatically starts the impersonator", func() {
-					startInformersAndController()
-					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					requireTLSServerIsRunning()
+				})
+
+				it("starts the load balancer automatically", func() {
+					// action 0: list nodes
+					// action 1: create load balancer
+					// that should be all
+					createLoadBalancerAction := kubeAPIClient.Actions()[1].(coretesting.CreateAction)
+					r.Equal("create", createLoadBalancerAction.GetVerb())
+					createdLoadBalancerService := createLoadBalancerAction.GetObject().(*corev1.Service)
+					r.Equal(generatedLoadBalancerServiceName, createdLoadBalancerService.Name)
+					r.Equal(installedInNamespace, createdLoadBalancerService.Namespace)
+					r.Equal(corev1.ServiceTypeLoadBalancer, createdLoadBalancerService.Spec.Type)
+					r.Equal("app-name", createdLoadBalancerService.Spec.Selector["app"])
+					r.Equal(labels, createdLoadBalancerService.Labels)
 				})
 			})
 		})
@@ -369,21 +387,20 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			it("only starts the impersonator once and only lists the cluster's nodes once", func() {
 				startInformersAndController()
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+				r.Equal(2, len(kubeAPIClient.Actions()))
 				r.Equal(
-					[]coretesting.Action{
-						coretesting.NewListAction(
-							schema.GroupVersionResource{Version: "v1", Resource: "nodes"},
-							schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Node"},
-							"",
-							metav1.ListOptions{}),
-					},
-					kubeAPIClient.Actions(),
+					coretesting.NewListAction(
+						schema.GroupVersionResource{Version: "v1", Resource: "nodes"},
+						schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Node"},
+						"",
+						metav1.ListOptions{}),
+					kubeAPIClient.Actions()[0],
 				)
 
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 				r.Equal(1, startTLSListenerFuncWasCalled) // wasn't started a second time
 				requireTLSServerIsRunning()               // still running
-				r.Equal(1, len(kubeAPIClient.Actions()))  // no new API calls
+				r.Equal(2, len(kubeAPIClient.Actions()))  // no new API calls
 			})
 		})
 
@@ -451,6 +468,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						startInformersAndController()
 						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 						requireTLSServerIsRunning()
+						r.Equal(1, len(kubeAPIClient.Actions()))
 					})
 				})
 			})
@@ -485,25 +503,48 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					startInformersAndController()
 					r.EqualError(controllerlib.TestSync(t, subject, *syncContext), "tls error")
 				})
+
+				it("does not start the load balancer if there are control plane nodes", func() {
+					startInformersAndController()
+					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+					// action 0: list nodes
+					// that should be all
+					r.Equal(1, len(kubeAPIClient.Actions()))
+				})
 			})
 
 			when("the configuration switches from enabled to disabled mode", func() {
 				it.Before(func() {
 					addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
-					addNodeWithRoleToTracker("control-plane")
+					addNodeWithRoleToTracker("worker")
 				})
 
-				it("starts the impersonator, then shuts it down, then starts it again", func() {
+				it("starts the impersonator and loadbalancer, then shuts it down, then starts it again", func() {
 					startInformersAndController()
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					requireTLSServerIsRunning()
+					// TODO extract this
+					// action 0: list nodes
+					// action 1: create load balancer
+					// that should be all
+					createLoadBalancerAction := kubeAPIClient.Actions()[1].(coretesting.CreateAction)
+					r.Equal("create", createLoadBalancerAction.GetVerb())
+					createdLoadBalancerService := createLoadBalancerAction.GetObject().(*corev1.Service)
+					r.Equal(generatedLoadBalancerServiceName, createdLoadBalancerService.Name)
+					r.Equal(installedInNamespace, createdLoadBalancerService.Namespace)
+					r.Equal(corev1.ServiceTypeLoadBalancer, createdLoadBalancerService.Spec.Type)
+					r.Equal("app-name", createdLoadBalancerService.Spec.Selector["app"])
+					r.Equal(labels, createdLoadBalancerService.Labels)
 
 					updateImpersonatorConfigMapInTracker(configMapResourceName, "mode: disabled", "1")
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "1")
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					requireTLSServerIsNoLongerRunning()
+					deleteLoadBalancerAction := kubeAPIClient.Actions()[2].(coretesting.DeleteAction)
+					r.Equal("delete", deleteLoadBalancerAction.GetVerb())
+					r.Equal(generatedLoadBalancerServiceName, deleteLoadBalancerAction.GetName())
 
 					updateImpersonatorConfigMapInTracker(configMapResourceName, "mode: enabled", "2")
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "2")
@@ -529,6 +570,59 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						requireTLSServerIsNoLongerRunning()
 					})
 				})
+			})
+
+			when("the endpoint switches from not specified, to specified, to not specified", func() {
+				it.Before(func() {
+					addImpersonatorConfigMapToTracker(configMapResourceName, here.Doc(`
+						mode: enabled
+						endpoint: https://proxy.example.com:8443/
+					  `))
+					addNodeWithRoleToTracker("worker")
+				})
+
+				it("starts, stops, restarts the loadbalancer", func() {
+					startInformersAndController()
+
+					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+
+					loadBalancer, err := kubeAPIClient.CoreV1().Services(installedInNamespace).Get(context.Background(), generatedLoadBalancerServiceName, metav1.GetOptions{})
+					r.Nil(loadBalancer)
+					r.EqualError(err, "services \"some-service-resource-name\" not found")
+
+					updateImpersonatorConfigMapInTracker(configMapResourceName, "mode: enabled", "1")
+					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "1")
+
+					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+					loadBalancer, err = kubeAPIClient.CoreV1().Services(installedInNamespace).Get(context.Background(), generatedLoadBalancerServiceName, metav1.GetOptions{})
+					r.NotNil(loadBalancer)
+					r.NoError(err, "services \"some-service-resource-name\" not found")
+
+					updateImpersonatorConfigMapInTracker(configMapResourceName, here.Doc(`
+						mode: enabled
+						endpoint: https://proxy.example.com:8443/
+					  `), "2")
+					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "2")
+
+					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+					loadBalancer, err = kubeAPIClient.CoreV1().Services(installedInNamespace).Get(context.Background(), generatedLoadBalancerServiceName, metav1.GetOptions{})
+					r.Nil(loadBalancer)
+					r.EqualError(err, "services \"some-service-resource-name\" not found")
+				})
+			})
+		})
+
+		when("there is an error creating the load balancer", func() {
+			it.Before(func() {
+				addNodeWithRoleToTracker("worker")
+				startInformersAndController()
+				kubeAPIClient.PrependReactor("create", "services", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, fmt.Errorf("error on create")
+				})
+			})
+
+			it("exits with an error", func() {
+				r.EqualError(controllerlib.TestSync(t, subject, *syncContext), "could not create load balancer: error on create")
 			})
 		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))

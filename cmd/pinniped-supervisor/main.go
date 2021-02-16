@@ -26,9 +26,9 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 
-	configv1alpha1 "go.pinniped.dev/generated/1.20/apis/supervisor/config/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned"
-	pinnipedinformers "go.pinniped.dev/generated/1.20/client/supervisor/informers/externalversions"
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/controller/supervisorconfig"
 	"go.pinniped.dev/internal/controller/supervisorconfig/generator"

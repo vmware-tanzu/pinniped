@@ -9,6 +9,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/go-logr/logr v0.3.0
 	github.com/go-logr/stdr v0.2.0
+	github.com/go-openapi/spec v0.19.9
 	github.com/gofrs/flock v0.8.0
 	github.com/golang/mock v1.4.4
 	github.com/google/go-cmp v0.5.4
@@ -26,8 +27,6 @@ require (
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.6.1
-	go.pinniped.dev/generated/1.20/apis v0.0.0-00010101000000-000000000000
-	go.pinniped.dev/generated/1.20/client v0.0.0-00010101000000-000000000000
 	golang.org/x/crypto v0.0.0-20201217014255-9d1352758620
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
@@ -44,11 +43,7 @@ require (
 	k8s.io/gengo v0.0.0-20201113003025-83324d819ded
 	k8s.io/klog/v2 v2.4.0
 	k8s.io/kube-aggregator v0.20.1
+	k8s.io/kube-openapi v0.0.0-20201113171705-d219536bb9fd
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
 	sigs.k8s.io/yaml v1.2.0
-)
-
-replace (
-	go.pinniped.dev/generated/1.20/apis => ./generated/1.20/apis
-	go.pinniped.dev/generated/1.20/client => ./generated/1.20/client
 )

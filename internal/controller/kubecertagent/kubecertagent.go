@@ -24,8 +24,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/clock"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
-	configv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/config/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/plog"
 )

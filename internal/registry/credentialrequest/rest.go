@@ -20,7 +20,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/utils/trace"
 
-	loginapi "go.pinniped.dev/generated/1.20/apis/concierge/login"
+	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
 )
 
 // clientCertificateTTL is the TTL for short-lived client certificates returned by this API.

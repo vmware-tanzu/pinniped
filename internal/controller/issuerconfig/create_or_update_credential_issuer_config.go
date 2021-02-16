@@ -13,8 +13,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 
-	configv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/config/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 )
 
 func CreateOrUpdateCredentialIssuerStatus(

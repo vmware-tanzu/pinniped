@@ -4,6 +4,7 @@
 package impersonator
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -144,18 +145,49 @@ func ensureNoImpersonationHeaders(r *http.Request) error {
 	return nil
 }
 
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 func getProxyHeaders(userInfo user.Info, requestHeaders http.Header) http.Header {
 	newHeaders := http.Header{}
-	newHeaders.Set("Impersonate-User", userInfo.GetName())
-	for _, group := range userInfo.GetGroups() {
-		newHeaders.Add("Impersonate-Group", group)
+
+	// Leverage client-go's impersonation RoundTripper to set impersonation headers for us in the new
+	// request. The client-go RoundTripper not only sets all of the impersonation headers for us, but
+	// it also does some helpful escaping of characters that can't go into an HTTP header. To do this,
+	// we make a fake call to the impersonation RoundTripper with a fake HTTP request and a delegate
+	// RoundTripper that captures the impersonation headers set on the request.
+	impersonateConfig := transport.ImpersonationConfig{
+		UserName: userInfo.GetName(),
+		Groups:   userInfo.GetGroups(),
+		Extra:    userInfo.GetExtra(),
 	}
+	impersonateHeaderSpy := roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		newHeaders.Set(transport.ImpersonateUserHeader, r.Header.Get(transport.ImpersonateUserHeader))
+		for _, groupHeaderValue := range r.Header.Values(transport.ImpersonateGroupHeader) {
+			newHeaders.Add(transport.ImpersonateGroupHeader, groupHeaderValue)
+		}
+		for headerKey, headerValues := range r.Header {
+			if strings.HasPrefix(headerKey, transport.ImpersonateUserExtraHeaderPrefix) {
+				for _, headerValue := range headerValues {
+					newHeaders.Add(headerKey, headerValue)
+				}
+			}
+		}
+		return nil, nil
+	})
+	fakeReq, _ := http.NewRequestWithContext(context.Background(), "", "", nil)
+	//nolint:bodyclose // We return a nil http.Response above, so there is nothing to close.
+	_, _ = transport.NewImpersonatingRoundTripper(impersonateConfig, impersonateHeaderSpy).RoundTrip(fakeReq)
+
+	// Copy over the allowed header values from the original request to the new request.
 	for _, header := range allowedHeaders {
 		values := requestHeaders.Values(header)
 		for i := range values {
 			newHeaders.Add(header, values[i])
 		}
 	}
+
 	return newHeaders
 }
 

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -21,6 +22,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/client-go/transport"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
 	"go.pinniped.dev/generated/1.20/apis/concierge/login"
@@ -37,7 +39,19 @@ func TestImpersonator(t *testing.T) {
 	const (
 		defaultAPIGroup = "pinniped.dev"
 		customAPIGroup  = "walrus.tld"
+
+		testUser = "test-user"
 	)
+
+	testGroups := []string{"test-group-1", "test-group-2"}
+	testExtra := map[string][]string{
+		"extra-1": {"some", "extra", "stuff"},
+		"extra-2": {"some", "more", "extra", "stuff"},
+	}
+	testExtraHeaders := map[string]string{
+		"extra-1": transport.ImpersonateUserExtraHeaderPrefix + "extra-1",
+		"extra-2": transport.ImpersonateUserExtraHeaderPrefix + "extra-2",
+	}
 
 	validURL, _ := url.Parse("http://pinniped.dev/blah")
 	testServerCA, testServerURL := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -55,6 +69,25 @@ func TestImpersonator(t *testing.T) {
 		if r.Header.Get("User-Agent") != "test-user-agent" {
 			http.Error(w, "got unexpected user agent header", http.StatusBadRequest)
 			return
+		}
+		// Ensure impersonation headers are set.
+		if values := r.Header.Values(transport.ImpersonateUserHeader); len(values) != 1 || values[0] != testUser {
+			message := fmt.Sprintf("got unexpected %q header: %q", transport.ImpersonateUserHeader, values)
+			http.Error(w, message, http.StatusBadRequest)
+			return
+		}
+		if values := r.Header.Values(transport.ImpersonateGroupHeader); !reflect.DeepEqual(testGroups, values) {
+			message := fmt.Sprintf("got unexpected %q headers: %q", transport.ImpersonateGroupHeader, values)
+			http.Error(w, message, http.StatusBadRequest)
+			return
+		}
+		for testExtraKey, testExtraValues := range testExtra {
+			header := testExtraHeaders[testExtraKey]
+			if values := r.Header.Values(header); !reflect.DeepEqual(testExtraValues, values) {
+				message := fmt.Sprintf("got unexpected %q headers: %q", header, values)
+				http.Error(w, message, http.StatusBadRequest)
+				return
+			}
 		}
 		_, _ = w.Write([]byte("successful proxied response"))
 	})
@@ -230,9 +263,10 @@ func TestImpersonator(t *testing.T) {
 			}),
 			expectMockToken: func(t *testing.T, recorder *mocktokenauthenticator.MockTokenMockRecorder) {
 				userInfo := user.DefaultInfo{
-					Name:   "test-user",
-					Groups: []string{"test-group-1", "test-group-2"},
+					Name:   testUser,
+					Groups: testGroups,
 					UID:    "test-uid",
+					Extra:  testExtra,
 				}
 				response := &authenticator.Response{User: &userInfo}
 				recorder.AuthenticateToken(gomock.Any(), "test-token").Return(response, true, nil)
@@ -252,9 +286,10 @@ func TestImpersonator(t *testing.T) {
 			}),
 			expectMockToken: func(t *testing.T, recorder *mocktokenauthenticator.MockTokenMockRecorder) {
 				userInfo := user.DefaultInfo{
-					Name:   "test-user",
-					Groups: []string{"test-group-1", "test-group-2"},
+					Name:   testUser,
+					Groups: testGroups,
 					UID:    "test-uid",
+					Extra:  testExtra,
 				}
 				response := &authenticator.Response{User: &userInfo}
 				recorder.AuthenticateToken(gomock.Any(), "test-token").Return(response, true, nil)
@@ -306,7 +341,7 @@ func TestImpersonator(t *testing.T) {
 			proxy.ServeHTTP(w, tt.request)
 			require.Equal(t, requestBeforeServe, tt.request, "ServeHTTP() mutated the request, and it should not per http.Handler docs")
 			if tt.wantHTTPStatus != 0 {
-				require.Equal(t, tt.wantHTTPStatus, w.Code)
+				require.Equalf(t, tt.wantHTTPStatus, w.Code, "fyi, response body was %q", w.Body.String())
 			}
 			if tt.wantHTTPBody != "" {
 				require.Equal(t, tt.wantHTTPBody, w.Body.String())

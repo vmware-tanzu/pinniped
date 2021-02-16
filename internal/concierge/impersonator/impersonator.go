@@ -88,6 +88,12 @@ func (p *proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"method", r.Method,
 	)
 
+	if err := ensureNoImpersonationHeaders(r); err != nil {
+		log.Error(err, "impersonation header already exists")
+		http.Error(w, "impersonation header already exists", http.StatusBadRequest)
+		return
+	}
+
 	tokenCredentialReq, err := extractToken(r, p.jsonDecoder)
 	if err != nil {
 		log.Error(err, "invalid token encoding")
@@ -118,6 +124,24 @@ func (p *proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	log.Info("proxying authenticated request")
 	p.proxy.ServeHTTP(w, newR)
+}
+
+func ensureNoImpersonationHeaders(r *http.Request) error {
+	if _, ok := r.Header[transport.ImpersonateUserHeader]; ok {
+		return fmt.Errorf("%q header already exists", transport.ImpersonateUserHeader)
+	}
+
+	if _, ok := r.Header[transport.ImpersonateGroupHeader]; ok {
+		return fmt.Errorf("%q header already exists", transport.ImpersonateGroupHeader)
+	}
+
+	for header := range r.Header {
+		if strings.HasPrefix(header, transport.ImpersonateUserExtraHeaderPrefix) {
+			return fmt.Errorf("%q header already exists", transport.ImpersonateUserExtraHeaderPrefix)
+		}
+	}
+
+	return nil
 }
 
 func getProxyHeaders(userInfo user.Info, requestHeaders http.Header) http.Header {

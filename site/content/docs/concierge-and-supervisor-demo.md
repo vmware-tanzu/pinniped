@@ -2,6 +2,10 @@
 title: "Pinniped Concierge and Supervisor Demo"
 cascade:
   layout: docs
+menu:
+  docs:
+    name: Concierge with Supervisor
+    parent: demo
 ---
 
 # Trying Pinniped Supervisor and Concierge

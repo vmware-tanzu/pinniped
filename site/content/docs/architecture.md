@@ -2,6 +2,10 @@
 title: "Pinniped Architecture"
 cascade:
   layout: docs
+menu:
+  docs:
+    name: Architecture
+    weight: 100
 ---
 
 # Architecture

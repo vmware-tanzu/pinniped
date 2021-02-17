@@ -2,6 +2,11 @@
 title: "Pinniped Demo"
 cascade:
   layout: docs
+menu:
+  docs:
+    name: Demo
+    identifier: demo
+    weight: 40
 ---
 
 # Trying Pinniped

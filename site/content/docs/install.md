@@ -2,6 +2,10 @@
 title: "Installing Pinniped"
 cascade:
   layout: docs
+menu:
+  docs:
+    name: Install
+    weight: 10
 ---
 
 # Installing Pinniped

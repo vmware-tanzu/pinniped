@@ -411,6 +411,11 @@
         ul {
             padding-left: 0px;
             margin-bottom: 35px;
+            ul {
+                padding-left: 15px;
+                margin-top: 10px;
+                margin-bottom: 15px;
+            }
             li {
                 display: list-item;
                 margin-bottom: 15px;

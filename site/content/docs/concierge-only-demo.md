@@ -2,6 +2,11 @@
 title: "Pinniped Concierge Only Demo"
 cascade:
   layout: docs
+menu:
+  docs:
+    name: Concierge with Webhook
+    parent: demo
+    weight: 100
 ---
 
 # Trying Pinniped Concierge

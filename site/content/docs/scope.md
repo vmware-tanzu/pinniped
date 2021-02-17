@@ -2,6 +2,10 @@
 title: "Pinniped Scope"
 cascade:
   layout: docs
+menu:
+  docs:
+    name: Scope
+    weight: 200
 ---
 
 

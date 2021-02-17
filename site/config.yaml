@@ -22,17 +22,3 @@ markup:
     noClasses: false
     style: monokailight
     tabWidth: 4
-menu:
-  docs:
-  - name: Overview
-    url: /docs/
-    weight: 100
-  - name: Install
-    url: /docs/install/
-    weight: 110
-  - name: Architecture
-    url: /docs/architecture/
-  - name: Demo
-    url: /docs/demo/
-  - name: Scope
-    url: /docs/scope/

@@ -2,6 +2,10 @@
 title: "Pinniped Documentation"
 cascade:
   layout: docs
+menu:
+  docs:
+    name: Overview
+    weight: 1
 ---
 
 ![Pinniped Logo](/docs/img/pinniped_logo.svg)

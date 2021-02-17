@@ -59,8 +59,10 @@ func TestImpersonationProxy(t *testing.T) {
 	impersonationProxyClient, err := kubernetes.NewForConfig(kubeconfig)
 	require.NoError(t, err, "unexpected failure from kubernetes.NewForConfig()")
 
-	// TODO if there is already a ConfigMap, remember its contents and delete it, which puts the proxy into its default settings
-	// TODO and in a t.Cleanup() if there was already a ConfigMap at the start of the test, then restore the original contents
+	oldConfigMap, err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Get(ctx, "pinniped-concierge-impersonation-proxy-config", metav1.GetOptions{})
+	if oldConfigMap.Data != nil {
+		adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, "pinniped-concierge-impersonation-proxy-config", metav1.DeleteOptions{})
+	}
 
 	serviceUnavailableError := fmt.Sprintf(`Get "%s/api/v1/namespaces": Service Unavailable`, proxyServiceURL)
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
@@ -88,7 +90,18 @@ func TestImpersonationProxy(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Cleanup(func() {
-			// TODO clean up the ConfigMap at the end of the test, and make sure that it happens before the t.Cleanup() above which is trying to restore the original ConfigMap
+			ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, "pinniped-concierge-impersonation-proxy-config", metav1.DeleteOptions{})
+			require.NoError(t, err)
+
+			if len(oldConfigMap.Data) != 0 {
+				t.Log(oldConfigMap)
+				oldConfigMap.UID = "" // cant have a UID yet
+				oldConfigMap.ResourceVersion = ""
+				_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, oldConfigMap, metav1.CreateOptions{})
+				require.NoError(t, err)
+			}
 		})
 	}
 
@@ -106,23 +119,31 @@ func TestImpersonationProxy(t *testing.T) {
 
 	// Update configuration to force the proxy to disabled mode
 	configMap := configMapForConfig(t, impersonator.Config{Mode: impersonator.ModeDisabled})
-	_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Update(ctx, &configMap, metav1.UpdateOptions{})
-	require.NoError(t, err)
+	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
+		_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, &configMap, metav1.CreateOptions{})
+		require.NoError(t, err)
+	} else {
+		_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Update(ctx, &configMap, metav1.UpdateOptions{})
+		require.NoError(t, err)
+	}
 
 	// Check that we can't use the impersonation proxy to execute kubectl commands again
 	_, err = impersonationProxyClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	require.EqualError(t, err, serviceUnavailableError)
 
-	// if env.HasCapability(library.HasExternalLoadBalancerProvider) {
-	// TODO we started the test with a load balancer, so after forcing the proxy to disable, assert that the LoadBalancer was deleted
-	// }
+	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
+		// the load balancer should not exist after we disable the impersonation proxy
+		require.Eventually(t, func() bool {
+			return !hasLoadBalancerService(ctx, t, adminClient, env.ConciergeNamespace)
+		}, 10*time.Second, 500*time.Millisecond)
+	}
 }
 
 func configMapForConfig(t *testing.T, config impersonator.Config) corev1.ConfigMap {
 	configString, err := yaml.Marshal(config)
 	require.NoError(t, err)
 	configMap := corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Name: "pinniped-concierge-impersonation-proxy-config"},
+		ObjectMeta: metav1.ObjectMeta{Name: "pinniped-concierge-impersonation-proxy-config"}, // TODO don't hard code this
 		Data: map[string]string{
 			"config.yaml": string(configString),
 		}}

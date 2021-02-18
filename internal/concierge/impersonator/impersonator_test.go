@@ -190,7 +190,7 @@ func TestImpersonator(t *testing.T) {
 			request:        newRequest(map[string][]string{}),
 			wantHTTPBody:   "invalid token encoding\n",
 			wantHTTPStatus: http.StatusBadRequest,
-			wantLogs:       []string{"\"error\"=\"missing authorization header\" \"msg\"=\"invalid token encoding\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
+			wantLogs:       []string{"\"error\"=\"token authenticator did not find token\" \"msg\"=\"invalid token encoding\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
 		},
 		{
 			name:           "authorization header missing bearer prefix",
@@ -198,7 +198,7 @@ func TestImpersonator(t *testing.T) {
 			request:        newRequest(map[string][]string{"Authorization": {impersonationtoken.Make(t, "test-token", &goodAuthenticator, defaultAPIGroup)}}),
 			wantHTTPBody:   "invalid token encoding\n",
 			wantHTTPStatus: http.StatusBadRequest,
-			wantLogs:       []string{"\"error\"=\"authorization header must be of type Bearer\" \"msg\"=\"invalid token encoding\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
+			wantLogs:       []string{"\"error\"=\"token authenticator did not find token\" \"msg\"=\"invalid token encoding\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
 		},
 		{
 			name:           "token is not base64 encoded",

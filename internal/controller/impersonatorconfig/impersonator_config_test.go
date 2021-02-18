@@ -19,10 +19,12 @@ import (
 	"github.com/sclevine/spec/report"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kubeinformers "k8s.io/client-go/informers"
+	corev1informers "k8s.io/client-go/informers/core/v1"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
@@ -64,17 +66,22 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 		var observableWithInformerOption *testutil.ObservableWithInformerOption
 		var observableWithInitialEventOption *testutil.ObservableWithInitialEventOption
 		var configMapsInformerFilter controllerlib.Filter
+		var servicesInformerFilter controllerlib.Filter
 
 		it.Before(func() {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			observableWithInitialEventOption = testutil.NewObservableWithInitialEventOption()
-			configMapsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().ConfigMaps()
+			sharedInformerFactory := kubeinformers.NewSharedInformerFactory(nil, 0)
+			configMapsInformer := sharedInformerFactory.Core().V1().ConfigMaps()
+			servicesInformer := sharedInformerFactory.Core().V1().Services()
+
 			_ = NewImpersonatorConfigController(
 				installedInNamespace,
 				configMapResourceName,
 				nil,
 				configMapsInformer,
+				servicesInformer,
 				observableWithInformerOption.WithInformer,
 				observableWithInitialEventOption.WithInitialEvent,
 				generatedLoadBalancerServiceName,
@@ -83,6 +90,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 				nil,
 			)
 			configMapsInformerFilter = observableWithInformerOption.GetFilterForInformer(configMapsInformer)
+			servicesInformerFilter = observableWithInformerOption.GetFilterForInformer(servicesInformer)
 		})
 
 		when("watching ConfigMap objects", func() {
@@ -125,6 +133,54 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 			})
 
 			when("a ConfigMap with a different name and a different namespace changes", func() {
+				it("returns false to avoid triggering the sync method", func() {
+					r.False(subject.Add(unrelated))
+					r.False(subject.Update(unrelated, unrelated))
+					r.False(subject.Delete(unrelated))
+				})
+			})
+		})
+
+		when("watching Service objects", func() {
+			var subject controllerlib.Filter
+			var target, wrongNamespace, wrongName, unrelated *corev1.Service
+
+			it.Before(func() {
+				subject = servicesInformerFilter
+				target = &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: generatedLoadBalancerServiceName, Namespace: installedInNamespace}}
+				wrongNamespace = &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: generatedLoadBalancerServiceName, Namespace: "wrong-namespace"}}
+				wrongName = &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: installedInNamespace}}
+				unrelated = &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: "wrong-namespace"}}
+			})
+
+			when("the target Service changes", func() {
+				it("returns true to trigger the sync method", func() {
+					r.True(subject.Add(target))
+					r.True(subject.Update(target, unrelated))
+					r.True(subject.Update(unrelated, target))
+					r.True(subject.Delete(target))
+				})
+			})
+
+			when("a Service from another namespace changes", func() {
+				it("returns false to avoid triggering the sync method", func() {
+					r.False(subject.Add(wrongNamespace))
+					r.False(subject.Update(wrongNamespace, unrelated))
+					r.False(subject.Update(unrelated, wrongNamespace))
+					r.False(subject.Delete(wrongNamespace))
+				})
+			})
+
+			when("a Service with a different name changes", func() {
+				it("returns false to avoid triggering the sync method", func() {
+					r.False(subject.Add(wrongName))
+					r.False(subject.Update(wrongName, unrelated))
+					r.False(subject.Update(unrelated, wrongName))
+					r.False(subject.Delete(wrongName))
+				})
+			})
+
+			when("a Service with a different name and a different namespace changes", func() {
 				it("returns false to avoid triggering the sync method", func() {
 					r.False(subject.Add(unrelated))
 					r.False(subject.Update(unrelated, unrelated))
@@ -233,6 +289,13 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			}, 10*time.Second, time.Millisecond)
 		}
 
+		var waitForLoadBalancerToBeDeleted = func(informer corev1informers.ServiceInformer, name string) {
+			r.Eventually(func() bool {
+				_, err := informer.Lister().Services(installedInNamespace).Get(name)
+				return k8serrors.IsNotFound(err)
+			}, 10*time.Second, time.Millisecond)
+		}
+
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
 		var startInformersAndController = func() {
@@ -242,6 +305,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				configMapResourceName,
 				kubeAPIClient,
 				kubeInformers.Core().V1().ConfigMaps(),
+				kubeInformers.Core().V1().Services(),
 				controllerlib.WithInformer,
 				controllerlib.WithInitialEvent,
 				generatedLoadBalancerServiceName,
@@ -307,6 +371,31 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			))
 		}
 
+		var addLoadBalancerServiceToTracker = func(resourceName string, client *kubernetesfake.Clientset) {
+			loadBalancerService := &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: installedInNamespace,
+					// Note that this seems to be ignored by the informer during initial creation, so actually
+					// the informer will see this as resource version "". Leaving it here to express the intent
+					// that the initial version is version 0.
+					ResourceVersion: "0",
+				},
+				Spec: corev1.ServiceSpec{
+					Type: corev1.ServiceTypeLoadBalancer,
+				},
+			}
+			r.NoError(client.Tracker().Add(loadBalancerService))
+		}
+
+		var deleteLoadBalancerServiceFromTracker = func(resourceName string, client *kubernetesfake.Clientset) {
+			r.NoError(client.Tracker().Delete(
+				schema.GroupVersionResource{Version: "v1", Resource: "services"},
+				installedInNamespace,
+				resourceName,
+			))
+		}
+
 		var addNodeWithRoleToTracker = func(role string) {
 			r.NoError(kubeAPIClient.Tracker().Add(
 				&corev1.Node{
@@ -316,6 +405,34 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					},
 				},
 			))
+		}
+
+		var requireNodesListed = func(action coretesting.Action) {
+			r.Equal(
+				coretesting.NewListAction(
+					schema.GroupVersionResource{Version: "v1", Resource: "nodes"},
+					schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Node"},
+					"",
+					metav1.ListOptions{}),
+				action,
+			)
+		}
+
+		var requireLoadBalancerWasCreated = func(action coretesting.Action) {
+			createLoadBalancerAction := action.(coretesting.CreateAction)
+			r.Equal("create", createLoadBalancerAction.GetVerb())
+			createdLoadBalancerService := createLoadBalancerAction.GetObject().(*corev1.Service)
+			r.Equal(generatedLoadBalancerServiceName, createdLoadBalancerService.Name)
+			r.Equal(installedInNamespace, createdLoadBalancerService.Namespace)
+			r.Equal(corev1.ServiceTypeLoadBalancer, createdLoadBalancerService.Spec.Type)
+			r.Equal("app-name", createdLoadBalancerService.Spec.Selector["app"])
+			r.Equal(labels, createdLoadBalancerService.Labels)
+		}
+
+		var requireLoadBalancerDeleted = func(action coretesting.Action) {
+			deleteLoadBalancerAction := action.(coretesting.DeleteAction)
+			r.Equal("delete", deleteLoadBalancerAction.GetVerb())
+			r.Equal(generatedLoadBalancerServiceName, deleteLoadBalancerAction.GetName())
 		}
 
 		it.Before(func() {
@@ -345,10 +462,29 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					addNodeWithRoleToTracker("control-plane")
 				})
 
-				it("does not start the impersonator", func() {
+				it("does not start the impersonator or load balancer", func() {
 					startInformersAndController()
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					requireTLSServerWasNeverStarted()
+					r.Equal(1, len(kubeAPIClient.Actions()))
+					requireNodesListed(kubeAPIClient.Actions()[0])
+				})
+			})
+
+			when("there are visible control plane nodes and a loadbalancer", func() {
+				it.Before(func() {
+					addNodeWithRoleToTracker("control-plane")
+					addLoadBalancerServiceToTracker(generatedLoadBalancerServiceName, kubeInformerClient)
+					addLoadBalancerServiceToTracker(generatedLoadBalancerServiceName, kubeAPIClient)
+				})
+
+				it("does not start the impersonator, deletes the loadbalancer", func() {
+					startInformersAndController()
+					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+					requireTLSServerWasNeverStarted()
+					r.Equal(2, len(kubeAPIClient.Actions()))
+					requireNodesListed(kubeAPIClient.Actions()[0])
+					requireLoadBalancerDeleted(kubeAPIClient.Actions()[1])
 				})
 			})
 
@@ -364,17 +500,28 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				})
 
 				it("starts the load balancer automatically", func() {
-					// action 0: list nodes
-					// action 1: create load balancer
-					// that should be all
-					createLoadBalancerAction := kubeAPIClient.Actions()[1].(coretesting.CreateAction)
-					r.Equal("create", createLoadBalancerAction.GetVerb())
-					createdLoadBalancerService := createLoadBalancerAction.GetObject().(*corev1.Service)
-					r.Equal(generatedLoadBalancerServiceName, createdLoadBalancerService.Name)
-					r.Equal(installedInNamespace, createdLoadBalancerService.Namespace)
-					r.Equal(corev1.ServiceTypeLoadBalancer, createdLoadBalancerService.Spec.Type)
-					r.Equal("app-name", createdLoadBalancerService.Spec.Selector["app"])
-					r.Equal(labels, createdLoadBalancerService.Labels)
+					r.Equal(2, len(kubeAPIClient.Actions()))
+					requireNodesListed(kubeAPIClient.Actions()[0])
+					requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
+				})
+			})
+
+			when("there are not visible control plane nodes and a load balancer already exists", func() {
+				it.Before(func() {
+					addNodeWithRoleToTracker("worker")
+					addLoadBalancerServiceToTracker(generatedLoadBalancerServiceName, kubeInformerClient)
+					addLoadBalancerServiceToTracker(generatedLoadBalancerServiceName, kubeAPIClient)
+					startInformersAndController()
+					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+				})
+
+				it("automatically starts the impersonator", func() {
+					requireTLSServerIsRunning()
+				})
+
+				it("does not start the load balancer automatically", func() {
+					r.Equal(1, len(kubeAPIClient.Actions()))
+					requireNodesListed(kubeAPIClient.Actions()[0])
 				})
 			})
 		})
@@ -388,14 +535,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				startInformersAndController()
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 				r.Equal(2, len(kubeAPIClient.Actions()))
-				r.Equal(
-					coretesting.NewListAction(
-						schema.GroupVersionResource{Version: "v1", Resource: "nodes"},
-						schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Node"},
-						"",
-						metav1.ListOptions{}),
-					kubeAPIClient.Actions()[0],
-				)
+				requireNodesListed(kubeAPIClient.Actions()[0])
+				requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
+
+				// update manually because the kubeAPIClient isn't connected to the informer in the tests
+				addLoadBalancerServiceToTracker(generatedLoadBalancerServiceName, kubeInformerClient)
+				waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "0")
 
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 				r.Equal(1, startTLSListenerFuncWasCalled) // wasn't started a second time
@@ -456,6 +601,8 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						startInformersAndController()
 						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 						requireTLSServerWasNeverStarted()
+						requireNodesListed(kubeAPIClient.Actions()[0])
+						r.Equal(1, len(kubeAPIClient.Actions()))
 					})
 				})
 
@@ -468,6 +615,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						startInformersAndController()
 						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 						requireTLSServerIsRunning()
+						requireNodesListed(kubeAPIClient.Actions()[0])
 						r.Equal(1, len(kubeAPIClient.Actions()))
 					})
 				})
@@ -483,33 +631,121 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					startInformersAndController()
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					requireTLSServerWasNeverStarted()
+					requireNodesListed(kubeAPIClient.Actions()[0])
+					r.Equal(1, len(kubeAPIClient.Actions()))
 				})
 			})
 
 			when("the configuration is enabled mode", func() {
-				it.Before(func() {
-					addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
-					addNodeWithRoleToTracker("control-plane")
+
+				when("there are control plane nodes", func() {
+					it.Before(func() {
+						addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
+						addNodeWithRoleToTracker("control-plane")
+					})
+
+					it("starts the impersonator", func() {
+						startInformersAndController()
+						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+						requireTLSServerIsRunning()
+					})
+
+					it("returns an error when the tls listener fails to start", func() {
+						startTLSListenerFuncError = errors.New("tls error")
+						startInformersAndController()
+						r.EqualError(controllerlib.TestSync(t, subject, *syncContext), "tls error")
+					})
+
+					it("does not start the load balancer", func() {
+						startInformersAndController()
+						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+						r.Equal(1, len(kubeAPIClient.Actions()))
+						requireNodesListed(kubeAPIClient.Actions()[0])
+					})
 				})
 
-				it("starts the impersonator regardless of the visibility of control plane nodes", func() {
-					startInformersAndController()
-					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
-					requireTLSServerIsRunning()
+				when("there are no control plane nodes but a loadbalancer already exists", func() {
+					it.Before(func() {
+						addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
+						addNodeWithRoleToTracker("worker")
+						addLoadBalancerServiceToTracker(generatedLoadBalancerServiceName, kubeInformerClient)
+						addLoadBalancerServiceToTracker(generatedLoadBalancerServiceName, kubeAPIClient)
+					})
+
+					it("starts the impersonator", func() {
+						startInformersAndController()
+						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+						requireTLSServerIsRunning()
+					})
+
+					it("returns an error when the tls listener fails to start", func() {
+						startTLSListenerFuncError = errors.New("tls error")
+						startInformersAndController()
+						r.EqualError(controllerlib.TestSync(t, subject, *syncContext), "tls error")
+					})
+
+					it("does not start the load balancer", func() {
+						startInformersAndController()
+						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+						r.Equal(1, len(kubeAPIClient.Actions()))
+						requireNodesListed(kubeAPIClient.Actions()[0])
+					})
 				})
 
-				it("returns an error when the tls listener fails to start", func() {
-					startTLSListenerFuncError = errors.New("tls error")
-					startInformersAndController()
-					r.EqualError(controllerlib.TestSync(t, subject, *syncContext), "tls error")
+				when("there are control plane nodes and a loadbalancer already exists", func() {
+					it.Before(func() {
+						addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
+						addNodeWithRoleToTracker("control-plane")
+						addLoadBalancerServiceToTracker(generatedLoadBalancerServiceName, kubeInformerClient)
+						addLoadBalancerServiceToTracker(generatedLoadBalancerServiceName, kubeAPIClient)
+					})
+
+					it("starts the impersonator", func() {
+						startInformersAndController()
+						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+						requireTLSServerIsRunning()
+					})
+
+					it("returns an error when the tls listener fails to start", func() {
+						startTLSListenerFuncError = errors.New("tls error")
+						startInformersAndController()
+						r.EqualError(controllerlib.TestSync(t, subject, *syncContext), "tls error")
+					})
+
+					it("stops the load balancer", func() {
+						startInformersAndController()
+						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+						r.Equal(2, len(kubeAPIClient.Actions()))
+						requireNodesListed(kubeAPIClient.Actions()[0])
+						requireLoadBalancerDeleted(kubeAPIClient.Actions()[1])
+					})
 				})
 
-				it("does not start the load balancer if there are control plane nodes", func() {
-					startInformersAndController()
-					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
-					// action 0: list nodes
-					// that should be all
-					r.Equal(1, len(kubeAPIClient.Actions()))
+				when("there are no control plane nodes and there is no load balancer", func() {
+					it.Before(func() {
+						addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
+						addNodeWithRoleToTracker("worker")
+					})
+
+					it("starts the impersonator", func() {
+						startInformersAndController()
+						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+						requireTLSServerIsRunning()
+					})
+
+					it("returns an error when the tls listener fails to start", func() {
+						startTLSListenerFuncError = errors.New("tls error")
+						startInformersAndController()
+						r.EqualError(controllerlib.TestSync(t, subject, *syncContext), "tls error")
+					})
+
+					it("starts the load balancer", func() {
+						startInformersAndController()
+						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+						r.Equal(2, len(kubeAPIClient.Actions()))
+						requireNodesListed(kubeAPIClient.Actions()[0])
+						requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
+					})
 				})
 			})
 
@@ -524,33 +760,32 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					requireTLSServerIsRunning()
-					// TODO extract this
-					// action 0: list nodes
-					// action 1: create load balancer
-					// that should be all
-					createLoadBalancerAction := kubeAPIClient.Actions()[1].(coretesting.CreateAction)
-					r.Equal("create", createLoadBalancerAction.GetVerb())
-					createdLoadBalancerService := createLoadBalancerAction.GetObject().(*corev1.Service)
-					r.Equal(generatedLoadBalancerServiceName, createdLoadBalancerService.Name)
-					r.Equal(installedInNamespace, createdLoadBalancerService.Namespace)
-					r.Equal(corev1.ServiceTypeLoadBalancer, createdLoadBalancerService.Spec.Type)
-					r.Equal("app-name", createdLoadBalancerService.Spec.Selector["app"])
-					r.Equal(labels, createdLoadBalancerService.Labels)
+					r.Equal(2, len(kubeAPIClient.Actions()))
+					requireNodesListed(kubeAPIClient.Actions()[0])
+					requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
+
+					// update manually because the kubeAPIClient isn't connected to the informer in the tests
+					addLoadBalancerServiceToTracker(generatedLoadBalancerServiceName, kubeInformerClient)
+					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "0")
 
 					updateImpersonatorConfigMapInTracker(configMapResourceName, "mode: disabled", "1")
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "1")
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					requireTLSServerIsNoLongerRunning()
-					deleteLoadBalancerAction := kubeAPIClient.Actions()[2].(coretesting.DeleteAction)
-					r.Equal("delete", deleteLoadBalancerAction.GetVerb())
-					r.Equal(generatedLoadBalancerServiceName, deleteLoadBalancerAction.GetName())
+					r.Equal(3, len(kubeAPIClient.Actions()))
+					requireLoadBalancerDeleted(kubeAPIClient.Actions()[2])
+
+					deleteLoadBalancerServiceFromTracker(generatedLoadBalancerServiceName, kubeInformerClient)
+					waitForLoadBalancerToBeDeleted(kubeInformers.Core().V1().Services(), generatedLoadBalancerServiceName)
 
 					updateImpersonatorConfigMapInTracker(configMapResourceName, "mode: enabled", "2")
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "2")
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					requireTLSServerIsRunning()
+					r.Equal(4, len(kubeAPIClient.Actions()))
+					requireLoadBalancerWasCreated(kubeAPIClient.Actions()[3])
 				})
 
 				when("there is an error while shutting down the server", func() {
@@ -572,7 +807,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				})
 			})
 
-			when("the endpoint switches from not specified, to specified, to not specified", func() {
+			when("the endpoint switches from specified, to not specified, to specified", func() {
 				it.Before(func() {
 					addImpersonatorConfigMapToTracker(configMapResourceName, here.Doc(`
 						mode: enabled
@@ -581,22 +816,24 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					addNodeWithRoleToTracker("worker")
 				})
 
-				it("starts, stops, restarts the loadbalancer", func() {
+				it("doesn't start, then creates, then deletes the load balancer", func() {
 					startInformersAndController()
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
-					loadBalancer, err := kubeAPIClient.CoreV1().Services(installedInNamespace).Get(context.Background(), generatedLoadBalancerServiceName, metav1.GetOptions{})
-					r.Nil(loadBalancer)
-					r.EqualError(err, "services \"some-service-resource-name\" not found")
+					r.Equal(1, len(kubeAPIClient.Actions()))
+					requireNodesListed(kubeAPIClient.Actions()[0])
 
 					updateImpersonatorConfigMapInTracker(configMapResourceName, "mode: enabled", "1")
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "1")
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
-					loadBalancer, err = kubeAPIClient.CoreV1().Services(installedInNamespace).Get(context.Background(), generatedLoadBalancerServiceName, metav1.GetOptions{})
-					r.NotNil(loadBalancer)
-					r.NoError(err, "services \"some-service-resource-name\" not found")
+					r.Equal(2, len(kubeAPIClient.Actions()))
+					requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
+
+					// update manually because the kubeAPIClient isn't connected to the informer in the tests
+					addLoadBalancerServiceToTracker(generatedLoadBalancerServiceName, kubeInformerClient)
+					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "0")
 
 					updateImpersonatorConfigMapInTracker(configMapResourceName, here.Doc(`
 						mode: enabled
@@ -605,9 +842,8 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "2")
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
-					loadBalancer, err = kubeAPIClient.CoreV1().Services(installedInNamespace).Get(context.Background(), generatedLoadBalancerServiceName, metav1.GetOptions{})
-					r.Nil(loadBalancer)
-					r.EqualError(err, "services \"some-service-resource-name\" not found")
+					r.Equal(3, len(kubeAPIClient.Actions()))
+					requireLoadBalancerDeleted(kubeAPIClient.Actions()[2])
 				})
 			})
 		})

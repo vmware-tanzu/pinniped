@@ -37,13 +37,13 @@ type impersonatorConfigController struct {
 	configMapResourceName            string
 	k8sClient                        kubernetes.Interface
 	configMapsInformer               corev1informers.ConfigMapInformer
+	servicesInformer                 corev1informers.ServiceInformer
 	generatedLoadBalancerServiceName string
 	labels                           map[string]string
 	startTLSListenerFunc             StartTLSListenerFunc
 	httpHandlerFactory               func() (http.Handler, error)
 
 	server               *http.Server
-	loadBalancer         *v1.Service
 	hasControlPlaneNodes *bool
 }
 
@@ -54,6 +54,7 @@ func NewImpersonatorConfigController(
 	configMapResourceName string,
 	k8sClient kubernetes.Interface,
 	configMapsInformer corev1informers.ConfigMapInformer,
+	servicesInformer corev1informers.ServiceInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	withInitialEvent pinnipedcontroller.WithInitialEventOptionFunc,
 	generatedLoadBalancerServiceName string,
@@ -69,6 +70,7 @@ func NewImpersonatorConfigController(
 				configMapResourceName:            configMapResourceName,
 				k8sClient:                        k8sClient,
 				configMapsInformer:               configMapsInformer,
+				servicesInformer:                 servicesInformer,
 				generatedLoadBalancerServiceName: generatedLoadBalancerServiceName,
 				labels:                           labels,
 				startTLSListenerFunc:             startTLSListenerFunc,
@@ -78,6 +80,11 @@ func NewImpersonatorConfigController(
 		withInformer(
 			configMapsInformer,
 			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(configMapResourceName, namespace),
+			controllerlib.InformerOption{},
+		),
+		withInformer(
+			servicesInformer,
+			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(generatedLoadBalancerServiceName, namespace),
 			controllerlib.InformerOption{},
 		),
 		// Be sure to run once even if the ConfigMap that the informer is watching doesn't exist.
@@ -128,26 +135,22 @@ func (c *impersonatorConfigController) Sync(ctx controllerlib.Context) error {
 		plog.Debug("Queried for control plane nodes", "foundControlPlaneNodes", hasControlPlaneNodes)
 	}
 
-	if (config.Mode == impersonator.ModeAuto && !*c.hasControlPlaneNodes) || config.Mode == impersonator.ModeEnabled {
-		if err = c.startImpersonator(); err != nil {
+	if c.shouldHaveImpersonator(config) {
+		if err = c.ensureImpersonatorIsStarted(); err != nil {
 			return err
 		}
 	} else {
-		if err = c.stopImpersonator(); err != nil {
+		if err = c.ensureImpersonatorIsStopped(); err != nil {
 			return err
 		}
 	}
 
-	// start the load balancer only if:
-	// - the impersonator is running
-	// - the cluster is cloud hosted
-	// - there is no endpoint specified in the config
-	if c.server != nil && !*c.hasControlPlaneNodes && config.Endpoint == "" {
-		if err = c.startLoadBalancer(ctx.Context); err != nil {
+	if c.shouldHaveLoadBalancer(config) {
+		if err = c.ensureLoadBalancerIsStarted(ctx.Context); err != nil {
 			return err
 		}
 	} else {
-		if err = c.stopLoadBalancer(ctx.Context); err != nil {
+		if err = c.ensureLoadBalancerIsStopped(ctx.Context); err != nil {
 			return err
 		}
 	}
@@ -155,7 +158,19 @@ func (c *impersonatorConfigController) Sync(ctx controllerlib.Context) error {
 	return nil
 }
 
-func (c *impersonatorConfigController) stopImpersonator() error {
+func (c *impersonatorConfigController) shouldHaveImpersonator(config *impersonator.Config) bool {
+	return (config.Mode == impersonator.ModeAuto && !*c.hasControlPlaneNodes) || config.Mode == impersonator.ModeEnabled
+}
+
+func (c *impersonatorConfigController) shouldHaveLoadBalancer(config *impersonator.Config) bool {
+	// start the load balancer only if:
+	// - the impersonator is running
+	// - the cluster is cloud hosted
+	// - there is no endpoint specified in the config
+	return c.server != nil && !*c.hasControlPlaneNodes && config.Endpoint == ""
+}
+
+func (c *impersonatorConfigController) ensureImpersonatorIsStopped() error {
 	if c.server != nil {
 		plog.Info("Stopping impersonation proxy", "port", impersonationProxyPort)
 		err := c.server.Close()
@@ -167,7 +182,7 @@ func (c *impersonatorConfigController) stopImpersonator() error {
 	return nil
 }
 
-func (c *impersonatorConfigController) startImpersonator() error {
+func (c *impersonatorConfigController) ensureImpersonatorIsStarted() error {
 	if c.server != nil {
 		return nil
 	}
@@ -210,22 +225,47 @@ func (c *impersonatorConfigController) startImpersonator() error {
 	return nil
 }
 
-func (c *impersonatorConfigController) stopLoadBalancer(ctx context.Context) error {
-	if c.loadBalancer != nil {
-		err := c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedLoadBalancerServiceName, metav1.DeleteOptions{})
-		if err != nil {
-			return err
-		}
+func (c *impersonatorConfigController) isLoadBalancerRunning() (bool, error) {
+	_, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedLoadBalancerServiceName)
+	notFound := k8serrors.IsNotFound(err)
+	if notFound {
+		return false, nil
 	}
-	return nil
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
-func (c *impersonatorConfigController) startLoadBalancer(ctx context.Context) error {
-	if c.loadBalancer != nil {
+func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.Context) error {
+	running, err := c.isLoadBalancerRunning()
+	if err != nil {
+		return err
+	}
+	if !running {
 		return nil
 	}
 
-	appNameLabel := c.labels["app"] // TODO what if this doesn't exist
+	plog.Info("Deleting load balancer for impersonation proxy",
+		"service", c.generatedLoadBalancerServiceName,
+		"namespace", c.namespace)
+	err = c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedLoadBalancerServiceName, metav1.DeleteOptions{})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.Context) error {
+	running, err := c.isLoadBalancerRunning()
+	if err != nil {
+		return err
+	}
+	if running {
+		return nil
+	}
+	appNameLabel := c.labels["app"]
 	loadBalancer := v1.Service{
 		Spec: v1.ServiceSpec{
 			Type: "LoadBalancer",
@@ -244,10 +284,12 @@ func (c *impersonatorConfigController) startLoadBalancer(ctx context.Context) er
 			Labels:    c.labels,
 		},
 	}
-	createdLoadBalancer, err := c.k8sClient.CoreV1().Services(c.namespace).Create(ctx, &loadBalancer, metav1.CreateOptions{})
+	plog.Info("creating load balancer for impersonation proxy",
+		"service", c.generatedLoadBalancerServiceName,
+		"namespace", c.namespace)
+	_, err = c.k8sClient.CoreV1().Services(c.namespace).Create(ctx, &loadBalancer, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("could not create load balancer: %w", err)
 	}
-	c.loadBalancer = createdLoadBalancer
 	return nil
 }

@@ -16,9 +16,9 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 
-	configv1alpha1 "go.pinniped.dev/generated/1.20/apis/supervisor/config/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned"
-	configinformers "go.pinniped.dev/generated/1.20/client/supervisor/informers/externalversions/config/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	configinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/oidc/provider"

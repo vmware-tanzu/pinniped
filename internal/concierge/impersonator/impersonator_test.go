@@ -24,8 +24,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/client-go/transport"
 
-	authenticationv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
-	"go.pinniped.dev/generated/1.20/apis/concierge/login"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	"go.pinniped.dev/generated/latest/apis/concierge/login"
 	conciergescheme "go.pinniped.dev/internal/concierge/scheme"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/groupsuffix"

@@ -24,8 +24,8 @@ import (
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Adds handlers for various dynamic auth plugins in client-go
 
-	conciergev1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
-	conciergeclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
+	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 )

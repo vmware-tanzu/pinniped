@@ -18,9 +18,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2/klogr"
 
-	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned"
-	pinnipedinformers "go.pinniped.dev/generated/1.20/client/concierge/informers/externalversions"
+	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
+	pinnipedinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/apiserviceref"
 	"go.pinniped.dev/internal/concierge/impersonator"
 	"go.pinniped.dev/internal/config/concierge"

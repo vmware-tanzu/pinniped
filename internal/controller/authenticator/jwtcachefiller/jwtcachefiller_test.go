@@ -28,9 +28,9 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 
-	auth1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/1.20/client/concierge/informers/externalversions"
+	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	pinnipedfake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
+	pinnipedinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/mocks/mocktokenauthenticatorcloser"

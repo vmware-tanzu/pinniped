@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
 
-	auth1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
+	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 )
 
 type Capability string

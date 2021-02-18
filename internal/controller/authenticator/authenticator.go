@@ -7,7 +7,7 @@ package authenticator
 import (
 	"encoding/base64"
 
-	auth1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
+	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 )
 
 // Closer is a type that can be closed idempotently.

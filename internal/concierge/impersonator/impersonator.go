@@ -20,7 +20,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 
-	"go.pinniped.dev/generated/1.20/apis/concierge/login"
+	"go.pinniped.dev/generated/latest/apis/concierge/login"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/kubeclient"

@@ -25,9 +25,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/cache"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
-	"go.pinniped.dev/generated/1.20/apis/supervisor/idp/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned"
-	idpinformers "go.pinniped.dev/generated/1.20/client/supervisor/informers/externalversions/idp/v1alpha1"
+	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
+	idpinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/idp/v1alpha1"
 	"go.pinniped.dev/internal/constable"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"

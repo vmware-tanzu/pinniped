@@ -17,8 +17,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	authenticationv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/authentication/v1alpha1"
-	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

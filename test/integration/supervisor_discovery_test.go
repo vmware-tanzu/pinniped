@@ -25,8 +25,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"go.pinniped.dev/generated/1.20/apis/supervisor/config/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/1.20/client/supervisor/clientset/versioned"
+	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/test/library"

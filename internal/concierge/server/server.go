@@ -17,8 +17,8 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 
-	"go.pinniped.dev/generated/1.20/apis/concierge/login"
-	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
+	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
+	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
 	"go.pinniped.dev/internal/concierge/apiserver"
 	conciergescheme "go.pinniped.dev/internal/concierge/scheme"
@@ -238,6 +238,6 @@ func getLoginJSONDecoder(loginConciergeAPIGroup string, loginConciergeScheme *ru
 	}
 	return codecs.DecoderToVersion(respInfo.Serializer, schema.GroupVersion{
 		Group:   loginConciergeAPIGroup,
-		Version: login.SchemeGroupVersion.Version,
+		Version: loginapi.SchemeGroupVersion.Version,
 	})
 }

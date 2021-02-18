@@ -17,7 +17,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	user "k8s.io/apiserver/pkg/authentication/user"
 
-	login "go.pinniped.dev/generated/1.20/apis/concierge/login"
+	login "go.pinniped.dev/generated/latest/apis/concierge/login"
 )
 
 // MockCertIssuer is a mock of CertIssuer interface

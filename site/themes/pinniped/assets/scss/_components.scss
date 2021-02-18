@@ -68,7 +68,7 @@
             margin: 0px;
             font-size: 16px;
             &.strong {
-                color: $black;
+                color: $darkgrey;
             }
         }
     }
@@ -261,33 +261,39 @@
             font-weight: 600;
         }
         a {
-            font-size: 14px;
+            font-size: 16px;
         }
         ul {
             list-style-type: disc;
             padding-left: 20px;
+            li:first-child {
+                margin-top: 10px;
+            }
             li {
                 list-style-type: unset;
                 display: list-item;
                 margin-bottom: 10px;
                 font-size: 14px;
-                color: $grey;
+                color: $darkgrey;
                 line-height: 1.6em;
                 list-style-image: url(/img/arrow.svg);
             }
         }
         ol {
+            li:first-child {
+                margin-top: 10px;
+            }
             li {
                 list-style-type: decimal;
                 display: list-item;
                 margin-bottom: 10px;
-                font-size: 14px;
-                color: $grey;
+                font-size: 16px;
+                color: $darkgrey;
             }
         }
         code {
             background-color: $white;
-            color: $grey;
+            color: $darkgrey;
             border: 2px solid #EFEFEF;
             padding: 2px 8px;
             .c1 {
@@ -313,6 +319,9 @@
         }
         img {
             max-width: 100%;
+        }
+        strong {
+            font-family: $metropolis-medium;
         }
     }
 }
@@ -428,28 +437,34 @@
         ul {
             list-style-type: disc;
             padding-left: 20px;
+            li:first-child {
+                margin-top: 10px;
+            }
             li {
                 list-style-type: unset;
                 display: list-item;
                 margin-bottom: 10px;
-                font-size: 14px;
-                color: $grey;
+                font-size: 16px;
+                color: $darkgrey;
                 line-height: 1.6em;
                 list-style-image: url(/img/arrow.svg);
             }
         }
         ol {
+            li:first-child {
+                margin-top: 10px;
+            }
             li {
                 list-style-type: decimal;
                 display: list-item;
                 margin-bottom: 10px;
-                font-size: 14px;
-                color: $grey;
+                font-size: 16px;
+                color: $darkgrey;
             }
         }
         code {
             background-color: $white;
-            color: $grey;
+            color: $darkgrey;
             border: 2px solid #EFEFEF;
             padding: 2px 8px;
             .c1 {

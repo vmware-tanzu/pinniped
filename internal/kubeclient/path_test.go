@@ -16,8 +16,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 
-	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
-	configv1alpha1 "go.pinniped.dev/generated/1.20/apis/supervisor/config/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 )
 
 func Test_updatePathNewGVK(t *testing.T) {

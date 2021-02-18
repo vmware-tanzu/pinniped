@@ -15,7 +15,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	v10 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	v1alpha1 "go.pinniped.dev/generated/1.20/apis/supervisor/config/v1alpha1"
+	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 )
 
 // MockSecretHelper is a mock of SecretHelper interface

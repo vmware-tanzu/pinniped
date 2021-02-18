@@ -13,7 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation"
 
-	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"

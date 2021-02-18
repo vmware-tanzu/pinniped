@@ -14,8 +14,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	loginapi "go.pinniped.dev/generated/1.20/apis/concierge/login"
-	loginv1alpha1 "go.pinniped.dev/generated/1.20/apis/concierge/login/v1alpha1"
+	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
+	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/groupsuffix"
 )
 

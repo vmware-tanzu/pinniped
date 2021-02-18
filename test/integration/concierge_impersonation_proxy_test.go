@@ -23,7 +23,9 @@ import (
 	"go.pinniped.dev/test/library"
 )
 
-// Smoke test to see if the kubeconfig works and the cluster is reachable.
+// TODO don't hard code "pinniped-concierge-" in this string. It should be constructed from the env app name.
+const impersonationProxyConfigMapName = "pinniped-concierge-impersonation-proxy-config"
+
 func TestImpersonationProxy(t *testing.T) {
 	env := library.IntegrationEnv(t)
 	if env.Proxy == "" {
@@ -59,9 +61,10 @@ func TestImpersonationProxy(t *testing.T) {
 	impersonationProxyClient, err := kubernetes.NewForConfig(kubeconfig)
 	require.NoError(t, err, "unexpected failure from kubernetes.NewForConfig()")
 
-	oldConfigMap, err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Get(ctx, "pinniped-concierge-impersonation-proxy-config", metav1.GetOptions{})
+	oldConfigMap, err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Get(ctx, impersonationProxyConfigMapName, metav1.GetOptions{})
 	if oldConfigMap.Data != nil {
-		require.NoError(t, adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, "pinniped-concierge-impersonation-proxy-config", metav1.DeleteOptions{}))
+		t.Logf("stashing a pre-existing configmap %s", oldConfigMap.Name)
+		require.NoError(t, adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, impersonationProxyConfigMapName, metav1.DeleteOptions{}))
 	}
 
 	serviceUnavailableError := fmt.Sprintf(`Get "%s/api/v1/namespaces": Service Unavailable`, proxyServiceURL)
@@ -86,19 +89,22 @@ func TestImpersonationProxy(t *testing.T) {
 			Endpoint: proxyServiceURL,
 			TLS:      nil,
 		})
+		t.Logf("creating configmap %s", configMap.Name)
 		_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, &configMap, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		t.Cleanup(func() {
 			ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, "pinniped-concierge-impersonation-proxy-config", metav1.DeleteOptions{})
+			t.Logf("cleaning up configmap at end of test %s", impersonationProxyConfigMapName)
+			err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, impersonationProxyConfigMapName, metav1.DeleteOptions{})
 			require.NoError(t, err)
 
 			if len(oldConfigMap.Data) != 0 {
 				t.Log(oldConfigMap)
 				oldConfigMap.UID = "" // cant have a UID yet
 				oldConfigMap.ResourceVersion = ""
+				t.Logf("restoring a pre-existing configmap %s", oldConfigMap.Name)
 				_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, oldConfigMap, metav1.CreateOptions{})
 				require.NoError(t, err)
 			}
@@ -120,9 +126,11 @@ func TestImpersonationProxy(t *testing.T) {
 	// Update configuration to force the proxy to disabled mode
 	configMap := configMapForConfig(t, impersonator.Config{Mode: impersonator.ModeDisabled})
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
+		t.Logf("creating configmap %s", configMap.Name)
 		_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, &configMap, metav1.CreateOptions{})
 		require.NoError(t, err)
 	} else {
+		t.Logf("updating configmap %s", configMap.Name)
 		_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Update(ctx, &configMap, metav1.UpdateOptions{})
 		require.NoError(t, err)
 	}
@@ -134,10 +142,11 @@ func TestImpersonationProxy(t *testing.T) {
 	}, 10*time.Second, 500*time.Millisecond)
 
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
-		// the load balancer should not exist after we disable the impersonation proxy
+		// The load balancer should not exist after we disable the impersonation proxy.
+		// Note that this can take kind of a long time on real cloud providers (e.g. ~22 seconds on EKS).
 		require.Eventually(t, func() bool {
 			return !hasLoadBalancerService(ctx, t, adminClient, env.ConciergeNamespace)
-		}, 10*time.Second, 500*time.Millisecond)
+		}, time.Minute, 500*time.Millisecond)
 	}
 }
 
@@ -145,7 +154,9 @@ func configMapForConfig(t *testing.T, config impersonator.Config) corev1.ConfigM
 	configString, err := yaml.Marshal(config)
 	require.NoError(t, err)
 	configMap := corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Name: "pinniped-concierge-impersonation-proxy-config"}, // TODO don't hard code this
+		ObjectMeta: metav1.ObjectMeta{
+			Name: impersonationProxyConfigMapName,
+		},
 		Data: map[string]string{
 			"config.yaml": string(configString),
 		}}

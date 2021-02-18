@@ -96,7 +96,7 @@ func NewImpersonatorConfigController(
 }
 
 func (c *impersonatorConfigController) Sync(ctx controllerlib.Context) error {
-	plog.Info("impersonatorConfigController Sync")
+	plog.Debug("Starting impersonatorConfigController Sync")
 
 	configMap, err := c.configMapsInformer.Lister().ConfigMaps(c.namespace).Get(c.configMapResourceName)
 	notFound := k8serrors.IsNotFound(err)
@@ -154,6 +154,8 @@ func (c *impersonatorConfigController) Sync(ctx controllerlib.Context) error {
 			return err
 		}
 	}
+
+	plog.Debug("Successfully finished impersonatorConfigController Sync")
 
 	return nil
 }

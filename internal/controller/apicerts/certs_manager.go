@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apicerts
@@ -93,14 +93,14 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 	}
 
 	// Create a CA.
-	aggregatedAPIServerCA, err := certauthority.New(pkix.Name{CommonName: c.generatedCACommonName}, c.certDuration)
+	ca, err := certauthority.New(pkix.Name{CommonName: c.generatedCACommonName}, c.certDuration)
 	if err != nil {
 		return fmt.Errorf("could not initialize CA: %w", err)
 	}
 
-	// Using the CA from above, create a TLS server cert for the aggregated API server to use.
+	// Using the CA from above, create a TLS server cert.
 	serviceEndpoint := c.serviceNameForGeneratedCertCommonName + "." + c.namespace + ".svc"
-	aggregatedAPIServerTLSCert, err := aggregatedAPIServerCA.Issue(
+	tlsCert, err := ca.Issue(
 		pkix.Name{CommonName: serviceEndpoint},
 		[]string{serviceEndpoint},
 		nil,
@@ -111,7 +111,7 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 	}
 
 	// Write the CA's public key bundle and the serving certs to a secret.
-	tlsCertChainPEM, tlsPrivateKeyPEM, err := certauthority.ToPEM(aggregatedAPIServerTLSCert)
+	tlsCertChainPEM, tlsPrivateKeyPEM, err := certauthority.ToPEM(tlsCert)
 	if err != nil {
 		return fmt.Errorf("could not PEM encode serving certificate: %w", err)
 	}
@@ -123,7 +123,7 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 			Labels:    c.certsSecretLabels,
 		},
 		StringData: map[string]string{
-			caCertificateSecretKey:       string(aggregatedAPIServerCA.Bundle()),
+			caCertificateSecretKey:       string(ca.Bundle()),
 			tlsPrivateKeySecretKey:       string(tlsPrivateKeyPEM),
 			tlsCertificateChainSecretKey: string(tlsCertChainPEM),
 		},

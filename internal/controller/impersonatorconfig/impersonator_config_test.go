@@ -466,7 +466,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					startInformersAndController()
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					requireTLSServerWasNeverStarted()
-					r.Equal(1, len(kubeAPIClient.Actions()))
+					r.Len(kubeAPIClient.Actions(), 1)
 					requireNodesListed(kubeAPIClient.Actions()[0])
 				})
 			})
@@ -482,7 +482,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					startInformersAndController()
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					requireTLSServerWasNeverStarted()
-					r.Equal(2, len(kubeAPIClient.Actions()))
+					r.Len(kubeAPIClient.Actions(), 2)
 					requireNodesListed(kubeAPIClient.Actions()[0])
 					requireLoadBalancerDeleted(kubeAPIClient.Actions()[1])
 				})
@@ -500,7 +500,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				})
 
 				it("starts the load balancer automatically", func() {
-					r.Equal(2, len(kubeAPIClient.Actions()))
+					r.Len(kubeAPIClient.Actions(), 2)
 					requireNodesListed(kubeAPIClient.Actions()[0])
 					requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
 				})
@@ -520,7 +520,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				})
 
 				it("does not start the load balancer automatically", func() {
-					r.Equal(1, len(kubeAPIClient.Actions()))
+					r.Len(kubeAPIClient.Actions(), 1)
 					requireNodesListed(kubeAPIClient.Actions()[0])
 				})
 			})
@@ -534,7 +534,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			it("only starts the impersonator once and only lists the cluster's nodes once", func() {
 				startInformersAndController()
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
-				r.Equal(2, len(kubeAPIClient.Actions()))
+				r.Len(kubeAPIClient.Actions(), 2)
 				requireNodesListed(kubeAPIClient.Actions()[0])
 				requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
 
@@ -545,7 +545,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 				r.Equal(1, startTLSListenerFuncWasCalled) // wasn't started a second time
 				requireTLSServerIsRunning()               // still running
-				r.Equal(2, len(kubeAPIClient.Actions()))  // no new API calls
+				r.Len(kubeAPIClient.Actions(), 2)         // no new API calls
 			})
 		})
 
@@ -602,7 +602,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 						requireTLSServerWasNeverStarted()
 						requireNodesListed(kubeAPIClient.Actions()[0])
-						r.Equal(1, len(kubeAPIClient.Actions()))
+						r.Len(kubeAPIClient.Actions(), 1)
 					})
 				})
 
@@ -616,7 +616,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 						requireTLSServerIsRunning()
 						requireNodesListed(kubeAPIClient.Actions()[0])
-						r.Equal(1, len(kubeAPIClient.Actions()))
+						r.Len(kubeAPIClient.Actions(), 1)
 					})
 				})
 			})
@@ -632,12 +632,11 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					requireTLSServerWasNeverStarted()
 					requireNodesListed(kubeAPIClient.Actions()[0])
-					r.Equal(1, len(kubeAPIClient.Actions()))
+					r.Len(kubeAPIClient.Actions(), 1)
 				})
 			})
 
 			when("the configuration is enabled mode", func() {
-
 				when("there are control plane nodes", func() {
 					it.Before(func() {
 						addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
@@ -659,7 +658,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					it("does not start the load balancer", func() {
 						startInformersAndController()
 						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
-						r.Equal(1, len(kubeAPIClient.Actions()))
+						r.Len(kubeAPIClient.Actions(), 1)
 						requireNodesListed(kubeAPIClient.Actions()[0])
 					})
 				})
@@ -687,7 +686,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					it("does not start the load balancer", func() {
 						startInformersAndController()
 						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
-						r.Equal(1, len(kubeAPIClient.Actions()))
+						r.Len(kubeAPIClient.Actions(), 1)
 						requireNodesListed(kubeAPIClient.Actions()[0])
 					})
 				})
@@ -715,7 +714,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					it("stops the load balancer", func() {
 						startInformersAndController()
 						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
-						r.Equal(2, len(kubeAPIClient.Actions()))
+						r.Len(kubeAPIClient.Actions(), 2)
 						requireNodesListed(kubeAPIClient.Actions()[0])
 						requireLoadBalancerDeleted(kubeAPIClient.Actions()[1])
 					})
@@ -742,7 +741,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					it("starts the load balancer", func() {
 						startInformersAndController()
 						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
-						r.Equal(2, len(kubeAPIClient.Actions()))
+						r.Len(kubeAPIClient.Actions(), 2)
 						requireNodesListed(kubeAPIClient.Actions()[0])
 						requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
 					})
@@ -760,7 +759,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					requireTLSServerIsRunning()
-					r.Equal(2, len(kubeAPIClient.Actions()))
+					r.Len(kubeAPIClient.Actions(), 2)
 					requireNodesListed(kubeAPIClient.Actions()[0])
 					requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
 
@@ -773,7 +772,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					requireTLSServerIsNoLongerRunning()
-					r.Equal(3, len(kubeAPIClient.Actions()))
+					r.Len(kubeAPIClient.Actions(), 3)
 					requireLoadBalancerDeleted(kubeAPIClient.Actions()[2])
 
 					deleteLoadBalancerServiceFromTracker(generatedLoadBalancerServiceName, kubeInformerClient)
@@ -784,7 +783,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					requireTLSServerIsRunning()
-					r.Equal(4, len(kubeAPIClient.Actions()))
+					r.Len(kubeAPIClient.Actions(), 4)
 					requireLoadBalancerWasCreated(kubeAPIClient.Actions()[3])
 				})
 
@@ -821,14 +820,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
-					r.Equal(1, len(kubeAPIClient.Actions()))
+					r.Len(kubeAPIClient.Actions(), 1)
 					requireNodesListed(kubeAPIClient.Actions()[0])
 
 					updateImpersonatorConfigMapInTracker(configMapResourceName, "mode: enabled", "1")
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "1")
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
-					r.Equal(2, len(kubeAPIClient.Actions()))
+					r.Len(kubeAPIClient.Actions(), 2)
 					requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
 
 					// update manually because the kubeAPIClient isn't connected to the informer in the tests
@@ -842,7 +841,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "2")
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
-					r.Equal(3, len(kubeAPIClient.Actions()))
+					r.Len(kubeAPIClient.Actions(), 3)
 					requireLoadBalancerDeleted(kubeAPIClient.Actions()[2])
 				})
 			})

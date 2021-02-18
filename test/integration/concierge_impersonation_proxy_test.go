@@ -61,7 +61,7 @@ func TestImpersonationProxy(t *testing.T) {
 
 	oldConfigMap, err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Get(ctx, "pinniped-concierge-impersonation-proxy-config", metav1.GetOptions{})
 	if oldConfigMap.Data != nil {
-		adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, "pinniped-concierge-impersonation-proxy-config", metav1.DeleteOptions{})
+		require.NoError(t, adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, "pinniped-concierge-impersonation-proxy-config", metav1.DeleteOptions{}))
 	}
 
 	serviceUnavailableError := fmt.Sprintf(`Get "%s/api/v1/namespaces": Service Unavailable`, proxyServiceURL)

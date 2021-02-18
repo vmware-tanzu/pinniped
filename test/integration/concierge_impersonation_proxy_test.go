@@ -128,8 +128,10 @@ func TestImpersonationProxy(t *testing.T) {
 	}
 
 	// Check that we can't use the impersonation proxy to execute kubectl commands again
-	_, err = impersonationProxyClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-	require.EqualError(t, err, serviceUnavailableError)
+	require.Eventually(t, func() bool {
+		_, err = impersonationProxyClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+		return err.Error() == serviceUnavailableError
+	}, 10*time.Second, 500*time.Millisecond)
 
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
 		// the load balancer should not exist after we disable the impersonation proxy

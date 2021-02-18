@@ -75,7 +75,7 @@ metadata:
 rules:
   - apiGroups: [ "" ]
     resources: [ services ]
-    verbs: [ create, get, list, patch, update, watch ]
+    verbs: [ create, get, list, patch, update, watch, delete ]
   - apiGroups: [ "" ]
     resources: [ secrets ]
     verbs: [ create, get, list, patch, update, watch, delete ]

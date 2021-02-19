@@ -197,8 +197,8 @@ metadata:
 spec:
   version: v1alpha1
   group: #@ pinnipedDevAPIGroupWithPrefix("login.concierge")
-  groupPriorityMinimum: 2500
-  versionPriority: 10
+  groupPriorityMinimum: 9900
+  versionPriority: 15
   #! caBundle: Do not include this key here. Starts out null, will be updated/owned by the golang code.
   service:
     name: #@ defaultResourceNameWithSuffix("api")

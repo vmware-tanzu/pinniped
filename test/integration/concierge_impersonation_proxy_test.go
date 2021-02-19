@@ -123,6 +123,23 @@ func TestImpersonationProxy(t *testing.T) {
 		)
 	}
 
+	t.Run("watching all the verbs", func(t *testing.T) {
+		// Start a watch in a informer.
+		// Create an RBAC rule to allow this user to read/write everything.
+		// t.Cleanup Delete the RBAC rule.
+		// Create a namespace, because it will be easier to deletecollection if we have a namespace.
+		// t.Cleanup Delete the namespace.
+		// Then "create" several Secrets.
+		// "get" one them.
+		// "list" them all.
+		// "update" one of them.
+		// "patch" one of them.
+		// "delete" one of them.
+		// "deletecollection" all of them.
+		// Make sure the watch sees all of those actions.
+		// Close the informer.
+	})
+
 	// Update configuration to force the proxy to disabled mode
 	configMap := configMapForConfig(t, impersonator.Config{Mode: impersonator.ModeDisabled})
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
@@ -135,8 +152,10 @@ func TestImpersonationProxy(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Check that we can't use the impersonation proxy to execute kubectl commands again
+	// Check that the impersonation proxy has shut down
 	require.Eventually(t, func() bool {
+		// It's okay if this returns RBAC errors because this user has no role bindings.
+		// What we want to see is that the proxy eventually shuts down entirely.
 		_, err = impersonationProxyClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 		return err.Error() == serviceUnavailableError
 	}, 10*time.Second, 500*time.Millisecond)

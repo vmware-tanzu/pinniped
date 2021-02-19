@@ -112,7 +112,7 @@ echo "generating API-related code for our public API groups..."
         deepcopy \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "supervisor/config:v1alpha1 supervisor/idp:v1alpha1 concierge/config:v1alpha1 concierge/authentication:v1alpha1 concierge/login:v1alpha1" \
+        "supervisor/config:v1alpha1 supervisor/idp:v1alpha1 concierge/config:v1alpha1 concierge/authentication:v1alpha1 concierge/login:v1alpha1 concierge/identity:v1alpha1" \
         --go-header-file "${ROOT}/hack/boilerplate.go.txt" 2>&1 | sed "s|^|gen-api > |"
 )
 
@@ -124,7 +124,7 @@ echo "generating API-related code for our internal API groups..."
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/concierge" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "concierge/login:v1alpha1" \
+        "concierge/login:v1alpha1 concierge/identity:v1alpha1" \
         --go-header-file "${ROOT}/hack/boilerplate.go.txt"  2>&1 | sed "s|^|gen-int-api > |"
 )
 
@@ -140,7 +140,7 @@ echo "generating client code for our public API groups..."
         client,lister,informer \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/concierge" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
-        "concierge/config:v1alpha1 concierge/authentication:v1alpha1 concierge/login:v1alpha1" \
+        "concierge/config:v1alpha1 concierge/authentication:v1alpha1 concierge/login:v1alpha1 concierge/identity:v1alpha1" \
         --go-header-file "${ROOT}/hack/boilerplate.go.txt"  2>&1 | sed "s|^|gen-client > |"
 )
   (cd client &&

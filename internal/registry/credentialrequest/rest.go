@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/authentication/user"
+	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/utils/trace"
 
@@ -155,6 +156,11 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, nil)}
 			return nil, apierrors.NewInvalid(loginapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
 		}
+	}
+
+	if namespace := genericapirequest.NamespaceValue(ctx); len(namespace) != 0 {
+		traceValidationFailure(t, "namespace is not allowed")
+		return nil, apierrors.NewBadRequest(fmt.Sprintf("namespace is not allowed on TokenCredentialRequest: %v", namespace))
 	}
 
 	// let dynamic admission webhooks have a chance to validate (but not mutate) as well

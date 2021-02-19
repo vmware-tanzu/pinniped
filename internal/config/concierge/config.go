@@ -79,7 +79,7 @@ func maybeSetAPIDefaults(apiConfig *APIConfigSpec) {
 
 func maybeSetAPIGroupSuffixDefault(apiGroupSuffix **string) {
 	if *apiGroupSuffix == nil {
-		*apiGroupSuffix = stringPtr("pinniped.dev")
+		*apiGroupSuffix = stringPtr(groupsuffix.PinnipedDefaultSuffix)
 	}
 }
 

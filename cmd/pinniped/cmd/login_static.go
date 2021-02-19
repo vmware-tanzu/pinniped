@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
+	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/pkg/conciergeclient"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
@@ -67,7 +68,7 @@ func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeAuthenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name")
 	cmd.Flags().StringVar(&flags.conciergeEndpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")
 	cmd.Flags().StringVar(&flags.conciergeCABundle, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the concierge")
-	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", "pinniped.dev", "Concierge API group suffix")
+	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runStaticLogin(cmd.OutOrStdout(), deps, flags) }
 
 	mustMarkDeprecated(cmd, "concierge-namespace", "not needed anymore")

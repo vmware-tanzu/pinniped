@@ -133,18 +133,22 @@ roleRef:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: #@ defaultResourceNameWithSuffix("create-token-credential-requests")
+  name: #@ defaultResourceNameWithSuffix("pre-authn-apis")
   labels: #@ labels()
 rules:
   - apiGroups:
       - #@ pinnipedDevAPIGroupWithPrefix("login.concierge")
     resources: [ tokencredentialrequests ]
-    verbs: [ create ]
+    verbs: [ create, list ]
+  - apiGroups:
+      - #@ pinnipedDevAPIGroupWithPrefix("identity.concierge")
+    resources: [ whoamirequests ]
+    verbs: [ create, list ]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: #@ defaultResourceNameWithSuffix("create-token-credential-requests")
+  name: #@ defaultResourceNameWithSuffix("pre-authn-apis")
   labels: #@ labels()
 subjects:
   - kind: Group
@@ -155,7 +159,7 @@ subjects:
     apiGroup: rbac.authorization.k8s.io
 roleRef:
   kind: ClusterRole
-  name: #@ defaultResourceNameWithSuffix("create-token-credential-requests")
+  name: #@ defaultResourceNameWithSuffix("pre-authn-apis")
   apiGroup: rbac.authorization.k8s.io
 
 #! Give permissions for subjectaccessreviews, tokenreview that is needed by aggregated api servers

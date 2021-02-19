@@ -204,3 +204,19 @@ spec:
     name: #@ defaultResourceNameWithSuffix("api")
     namespace: #@ namespace()
     port: 443
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: #@ pinnipedDevAPIGroupWithPrefix("v1alpha1.identity.concierge")
+  labels: #@ labels()
+spec:
+  version: v1alpha1
+  group: #@ pinnipedDevAPIGroupWithPrefix("identity.concierge")
+  groupPriorityMinimum: 9900
+  versionPriority: 15
+  #! caBundle: Do not include this key here. Starts out null, will be updated/owned by the golang code.
+  service:
+    name: #@ defaultResourceNameWithSuffix("api")
+    namespace: #@ namespace()
+    port: 443

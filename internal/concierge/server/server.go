@@ -19,6 +19,8 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 
+	identityapi "go.pinniped.dev/generated/latest/apis/concierge/identity"
+	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
@@ -174,7 +176,7 @@ func getAggregatedAPIServerConfig(
 	startControllersPostStartHook func(context.Context),
 	apiGroupSuffix string,
 ) (*apiserver.Config, error) {
-	scheme, groupVersion := getAggregatedAPIServerScheme(apiGroupSuffix)
+	scheme, loginConciergeGroupVersion, identityConciergeGroupVersion := getAggregatedAPIServerScheme(apiGroupSuffix)
 	codecs := serializer.NewCodecFactory(scheme)
 
 	// this is unused for now but it is a safe value that we could use in the future
@@ -182,7 +184,7 @@ func getAggregatedAPIServerConfig(
 
 	recommendedOptions := genericoptions.NewRecommendedOptions(
 		defaultEtcdPathPrefix,
-		codecs.LegacyCodec(groupVersion),
+		codecs.LegacyCodec(loginConciergeGroupVersion, identityConciergeGroupVersion),
 	)
 	recommendedOptions.Etcd = nil // turn off etcd storage because we don't need it yet
 	recommendedOptions.SecureServing.ServerCert.GeneratedCert = dynamicCertProvider
@@ -210,13 +212,14 @@ func getAggregatedAPIServerConfig(
 			StartControllersPostStartHook: startControllersPostStartHook,
 			Scheme:                        scheme,
 			NegotiatedSerializer:          codecs,
-			GroupVersion:                  groupVersion,
+			LoginConciergeGroupVersion:    loginConciergeGroupVersion,
+			IdentityConciergeGroupVersion: identityConciergeGroupVersion,
 		},
 	}
 	return apiServerConfig, nil
 }
 
-func getAggregatedAPIServerScheme(apiGroupSuffix string) (*runtime.Scheme, schema.GroupVersion) {
+func getAggregatedAPIServerScheme(apiGroupSuffix string) (_ *runtime.Scheme, login, identity schema.GroupVersion) {
 	// standard set up of the server side scheme
 	scheme := runtime.NewScheme()
 
@@ -224,48 +227,30 @@ func getAggregatedAPIServerScheme(apiGroupSuffix string) (*runtime.Scheme, schem
 	metav1.AddToGroupVersion(scheme, metav1.Unversioned)
 
 	// nothing fancy is required if using the standard group suffix
-	if apiGroupSuffix == "pinniped.dev" {
-		utilruntime.Must(loginv1alpha1.AddToScheme(scheme))
-		utilruntime.Must(loginapi.AddToScheme(scheme))
-		return scheme, loginv1alpha1.SchemeGroupVersion
+	if apiGroupSuffix == groupsuffix.PinnipedDefaultSuffix {
+		schemeBuilder := runtime.NewSchemeBuilder(
+			loginv1alpha1.AddToScheme,
+			loginapi.AddToScheme,
+			identityv1alpha1.AddToScheme,
+			identityapi.AddToScheme,
+		)
+		utilruntime.Must(schemeBuilder.AddToScheme(scheme))
+		return scheme, loginv1alpha1.SchemeGroupVersion, identityv1alpha1.SchemeGroupVersion
 	}
 
-	loginConciergeAPIGroup, ok := groupsuffix.Replace(loginv1alpha1.GroupName, apiGroupSuffix)
-	if !ok {
-		panic(fmt.Errorf("cannot make api group from %s/%s", loginv1alpha1.GroupName, apiGroupSuffix)) // static input, impossible case
-	}
+	loginConciergeGroupData, identityConciergeGroupData := groupsuffix.ConciergeAggregatedGroups(apiGroupSuffix)
 
-	// we need a temporary place to register our types to avoid double registering them
-	tmpScheme := runtime.NewScheme()
-	utilruntime.Must(loginv1alpha1.AddToScheme(tmpScheme))
-	utilruntime.Must(loginapi.AddToScheme(tmpScheme))
+	addToSchemeAtNewGroup(scheme, loginv1alpha1.GroupName, loginConciergeGroupData.Group, loginv1alpha1.AddToScheme, loginapi.AddToScheme)
+	addToSchemeAtNewGroup(scheme, identityv1alpha1.GroupName, identityConciergeGroupData.Group, identityv1alpha1.AddToScheme, identityapi.AddToScheme)
 
-	for gvk := range tmpScheme.AllKnownTypes() {
-		if gvk.GroupVersion() == metav1.Unversioned {
-			continue // metav1.AddToGroupVersion registers types outside of our aggregated API group that we need to ignore
-		}
-
-		if gvk.Group != loginv1alpha1.GroupName {
-			panic("tmp scheme has types not in the aggregated API group: " + gvk.Group) // programmer error
-		}
-
-		obj, err := tmpScheme.New(gvk)
-		if err != nil {
-			panic(err) // programmer error, scheme internal code is broken
-		}
-		newGVK := schema.GroupVersionKind{
-			Group:   loginConciergeAPIGroup,
-			Version: gvk.Version,
-			Kind:    gvk.Kind,
-		}
-
-		// register the existing type but with the new group in the correct scheme
-		scheme.AddKnownTypeWithName(newGVK, obj)
-	}
-
-	// manually register conversions and defaulting into the correct scheme since we cannot directly call loginv1alpha1.AddToScheme
-	utilruntime.Must(loginv1alpha1.RegisterConversions(scheme))
-	utilruntime.Must(loginv1alpha1.RegisterDefaults(scheme))
+	// manually register conversions and defaulting into the correct scheme since we cannot directly call AddToScheme
+	schemeBuilder := runtime.NewSchemeBuilder(
+		loginv1alpha1.RegisterConversions,
+		loginv1alpha1.RegisterDefaults,
+		identityv1alpha1.RegisterConversions,
+		identityv1alpha1.RegisterDefaults,
+	)
+	utilruntime.Must(schemeBuilder.AddToScheme(scheme))
 
 	// we do not want to return errors from the scheme and instead would prefer to defer
 	// to the REST storage layer for consistency.  The simplest way to do this is to force
@@ -306,5 +291,35 @@ func getAggregatedAPIServerScheme(apiGroupSuffix string) (*runtime.Scheme, schem
 		credentialRequest.Spec.Authenticator.APIGroup = &restoredGroup
 	})
 
-	return scheme, schema.GroupVersion{Group: loginConciergeAPIGroup, Version: loginv1alpha1.SchemeGroupVersion.Version}
+	return scheme, schema.GroupVersion(loginConciergeGroupData), schema.GroupVersion(identityConciergeGroupData)
+}
+
+func addToSchemeAtNewGroup(scheme *runtime.Scheme, oldGroup, newGroup string, funcs ...func(*runtime.Scheme) error) {
+	// we need a temporary place to register our types to avoid double registering them
+	tmpScheme := runtime.NewScheme()
+	schemeBuilder := runtime.NewSchemeBuilder(funcs...)
+	utilruntime.Must(schemeBuilder.AddToScheme(tmpScheme))
+
+	for gvk := range tmpScheme.AllKnownTypes() {
+		if gvk.GroupVersion() == metav1.Unversioned {
+			continue // metav1.AddToGroupVersion registers types outside of our aggregated API group that we need to ignore
+		}
+
+		if gvk.Group != oldGroup {
+			panic(fmt.Errorf("tmp scheme has type not in the old aggregated API group %s: %s", oldGroup, gvk)) // programmer error
+		}
+
+		obj, err := tmpScheme.New(gvk)
+		if err != nil {
+			panic(err) // programmer error, scheme internal code is broken
+		}
+		newGVK := schema.GroupVersionKind{
+			Group:   newGroup,
+			Version: gvk.Version,
+			Kind:    gvk.Kind,
+		}
+
+		// register the existing type but with the new group in the correct scheme
+		scheme.AddKnownTypeWithName(newGVK, obj)
+	}
 }

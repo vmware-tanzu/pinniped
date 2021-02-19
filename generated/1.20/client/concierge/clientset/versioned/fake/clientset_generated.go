@@ -11,6 +11,8 @@ import (
 	fakeauthenticationv1alpha1 "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned/typed/authentication/v1alpha1/fake"
 	configv1alpha1 "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned/typed/config/v1alpha1"
 	fakeconfigv1alpha1 "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned/typed/config/v1alpha1/fake"
+	identityv1alpha1 "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned/typed/identity/v1alpha1"
+	fakeidentityv1alpha1 "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned/typed/identity/v1alpha1/fake"
 	loginv1alpha1 "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned/typed/login/v1alpha1"
 	fakeloginv1alpha1 "go.pinniped.dev/generated/1.20/client/concierge/clientset/versioned/typed/login/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -75,6 +77,11 @@ func (c *Clientset) AuthenticationV1alpha1() authenticationv1alpha1.Authenticati
 // ConfigV1alpha1 retrieves the ConfigV1alpha1Client
 func (c *Clientset) ConfigV1alpha1() configv1alpha1.ConfigV1alpha1Interface {
 	return &fakeconfigv1alpha1.FakeConfigV1alpha1{Fake: &c.Fake}
+}
+
+// IdentityV1alpha1 retrieves the IdentityV1alpha1Client
+func (c *Clientset) IdentityV1alpha1() identityv1alpha1.IdentityV1alpha1Interface {
+	return &fakeidentityv1alpha1.FakeIdentityV1alpha1{Fake: &c.Fake}
 }
 
 // LoginV1alpha1 retrieves the LoginV1alpha1Client

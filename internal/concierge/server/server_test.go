@@ -20,7 +20,6 @@ import (
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
-	"go.pinniped.dev/internal/groupsuffix"
 )
 
 const knownGoodUsage = `
@@ -126,9 +125,10 @@ func Test_getAggregatedAPIServerScheme(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		apiGroupSuffix string
-		want           map[schema.GroupVersionKind]reflect.Type
+		name             string
+		apiGroupSuffix   string
+		want             map[schema.GroupVersionKind]reflect.Type
+		wantGroupVersion schema.GroupVersion
 	}{
 		{
 			name:           "regular api group",
@@ -171,6 +171,7 @@ func Test_getAggregatedAPIServerScheme(t *testing.T) {
 				metav1.Unversioned.WithKind("UpdateOptions"):   reflect.TypeOf(&metav1.UpdateOptions{}).Elem(),
 				metav1.Unversioned.WithKind("WatchEvent"):      reflect.TypeOf(&metav1.WatchEvent{}).Elem(),
 			},
+			wantGroupVersion: regularGV,
 		},
 		{
 			name:           "other api group",
@@ -213,16 +214,15 @@ func Test_getAggregatedAPIServerScheme(t *testing.T) {
 				metav1.Unversioned.WithKind("UpdateOptions"):   reflect.TypeOf(&metav1.UpdateOptions{}).Elem(),
 				metav1.Unversioned.WithKind("WatchEvent"):      reflect.TypeOf(&metav1.WatchEvent{}).Elem(),
 			},
+			wantGroupVersion: otherGV,
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			loginConciergeAPIGroup, ok := groupsuffix.Replace("login.concierge.pinniped.dev", tt.apiGroupSuffix)
-			require.True(t, ok)
-
-			scheme := getAggregatedAPIServerScheme(loginConciergeAPIGroup, tt.apiGroupSuffix)
+			scheme, gv := getAggregatedAPIServerScheme(tt.apiGroupSuffix)
 			require.Equal(t, tt.want, scheme.AllKnownTypes())
+			require.Equal(t, tt.wantGroupVersion, gv)
 
 			// make a credential request like a client would send
 			authenticationConciergeAPIGroup := "authentication.concierge." + tt.apiGroupSuffix

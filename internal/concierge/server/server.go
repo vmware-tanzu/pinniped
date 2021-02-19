@@ -174,19 +174,11 @@ func getAggregatedAPIServerConfig(
 	startControllersPostStartHook func(context.Context),
 	apiGroupSuffix string,
 ) (*apiserver.Config, error) {
-	loginConciergeAPIGroup, ok := groupsuffix.Replace(loginv1alpha1.GroupName, apiGroupSuffix)
-	if !ok {
-		return nil, fmt.Errorf("cannot make api group from %s/%s", loginv1alpha1.GroupName, apiGroupSuffix)
-	}
-
-	scheme := getAggregatedAPIServerScheme(loginConciergeAPIGroup, apiGroupSuffix)
+	scheme, groupVersion := getAggregatedAPIServerScheme(apiGroupSuffix)
 	codecs := serializer.NewCodecFactory(scheme)
 
-	defaultEtcdPathPrefix := fmt.Sprintf("/registry/%s", loginConciergeAPIGroup)
-	groupVersion := schema.GroupVersion{
-		Group:   loginConciergeAPIGroup,
-		Version: loginv1alpha1.SchemeGroupVersion.Version,
-	}
+	// this is unused for now but it is a safe value that we could use in the future
+	defaultEtcdPathPrefix := fmt.Sprintf("/pinniped-concierge-registry/%s", apiGroupSuffix)
 
 	recommendedOptions := genericoptions.NewRecommendedOptions(
 		defaultEtcdPathPrefix,
@@ -224,18 +216,23 @@ func getAggregatedAPIServerConfig(
 	return apiServerConfig, nil
 }
 
-func getAggregatedAPIServerScheme(loginConciergeAPIGroup, apiGroupSuffix string) *runtime.Scheme {
+func getAggregatedAPIServerScheme(apiGroupSuffix string) (*runtime.Scheme, schema.GroupVersion) {
 	// standard set up of the server side scheme
 	scheme := runtime.NewScheme()
 
 	// add the options to empty v1
 	metav1.AddToGroupVersion(scheme, metav1.Unversioned)
 
-	// nothing fancy is required if using the standard group
-	if loginConciergeAPIGroup == loginv1alpha1.GroupName {
+	// nothing fancy is required if using the standard group suffix
+	if apiGroupSuffix == "pinniped.dev" {
 		utilruntime.Must(loginv1alpha1.AddToScheme(scheme))
 		utilruntime.Must(loginapi.AddToScheme(scheme))
-		return scheme
+		return scheme, loginv1alpha1.SchemeGroupVersion
+	}
+
+	loginConciergeAPIGroup, ok := groupsuffix.Replace(loginv1alpha1.GroupName, apiGroupSuffix)
+	if !ok {
+		panic(fmt.Errorf("cannot make api group from %s/%s", loginv1alpha1.GroupName, apiGroupSuffix)) // static input, impossible case
 	}
 
 	// we need a temporary place to register our types to avoid double registering them
@@ -309,5 +306,5 @@ func getAggregatedAPIServerScheme(loginConciergeAPIGroup, apiGroupSuffix string)
 		credentialRequest.Spec.Authenticator.APIGroup = &restoredGroup
 	})
 
-	return scheme
+	return scheme, schema.GroupVersion{Group: loginConciergeAPIGroup, Version: loginv1alpha1.SchemeGroupVersion.Version}
 }

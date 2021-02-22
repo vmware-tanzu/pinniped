@@ -87,7 +87,7 @@ The default behavior of Pinniped remains unchanged, and we made sure to implemen
 
 ### Advantages and Disadvantages
 
-With v0.5.0, each instance of Pinniped to be upgraded and operated 100% independently, with no coordination or shared state needed.
+With v0.5.0, each instance of Pinniped can be upgraded and operated 100% independently, with no coordination or shared state needed.
 One remaining constraint is that each instance should be deployed into its own namespace.
 This ensures that any other standard Kubernetes objects such as Secrets and ConfigMaps referenced by the configuration do not overlap.
 

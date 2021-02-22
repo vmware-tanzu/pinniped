@@ -1,0 +1,15 @@
+{{- $subsection := .Get 0 -}}
+<ul>
+    {{- range .Site.Menus.docs -}}
+        {{- range .Children }}
+            {{- if eq $subsection .Parent -}}
+                <li>
+                    <a href="{{ .URL }}">{{- .Page.Title -}}</a>
+                    {{- with .Page.Description }}
+                    <p>{{ . | markdownify }}</p>
+                    {{- end -}}
+                </li>
+            {{- end -}}
+        {{- end -}}
+    {{- end }}
+</ul>

@@ -273,9 +273,8 @@
                 list-style-type: unset;
                 display: list-item;
                 margin-bottom: 10px;
-                font-size: 14px;
+                font-size: 16px;
                 color: $darkgrey;
-                line-height: 1.6em;
                 list-style-image: url(/img/arrow.svg);
             }
         }
@@ -437,7 +436,7 @@
         width: 75%;
         float: right;
         a {
-            font-size: 14px;
+            font-size: 16px;
         }
         ul {
             list-style-type: disc;
@@ -491,10 +490,36 @@
                 border: 15px solid #EFEFEF;
                 padding: 15px;
                 margin-bottom: 30px;
+                font-size: 14px;
             }
         }
         img {
             max-width: 100%;
+        }
+        strong {
+            font-family: $metropolis-medium;
+        }
+    }
+    .danger {
+        .danger-icon {
+            float: left;
+            padding: 40px;
+            width: 24px;
+            height: 24px;
+        }
+        padding: 10px;
+        font-family: $metropolis-light-italic;
+    }
+
+    .button {
+        a {
+            font-size: 14px;
+        }
+    }
+
+    table {
+        td {
+            padding: 10px 30px;
         }
     }
 }

@@ -97,6 +97,13 @@ button {
     &.tertiary {
         border: 1px solid $blue;
     }
+    img.button-icon {
+        margin-left: 5px;
+        margin-right: 5px;
+        margin-bottom: -8px;
+        width: 24px;
+        height: 24px;
+    }
 }
 .buttons {
     margin-top: 40px;

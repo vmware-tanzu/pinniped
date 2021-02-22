@@ -1,14 +1,13 @@
 ---
-title: "Pinniped Concierge and Supervisor Demo"
+title: Learn to use the Pinniped Supervisor alongside the Concierge
+description: See how the Pinniped Supervisor streamlines login to multiple Kubernetes clusters.
 cascade:
   layout: docs
 menu:
   docs:
     name: Concierge with Supervisor
-    parent: demo
+    parent: tutorials
 ---
-
-# Trying Pinniped Supervisor and Concierge
 
 ## Prerequisites
 
@@ -17,18 +16,18 @@ menu:
    Don't have a cluster handy? Consider using [kind](https://kind.sigs.k8s.io/) on your local machine.
    See below for an example of using kind.
 
-1. A Kubernetes cluster of a type supported by Pinniped Supervisor (this can be the same cluster as the above, or different).
+1. A Kubernetes cluster of a type supported by Pinniped Supervisor (this can be the same cluster as the first, or different).
 
-1. A kubeconfig that has admin-like privileges on each cluster.
+1. A kubeconfig that has administrator-like privileges on each cluster.
 
 1. An external OIDC identity provider to use as the source of identity for Pinniped.
 
 ## Overview
 
-Installing and trying Pinniped on any cluster will consist of the following general steps. See the next section below
+Installing and trying Pinniped on any cluster consists of the following general steps. See the next section below
 for a more specific example, including the commands to use for that case.
 
-1. Install the Pinniped Supervisor. See [deploy/supervisor/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/supervisor/README.md).
+1. [Install the Supervisor]({{< ref "../howto/install-supervisor" >}}).
 1. Create a
    [`FederationDomain`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-config-v1alpha1-federationdomain)
    via the installed Pinniped Supervisor.
@@ -39,31 +38,31 @@ for a more specific example, including the commands to use for that case.
 1. Create a
    [`JWTAuthenticator`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-jwtauthenticator)
    via the installed Pinniped Concierge.
-1. Download the Pinniped CLI from [Pinniped's github Releases page](https://github.com/vmware-tanzu/pinniped/releases/latest).
-1. Generate a kubeconfig using the Pinniped CLI. Run `pinniped get kubeconfig --help` for more information.
-1. Run `kubectl` commands using the generated kubeconfig. The Pinniped Supervisor and Concierge will automatically be used for authentication during those commands.
+1. [Install the Pinniped command-line tool]({{< ref "../howto/install-cli" >}}).
+1. Generate a kubeconfig using the Pinniped command-line tool. Run `pinniped get kubeconfig --help` for more information.
+1. Run `kubectl` commands using the generated kubeconfig. The Pinniped Supervisor and Concierge are automatically used for authentication during those commands.
 
-## Example of Deploying on Multiple kind Clusters
+## Example of deploying on multiple kind clusters
 
 [kind](https://kind.sigs.k8s.io) is a tool for creating and managing Kubernetes clusters on your local machine
-which uses Docker containers as the cluster's "nodes". This is a convenient way to try out Pinniped on local
+which uses Docker containers as the cluster's nodes. This is a convenient way to try out Pinniped on local
 non-production clusters.
 
-The following steps will deploy the latest release of Pinniped on kind. It will deploy the Pinniped
+The following steps deploy the latest release of Pinniped on kind. They deploy the Pinniped
 Supervisor on one cluster, and the Pinniped Concierge on another cluster. A multi-cluster deployment
-strategy is typical for Pinniped. The Pinniped Concierge will use a
+strategy is typical for Pinniped. The Pinniped Concierge uses a
 [`JWTAuthenticator`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-jwtauthenticator)
 to authenticate federated identities from the Supervisor.
 
 1. Install the tools required for the following steps.
 
-   -  [Install kind](https://kind.sigs.k8s.io/docs/user/quick-start/), if not already installed. e.g. `brew install kind` on MacOS.
+   - [Install kind](https://kind.sigs.k8s.io/docs/user/quick-start/), if not already installed. For example, `brew install kind` on macOS.
 
-   - kind depends on Docker. If not already installed, [install Docker](https://docs.docker.com/get-docker/), e.g. `brew cask install docker` on MacOS.
+   - kind depends on Docker. If not already installed, [install Docker](https://docs.docker.com/get-docker/), for example `brew cask install docker` on macOS.
 
    - This demo requires `kubectl`, which comes with Docker, or can be [installed separately](https://kubernetes.io/docs/tasks/tools/install-kubectl/).
 
-   - This demo requires `openssl`, which is installed on MacOS by default, or can be [installed separately](https://www.openssl.org/).
+   - This demo requires `openssl`, which is installed on macOS by default, or can be [installed separately](https://www.openssl.org/).
 
 1. Create a new Kubernetes cluster for the Pinniped Supervisor using `kind create cluster --name pinniped-supervisor`.
 
@@ -72,10 +71,10 @@ to authenticate federated identities from the Supervisor.
 1. Deploy the Pinniped Supervisor with a valid serving certificate and network path. See
    [deploy/supervisor/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/supervisor/README.md).
 
-   For purposes of this demo, the following issuer will be used. This issuer is specific to DNS and
-   TLS infrastructure set up for this demo.
+   For purposes of this demo, the following issuer is used. This issuer is specific to DNS and
+   TLS infrastructure set up for this demo:
 
-   ```bash
+   ```sh
    issuer=https://my-supervisor.demo.pinniped.dev
    ```
 
@@ -92,7 +91,7 @@ to authenticate federated identities from the Supervisor.
    [`FederationDomain`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-supervisor-config-v1alpha1-federationdomain)
    object to configure the Pinniped Supervisor to issue federated identities.
 
-   ```bash
+   ```sh
    cat <<EOF | kubectl create --context kind-pinniped-supervisor --namespace pinniped-supervisor -f -
    apiVersion: config.supervisor.pinniped.dev/v1alpha1
    kind: FederationDomain
@@ -108,7 +107,7 @@ to authenticate federated identities from the Supervisor.
 1. Create a `Secret` with the external OIDC identity provider OAuth 2.0 client credentials named
    `my-oidc-identity-provider-client` in the pinniped-supervisor namespace.
 
-   ```bash
+   ```sh
    kubectl create secret generic my-oidc-identity-provider-client \
      --context kind-pinniped-supervisor \
      --namespace pinniped-supervisor \
@@ -125,7 +124,7 @@ to authenticate federated identities from the Supervisor.
    Replace the `issuer` with your external identity provider's issuer and
    adjust any other configuration on the spec.
 
-   ```bash
+   ```sh
    cat <<EOF | kubectl create --context kind-pinniped-supervisor --namespace pinniped-supervisor -f -
    apiVersion: idp.supervisor.pinniped.dev/v1alpha1
    kind: OIDCIdentityProvider
@@ -144,21 +143,19 @@ to authenticate federated identities from the Supervisor.
 
 1. Deploy the Pinniped Concierge.
 
-   ```bash
+   ```sh
    kubectl apply \
      --context kind-pinniped-concierge \
      -f https://get.pinniped.dev/latest/install-pinniped-concierge.yaml
    ```
 
    The `install-pinniped-concierge.yaml` file includes the default deployment options.
-   If you would prefer to customize the available options, please see [deploy/concierge/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/concierge/README.md)
+   If you would prefer to customize the available options, please see the [Concierge installation guide]({{< ref "../howto/install-concierge" >}})
    for instructions on how to deploy using `ytt`.
-
-   If you prefer to install a specific version, replace `latest` in the above URL with the version number such as `v0.4.1`.
 
 1. Generate a random audience value for this cluster.
 
-   ```bash
+   ```sh
    audience="$(openssl rand -hex 8)"
    ```
 
@@ -166,7 +163,7 @@ to authenticate federated identities from the Supervisor.
    [`JWTAuthenticator`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-go-pinniped-dev-generated-1-19-apis-concierge-authentication-v1alpha1-jwtauthenticator)
    object to configure the Pinniped Concierge to authenticate using the Pinniped Supervisor.
 
-    ```bash
+    ```sh
     cat <<EOF | kubectl create --context kind-pinniped-concierge -f -
     apiVersion: authentication.concierge.pinniped.dev/v1alpha1
     kind: JWTAuthenticator
@@ -179,30 +176,28 @@ to authenticate federated identities from the Supervisor.
         certificateAuthorityData: $(cat /tmp/pinniped-supervisor-ca-bundle-base64-encoded.pem)
     EOF
     ```
-1. Download the latest version of the Pinniped CLI binary for your platform
-   from Pinniped's [latest release](https://github.com/vmware-tanzu/pinniped/releases/latest).
 
-1. Move the Pinniped CLI binary to your preferred filename and directory. Add the executable bit,
-   e.g. `chmod +x /usr/local/bin/pinniped`.
+1. Download the latest version of the Pinniped command-line tool for your platform.
+   On macOS or Linux, you can do this using Homebrew:
+
+   ```sh
+   brew install vmware-tanzu/pinniped/pinniped-cli
+   ```
+
+   On other platforms, see the [command-line installation guide]({{< ref "../howto/install-cli" >}}) for more details.
 
 1. Generate a kubeconfig for the current cluster.
-   ```bash
+
+   ```sh
    pinniped get kubeconfig \
      --kubeconfig-context kind-pinniped-concierge \
      > /tmp/pinniped-kubeconfig
    ```
 
-   If you are using MacOS, you may get an error dialog that says
-   `“pinniped” cannot be opened because the developer cannot be verified`. Cancel this dialog, open System Preferences,
-   click on Security & Privacy, and click the Allow Anyway button next to the Pinniped message.
-   Run the above command again and another dialog will appear saying
-   `macOS cannot verify the developer of “pinniped”. Are you sure you want to open it?`.
-   Click Open to allow the command to proceed.
+1. Try using the generated kubeconfig to issue arbitrary `kubectl` commands. The `pinniped` command-line tool
+   opens a browser page that can be used to login to the external OIDC identity provider configured earlier.
 
-1. Try using the generated kubeconfig to issue arbitrary `kubectl` commands. The `pinniped` CLI will
-   open a browser page that can be used to login to the external OIDC identity provider configured earlier.
-
-   ```bash
+   ```sh
    kubectl --kubeconfig /tmp/pinniped-kubeconfig get pods -n pinniped-concierge
    ```
 
@@ -213,30 +208,28 @@ to authenticate federated identities from the Supervisor.
    to the upstream OIDC identity provider. However, this does prove that you are authenticated and
    acting as the `pinny` user.
 
-1. As the admin user, create RBAC rules for the test user to give them permissions to perform actions on the cluster.
+1. As the administrator user, create RBAC rules for the test user to give them permissions to perform actions on the cluster.
    For example, grant the test user permission to view all cluster resources.
 
-   ```bash
+   ```sh
    kubectl --context kind-pinniped-concierge create clusterrolebinding pinny-can-read --clusterrole view --user pinny
    ```
 
 1. Use the generated kubeconfig to issue arbitrary `kubectl` commands as the `pinny` user.
 
-   ```bash
+   ```sh
    kubectl --kubeconfig /tmp/pinniped-kubeconfig get pods -n pinniped-concierge
    ```
 
    The user has permission to list pods, so the command succeeds this time.
-   Pinniped has provided authentication into the cluster for your `kubectl` command! 🎉
+   Pinniped has provided authentication into the cluster for your `kubectl` command. 🎉
 
 1. Carry on issuing as many `kubectl` commands as you'd like as the `pinny` user.
-   Each invocation will use Pinniped for authentication.
+   Each invocation uses Pinniped for authentication.
    You may find it convenient to set the `KUBECONFIG` environment variable rather than passing `--kubeconfig` to each invocation.
 
-   ```bash
+   ```sh
    export KUBECONFIG=/tmp/pinniped-kubeconfig
    kubectl get namespaces
    kubectl get pods -A
    ```
-
-1. Profit! 💰

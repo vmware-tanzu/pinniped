@@ -294,7 +294,7 @@ func execCredentialForImpersonationProxy(
 	if err != nil {
 		return nil, fmt.Errorf("Error creating TokenCredentialRequest for impersonation proxy: %w", err)
 	}
-	encodedToken := base64.RawURLEncoding.EncodeToString(reqJSON)
+	encodedToken := base64.StdEncoding.EncodeToString(reqJSON)
 	cred := &clientauthv1beta1.ExecCredential{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ExecCredential",

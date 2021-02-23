@@ -23,6 +23,7 @@ import (
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/stretchr/testify/require"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
@@ -135,6 +136,12 @@ func TestE2EFullIntegration(t *testing.T) {
 		rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.SupervisorTestUpstream.Username},
 		rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
 	)
+	library.WaitForUserToHaveAccess(t, env.SupervisorTestUpstream.Username, []string{}, &authorizationv1.ResourceAttributes{
+		Verb:     "get",
+		Group:    "",
+		Version:  "v1",
+		Resource: "namespaces",
+	})
 
 	// Use a specific session cache for this test.
 	sessionCachePath := tempDir + "/sessions.yaml"

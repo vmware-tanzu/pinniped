@@ -11,6 +11,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,6 +35,7 @@ var allowedHeaders = []string{
 	"User-Agent",
 	"Connection",
 	"Upgrade",
+	"Content-Type",
 }
 
 type proxy struct {
@@ -68,7 +70,7 @@ func newInternal(cache *authncache.Cache, jsonDecoder runtime.Decoder, log logr.
 	if err != nil {
 		return nil, fmt.Errorf("could not get in-cluster transport config: %w", err)
 	}
-	kubeTransportConfig.TLS.NextProtos = []string{"http/1.1"}
+	kubeTransportConfig.TLS.NextProtos = []string{"http/1.1"} // TODO huh?
 
 	kubeRoundTripper, err := transport.New(kubeTransportConfig)
 	if err != nil {
@@ -77,6 +79,7 @@ func newInternal(cache *authncache.Cache, jsonDecoder runtime.Decoder, log logr.
 
 	reverseProxy := httputil.NewSingleHostReverseProxy(serverURL)
 	reverseProxy.Transport = kubeRoundTripper
+	reverseProxy.FlushInterval = 200 * time.Millisecond // the "watch" verb will not work without this line
 
 	return &proxy{
 		cache:       cache,
@@ -218,7 +221,7 @@ func getProxyHeaders(userInfo user.Info, requestHeaders http.Header) http.Header
 }
 
 func extractToken(token string, jsonDecoder runtime.Decoder) (*login.TokenCredentialRequest, error) {
-	tokenCredentialRequestJSON, err := base64.RawURLEncoding.DecodeString(token)
+	tokenCredentialRequestJSON, err := base64.StdEncoding.DecodeString(token)
 	if err != nil {
 		return nil, fmt.Errorf("invalid base64 in encoded bearer token: %w", err)
 	}

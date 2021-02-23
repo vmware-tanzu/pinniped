@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package library
@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -137,6 +138,12 @@ func addTestClusterUserCanViewEverythingRoleBinding(t *testing.T, testUsername s
 			Name:     "view",
 		},
 	)
+	WaitForUserToHaveAccess(t, testUsername, []string{}, &authorizationv1.ResourceAttributes{
+		Verb:     "get",
+		Group:    "",
+		Version:  "v1",
+		Resource: "namespaces",
+	})
 }
 
 func addTestClusterGroupCanViewEverythingRoleBinding(t *testing.T, testGroup string) {
@@ -154,6 +161,12 @@ func addTestClusterGroupCanViewEverythingRoleBinding(t *testing.T, testGroup str
 			Name:     "view",
 		},
 	)
+	WaitForUserToHaveAccess(t, "", []string{testGroup}, &authorizationv1.ResourceAttributes{
+		Verb:     "get",
+		Group:    "",
+		Version:  "v1",
+		Resource: "namespaces",
+	})
 }
 
 func runKubectlGetNamespaces(t *testing.T, kubeConfigYAML string) (string, error) {

@@ -12,8 +12,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	k8sinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
@@ -124,12 +128,94 @@ func TestImpersonationProxy(t *testing.T) {
 	}
 
 	t.Run("watching all the verbs", func(t *testing.T) {
-		// Start a watch in a informer.
-		// Create an RBAC rule to allow this user to read/write everything.
-		// t.Cleanup Delete the RBAC rule.
 		// Create a namespace, because it will be easier to deletecollection if we have a namespace.
 		// t.Cleanup Delete the namespace.
-		// Then "create" several Secrets.
+		namespace, err := adminClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{GenerateName: "impersonation-integration-test-"},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			t.Logf("cleaning up test namespace %s", namespace.Name)
+			err = adminClient.CoreV1().Namespaces().Delete(context.Background(), namespace.Name, metav1.DeleteOptions{})
+			require.NoError(t, err)
+		})
+
+		// Create an RBAC rule to allow this user to read/write everything.
+		library.CreateTestClusterRoleBinding(
+			t,
+			rbacv1.Subject{
+				Kind:     rbacv1.UserKind,
+				APIGroup: rbacv1.GroupName,
+				Name:     env.TestUser.ExpectedUsername,
+			},
+			rbacv1.RoleRef{
+				Kind:     "ClusterRole",
+				APIGroup: rbacv1.GroupName,
+				Name:     "cluster-admin",
+			},
+		)
+		library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
+			Namespace: namespace.Name,
+			Verb:      "create",
+			Group:     "",
+			Version:   "v1",
+			Resource:  "configmaps",
+		})
+
+		// Create and start informer.
+		informerFactory := k8sinformers.NewSharedInformerFactoryWithOptions(
+			impersonationProxyClient,
+			0,
+			k8sinformers.WithNamespace(namespace.Name))
+		informer := informerFactory.Core().V1().ConfigMaps()
+		informer.Informer() // makes sure that the informer will cache
+		stopChannel := make(chan struct{})
+		informerFactory.Start(stopChannel)
+		t.Cleanup(func() {
+			stopChannel <- struct{}{}
+		})
+		informerFactory.WaitForCacheSync(ctx.Done())
+
+		// Test "create" verb.
+		_, err = impersonationProxyClient.CoreV1().ConfigMaps(namespace.Name).Create(
+			ctx,
+			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-1"}},
+			metav1.CreateOptions{},
+		)
+		require.NoError(t, err)
+		require.Eventually(t, func() bool {
+			_, err = informer.Lister().ConfigMaps(namespace.Name).Get("configmap-1")
+			return err == nil
+		}, 10*time.Second, 500*time.Millisecond)
+
+		_, err = impersonationProxyClient.CoreV1().ConfigMaps(namespace.Name).Create(
+			ctx,
+			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-2"}},
+			metav1.CreateOptions{},
+		)
+		require.NoError(t, err)
+		require.Eventually(t, func() bool {
+			_, err = informer.Lister().ConfigMaps(namespace.Name).Get("configmap-2")
+			return err == nil
+		}, 10*time.Second, 500*time.Millisecond)
+
+		_, err = impersonationProxyClient.CoreV1().ConfigMaps(namespace.Name).Create(
+			ctx,
+			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-3"}},
+			metav1.CreateOptions{},
+		)
+		require.NoError(t, err)
+		require.Eventually(t, func() bool {
+			_, err = informer.Lister().ConfigMaps(namespace.Name).Get("configmap-3")
+			return err == nil
+		}, 10*time.Second, 500*time.Millisecond)
+
+		require.Eventually(t, func() bool {
+			configmaps, err := informer.Lister().ConfigMaps(namespace.Name).List(labels.Everything())
+			return err == nil && len(configmaps) == 3
+		}, 10*time.Second, 500*time.Millisecond)
+
+		// TODO, test more verbs
 		// "get" one them.
 		// "list" them all.
 		// "update" one of them.
@@ -137,7 +223,6 @@ func TestImpersonationProxy(t *testing.T) {
 		// "delete" one of them.
 		// "deletecollection" all of them.
 		// Make sure the watch sees all of those actions.
-		// Close the informer.
 	})
 
 	// Update configuration to force the proxy to disabled mode

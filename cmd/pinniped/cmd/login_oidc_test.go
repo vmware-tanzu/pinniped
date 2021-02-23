@@ -288,5 +288,5 @@ func impersonationProxyTestToken(token string) string {
 			},
 		},
 	})
-	return base64.RawURLEncoding.EncodeToString(reqJSON)
+	return base64.StdEncoding.EncodeToString(reqJSON)
 }

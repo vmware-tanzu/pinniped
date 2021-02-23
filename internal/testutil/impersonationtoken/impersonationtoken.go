@@ -63,5 +63,5 @@ func Make(
 
 	reqJSON, err := runtime.Encode(respInfo.PrettySerializer, &tokenCredentialRequest)
 	require.NoError(t, err)
-	return base64.RawURLEncoding.EncodeToString(reqJSON)
+	return base64.StdEncoding.EncodeToString(reqJSON)
 }

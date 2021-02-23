@@ -17,6 +17,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -432,6 +433,27 @@ func CreateTestClusterRoleBinding(t *testing.T, subject rbacv1.Subject, roleRef 
 		require.NoError(t, err)
 	})
 	return created
+}
+
+func WaitForUserToHaveAccess(t *testing.T, user string, groups []string, shouldHaveAccessTo *authorizationv1.ResourceAttributes) {
+	t.Helper()
+	client := NewKubernetesClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	RequireEventuallyWithoutError(t, func() (bool, error) {
+		subjectAccessReview, err := client.AuthorizationV1().SubjectAccessReviews().Create(ctx,
+			&authorizationv1.SubjectAccessReview{
+				Spec: authorizationv1.SubjectAccessReviewSpec{
+					ResourceAttributes: shouldHaveAccessTo,
+					User:               user,
+					Groups:             groups,
+				}}, metav1.CreateOptions{})
+		if err != nil {
+			return false, err
+		}
+		return subjectAccessReview.Status.Allowed, nil
+	}, 10*time.Second, 500*time.Millisecond)
 }
 
 func testObjectMeta(t *testing.T, baseName string) metav1.ObjectMeta {

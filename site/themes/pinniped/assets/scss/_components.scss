@@ -407,6 +407,11 @@
     .side-nav {
         width: 25%;
         float: left;
+        @include breakpoint(small-medium) {
+            width: 100%;
+            float: none;
+        }
+
         ul {
             padding-left: 0px;
             margin-bottom: 35px;
@@ -435,6 +440,10 @@
     .docs-content {
         width: 75%;
         float: right;
+        @include breakpoint(small-medium) {
+            width: 100%;
+            float: none;
+        }
         a {
             font-size: 16px;
         }
@@ -512,6 +521,7 @@
     }
 
     .button {
+        white-space: nowrap;
         a {
             font-size: 14px;
         }

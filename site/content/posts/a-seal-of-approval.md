@@ -5,7 +5,7 @@ date: 2020-11-12
 author: Pablo Schuhmacher
 image: /img/logo.svg
 excerpt: "Pinniped intends to bring that dream state — log in once and you’re done — to reality."
-tags: ['Pablo Schuhmacher']
+tags: ['Pablo Schuhmacher', 'release']
 ---
 
 Kubernetes, containers, microservices: They’ve all turned conventional application development wisdom inside out. But for all the wonders introduced and new technologies released, there are still a few things that remain difficult, cumbersome, or just really really frustrating when it comes to Kubernetes. We have set out to make one of those things easier and more understandable: authentication.

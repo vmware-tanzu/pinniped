@@ -22,3 +22,13 @@ markup:
     noClasses: false
     style: monokailight
     tabWidth: 4
+
+related:
+  includeNewer: true
+  indices:
+  - name: tags
+    weight: 50
+  - name: date
+    weight: 50
+  threshold: 0
+  toLower: true

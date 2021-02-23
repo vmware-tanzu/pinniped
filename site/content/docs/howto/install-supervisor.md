@@ -23,9 +23,9 @@ You should have a supported Kubernetes cluster with working HTTPS ingress capabi
 
 1. Choose your preferred [release](https://github.com/vmware-tanzu/pinniped/releases) version number and use it to replace the version number in the URL below.
 
-1. Install theSupervisor into the `pinniped-supervisor`  namespace with default options:
+1. Install the Supervisor into the `pinniped-supervisor` namespace with default options:
 
-   - `kubectl apply -f https://get.pinniped.dev/v0.4.1/install-pinniped-concierge.yaml`
+   - `kubectl apply -f https://get.pinniped.dev/v0.4.1/install-pinniped-supervisor.yaml`
   
      *Replace v0.4.1 with your preferred version number.*
 

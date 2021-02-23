@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	certificatesv1 "k8s.io/api/certificates/v1"
+	certificatesv1beta1 "k8s.io/api/certificates/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -290,19 +291,20 @@ func TestWhoAmI_CSR(t *testing.T) {
 		if t.Failed() {
 			return
 		}
-		err := kubeClient.CertificatesV1().CertificateSigningRequests().Delete(ctx, csrName, metav1.DeleteOptions{})
+		err := kubeClient.CertificatesV1beta1().CertificateSigningRequests().Delete(ctx, csrName, metav1.DeleteOptions{})
 		require.NoError(t, err)
 	}()
 
 	// this is a blind update with no resource version checks, which is only safe during tests
-	_, err = kubeClient.CertificatesV1().CertificateSigningRequests().UpdateApproval(ctx, csrName, &certificatesv1.CertificateSigningRequest{
+	// use the beta CSR API to support older clusters
+	_, err = kubeClient.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(ctx, &certificatesv1beta1.CertificateSigningRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: csrName,
 		},
-		Status: certificatesv1.CertificateSigningRequestStatus{
-			Conditions: []certificatesv1.CertificateSigningRequestCondition{
+		Status: certificatesv1beta1.CertificateSigningRequestStatus{
+			Conditions: []certificatesv1beta1.CertificateSigningRequestCondition{
 				{
-					Type:   certificatesv1.CertificateApproved,
+					Type:   certificatesv1beta1.CertificateApproved,
 					Status: corev1.ConditionTrue,
 					Reason: "WhoAmICSRTest",
 				},
@@ -381,7 +383,8 @@ func TestWhoAmI_ImpersonateDirectly(t *testing.T) {
 	impersonationConfig := library.NewClientConfig(t)
 	impersonationConfig.Impersonate = rest.ImpersonationConfig{
 		UserName: "solaire",
-		Groups:   []string{"astora", "lordran"},
+		// need to impersonate system:authenticated directly to support older clusters otherwise we will get RBAC errors below
+		Groups: []string{"astora", "lordran", "system:authenticated"},
 		Extra: map[string][]string{
 			"covenant": {"warrior-of-sunlight"},
 			"loves":    {"sun", "co-op"},
@@ -402,7 +405,7 @@ func TestWhoAmI_ImpersonateDirectly(t *testing.T) {
 						Groups: []string{
 							"astora",
 							"lordran",
-							"system:authenticated", // impersonation will add this implicitly
+							"system:authenticated", // impersonation will add this implicitly but only in newer clusters
 						},
 						Extra: map[string]identityv1alpha1.ExtraValue{
 							"covenant": {"warrior-of-sunlight"},
@@ -417,6 +420,8 @@ func TestWhoAmI_ImpersonateDirectly(t *testing.T) {
 
 	impersonationAnonymousConfig := library.NewClientConfig(t)
 	impersonationAnonymousConfig.Impersonate.UserName = "system:anonymous"
+	// need to impersonate system:unauthenticated directly to support older clusters otherwise we will get RBAC errors below
+	impersonationAnonymousConfig.Impersonate.Groups = []string{"system:unauthenticated"}
 
 	whoAmIAnonymous, err := library.NewKubeclient(t, impersonationAnonymousConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
@@ -429,7 +434,7 @@ func TestWhoAmI_ImpersonateDirectly(t *testing.T) {
 					User: identityv1alpha1.UserInfo{
 						Username: "system:anonymous",
 						Groups: []string{
-							"system:unauthenticated", // impersonation will add this implicitly
+							"system:unauthenticated", // impersonation will add this implicitly but only in newer clusters
 						},
 					},
 				},

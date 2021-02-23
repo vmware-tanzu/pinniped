@@ -72,25 +72,25 @@ func NewClientsetWithCertAndKey(t *testing.T, clientCertificateData, clientKeyDa
 func NewKubernetesClientset(t *testing.T) kubernetes.Interface {
 	t.Helper()
 
-	return newKubeclient(t, NewClientConfig(t)).Kubernetes
+	return NewKubeclient(t, NewClientConfig(t)).Kubernetes
 }
 
 func NewSupervisorClientset(t *testing.T) supervisorclientset.Interface {
 	t.Helper()
 
-	return newKubeclient(t, NewClientConfig(t)).PinnipedSupervisor
+	return NewKubeclient(t, NewClientConfig(t)).PinnipedSupervisor
 }
 
 func NewConciergeClientset(t *testing.T) conciergeclientset.Interface {
 	t.Helper()
 
-	return newKubeclient(t, NewClientConfig(t)).PinnipedConcierge
+	return NewKubeclient(t, NewClientConfig(t)).PinnipedConcierge
 }
 
 func NewAnonymousConciergeClientset(t *testing.T) conciergeclientset.Interface {
 	t.Helper()
 
-	return newKubeclient(t, newAnonymousClientRestConfig(t)).PinnipedConcierge
+	return NewKubeclient(t, NewAnonymousClientRestConfig(t)).PinnipedConcierge
 }
 
 func NewAggregatedClientset(t *testing.T) aggregatorclient.Interface {
@@ -118,7 +118,7 @@ func newClientsetWithConfig(t *testing.T, config *rest.Config) kubernetes.Interf
 }
 
 // Returns a rest.Config without any user authentication info.
-func newAnonymousClientRestConfig(t *testing.T) *rest.Config {
+func NewAnonymousClientRestConfig(t *testing.T) *rest.Config {
 	t.Helper()
 
 	return rest.AnonymousClientConfig(NewClientConfig(t))
@@ -128,13 +128,13 @@ func newAnonymousClientRestConfig(t *testing.T) *rest.Config {
 func newAnonymousClientRestConfigWithCertAndKeyAdded(t *testing.T, clientCertificateData, clientKeyData string) *rest.Config {
 	t.Helper()
 
-	config := newAnonymousClientRestConfig(t)
+	config := NewAnonymousClientRestConfig(t)
 	config.CertData = []byte(clientCertificateData)
 	config.KeyData = []byte(clientKeyData)
 	return config
 }
 
-func newKubeclient(t *testing.T, config *rest.Config) *kubeclient.Client {
+func NewKubeclient(t *testing.T, config *rest.Config) *kubeclient.Client {
 	t.Helper()
 	env := IntegrationEnv(t)
 	client, err := kubeclient.New(

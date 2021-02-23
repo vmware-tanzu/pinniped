@@ -118,7 +118,7 @@ func WithAPIGroupSuffix(apiGroupSuffix string) Option {
 
 // New validates the specified options and returns a newly initialized *Client.
 func New(opts ...Option) (*Client, error) {
-	c := Client{apiGroupSuffix: "pinniped.dev"}
+	c := Client{apiGroupSuffix: groupsuffix.PinnipedDefaultSuffix}
 	for _, opt := range opts {
 		if err := opt(&c); err != nil {
 			return nil, err

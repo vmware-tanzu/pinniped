@@ -8,6 +8,8 @@
 - xref:{anchor_prefix}-authentication-concierge-pinniped-dev-v1alpha1[$$authentication.concierge.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-config-concierge-pinniped-dev-v1alpha1[$$config.concierge.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-config-supervisor-pinniped-dev-v1alpha1[$$config.supervisor.pinniped.dev/v1alpha1$$]
+- xref:{anchor_prefix}-identity-concierge-pinniped-dev-identity[$$identity.concierge.pinniped.dev/identity$$]
+- xref:{anchor_prefix}-identity-concierge-pinniped-dev-v1alpha1[$$identity.concierge.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-idp-supervisor-pinniped-dev-v1alpha1[$$idp.supervisor.pinniped.dev/v1alpha1$$]
 - xref:{anchor_prefix}-login-concierge-pinniped-dev-v1alpha1[$$login.concierge.pinniped.dev/v1alpha1$$]
 
@@ -400,6 +402,203 @@ FederationDomainTLSSpec is a struct that describes the TLS configuration for an 
  SecretName is required if you would like to use different TLS certificates for issuers of different hostnames. SNI requests do not include port numbers, so all issuers with the same DNS hostname must use the same SecretName value even if they have different port numbers. 
  SecretName is not required when you would like to use only the HTTP endpoints (e.g. when terminating TLS at an Ingress). It is also not required when you would like all requests to this OIDC Provider's HTTPS endpoints to use the default TLS certificate, which is configured elsewhere. 
  When your Issuer URL's host is an IP address, then this field is ignored. SNI does not work for IP addresses.
+|===
+
+
+
+[id="{anchor_prefix}-identity-concierge-pinniped-dev-identity"]
+=== identity.concierge.pinniped.dev/identity
+
+Package identity is the internal version of the Pinniped identity API.
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-extravalue"]
+==== ExtraValue 
+
+ExtraValue masks the value so protobuf can generate
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-userinfo[$$UserInfo$$]
+****
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-kubernetesuserinfo"]
+==== KubernetesUserInfo 
+
+KubernetesUserInfo represents the current authenticated user, exactly as Kubernetes understands it. Copied from the Kubernetes token review API.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-whoamirequeststatus[$$WhoAmIRequestStatus$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`User`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-userinfo[$$UserInfo$$]__ | User is the UserInfo associated with the current user.
+| *`Audiences`* __string array__ | Audiences are audience identifiers chosen by the authenticator.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-userinfo"]
+==== UserInfo 
+
+UserInfo holds the information about the user needed to implement the user.Info interface.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-kubernetesuserinfo[$$KubernetesUserInfo$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`Username`* __string__ | The name that uniquely identifies this user among all active users.
+| *`UID`* __string__ | A unique value that identifies this user across time. If this user is deleted and another user by the same name is added, they will have different UIDs.
+| *`Groups`* __string array__ | The names of groups this user is a part of.
+| *`Extra`* __object (keys:string, values:string array)__ | Any additional information provided by the authenticator.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-whoamirequest"]
+==== WhoAmIRequest 
+
+WhoAmIRequest submits a request to echo back the current authenticated user.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-whoamirequestlist[$$WhoAmIRequestList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`ObjectMeta`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#objectmeta-v1-meta[$$ObjectMeta$$]__ | 
+| *`Spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-whoamirequestspec[$$WhoAmIRequestSpec$$]__ | 
+| *`Status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-whoamirequeststatus[$$WhoAmIRequestStatus$$]__ | 
+|===
+
+
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-whoamirequeststatus"]
+==== WhoAmIRequestStatus 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-whoamirequest[$$WhoAmIRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`KubernetesUserInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-kubernetesuserinfo[$$KubernetesUserInfo$$]__ | The current authenticated user, exactly as Kubernetes understands it.
+|===
+
+
+
+[id="{anchor_prefix}-identity-concierge-pinniped-dev-v1alpha1"]
+=== identity.concierge.pinniped.dev/v1alpha1
+
+Package v1alpha1 is the v1alpha1 version of the Pinniped identity API.
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-v1alpha1-extravalue"]
+==== ExtraValue 
+
+ExtraValue masks the value so protobuf can generate
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-v1alpha1-userinfo[$$UserInfo$$]
+****
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-v1alpha1-kubernetesuserinfo"]
+==== KubernetesUserInfo 
+
+KubernetesUserInfo represents the current authenticated user, exactly as Kubernetes understands it. Copied from the Kubernetes token review API.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-v1alpha1-whoamirequeststatus[$$WhoAmIRequestStatus$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`user`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-v1alpha1-userinfo[$$UserInfo$$]__ | User is the UserInfo associated with the current user.
+| *`audiences`* __string array__ | Audiences are audience identifiers chosen by the authenticator.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-v1alpha1-userinfo"]
+==== UserInfo 
+
+UserInfo holds the information about the user needed to implement the user.Info interface.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-v1alpha1-kubernetesuserinfo[$$KubernetesUserInfo$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`username`* __string__ | The name that uniquely identifies this user among all active users.
+| *`uid`* __string__ | A unique value that identifies this user across time. If this user is deleted and another user by the same name is added, they will have different UIDs.
+| *`groups`* __string array__ | The names of groups this user is a part of.
+| *`extra`* __object (keys:string, values:string array)__ | Any additional information provided by the authenticator.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-v1alpha1-whoamirequest"]
+==== WhoAmIRequest 
+
+WhoAmIRequest submits a request to echo back the current authenticated user.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-v1alpha1-whoamirequestlist[$$WhoAmIRequestList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-v1alpha1-whoamirequestspec[$$WhoAmIRequestSpec$$]__ | 
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-v1alpha1-whoamirequeststatus[$$WhoAmIRequestStatus$$]__ | 
+|===
+
+
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-v1alpha1-whoamirequeststatus"]
+==== WhoAmIRequestStatus 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-v1alpha1-whoamirequest[$$WhoAmIRequest$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`kubernetesUserInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-identity-v1alpha1-kubernetesuserinfo[$$KubernetesUserInfo$$]__ | The current authenticated user, exactly as Kubernetes understands it.
 |===
 
 

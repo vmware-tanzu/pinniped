@@ -17,6 +17,12 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
+		"go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.KubernetesUserInfo":        schema_apis_concierge_identity_v1alpha1_KubernetesUserInfo(ref),
+		"go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.UserInfo":                  schema_apis_concierge_identity_v1alpha1_UserInfo(ref),
+		"go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.WhoAmIRequest":             schema_apis_concierge_identity_v1alpha1_WhoAmIRequest(ref),
+		"go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.WhoAmIRequestList":         schema_apis_concierge_identity_v1alpha1_WhoAmIRequestList(ref),
+		"go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.WhoAmIRequestSpec":         schema_apis_concierge_identity_v1alpha1_WhoAmIRequestSpec(ref),
+		"go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.WhoAmIRequestStatus":       schema_apis_concierge_identity_v1alpha1_WhoAmIRequestStatus(ref),
 		"go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1.ClusterCredential":            schema_apis_concierge_login_v1alpha1_ClusterCredential(ref),
 		"go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1.TokenCredentialRequest":       schema_apis_concierge_login_v1alpha1_TokenCredentialRequest(ref),
 		"go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1.TokenCredentialRequestList":   schema_apis_concierge_login_v1alpha1_TokenCredentialRequestList(ref),
@@ -74,6 +80,240 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"k8s.io/apimachinery/pkg/runtime.TypeMeta":                                                  schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
 		"k8s.io/apimachinery/pkg/runtime.Unknown":                                                   schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
 		"k8s.io/apimachinery/pkg/version.Info":                                                      schema_k8sio_apimachinery_pkg_version_Info(ref),
+	}
+}
+
+func schema_apis_concierge_identity_v1alpha1_KubernetesUserInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "KubernetesUserInfo represents the current authenticated user, exactly as Kubernetes understands it. Copied from the Kubernetes token review API.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"user": {
+						SchemaProps: spec.SchemaProps{
+							Description: "User is the UserInfo associated with the current user.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.UserInfo"),
+						},
+					},
+					"audiences": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Audiences are audience identifiers chosen by the authenticator.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"user"},
+			},
+		},
+		Dependencies: []string{
+			"go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.UserInfo"},
+	}
+}
+
+func schema_apis_concierge_identity_v1alpha1_UserInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "UserInfo holds the information about the user needed to implement the user.Info interface.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"username": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The name that uniquely identifies this user among all active users.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"uid": {
+						SchemaProps: spec.SchemaProps{
+							Description: "A unique value that identifies this user across time. If this user is deleted and another user by the same name is added, they will have different UIDs.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"groups": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The names of groups this user is a part of.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"extra": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Any additional information provided by the authenticator.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type: []string{"array"},
+										Items: &spec.SchemaOrArray{
+											Schema: &spec.Schema{
+												SchemaProps: spec.SchemaProps{
+													Default: "",
+													Type:    []string{"string"},
+													Format:  "",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"username"},
+			},
+		},
+	}
+}
+
+func schema_apis_concierge_identity_v1alpha1_WhoAmIRequest(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "WhoAmIRequest submits a request to echo back the current authenticated user.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.WhoAmIRequestSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.WhoAmIRequestStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.WhoAmIRequestSpec", "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.WhoAmIRequestStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_apis_concierge_identity_v1alpha1_WhoAmIRequestList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "WhoAmIRequestList is a list of WhoAmIRequest objects.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Items is a list of WhoAmIRequest",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.WhoAmIRequest"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.WhoAmIRequest", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_apis_concierge_identity_v1alpha1_WhoAmIRequestSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+			},
+		},
+	}
+}
+
+func schema_apis_concierge_identity_v1alpha1_WhoAmIRequestStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kubernetesUserInfo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The current authenticated user, exactly as Kubernetes understands it.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.KubernetesUserInfo"),
+						},
+					},
+				},
+				Required: []string{"kubernetesUserInfo"},
+			},
+		},
+		Dependencies: []string{
+			"go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1.KubernetesUserInfo"},
 	}
 }
 

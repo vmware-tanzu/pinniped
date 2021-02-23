@@ -284,6 +284,17 @@ func TestCreate(t *testing.T) {
 				`.pinniped.dev "request name" is invalid: dryRun: Unsupported value: []string{"some dry run flag"}`)
 			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:dryRun not supported`)
 		})
+
+		it("CreateFailsWhenNamespaceIsNotEmpty", func() {
+			response, err := NewREST(nil, nil, schema.GroupResource{}).Create(
+				genericapirequest.WithNamespace(genericapirequest.NewContext(), "some-ns"),
+				validCredentialRequest(),
+				rest.ValidateAllObjectFunc,
+				&metav1.CreateOptions{})
+
+			requireAPIError(t, response, err, apierrors.IsBadRequest, `namespace is not allowed on TokenCredentialRequest: some-ns`)
+			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:namespace is not allowed`)
+		})
 	}, spec.Sequential())
 }
 

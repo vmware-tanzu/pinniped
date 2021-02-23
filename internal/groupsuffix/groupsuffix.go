@@ -20,13 +20,13 @@ import (
 )
 
 const (
-	pinnipedDefaultSuffix        = "pinniped.dev"
+	PinnipedDefaultSuffix        = "pinniped.dev"
 	pinnipedDefaultSuffixWithDot = ".pinniped.dev"
 )
 
 func New(apiGroupSuffix string) kubeclient.Middleware {
 	// return a no-op middleware by default
-	if len(apiGroupSuffix) == 0 || apiGroupSuffix == pinnipedDefaultSuffix {
+	if len(apiGroupSuffix) == 0 || apiGroupSuffix == PinnipedDefaultSuffix {
 		return nil
 	}
 
@@ -161,7 +161,7 @@ func Replace(baseAPIGroup, apiGroupSuffix string) (string, bool) {
 	if !strings.HasSuffix(baseAPIGroup, pinnipedDefaultSuffixWithDot) {
 		return "", false
 	}
-	return strings.TrimSuffix(baseAPIGroup, pinnipedDefaultSuffix) + apiGroupSuffix, true
+	return strings.TrimSuffix(baseAPIGroup, PinnipedDefaultSuffix) + apiGroupSuffix, true
 }
 
 // Unreplace is like performing an undo of Replace().
@@ -169,7 +169,7 @@ func Unreplace(baseAPIGroup, apiGroupSuffix string) (string, bool) {
 	if !strings.HasSuffix(baseAPIGroup, "."+apiGroupSuffix) {
 		return "", false
 	}
-	return strings.TrimSuffix(baseAPIGroup, apiGroupSuffix) + pinnipedDefaultSuffix, true
+	return strings.TrimSuffix(baseAPIGroup, apiGroupSuffix) + PinnipedDefaultSuffix, true
 }
 
 // Validate validates the provided apiGroupSuffix is usable as an API group suffix. Specifically, it

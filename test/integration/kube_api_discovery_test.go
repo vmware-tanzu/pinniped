@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/discovery"
 
 	"go.pinniped.dev/test/library"
@@ -44,6 +45,7 @@ func TestGetAPIResourceList(t *testing.T) {
 		}
 	}
 	loginConciergeGV := makeGV("login", "concierge")
+	identityConciergeGV := makeGV("identity", "concierge")
 	authenticationConciergeGV := makeGV("authentication", "concierge")
 	configConciergeGV := makeGV("config", "concierge")
 	idpSupervisorGV := makeGV("idp", "supervisor")
@@ -72,6 +74,32 @@ func TestGetAPIResourceList(t *testing.T) {
 					{
 						Name:       "tokencredentialrequests",
 						Kind:       "TokenCredentialRequest",
+						Verbs:      []string{"create", "list"},
+						Namespaced: false,
+						Categories: []string{"pinniped"},
+					},
+				},
+			},
+		},
+		{
+			group: metav1.APIGroup{
+				Name: identityConciergeGV.Group,
+				Versions: []metav1.GroupVersionForDiscovery{
+					{
+						GroupVersion: identityConciergeGV.String(),
+						Version:      identityConciergeGV.Version,
+					},
+				},
+				PreferredVersion: metav1.GroupVersionForDiscovery{
+					GroupVersion: identityConciergeGV.String(),
+					Version:      identityConciergeGV.Version,
+				},
+			},
+			resourceByVersion: map[string][]metav1.APIResource{
+				identityConciergeGV.String(): {
+					{
+						Name:       "whoamirequests",
+						Kind:       "WhoAmIRequest",
 						Verbs:      []string{"create", "list"},
 						Namespaced: false,
 						Categories: []string{"pinniped"},
@@ -280,6 +308,8 @@ func TestGetAPIResourceList(t *testing.T) {
 	t.Run("every API has a status subresource", func(t *testing.T) {
 		t.Parallel()
 
+		aggregatedAPIs := sets.NewString("tokencredentialrequests", "whoamirequests")
+
 		var regular, status []string
 
 		for _, r := range resources {
@@ -288,8 +318,8 @@ func TestGetAPIResourceList(t *testing.T) {
 			}
 
 			for _, a := range r.APIResources {
-				if a.Name == "tokencredentialrequests" {
-					continue // our special aggregated API with its own magical properties
+				if aggregatedAPIs.Has(a.Name) {
+					continue // skip our special aggregated APIs with their own magical properties
 				}
 
 				if strings.HasSuffix(a.Name, "/status") {

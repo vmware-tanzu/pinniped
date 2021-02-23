@@ -168,12 +168,6 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 
 	t.Cleanup(func() {
 		t.Helper()
-
-		if t.Failed() {
-			t.Logf("skipping deletion of test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
-			return
-		}
-
 		t.Logf("cleaning up test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
 		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -237,12 +231,6 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 
 	t.Cleanup(func() {
 		t.Helper()
-
-		if t.Failed() {
-			t.Logf("skipping deletion of test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
-			return
-		}
-
 		t.Logf("cleaning up test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
 		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

@@ -21,8 +21,8 @@ import (
 	"k8s.io/client-go/transport"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 
-	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	"go.pinniped.dev/internal/testutil/fakekubeapi"
 )
 
@@ -46,16 +46,15 @@ var (
 		},
 	}
 
-	tokenCredentialRequestGVK  = loginv1alpha1.SchemeGroupVersion.WithKind("TokenCredentialRequest")
-	goodTokenCredentialRequest = &loginv1alpha1.TokenCredentialRequest{
+	credentialIssuerGVK  = conciergeconfigv1alpha1.SchemeGroupVersion.WithKind("CredentialIssuer")
+	goodCredentialIssuer = &conciergeconfigv1alpha1.CredentialIssuer{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "good-token-credential-request",
-			Namespace: "good-namespace",
+			Name: "good-credential-issuer",
 		},
 	}
 
-	federationDomainGVK  = configv1alpha1.SchemeGroupVersion.WithKind("FederationDomain")
-	goodFederationDomain = &configv1alpha1.FederationDomain{
+	federationDomainGVK  = supervisorconfigv1alpha1.SchemeGroupVersion.WithKind("FederationDomain")
+	goodFederationDomain = &supervisorconfigv1alpha1.FederationDomain{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "good-federation-domain",
 			Namespace: "good-namespace",
@@ -258,60 +257,60 @@ func TestKubeclient(t *testing.T) {
 			reallyRunTest: func(t *testing.T, c *Client) {
 				// create
 				tokenCredentialRequest, err := c.PinnipedConcierge.
-					LoginV1alpha1().
-					TokenCredentialRequests().
-					Create(context.Background(), goodTokenCredentialRequest, metav1.CreateOptions{})
+					ConfigV1alpha1().
+					CredentialIssuers().
+					Create(context.Background(), goodCredentialIssuer, metav1.CreateOptions{})
 				require.NoError(t, err)
-				require.Equal(t, goodTokenCredentialRequest, tokenCredentialRequest)
+				require.Equal(t, goodCredentialIssuer, tokenCredentialRequest)
 
 				// read
 				tokenCredentialRequest, err = c.PinnipedConcierge.
-					LoginV1alpha1().
-					TokenCredentialRequests().
+					ConfigV1alpha1().
+					CredentialIssuers().
 					Get(context.Background(), tokenCredentialRequest.Name, metav1.GetOptions{})
 				require.NoError(t, err)
-				require.Equal(t, with(goodTokenCredentialRequest, annotations(), labels()), tokenCredentialRequest)
+				require.Equal(t, with(goodCredentialIssuer, annotations(), labels()), tokenCredentialRequest)
 
 				// update
-				goodTokenCredentialRequestWithAnnotationsAndLabelsAndClusterName := with(goodTokenCredentialRequest, annotations(), labels(), clusterName()).(*loginv1alpha1.TokenCredentialRequest)
+				goodCredentialIssuerWithAnnotationsAndLabelsAndClusterName := with(goodCredentialIssuer, annotations(), labels(), clusterName()).(*conciergeconfigv1alpha1.CredentialIssuer)
 				tokenCredentialRequest, err = c.PinnipedConcierge.
-					LoginV1alpha1().
-					TokenCredentialRequests().
-					Update(context.Background(), goodTokenCredentialRequestWithAnnotationsAndLabelsAndClusterName, metav1.UpdateOptions{})
+					ConfigV1alpha1().
+					CredentialIssuers().
+					Update(context.Background(), goodCredentialIssuerWithAnnotationsAndLabelsAndClusterName, metav1.UpdateOptions{})
 				require.NoError(t, err)
-				require.Equal(t, goodTokenCredentialRequestWithAnnotationsAndLabelsAndClusterName, tokenCredentialRequest)
+				require.Equal(t, goodCredentialIssuerWithAnnotationsAndLabelsAndClusterName, tokenCredentialRequest)
 
 				// delete
 				err = c.PinnipedConcierge.
-					LoginV1alpha1().
-					TokenCredentialRequests().
+					ConfigV1alpha1().
+					CredentialIssuers().
 					Delete(context.Background(), tokenCredentialRequest.Name, metav1.DeleteOptions{})
 				require.NoError(t, err)
 			},
 			wantMiddlewareReqs: [][]Object{
 				{
-					with(goodTokenCredentialRequest, gvk(tokenCredentialRequestGVK)),
-					with(&metav1.PartialObjectMetadata{}, gvk(tokenCredentialRequestGVK)),
-					with(goodTokenCredentialRequest, annotations(), labels(), clusterName(), gvk(tokenCredentialRequestGVK)),
-					with(&metav1.PartialObjectMetadata{}, gvk(tokenCredentialRequestGVK)),
+					with(goodCredentialIssuer, gvk(credentialIssuerGVK)),
+					with(&metav1.PartialObjectMetadata{}, gvk(credentialIssuerGVK)),
+					with(goodCredentialIssuer, annotations(), labels(), clusterName(), gvk(credentialIssuerGVK)),
+					with(&metav1.PartialObjectMetadata{}, gvk(credentialIssuerGVK)),
 				},
 				{
-					with(goodTokenCredentialRequest, annotations(), gvk(tokenCredentialRequestGVK)),
-					with(&metav1.PartialObjectMetadata{}, gvk(tokenCredentialRequestGVK)),
-					with(goodTokenCredentialRequest, annotations(), labels(), clusterName(), gvk(tokenCredentialRequestGVK)),
-					with(&metav1.PartialObjectMetadata{}, gvk(tokenCredentialRequestGVK)),
+					with(goodCredentialIssuer, annotations(), gvk(credentialIssuerGVK)),
+					with(&metav1.PartialObjectMetadata{}, gvk(credentialIssuerGVK)),
+					with(goodCredentialIssuer, annotations(), labels(), clusterName(), gvk(credentialIssuerGVK)),
+					with(&metav1.PartialObjectMetadata{}, gvk(credentialIssuerGVK)),
 				},
 			},
 			wantMiddlewareResps: [][]Object{
 				{
-					with(goodTokenCredentialRequest, annotations(), labels(), gvk(tokenCredentialRequestGVK)),
-					with(goodTokenCredentialRequest, annotations(), labels(), gvk(tokenCredentialRequestGVK)),
-					with(goodTokenCredentialRequest, annotations(), labels(), clusterName(), gvk(tokenCredentialRequestGVK)),
+					with(goodCredentialIssuer, annotations(), labels(), gvk(credentialIssuerGVK)),
+					with(goodCredentialIssuer, annotations(), labels(), gvk(credentialIssuerGVK)),
+					with(goodCredentialIssuer, annotations(), labels(), clusterName(), gvk(credentialIssuerGVK)),
 				},
 				{
-					with(goodTokenCredentialRequest, emptyAnnotations(), labels(), gvk(tokenCredentialRequestGVK)),
-					with(goodTokenCredentialRequest, annotations(), labels(), gvk(tokenCredentialRequestGVK)),
-					with(goodTokenCredentialRequest, annotations(), labels(), clusterName(), gvk(tokenCredentialRequestGVK)),
+					with(goodCredentialIssuer, emptyAnnotations(), labels(), gvk(credentialIssuerGVK)),
+					with(goodCredentialIssuer, annotations(), labels(), gvk(credentialIssuerGVK)),
+					with(goodCredentialIssuer, annotations(), labels(), clusterName(), gvk(credentialIssuerGVK)),
 				},
 			},
 		},
@@ -338,7 +337,7 @@ func TestKubeclient(t *testing.T) {
 				require.Equal(t, with(goodFederationDomain, annotations(), labels()), federationDomain)
 
 				// update
-				goodFederationDomainWithAnnotationsAndLabelsAndClusterName := with(goodFederationDomain, annotations(), labels(), clusterName()).(*configv1alpha1.FederationDomain)
+				goodFederationDomainWithAnnotationsAndLabelsAndClusterName := with(goodFederationDomain, annotations(), labels(), clusterName()).(*supervisorconfigv1alpha1.FederationDomain)
 				federationDomain, err = c.PinnipedSupervisor.
 					ConfigV1alpha1().
 					FederationDomains(federationDomain.Namespace).

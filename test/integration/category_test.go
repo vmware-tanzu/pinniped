@@ -45,6 +45,8 @@ func TestGetPinnipedCategory(t *testing.T) {
 
 		require.Contains(t, stdErr.String(), `"kind":"Table"`)
 		require.Contains(t, stdErr.String(), `"resourceVersion":"0"`)
+		require.Contains(t, stdErr.String(), `/v1alpha1/tokencredentialrequests`)
+		require.Contains(t, stdErr.String(), `/v1alpha1/whoamirequests`)
 	})
 
 	t.Run("list, no special params", func(t *testing.T) {
@@ -78,7 +80,7 @@ func TestGetPinnipedCategory(t *testing.T) {
 		require.Contains(t, stdErr.String(), `"resourceVersion":"0"`)
 	})
 
-	t.Run("raw request to see body", func(t *testing.T) {
+	t.Run("raw request to see body, token cred", func(t *testing.T) {
 		var stdOut, stdErr bytes.Buffer
 
 		//nolint: gosec  // input is part of test env
@@ -91,6 +93,22 @@ func TestGetPinnipedCategory(t *testing.T) {
 
 		require.NotContains(t, stdOut.String(), "MethodNotAllowed")
 		require.Contains(t, stdOut.String(), `{"kind":"TokenCredentialRequestList","apiVersion":"login.concierge`+
+			dotSuffix+`/v1alpha1","metadata":{"resourceVersion":"0"},"items":[]}`)
+	})
+
+	t.Run("raw request to see body, whoami", func(t *testing.T) {
+		var stdOut, stdErr bytes.Buffer
+
+		//nolint: gosec  // input is part of test env
+		cmd := exec.Command("kubectl", "get", "--raw", "/apis/identity.concierge"+dotSuffix+"/v1alpha1/whoamirequests")
+		cmd.Stdout = &stdOut
+		cmd.Stderr = &stdErr
+		err := cmd.Run()
+		require.NoError(t, err, stdErr.String(), stdOut.String())
+		require.Empty(t, stdErr.String())
+
+		require.NotContains(t, stdOut.String(), "MethodNotAllowed")
+		require.Contains(t, stdOut.String(), `{"kind":"WhoAmIRequestList","apiVersion":"identity.concierge`+
 			dotSuffix+`/v1alpha1","metadata":{"resourceVersion":"0"},"items":[]}`)
 	})
 }

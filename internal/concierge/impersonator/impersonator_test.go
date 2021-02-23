@@ -26,7 +26,6 @@ import (
 	"go.pinniped.dev/generated/latest/apis/concierge/login"
 	conciergescheme "go.pinniped.dev/internal/concierge/scheme"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
-	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/mocks/mocktokenauthenticator"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/impersonationtoken"
@@ -390,16 +389,13 @@ func stringPtr(s string) *string { return &s }
 func makeDecoder(t *testing.T, apiGroupSuffix string) runtime.Decoder {
 	t.Helper()
 
-	loginConciergeGroupName, ok := groupsuffix.Replace(login.GroupName, apiGroupSuffix)
-	require.True(t, ok, "couldn't replace suffix of %q with %q", login.GroupName, apiGroupSuffix)
-
-	scheme := conciergescheme.New(loginConciergeGroupName, apiGroupSuffix)
+	scheme, loginGV, _ := conciergescheme.New(apiGroupSuffix)
 	codecs := serializer.NewCodecFactory(scheme)
 	respInfo, ok := runtime.SerializerInfoForMediaType(codecs.SupportedMediaTypes(), runtime.ContentTypeJSON)
 	require.True(t, ok, "couldn't find serializer info for media type")
 
 	return codecs.DecoderToVersion(respInfo.Serializer, schema.GroupVersion{
-		Group:   loginConciergeGroupName,
+		Group:   loginGV.Group,
 		Version: login.SchemeGroupVersion.Version,
 	})
 }

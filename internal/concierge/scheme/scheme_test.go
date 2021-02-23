@@ -14,29 +14,46 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
+	identityapi "go.pinniped.dev/generated/latest/apis/concierge/identity"
+	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
-	"go.pinniped.dev/internal/groupsuffix"
 )
 
 func TestNew(t *testing.T) {
 	// the standard group
-	regularGV := schema.GroupVersion{
+	regularLoginGV := schema.GroupVersion{
 		Group:   "login.concierge.pinniped.dev",
 		Version: "v1alpha1",
 	}
-	regularGVInternal := schema.GroupVersion{
+	regularLoginGVInternal := schema.GroupVersion{
 		Group:   "login.concierge.pinniped.dev",
+		Version: runtime.APIVersionInternal,
+	}
+	regularIdentityGV := schema.GroupVersion{
+		Group:   "identity.concierge.pinniped.dev",
+		Version: "v1alpha1",
+	}
+	regularIdentityGVInternal := schema.GroupVersion{
+		Group:   "identity.concierge.pinniped.dev",
 		Version: runtime.APIVersionInternal,
 	}
 
 	// the canonical other group
-	otherGV := schema.GroupVersion{
+	otherLoginGV := schema.GroupVersion{
 		Group:   "login.concierge.walrus.tld",
 		Version: "v1alpha1",
 	}
-	otherGVInternal := schema.GroupVersion{
+	otherLoginGVInternal := schema.GroupVersion{
 		Group:   "login.concierge.walrus.tld",
+		Version: runtime.APIVersionInternal,
+	}
+	otherIdentityGV := schema.GroupVersion{
+		Group:   "identity.concierge.walrus.tld",
+		Version: "v1alpha1",
+	}
+	otherIdentityGVInternal := schema.GroupVersion{
+		Group:   "identity.concierge.walrus.tld",
 		Version: runtime.APIVersionInternal,
 	}
 
@@ -47,9 +64,11 @@ func TestNew(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		apiGroupSuffix string
-		want           map[schema.GroupVersionKind]reflect.Type
+		name                     string
+		apiGroupSuffix           string
+		want                     map[schema.GroupVersionKind]reflect.Type
+		wantLoginGroupVersion    schema.GroupVersion
+		wantIdentityGroupVersion schema.GroupVersion
 	}{
 		{
 			name:           "regular api group",
@@ -57,22 +76,39 @@ func TestNew(t *testing.T) {
 			want: map[schema.GroupVersionKind]reflect.Type{
 				// all the types that are in the aggregated API group
 
-				regularGV.WithKind("TokenCredentialRequest"):     reflect.TypeOf(&loginv1alpha1.TokenCredentialRequest{}).Elem(),
-				regularGV.WithKind("TokenCredentialRequestList"): reflect.TypeOf(&loginv1alpha1.TokenCredentialRequestList{}).Elem(),
+				regularLoginGV.WithKind("TokenCredentialRequest"):     reflect.TypeOf(&loginv1alpha1.TokenCredentialRequest{}).Elem(),
+				regularLoginGV.WithKind("TokenCredentialRequestList"): reflect.TypeOf(&loginv1alpha1.TokenCredentialRequestList{}).Elem(),
 
-				regularGVInternal.WithKind("TokenCredentialRequest"):     reflect.TypeOf(&loginapi.TokenCredentialRequest{}).Elem(),
-				regularGVInternal.WithKind("TokenCredentialRequestList"): reflect.TypeOf(&loginapi.TokenCredentialRequestList{}).Elem(),
+				regularLoginGVInternal.WithKind("TokenCredentialRequest"):     reflect.TypeOf(&loginapi.TokenCredentialRequest{}).Elem(),
+				regularLoginGVInternal.WithKind("TokenCredentialRequestList"): reflect.TypeOf(&loginapi.TokenCredentialRequestList{}).Elem(),
 
-				regularGV.WithKind("CreateOptions"): reflect.TypeOf(&metav1.CreateOptions{}).Elem(),
-				regularGV.WithKind("DeleteOptions"): reflect.TypeOf(&metav1.DeleteOptions{}).Elem(),
-				regularGV.WithKind("ExportOptions"): reflect.TypeOf(&metav1.ExportOptions{}).Elem(),
-				regularGV.WithKind("GetOptions"):    reflect.TypeOf(&metav1.GetOptions{}).Elem(),
-				regularGV.WithKind("ListOptions"):   reflect.TypeOf(&metav1.ListOptions{}).Elem(),
-				regularGV.WithKind("PatchOptions"):  reflect.TypeOf(&metav1.PatchOptions{}).Elem(),
-				regularGV.WithKind("UpdateOptions"): reflect.TypeOf(&metav1.UpdateOptions{}).Elem(),
-				regularGV.WithKind("WatchEvent"):    reflect.TypeOf(&metav1.WatchEvent{}).Elem(),
+				regularIdentityGV.WithKind("WhoAmIRequest"):     reflect.TypeOf(&identityv1alpha1.WhoAmIRequest{}).Elem(),
+				regularIdentityGV.WithKind("WhoAmIRequestList"): reflect.TypeOf(&identityv1alpha1.WhoAmIRequestList{}).Elem(),
 
-				regularGVInternal.WithKind("WatchEvent"): reflect.TypeOf(&metav1.InternalEvent{}).Elem(),
+				regularIdentityGVInternal.WithKind("WhoAmIRequest"):     reflect.TypeOf(&identityapi.WhoAmIRequest{}).Elem(),
+				regularIdentityGVInternal.WithKind("WhoAmIRequestList"): reflect.TypeOf(&identityapi.WhoAmIRequestList{}).Elem(),
+
+				regularLoginGV.WithKind("CreateOptions"): reflect.TypeOf(&metav1.CreateOptions{}).Elem(),
+				regularLoginGV.WithKind("DeleteOptions"): reflect.TypeOf(&metav1.DeleteOptions{}).Elem(),
+				regularLoginGV.WithKind("ExportOptions"): reflect.TypeOf(&metav1.ExportOptions{}).Elem(),
+				regularLoginGV.WithKind("GetOptions"):    reflect.TypeOf(&metav1.GetOptions{}).Elem(),
+				regularLoginGV.WithKind("ListOptions"):   reflect.TypeOf(&metav1.ListOptions{}).Elem(),
+				regularLoginGV.WithKind("PatchOptions"):  reflect.TypeOf(&metav1.PatchOptions{}).Elem(),
+				regularLoginGV.WithKind("UpdateOptions"): reflect.TypeOf(&metav1.UpdateOptions{}).Elem(),
+				regularLoginGV.WithKind("WatchEvent"):    reflect.TypeOf(&metav1.WatchEvent{}).Elem(),
+
+				regularIdentityGV.WithKind("CreateOptions"): reflect.TypeOf(&metav1.CreateOptions{}).Elem(),
+				regularIdentityGV.WithKind("DeleteOptions"): reflect.TypeOf(&metav1.DeleteOptions{}).Elem(),
+				regularIdentityGV.WithKind("ExportOptions"): reflect.TypeOf(&metav1.ExportOptions{}).Elem(),
+				regularIdentityGV.WithKind("GetOptions"):    reflect.TypeOf(&metav1.GetOptions{}).Elem(),
+				regularIdentityGV.WithKind("ListOptions"):   reflect.TypeOf(&metav1.ListOptions{}).Elem(),
+				regularIdentityGV.WithKind("PatchOptions"):  reflect.TypeOf(&metav1.PatchOptions{}).Elem(),
+				regularIdentityGV.WithKind("UpdateOptions"): reflect.TypeOf(&metav1.UpdateOptions{}).Elem(),
+				regularIdentityGV.WithKind("WatchEvent"):    reflect.TypeOf(&metav1.WatchEvent{}).Elem(),
+
+				regularLoginGVInternal.WithKind("WatchEvent"): reflect.TypeOf(&metav1.InternalEvent{}).Elem(),
+
+				regularIdentityGVInternal.WithKind("WatchEvent"): reflect.TypeOf(&metav1.InternalEvent{}).Elem(),
 
 				// the types below this line do not really matter to us because they are in the core group
 
@@ -92,6 +128,8 @@ func TestNew(t *testing.T) {
 				metav1.Unversioned.WithKind("UpdateOptions"):   reflect.TypeOf(&metav1.UpdateOptions{}).Elem(),
 				metav1.Unversioned.WithKind("WatchEvent"):      reflect.TypeOf(&metav1.WatchEvent{}).Elem(),
 			},
+			wantLoginGroupVersion:    regularLoginGV,
+			wantIdentityGroupVersion: regularIdentityGV,
 		},
 		{
 			name:           "other api group",
@@ -99,22 +137,39 @@ func TestNew(t *testing.T) {
 			want: map[schema.GroupVersionKind]reflect.Type{
 				// all the types that are in the aggregated API group
 
-				otherGV.WithKind("TokenCredentialRequest"):     reflect.TypeOf(&loginv1alpha1.TokenCredentialRequest{}).Elem(),
-				otherGV.WithKind("TokenCredentialRequestList"): reflect.TypeOf(&loginv1alpha1.TokenCredentialRequestList{}).Elem(),
+				otherLoginGV.WithKind("TokenCredentialRequest"):     reflect.TypeOf(&loginv1alpha1.TokenCredentialRequest{}).Elem(),
+				otherLoginGV.WithKind("TokenCredentialRequestList"): reflect.TypeOf(&loginv1alpha1.TokenCredentialRequestList{}).Elem(),
 
-				otherGVInternal.WithKind("TokenCredentialRequest"):     reflect.TypeOf(&loginapi.TokenCredentialRequest{}).Elem(),
-				otherGVInternal.WithKind("TokenCredentialRequestList"): reflect.TypeOf(&loginapi.TokenCredentialRequestList{}).Elem(),
+				otherLoginGVInternal.WithKind("TokenCredentialRequest"):     reflect.TypeOf(&loginapi.TokenCredentialRequest{}).Elem(),
+				otherLoginGVInternal.WithKind("TokenCredentialRequestList"): reflect.TypeOf(&loginapi.TokenCredentialRequestList{}).Elem(),
 
-				otherGV.WithKind("CreateOptions"): reflect.TypeOf(&metav1.CreateOptions{}).Elem(),
-				otherGV.WithKind("DeleteOptions"): reflect.TypeOf(&metav1.DeleteOptions{}).Elem(),
-				otherGV.WithKind("ExportOptions"): reflect.TypeOf(&metav1.ExportOptions{}).Elem(),
-				otherGV.WithKind("GetOptions"):    reflect.TypeOf(&metav1.GetOptions{}).Elem(),
-				otherGV.WithKind("ListOptions"):   reflect.TypeOf(&metav1.ListOptions{}).Elem(),
-				otherGV.WithKind("PatchOptions"):  reflect.TypeOf(&metav1.PatchOptions{}).Elem(),
-				otherGV.WithKind("UpdateOptions"): reflect.TypeOf(&metav1.UpdateOptions{}).Elem(),
-				otherGV.WithKind("WatchEvent"):    reflect.TypeOf(&metav1.WatchEvent{}).Elem(),
+				otherIdentityGV.WithKind("WhoAmIRequest"):     reflect.TypeOf(&identityv1alpha1.WhoAmIRequest{}).Elem(),
+				otherIdentityGV.WithKind("WhoAmIRequestList"): reflect.TypeOf(&identityv1alpha1.WhoAmIRequestList{}).Elem(),
 
-				otherGVInternal.WithKind("WatchEvent"): reflect.TypeOf(&metav1.InternalEvent{}).Elem(),
+				otherIdentityGVInternal.WithKind("WhoAmIRequest"):     reflect.TypeOf(&identityapi.WhoAmIRequest{}).Elem(),
+				otherIdentityGVInternal.WithKind("WhoAmIRequestList"): reflect.TypeOf(&identityapi.WhoAmIRequestList{}).Elem(),
+
+				otherLoginGV.WithKind("CreateOptions"): reflect.TypeOf(&metav1.CreateOptions{}).Elem(),
+				otherLoginGV.WithKind("DeleteOptions"): reflect.TypeOf(&metav1.DeleteOptions{}).Elem(),
+				otherLoginGV.WithKind("ExportOptions"): reflect.TypeOf(&metav1.ExportOptions{}).Elem(),
+				otherLoginGV.WithKind("GetOptions"):    reflect.TypeOf(&metav1.GetOptions{}).Elem(),
+				otherLoginGV.WithKind("ListOptions"):   reflect.TypeOf(&metav1.ListOptions{}).Elem(),
+				otherLoginGV.WithKind("PatchOptions"):  reflect.TypeOf(&metav1.PatchOptions{}).Elem(),
+				otherLoginGV.WithKind("UpdateOptions"): reflect.TypeOf(&metav1.UpdateOptions{}).Elem(),
+				otherLoginGV.WithKind("WatchEvent"):    reflect.TypeOf(&metav1.WatchEvent{}).Elem(),
+
+				otherIdentityGV.WithKind("CreateOptions"): reflect.TypeOf(&metav1.CreateOptions{}).Elem(),
+				otherIdentityGV.WithKind("DeleteOptions"): reflect.TypeOf(&metav1.DeleteOptions{}).Elem(),
+				otherIdentityGV.WithKind("ExportOptions"): reflect.TypeOf(&metav1.ExportOptions{}).Elem(),
+				otherIdentityGV.WithKind("GetOptions"):    reflect.TypeOf(&metav1.GetOptions{}).Elem(),
+				otherIdentityGV.WithKind("ListOptions"):   reflect.TypeOf(&metav1.ListOptions{}).Elem(),
+				otherIdentityGV.WithKind("PatchOptions"):  reflect.TypeOf(&metav1.PatchOptions{}).Elem(),
+				otherIdentityGV.WithKind("UpdateOptions"): reflect.TypeOf(&metav1.UpdateOptions{}).Elem(),
+				otherIdentityGV.WithKind("WatchEvent"):    reflect.TypeOf(&metav1.WatchEvent{}).Elem(),
+
+				otherLoginGVInternal.WithKind("WatchEvent"): reflect.TypeOf(&metav1.InternalEvent{}).Elem(),
+
+				otherIdentityGVInternal.WithKind("WatchEvent"): reflect.TypeOf(&metav1.InternalEvent{}).Elem(),
 
 				// the types below this line do not really matter to us because they are in the core group
 
@@ -134,16 +189,17 @@ func TestNew(t *testing.T) {
 				metav1.Unversioned.WithKind("UpdateOptions"):   reflect.TypeOf(&metav1.UpdateOptions{}).Elem(),
 				metav1.Unversioned.WithKind("WatchEvent"):      reflect.TypeOf(&metav1.WatchEvent{}).Elem(),
 			},
+			wantLoginGroupVersion:    otherLoginGV,
+			wantIdentityGroupVersion: otherIdentityGV,
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			loginConciergeAPIGroup, ok := groupsuffix.Replace("login.concierge.pinniped.dev", tt.apiGroupSuffix)
-			require.True(t, ok)
-
-			scheme := New(loginConciergeAPIGroup, tt.apiGroupSuffix)
+			scheme, loginGV, identityGV := New(tt.apiGroupSuffix)
 			require.Equal(t, tt.want, scheme.AllKnownTypes())
+			require.Equal(t, tt.wantLoginGroupVersion, loginGV)
+			require.Equal(t, tt.wantIdentityGroupVersion, identityGV)
 
 			// make a credential request like a client would send
 			authenticationConciergeAPIGroup := "authentication.concierge." + tt.apiGroupSuffix

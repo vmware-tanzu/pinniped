@@ -28,6 +28,7 @@ import (
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 	"k8s.io/klog/v2/klogr"
 
+	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/pkg/conciergeclient"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/filesession"
@@ -100,7 +101,7 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeAuthenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name")
 	cmd.Flags().StringVar(&flags.conciergeEndpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")
 	cmd.Flags().StringVar(&flags.conciergeCABundle, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the concierge")
-	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", "pinniped.dev", "Concierge API group suffix")
+	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
 	cmd.Flags().BoolVar(&flags.useImpersonationProxy, "concierge-use-impersonation-proxy", false, "Whether the concierge cluster uses an impersonation proxy")
 
 	mustMarkHidden(cmd, "debug-session-cache")

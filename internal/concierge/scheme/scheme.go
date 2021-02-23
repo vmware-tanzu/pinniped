@@ -6,6 +6,7 @@
 package scheme
 
 import (
+	"fmt"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,62 +14,48 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
+	identityapi "go.pinniped.dev/generated/latest/apis/concierge/identity"
+	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/plog"
 )
 
-// New returns a runtime.Scheme for use by the Concierge aggregated API. The provided
-// loginConciergeAPIGroup should be the API group that the Concierge is serving (e.g.,
-// login.concierge.pinniped.dev, login.concierge.walrus.tld, etc.). The provided apiGroupSuffix is
-// the API group suffix of the provided loginConciergeAPIGroup (e.g., pinniped.dev, walrus.tld,
-// etc.).
-func New(loginConciergeAPIGroup, apiGroupSuffix string) *runtime.Scheme {
+// New returns a runtime.Scheme for use by the Concierge aggregated API running with the provided
+// apiGroupSuffix.
+func New(apiGroupSuffix string) (_ *runtime.Scheme, login, identity schema.GroupVersion) {
 	// standard set up of the server side scheme
 	scheme := runtime.NewScheme()
 
 	// add the options to empty v1
 	metav1.AddToGroupVersion(scheme, metav1.Unversioned)
 
-	// nothing fancy is required if using the standard group
-	if loginConciergeAPIGroup == loginv1alpha1.GroupName {
-		utilruntime.Must(loginv1alpha1.AddToScheme(scheme))
-		utilruntime.Must(loginapi.AddToScheme(scheme))
-		return scheme
+	// nothing fancy is required if using the standard group suffix
+	if apiGroupSuffix == groupsuffix.PinnipedDefaultSuffix {
+		schemeBuilder := runtime.NewSchemeBuilder(
+			loginv1alpha1.AddToScheme,
+			loginapi.AddToScheme,
+			identityv1alpha1.AddToScheme,
+			identityapi.AddToScheme,
+		)
+		utilruntime.Must(schemeBuilder.AddToScheme(scheme))
+		return scheme, loginv1alpha1.SchemeGroupVersion, identityv1alpha1.SchemeGroupVersion
 	}
 
-	// we need a temporary place to register our types to avoid double registering them
-	tmpScheme := runtime.NewScheme()
-	utilruntime.Must(loginv1alpha1.AddToScheme(tmpScheme))
-	utilruntime.Must(loginapi.AddToScheme(tmpScheme))
+	loginConciergeGroupData, identityConciergeGroupData := groupsuffix.ConciergeAggregatedGroups(apiGroupSuffix)
 
-	for gvk := range tmpScheme.AllKnownTypes() {
-		if gvk.GroupVersion() == metav1.Unversioned {
-			continue // metav1.AddToGroupVersion registers types outside of our aggregated API group that we need to ignore
-		}
+	addToSchemeAtNewGroup(scheme, loginv1alpha1.GroupName, loginConciergeGroupData.Group, loginv1alpha1.AddToScheme, loginapi.AddToScheme)
+	addToSchemeAtNewGroup(scheme, identityv1alpha1.GroupName, identityConciergeGroupData.Group, identityv1alpha1.AddToScheme, identityapi.AddToScheme)
 
-		if gvk.Group != loginv1alpha1.GroupName {
-			panic("tmp scheme has types not in the aggregated API group: " + gvk.Group) // programmer error
-		}
-
-		obj, err := tmpScheme.New(gvk)
-		if err != nil {
-			panic(err) // programmer error, scheme internal code is broken
-		}
-		newGVK := schema.GroupVersionKind{
-			Group:   loginConciergeAPIGroup,
-			Version: gvk.Version,
-			Kind:    gvk.Kind,
-		}
-
-		// register the existing type but with the new group in the correct scheme
-		scheme.AddKnownTypeWithName(newGVK, obj)
-	}
-
-	// manually register conversions and defaulting into the correct scheme since we cannot directly call loginv1alpha1.AddToScheme
-	utilruntime.Must(loginv1alpha1.RegisterConversions(scheme))
-	utilruntime.Must(loginv1alpha1.RegisterDefaults(scheme))
+	// manually register conversions and defaulting into the correct scheme since we cannot directly call AddToScheme
+	schemeBuilder := runtime.NewSchemeBuilder(
+		loginv1alpha1.RegisterConversions,
+		loginv1alpha1.RegisterDefaults,
+		identityv1alpha1.RegisterConversions,
+		identityv1alpha1.RegisterDefaults,
+	)
+	utilruntime.Must(schemeBuilder.AddToScheme(scheme))
 
 	// we do not want to return errors from the scheme and instead would prefer to defer
 	// to the REST storage layer for consistency.  The simplest way to do this is to force
@@ -109,5 +96,35 @@ func New(loginConciergeAPIGroup, apiGroupSuffix string) *runtime.Scheme {
 		credentialRequest.Spec.Authenticator.APIGroup = &restoredGroup
 	})
 
-	return scheme
+	return scheme, schema.GroupVersion(loginConciergeGroupData), schema.GroupVersion(identityConciergeGroupData)
+}
+
+func addToSchemeAtNewGroup(scheme *runtime.Scheme, oldGroup, newGroup string, funcs ...func(*runtime.Scheme) error) {
+	// we need a temporary place to register our types to avoid double registering them
+	tmpScheme := runtime.NewScheme()
+	schemeBuilder := runtime.NewSchemeBuilder(funcs...)
+	utilruntime.Must(schemeBuilder.AddToScheme(tmpScheme))
+
+	for gvk := range tmpScheme.AllKnownTypes() {
+		if gvk.GroupVersion() == metav1.Unversioned {
+			continue // metav1.AddToGroupVersion registers types outside of our aggregated API group that we need to ignore
+		}
+
+		if gvk.Group != oldGroup {
+			panic(fmt.Errorf("tmp scheme has type not in the old aggregated API group %s: %s", oldGroup, gvk)) // programmer error
+		}
+
+		obj, err := tmpScheme.New(gvk)
+		if err != nil {
+			panic(err) // programmer error, scheme internal code is broken
+		}
+		newGVK := schema.GroupVersionKind{
+			Group:   newGroup,
+			Version: gvk.Version,
+			Kind:    gvk.Kind,
+		}
+
+		// register the existing type but with the new group in the correct scheme
+		scheme.AddKnownTypeWithName(newGVK, obj)
+	}
 }

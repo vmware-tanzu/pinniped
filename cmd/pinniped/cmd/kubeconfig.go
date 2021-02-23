@@ -111,7 +111,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.StringVar(&namespace, "concierge-namespace", "pinniped-concierge", "Namespace in which the concierge was installed")
 	f.StringVar(&flags.concierge.authenticatorType, "concierge-authenticator-type", "", "Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)")
 	f.StringVar(&flags.concierge.authenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name (default: autodiscover)")
-	f.StringVar(&flags.concierge.apiGroupSuffix, "concierge-api-group-suffix", "pinniped.dev", "Concierge API group suffix")
+	f.StringVar(&flags.concierge.apiGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
 
 	f.StringVar(&flags.concierge.caBundlePath, "concierge-ca-bundle", "", "Path to TLS certificate authority bundle (PEM format, optional, can be repeated) to use when connecting to the concierge")
 	f.StringVar(&flags.concierge.endpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")

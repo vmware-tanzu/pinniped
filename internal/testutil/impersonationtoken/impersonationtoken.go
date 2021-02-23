@@ -35,12 +35,11 @@ func Make(
 	// is installed on the cluster. This API group is usually replaced by the kubeclient middleware,
 	// but this object is not touched by the middleware since it is in a HTTP header. Therefore, we
 	// need to make a manual edit here.
-	loginConciergeGroupName, ok := groupsuffix.Replace(loginv1alpha1.GroupName, apiGroupSuffix)
-	require.True(t, ok, "couldn't replace suffix of %q with %q", loginv1alpha1.GroupName, apiGroupSuffix)
+	scheme, loginGV, _ := conciergescheme.New(apiGroupSuffix)
 	tokenCredentialRequest := loginv1alpha1.TokenCredentialRequest{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "TokenCredentialRequest",
-			APIVersion: loginConciergeGroupName + "/v1alpha1",
+			APIVersion: loginGV.Group + "/v1alpha1",
 		},
 		Spec: loginv1alpha1.TokenCredentialRequestSpec{
 			Token:         token,
@@ -56,7 +55,6 @@ func Make(
 	require.True(t, ok, "couldn't replace suffix of %q with %q", *tokenCredentialRequest.Spec.Authenticator.APIGroup, apiGroupSuffix)
 	tokenCredentialRequest.Spec.Authenticator.APIGroup = &authenticatorAPIGroup
 
-	scheme := conciergescheme.New(loginConciergeGroupName, apiGroupSuffix)
 	codecs := serializer.NewCodecFactory(scheme)
 	respInfo, ok := runtime.SerializerInfoForMediaType(codecs.SupportedMediaTypes(), runtime.ContentTypeJSON)
 	require.True(t, ok, "couldn't find serializer info for media type")

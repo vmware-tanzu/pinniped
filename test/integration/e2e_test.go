@@ -310,4 +310,37 @@ func TestE2EFullIntegration(t *testing.T) {
 		expectedGroups = append(expectedGroups, g)
 	}
 	require.Equal(t, expectedGroups, idTokenClaims[oidc.DownstreamGroupsClaim])
+
+	// confirm we are the right user according to Kube
+	expectedYAMLGroups := func() string {
+		var b strings.Builder
+		for _, g := range env.SupervisorTestUpstream.ExpectedGroups {
+			b.WriteString("\n")
+			b.WriteString(`      - `)
+			b.WriteString(g)
+		}
+		return b.String()
+	}()
+	kubectlCmd3 := exec.CommandContext(ctx, "kubectl", "create", "-f", "-", "-o", "yaml", "--kubeconfig", kubeconfigPath)
+	kubectlCmd3.Env = append(os.Environ(), env.ProxyEnv()...)
+	kubectlCmd3.Stdin = strings.NewReader(`
+apiVersion: identity.concierge.` + env.APIGroupSuffix + `/v1alpha1
+kind: WhoAmIRequest
+`)
+	kubectlOutput3, err := kubectlCmd3.CombinedOutput()
+	require.NoError(t, err)
+	require.Equal(t,
+		`apiVersion: identity.concierge.`+env.APIGroupSuffix+`/v1alpha1
+kind: WhoAmIRequest
+metadata:
+  creationTimestamp: null
+spec: {}
+status:
+  kubernetesUserInfo:
+    user:
+      groups:`+expectedYAMLGroups+`
+      - system:authenticated
+      username: `+env.SupervisorTestUpstream.Username+`
+`,
+		string(kubectlOutput3))
 }

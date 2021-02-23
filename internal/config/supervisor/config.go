@@ -54,7 +54,7 @@ func FromPath(path string) (*Config, error) {
 
 func maybeSetAPIGroupSuffixDefault(apiGroupSuffix **string) {
 	if *apiGroupSuffix == nil {
-		*apiGroupSuffix = stringPtr("pinniped.dev")
+		*apiGroupSuffix = stringPtr(groupsuffix.PinnipedDefaultSuffix)
 	}
 }
 

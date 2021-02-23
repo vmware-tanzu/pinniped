@@ -18,7 +18,6 @@ import (
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
-	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
 	"go.pinniped.dev/internal/concierge/apiserver"
 	conciergescheme "go.pinniped.dev/internal/concierge/scheme"
@@ -27,7 +26,6 @@ import (
 	"go.pinniped.dev/internal/controllermanager"
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/dynamiccert"
-	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/registry/credentialrequest"
@@ -124,11 +122,7 @@ func (a *App) runServer(ctx context.Context) error {
 
 	// Get the "real" name of the login concierge API group (i.e., the API group name with the
 	// injected suffix).
-	loginConciergeAPIGroup, ok := groupsuffix.Replace(loginv1alpha1.GroupName, *cfg.APIGroupSuffix)
-	if !ok {
-		return fmt.Errorf("cannot make api group from %s/%s", loginv1alpha1.GroupName, *cfg.APIGroupSuffix)
-	}
-	loginConciergeScheme := conciergescheme.New(loginConciergeAPIGroup, *cfg.APIGroupSuffix)
+	scheme, loginGV, identityGV := conciergescheme.New(*cfg.APIGroupSuffix)
 
 	// Prepare to start the controllers, but defer actually starting them until the
 	// post start hook of the aggregated API server.
@@ -145,7 +139,7 @@ func (a *App) runServer(ctx context.Context) error {
 			ServingCertDuration:        time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds) * time.Second,
 			ServingCertRenewBefore:     time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds) * time.Second,
 			AuthenticatorCache:         authenticators,
-			LoginJSONDecoder:           getLoginJSONDecoder(loginConciergeAPIGroup, loginConciergeScheme),
+			LoginJSONDecoder:           getLoginJSONDecoder(loginGV.Group, scheme),
 		},
 	)
 	if err != nil {
@@ -158,8 +152,10 @@ func (a *App) runServer(ctx context.Context) error {
 		authenticators,
 		dynamiccertauthority.New(dynamicSigningCertProvider),
 		startControllersFunc,
-		loginConciergeAPIGroup,
-		loginConciergeScheme,
+		*cfg.APIGroupSuffix,
+		scheme,
+		loginGV,
+		identityGV,
 	)
 	if err != nil {
 		return fmt.Errorf("could not configure aggregated API server: %w", err)
@@ -181,21 +177,18 @@ func getAggregatedAPIServerConfig(
 	authenticator credentialrequest.TokenCredentialRequestAuthenticator,
 	issuer credentialrequest.CertIssuer,
 	startControllersPostStartHook func(context.Context),
-	loginConciergeAPIGroup string,
-	loginConciergeScheme *runtime.Scheme,
+	apiGroupSuffix string,
+	scheme *runtime.Scheme,
+	loginConciergeGroupVersion, identityConciergeGroupVersion schema.GroupVersion,
 ) (*apiserver.Config, error) {
-	scheme := loginConciergeScheme
 	codecs := serializer.NewCodecFactory(scheme)
 
-	defaultEtcdPathPrefix := fmt.Sprintf("/registry/%s", loginConciergeAPIGroup)
-	groupVersion := schema.GroupVersion{
-		Group:   loginConciergeAPIGroup,
-		Version: loginv1alpha1.SchemeGroupVersion.Version,
-	}
+	// this is unused for now but it is a safe value that we could use in the future
+	defaultEtcdPathPrefix := fmt.Sprintf("/pinniped-concierge-registry/%s", apiGroupSuffix)
 
 	recommendedOptions := genericoptions.NewRecommendedOptions(
 		defaultEtcdPathPrefix,
-		codecs.LegacyCodec(groupVersion),
+		codecs.LegacyCodec(loginConciergeGroupVersion, identityConciergeGroupVersion),
 	)
 	recommendedOptions.Etcd = nil // turn off etcd storage because we don't need it yet
 	recommendedOptions.SecureServing.ServerCert.GeneratedCert = dynamicCertProvider
@@ -223,7 +216,8 @@ func getAggregatedAPIServerConfig(
 			StartControllersPostStartHook: startControllersPostStartHook,
 			Scheme:                        scheme,
 			NegotiatedSerializer:          codecs,
-			GroupVersion:                  groupVersion,
+			LoginConciergeGroupVersion:    loginConciergeGroupVersion,
+			IdentityConciergeGroupVersion: identityConciergeGroupVersion,
 		},
 	}
 	return apiServerConfig, nil

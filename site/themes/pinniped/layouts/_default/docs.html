@@ -7,8 +7,10 @@
 		</div>
 		<div class="wrapper docs clearfix">
 			{{ partial "docs-sidebar.html" . }}
-			
 			<div class="docs-content">
+				{{- with .Title -}}
+					<h1>{{.}}</h1>
+				{{- end -}}
 				{{ .Content }}
 			</div>
 		</div>

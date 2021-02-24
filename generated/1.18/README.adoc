@@ -236,6 +236,24 @@ Describes the configuration status of a Pinniped credential issuer.
 |===
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerimpersonationproxyinfo"]
+==== CredentialIssuerImpersonationProxyInfo 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerstatus[$$CredentialIssuerStatus$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`endpoint`* __string__ | The HTTPS endpoint of the impersonation proxy.
+| *`certificateAuthorityData`* __string__ | The CA bundle to validate connections to the impersonation proxy.
+|===
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerkubeconfiginfo"]
 ==== CredentialIssuerKubeConfigInfo 
 
@@ -249,8 +267,8 @@ Describes the configuration status of a Pinniped credential issuer.
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`server`* __string__ | The K8s API server URL.
-| *`certificateAuthorityData`* __string__ | The K8s API server CA bundle.
+| *`server`* __string__ | The Kubernetes API server URL.
+| *`certificateAuthorityData`* __string__ | The Kubernetes API server CA bundle.
 |===
 
 
@@ -270,7 +288,8 @@ Status of a credential issuer.
 |===
 | Field | Description
 | *`strategies`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$] array__ | List of integration strategies that were attempted by Pinniped.
-| *`kubeConfigInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerkubeconfiginfo[$$CredentialIssuerKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
+| *`kubeConfigInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerkubeconfiginfo[$$CredentialIssuerKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using the TokenCredentialRequest API.
+| *`impersonationProxyInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerimpersonationproxyinfo[$$CredentialIssuerImpersonationProxyInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using the impersonation proxy.
 |===
 
 

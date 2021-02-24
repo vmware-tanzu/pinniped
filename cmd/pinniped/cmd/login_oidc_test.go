@@ -15,15 +15,13 @@ import (
 	"testing"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-
-	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
-
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
@@ -64,15 +62,15 @@ func TestLoginOIDCCommand(t *testing.T) {
 
 				Flags:
 				      --ca-bundle strings                     Path to TLS certificate authority bundle (PEM format, optional, can be repeated)
-				      --ca-bundle-data strings                Base64 endcoded TLS certificate authority bundle (base64 encoded PEM format, optional, can be repeated)
+				      --ca-bundle-data strings                Base64 encoded TLS certificate authority bundle (base64 encoded PEM format, optional, can be repeated)
 				      --client-id string                      OpenID Connect client ID (default "pinniped-cli")
 				      --concierge-api-group-suffix string     Concierge API group suffix (default "pinniped.dev")
 				      --concierge-authenticator-name string   Concierge authenticator name
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt')
-				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the concierge
-				      --concierge-endpoint string             API base for the Pinniped concierge endpoint
-				      --concierge-use-impersonation-proxy     Whether the concierge cluster uses an impersonation proxy
-				      --enable-concierge                      Exchange the OIDC ID token with the Pinniped concierge during login
+				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the Concierge
+				      --concierge-endpoint string             API base for the Concierge endpoint
+				      --concierge-mode mode                   Concierge mode of operation (default TokenCredentialRequestAPI)
+				      --enable-concierge                      Use the Concierge to login
 				  -h, --help                                  help for oidc
 				      --issuer string                         OpenID Connect issuer URL
 				      --listen-port uint16                    TCP port for localhost listener (authorization code flow only)
@@ -207,7 +205,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--client-id", "test-client-id",
 				"--issuer", "test-issuer",
 				"--enable-concierge",
-				"--concierge-use-impersonation-proxy",
+				"--concierge-mode", "ImpersonationProxy",
 				"--concierge-authenticator-type", "webhook",
 				"--concierge-authenticator-name", "test-authenticator",
 				"--concierge-endpoint", "https://127.0.0.1:1234/",

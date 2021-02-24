@@ -54,10 +54,10 @@ func TestLoginStaticCommand(t *testing.T) {
 				      --concierge-api-group-suffix string     Concierge API group suffix (default "pinniped.dev")
 				      --concierge-authenticator-name string   Concierge authenticator name
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt')
-				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the concierge
-				      --concierge-endpoint string             API base for the Pinniped concierge endpoint
-				      --concierge-use-impersonation-proxy     Whether the concierge cluster uses an impersonation proxy
-				      --enable-concierge                      Exchange the token with the Pinniped concierge during login
+				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the Concierge
+				      --concierge-endpoint string             API base for the Concierge endpoint
+				      --concierge-mode mode                   Concierge mode of operation (default TokenCredentialRequestAPI)
+				      --enable-concierge                      Use the Concierge to login
 				  -h, --help                                  help for static
 				      --token string                          Static token to present during login
 				      --token-env string                      Environment variable containing a static token
@@ -156,7 +156,7 @@ func TestLoginStaticCommand(t *testing.T) {
 			name: "impersonation proxy success",
 			args: []string{
 				"--enable-concierge",
-				"--concierge-use-impersonation-proxy",
+				"--concierge-mode", "ImpersonationProxy",
 				"--token", "test-token",
 				"--concierge-endpoint", "https://127.0.0.1/",
 				"--concierge-authenticator-type", "webhook",

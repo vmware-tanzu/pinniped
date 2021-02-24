@@ -296,9 +296,11 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				client.Kubernetes,
 				informers.installationNamespaceK8s.Core().V1().ConfigMaps(),
 				informers.installationNamespaceK8s.Core().V1().Services(),
+				informers.installationNamespaceK8s.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 				controllerlib.WithInitialEvent,
-				"pinniped-concierge-impersonation-proxy-load-balancer", // TODO this string should come from `c.NamesConfig`
+				"pinniped-concierge-impersonation-proxy-load-balancer",           // TODO this string should come from `c.NamesConfig`
+				"pinniped-concierge-impersonation-proxy-tls-serving-certificate", // TODO this string should come from `c.NamesConfig`
 				c.Labels,
 				tls.Listen,
 				func() (http.Handler, error) {

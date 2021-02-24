@@ -37,5 +37,5 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(base64.RawURLEncoding.EncodeToString(reqJSON))
+	fmt.Println(base64.StdEncoding.EncodeToString(reqJSON))
 }

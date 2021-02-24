@@ -180,18 +180,21 @@ func TestImpersonationProxy(t *testing.T) {
 		informerFactory.WaitForCacheSync(ctx.Done())
 
 		// Test "create" verb through the impersonation proxy.
+		configMapLabels := labels.Set{
+			"pinniped.dev/testConfigMap": library.RandHex(t, 8),
+		}
 		_, err = impersonationProxyClient.CoreV1().ConfigMaps(namespace.Name).Create(ctx,
-			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-1"}},
+			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-1", Labels: configMapLabels}},
 			metav1.CreateOptions{},
 		)
 		require.NoError(t, err)
 		_, err = impersonationProxyClient.CoreV1().ConfigMaps(namespace.Name).Create(ctx,
-			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-2"}},
+			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-2", Labels: configMapLabels}},
 			metav1.CreateOptions{},
 		)
 		require.NoError(t, err)
 		_, err = impersonationProxyClient.CoreV1().ConfigMaps(namespace.Name).Create(ctx,
-			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-3"}},
+			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-3", Labels: configMapLabels}},
 			metav1.CreateOptions{},
 		)
 		require.NoError(t, err)
@@ -210,7 +213,9 @@ func TestImpersonationProxy(t *testing.T) {
 		require.NoError(t, err)
 
 		// Test "list" verb through the impersonation proxy.
-		listResult, err := impersonationProxyClient.CoreV1().ConfigMaps(namespace.Name).List(ctx, metav1.ListOptions{})
+		listResult, err := impersonationProxyClient.CoreV1().ConfigMaps(namespace.Name).List(ctx, metav1.ListOptions{
+			LabelSelector: configMapLabels.String(),
+		})
 		require.NoError(t, err)
 		require.Len(t, listResult.Items, 3)
 
@@ -253,7 +258,7 @@ func TestImpersonationProxy(t *testing.T) {
 		// demonstrate that the informer's "watch" verb is working through the impersonation proxy.
 		require.Eventually(t, func() bool {
 			_, getErr := informer.Lister().ConfigMaps(namespace.Name).Get("configmap-3")
-			list, listErr := informer.Lister().ConfigMaps(namespace.Name).List(labels.Everything())
+			list, listErr := informer.Lister().ConfigMaps(namespace.Name).List(configMapLabels.AsSelector())
 			return k8serrors.IsNotFound(getErr) && listErr == nil && len(list) == 2
 		}, 10*time.Second, 50*time.Millisecond)
 
@@ -264,11 +269,13 @@ func TestImpersonationProxy(t *testing.T) {
 		// Make sure that the deleted ConfigMaps shows up in the informer's cache to
 		// demonstrate that the informer's "watch" verb is working through the impersonation proxy.
 		require.Eventually(t, func() bool {
-			list, listErr := informer.Lister().ConfigMaps(namespace.Name).List(labels.Everything())
+			list, listErr := informer.Lister().ConfigMaps(namespace.Name).List(configMapLabels.AsSelector())
 			return listErr == nil && len(list) == 0
 		}, 10*time.Second, 50*time.Millisecond)
 
-		listResult, err = impersonationProxyClient.CoreV1().ConfigMaps(namespace.Name).List(ctx, metav1.ListOptions{})
+		listResult, err = impersonationProxyClient.CoreV1().ConfigMaps(namespace.Name).List(ctx, metav1.ListOptions{
+			LabelSelector: configMapLabels.String(),
+		})
 		require.NoError(t, err)
 		require.Len(t, listResult.Items, 0)
 	})

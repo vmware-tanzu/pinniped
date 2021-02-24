@@ -16,12 +16,15 @@ type StrategyReason string
 
 const (
 	KubeClusterSigningCertificateStrategyType = StrategyType("KubeClusterSigningCertificate")
+	ImpersonationProxyStrategyType            = StrategyType("ImpersonationProxy")
 
 	SuccessStrategyStatus = StrategyStatus("Success")
 	ErrorStrategyStatus   = StrategyStatus("Error")
 
 	CouldNotFetchKeyStrategyReason = StrategyReason("CouldNotFetchKey")
 	FetchedKeyStrategyReason       = StrategyReason("FetchedKey")
+	ListeningStrategyReason        = StrategyReason("Listening")
+	DisabledStrategyReason         = StrategyReason("Disabled")
 )
 
 // Status of a credential issuer.
@@ -29,19 +32,35 @@ type CredentialIssuerStatus struct {
 	// List of integration strategies that were attempted by Pinniped.
 	Strategies []CredentialIssuerStrategy `json:"strategies"`
 
-	// Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
+	// Information needed to form a valid Pinniped-based kubeconfig using the TokenCredentialRequest API.
 	// +optional
 	KubeConfigInfo *CredentialIssuerKubeConfigInfo `json:"kubeConfigInfo,omitempty"`
+
+	// Information needed to form a valid Pinniped-based kubeconfig using the impersonation proxy.
+	// +optional
+	ImpersonationProxyInfo *CredentialIssuerImpersonationProxyInfo `json:"impersonationProxyInfo,omitempty"`
 }
 
-// Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
+// Information needed to connect to the TokenCredentialRequest API on this cluster.
 type CredentialIssuerKubeConfigInfo struct {
-	// The K8s API server URL.
+	// The Kubernetes API server URL.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:Pattern=`^https://|^http://`
 	Server string `json:"server"`
 
-	// The K8s API server CA bundle.
+	// The Kubernetes API server CA bundle.
+	// +kubebuilder:validation:MinLength=1
+	CertificateAuthorityData string `json:"certificateAuthorityData"`
+}
+
+// Information needed to connect to the TokenCredentialRequest API on this cluster.
+type CredentialIssuerImpersonationProxyInfo struct {
+	// The HTTPS endpoint of the impersonation proxy.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^https://`
+	Endpoint string `json:"endpoint"`
+
+	// The CA bundle to validate connections to the impersonation proxy.
 	// +kubebuilder:validation:MinLength=1
 	CertificateAuthorityData string `json:"certificateAuthorityData"`
 }

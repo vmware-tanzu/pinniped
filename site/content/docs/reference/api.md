@@ -1,11 +1,11 @@
 ---
-title: API
+title: API Types
 description: Reference for the `*.pinniped.dev` Kubernetes API groups.
 cascade:
   layout: docs
 menu:
   docs:
-    name: Kubernetes API
+    name: API Types
     weight: 35
     parent: reference
 ---

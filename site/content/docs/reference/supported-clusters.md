@@ -10,7 +10,7 @@ menu:
     parent: reference
 ---
 
-| **Cluster Type** | **Conciege Works?** |
+| **Cluster Type** | **Concierge Works?** |
 |-|-|
 | [VMware Tanzu Kubernetes Grid (TKG) clusters](https://tanzu.vmware.com/kubernetes-grid) | Yes |
 | [Kind clusters](https://kind.sigs.k8s.io/) | Yes |

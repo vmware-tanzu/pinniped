@@ -27,7 +27,7 @@ Find the appropriate binary for your platform from the [latest release](https://
 
 {{< buttonlink href="https://get.pinniped.dev/latest/pinniped-cli-linux-amd64" >}}Download for Linux/amd64{{< buttonicon "download.png" >}}{{< /buttonlink >}}
 
-{{< buttonlink href="https://get.pinniped.dev/latest/pinniped-cli-windows-amd64" >}}Download for Windows/amd64{{< buttonicon "download.png" >}}{{< /buttonlink >}}
+{{< buttonlink href="https://get.pinniped.dev/latest/pinniped-cli-windows-amd64.exe" >}}Download for Windows/amd64{{< buttonicon "download.png" >}}{{< /buttonlink >}}
 
 You should put the command-line tool somewhere on your `$PATH`, such as `/usr/local/bin` on macOS/Linux.
 You'll also need to mark the file as executable.

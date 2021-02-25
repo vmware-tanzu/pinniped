@@ -8,7 +8,7 @@ Please see the [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## Project Scope
 
-Learn about the [scope](https://pinniped.dev/docs/scope/) of the project.
+See [SCOPE.md](./SCOPE.md) for some guidelines about what we consider in and out of scope for Pinniped.
 
 ## Community Meetings
 

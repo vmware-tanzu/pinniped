@@ -3,7 +3,7 @@
 		<article>
 			<div class="hero subpage">
 				<div class="wrapper">
-					<h1>Pinniped Blog</h1>
+					<h1>Pinniped blog</h1>
 				</div>
 			</div>
 			<div class="wrapper blog">
@@ -15,18 +15,19 @@
 					<p class="date">{{ dateFormat "Jan 2, 2006" .Date }}</p>
 					{{ .Content }}
 				</div>
-				<h2>Related Content</h2>
-				<div class="grid three">
-					{{ $related := (where (.Site.RegularPages.Related .) "Type" "posts") | first 3 }}
-					{{ with $related }}
+				{{ $related := (where (.Site.RegularPages.Related .) "Type" "posts") | first 3 }}
+				{{ with $related }}
+					<h2>Related content</h2>
+					<div class="grid three">
 						{{ range . }}
 							{{ partial "blog-post-card.html" . }}
 						{{ end }}
-					{{ end }}
-				</div>
+					</div>
+				{{ end }}
 			</div>
 		</article>
 	</main>
+	{{ partial "getting-started" . }}
 {{ end }}
 
 

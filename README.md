@@ -10,7 +10,7 @@ install procedure across all types and origins of Kubernetes clusters,
 declarative configuration via Kubernetes APIs, enterprise-grade integrations
 with IDPs, and distribution-specific integration strategies.
 
-### Example Use Cases
+### Example use cases
 
 * Your team uses a large enterprise IDP, and has many clusters that they
   manage. Pinniped provides:
@@ -39,17 +39,15 @@ The Pinniped Concierge can be configured to hook into the Pinniped Supervisor's
 federated credentials, or it can authenticate users directly via external IDP
 credentials.
 
-To learn more, see [architecture](https://pinniped.dev/docs/architecture/).
+To learn more, see [architecture](https://pinniped.dev/docs/background/architecture/).
 
-<img src="site/content/docs/img/pinniped_architecture_concierge_supervisor.svg" alt="Pinniped Architecture Sketch"/>
-
-## Trying Pinniped
+## Getting started with Pinniped
 
 Care to kick the tires? It's easy to [install and try Pinniped](https://pinniped.dev/docs/demo/).
 
-## Community Meetings
+## Community meetings
 
-Pinniped is better because of our contributors and maintainers. It is because of you that we can bring great software to the community. Please join us during our online community meetings, occuring every first and third Thursday of the month at 9AM PT / 12PM PT. Use [this Zoom Link](https://vmware.zoom.us/j/93798188973?pwd=T3pIMWxReEQvcWljNm1admRoZTFSZz09) to attend and add any agenda items you wish to discuss to [the notes document](https://hackmd.io/rd_kVJhjQfOvfAWzK8A3tQ?view). Join our [Google Group](https://groups.google.com/u/1/g/project-pinniped) to receive invites to this meeting.
+Pinniped is better because of our contributors and maintainers. It is because of you that we can bring great software to the community. Please join us during our online community meetings, occurring every first and third Thursday of the month at 9 AM PT / 12 PM PT. Use [this Zoom Link](https://vmware.zoom.us/j/93798188973?pwd=T3pIMWxReEQvcWljNm1admRoZTFSZz09) to attend and add any agenda items you wish to discuss to [the notes document](https://hackmd.io/rd_kVJhjQfOvfAWzK8A3tQ?view). Join our [Google Group](https://groups.google.com/u/1/g/project-pinniped) to receive invites to this meeting.
 
 If the meeting day falls on a US holiday, please consider that occurrence of the meeting to be canceled.
 
@@ -61,7 +59,7 @@ Got a question, comment, or idea? Please don't hesitate to reach out via the Git
 
 Contributions are welcome. Before contributing, please see the [contributing guide](CONTRIBUTING.md).
 
-## Reporting Security Vulnerabilities
+## Reporting security vulnerabilities
 
 Please follow the procedure described in [SECURITY.md](SECURITY.md).
 

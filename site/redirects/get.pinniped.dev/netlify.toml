@@ -1,3 +1,8 @@
+[[redirects]]
+  from = "/"
+  to = "https://pinniped.dev"
+  status = 302
+  force = true
 
 [[redirects]]
   from = "/latest/*"

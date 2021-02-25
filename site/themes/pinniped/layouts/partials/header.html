@@ -7,7 +7,7 @@
 			<li><a href="/blog/" {{ if or (eq .Page.Section "posts") (eq .Page.Section "tags") }}class="active"{{ end }}>Blog</a></li>
 			<li><a href="/docs/" {{ if (eq .Page.Section "docs") }}class="active"{{ end }}>Docs</a></li>
 		</ul>
-		<button type="button" class="mobile" onclick="mobileNavToggle()">
+		<button type="button" class="mobile" id="mobile-menu-button">
 			<img class="collapsed-icon" src="/img/hamburger.svg" alt="Mobile nav icon">
 			<img class="expanded-icon" src="/img/close.svg" alt="Mobile nav icon">
 		</button>

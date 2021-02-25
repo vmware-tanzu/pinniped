@@ -1,16 +1,20 @@
 ---
-title: "Pinniped Architecture"
+title: Architecture
+description: Dive into the overall design and implementation details of Pinniped.
 cascade:
   layout: docs
+menu:
+  docs:
+    name: Architecture
+    weight: 100
+    parent: background
 ---
-
-# Architecture
-
 The principal purpose of Pinniped is to allow users to access Kubernetes
 clusters. Pinniped hopes to enable this access across a wide range of Kubernetes
 environments with zero configuration.
 
 Pinniped is composed of two parts.
+
 1. The Pinniped Supervisor is an OIDC server which allows users to authenticate
 with an external identity provider (IDP), and then issues its own federation ID tokens
 to be passed on to clusters based on the user information from the IDP.
@@ -23,14 +27,6 @@ understood by the host Kubernetes cluster.
 
 Pinniped supports various authenticator types and OIDC identity providers and implements different integration strategies
 for various Kubernetes distributions to make authentication possible.
-
-## Supported Kubernetes Cluster Types
-
-Pinniped supports the following types of Kubernetes clusters:
-
-- Clusters where the Kube Controller Manager pod is accessible from Pinniped's pods.
-
-Support for other types of Kubernetes distributions is coming soon.
 
 ## External Identity Provider Integrations
 

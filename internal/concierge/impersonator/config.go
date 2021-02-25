@@ -45,9 +45,13 @@ type Config struct {
 	// Enable or disable the impersonation proxy. Optional. Defaults to ModeAuto.
 	Mode Mode `json:"mode,omitempty"`
 
-	// The HTTPS URL of the impersonation proxy for clients to use from outside the cluster. Used when creating TLS
-	// certificates and for clients to discover the endpoint. Optional. When not specified, if the impersonation proxy
-	// is started, then it will automatically create a LoadBalancer Service and use its ingress as the endpoint.
+	// Used when creating TLS certificates and for clients to discover the endpoint. Optional. When not specified, if the
+	// impersonation proxy is started, then it will automatically create a LoadBalancer Service and use its ingress as the
+	// endpoint.
+	//
+	// When specified, it may be a hostname or IP address, optionally with a port number, of the impersonation proxy
+	// for clients to use from outside the cluster. E.g. myhost.mycompany.com:8443. Clients should assume that they should
+	// connect via HTTPS to this service.
 	Endpoint string `json:"endpoint,omitempty"`
 
 	// The TLS configuration of the impersonation proxy's endpoints. Optional. When not specified, a CA and TLS

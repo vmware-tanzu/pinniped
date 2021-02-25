@@ -6,7 +6,9 @@ package impersonatorconfig
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -170,11 +172,13 @@ func (c *impersonatorConfigController) Sync(ctx controllerlib.Context) error {
 	}
 
 	if c.shouldHaveTLSSecret(config) {
-		if err = c.ensureTLSSecretIsCreated(ctx.Context, config); err != nil {
-			// return err // TODO
+		err = c.ensureTLSSecret(ctx, config)
+		if err != nil {
+			return err
 		}
 	} else {
-		if err = c.ensureTLSSecretIsRemoved(ctx.Context); err != nil {
+		err = c.ensureTLSSecretIsRemoved(ctx.Context)
+		if err != nil {
 			return err
 		}
 	}
@@ -184,8 +188,24 @@ func (c *impersonatorConfigController) Sync(ctx controllerlib.Context) error {
 	return nil
 }
 
-func (c *impersonatorConfigController) shouldHaveTLSSecret(config *impersonator.Config) bool {
-	return c.shouldHaveImpersonator(config)
+func (c *impersonatorConfigController) ensureTLSSecret(ctx controllerlib.Context, config *impersonator.Config) error {
+	secret, err := c.secretsInformer.Lister().Secrets(c.namespace).Get(c.tlsSecretName)
+	notFound := k8serrors.IsNotFound(err)
+	if notFound {
+		secret = nil
+	}
+	if !notFound && err != nil {
+		return err
+	}
+	//nolint:staticcheck // TODO remove this nolint when we fix the TODO below
+	if secret, err = c.deleteTLSCertificateWithWrongName(ctx.Context, config, secret); err != nil {
+		// TODO
+		// return err
+	}
+	if err = c.ensureTLSSecretIsCreatedAndLoaded(ctx.Context, config, secret); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *impersonatorConfigController) shouldHaveImpersonator(config *impersonator.Config) bool {
@@ -194,6 +214,10 @@ func (c *impersonatorConfigController) shouldHaveImpersonator(config *impersonat
 
 func (c *impersonatorConfigController) shouldHaveLoadBalancer(config *impersonator.Config) bool {
 	return c.shouldHaveImpersonator(config) && config.Endpoint == ""
+}
+
+func (c *impersonatorConfigController) shouldHaveTLSSecret(config *impersonator.Config) bool {
+	return c.shouldHaveImpersonator(config) // TODO is this the logic that we want here?
 }
 
 func (c *impersonatorConfigController) ensureImpersonatorIsStopped() error {
@@ -266,26 +290,6 @@ func (c *impersonatorConfigController) tlsSecretExists() (bool, *v1.Secret, erro
 	return true, secret, nil
 }
 
-func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.Context) error {
-	running, err := c.isLoadBalancerRunning()
-	if err != nil {
-		return err
-	}
-	if !running {
-		return nil
-	}
-
-	plog.Info("Deleting load balancer for impersonation proxy",
-		"service", c.generatedLoadBalancerServiceName,
-		"namespace", c.namespace)
-	err = c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedLoadBalancerServiceName, metav1.DeleteOptions{})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.Context) error {
 	running, err := c.isLoadBalancerRunning()
 	if err != nil {
@@ -323,56 +327,147 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.C
 	return nil
 }
 
-func (c *impersonatorConfigController) ensureTLSSecretIsCreated(ctx context.Context, config *impersonator.Config) error {
-	tlsSecretExists, tlsSecret, err := c.tlsSecretExists()
+func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.Context) error {
+	running, err := c.isLoadBalancerRunning()
 	if err != nil {
 		return err
 	}
-	if tlsSecretExists {
-		certPEM := tlsSecret.Data[v1.TLSCertKey]
-		keyPEM := tlsSecret.Data[v1.TLSPrivateKeyKey]
-		tlsCert, _ := tls.X509KeyPair(certPEM, keyPEM)
-		// TODO handle err, like when the Secret did not contain the fields that we expected
-		c.setTLSCert(&tlsCert)
+	if !running {
 		return nil
 	}
-	impersonationCA, err := certauthority.New(pkix.Name{CommonName: "test CA"}, 24*time.Hour) // TODO change the length of this
+
+	plog.Info("Deleting load balancer for impersonation proxy",
+		"service", c.generatedLoadBalancerServiceName,
+		"namespace", c.namespace)
+	err = c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedLoadBalancerServiceName, metav1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("could not create impersonation CA: %w", err)
+		return err
 	}
-	var ips []net.IP
-	if config.Endpoint == "" { // TODO are there other cases where we need to do this?
-		lb, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedLoadBalancerServiceName)
-		notFound := k8serrors.IsNotFound(err)
-		if notFound {
-			return nil
+
+	return nil
+}
+
+func (c *impersonatorConfigController) deleteTLSCertificateWithWrongName(ctx context.Context, config *impersonator.Config, secret *v1.Secret) (*v1.Secret, error) {
+	if secret == nil {
+		// There is no Secret, so there is nothing to delete.
+		return secret, nil
+	}
+
+	certPEM := secret.Data[v1.TLSCertKey]
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		// The certPEM is not valid.
+		return secret, nil // TODO what should we do?
+	}
+	parsed, _ := x509.ParseCertificate(block.Bytes)
+	// TODO handle err
+
+	desiredIPs, nameIsReady, err := c.findTLSCertificateName(config)
+	//nolint:staticcheck // TODO remove this nolint when we fix the TODO below
+	if err != nil {
+		// TODO return err
+	}
+	if !nameIsReady {
+		// We currently have a secret but we are waiting for a load balancer to be assigned an ingress, so
+		// our current secret must be old/unwanted.
+		err = c.ensureTLSSecretIsRemoved(ctx)
+		if err != nil {
+			return secret, err
 		}
+		return nil, nil
+	}
+
+	actualIPs := parsed.IPAddresses
+	// TODO handle multiple IPs, and handle when there is no IP
+	if desiredIPs[0].Equal(actualIPs[0]) {
+		// The cert matches the desired state, so we do not need to delete it.
+		return secret, nil
+	}
+
+	err = c.ensureTLSSecretIsRemoved(ctx)
+	if err != nil {
+		return secret, err
+	}
+	return nil, nil
+}
+
+func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx context.Context, config *impersonator.Config, secret *v1.Secret) error {
+	if secret != nil {
+		err := c.loadTLSCertFromSecret(secret)
 		if err != nil {
 			return err
 		}
+		return nil
+	}
+
+	// TODO create/save/watch the CA separately so we can reuse it to mint tls certs as the settings are dynamically changed,
+	//   so that clients don't need to be updated to use a different CA just because the server-side settings were changed.
+	impersonationCA, err := certauthority.New(pkix.Name{CommonName: "test CA"}, 24*time.Hour) // TODO change the expiration of this to 100 years
+	if err != nil {
+		return fmt.Errorf("could not create impersonation CA: %w", err)
+	}
+
+	ips, nameIsReady, err := c.findTLSCertificateName(config)
+	if err != nil {
+		return err
+	}
+	if !nameIsReady {
+		// Sync will get called again when the load balancer is updated with its ingress info, so this is not an error.
+		return nil
+	}
+
+	newTLSSecret, err := c.createNewTLSSecret(ctx, impersonationCA, ips)
+	if err != nil {
+		return err
+	}
+
+	err = c.loadTLSCertFromSecret(newTLSSecret)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *impersonatorConfigController) findTLSCertificateName(config *impersonator.Config) ([]net.IP, bool, error) {
+	var ips []net.IP
+	if config.Endpoint != "" {
+		// TODO Endpoint could be a hostname
+		// TODO Endpoint could have a port number in it, which we should parse out and ignore for this purpose
+		ips = []net.IP{net.ParseIP(config.Endpoint)}
+	} else {
+		lb, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedLoadBalancerServiceName)
+		notFound := k8serrors.IsNotFound(err)
+		if notFound {
+			// TODO is this an error? we should have already created the load balancer, so why would it not exist here?
+			return nil, false, nil
+		}
+		if err != nil {
+			return nil, false, err
+		}
 		ingresses := lb.Status.LoadBalancer.Ingress
 		if len(ingresses) == 0 {
-			return nil
+			plog.Info("load balancer for impersonation proxy does not have an ingress yet, so skipping tls cert generation while we wait",
+				"service", c.generatedLoadBalancerServiceName,
+				"namespace", c.namespace)
+			return nil, false, nil
 		}
-		ip := ingresses[0].IP // TODO multiple ips
+		ip := ingresses[0].IP // TODO handle multiple ips?
 		ips = []net.IP{net.ParseIP(ip)}
-		// check with informer to get the ip address of the load balancer if its available
-		// if not, return
-	} else {
-		ips = []net.IP{net.ParseIP(config.Endpoint)}
 	}
-	impersonationCert, err := impersonationCA.Issue(pkix.Name{}, nil, ips, 24*time.Hour) // TODO change the length of this
+	return ips, true, nil
+}
+
+func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, ca *certauthority.CA, ips []net.IP) (*v1.Secret, error) {
+	impersonationCert, err := ca.Issue(pkix.Name{}, nil, ips, 24*time.Hour) // TODO change the length of this too 100 years for now?
 	if err != nil {
-		return fmt.Errorf("could not create impersonation cert: %w", err)
+		return nil, fmt.Errorf("could not create impersonation cert: %w", err)
 	}
 
-	c.setTLSCert(impersonationCert)
+	certPEM, keyPEM, _ := certauthority.ToPEM(impersonationCert)
+	// TODO handle err
 
-	certPEM, keyPEM, err := certauthority.ToPEM(impersonationCert)
-	// TODO error handling?
-
-	// TODO handle error on create
-	c.k8sClient.CoreV1().Secrets(c.namespace).Create(ctx, &v1.Secret{
+	newTLSSecret := &v1.Secret{
 		Type: v1.SecretTypeTLS,
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      c.tlsSecretName,
@@ -380,11 +475,30 @@ func (c *impersonatorConfigController) ensureTLSSecretIsCreated(ctx context.Cont
 			Labels:    c.labels,
 		},
 		Data: map[string][]byte{
-			"ca.crt":            impersonationCA.Bundle(),
+			"ca.crt":            ca.Bundle(),
 			v1.TLSPrivateKeyKey: keyPEM,
 			v1.TLSCertKey:       certPEM,
 		},
-	}, metav1.CreateOptions{})
+	}
+	_, _ = c.k8sClient.CoreV1().Secrets(c.namespace).Create(ctx, newTLSSecret, metav1.CreateOptions{})
+	// TODO handle error on create
+	return newTLSSecret, nil
+}
+
+func (c *impersonatorConfigController) loadTLSCertFromSecret(tlsSecret *v1.Secret) error {
+	certPEM := tlsSecret.Data[v1.TLSCertKey]
+	keyPEM := tlsSecret.Data[v1.TLSPrivateKeyKey]
+	tlsCert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		plog.Error("Could not parse TLS cert PEM data from Secret",
+			err,
+			"secret", c.tlsSecretName,
+			"namespace", c.namespace,
+		)
+		// TODO clear the secret if it was already set previously... c.setTLSCert(nil)
+		return fmt.Errorf("could not parse TLS cert PEM data from Secret: %w", err)
+	}
+	c.setTLSCert(&tlsCert)
 	return nil
 }
 
@@ -403,6 +517,8 @@ func (c *impersonatorConfigController) ensureTLSSecretIsRemoved(ctx context.Cont
 	if err != nil {
 		return err
 	}
+
+	c.setTLSCert(nil)
 
 	return nil
 }

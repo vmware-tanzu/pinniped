@@ -11,7 +11,7 @@ require (
 	github.com/go-logr/stdr v0.4.0
 	github.com/go-openapi/spec v0.20.3
 	github.com/gofrs/flock v0.8.0
-	github.com/golang/mock v1.4.4
+	github.com/golang/mock v1.5.0
 	github.com/google/go-cmp v0.5.4
 	github.com/google/gofuzz v1.2.0
 	github.com/gorilla/securecookie v1.1.1

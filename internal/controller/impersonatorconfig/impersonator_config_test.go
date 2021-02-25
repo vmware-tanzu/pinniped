@@ -1017,8 +1017,60 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						r.Len(kubeAPIClient.Actions(), 2)
 						requireNodesListed(kubeAPIClient.Actions()[0])
 						ca := requireTLSSecretWasCreated(kubeAPIClient.Actions()[1])
-						// Check that the server is running and that TLS certs that are being served are are for fakeIP.
+						// Check that the server is running and that TLS certs that are being served are are for fakeHostname.
 						requireTLSServerIsRunning(ca, fakeHostname, map[string]string{fakeHostname + ":443": startedTLSListener.Addr().String()})
+					})
+				})
+
+				when("switching from ip address endpoint to hostname endpoint and back to ip address", func() {
+					const fakeHostname = "fake.example.com"
+					const fakeIP = "127.0.0.42"
+					var hostnameYAML = fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeHostname)
+					var ipAddressYAML = fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeIP)
+					it.Before(func() {
+						addImpersonatorConfigMapToTracker(configMapResourceName, ipAddressYAML)
+						addNodeWithRoleToTracker("worker")
+					})
+
+					it("regenerates the cert for the hostname, then regenerates it for the IP again", func() {
+						startInformersAndController()
+						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+						r.Len(kubeAPIClient.Actions(), 2)
+						requireNodesListed(kubeAPIClient.Actions()[0])
+						ca := requireTLSSecretWasCreated(kubeAPIClient.Actions()[1])
+						// Check that the server is running and that TLS certs that are being served are are for fakeIP.
+						requireTLSServerIsRunning(ca, fakeIP, map[string]string{fakeIP + ":443": startedTLSListener.Addr().String()})
+
+						// update manually because the kubeAPIClient isn't connected to the informer in the tests
+						addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[1], kubeInformerClient, "1")
+						waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "1")
+
+						// Switch the endpoint config to a hostname.
+						updateImpersonatorConfigMapInTracker(configMapResourceName, hostnameYAML, "1")
+						waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "1")
+
+						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+						r.Len(kubeAPIClient.Actions(), 4)
+						requireTLSSecretDeleted(kubeAPIClient.Actions()[2])
+						ca = requireTLSSecretWasCreated(kubeAPIClient.Actions()[3])
+						// Check that the server is running and that TLS certs that are being served are are for fakeHostname.
+						requireTLSServerIsRunning(ca, fakeHostname, map[string]string{fakeHostname + ":443": startedTLSListener.Addr().String()})
+
+						// update manually because the kubeAPIClient isn't connected to the informer in the tests
+						deleteTLSCertSecretFromTracker(tlsSecretName, kubeInformerClient)
+						addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[3], kubeInformerClient, "2")
+						waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "2")
+
+						// Switch the endpoint config back to an IP.
+						updateImpersonatorConfigMapInTracker(configMapResourceName, ipAddressYAML, "2")
+						waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "2")
+
+						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+						r.Len(kubeAPIClient.Actions(), 6)
+						requireTLSSecretDeleted(kubeAPIClient.Actions()[4])
+						ca = requireTLSSecretWasCreated(kubeAPIClient.Actions()[5])
+						// Check that the server is running and that TLS certs that are being served are are for fakeIP.
+						requireTLSServerIsRunning(ca, fakeIP, map[string]string{fakeIP + ":443": startedTLSListener.Addr().String()})
 					})
 				})
 			})

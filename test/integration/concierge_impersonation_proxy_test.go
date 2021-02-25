@@ -29,8 +29,11 @@ import (
 	"go.pinniped.dev/test/library"
 )
 
-// TODO don't hard code "pinniped-concierge-" in this string. It should be constructed from the env app name.
-const impersonationProxyConfigMapName = "pinniped-concierge-impersonation-proxy-config"
+const (
+	// TODO don't hard code "pinniped-concierge-" in these strings. It should be constructed from the env app name.
+	impersonationProxyConfigMapName = "pinniped-concierge-impersonation-proxy-config"
+	impersonationProxyTLSSecretName = "pinniped-concierge-impersonation-proxy-tls-serving-certificate" //nolint:gosec // this is not a credential
+)
 
 func TestImpersonationProxy(t *testing.T) {
 	env := library.IntegrationEnv(t)
@@ -49,23 +52,27 @@ func TestImpersonationProxy(t *testing.T) {
 	authenticator := library.CreateTestWebhookAuthenticator(ctx, t)
 
 	// The address of the ClusterIP service that points at the impersonation proxy's port
-	proxyServiceURL := fmt.Sprintf("https://%s-proxy.%s.svc.cluster.local", env.ConciergeAppName, env.ConciergeNamespace)
+	proxyServiceEndpoint := fmt.Sprintf("%s-proxy.%s.svc.cluster.local", env.ConciergeAppName, env.ConciergeNamespace)
+	proxyServiceURL := fmt.Sprintf("https://%s", proxyServiceEndpoint)
 	t.Logf("making kubeconfig that points to %q", proxyServiceURL)
 
-	kubeconfig := &rest.Config{
-		Host:            proxyServiceURL,
-		TLSClientConfig: rest.TLSClientConfig{Insecure: true},
-		BearerToken:     impersonationtoken.Make(t, env.TestUser.Token, &authenticator, env.APIGroupSuffix),
-		Proxy: func(req *http.Request) (*url.URL, error) {
-			proxyURL, err := url.Parse(env.Proxy)
-			require.NoError(t, err)
-			t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
-			return proxyURL, nil
-		},
-	}
+	getImpersonationProxyClient := func(caData []byte) *kubernetes.Clientset {
+		kubeconfig := &rest.Config{
+			Host:            proxyServiceURL,
+			TLSClientConfig: rest.TLSClientConfig{Insecure: caData == nil, CAData: caData},
+			BearerToken:     impersonationtoken.Make(t, env.TestUser.Token, &authenticator, env.APIGroupSuffix),
+			Proxy: func(req *http.Request) (*url.URL, error) {
+				proxyURL, err := url.Parse(env.Proxy)
+				require.NoError(t, err)
+				t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
+				return proxyURL, nil
+			},
+		}
 
-	impersonationProxyClient, err := kubernetes.NewForConfig(kubeconfig)
-	require.NoError(t, err, "unexpected failure from kubernetes.NewForConfig()")
+		impersonationProxyClient, err := kubernetes.NewForConfig(kubeconfig)
+		require.NoError(t, err, "unexpected failure from kubernetes.NewForConfig()")
+		return impersonationProxyClient
+	}
 
 	oldConfigMap, err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Get(ctx, impersonationProxyConfigMapName, metav1.GetOptions{})
 	if oldConfigMap.Data != nil {
@@ -74,6 +81,8 @@ func TestImpersonationProxy(t *testing.T) {
 	}
 
 	serviceUnavailableError := fmt.Sprintf(`Get "%s/api/v1/namespaces": Service Unavailable`, proxyServiceURL)
+	insecureImpersonationProxyClient := getImpersonationProxyClient(nil)
+
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
 		// Check that load balancer has been created
 		require.Eventually(t, func() bool {
@@ -86,13 +95,13 @@ func TestImpersonationProxy(t *testing.T) {
 		}, 10*time.Second, 500*time.Millisecond)
 
 		// Check that we can't use the impersonation proxy to execute kubectl commands yet
-		_, err = impersonationProxyClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+		_, err = insecureImpersonationProxyClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 		require.EqualError(t, err, serviceUnavailableError)
 
 		// Create configuration to make the impersonation proxy turn on with a hard coded endpoint (without a LoadBalancer)
 		configMap := configMapForConfig(t, impersonator.Config{
 			Mode:     impersonator.ModeEnabled,
-			Endpoint: proxyServiceURL,
+			Endpoint: proxyServiceEndpoint,
 			TLS:      nil,
 		})
 		t.Logf("creating configmap %s", configMap.Name)
@@ -117,6 +126,16 @@ func TestImpersonationProxy(t *testing.T) {
 		})
 	}
 
+	// Wait for ca data to be available at the secret location.
+	var caSecret *corev1.Secret
+	require.Eventually(t,
+		func() bool {
+			caSecret, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName, metav1.GetOptions{})
+			return caSecret != nil && caSecret.Data["ca.crt"] != nil
+		}, 5*time.Minute, 250*time.Millisecond)
+
+	// Create an impersonation proxy client with that ca data.
+	impersonationProxyClient := getImpersonationProxyClient(caSecret.Data["ca.crt"])
 	t.Run(
 		"access as user",
 		library.AccessAsUserTest(ctx, env.TestUser.ExpectedUsername, impersonationProxyClient),
@@ -296,9 +315,9 @@ func TestImpersonationProxy(t *testing.T) {
 	require.Eventually(t, func() bool {
 		// It's okay if this returns RBAC errors because this user has no role bindings.
 		// What we want to see is that the proxy eventually shuts down entirely.
-		_, err = impersonationProxyClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+		_, err = insecureImpersonationProxyClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 		return err.Error() == serviceUnavailableError
-	}, 10*time.Second, 500*time.Millisecond)
+	}, 20*time.Second, 500*time.Millisecond)
 
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
 		// The load balancer should not exist after we disable the impersonation proxy.
@@ -307,6 +326,11 @@ func TestImpersonationProxy(t *testing.T) {
 			return !hasLoadBalancerService(ctx, t, adminClient, env.ConciergeNamespace)
 		}, time.Minute, 500*time.Millisecond)
 	}
+
+	require.Eventually(t, func() bool {
+		caSecret, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName, metav1.GetOptions{})
+		return k8serrors.IsNotFound(err)
+	}, 10*time.Second, 250*time.Millisecond)
 }
 
 func configMapForConfig(t *testing.T, config impersonator.Config) corev1.ConfigMap {

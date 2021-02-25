@@ -1000,6 +1000,27 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						requireTLSServerIsRunningWithoutCerts()
 					})
 				})
+
+				when("we have a hostname specified for the endpoint", func() {
+					const fakeHostname = "fake.example.com"
+					it.Before(func() {
+						addImpersonatorConfigMapToTracker(configMapResourceName, here.Docf(`
+							mode: enabled
+							endpoint: %s
+						`, fakeHostname))
+						addNodeWithRoleToTracker("worker")
+					})
+
+					it("starts the impersonator, generates a valid cert for the hostname", func() {
+						startInformersAndController()
+						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+						r.Len(kubeAPIClient.Actions(), 2)
+						requireNodesListed(kubeAPIClient.Actions()[0])
+						ca := requireTLSSecretWasCreated(kubeAPIClient.Actions()[1])
+						// Check that the server is running and that TLS certs that are being served are are for fakeIP.
+						requireTLSServerIsRunning(ca, fakeHostname, map[string]string{fakeHostname + ":443": startedTLSListener.Addr().String()})
+					})
+				})
 			})
 
 			when("the configuration switches from enabled to disabled mode", func() {

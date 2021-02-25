@@ -362,7 +362,7 @@ func (c *impersonatorConfigController) deleteTLSCertificateWithWrongName(ctx con
 	parsed, _ := x509.ParseCertificate(block.Bytes)
 	// TODO handle err
 
-	desiredIPs, nameIsReady, err := c.findTLSCertificateName(config)
+	desiredIPs, _, nameIsReady, err := c.findTLSCertificateName(config) // TODO check this for hostnames too, not just ips
 	//nolint:staticcheck // TODO remove this nolint when we fix the TODO below
 	if err != nil {
 		// TODO return err
@@ -407,7 +407,7 @@ func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx con
 		return fmt.Errorf("could not create impersonation CA: %w", err)
 	}
 
-	ips, nameIsReady, err := c.findTLSCertificateName(config)
+	ips, hostnames, nameIsReady, err := c.findTLSCertificateName(config)
 	if err != nil {
 		return err
 	}
@@ -416,7 +416,7 @@ func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx con
 		return nil
 	}
 
-	newTLSSecret, err := c.createNewTLSSecret(ctx, impersonationCA, ips)
+	newTLSSecret, err := c.createNewTLSSecret(ctx, impersonationCA, ips, hostnames)
 	if err != nil {
 		return err
 	}
@@ -429,37 +429,44 @@ func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx con
 	return nil
 }
 
-func (c *impersonatorConfigController) findTLSCertificateName(config *impersonator.Config) ([]net.IP, bool, error) {
+func (c *impersonatorConfigController) findTLSCertificateName(config *impersonator.Config) ([]net.IP, []string, bool, error) {
 	var ips []net.IP
+	var hostnames []string
 	if config.Endpoint != "" {
+		parsedAsIP := net.ParseIP(config.Endpoint)
+		if parsedAsIP != nil {
+			ips = []net.IP{parsedAsIP}
+		} else {
+			hostnames = []string{config.Endpoint}
+		}
 		// TODO Endpoint could be a hostname
 		// TODO Endpoint could have a port number in it, which we should parse out and ignore for this purpose
-		ips = []net.IP{net.ParseIP(config.Endpoint)}
 	} else {
 		lb, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedLoadBalancerServiceName)
 		notFound := k8serrors.IsNotFound(err)
 		if notFound {
 			// TODO is this an error? we should have already created the load balancer, so why would it not exist here?
-			return nil, false, nil
+			return nil, nil, false, nil
 		}
 		if err != nil {
-			return nil, false, err
+			return nil, nil, false, err
 		}
 		ingresses := lb.Status.LoadBalancer.Ingress
 		if len(ingresses) == 0 {
 			plog.Info("load balancer for impersonation proxy does not have an ingress yet, so skipping tls cert generation while we wait",
 				"service", c.generatedLoadBalancerServiceName,
 				"namespace", c.namespace)
-			return nil, false, nil
+			return nil, nil, false, nil
 		}
-		ip := ingresses[0].IP // TODO handle multiple ips?
+		// TODO get all IPs and all hostnames from ingresses and put them in the cert
+		ip := ingresses[0].IP
 		ips = []net.IP{net.ParseIP(ip)}
 	}
-	return ips, true, nil
+	return ips, hostnames, true, nil
 }
 
-func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, ca *certauthority.CA, ips []net.IP) (*v1.Secret, error) {
-	impersonationCert, err := ca.Issue(pkix.Name{}, nil, ips, 24*time.Hour) // TODO change the length of this too 100 years for now?
+func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, ca *certauthority.CA, ips []net.IP, hostnames []string) (*v1.Secret, error) {
+	impersonationCert, err := ca.Issue(pkix.Name{}, hostnames, ips, 24*time.Hour) // TODO change the length of this too 100 years for now?
 	if err != nil {
 		return nil, fmt.Errorf("could not create impersonation cert: %w", err)
 	}

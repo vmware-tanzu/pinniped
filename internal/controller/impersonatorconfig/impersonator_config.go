@@ -362,7 +362,7 @@ func (c *impersonatorConfigController) deleteTLSCertificateWithWrongName(ctx con
 	actualCertFromSecret, _ := x509.ParseCertificate(block.Bytes)
 	// TODO handle err
 
-	desiredIPs, desiredHostnames, nameIsReady, err := c.findTLSCertificateName(config) // TODO check this for hostnames too, not just ips
+	desiredIPs, desiredHostnames, nameIsReady, err := c.findTLSCertificateName(config)
 	//nolint:staticcheck // TODO remove this nolint when we fix the TODO below
 	if err != nil {
 		// TODO return err
@@ -474,15 +474,22 @@ func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() 
 		return nil, nil, false, err
 	}
 	ingresses := lb.Status.LoadBalancer.Ingress
-	if len(ingresses) == 0 {
+	if len(ingresses) == 0 || (ingresses[0].Hostname == "" && ingresses[0].IP == "") {
 		plog.Info("load balancer for impersonation proxy does not have an ingress yet, so skipping tls cert generation while we wait",
 			"service", c.generatedLoadBalancerServiceName,
 			"namespace", c.namespace)
 		return nil, nil, false, nil
 	}
-	// TODO get all IPs and all hostnames from ingresses and put them in the cert
+	hostname := ingresses[0].Hostname
+	if hostname != "" {
+		return nil, []string{hostname}, true, nil
+	}
 	ip := ingresses[0].IP
-	ips = []net.IP{net.ParseIP(ip)}
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return nil, nil, false, fmt.Errorf("could not parse IP address from load balancer %s: %s", lb.Name, ip)
+	}
+	ips = []net.IP{parsedIP}
 	return ips, hostnames, true, nil
 }
 

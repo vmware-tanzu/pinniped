@@ -190,7 +190,6 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 
 	// The exact behavior depends on in which mode the Concierge is operating.
 	switch flags.conciergeMode {
-
 	case modeTokenCredentialRequestAPI:
 		// do a credential exchange request
 		cred, err := deps.exchangeToken(ctx, concierge, token.IDToken.Token)

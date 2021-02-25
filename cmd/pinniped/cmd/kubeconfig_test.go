@@ -64,13 +64,13 @@ func TestGetKubeconfig(t *testing.T) {
 				      --concierge-api-group-suffix string     Concierge API group suffix (default "pinniped.dev")
 				      --concierge-authenticator-name string   Concierge authenticator name (default: autodiscover)
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)
-				      --concierge-ca-bundle string            Path to TLS certificate authority bundle (PEM format, optional, can be repeated) to use when connecting to the concierge
-				      --concierge-endpoint string             API base for the Pinniped concierge endpoint
-				      --concierge-use-impersonation-proxy     Whether the concierge cluster uses an impersonation proxy
+				      --concierge-ca-bundle string            Path to TLS certificate authority bundle (PEM format, optional, can be repeated) to use when connecting to the Concierge
+				      --concierge-endpoint string             API base for the Concierge endpoint
+				      --concierge-mode mode                   Concierge mode of operation (default TokenCredentialRequestAPI)
 				  -h, --help                                  help for kubeconfig
 				      --kubeconfig string                     Path to kubeconfig file
 				      --kubeconfig-context string             Kubeconfig context name (default: current active context)
-				      --no-concierge                          Generate a configuration which does not use the concierge, but sends the credential to the cluster directly
+				      --no-concierge                          Generate a configuration which does not use the Concierge, but sends the credential to the cluster directly
 				      --oidc-ca-bundle strings                Path to TLS certificate authority bundle (PEM format, optional, can be repeated)
 				      --oidc-client-id string                 OpenID Connect client ID (default: autodiscover) (default "pinniped-cli")
 				      --oidc-issuer string                    OpenID Connect issuer URL (default: autodiscover)
@@ -273,7 +273,12 @@ func TestGetKubeconfig(t *testing.T) {
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 				"--concierge-ca-bundle", "./does/not/exist",
 				"--concierge-endpoint", "https://impersonation-proxy-endpoint.test",
-				"--concierge-use-impersonation-proxy",
+				"--concierge-authenticator-name", "test-authenticator",
+				"--concierge-authenticator-type", "webhook",
+				"--concierge-mode", "ImpersonationProxy",
+			},
+			conciergeObjects: []runtime.Object{
+				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
@@ -343,6 +348,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-type=webhook
         		      - --concierge-endpoint=https://fake-server-url-value
         		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+        		      - --concierge-mode=TokenCredentialRequestAPI
         		      - --token=test-token
         		      command: '.../path/to/pinniped'
         		      env: []
@@ -387,6 +393,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-type=webhook
         		      - --concierge-endpoint=https://fake-server-url-value
         		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+        		      - --concierge-mode=TokenCredentialRequestAPI
         		      - --token-env=TEST_TOKEN
         		      command: '.../path/to/pinniped'
         		      env: []
@@ -439,6 +446,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-type=jwt
         		      - --concierge-endpoint=https://fake-server-url-value
         		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+        		      - --concierge-mode=TokenCredentialRequestAPI
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
         		      - --scopes=offline_access,openid,pinniped:request-audience
@@ -498,6 +506,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-type=webhook
         		      - --concierge-endpoint=https://fake-server-url-value
         		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+        		      - --concierge-mode=TokenCredentialRequestAPI
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
         		      - --scopes=offline_access,openid,pinniped:request-audience
@@ -519,7 +528,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 				"--concierge-ca-bundle", testConciergeCABundlePath,
 				"--concierge-endpoint", "https://impersonation-proxy-endpoint.test",
-				"--concierge-use-impersonation-proxy",
+				"--concierge-mode", "ImpersonationProxy",
 			},
 			conciergeObjects: []runtime.Object{
 				&conciergev1alpha1.JWTAuthenticator{
@@ -562,7 +571,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-type=jwt
         		      - --concierge-endpoint=https://impersonation-proxy-endpoint.test
         		      - --concierge-ca-bundle-data=dGVzdC1jb25jaWVyZ2UtY2E=
-        		      - --concierge-use-impersonation-proxy
+        		      - --concierge-mode=ImpersonationProxy
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
         		      - --scopes=offline_access,openid,pinniped:request-audience

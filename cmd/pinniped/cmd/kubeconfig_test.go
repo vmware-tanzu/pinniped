@@ -20,6 +20,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	fakeconciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
 	"go.pinniped.dev/internal/certauthority"
@@ -65,6 +66,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --concierge-authenticator-name string   Concierge authenticator name (default: autodiscover)
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)
 				      --concierge-ca-bundle string            Path to TLS certificate authority bundle (PEM format, optional, can be repeated) to use when connecting to the Concierge
+				      --concierge-credential-issuer string    Concierge CredentialIssuer object to use for autodiscovery (default: autodiscover)
 				      --concierge-endpoint string             API base for the Concierge endpoint
 				      --concierge-mode mode                   Concierge mode of operation (default TokenCredentialRequestAPI)
 				  -h, --help                                  help for kubeconfig
@@ -135,11 +137,39 @@ func TestGetKubeconfig(t *testing.T) {
 			`),
 		},
 		{
+			name: "no credentialissuers",
+			args: []string{
+				"--kubeconfig", "./testdata/kubeconfig.yaml",
+			},
+			wantError: true,
+			wantStderr: here.Doc(`
+				Error: no CredentialIssuers were found
+			`),
+		},
+
+		{
+			name: "credentialissuer not found",
+			args: []string{
+				"--kubeconfig", "./testdata/kubeconfig.yaml",
+				"--concierge-credential-issuer", "does-not-exist",
+			},
+			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+			},
+			wantError: true,
+			wantStderr: here.Doc(`
+				Error: credentialissuers.config.concierge.pinniped.dev "does-not-exist" not found
+			`),
+		},
+		{
 			name: "webhook authenticator not found",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 				"--concierge-authenticator-type", "webhook",
 				"--concierge-authenticator-name", "test-authenticator",
+			},
+			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
@@ -153,6 +183,9 @@ func TestGetKubeconfig(t *testing.T) {
 				"--concierge-authenticator-type", "jwt",
 				"--concierge-authenticator-name", "test-authenticator",
 			},
+			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+			},
 			wantError: true,
 			wantStderr: here.Doc(`
 				Error: jwtauthenticators.authentication.concierge.pinniped.dev "test-authenticator" not found
@@ -165,6 +198,9 @@ func TestGetKubeconfig(t *testing.T) {
 				"--concierge-authenticator-type", "invalid",
 				"--concierge-authenticator-name", "test-authenticator",
 			},
+			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+			},
 			wantError: true,
 			wantStderr: here.Doc(`
 				Error: invalid authenticator type "invalid", supported values are "webhook" and "jwt"
@@ -174,6 +210,9 @@ func TestGetKubeconfig(t *testing.T) {
 			name: "fail to autodetect authenticator, listing jwtauthenticators fails",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
+			},
+			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
 			},
 			conciergeReactions: []kubetesting.Reactor{
 				&kubetesting.SimpleReactor{
@@ -194,6 +233,9 @@ func TestGetKubeconfig(t *testing.T) {
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 			},
+			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+			},
 			conciergeReactions: []kubetesting.Reactor{
 				&kubetesting.SimpleReactor{
 					Verb:     "*",
@@ -213,6 +255,9 @@ func TestGetKubeconfig(t *testing.T) {
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 			},
+			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+			},
 			wantError: true,
 			wantStderr: here.Doc(`
 				Error: no authenticators were found
@@ -224,6 +269,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 			},
 			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
 				&conciergev1alpha1.JWTAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-1"}},
 				&conciergev1alpha1.JWTAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-2"}},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-3"}},
@@ -235,16 +281,61 @@ func TestGetKubeconfig(t *testing.T) {
 			`),
 		},
 		{
+			name: "autodetect webhook authenticator, bad credential issuer with no status",
+			args: []string{
+				"--kubeconfig", "./testdata/kubeconfig.yaml",
+			},
+			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
+			},
+			wantError: true,
+			wantStderr: here.Doc(`
+				Error: could not autodiscover --concierge-mode and none was provided
+			`),
+		},
+		{
+			name: "autodetect webhook authenticator, bad credential issuer with invalid impersonation CA",
+			args: []string{
+				"--kubeconfig", "./testdata/kubeconfig.yaml",
+			},
+			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
+					Status: configv1alpha1.CredentialIssuerStatus{
+						ImpersonationProxyInfo: &configv1alpha1.CredentialIssuerImpersonationProxyInfo{
+							Endpoint:                 "https://impersonation-endpoint",
+							CertificateAuthorityData: "invalid-base-64",
+						},
+					},
+				},
+				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
+			},
+			wantError: true,
+			wantStderr: here.Doc(`
+				Error: autodiscovered Concierge CA bundle is invalid: illegal base64 data at input byte 7
+			`),
+		},
+		{
 			name: "autodetect webhook authenticator, missing --oidc-issuer",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 			},
 			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
+					Status: configv1alpha1.CredentialIssuerStatus{
+						KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
+							Server:                   "https://concierge-endpoint",
+							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
+						},
+					},
+				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: could not autodiscover --oidc-issuer, and none was provided
+				Error: could not autodiscover --oidc-issuer and none was provided
 			`),
 		},
 		{
@@ -253,6 +344,15 @@ func TestGetKubeconfig(t *testing.T) {
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 			},
 			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
+					Status: configv1alpha1.CredentialIssuerStatus{
+						KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
+							Server:                   "https://concierge-endpoint",
+							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
+						},
+					},
+				},
 				&conciergev1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
 					Spec: conciergev1alpha1.JWTAuthenticatorSpec{
@@ -268,7 +368,7 @@ func TestGetKubeconfig(t *testing.T) {
 			`),
 		},
 		{
-			name: " invalid concierge ca bundle",
+			name: "invalid concierge ca bundle",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 				"--concierge-ca-bundle", "./does/not/exist",
@@ -278,6 +378,15 @@ func TestGetKubeconfig(t *testing.T) {
 				"--concierge-mode", "ImpersonationProxy",
 			},
 			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
+					Status: configv1alpha1.CredentialIssuerStatus{
+						KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
+							Server:                   "https://concierge-endpoint",
+							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
+						},
+					},
+				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
 			wantError: true,
@@ -293,6 +402,15 @@ func TestGetKubeconfig(t *testing.T) {
 				"--static-token-env", "TEST_TOKEN",
 			},
 			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
+					Status: configv1alpha1.CredentialIssuerStatus{
+						KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
+							Server:                   "https://concierge-endpoint",
+							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
+						},
+					},
+				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
 			wantError: true,
@@ -317,6 +435,15 @@ func TestGetKubeconfig(t *testing.T) {
 				"--static-token", "test-token",
 			},
 			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
+					Status: configv1alpha1.CredentialIssuerStatus{
+						KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
+							Server:                   "https://concierge-endpoint",
+							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
+						},
+					},
+				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
 			wantStdout: here.Doc(`
@@ -362,6 +489,15 @@ func TestGetKubeconfig(t *testing.T) {
 				"--static-token-env", "TEST_TOKEN",
 			},
 			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
+					Status: configv1alpha1.CredentialIssuerStatus{
+						KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
+							Server:                   "https://concierge-endpoint",
+							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
+						},
+					},
+				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
 			wantStdout: here.Doc(`
@@ -406,6 +542,15 @@ func TestGetKubeconfig(t *testing.T) {
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 			},
 			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
+					Status: configv1alpha1.CredentialIssuerStatus{
+						KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
+							Server:                   "https://concierge-endpoint",
+							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
+						},
+					},
+				},
 				&conciergev1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
 					Spec: conciergev1alpha1.JWTAuthenticatorSpec{
@@ -473,6 +618,15 @@ func TestGetKubeconfig(t *testing.T) {
 				"--oidc-request-audience", "test-audience",
 			},
 			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
+					Status: configv1alpha1.CredentialIssuerStatus{
+						KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
+							Server:                   "https://concierge-endpoint",
+							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
+						},
+					},
+				},
 				&conciergev1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
 				},
@@ -531,6 +685,76 @@ func TestGetKubeconfig(t *testing.T) {
 				"--concierge-mode", "ImpersonationProxy",
 			},
 			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
+					Status:     configv1alpha1.CredentialIssuerStatus{},
+				},
+				&conciergev1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
+					Spec: conciergev1alpha1.JWTAuthenticatorSpec{
+						Issuer:   "https://example.com/issuer",
+						Audience: "test-audience",
+						TLS: &conciergev1alpha1.TLSSpec{
+							CertificateAuthorityData: base64.StdEncoding.EncodeToString(testOIDCCA.Bundle()),
+						},
+					},
+				},
+			},
+			wantStdout: here.Docf(`
+        		apiVersion: v1
+        		clusters:
+        		- cluster:
+        		    certificate-authority-data: dGVzdC1jb25jaWVyZ2UtY2E=
+        		    server: https://impersonation-proxy-endpoint.test
+        		  name: pinniped
+        		contexts:
+        		- context:
+        		    cluster: pinniped
+        		    user: pinniped
+        		  name: pinniped
+        		current-context: pinniped
+        		kind: Config
+        		preferences: {}
+        		users:
+        		- name: pinniped
+        		  user:
+        		    exec:
+        		      apiVersion: client.authentication.k8s.io/v1beta1
+        		      args:
+        		      - login
+        		      - oidc
+        		      - --enable-concierge
+        		      - --concierge-api-group-suffix=pinniped.dev
+        		      - --concierge-authenticator-name=test-authenticator
+        		      - --concierge-authenticator-type=jwt
+        		      - --concierge-endpoint=https://impersonation-proxy-endpoint.test
+        		      - --concierge-ca-bundle-data=dGVzdC1jb25jaWVyZ2UtY2E=
+        		      - --concierge-mode=ImpersonationProxy
+        		      - --issuer=https://example.com/issuer
+        		      - --client-id=pinniped-cli
+        		      - --scopes=offline_access,openid,pinniped:request-audience
+        		      - --ca-bundle-data=%s
+        		      - --request-audience=test-audience
+        		      command: '.../path/to/pinniped'
+        		      env: []
+        		      provideClusterInfo: true
+			`, base64.StdEncoding.EncodeToString(testOIDCCA.Bundle())),
+		},
+		{
+			name: "autodetect impersonation proxy with autodetected JWT authenticator",
+			args: []string{
+				"--kubeconfig", "./testdata/kubeconfig.yaml",
+			},
+			conciergeObjects: []runtime.Object{
+				&configv1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
+					Status: configv1alpha1.CredentialIssuerStatus{
+						ImpersonationProxyInfo: &configv1alpha1.CredentialIssuerImpersonationProxyInfo{
+							Endpoint:                 "https://impersonation-proxy-endpoint.test",
+							CertificateAuthorityData: "dGVzdC1jb25jaWVyZ2UtY2E=",
+						},
+					},
+				},
 				&conciergev1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
 					Spec: conciergev1alpha1.JWTAuthenticatorSpec{
@@ -604,7 +828,7 @@ func TestGetKubeconfig(t *testing.T) {
 					}
 					fake := fakeconciergeclientset.NewSimpleClientset(tt.conciergeObjects...)
 					if len(tt.conciergeReactions) > 0 {
-						fake.ReactionChain = tt.conciergeReactions
+						fake.ReactionChain = append(tt.conciergeReactions, fake.ReactionChain...)
 					}
 					return fake, nil
 				},

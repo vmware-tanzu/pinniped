@@ -122,7 +122,7 @@ func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams
 
 	// If the concierge is enabled, we need to do extra steps.
 	switch flags.conciergeMode {
-	case modeTokenCredentialRequestAPI:
+	case modeUnknown, modeTokenCredentialRequestAPI:
 		// do a credential exchange request
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

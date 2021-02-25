@@ -12,7 +12,7 @@ import (
 func TestConciergeModeFlag(t *testing.T) {
 	var m conciergeMode
 	require.Equal(t, "mode", m.Type())
-	require.Equal(t, modeTokenCredentialRequestAPI, m)
+	require.Equal(t, modeUnknown, m)
 	require.EqualError(t, m.Set("foo"), `invalid mode "foo", valid modes are TokenCredentialRequestAPI and ImpersonationProxy`)
 
 	require.NoError(t, m.Set("TokenCredentialRequestAPI"))

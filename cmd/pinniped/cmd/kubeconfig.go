@@ -25,6 +25,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Adds handlers for various dynamic auth plugins in client-go
 
 	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
@@ -74,6 +75,7 @@ type getKubeconfigOIDCParams struct {
 
 type getKubeconfigConciergeParams struct {
 	disabled          bool
+	credentialIssuer  string
 	authenticatorName string
 	authenticatorType string
 	apiGroupSuffix    string
@@ -109,6 +111,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 
 	f.BoolVar(&flags.concierge.disabled, "no-concierge", false, "Generate a configuration which does not use the Concierge, but sends the credential to the cluster directly")
 	f.StringVar(&namespace, "concierge-namespace", "pinniped-concierge", "Namespace in which the Concierge was installed")
+	f.StringVar(&flags.concierge.credentialIssuer, "concierge-credential-issuer", "", "Concierge CredentialIssuer object to use for autodiscovery (default: autodiscover)")
 	f.StringVar(&flags.concierge.authenticatorType, "concierge-authenticator-type", "", "Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)")
 	f.StringVar(&flags.concierge.authenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name (default: autodiscover)")
 	f.StringVar(&flags.concierge.apiGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
@@ -178,6 +181,11 @@ func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigPar
 	}
 
 	if !flags.concierge.disabled {
+		credentialIssuer, err := lookupCredentialIssuer(clientset, flags.concierge.credentialIssuer)
+		if err != nil {
+			return err
+		}
+
 		authenticator, err := lookupAuthenticator(
 			clientset,
 			flags.concierge.authenticatorType,
@@ -186,7 +194,8 @@ func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigPar
 		if err != nil {
 			return err
 		}
-		if err := configureConcierge(authenticator, &flags, cluster, &oidcCABundle, &execConfig); err != nil {
+
+		if err := configureConcierge(credentialIssuer, authenticator, &flags, cluster, &oidcCABundle, &execConfig); err != nil {
 			return err
 		}
 	}
@@ -209,7 +218,7 @@ func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigPar
 	// Otherwise continue to parse the OIDC-related flags and output a config that runs `pinniped login oidc`.
 	execConfig.Args = append([]string{"login", "oidc"}, execConfig.Args...)
 	if flags.oidc.issuer == "" {
-		return fmt.Errorf("could not autodiscover --oidc-issuer, and none was provided")
+		return fmt.Errorf("could not autodiscover --oidc-issuer and none was provided")
 	}
 	execConfig.Args = append(execConfig.Args,
 		"--issuer="+flags.oidc.issuer,
@@ -237,18 +246,30 @@ func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigPar
 	return writeConfigAsYAML(out, newExecKubeconfig(cluster, &execConfig))
 }
 
-func configureConcierge(authenticator metav1.Object, flags *getKubeconfigParams, v1Cluster *clientcmdapi.Cluster, oidcCABundle *string, execConfig *clientcmdapi.ExecConfig) error {
+func configureConcierge(credentialIssuer *configv1alpha1.CredentialIssuer, authenticator metav1.Object, flags *getKubeconfigParams, v1Cluster *clientcmdapi.Cluster, oidcCABundle *string, execConfig *clientcmdapi.ExecConfig) error {
+	var conciergeCABundleData []byte
 
-	if flags.concierge.mode == modeImpersonationProxy {
-		// TODO what to do if --use-impersonation-proxy is set but flags.concierge.caBundlePath is not???
-		// TODO dont do this twice
-		conciergeCaBundleData, err := loadCABundlePaths([]string{flags.concierge.caBundlePath})
-		if err != nil {
-			return fmt.Errorf("could not read --concierge-ca-bundle: %w", err)
+	// Autodiscover the --concierge-mode.
+	if flags.concierge.mode == modeUnknown {
+
+		if credentialIssuer.Status.KubeConfigInfo != nil {
+			// Prefer the TokenCredentialRequest API if available.
+			flags.concierge.mode = modeTokenCredentialRequestAPI
+		} else if credentialIssuer.Status.ImpersonationProxyInfo != nil {
+			// Otherwise prefer the impersonation proxy if it seems configured.
+			flags.concierge.mode = modeImpersonationProxy
+		} else {
+			return fmt.Errorf("could not autodiscover --concierge-mode and none was provided")
 		}
+	}
 
-		v1Cluster.CertificateAuthorityData = []byte(conciergeCaBundleData)
-		v1Cluster.Server = flags.concierge.endpoint
+	if flags.concierge.mode == modeImpersonationProxy && credentialIssuer.Status.ImpersonationProxyInfo != nil {
+		flags.concierge.endpoint = credentialIssuer.Status.ImpersonationProxyInfo.Endpoint
+		var err error
+		conciergeCABundleData, err = base64.StdEncoding.DecodeString(credentialIssuer.Status.ImpersonationProxyInfo.CertificateAuthorityData)
+		if err != nil {
+			return fmt.Errorf("autodiscovered Concierge CA bundle is invalid: %w", err)
+		}
 	}
 
 	switch auth := authenticator.(type) {
@@ -292,15 +313,16 @@ func configureConcierge(authenticator metav1.Object, flags *getKubeconfigParams,
 		flags.concierge.endpoint = v1Cluster.Server
 	}
 
-	var encodedConciergeCaBundleData string
-	if flags.concierge.caBundlePath == "" {
-		encodedConciergeCaBundleData = base64.StdEncoding.EncodeToString(v1Cluster.CertificateAuthorityData)
-	} else {
-		conciergeCaBundleData, err := loadCABundlePaths([]string{flags.concierge.caBundlePath})
-		if err != nil {
-			return fmt.Errorf("could not read --concierge-ca-bundle: %w", err)
+	if conciergeCABundleData == nil {
+		if flags.concierge.caBundlePath == "" {
+			conciergeCABundleData = v1Cluster.CertificateAuthorityData
+		} else {
+			caBundleString, err := loadCABundlePaths([]string{flags.concierge.caBundlePath})
+			if err != nil {
+				return fmt.Errorf("could not read --concierge-ca-bundle: %w", err)
+			}
+			conciergeCABundleData = []byte(caBundleString)
 		}
-		encodedConciergeCaBundleData = base64.StdEncoding.EncodeToString([]byte(conciergeCaBundleData))
 	}
 
 	// Append the flags to configure the Concierge credential exchange at runtime.
@@ -310,9 +332,16 @@ func configureConcierge(authenticator metav1.Object, flags *getKubeconfigParams,
 		"--concierge-authenticator-name="+flags.concierge.authenticatorName,
 		"--concierge-authenticator-type="+flags.concierge.authenticatorType,
 		"--concierge-endpoint="+flags.concierge.endpoint,
-		"--concierge-ca-bundle-data="+encodedConciergeCaBundleData,
+		"--concierge-ca-bundle-data="+base64.StdEncoding.EncodeToString(conciergeCABundleData),
 		"--concierge-mode="+flags.concierge.mode.String(),
 	)
+
+	// If we're in impersonation proxy mode, the main server endpoint for the kubeconfig also needs to point to the proxy
+	if flags.concierge.mode == modeImpersonationProxy {
+		v1Cluster.CertificateAuthorityData = conciergeCABundleData
+		v1Cluster.Server = flags.concierge.endpoint
+	}
+
 	return nil
 }
 
@@ -341,6 +370,29 @@ func newExecKubeconfig(cluster *clientcmdapi.Cluster, execConfig *clientcmdapi.E
 		Contexts:       map[string]*clientcmdapi.Context{name: {Cluster: name, AuthInfo: name}},
 		CurrentContext: name,
 	}
+}
+
+func lookupCredentialIssuer(clientset conciergeclientset.Interface, name string) (*configv1alpha1.CredentialIssuer, error) {
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*20)
+	defer cancelFunc()
+
+	// If the name is specified, get that object.
+	if name != "" {
+		return clientset.ConfigV1alpha1().CredentialIssuers().Get(ctx, name, metav1.GetOptions{})
+	}
+
+	// Otherwise list all the available CredentialIssuers and hope there's just a single one
+	results, err := clientset.ConfigV1alpha1().CredentialIssuers().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list CredentialIssuer objects for autodiscovery: %w", err)
+	}
+	if len(results.Items) == 0 {
+		return nil, fmt.Errorf("no CredentialIssuers were found")
+	}
+	if len(results.Items) > 1 {
+		return nil, fmt.Errorf("multiple CredentialIssuers were found, so the --concierge-credential-issuer flag must be specified")
+	}
+	return &results.Items[0], nil
 }
 
 func lookupAuthenticator(clientset conciergeclientset.Interface, authType, authName string) (metav1.Object, error) {

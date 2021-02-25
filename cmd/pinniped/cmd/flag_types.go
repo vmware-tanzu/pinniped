@@ -16,6 +16,7 @@ type conciergeMode int
 var _ flag.Value = new(conciergeMode)
 
 const (
+	modeUnknown                   conciergeMode = iota
 	modeTokenCredentialRequestAPI conciergeMode = iota
 	modeImpersonationProxy        conciergeMode = iota
 )
@@ -32,6 +33,10 @@ func (c *conciergeMode) String() string {
 }
 
 func (c *conciergeMode) Set(s string) error {
+	if strings.EqualFold(s, "") {
+		*c = modeUnknown
+		return nil
+	}
 	if strings.EqualFold(s, "TokenCredentialRequestAPI") {
 		*c = modeTokenCredentialRequestAPI
 		return nil

@@ -251,14 +251,14 @@ func configureConcierge(credentialIssuer *configv1alpha1.CredentialIssuer, authe
 
 	// Autodiscover the --concierge-mode.
 	if flags.concierge.mode == modeUnknown {
-
-		if credentialIssuer.Status.KubeConfigInfo != nil {
+		switch {
+		case credentialIssuer.Status.KubeConfigInfo != nil:
 			// Prefer the TokenCredentialRequest API if available.
 			flags.concierge.mode = modeTokenCredentialRequestAPI
-		} else if credentialIssuer.Status.ImpersonationProxyInfo != nil {
+		case credentialIssuer.Status.ImpersonationProxyInfo != nil:
 			// Otherwise prefer the impersonation proxy if it seems configured.
 			flags.concierge.mode = modeImpersonationProxy
-		} else {
+		default:
 			return fmt.Errorf("could not autodiscover --concierge-mode and none was provided")
 		}
 	}

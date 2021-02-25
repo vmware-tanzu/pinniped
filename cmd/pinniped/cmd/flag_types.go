@@ -25,7 +25,7 @@ func (c *conciergeMode) String() string {
 	switch *c {
 	case modeImpersonationProxy:
 		return "ImpersonationProxy"
-	case modeTokenCredentialRequestAPI:
+	case modeTokenCredentialRequestAPI, modeUnknown:
 		return "TokenCredentialRequestAPI"
 	default:
 		return "TokenCredentialRequestAPI"

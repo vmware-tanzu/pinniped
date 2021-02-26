@@ -1210,6 +1210,44 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					})
 				})
 
+				when("endpoint is IP address with a port", func() {
+					const fakeIpWithPort = "127.0.0.1:3000"
+					it.Before(func() {
+						configMapYAML := fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeIpWithPort)
+						addImpersonatorConfigMapToTracker(configMapResourceName, configMapYAML, kubeInformerClient)
+						addNodeWithRoleToTracker("worker", kubeAPIClient)
+					})
+
+					it("starts the impersonator, generates a valid cert for the hostname", func() {
+						startInformersAndController()
+						r.NoError(runControllerSync())
+						r.Len(kubeAPIClient.Actions(), 2)
+						requireNodesListed(kubeAPIClient.Actions()[0])
+						ca := requireTLSSecretWasCreated(kubeAPIClient.Actions()[1])
+						// Check that the server is running and that TLS certs that are being served are are for fakeIpWithPort.
+						requireTLSServerIsRunning(ca, fakeIpWithPort, map[string]string{fakeIpWithPort: testServerAddr()})
+					})
+				})
+
+				when("endpoint is hostname with a port", func() {
+					const fakeHostnameWithPort = "fake.example.com:3000"
+					it.Before(func() {
+						configMapYAML := fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeHostnameWithPort)
+						addImpersonatorConfigMapToTracker(configMapResourceName, configMapYAML, kubeInformerClient)
+						addNodeWithRoleToTracker("worker", kubeAPIClient)
+					})
+
+					it("starts the impersonator, generates a valid cert for the hostname", func() {
+						startInformersAndController()
+						r.NoError(runControllerSync())
+						r.Len(kubeAPIClient.Actions(), 2)
+						requireNodesListed(kubeAPIClient.Actions()[0])
+						ca := requireTLSSecretWasCreated(kubeAPIClient.Actions()[1])
+						// Check that the server is running and that TLS certs that are being served are are for fakeHostnameWithPort.
+						requireTLSServerIsRunning(ca, fakeHostnameWithPort, map[string]string{fakeHostnameWithPort: testServerAddr()})
+					})
+				})
+
 				when("switching from ip address endpoint to hostname endpoint and back to ip address", func() {
 					const fakeHostname = "fake.example.com"
 					const fakeIP = "127.0.0.42"

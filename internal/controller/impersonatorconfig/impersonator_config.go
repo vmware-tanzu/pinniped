@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -491,12 +492,12 @@ func (c *impersonatorConfigController) findDesiredTLSCertificateName(config *imp
 }
 
 func (c *impersonatorConfigController) findTLSCertificateNameFromEndpointConfig(config *impersonator.Config) (net.IP, string, bool, error) {
-	// TODO Endpoint could have a port number in it, which we should parse out and ignore for this purpose
-	parsedAsIP := net.ParseIP(config.Endpoint)
+	endpointWithoutPort := strings.Split(config.Endpoint, ":")[0]
+	parsedAsIP := net.ParseIP(endpointWithoutPort)
 	if parsedAsIP != nil {
 		return parsedAsIP, "", true, nil
 	}
-	return nil, config.Endpoint, true, nil
+	return nil, endpointWithoutPort, true, nil
 }
 
 func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() (net.IP, string, bool, error) {

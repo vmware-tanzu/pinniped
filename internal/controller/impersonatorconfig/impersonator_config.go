@@ -217,7 +217,17 @@ func (c *impersonatorConfigController) shouldHaveLoadBalancer(config *impersonat
 }
 
 func (c *impersonatorConfigController) shouldHaveTLSSecret(config *impersonator.Config) bool {
-	return c.shouldHaveImpersonator(config) // TODO is this the logic that we want here?
+	return c.shouldHaveImpersonator(config)
+}
+
+func certHostnameAndIPMatchDesiredState(desiredIP net.IP, actualIPs []net.IP, desiredHostname string, actualHostnames []string) bool {
+	if desiredIP != nil && len(actualIPs) == 1 && desiredIP.Equal(actualIPs[0]) && len(actualHostnames) == 0 {
+		return true
+	}
+	if desiredHostname != "" && len(actualHostnames) == 1 && desiredHostname == actualHostnames[0] && len(actualIPs) == 0 {
+		return true
+	}
+	return false
 }
 
 func (c *impersonatorConfigController) ensureImpersonatorIsStopped() error {
@@ -357,12 +367,12 @@ func (c *impersonatorConfigController) deleteTLSCertificateWithWrongName(ctx con
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
 		// The certPEM is not valid.
-		return secret, nil // TODO what should we do?
+		return secret, nil // TODO delete this so the controller will create a valid one
 	}
 	actualCertFromSecret, _ := x509.ParseCertificate(block.Bytes)
 	// TODO handle err
 
-	desiredIPs, desiredHostnames, nameIsReady, err := c.findTLSCertificateName(config)
+	desiredIP, desiredHostname, nameIsReady, err := c.findDesiredTLSCertificateName(config)
 	//nolint:staticcheck // TODO remove this nolint when we fix the TODO below
 	if err != nil {
 		// TODO return err
@@ -380,22 +390,16 @@ func (c *impersonatorConfigController) deleteTLSCertificateWithWrongName(ctx con
 	actualIPs := actualCertFromSecret.IPAddresses
 	actualHostnames := actualCertFromSecret.DNSNames
 	plog.Info("Checking TLS certificate names",
-		"desiredIPs", desiredIPs,
-		"desiredHostnames", desiredHostnames,
+		"desiredIP", desiredIP,
+		"desiredHostname", desiredHostname,
 		"actualIPs", actualIPs,
 		"actualHostnames", actualHostnames,
 		"secret", c.tlsSecretName,
 		"namespace", c.namespace)
 
-	// TODO handle multiple IPs
-	if len(desiredIPs) == len(actualIPs) && len(desiredIPs) == 1 && desiredIPs[0].Equal(actualIPs[0]) { //nolint:gocritic
-		// The cert matches the desired state, so we do not need to delete it.
+	if certHostnameAndIPMatchDesiredState(desiredIP, actualIPs, desiredHostname, actualHostnames) {
 		return secret, nil
 	}
-	if len(desiredHostnames) == len(actualHostnames) && len(desiredHostnames) == 1 && desiredHostnames[0] == actualHostnames[0] { //nolint:gocritic
-		return secret, nil
-	}
-
 	err = c.ensureTLSSecretIsRemoved(ctx)
 	if err != nil {
 		return secret, err
@@ -419,7 +423,7 @@ func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx con
 		return fmt.Errorf("could not create impersonation CA: %w", err)
 	}
 
-	ips, hostnames, nameIsReady, err := c.findTLSCertificateName(config)
+	ip, hostname, nameIsReady, err := c.findDesiredTLSCertificateName(config)
 	if err != nil {
 		return err
 	}
@@ -428,6 +432,14 @@ func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx con
 		return nil
 	}
 
+	var hostnames []string
+	var ips []net.IP
+	if hostname != "" {
+		hostnames = []string{hostname}
+	}
+	if ip != nil {
+		ips = []net.IP{ip}
+	}
 	newTLSSecret, err := c.createNewTLSSecret(ctx, impersonationCA, ips, hostnames)
 	if err != nil {
 		return err
@@ -441,56 +453,54 @@ func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx con
 	return nil
 }
 
-func (c *impersonatorConfigController) findTLSCertificateName(config *impersonator.Config) ([]net.IP, []string, bool, error) {
+func (c *impersonatorConfigController) findDesiredTLSCertificateName(config *impersonator.Config) (net.IP, string, bool, error) {
 	if config.Endpoint != "" {
 		return c.findTLSCertificateNameFromEndpointConfig(config)
 	}
 	return c.findTLSCertificateNameFromLoadBalancer()
 }
 
-func (c *impersonatorConfigController) findTLSCertificateNameFromEndpointConfig(config *impersonator.Config) ([]net.IP, []string, bool, error) {
-	var ips []net.IP
-	var hostnames []string
+func (c *impersonatorConfigController) findTLSCertificateNameFromEndpointConfig(config *impersonator.Config) (net.IP, string, bool, error) {
+	// TODO Endpoint could have a port number in it, which we should parse out and ignore for this purpose
 	parsedAsIP := net.ParseIP(config.Endpoint)
 	if parsedAsIP != nil {
-		ips = []net.IP{parsedAsIP}
-	} else {
-		hostnames = []string{config.Endpoint}
+		return parsedAsIP, "", true, nil
 	}
-	// TODO Endpoint could have a port number in it, which we should parse out and ignore for this purpose
-	return ips, hostnames, true, nil
+	return nil, config.Endpoint, true, nil
 }
 
-func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() ([]net.IP, []string, bool, error) {
-	var ips []net.IP
-	var hostnames []string
+func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() (net.IP, string, bool, error) {
 	lb, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedLoadBalancerServiceName)
 	notFound := k8serrors.IsNotFound(err)
 	if notFound {
-		// TODO is this an error? we should have already created the load balancer, so why would it not exist here?
-		return nil, nil, false, nil
+		// Maybe the loadbalancer hasn't been cached in the informer yet. We aren't ready and will try again later.
+		return nil, "", false, nil
 	}
 	if err != nil {
-		return nil, nil, false, err
+		return nil, "", false, err
 	}
 	ingresses := lb.Status.LoadBalancer.Ingress
 	if len(ingresses) == 0 || (ingresses[0].Hostname == "" && ingresses[0].IP == "") {
 		plog.Info("load balancer for impersonation proxy does not have an ingress yet, so skipping tls cert generation while we wait",
 			"service", c.generatedLoadBalancerServiceName,
 			"namespace", c.namespace)
-		return nil, nil, false, nil
+		return nil, "", false, nil
 	}
-	hostname := ingresses[0].Hostname
-	if hostname != "" {
-		return nil, []string{hostname}, true, nil
+	for _, ingress := range ingresses {
+		hostname := ingress.Hostname
+		if hostname != "" {
+			return nil, hostname, true, nil
+		}
 	}
-	ip := ingresses[0].IP
-	parsedIP := net.ParseIP(ip)
-	if parsedIP == nil {
-		return nil, nil, false, fmt.Errorf("could not parse IP address from load balancer %s: %s", lb.Name, ip)
+	for _, ingress := range ingresses {
+		ip := ingress.IP
+		parsedIP := net.ParseIP(ip)
+		if parsedIP != nil {
+			return parsedIP, "", true, nil
+		}
 	}
-	ips = []net.IP{parsedIP}
-	return ips, hostnames, true, nil
+
+	return nil, "", false, fmt.Errorf("could not find valid IP addresses or hostnames from load balancer %s/%s", c.namespace, lb.Name)
 }
 
 func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, ca *certauthority.CA, ips []net.IP, hostnames []string) (*v1.Secret, error) {

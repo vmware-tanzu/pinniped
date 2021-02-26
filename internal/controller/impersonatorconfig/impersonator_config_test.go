@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -668,6 +669,17 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.NotNil(createdSecret.Data["ca.crt"])
 			r.NotNil(createdSecret.Data[corev1.TLSPrivateKeyKey])
 			r.NotNil(createdSecret.Data[corev1.TLSCertKey])
+			validCert := testutil.ValidateCertificate(t, string(createdSecret.Data["ca.crt"]), string(createdSecret.Data[corev1.TLSCertKey]))
+			validCert.RequireMatchesPrivateKey(string(createdSecret.Data[corev1.TLSPrivateKeyKey]))
+			validCert.RequireLifetime(time.Now().Add(-10*time.Second), time.Now().Add(100*time.Hour*24*365), 10*time.Second)
+			// Make sure the CA certificate looks roughly like what we expect.
+			block, _ := pem.Decode(createdSecret.Data["ca.crt"])
+			require.NotNil(t, block)
+			caCert, err := x509.ParseCertificate(block.Bytes)
+			require.NoError(t, err)
+			require.Equal(t, "Pinniped Impersonation Proxy CA", caCert.Subject.CommonName)
+			require.WithinDuration(t, time.Now().Add(-10*time.Second), caCert.NotBefore, 10*time.Second)
+			require.WithinDuration(t, time.Now().Add(100*time.Hour*24*365), caCert.NotAfter, 10*time.Second)
 			return createdSecret.Data["ca.crt"]
 		}
 

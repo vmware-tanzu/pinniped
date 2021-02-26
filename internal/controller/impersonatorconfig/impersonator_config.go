@@ -448,7 +448,7 @@ func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx con
 
 	// TODO create/save/watch the CA separately so we can reuse it to mint tls certs as the settings are dynamically changed,
 	//   so that clients don't need to be updated to use a different CA just because the server-side settings were changed.
-	impersonationCA, err := certauthority.New(pkix.Name{CommonName: "test CA"}, 24*time.Hour) // TODO change the expiration of this to 100 years
+	impersonationCA, err := certauthority.New(pkix.Name{CommonName: "Pinniped Impersonation Proxy CA"}, 100*365*24*time.Hour)
 	if err != nil {
 		return fmt.Errorf("could not create impersonation CA: %w", err)
 	}
@@ -534,7 +534,7 @@ func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() 
 }
 
 func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, ca *certauthority.CA, ips []net.IP, hostnames []string) (*v1.Secret, error) {
-	impersonationCert, err := ca.Issue(pkix.Name{}, hostnames, ips, 24*time.Hour) // TODO change the length of this too 100 years for now?
+	impersonationCert, err := ca.Issue(pkix.Name{}, hostnames, ips, 100*365*24*time.Hour)
 	if err != nil {
 		return nil, fmt.Errorf("could not create impersonation cert: %w", err)
 	}

@@ -197,10 +197,8 @@ func (c *impersonatorConfigController) ensureTLSSecret(ctx controllerlib.Context
 	if !notFound && err != nil {
 		return err
 	}
-	//nolint:staticcheck // TODO remove this nolint when we fix the TODO below
-	if secret, err = c.deleteTLSCertificateWithWrongName(ctx.Context, config, secret); err != nil {
-		// TODO
-		// return err
+	if secret, err = c.deleteWhenTLSCertificateDoesNotMatchDesiredState(ctx.Context, config, secret); err != nil {
+		return err
 	}
 	if err = c.ensureTLSSecretIsCreatedAndLoaded(ctx.Context, config, secret); err != nil {
 		return err
@@ -357,7 +355,7 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.C
 	return nil
 }
 
-func (c *impersonatorConfigController) deleteTLSCertificateWithWrongName(ctx context.Context, config *impersonator.Config, secret *v1.Secret) (*v1.Secret, error) {
+func (c *impersonatorConfigController) deleteWhenTLSCertificateDoesNotMatchDesiredState(ctx context.Context, config *impersonator.Config, secret *v1.Secret) (*v1.Secret, error) {
 	if secret == nil {
 		// There is no Secret, so there is nothing to delete.
 		return secret, nil
@@ -366,16 +364,46 @@ func (c *impersonatorConfigController) deleteTLSCertificateWithWrongName(ctx con
 	certPEM := secret.Data[v1.TLSCertKey]
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
-		// The certPEM is not valid.
-		return secret, nil // TODO delete this so the controller will create a valid one
+		plog.Warning("Found missing or not PEM-encoded data in TLS Secret",
+			"invalidCertPEM", certPEM,
+			"secret", c.tlsSecretName,
+			"namespace", c.namespace)
+		deleteErr := c.ensureTLSSecretIsRemoved(ctx)
+		if deleteErr != nil {
+			return nil, fmt.Errorf("found missing or not PEM-encoded data in TLS Secret, but got error while deleting it: %w", deleteErr)
+		}
+		return nil, nil
 	}
-	actualCertFromSecret, _ := x509.ParseCertificate(block.Bytes)
-	// TODO handle err
+
+	actualCertFromSecret, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		plog.Error("Found invalid PEM data in TLS Secret", err,
+			"invalidCertPEM", certPEM,
+			"secret", c.tlsSecretName,
+			"namespace", c.namespace)
+		deleteErr := c.ensureTLSSecretIsRemoved(ctx)
+		if deleteErr != nil {
+			return nil, fmt.Errorf("PEM data represented an invalid cert, but got error while deleting it: %w", deleteErr)
+		}
+		return nil, nil
+	}
+
+	keyPEM := secret.Data[v1.TLSPrivateKeyKey]
+	_, err = tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		plog.Error("Found invalid private key PEM data in TLS Secret", err,
+			"secret", c.tlsSecretName,
+			"namespace", c.namespace)
+		deleteErr := c.ensureTLSSecretIsRemoved(ctx)
+		if deleteErr != nil {
+			return nil, fmt.Errorf("cert had an invalid private key, but got error while deleting it: %w", deleteErr)
+		}
+		return nil, nil
+	}
 
 	desiredIP, desiredHostname, nameIsReady, err := c.findDesiredTLSCertificateName(config)
-	//nolint:staticcheck // TODO remove this nolint when we fix the TODO below
 	if err != nil {
-		// TODO return err
+		return secret, err
 	}
 	if !nameIsReady {
 		// We currently have a secret but we are waiting for a load balancer to be assigned an ingress, so
@@ -398,8 +426,10 @@ func (c *impersonatorConfigController) deleteTLSCertificateWithWrongName(ctx con
 		"namespace", c.namespace)
 
 	if certHostnameAndIPMatchDesiredState(desiredIP, actualIPs, desiredHostname, actualHostnames) {
+		// The cert already matches the desired state, so there is no need to delete/recreate it.
 		return secret, nil
 	}
+
 	err = c.ensureTLSSecretIsRemoved(ctx)
 	if err != nil {
 		return secret, err
@@ -509,8 +539,10 @@ func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, c
 		return nil, fmt.Errorf("could not create impersonation cert: %w", err)
 	}
 
-	certPEM, keyPEM, _ := certauthority.ToPEM(impersonationCert)
-	// TODO handle err
+	certPEM, keyPEM, err := certauthority.ToPEM(impersonationCert)
+	if err != nil {
+		return nil, err
+	}
 
 	newTLSSecret := &v1.Secret{
 		Type: v1.SecretTypeTLS,
@@ -525,13 +557,17 @@ func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, c
 			v1.TLSCertKey:       certPEM,
 		},
 	}
+
 	plog.Info("Creating TLS certificates for impersonation proxy",
 		"ips", ips,
 		"hostnames", hostnames,
 		"secret", c.tlsSecretName,
 		"namespace", c.namespace)
-	_, _ = c.k8sClient.CoreV1().Secrets(c.namespace).Create(ctx, newTLSSecret, metav1.CreateOptions{})
-	// TODO handle error on create
+	_, err = c.k8sClient.CoreV1().Secrets(c.namespace).Create(ctx, newTLSSecret, metav1.CreateOptions{})
+	if err != nil {
+		return nil, err
+	}
+
 	return newTLSSecret, nil
 }
 
@@ -545,7 +581,7 @@ func (c *impersonatorConfigController) loadTLSCertFromSecret(tlsSecret *v1.Secre
 			"secret", c.tlsSecretName,
 			"namespace", c.namespace,
 		)
-		// TODO clear the secret if it was already set previously... c.setTLSCert(nil)
+		c.setTLSCert(nil)
 		return fmt.Errorf("could not parse TLS cert PEM data from Secret: %w", err)
 	}
 	plog.Info("Loading TLS certificates for impersonation proxy",

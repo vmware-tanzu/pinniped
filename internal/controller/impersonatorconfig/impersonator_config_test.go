@@ -896,12 +896,11 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			})
 
 			when("there are not visible control plane nodes, a secret exists with multiple hostnames and an IP", func() {
-				var tlsSecret *corev1.Secret
 				it.Before(func() {
 					addNodeWithRoleToTracker("worker")
 					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeInformerClient)
 					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeAPIClient)
-					tlsSecret = createTLSSecretWithMultipleHostnames(tlsSecretName, "127.0.0.1")
+					tlsSecret := createTLSSecretWithMultipleHostnames(tlsSecretName, "127.0.0.1")
 					r.NoError(kubeAPIClient.Tracker().Add(tlsSecret))
 					r.NoError(kubeInformerClient.Tracker().Add(tlsSecret))
 					startInformersAndController()
@@ -913,6 +912,58 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireNodesListed(kubeAPIClient.Actions()[0])
 					requireTLSSecretDeleted(kubeAPIClient.Actions()[1])
 					ca := requireTLSSecretWasCreated(kubeAPIClient.Actions()[2])
+					requireTLSServerIsRunning(ca, startedTLSListener.Addr().String(), nil)
+				})
+			})
+
+			when("the cert's name needs to change but there is an error while deleting the tls Secret", func() {
+				it.Before(func() {
+					addNodeWithRoleToTracker("worker")
+					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.42"}}, kubeInformerClient)
+					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.42"}}, kubeAPIClient)
+					tlsSecret := createActualTLSSecret(tlsSecretName)
+					r.NoError(kubeAPIClient.Tracker().Add(tlsSecret))
+					r.NoError(kubeInformerClient.Tracker().Add(tlsSecret))
+					kubeAPIClient.PrependReactor("delete", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+						return true, nil, fmt.Errorf("error on delete")
+					})
+				})
+
+				it("returns an error and runs the proxy without certs", func() {
+					startInformersAndController()
+					r.Error(controllerlib.TestSync(t, subject, *syncContext), "error on delete")
+					r.Len(kubeAPIClient.Actions(), 2)
+					requireNodesListed(kubeAPIClient.Actions()[0])
+					requireTLSSecretDeleted(kubeAPIClient.Actions()[1])
+					requireTLSServerIsRunningWithoutCerts()
+				})
+			})
+
+			when("the cert's name might need to change but there is an error while determining the new name", func() {
+				var ca []byte
+				it.Before(func() {
+					addNodeWithRoleToTracker("worker")
+					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeInformerClient)
+					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeAPIClient)
+					tlsSecret := createActualTLSSecret(tlsSecretName)
+					ca = tlsSecret.Data["ca.crt"]
+					r.NoError(kubeAPIClient.Tracker().Add(tlsSecret))
+					r.NoError(kubeInformerClient.Tracker().Add(tlsSecret))
+				})
+
+				it("returns an error and keeps running the proxy with the old cert", func() {
+					startInformersAndController()
+					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+					r.Len(kubeAPIClient.Actions(), 1)
+					requireNodesListed(kubeAPIClient.Actions()[0])
+					requireTLSServerIsRunning(ca, startedTLSListener.Addr().String(), nil)
+
+					updateLoadBalancerServiceInTracker(generatedLoadBalancerServiceName, "not-an-ip", "1")
+					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "1")
+
+					r.EqualError(controllerlib.TestSync(t, subject, *syncContext),
+						"could not find valid IP addresses or hostnames from load balancer some-namespace/some-service-resource-name")
+					r.Len(kubeAPIClient.Actions(), 1) // no new actions
 					requireTLSServerIsRunning(ca, startedTLSListener.Addr().String(), nil)
 				})
 			})
@@ -1165,28 +1216,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					})
 				})
 
-				when("a load balancer and a secret already exists but the tls secret is not valid", func() {
-					var tlsSecret *corev1.Secret
-					it.Before(func() {
-						addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
-						addNodeWithRoleToTracker("worker")
-						tlsSecret = createStubTLSSecret(tlsSecretName) // secret exists but lacks certs
-						r.NoError(kubeAPIClient.Tracker().Add(tlsSecret))
-						r.NoError(kubeInformerClient.Tracker().Add(tlsSecret))
-						addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeInformerClient)
-						addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeAPIClient)
-					})
-
-					it("returns an error and leaves the impersonator running without tls certs", func() {
-						startInformersAndController()
-						r.EqualError(controllerlib.TestSync(t, subject, *syncContext),
-							"could not parse TLS cert PEM data from Secret: tls: failed to find any PEM data in certificate input")
-						r.Len(kubeAPIClient.Actions(), 1)
-						requireNodesListed(kubeAPIClient.Actions()[0])
-						requireTLSServerIsRunningWithoutCerts()
-					})
-				})
-
 				when("we have a hostname specified for the endpoint", func() {
 					const fakeHostname = "fake.example.com"
 					it.Before(func() {
@@ -1319,7 +1348,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				})
 			})
 
-			when("the endpoint switches from specified, to not specified, to specified", func() {
+			when("the endpoint switches from specified, to not specified, to specified again", func() {
 				it.Before(func() {
 					addImpersonatorConfigMapToTracker(configMapResourceName, here.Doc(`
 						mode: enabled
@@ -1373,6 +1402,10 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					// Check that the server is running and that TLS certs that are being served are are for fakeIP.
 					requireTLSServerIsRunning(ca, fakeIP, map[string]string{fakeIP + ":443": startedTLSListener.Addr().String()})
 
+					// update manually because the kubeAPIClient isn't connected to the informer in the tests
+					addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[4], kubeInformerClient, "2")
+					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "2")
+
 					// Now switch back to having the "endpoint" specified, so the load balancer is not needed anymore.
 					updateImpersonatorConfigMapInTracker(configMapResourceName, here.Doc(`
 						mode: enabled
@@ -1381,9 +1414,10 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "2")
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
-					r.Len(kubeAPIClient.Actions(), 7)
+					r.Len(kubeAPIClient.Actions(), 8)
 					requireLoadBalancerDeleted(kubeAPIClient.Actions()[5])
-					requireTLSSecretWasCreated(kubeAPIClient.Actions()[6]) // recreated because the endpoint was updated
+					requireTLSSecretDeleted(kubeAPIClient.Actions()[6])
+					requireTLSSecretWasCreated(kubeAPIClient.Actions()[7]) // recreated because the endpoint was updated
 				})
 			})
 		})
@@ -1399,6 +1433,25 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 			it("exits with an error", func() {
 				r.EqualError(controllerlib.TestSync(t, subject, *syncContext), "could not create load balancer: error on create")
+			})
+		})
+
+		when("there is an error creating the tls secret", func() {
+			it.Before(func() {
+				addImpersonatorConfigMapToTracker(configMapResourceName, "{mode: enabled, endpoint: example.com}")
+				addNodeWithRoleToTracker("control-plane")
+				kubeAPIClient.PrependReactor("create", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, fmt.Errorf("error on create")
+				})
+			})
+
+			it("starts the impersonator without certs and returns an error", func() {
+				startInformersAndController()
+				r.EqualError(controllerlib.TestSync(t, subject, *syncContext), "error on create")
+				requireTLSServerIsRunningWithoutCerts()
+				r.Len(kubeAPIClient.Actions(), 2)
+				requireNodesListed(kubeAPIClient.Actions()[0])
+				requireTLSSecretWasCreated(kubeAPIClient.Actions()[1])
 			})
 		})
 
@@ -1423,6 +1476,134 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireNodesListed(kubeAPIClient.Actions()[0])
 				requireLoadBalancerDeleted(kubeAPIClient.Actions()[1])
 				requireTLSSecretDeleted(kubeAPIClient.Actions()[2])
+			})
+		})
+
+		when("the PEM formatted data in the Secret is not a valid cert", func() {
+			it.Before(func() {
+				addImpersonatorConfigMapToTracker(configMapResourceName, "{mode: enabled, endpoint: 127.0.0.1}")
+				addNodeWithRoleToTracker("worker")
+				tlsSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      tlsSecretName,
+						Namespace: installedInNamespace,
+					},
+					Data: map[string][]byte{
+						// "aGVsbG8gd29ybGQK" is "hello world" base64 encoded
+						corev1.TLSCertKey: []byte("-----BEGIN CERTIFICATE-----\naGVsbG8gd29ybGQK\n-----END CERTIFICATE-----\n"),
+					},
+				}
+				r.NoError(kubeAPIClient.Tracker().Add(tlsSecret))
+				r.NoError(kubeInformerClient.Tracker().Add(tlsSecret))
+			})
+
+			it("deletes the invalid certs, creates new certs, and starts the impersonator", func() {
+				startInformersAndController()
+				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+				r.Len(kubeAPIClient.Actions(), 3)
+				requireNodesListed(kubeAPIClient.Actions()[0])
+				requireTLSSecretDeleted(kubeAPIClient.Actions()[1]) // deleted the bad cert
+				ca := requireTLSSecretWasCreated(kubeAPIClient.Actions()[2])
+				requireTLSServerIsRunning(ca, startedTLSListener.Addr().String(), nil)
+			})
+
+			when("there is an error while the invalid cert is being deleted", func() {
+				it.Before(func() {
+					kubeAPIClient.PrependReactor("delete", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+						return true, nil, fmt.Errorf("error on delete")
+					})
+				})
+
+				it("tries to delete the invalid cert, starts the impersonator without certs, and returns an error", func() {
+					startInformersAndController()
+					r.EqualError(controllerlib.TestSync(t, subject, *syncContext), "PEM data represented an invalid cert, but got error while deleting it: error on delete")
+					requireTLSServerIsRunningWithoutCerts()
+					r.Len(kubeAPIClient.Actions(), 2)
+					requireNodesListed(kubeAPIClient.Actions()[0])
+					requireTLSSecretDeleted(kubeAPIClient.Actions()[1]) // tried deleted the bad cert, which failed
+					requireTLSServerIsRunningWithoutCerts()
+				})
+			})
+		})
+
+		when("a tls secret already exists but it is not valid", func() {
+			it.Before(func() {
+				addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
+				addNodeWithRoleToTracker("worker")
+				tlsSecret := createStubTLSSecret(tlsSecretName) // secret exists but lacks certs
+				r.NoError(kubeAPIClient.Tracker().Add(tlsSecret))
+				r.NoError(kubeInformerClient.Tracker().Add(tlsSecret))
+				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeInformerClient)
+				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeAPIClient)
+			})
+
+			it("deletes the invalid certs, creates new certs, and starts the impersonator", func() {
+				startInformersAndController()
+				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+				r.Len(kubeAPIClient.Actions(), 3)
+				requireNodesListed(kubeAPIClient.Actions()[0])
+				requireTLSSecretDeleted(kubeAPIClient.Actions()[1]) // deleted the bad cert
+				ca := requireTLSSecretWasCreated(kubeAPIClient.Actions()[2])
+				requireTLSServerIsRunning(ca, startedTLSListener.Addr().String(), nil)
+			})
+
+			when("there is an error while the invalid cert is being deleted", func() {
+				it.Before(func() {
+					kubeAPIClient.PrependReactor("delete", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+						return true, nil, fmt.Errorf("error on delete")
+					})
+				})
+
+				it("tries to delete the invalid cert, starts the impersonator without certs, and returns an error", func() {
+					startInformersAndController()
+					r.EqualError(controllerlib.TestSync(t, subject, *syncContext), "found missing or not PEM-encoded data in TLS Secret, but got error while deleting it: error on delete")
+					requireTLSServerIsRunningWithoutCerts()
+					r.Len(kubeAPIClient.Actions(), 2)
+					requireNodesListed(kubeAPIClient.Actions()[0])
+					requireTLSSecretDeleted(kubeAPIClient.Actions()[1]) // tried deleted the bad cert, which failed
+					requireTLSServerIsRunningWithoutCerts()
+				})
+			})
+		})
+
+		when("a tls secret already exists but the private key is not valid", func() {
+			it.Before(func() {
+				addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
+				addNodeWithRoleToTracker("worker")
+				tlsSecret := createActualTLSSecret(tlsSecretName)
+				tlsSecret.Data["tls.key"] = nil
+				r.NoError(kubeAPIClient.Tracker().Add(tlsSecret))
+				r.NoError(kubeInformerClient.Tracker().Add(tlsSecret))
+				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeInformerClient)
+				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeAPIClient)
+			})
+
+			it("deletes the invalid certs, creates new certs, and starts the impersonator", func() {
+				startInformersAndController()
+				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+				r.Len(kubeAPIClient.Actions(), 3)
+				requireNodesListed(kubeAPIClient.Actions()[0])
+				requireTLSSecretDeleted(kubeAPIClient.Actions()[1]) // deleted the bad cert
+				ca := requireTLSSecretWasCreated(kubeAPIClient.Actions()[2])
+				requireTLSServerIsRunning(ca, startedTLSListener.Addr().String(), nil)
+			})
+
+			when("there is an error while the invalid cert is being deleted", func() {
+				it.Before(func() {
+					kubeAPIClient.PrependReactor("delete", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+						return true, nil, fmt.Errorf("error on delete")
+					})
+				})
+
+				it("tries to delete the invalid cert, starts the impersonator without certs, and returns an error", func() {
+					startInformersAndController()
+					r.EqualError(controllerlib.TestSync(t, subject, *syncContext), "cert had an invalid private key, but got error while deleting it: error on delete")
+					requireTLSServerIsRunningWithoutCerts()
+					r.Len(kubeAPIClient.Actions(), 2)
+					requireNodesListed(kubeAPIClient.Actions()[0])
+					requireTLSSecretDeleted(kubeAPIClient.Actions()[1]) // tried deleted the bad cert, which failed
+					requireTLSServerIsRunningWithoutCerts()
+				})
 			})
 		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))

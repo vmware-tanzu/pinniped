@@ -33,7 +33,6 @@ import (
 
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
 )
 
@@ -263,6 +262,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		const configMapResourceName = "some-configmap-resource-name"
 		const generatedLoadBalancerServiceName = "some-service-resource-name"
 		const tlsSecretName = "some-secret-name"
+		const localhostIP = "127.0.0.1"
 		var labels = map[string]string{"app": "app-name", "other-key": "other-value"}
 
 		var r *require.Assertions
@@ -440,7 +440,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
-		var addImpersonatorConfigMapToTracker = func(resourceName, configYAML string) {
+		var addImpersonatorConfigMapToTracker = func(resourceName, configYAML string, client *kubernetesfake.Clientset) {
 			impersonatorConfigMap := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
@@ -454,10 +454,10 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					"config.yaml": configYAML,
 				},
 			}
-			r.NoError(kubeInformerClient.Tracker().Add(impersonatorConfigMap))
+			r.NoError(client.Tracker().Add(impersonatorConfigMap))
 		}
 
-		var updateImpersonatorConfigMapInTracker = func(resourceName, configYAML, newResourceVersion string) {
+		var updateImpersonatorConfigMapInTracker = func(resourceName, configYAML string, client *kubernetesfake.Clientset, newResourceVersion string) {
 			impersonatorConfigMap := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
@@ -470,14 +470,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					"config.yaml": configYAML,
 				},
 			}
-			r.NoError(kubeInformerClient.Tracker().Update(
+			r.NoError(client.Tracker().Update(
 				schema.GroupVersionResource{Version: "v1", Resource: "configmaps"},
 				impersonatorConfigMap,
 				installedInNamespace,
 			))
 		}
 
-		var createStubTLSSecret = func(resourceName string) *corev1.Secret {
+		var secretWithData = func(resourceName string, data map[string][]byte) *corev1.Secret {
 			return &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
@@ -487,33 +487,26 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					// that the initial version is version 0.
 					ResourceVersion: "0",
 				},
-				Data: map[string][]byte{},
+				Data: data,
 			}
 		}
 
-		var createActualTLSSecret = func(resourceName string) *corev1.Secret {
+		var createStubTLSSecret = func(resourceName string) *corev1.Secret {
+			return secretWithData(resourceName, map[string][]byte{})
+		}
+
+		var createActualTLSSecret = func(resourceName string, ip string) *corev1.Secret {
 			impersonationCA, err := certauthority.New(pkix.Name{CommonName: "test CA"}, 24*time.Hour)
 			r.NoError(err)
-			impersonationCert, err := impersonationCA.Issue(pkix.Name{}, nil, []net.IP{net.ParseIP("127.0.0.1")}, 24*time.Hour)
+			impersonationCert, err := impersonationCA.Issue(pkix.Name{}, nil, []net.IP{net.ParseIP(ip)}, 24*time.Hour)
 			r.NoError(err)
 			certPEM, keyPEM, err := certauthority.ToPEM(impersonationCert)
 			r.NoError(err)
-
-			return &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: installedInNamespace,
-					// Note that this seems to be ignored by the informer during initial creation, so actually
-					// the informer will see this as resource version "". Leaving it here to express the intent
-					// that the initial version is version 0.
-					ResourceVersion: "0",
-				},
-				Data: map[string][]byte{
-					"ca.crt":                impersonationCA.Bundle(),
-					corev1.TLSPrivateKeyKey: keyPEM,
-					corev1.TLSCertKey:       certPEM,
-				},
-			}
+			return secretWithData(resourceName, map[string][]byte{
+				"ca.crt":                impersonationCA.Bundle(),
+				corev1.TLSPrivateKeyKey: keyPEM,
+				corev1.TLSCertKey:       certPEM,
+			})
 		}
 
 		var createTLSSecretWithMultipleHostnames = func(resourceName string, ip string) *corev1.Secret {
@@ -523,22 +516,11 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.NoError(err)
 			certPEM, keyPEM, err := certauthority.ToPEM(impersonationCert)
 			r.NoError(err)
-
-			return &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: installedInNamespace,
-					// Note that this seems to be ignored by the informer during initial creation, so actually
-					// the informer will see this as resource version "". Leaving it here to express the intent
-					// that the initial version is version 0.
-					ResourceVersion: "0",
-				},
-				Data: map[string][]byte{
-					"ca.crt":                impersonationCA.Bundle(),
-					corev1.TLSPrivateKeyKey: keyPEM,
-					corev1.TLSCertKey:       certPEM,
-				},
-			}
+			return secretWithData(resourceName, map[string][]byte{
+				"ca.crt":                impersonationCA.Bundle(),
+				corev1.TLSPrivateKeyKey: keyPEM,
+				corev1.TLSCertKey:       certPEM,
+			})
 		}
 
 		var addLoadBalancerServiceToTracker = func(resourceName string, client *kubernetesfake.Clientset) {
@@ -558,7 +540,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.NoError(client.Tracker().Add(loadBalancerService))
 		}
 
-		var updateLoadBalancerServiceInTracker = func(resourceName, lbIngressIP, newResourceVersion string) {
+		var updateLoadBalancerServiceInTracker = func(resourceName, lbIngressIP string, client *kubernetesfake.Clientset, newResourceVersion string) {
 			loadBalancerService := &corev1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            resourceName,
@@ -576,7 +558,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					},
 				},
 			}
-			r.NoError(kubeInformerClient.Tracker().Update(
+			r.NoError(client.Tracker().Update(
 				schema.GroupVersionResource{Version: "v1", Resource: "services"},
 				loadBalancerService,
 				installedInNamespace,
@@ -708,7 +690,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("the ConfigMap does not yet exist in the installation namespace or it was deleted (defaults to auto mode)", func() {
 			it.Before(func() {
-				addImpersonatorConfigMapToTracker("some-other-ConfigMap", "foo: bar")
+				addImpersonatorConfigMapToTracker("some-other-ConfigMap", "foo: bar", kubeInformerClient)
 			})
 
 			when("there are visible control plane nodes", func() {
@@ -898,9 +880,9 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			when("there are not visible control plane nodes, a secret exists with multiple hostnames and an IP", func() {
 				it.Before(func() {
 					addNodeWithRoleToTracker("worker")
-					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeInformerClient)
-					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeAPIClient)
-					tlsSecret := createTLSSecretWithMultipleHostnames(tlsSecretName, "127.0.0.1")
+					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP}}, kubeInformerClient)
+					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP}}, kubeAPIClient)
+					tlsSecret := createTLSSecretWithMultipleHostnames(tlsSecretName, localhostIP)
 					r.NoError(kubeAPIClient.Tracker().Add(tlsSecret))
 					r.NoError(kubeInformerClient.Tracker().Add(tlsSecret))
 					startInformersAndController()
@@ -921,7 +903,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					addNodeWithRoleToTracker("worker")
 					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.42"}}, kubeInformerClient)
 					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.42"}}, kubeAPIClient)
-					tlsSecret := createActualTLSSecret(tlsSecretName)
+					tlsSecret := createActualTLSSecret(tlsSecretName, localhostIP)
 					r.NoError(kubeAPIClient.Tracker().Add(tlsSecret))
 					r.NoError(kubeInformerClient.Tracker().Add(tlsSecret))
 					kubeAPIClient.PrependReactor("delete", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
@@ -943,9 +925,9 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				var ca []byte
 				it.Before(func() {
 					addNodeWithRoleToTracker("worker")
-					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeInformerClient)
-					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeAPIClient)
-					tlsSecret := createActualTLSSecret(tlsSecretName)
+					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP}}, kubeInformerClient)
+					addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP}}, kubeAPIClient)
+					tlsSecret := createActualTLSSecret(tlsSecretName, localhostIP)
 					ca = tlsSecret.Data["ca.crt"]
 					r.NoError(kubeAPIClient.Tracker().Add(tlsSecret))
 					r.NoError(kubeInformerClient.Tracker().Add(tlsSecret))
@@ -958,7 +940,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireNodesListed(kubeAPIClient.Actions()[0])
 					requireTLSServerIsRunning(ca, startedTLSListener.Addr().String(), nil)
 
-					updateLoadBalancerServiceInTracker(generatedLoadBalancerServiceName, "not-an-ip", "1")
+					updateLoadBalancerServiceInTracker(generatedLoadBalancerServiceName, "not-an-ip", kubeInformerClient, "1")
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "1")
 
 					r.EqualError(controllerlib.TestSync(t, subject, *syncContext),
@@ -1001,7 +983,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireTLSServerIsRunningWithoutCerts()
 
 				// update manually because the kubeAPIClient isn't connected to the informer in the tests
-				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeInformerClient)
+				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP}}, kubeInformerClient)
 				waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "0")
 
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -1030,7 +1012,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireTLSServerIsRunningWithoutCerts()
 
 				// update manually because the kubeAPIClient isn't connected to the informer in the tests
-				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1", Hostname: hostname}}, kubeInformerClient)
+				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP, Hostname: hostname}}, kubeInformerClient)
 				waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "0")
 
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -1073,7 +1055,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("the configmap is invalid", func() {
 			it.Before(func() {
-				addImpersonatorConfigMapToTracker(configMapResourceName, "not yaml")
+				addImpersonatorConfigMapToTracker(configMapResourceName, "not yaml", kubeInformerClient)
 			})
 
 			it("returns an error", func() {
@@ -1086,11 +1068,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		when("the ConfigMap is already in the installation namespace", func() {
 			when("the configuration is auto mode with an endpoint", func() {
 				it.Before(func() {
-					addImpersonatorConfigMapToTracker(configMapResourceName, here.Doc(`
-						mode: auto
-						endpoint: 127.0.0.1
-					  `),
-					)
+					addImpersonatorConfigMapToTracker(configMapResourceName, "{mode: auto, endpoint: 127.0.0.1}", kubeInformerClient)
 				})
 
 				when("there are visible control plane nodes", func() {
@@ -1125,7 +1103,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 			when("the configuration is disabled mode", func() {
 				it.Before(func() {
-					addImpersonatorConfigMapToTracker(configMapResourceName, "mode: disabled")
+					addImpersonatorConfigMapToTracker(configMapResourceName, "mode: disabled", kubeInformerClient)
 					addNodeWithRoleToTracker("worker")
 				})
 
@@ -1141,7 +1119,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			when("the configuration is enabled mode", func() {
 				when("no load balancer", func() {
 					it.Before(func() {
-						addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
+						addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled", kubeInformerClient)
 						addNodeWithRoleToTracker("control-plane")
 					})
 
@@ -1168,7 +1146,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 				when("a loadbalancer already exists", func() {
 					it.Before(func() {
-						addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
+						addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled", kubeInformerClient)
 						addNodeWithRoleToTracker("worker")
 						addLoadBalancerServiceToTracker(generatedLoadBalancerServiceName, kubeInformerClient)
 						addLoadBalancerServiceToTracker(generatedLoadBalancerServiceName, kubeAPIClient)
@@ -1197,14 +1175,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				when("a load balancer and a secret already exists", func() {
 					var ca []byte
 					it.Before(func() {
-						addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
+						addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled", kubeInformerClient)
 						addNodeWithRoleToTracker("worker")
-						tlsSecret := createActualTLSSecret(tlsSecretName)
+						tlsSecret := createActualTLSSecret(tlsSecretName, localhostIP)
 						ca = tlsSecret.Data["ca.crt"]
 						r.NoError(kubeAPIClient.Tracker().Add(tlsSecret))
 						r.NoError(kubeInformerClient.Tracker().Add(tlsSecret))
-						addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeInformerClient)
-						addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeAPIClient)
+						addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP}}, kubeInformerClient)
+						addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP}}, kubeAPIClient)
 					})
 
 					it("starts the impersonator with the existing tls certs, does not start loadbalancer or make tls secret", func() {
@@ -1219,10 +1197,8 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				when("we have a hostname specified for the endpoint", func() {
 					const fakeHostname = "fake.example.com"
 					it.Before(func() {
-						addImpersonatorConfigMapToTracker(configMapResourceName, here.Docf(`
-							mode: enabled
-							endpoint: %s
-						`, fakeHostname))
+						configMapYAML := fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeHostname)
+						addImpersonatorConfigMapToTracker(configMapResourceName, configMapYAML, kubeInformerClient)
 						addNodeWithRoleToTracker("worker")
 					})
 
@@ -1243,7 +1219,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					var hostnameYAML = fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeHostname)
 					var ipAddressYAML = fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeIP)
 					it.Before(func() {
-						addImpersonatorConfigMapToTracker(configMapResourceName, ipAddressYAML)
+						addImpersonatorConfigMapToTracker(configMapResourceName, ipAddressYAML, kubeInformerClient)
 						addNodeWithRoleToTracker("worker")
 					})
 
@@ -1261,7 +1237,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "1")
 
 						// Switch the endpoint config to a hostname.
-						updateImpersonatorConfigMapInTracker(configMapResourceName, hostnameYAML, "1")
+						updateImpersonatorConfigMapInTracker(configMapResourceName, hostnameYAML, kubeInformerClient, "1")
 						waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "1")
 
 						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -1277,7 +1253,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "2")
 
 						// Switch the endpoint config back to an IP.
-						updateImpersonatorConfigMapInTracker(configMapResourceName, ipAddressYAML, "2")
+						updateImpersonatorConfigMapInTracker(configMapResourceName, ipAddressYAML, kubeInformerClient, "2")
 						waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "2")
 
 						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -1292,7 +1268,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 			when("the configuration switches from enabled to disabled mode", func() {
 				it.Before(func() {
-					addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
+					addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled", kubeInformerClient)
 					addNodeWithRoleToTracker("worker")
 				})
 
@@ -1309,7 +1285,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					addLoadBalancerServiceToTracker(generatedLoadBalancerServiceName, kubeInformerClient)
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "0")
 
-					updateImpersonatorConfigMapInTracker(configMapResourceName, "mode: disabled", "1")
+					updateImpersonatorConfigMapInTracker(configMapResourceName, "mode: disabled", kubeInformerClient, "1")
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "1")
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -1320,7 +1296,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					deleteLoadBalancerServiceFromTracker(generatedLoadBalancerServiceName, kubeInformerClient)
 					waitForLoadBalancerToBeDeleted(kubeInformers.Core().V1().Services(), generatedLoadBalancerServiceName)
 
-					updateImpersonatorConfigMapInTracker(configMapResourceName, "mode: enabled", "2")
+					updateImpersonatorConfigMapInTracker(configMapResourceName, "mode: enabled", kubeInformerClient, "2")
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "2")
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -1339,7 +1315,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 						requireTLSServerIsRunningWithoutCerts()
 
-						updateImpersonatorConfigMapInTracker(configMapResourceName, "mode: disabled", "1")
+						updateImpersonatorConfigMapInTracker(configMapResourceName, "mode: disabled", kubeInformerClient, "1")
 						waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "1")
 
 						r.EqualError(controllerlib.TestSync(t, subject, *syncContext), "fake server close error")
@@ -1350,10 +1326,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 			when("the endpoint switches from specified, to not specified, to specified again", func() {
 				it.Before(func() {
-					addImpersonatorConfigMapToTracker(configMapResourceName, here.Doc(`
-						mode: enabled
-						endpoint: 127.0.0.1
-					  `))
+					addImpersonatorConfigMapToTracker(configMapResourceName, "{mode: enabled, endpoint: 127.0.0.1}", kubeInformerClient)
 					addNodeWithRoleToTracker("worker")
 				})
 
@@ -1372,7 +1345,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "1")
 
 					// Switch to "enabled" mode without an "endpoint", so a load balancer is needed now.
-					updateImpersonatorConfigMapInTracker(configMapResourceName, "mode: enabled", "1")
+					updateImpersonatorConfigMapInTracker(configMapResourceName, "mode: enabled", kubeInformerClient, "1")
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "1")
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -1394,7 +1367,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 					// Update the ingress of the LB in the informer's client and run Sync again.
 					fakeIP := "127.0.0.123"
-					updateLoadBalancerServiceInTracker(generatedLoadBalancerServiceName, fakeIP, "1")
+					updateLoadBalancerServiceInTracker(generatedLoadBalancerServiceName, fakeIP, kubeInformerClient, "1")
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "1")
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 					r.Len(kubeAPIClient.Actions(), 5)
@@ -1407,10 +1380,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "2")
 
 					// Now switch back to having the "endpoint" specified, so the load balancer is not needed anymore.
-					updateImpersonatorConfigMapInTracker(configMapResourceName, here.Doc(`
-						mode: enabled
-						endpoint: 127.0.0.1
-					  `), "2")
+					updateImpersonatorConfigMapInTracker(configMapResourceName, "{mode: enabled, endpoint: 127.0.0.1}", kubeInformerClient, "2")
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().ConfigMaps().Informer(), "2")
 
 					r.NoError(controllerlib.TestSync(t, subject, *syncContext))
@@ -1438,7 +1408,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("there is an error creating the tls secret", func() {
 			it.Before(func() {
-				addImpersonatorConfigMapToTracker(configMapResourceName, "{mode: enabled, endpoint: example.com}")
+				addImpersonatorConfigMapToTracker(configMapResourceName, "{mode: enabled, endpoint: example.com}", kubeInformerClient)
 				addNodeWithRoleToTracker("control-plane")
 				kubeAPIClient.PrependReactor("create", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, fmt.Errorf("error on create")
@@ -1481,7 +1451,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("the PEM formatted data in the Secret is not a valid cert", func() {
 			it.Before(func() {
-				addImpersonatorConfigMapToTracker(configMapResourceName, "{mode: enabled, endpoint: 127.0.0.1}")
+				addImpersonatorConfigMapToTracker(configMapResourceName, "{mode: enabled, endpoint: 127.0.0.1}", kubeInformerClient)
 				addNodeWithRoleToTracker("worker")
 				tlsSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1528,13 +1498,13 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("a tls secret already exists but it is not valid", func() {
 			it.Before(func() {
-				addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
+				addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled", kubeInformerClient)
 				addNodeWithRoleToTracker("worker")
 				tlsSecret := createStubTLSSecret(tlsSecretName) // secret exists but lacks certs
 				r.NoError(kubeAPIClient.Tracker().Add(tlsSecret))
 				r.NoError(kubeInformerClient.Tracker().Add(tlsSecret))
-				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeInformerClient)
-				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeAPIClient)
+				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP}}, kubeInformerClient)
+				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP}}, kubeAPIClient)
 			})
 
 			it("deletes the invalid certs, creates new certs, and starts the impersonator", func() {
@@ -1568,14 +1538,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("a tls secret already exists but the private key is not valid", func() {
 			it.Before(func() {
-				addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled")
+				addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled", kubeInformerClient)
 				addNodeWithRoleToTracker("worker")
-				tlsSecret := createActualTLSSecret(tlsSecretName)
+				tlsSecret := createActualTLSSecret(tlsSecretName, localhostIP)
 				tlsSecret.Data["tls.key"] = nil
 				r.NoError(kubeAPIClient.Tracker().Add(tlsSecret))
 				r.NoError(kubeInformerClient.Tracker().Add(tlsSecret))
-				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeInformerClient)
-				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: "127.0.0.1"}}, kubeAPIClient)
+				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP}}, kubeInformerClient)
+				addLoadBalancerServiceWithIngressToTracker(generatedLoadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP}}, kubeAPIClient)
 			})
 
 			it("deletes the invalid certs, creates new certs, and starts the impersonator", func() {

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -10,35 +10,36 @@ package mocktokenauthenticatorcloser
 
 import (
 	context "context"
+	reflect "reflect"
+
 	gomock "github.com/golang/mock/gomock"
 	authenticator "k8s.io/apiserver/pkg/authentication/authenticator"
-	reflect "reflect"
 )
 
-// MockTokenAuthenticatorCloser is a mock of TokenAuthenticatorCloser interface
+// MockTokenAuthenticatorCloser is a mock of TokenAuthenticatorCloser interface.
 type MockTokenAuthenticatorCloser struct {
 	ctrl     *gomock.Controller
 	recorder *MockTokenAuthenticatorCloserMockRecorder
 }
 
-// MockTokenAuthenticatorCloserMockRecorder is the mock recorder for MockTokenAuthenticatorCloser
+// MockTokenAuthenticatorCloserMockRecorder is the mock recorder for MockTokenAuthenticatorCloser.
 type MockTokenAuthenticatorCloserMockRecorder struct {
 	mock *MockTokenAuthenticatorCloser
 }
 
-// NewMockTokenAuthenticatorCloser creates a new mock instance
+// NewMockTokenAuthenticatorCloser creates a new mock instance.
 func NewMockTokenAuthenticatorCloser(ctrl *gomock.Controller) *MockTokenAuthenticatorCloser {
 	mock := &MockTokenAuthenticatorCloser{ctrl: ctrl}
 	mock.recorder = &MockTokenAuthenticatorCloserMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockTokenAuthenticatorCloser) EXPECT() *MockTokenAuthenticatorCloserMockRecorder {
 	return m.recorder
 }
 
-// AuthenticateToken mocks base method
+// AuthenticateToken mocks base method.
 func (m *MockTokenAuthenticatorCloser) AuthenticateToken(arg0 context.Context, arg1 string) (*authenticator.Response, bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AuthenticateToken", arg0, arg1)
@@ -48,19 +49,19 @@ func (m *MockTokenAuthenticatorCloser) AuthenticateToken(arg0 context.Context, a
 	return ret0, ret1, ret2
 }
 
-// AuthenticateToken indicates an expected call of AuthenticateToken
+// AuthenticateToken indicates an expected call of AuthenticateToken.
 func (mr *MockTokenAuthenticatorCloserMockRecorder) AuthenticateToken(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AuthenticateToken", reflect.TypeOf((*MockTokenAuthenticatorCloser)(nil).AuthenticateToken), arg0, arg1)
 }
 
-// Close mocks base method
+// Close mocks base method.
 func (m *MockTokenAuthenticatorCloser) Close() {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Close")
 }
 
-// Close indicates an expected call of Close
+// Close indicates an expected call of Close.
 func (mr *MockTokenAuthenticatorCloserMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockTokenAuthenticatorCloser)(nil).Close))

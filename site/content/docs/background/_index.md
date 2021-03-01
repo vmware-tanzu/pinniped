@@ -1,4 +1,5 @@
 ---
+title: Pinniped Background
 cascade:
   layout: docs
 menu:
@@ -7,7 +8,5 @@ menu:
     identifier: background
     weight: 110
 ---
-
-# Pinniped background
 
 {{< docsmenu "background" >}}

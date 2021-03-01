@@ -1,4 +1,5 @@
 ---
+title: Pinniped Reference
 cascade:
   layout: docs
 menu:
@@ -7,7 +8,5 @@ menu:
     identifier: reference
     weight: 100
 ---
-
-# Pinniped reference
 
 {{< docsmenu "reference" >}}

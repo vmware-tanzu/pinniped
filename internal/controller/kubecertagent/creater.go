@@ -17,6 +17,7 @@ import (
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/constable"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/plog"
 )
@@ -96,13 +97,12 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 	if len(controllerManagerPods) == 0 {
 		// If there are no controller manager pods, we alert the user that we can't find the keypair via
 		// the CredentialIssuer.
-		return createOrUpdateCredentialIssuer(
+		return issuerconfig.UpdateStrategy(
 			ctx.Context,
-			*c.credentialIssuerLocationConfig,
+			c.credentialIssuerLocationConfig.Name,
 			c.credentialIssuerLabels,
-			c.clock,
 			c.pinnipedAPIClient,
-			constable.Error("did not find kube-controller-manager pod(s)"),
+			strategyError(c.clock, constable.Error("did not find kube-controller-manager pod(s)")),
 		)
 	}
 
@@ -131,13 +131,12 @@ func (c *createrController) Sync(ctx controllerlib.Context) error {
 				Create(ctx.Context, agentPod, metav1.CreateOptions{})
 			if err != nil {
 				err = fmt.Errorf("cannot create agent pod: %w", err)
-				strategyResultUpdateErr := createOrUpdateCredentialIssuer(
+				strategyResultUpdateErr := issuerconfig.UpdateStrategy(
 					ctx.Context,
-					*c.credentialIssuerLocationConfig,
+					c.credentialIssuerLocationConfig.Name,
 					c.credentialIssuerLabels,
-					c.clock,
 					c.pinnipedAPIClient,
-					err,
+					strategyError(c.clock, err),
 				)
 				if strategyResultUpdateErr != nil {
 					// If the CI update fails, then we probably want to try again. This controller will get

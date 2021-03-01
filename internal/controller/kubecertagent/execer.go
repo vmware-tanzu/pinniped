@@ -14,6 +14,7 @@ import (
 
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/dynamiccert"
 )
@@ -87,21 +88,39 @@ func (c *execerController) Sync(ctx controllerlib.Context) error {
 
 	certPEM, err := c.podCommandExecutor.Exec(agentPod.Namespace, agentPod.Name, "cat", certPath)
 	if err != nil {
-		strategyResultUpdateErr := createOrUpdateCredentialIssuer(ctx.Context, *c.credentialIssuerLocationConfig, nil, c.clock, c.pinnipedAPIClient, err)
+		strategyResultUpdateErr := issuerconfig.UpdateStrategy(
+			ctx.Context,
+			c.credentialIssuerLocationConfig.Name,
+			nil,
+			c.pinnipedAPIClient,
+			strategyError(c.clock, err),
+		)
 		klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuer with strategy success")
 		return err
 	}
 
 	keyPEM, err := c.podCommandExecutor.Exec(agentPod.Namespace, agentPod.Name, "cat", keyPath)
 	if err != nil {
-		strategyResultUpdateErr := createOrUpdateCredentialIssuer(ctx.Context, *c.credentialIssuerLocationConfig, nil, c.clock, c.pinnipedAPIClient, err)
+		strategyResultUpdateErr := issuerconfig.UpdateStrategy(
+			ctx.Context,
+			c.credentialIssuerLocationConfig.Name,
+			nil,
+			c.pinnipedAPIClient,
+			strategyError(c.clock, err),
+		)
 		klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuer with strategy success")
 		return err
 	}
 
 	c.dynamicCertProvider.Set([]byte(certPEM), []byte(keyPEM))
 
-	err = createOrUpdateCredentialIssuer(ctx.Context, *c.credentialIssuerLocationConfig, nil, c.clock, c.pinnipedAPIClient, nil)
+	err = issuerconfig.UpdateStrategy(
+		ctx.Context,
+		c.credentialIssuerLocationConfig.Name,
+		nil,
+		c.pinnipedAPIClient,
+		strategySuccess(c.clock),
+	)
 	if err != nil {
 		return err
 	}

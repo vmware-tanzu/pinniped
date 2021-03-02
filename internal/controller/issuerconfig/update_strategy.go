@@ -42,6 +42,14 @@ func mergeStrategy(configToUpdate *v1alpha1.CredentialIssuerStatus, strategy v1a
 		configToUpdate.Strategies = append(configToUpdate.Strategies, strategy)
 	}
 	sort.Stable(sortableStrategies(configToUpdate.Strategies))
+
+	// Special case: the "TokenCredentialRequestAPI" data is mirrored into the deprecated status.kubeConfigInfo field.
+	if strategy.Frontend != nil && strategy.Frontend.Type == v1alpha1.TokenCredentialRequestAPIFrontendType {
+		configToUpdate.KubeConfigInfo = &v1alpha1.CredentialIssuerKubeConfigInfo{
+			Server:                   strategy.Frontend.TokenCredentialRequestAPIInfo.Server,
+			CertificateAuthorityData: strategy.Frontend.TokenCredentialRequestAPIInfo.CertificateAuthorityData,
+		}
+	}
 }
 
 // TODO: sort strategies by server preference rather than alphanumerically by type.

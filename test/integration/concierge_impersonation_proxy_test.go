@@ -135,7 +135,6 @@ func TestImpersonationProxy(t *testing.T) {
 		configMap := configMapForConfig(t, env, impersonator.Config{
 			Mode:     impersonator.ModeEnabled,
 			Endpoint: proxyServiceEndpoint,
-			TLS:      nil,
 		})
 		t.Logf("creating configmap %s", configMap.Name)
 		_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, &configMap, metav1.CreateOptions{})

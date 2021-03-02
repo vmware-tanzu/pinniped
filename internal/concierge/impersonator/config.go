@@ -27,20 +27,6 @@ const (
 	ConfigMapDataKey = "config.yaml"
 )
 
-// When specified, both CertificateAuthoritySecretName and TLSSecretName are required. They may be specified to
-// both point at the same Secret or to point at different Secrets.
-type TLSConfig struct {
-	// CertificateAuthoritySecretName contains the name of a namespace-local Secret resource. The corresponding Secret
-	// must contain a key called "ca.crt" whose value is the CA certificate which clients should trust when connecting
-	// to the impersonation proxy.
-	CertificateAuthoritySecretName string `json:"certificateAuthoritySecretName"`
-
-	// TLSSecretName contains the name of a namespace-local Secret resource. The corresponding Secret must be of type
-	// "kubernetes.io/tls" and contain keys called "tls.crt" and "tls.key" whose values are the TLS certificate and
-	// private key that will be used by the impersonation proxy to serve its endpoints.
-	TLSSecretName string `json:"tlsSecretName"`
-}
-
 type Config struct {
 	// Enable or disable the impersonation proxy. Optional. Defaults to ModeAuto.
 	Mode Mode `json:"mode,omitempty"`
@@ -53,10 +39,6 @@ type Config struct {
 	// for clients to use from outside the cluster. E.g. myhost.mycompany.com:8443. Clients should assume that they should
 	// connect via HTTPS to this service.
 	Endpoint string `json:"endpoint,omitempty"`
-
-	// The TLS configuration of the impersonation proxy's endpoints. Optional. When not specified, a CA and TLS
-	// certificate will be automatically created based on the Endpoint setting.
-	TLS *TLSConfig `json:"tls,omitempty"`
 }
 
 func NewConfig() *Config {

@@ -33,20 +33,13 @@ func TestConfigFromConfigMap(t *testing.T) {
 				Data: map[string]string{
 					"config.yaml": here.Doc(`
 						mode: enabled
-						endpoint: https://proxy.example.com:8443/
-						tls:
-							certificateAuthoritySecretName: my-ca-crt
-							tlsSecretName: my-tls-certificate-and-key
+						endpoint: proxy.example.com:8443
 					`),
 				},
 			},
 			wantConfig: &Config{
 				Mode:     "enabled",
-				Endpoint: "https://proxy.example.com:8443/",
-				TLS: &TLSConfig{
-					CertificateAuthoritySecretName: "my-ca-crt",
-					TLSSecretName:                  "my-tls-certificate-and-key",
-				},
+				Endpoint: "proxy.example.com:8443",
 			},
 		},
 		{
@@ -61,7 +54,6 @@ func TestConfigFromConfigMap(t *testing.T) {
 			wantConfig: &Config{
 				Mode:     "auto",
 				Endpoint: "",
-				TLS:      nil,
 			},
 		},
 		{
@@ -76,7 +68,6 @@ func TestConfigFromConfigMap(t *testing.T) {
 			wantConfig: &Config{
 				Mode:     "enabled",
 				Endpoint: "",
-				TLS:      nil,
 			},
 		},
 		{
@@ -91,7 +82,6 @@ func TestConfigFromConfigMap(t *testing.T) {
 			wantConfig: &Config{
 				Mode:     "disabled",
 				Endpoint: "",
-				TLS:      nil,
 			},
 		},
 		{
@@ -106,7 +96,6 @@ func TestConfigFromConfigMap(t *testing.T) {
 			wantConfig: &Config{
 				Mode:     "auto",
 				Endpoint: "",
-				TLS:      nil,
 			},
 		},
 		{

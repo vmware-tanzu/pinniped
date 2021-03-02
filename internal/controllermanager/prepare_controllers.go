@@ -292,20 +292,24 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		WithController(
 			impersonatorconfig.NewImpersonatorConfigController(
 				c.ServerInstallationInfo.Namespace,
-				"pinniped-concierge-impersonation-proxy-config", // TODO this string should come from `c.NamesConfig`
+				c.NamesConfig.ImpersonationConfigMap,
 				client.Kubernetes,
 				informers.installationNamespaceK8s.Core().V1().ConfigMaps(),
 				informers.installationNamespaceK8s.Core().V1().Services(),
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 				controllerlib.WithInitialEvent,
-				"pinniped-concierge-impersonation-proxy-load-balancer",           // TODO this string should come from `c.NamesConfig`
-				"pinniped-concierge-impersonation-proxy-tls-serving-certificate", // TODO this string should come from `c.NamesConfig`
-				"pinniped-concierge-impersonation-proxy-ca-certificate",          // TODO this string should come from `c.NamesConfig`
+				c.NamesConfig.ImpersonationLoadBalancerService,
+				c.NamesConfig.ImpersonationTLSCertificateSecret,
+				c.NamesConfig.ImpersonationCACertificateSecret,
 				c.Labels,
 				tls.Listen,
 				func() (http.Handler, error) {
-					impersonationProxyHandler, err := impersonator.New(c.AuthenticatorCache, c.LoginJSONDecoder, klogr.New().WithName("impersonation-proxy"))
+					impersonationProxyHandler, err := impersonator.New(
+						c.AuthenticatorCache,
+						c.LoginJSONDecoder,
+						klogr.New().WithName("impersonation-proxy"),
+					)
 					if err != nil {
 						return nil, fmt.Errorf("could not create impersonation proxy: %w", err)
 					}

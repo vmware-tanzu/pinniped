@@ -29,14 +29,6 @@ import (
 	"go.pinniped.dev/test/library"
 )
 
-const (
-	// TODO don't hard code "pinniped-concierge-" in these strings. It should be constructed from the env app name.
-	impersonationProxyConfigMapName    = "pinniped-concierge-impersonation-proxy-config"
-	impersonationProxyTLSSecretName    = "pinniped-concierge-impersonation-proxy-tls-serving-certificate" //nolint:gosec // this is not a credential
-	impersonationProxyCASecretName     = "pinniped-concierge-impersonation-proxy-ca-certificate"          //nolint:gosec // this is not a credential
-	impersonationProxyLoadBalancerName = "pinniped-concierge-impersonation-proxy-load-balancer"
-)
-
 // Note that this test supports being run on all of our integration test cluster types:
 //   - load balancers not supported, has squid proxy (e.g. kind)
 //   - load balancers supported, has squid proxy (e.g. EKS)
@@ -94,11 +86,11 @@ func TestImpersonationProxy(t *testing.T) {
 		return impersonationProxyClient
 	}
 
-	oldConfigMap, err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Get(ctx, impersonationProxyConfigMapName, metav1.GetOptions{})
+	oldConfigMap, err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Get(ctx, impersonationProxyConfigMapName(env), metav1.GetOptions{})
 	if !k8serrors.IsNotFound(err) {
 		require.NoError(t, err) // other errors aside from NotFound are unexpected
 		t.Logf("stashing a pre-existing configmap %s", oldConfigMap.Name)
-		require.NoError(t, adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, impersonationProxyConfigMapName, metav1.DeleteOptions{}))
+		require.NoError(t, adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, impersonationProxyConfigMapName(env), metav1.DeleteOptions{}))
 	}
 
 	impersonationProxyLoadBalancerIngress := ""
@@ -106,13 +98,14 @@ func TestImpersonationProxy(t *testing.T) {
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) { //nolint:nestif // come on... it's just a test
 		// Check that load balancer has been created.
 		library.RequireEventuallyWithoutError(t, func() (bool, error) {
-			return hasImpersonationProxyLoadBalancerService(ctx, adminClient, env.ConciergeNamespace)
+			return hasImpersonationProxyLoadBalancerService(ctx, env, adminClient)
 		}, 10*time.Second, 500*time.Millisecond)
 
+		// TODO this information should come from the CredentialIssuer status once that is implemented
 		// Wait for the load balancer to get an ingress and make a note of its address.
 		var ingress *corev1.LoadBalancerIngress
 		library.RequireEventuallyWithoutError(t, func() (bool, error) {
-			ingress, err = getImpersonationProxyLoadBalancerIngress(ctx, adminClient, env.ConciergeNamespace)
+			ingress, err = getImpersonationProxyLoadBalancerIngress(ctx, env, adminClient)
 			if err != nil {
 				return false, err
 			}
@@ -131,7 +124,7 @@ func TestImpersonationProxy(t *testing.T) {
 
 		// Check that no load balancer has been created.
 		library.RequireNeverWithoutError(t, func() (bool, error) {
-			return hasImpersonationProxyLoadBalancerService(ctx, adminClient, env.ConciergeNamespace)
+			return hasImpersonationProxyLoadBalancerService(ctx, env, adminClient)
 		}, 10*time.Second, 500*time.Millisecond)
 
 		// Check that we can't use the impersonation proxy to execute kubectl commands yet.
@@ -139,7 +132,7 @@ func TestImpersonationProxy(t *testing.T) {
 		require.EqualError(t, err, serviceUnavailableViaSquidError)
 
 		// Create configuration to make the impersonation proxy turn on with a hard coded endpoint (without a LoadBalancer).
-		configMap := configMapForConfig(t, impersonator.Config{
+		configMap := configMapForConfig(t, env, impersonator.Config{
 			Mode:     impersonator.ModeEnabled,
 			Endpoint: proxyServiceEndpoint,
 			TLS:      nil,
@@ -152,8 +145,8 @@ func TestImpersonationProxy(t *testing.T) {
 		t.Cleanup(func() {
 			ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			t.Logf("cleaning up configmap at end of test %s", impersonationProxyConfigMapName)
-			err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, impersonationProxyConfigMapName, metav1.DeleteOptions{})
+			t.Logf("cleaning up configmap at end of test %s", impersonationProxyConfigMapName(env))
+			err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, impersonationProxyConfigMapName(env), metav1.DeleteOptions{})
 			require.NoError(t, err)
 
 			if len(oldConfigMap.Data) != 0 {
@@ -171,7 +164,7 @@ func TestImpersonationProxy(t *testing.T) {
 	// TODO We should be getting the CA data from the CredentialIssuer's status instead, once that is implemented.
 	var caSecret *corev1.Secret
 	require.Eventually(t, func() bool {
-		caSecret, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyCASecretName, metav1.GetOptions{})
+		caSecret, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyCASecretName(env), metav1.GetOptions{})
 		return err == nil && caSecret != nil && caSecret.Data["ca.crt"] != nil
 	}, 10*time.Second, 250*time.Millisecond)
 	impersonationProxyCACertPEM := caSecret.Data["ca.crt"]
@@ -180,7 +173,7 @@ func TestImpersonationProxy(t *testing.T) {
 	// This could take a while if we are waiting for the load balancer to get an IP or hostname assigned to it, and it
 	// should be fast when we are not waiting for a load balancer (e.g. on kind).
 	require.Eventually(t, func() bool {
-		_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName, metav1.GetOptions{})
+		_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
 		return err == nil
 	}, 5*time.Minute, 250*time.Millisecond)
 
@@ -209,7 +202,7 @@ func TestImpersonationProxy(t *testing.T) {
 
 	// Try more Kube API verbs through the impersonation proxy.
 	t.Run("watching all the basic verbs", func(t *testing.T) {
-		// Create a namespace, because it will be easier to exercise deletecollection if we have a namespace.
+		// Create a namespace, because it will be easier to exercise "deletecollection" if we have a namespace.
 		namespace, err := adminClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{GenerateName: "impersonation-integration-test-"},
 		}, metav1.CreateOptions{})
@@ -369,19 +362,19 @@ func TestImpersonationProxy(t *testing.T) {
 
 		// We already know that this Secret exists because we checked above. Now see that we can get it through
 		// the impersonation proxy without any impersonation headers on the request.
-		_, err = impersonationProxyClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName, metav1.GetOptions{})
+		_, err = impersonationProxyClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
 		require.NoError(t, err)
 
 		// Now we'll see what happens when we add an impersonation header to the request. This should generate a
 		// request similar to the one above, except that it will have an impersonation header.
-		_, err = doubleImpersonationClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName, metav1.GetOptions{})
+		_, err = doubleImpersonationClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
 		// Double impersonation is not supported yet, so we should get an error.
-		expectedErr := fmt.Sprintf("the server rejected our request for an unknown reason (get secrets %s)", impersonationProxyTLSSecretName)
+		expectedErr := fmt.Sprintf("the server rejected our request for an unknown reason (get secrets %s)", impersonationProxyTLSSecretName(env))
 		require.EqualError(t, err, expectedErr)
 	})
 
 	// Update configuration to force the proxy to disabled mode
-	configMap := configMapForConfig(t, impersonator.Config{Mode: impersonator.ModeDisabled})
+	configMap := configMapForConfig(t, env, impersonator.Config{Mode: impersonator.ModeDisabled})
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
 		t.Logf("creating configmap %s", configMap.Name)
 		_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, &configMap, metav1.CreateOptions{})
@@ -396,7 +389,7 @@ func TestImpersonationProxy(t *testing.T) {
 		// The load balancer should not exist after we disable the impersonation proxy.
 		// Note that this can take kind of a long time on real cloud providers (e.g. ~22 seconds on EKS).
 		library.RequireEventuallyWithoutError(t, func() (bool, error) {
-			hasService, err := hasImpersonationProxyLoadBalancerService(ctx, adminClient, env.ConciergeNamespace)
+			hasService, err := hasImpersonationProxyLoadBalancerService(ctx, env, adminClient)
 			return !hasService, err
 		}, time.Minute, 500*time.Millisecond)
 	}
@@ -417,17 +410,17 @@ func TestImpersonationProxy(t *testing.T) {
 
 	// Check that the generated TLS cert Secret was deleted by the controller.
 	require.Eventually(t, func() bool {
-		_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName, metav1.GetOptions{})
+		_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
 		return k8serrors.IsNotFound(err)
 	}, 10*time.Second, 250*time.Millisecond)
 }
 
-func configMapForConfig(t *testing.T, config impersonator.Config) corev1.ConfigMap {
+func configMapForConfig(t *testing.T, env *library.TestEnv, config impersonator.Config) corev1.ConfigMap {
 	configString, err := yaml.Marshal(config)
 	require.NoError(t, err)
 	configMap := corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: impersonationProxyConfigMapName,
+			Name: impersonationProxyConfigMapName(env),
 		},
 		Data: map[string]string{
 			"config.yaml": string(configString),
@@ -435,8 +428,8 @@ func configMapForConfig(t *testing.T, config impersonator.Config) corev1.ConfigM
 	return configMap
 }
 
-func hasImpersonationProxyLoadBalancerService(ctx context.Context, client kubernetes.Interface, namespace string) (bool, error) {
-	service, err := client.CoreV1().Services(namespace).Get(ctx, impersonationProxyLoadBalancerName, metav1.GetOptions{})
+func hasImpersonationProxyLoadBalancerService(ctx context.Context, env *library.TestEnv, client kubernetes.Interface) (bool, error) {
+	service, err := client.CoreV1().Services(env.ConciergeNamespace).Get(ctx, impersonationProxyLoadBalancerName(env), metav1.GetOptions{})
 	if k8serrors.IsNotFound(err) {
 		return false, nil
 	}
@@ -446,8 +439,8 @@ func hasImpersonationProxyLoadBalancerService(ctx context.Context, client kubern
 	return service.Spec.Type == corev1.ServiceTypeLoadBalancer, nil
 }
 
-func getImpersonationProxyLoadBalancerIngress(ctx context.Context, client kubernetes.Interface, namespace string) (*corev1.LoadBalancerIngress, error) {
-	service, err := client.CoreV1().Services(namespace).Get(ctx, impersonationProxyLoadBalancerName, metav1.GetOptions{})
+func getImpersonationProxyLoadBalancerIngress(ctx context.Context, env *library.TestEnv, client kubernetes.Interface) (*corev1.LoadBalancerIngress, error) {
+	service, err := client.CoreV1().Services(env.ConciergeNamespace).Get(ctx, impersonationProxyLoadBalancerName(env), metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -459,4 +452,20 @@ func getImpersonationProxyLoadBalancerIngress(ctx context.Context, client kubern
 		return nil, nil
 	}
 	return &ingresses[0], nil
+}
+
+func impersonationProxyConfigMapName(env *library.TestEnv) string {
+	return env.ConciergeAppName + "-impersonation-proxy-config"
+}
+
+func impersonationProxyTLSSecretName(env *library.TestEnv) string {
+	return env.ConciergeAppName + "-impersonation-proxy-tls-serving-certificate"
+}
+
+func impersonationProxyCASecretName(env *library.TestEnv) string {
+	return env.ConciergeAppName + "-impersonation-proxy-ca-certificate"
+}
+
+func impersonationProxyLoadBalancerName(env *library.TestEnv) string {
+	return env.ConciergeAppName + "-impersonation-proxy-load-balancer"
 }

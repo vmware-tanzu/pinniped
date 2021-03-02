@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -27,16 +28,8 @@ import (
 	"go.pinniped.dev/internal/kubeclient"
 )
 
-// allowedHeaders are the set of HTTP headers that are allowed to be forwarded through the impersonation proxy.
-//nolint: gochecknoglobals
-var allowedHeaders = []string{
-	"Accept",
-	"Accept-Encoding",
-	"User-Agent",
-	"Connection",
-	"Upgrade",
-	"Content-Type",
-}
+// nolint: gochecknoglobals
+var impersonateHeaderRegex = regexp.MustCompile("Impersonate-.*")
 
 type proxy struct {
 	cache       *authncache.Cache
@@ -157,17 +150,9 @@ type httpError struct {
 func (e *httpError) Error() string { return e.message }
 
 func ensureNoImpersonationHeaders(r *http.Request) error {
-	if _, ok := r.Header[transport.ImpersonateUserHeader]; ok {
-		return fmt.Errorf("%q header already exists", transport.ImpersonateUserHeader)
-	}
-
-	if _, ok := r.Header[transport.ImpersonateGroupHeader]; ok {
-		return fmt.Errorf("%q header already exists", transport.ImpersonateGroupHeader)
-	}
-
-	for header := range r.Header {
-		if strings.HasPrefix(header, transport.ImpersonateUserExtraHeaderPrefix) {
-			return fmt.Errorf("%q header already exists", transport.ImpersonateUserExtraHeaderPrefix)
+	for key := range r.Header {
+		if impersonateHeaderRegex.MatchString(key) {
+			return fmt.Errorf("%q header already exists", key)
 		}
 	}
 
@@ -209,11 +194,12 @@ func getProxyHeaders(userInfo user.Info, requestHeaders http.Header) http.Header
 	//nolint:bodyclose // We return a nil http.Response above, so there is nothing to close.
 	_, _ = transport.NewImpersonatingRoundTripper(impersonateConfig, impersonateHeaderSpy).RoundTrip(fakeReq)
 
-	// Copy over the allowed header values from the original request to the new request.
-	for _, header := range allowedHeaders {
-		values := requestHeaders.Values(header)
-		for i := range values {
-			newHeaders.Add(header, values[i])
+	// Copy over all headers except the Authorization header from the original request to the new request.
+	for key := range requestHeaders {
+		if key != "Authorization" {
+			for _, val := range requestHeaders.Values(key) {
+				newHeaders.Add(key, val)
+			}
 		}
 	}
 

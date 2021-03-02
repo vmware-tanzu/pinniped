@@ -132,7 +132,16 @@ func TestImpersonator(t *testing.T) {
 			request:        newRequest(map[string][]string{"Impersonate-Extra-something": {"something"}}),
 			wantHTTPBody:   "impersonation header already exists\n",
 			wantHTTPStatus: http.StatusBadRequest,
-			wantLogs:       []string{"\"msg\"=\"impersonation header already exists\" \"error\"=\"\\\"Impersonate-Extra-\\\" header already exists\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
+			wantLogs:       []string{"\"msg\"=\"impersonation header already exists\" \"error\"=\"\\\"Impersonate-Extra-something\\\" header already exists\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
+		},
+		{
+			name: "Impersonate-* header already in request",
+			request: newRequest(map[string][]string{
+				"Impersonate-Something": {"some-newfangled-impersonate-header"},
+			}),
+			wantHTTPBody:   "impersonation header already exists\n",
+			wantHTTPStatus: http.StatusBadRequest,
+			wantLogs:       []string{"\"msg\"=\"impersonation header already exists\" \"error\"=\"\\\"Impersonate-Something\\\" header already exists\" \"method\"=\"GET\" \"url\"=\"http://pinniped.dev/blah\""},
 		},
 		{
 			name:           "missing authorization header",
@@ -198,15 +207,15 @@ func TestImpersonator(t *testing.T) {
 		{
 			name: "token validates",
 			request: newRequest(map[string][]string{
-				"Authorization":    {"Bearer " + impersonationtoken.Make(t, "test-token", &goodAuthenticator, defaultAPIGroup)},
-				"User-Agent":       {"test-user-agent"},
-				"Accept":           {"some-accepted-format"},
-				"Accept-Encoding":  {"some-accepted-encoding"},
-				"Connection":       {"Upgrade"}, // the value "Upgrade" is handled in a special way by `httputil.NewSingleHostReverseProxy`
-				"Upgrade":          {"some-upgrade"},
-				"Content-Type":     {"some-type"},
-				"Content-Length":   {"some-length"},
-				"Malicious-Header": {"test-header-value-1"}, // this header should not be forwarded to the Kube API server
+				"Authorization":   {"Bearer " + impersonationtoken.Make(t, "test-token", &goodAuthenticator, defaultAPIGroup)},
+				"User-Agent":      {"test-user-agent"},
+				"Accept":          {"some-accepted-format"},
+				"Accept-Encoding": {"some-accepted-encoding"},
+				"Connection":      {"Upgrade"}, // the value "Upgrade" is handled in a special way by `httputil.NewSingleHostReverseProxy`
+				"Upgrade":         {"some-upgrade"},
+				"Content-Type":    {"some-type"},
+				"Content-Length":  {"some-length"},
+				"Other-Header":    {"test-header-value-1"}, // this header will be passed through
 			}),
 			expectMockToken: func(t *testing.T, recorder *mocktokenauthenticator.MockTokenMockRecorder) {
 				userInfo := user.DefaultInfo{
@@ -230,6 +239,7 @@ func TestImpersonator(t *testing.T) {
 				"Connection":                {"Upgrade"},
 				"Upgrade":                   {"some-upgrade"},
 				"Content-Type":              {"some-type"},
+				"Other-Header":              {"test-header-value-1"},
 			},
 			wantHTTPBody:   "successful proxied response",
 			wantHTTPStatus: http.StatusOK,
@@ -238,9 +248,8 @@ func TestImpersonator(t *testing.T) {
 		{
 			name: "token validates and the kube API request returns an error",
 			request: newRequest(map[string][]string{
-				"Authorization":    {"Bearer " + impersonationtoken.Make(t, "test-token", &goodAuthenticator, defaultAPIGroup)},
-				"Malicious-Header": {"test-header-value-1"},
-				"User-Agent":       {"test-user-agent"},
+				"Authorization": {"Bearer " + impersonationtoken.Make(t, "test-token", &goodAuthenticator, defaultAPIGroup)},
+				"User-Agent":    {"test-user-agent"},
 			}),
 			expectMockToken: func(t *testing.T, recorder *mocktokenauthenticator.MockTokenMockRecorder) {
 				userInfo := user.DefaultInfo{
@@ -269,9 +278,9 @@ func TestImpersonator(t *testing.T) {
 			name:             "token validates with custom api group",
 			apiGroupOverride: customAPIGroup,
 			request: newRequest(map[string][]string{
-				"Authorization":    {"Bearer " + impersonationtoken.Make(t, "test-token", &goodAuthenticator, customAPIGroup)},
-				"Malicious-Header": {"test-header-value-1"},
-				"User-Agent":       {"test-user-agent"},
+				"Authorization": {"Bearer " + impersonationtoken.Make(t, "test-token", &goodAuthenticator, customAPIGroup)},
+				"Other-Header":  {"test-header-value-1"},
+				"User-Agent":    {"test-user-agent"},
 			}),
 			expectMockToken: func(t *testing.T, recorder *mocktokenauthenticator.MockTokenMockRecorder) {
 				userInfo := user.DefaultInfo{
@@ -291,6 +300,7 @@ func TestImpersonator(t *testing.T) {
 				"Impersonate-Group":         {"test-group-1", "test-group-2"},
 				"Impersonate-User":          {"test-user"},
 				"User-Agent":                {"test-user-agent"},
+				"Other-Header":              {"test-header-value-1"},
 			},
 			wantHTTPBody:   "successful proxied response",
 			wantHTTPStatus: http.StatusOK,

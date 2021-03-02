@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -10,39 +10,40 @@ package mockupstreamoidcidentityprovider
 
 import (
 	context "context"
+	url "net/url"
+	reflect "reflect"
+
 	gomock "github.com/golang/mock/gomock"
 	nonce "go.pinniped.dev/pkg/oidcclient/nonce"
 	oidctypes "go.pinniped.dev/pkg/oidcclient/oidctypes"
 	pkce "go.pinniped.dev/pkg/oidcclient/pkce"
 	oauth2 "golang.org/x/oauth2"
-	url "net/url"
-	reflect "reflect"
 )
 
-// MockUpstreamOIDCIdentityProviderI is a mock of UpstreamOIDCIdentityProviderI interface
+// MockUpstreamOIDCIdentityProviderI is a mock of UpstreamOIDCIdentityProviderI interface.
 type MockUpstreamOIDCIdentityProviderI struct {
 	ctrl     *gomock.Controller
 	recorder *MockUpstreamOIDCIdentityProviderIMockRecorder
 }
 
-// MockUpstreamOIDCIdentityProviderIMockRecorder is the mock recorder for MockUpstreamOIDCIdentityProviderI
+// MockUpstreamOIDCIdentityProviderIMockRecorder is the mock recorder for MockUpstreamOIDCIdentityProviderI.
 type MockUpstreamOIDCIdentityProviderIMockRecorder struct {
 	mock *MockUpstreamOIDCIdentityProviderI
 }
 
-// NewMockUpstreamOIDCIdentityProviderI creates a new mock instance
+// NewMockUpstreamOIDCIdentityProviderI creates a new mock instance.
 func NewMockUpstreamOIDCIdentityProviderI(ctrl *gomock.Controller) *MockUpstreamOIDCIdentityProviderI {
 	mock := &MockUpstreamOIDCIdentityProviderI{ctrl: ctrl}
 	mock.recorder = &MockUpstreamOIDCIdentityProviderIMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockUpstreamOIDCIdentityProviderI) EXPECT() *MockUpstreamOIDCIdentityProviderIMockRecorder {
 	return m.recorder
 }
 
-// ExchangeAuthcodeAndValidateTokens mocks base method
+// ExchangeAuthcodeAndValidateTokens mocks base method.
 func (m *MockUpstreamOIDCIdentityProviderI) ExchangeAuthcodeAndValidateTokens(arg0 context.Context, arg1 string, arg2 pkce.Code, arg3 nonce.Nonce, arg4 string) (*oidctypes.Token, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ExchangeAuthcodeAndValidateTokens", arg0, arg1, arg2, arg3, arg4)
@@ -51,13 +52,13 @@ func (m *MockUpstreamOIDCIdentityProviderI) ExchangeAuthcodeAndValidateTokens(ar
 	return ret0, ret1
 }
 
-// ExchangeAuthcodeAndValidateTokens indicates an expected call of ExchangeAuthcodeAndValidateTokens
+// ExchangeAuthcodeAndValidateTokens indicates an expected call of ExchangeAuthcodeAndValidateTokens.
 func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) ExchangeAuthcodeAndValidateTokens(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExchangeAuthcodeAndValidateTokens", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).ExchangeAuthcodeAndValidateTokens), arg0, arg1, arg2, arg3, arg4)
 }
 
-// GetAuthorizationURL mocks base method
+// GetAuthorizationURL mocks base method.
 func (m *MockUpstreamOIDCIdentityProviderI) GetAuthorizationURL() *url.URL {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAuthorizationURL")
@@ -65,13 +66,13 @@ func (m *MockUpstreamOIDCIdentityProviderI) GetAuthorizationURL() *url.URL {
 	return ret0
 }
 
-// GetAuthorizationURL indicates an expected call of GetAuthorizationURL
+// GetAuthorizationURL indicates an expected call of GetAuthorizationURL.
 func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetAuthorizationURL() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAuthorizationURL", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetAuthorizationURL))
 }
 
-// GetClientID mocks base method
+// GetClientID mocks base method.
 func (m *MockUpstreamOIDCIdentityProviderI) GetClientID() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetClientID")
@@ -79,13 +80,13 @@ func (m *MockUpstreamOIDCIdentityProviderI) GetClientID() string {
 	return ret0
 }
 
-// GetClientID indicates an expected call of GetClientID
+// GetClientID indicates an expected call of GetClientID.
 func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetClientID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClientID", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetClientID))
 }
 
-// GetGroupsClaim mocks base method
+// GetGroupsClaim mocks base method.
 func (m *MockUpstreamOIDCIdentityProviderI) GetGroupsClaim() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetGroupsClaim")
@@ -93,13 +94,13 @@ func (m *MockUpstreamOIDCIdentityProviderI) GetGroupsClaim() string {
 	return ret0
 }
 
-// GetGroupsClaim indicates an expected call of GetGroupsClaim
+// GetGroupsClaim indicates an expected call of GetGroupsClaim.
 func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetGroupsClaim() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroupsClaim", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetGroupsClaim))
 }
 
-// GetName mocks base method
+// GetName mocks base method.
 func (m *MockUpstreamOIDCIdentityProviderI) GetName() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetName")
@@ -107,13 +108,13 @@ func (m *MockUpstreamOIDCIdentityProviderI) GetName() string {
 	return ret0
 }
 
-// GetName indicates an expected call of GetName
+// GetName indicates an expected call of GetName.
 func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetName() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetName", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetName))
 }
 
-// GetScopes mocks base method
+// GetScopes mocks base method.
 func (m *MockUpstreamOIDCIdentityProviderI) GetScopes() []string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetScopes")
@@ -121,13 +122,13 @@ func (m *MockUpstreamOIDCIdentityProviderI) GetScopes() []string {
 	return ret0
 }
 
-// GetScopes indicates an expected call of GetScopes
+// GetScopes indicates an expected call of GetScopes.
 func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetScopes() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetScopes", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetScopes))
 }
 
-// GetUsernameClaim mocks base method
+// GetUsernameClaim mocks base method.
 func (m *MockUpstreamOIDCIdentityProviderI) GetUsernameClaim() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetUsernameClaim")
@@ -135,13 +136,13 @@ func (m *MockUpstreamOIDCIdentityProviderI) GetUsernameClaim() string {
 	return ret0
 }
 
-// GetUsernameClaim indicates an expected call of GetUsernameClaim
+// GetUsernameClaim indicates an expected call of GetUsernameClaim.
 func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetUsernameClaim() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUsernameClaim", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetUsernameClaim))
 }
 
-// ValidateToken mocks base method
+// ValidateToken mocks base method.
 func (m *MockUpstreamOIDCIdentityProviderI) ValidateToken(arg0 context.Context, arg1 *oauth2.Token, arg2 nonce.Nonce) (*oidctypes.Token, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ValidateToken", arg0, arg1, arg2)
@@ -150,7 +151,7 @@ func (m *MockUpstreamOIDCIdentityProviderI) ValidateToken(arg0 context.Context, 
 	return ret0, ret1
 }
 
-// ValidateToken indicates an expected call of ValidateToken
+// ValidateToken indicates an expected call of ValidateToken.
 func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) ValidateToken(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateToken", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).ValidateToken), arg0, arg1, arg2)

@@ -1,4 +1,5 @@
 ---
+title: Pinniped Tutorials
 cascade:
   layout: docs
 menu:
@@ -7,8 +8,6 @@ menu:
     identifier: tutorials
     weight: 40
 ---
-
-# Pinniped tutorials
 
 These tutorials demonstrate how to use the Pinniped command-line tool, Concierge, and Supervisor:
 

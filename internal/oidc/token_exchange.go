@@ -40,8 +40,10 @@ type TokenExchangeHandler struct {
 	accessTokenStorage  oauth2.AccessTokenStorage
 }
 
+var _ fosite.TokenEndpointHandler = (*TokenExchangeHandler)(nil)
+
 func (t *TokenExchangeHandler) HandleTokenEndpointRequest(ctx context.Context, requester fosite.AccessRequester) error {
-	if !(requester.GetGrantTypes().ExactOne("urn:ietf:params:oauth:grant-type:token-exchange")) {
+	if !t.CanHandleTokenEndpointRequest(requester) {
 		return errors.WithStack(fosite.ErrUnknownRequest)
 	}
 	return nil
@@ -138,4 +140,12 @@ func (t *TokenExchangeHandler) validateAccessToken(ctx context.Context, requeste
 		return nil, fosite.ErrRequestUnauthorized.WithWrap(err).WithHint("invalid subject_token")
 	}
 	return originalRequester, nil
+}
+
+func (t *TokenExchangeHandler) CanSkipClientAuth(_ fosite.AccessRequester) bool {
+	return false
+}
+
+func (t *TokenExchangeHandler) CanHandleTokenEndpointRequest(requester fosite.AccessRequester) bool {
+	return requester.GetGrantTypes().ExactOne("urn:ietf:params:oauth:grant-type:token-exchange")
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -10,35 +10,36 @@ package mocktokenauthenticator
 
 import (
 	context "context"
+	reflect "reflect"
+
 	gomock "github.com/golang/mock/gomock"
 	authenticator "k8s.io/apiserver/pkg/authentication/authenticator"
-	reflect "reflect"
 )
 
-// MockToken is a mock of Token interface
+// MockToken is a mock of Token interface.
 type MockToken struct {
 	ctrl     *gomock.Controller
 	recorder *MockTokenMockRecorder
 }
 
-// MockTokenMockRecorder is the mock recorder for MockToken
+// MockTokenMockRecorder is the mock recorder for MockToken.
 type MockTokenMockRecorder struct {
 	mock *MockToken
 }
 
-// NewMockToken creates a new mock instance
+// NewMockToken creates a new mock instance.
 func NewMockToken(ctrl *gomock.Controller) *MockToken {
 	mock := &MockToken{ctrl: ctrl}
 	mock.recorder = &MockTokenMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockToken) EXPECT() *MockTokenMockRecorder {
 	return m.recorder
 }
 
-// AuthenticateToken mocks base method
+// AuthenticateToken mocks base method.
 func (m *MockToken) AuthenticateToken(arg0 context.Context, arg1 string) (*authenticator.Response, bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AuthenticateToken", arg0, arg1)
@@ -48,7 +49,7 @@ func (m *MockToken) AuthenticateToken(arg0 context.Context, arg1 string) (*authe
 	return ret0, ret1, ret2
 }
 
-// AuthenticateToken indicates an expected call of AuthenticateToken
+// AuthenticateToken indicates an expected call of AuthenticateToken.
 func (mr *MockTokenMockRecorder) AuthenticateToken(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AuthenticateToken", reflect.TypeOf((*MockToken)(nil).AuthenticateToken), arg0, arg1)

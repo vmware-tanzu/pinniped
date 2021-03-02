@@ -18,6 +18,7 @@ import (
 
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/plog"
 )
@@ -121,7 +122,13 @@ func (c *annotaterController) Sync(ctx controllerlib.Context) error {
 			keyPath,
 		); err != nil {
 			err = fmt.Errorf("cannot update agent pod: %w", err)
-			strategyResultUpdateErr := createOrUpdateCredentialIssuer(ctx.Context, *c.credentialIssuerLocationConfig, nil, c.clock, c.pinnipedAPIClient, err)
+			strategyResultUpdateErr := issuerconfig.UpdateStrategy(
+				ctx.Context,
+				c.credentialIssuerLocationConfig.Name,
+				nil,
+				c.pinnipedAPIClient,
+				strategyError(c.clock, err),
+			)
 			if strategyResultUpdateErr != nil {
 				// If the CI update fails, then we probably want to try again. This controller will get
 				// called again because of the pod create failure, so just try the CI update again then.

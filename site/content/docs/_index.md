@@ -1,4 +1,5 @@
 ---
+title: Getting Started with Pinniped
 cascade:
   layout: docs
 menu:
@@ -6,8 +7,6 @@ menu:
     name: Overview
     weight: 1
 ---
-
-# Getting started with Pinniped
 
 Pinniped is an authentication service for Kubernetes clusters.
 As a Kubernetes cluster administrator or user, you can learn how Pinniped works, see how to use it on your clusters, and dive into internals of Pinniped's APIs and architecture.

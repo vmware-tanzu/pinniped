@@ -32,3 +32,5 @@ related:
     weight: 50
   threshold: 0
   toLower: true
+
+enableGitInfo: true

@@ -277,12 +277,14 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			singletonWorker,
 		).
 
-		// The impersonation proxy configuration controllers dynamically configure the impersonation proxy feature.
+		// The impersonator configuration controller dynamically configures the impersonation proxy feature.
 		WithController(
 			impersonatorconfig.NewImpersonatorConfigController(
 				c.ServerInstallationInfo.Namespace,
 				c.NamesConfig.ImpersonationConfigMap,
+				c.NamesConfig.CredentialIssuer,
 				client.Kubernetes,
+				client.PinnipedConcierge,
 				informers.installationNamespaceK8s.Core().V1().ConfigMaps(),
 				informers.installationNamespaceK8s.Core().V1().Services(),
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
@@ -292,6 +294,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				c.NamesConfig.ImpersonationTLSCertificateSecret,
 				c.NamesConfig.ImpersonationCACertificateSecret,
 				c.Labels,
+				clock.RealClock{},
 				tls.Listen,
 				func() (http.Handler, error) {
 					impersonationProxyHandler, err := impersonator.New(

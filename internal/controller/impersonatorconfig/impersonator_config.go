@@ -20,14 +20,18 @@ import (
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	pinnipedclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/clusterhost"
 	"go.pinniped.dev/internal/concierge/impersonator"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/plog"
 )
@@ -40,21 +44,31 @@ const (
 	caCrtKey               = "ca.crt"
 	caKeyKey               = "ca.key"
 	appLabelKey            = "app"
+
+	// TODO move these to the api package after resolving an upcoming merge.
+	PendingStrategyReason          = v1alpha1.StrategyReason("Pending")
+	ErrorDuringSetupStrategyReason = v1alpha1.StrategyReason("ErrorDuringSetup")
 )
 
 type impersonatorConfigController struct {
 	namespace                        string
 	configMapResourceName            string
-	k8sClient                        kubernetes.Interface
-	configMapsInformer               corev1informers.ConfigMapInformer
-	servicesInformer                 corev1informers.ServiceInformer
-	secretsInformer                  corev1informers.SecretInformer
+	credentialIssuerResourceName     string
 	generatedLoadBalancerServiceName string
 	tlsSecretName                    string
 	caSecretName                     string
-	labels                           map[string]string
-	startTLSListenerFunc             StartTLSListenerFunc
-	httpHandlerFactory               func() (http.Handler, error)
+
+	k8sClient         kubernetes.Interface
+	pinnipedAPIClient pinnipedclientset.Interface
+
+	configMapsInformer corev1informers.ConfigMapInformer
+	servicesInformer   corev1informers.ServiceInformer
+	secretsInformer    corev1informers.SecretInformer
+
+	labels               map[string]string
+	clock                clock.Clock
+	startTLSListenerFunc StartTLSListenerFunc
+	httpHandlerFactory   func() (http.Handler, error)
 
 	server               *http.Server
 	hasControlPlaneNodes *bool
@@ -67,7 +81,9 @@ type StartTLSListenerFunc func(network, listenAddress string, config *tls.Config
 func NewImpersonatorConfigController(
 	namespace string,
 	configMapResourceName string,
+	credentialIssuerResourceName string,
 	k8sClient kubernetes.Interface,
+	pinnipedAPIClient pinnipedclientset.Interface,
 	configMapsInformer corev1informers.ConfigMapInformer,
 	servicesInformer corev1informers.ServiceInformer,
 	secretsInformer corev1informers.SecretInformer,
@@ -77,6 +93,7 @@ func NewImpersonatorConfigController(
 	tlsSecretName string,
 	caSecretName string,
 	labels map[string]string,
+	clock clock.Clock,
 	startTLSListenerFunc StartTLSListenerFunc,
 	httpHandlerFactory func() (http.Handler, error),
 ) controllerlib.Controller {
@@ -86,14 +103,17 @@ func NewImpersonatorConfigController(
 			Syncer: &impersonatorConfigController{
 				namespace:                        namespace,
 				configMapResourceName:            configMapResourceName,
-				k8sClient:                        k8sClient,
-				configMapsInformer:               configMapsInformer,
-				servicesInformer:                 servicesInformer,
-				secretsInformer:                  secretsInformer,
+				credentialIssuerResourceName:     credentialIssuerResourceName,
 				generatedLoadBalancerServiceName: generatedLoadBalancerServiceName,
 				tlsSecretName:                    tlsSecretName,
 				caSecretName:                     caSecretName,
+				k8sClient:                        k8sClient,
+				pinnipedAPIClient:                pinnipedAPIClient,
+				configMapsInformer:               configMapsInformer,
+				servicesInformer:                 servicesInformer,
+				secretsInformer:                  secretsInformer,
 				labels:                           labels,
+				clock:                            clock,
 				startTLSListenerFunc:             startTLSListenerFunc,
 				httpHandlerFactory:               httpHandlerFactory,
 			},
@@ -126,11 +146,37 @@ func NewImpersonatorConfigController(
 
 func (c *impersonatorConfigController) Sync(syncCtx controllerlib.Context) error {
 	plog.Debug("Starting impersonatorConfigController Sync")
-	ctx := syncCtx.Context
 
+	strategy, err := c.doSync(syncCtx.Context)
+
+	if err != nil {
+		strategy = &v1alpha1.CredentialIssuerStrategy{
+			Type:           v1alpha1.ImpersonationProxyStrategyType,
+			Status:         v1alpha1.ErrorStrategyStatus,
+			Reason:         ErrorDuringSetupStrategyReason,
+			Message:        err.Error(),
+			LastUpdateTime: metav1.NewTime(c.clock.Now()),
+		}
+	}
+
+	updateStrategyErr := c.updateStrategy(syncCtx.Context, strategy)
+	if updateStrategyErr != nil {
+		plog.Error("error while updating the CredentialIssuer status", err)
+		if err == nil {
+			err = updateStrategyErr
+		}
+	}
+
+	if err == nil {
+		plog.Debug("Successfully finished impersonatorConfigController Sync")
+	}
+	return err
+}
+
+func (c *impersonatorConfigController) doSync(ctx context.Context) (*v1alpha1.CredentialIssuerStrategy, error) {
 	config, err := c.loadImpersonationProxyConfiguration()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Make a live API call to avoid the cost of having an informer watch all node changes on the cluster,
@@ -140,7 +186,7 @@ func (c *impersonatorConfigController) Sync(syncCtx controllerlib.Context) error
 	if c.hasControlPlaneNodes == nil {
 		hasControlPlaneNodes, err := clusterhost.New(c.k8sClient).HasControlPlaneNodes(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		c.hasControlPlaneNodes = &hasControlPlaneNodes
 		plog.Debug("Queried for control plane nodes", "foundControlPlaneNodes", hasControlPlaneNodes)
@@ -148,39 +194,38 @@ func (c *impersonatorConfigController) Sync(syncCtx controllerlib.Context) error
 
 	if c.shouldHaveImpersonator(config) {
 		if err = c.ensureImpersonatorIsStarted(); err != nil {
-			return err
+			return nil, err
 		}
 	} else {
 		if err = c.ensureImpersonatorIsStopped(); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	if c.shouldHaveLoadBalancer(config) {
 		if err = c.ensureLoadBalancerIsStarted(ctx); err != nil {
-			return err
+			return nil, err
 		}
 	} else {
 		if err = c.ensureLoadBalancerIsStopped(ctx); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
+	waitingForLoadBalancer := false
 	if c.shouldHaveTLSSecret(config) {
 		var impersonationCA *certauthority.CA
 		if impersonationCA, err = c.ensureCASecretIsCreated(ctx); err != nil {
-			return err
+			return nil, err
 		}
-		if err = c.ensureTLSSecret(ctx, config, impersonationCA); err != nil {
-			return err
+		if waitingForLoadBalancer, err = c.ensureTLSSecret(ctx, config, impersonationCA); err != nil {
+			return nil, err
 		}
 	} else if err = c.ensureTLSSecretIsRemoved(ctx); err != nil {
-		return err
+		return nil, err
 	}
 
-	plog.Debug("Successfully finished impersonatorConfigController Sync")
-
-	return nil
+	return c.doSyncResult(waitingForLoadBalancer, config), nil
 }
 
 func (c *impersonatorConfigController) loadImpersonationProxyConfiguration() (*impersonator.Config, error) {
@@ -212,7 +257,19 @@ func (c *impersonatorConfigController) loadImpersonationProxyConfiguration() (*i
 }
 
 func (c *impersonatorConfigController) shouldHaveImpersonator(config *impersonator.Config) bool {
-	return (config.Mode == impersonator.ModeAuto && !*c.hasControlPlaneNodes) || config.Mode == impersonator.ModeEnabled
+	return c.enabledByAutoMode(config) || config.Mode == impersonator.ModeEnabled
+}
+
+func (c *impersonatorConfigController) enabledByAutoMode(config *impersonator.Config) bool {
+	return config.Mode == impersonator.ModeAuto && !*c.hasControlPlaneNodes
+}
+
+func (c *impersonatorConfigController) disabledByAutoMode(config *impersonator.Config) bool {
+	return config.Mode == impersonator.ModeAuto && *c.hasControlPlaneNodes
+}
+
+func (c *impersonatorConfigController) disabledExplicitly(config *impersonator.Config) bool {
+	return config.Mode == impersonator.ModeDisabled
 }
 
 func (c *impersonatorConfigController) shouldHaveLoadBalancer(config *impersonator.Config) bool {
@@ -221,6 +278,10 @@ func (c *impersonatorConfigController) shouldHaveLoadBalancer(config *impersonat
 
 func (c *impersonatorConfigController) shouldHaveTLSSecret(config *impersonator.Config) bool {
 	return c.shouldHaveImpersonator(config)
+}
+
+func (c *impersonatorConfigController) updateStrategy(ctx context.Context, strategy *v1alpha1.CredentialIssuerStrategy) error {
+	return issuerconfig.UpdateStrategy(ctx, c.credentialIssuerResourceName, c.labels, c.pinnipedAPIClient, *strategy)
 }
 
 func (c *impersonatorConfigController) loadBalancerExists() (bool, error) {
@@ -342,17 +403,17 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.C
 	return c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedLoadBalancerServiceName, metav1.DeleteOptions{})
 }
 
-func (c *impersonatorConfigController) ensureTLSSecret(ctx context.Context, config *impersonator.Config, ca *certauthority.CA) error {
+func (c *impersonatorConfigController) ensureTLSSecret(ctx context.Context, config *impersonator.Config, ca *certauthority.CA) (bool, error) {
 	secretFromInformer, err := c.secretsInformer.Lister().Secrets(c.namespace).Get(c.tlsSecretName)
 	notFound := k8serrors.IsNotFound(err)
 	if !notFound && err != nil {
-		return err
+		return false, err
 	}
 
 	if !notFound {
 		secretWasDeleted, err := c.deleteTLSSecretWhenCertificateDoesNotMatchDesiredState(ctx, config, ca, secretFromInformer)
 		if err != nil {
-			return err
+			return false, err
 		}
 		// If it was deleted by the above call, then set it to nil. This allows us to avoid waiting
 		// for the informer cache to update before deciding to proceed to create the new Secret below.
@@ -457,35 +518,36 @@ func certHostnameAndIPMatchDesiredState(desiredIP net.IP, actualIPs []net.IP, de
 	return false
 }
 
-func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx context.Context, config *impersonator.Config, secret *v1.Secret, ca *certauthority.CA) error {
+func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx context.Context, config *impersonator.Config, secret *v1.Secret, ca *certauthority.CA) (bool, error) {
 	if secret != nil {
 		err := c.loadTLSCertFromSecret(secret)
 		if err != nil {
-			return err
+			return false, err
 		}
-		return nil
+		return false, nil
 	}
 
 	ip, hostname, nameIsReady, err := c.findDesiredTLSCertificateName(config)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if !nameIsReady {
 		// Sync will get called again when the load balancer is updated with its ingress info, so this is not an error.
-		return nil
+		// Return "true" meaning that we are waiting for the load balancer.
+		return true, nil
 	}
 
 	newTLSSecret, err := c.createNewTLSSecret(ctx, ca, ip, hostname)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	err = c.loadTLSCertFromSecret(newTLSSecret)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	return nil
+	return false, nil
 }
 
 func (c *impersonatorConfigController) ensureCASecretIsCreated(ctx context.Context) (*certauthority.CA, error) {
@@ -670,6 +732,43 @@ func (c *impersonatorConfigController) ensureTLSSecretIsRemoved(ctx context.Cont
 	c.setTLSCert(nil)
 
 	return nil
+}
+
+func (c *impersonatorConfigController) doSyncResult(waitingForLoadBalancer bool, config *impersonator.Config) *v1alpha1.CredentialIssuerStrategy {
+	switch {
+	case waitingForLoadBalancer:
+		return &v1alpha1.CredentialIssuerStrategy{
+			Type:           v1alpha1.ImpersonationProxyStrategyType,
+			Status:         v1alpha1.ErrorStrategyStatus,
+			Reason:         PendingStrategyReason,
+			Message:        "waiting for load balancer Service to be assigned IP or hostname",
+			LastUpdateTime: metav1.NewTime(c.clock.Now()),
+		}
+	case c.disabledExplicitly(config):
+		return &v1alpha1.CredentialIssuerStrategy{
+			Type:           v1alpha1.ImpersonationProxyStrategyType,
+			Status:         v1alpha1.ErrorStrategyStatus,
+			Reason:         v1alpha1.DisabledStrategyReason,
+			Message:        "impersonation proxy was explicitly disabled by configuration",
+			LastUpdateTime: metav1.NewTime(c.clock.Now()),
+		}
+	case c.disabledByAutoMode(config):
+		return &v1alpha1.CredentialIssuerStrategy{
+			Type:           v1alpha1.ImpersonationProxyStrategyType,
+			Status:         v1alpha1.ErrorStrategyStatus,
+			Reason:         v1alpha1.DisabledStrategyReason,
+			Message:        "automatically determined that impersonation proxy should be disabled",
+			LastUpdateTime: metav1.NewTime(c.clock.Now()),
+		}
+	default:
+		return &v1alpha1.CredentialIssuerStrategy{
+			Type:           v1alpha1.ImpersonationProxyStrategyType,
+			Status:         v1alpha1.SuccessStrategyStatus,
+			Reason:         v1alpha1.ListeningStrategyReason,
+			Message:        "impersonation proxy is ready to accept client connections",
+			LastUpdateTime: metav1.NewTime(c.clock.Now()),
+		}
+	}
 }
 
 func (c *impersonatorConfigController) setTLSCert(cert *tls.Certificate) {

@@ -10,7 +10,6 @@
 package kubecertagent
 
 import (
-	"context"
 	"encoding/hex"
 	"fmt"
 	"hash/fnv"
@@ -25,8 +24,6 @@ import (
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
-	pinnipedclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
-	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -278,32 +275,6 @@ func findControllerManagerPodForSpecificAgentPod(
 	}
 
 	return maybeControllerManagerPod, nil
-}
-
-func createOrUpdateCredentialIssuer(ctx context.Context,
-	ciConfig CredentialIssuerLocationConfig,
-	credentialIssuerLabels map[string]string,
-	clock clock.Clock,
-	pinnipedAPIClient pinnipedclientset.Interface,
-	err error,
-) error {
-	return issuerconfig.CreateOrUpdateCredentialIssuerStatus(
-		ctx,
-		ciConfig.Name,
-		credentialIssuerLabels,
-		pinnipedAPIClient,
-		func(configToUpdate *configv1alpha1.CredentialIssuerStatus) {
-			var strategyResult configv1alpha1.CredentialIssuerStrategy
-			if err == nil {
-				strategyResult = strategySuccess(clock)
-			} else {
-				strategyResult = strategyError(clock, err)
-			}
-			configToUpdate.Strategies = []configv1alpha1.CredentialIssuerStrategy{
-				strategyResult,
-			}
-		},
-	)
 }
 
 func strategySuccess(clock clock.Clock) configv1alpha1.CredentialIssuerStrategy {

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
@@ -19,6 +19,7 @@ type StrategyReason string
 
 const (
 	KubeClusterSigningCertificateStrategyType = StrategyType("KubeClusterSigningCertificate")
+	ImpersonationProxyStrategyType            = StrategyType("ImpersonationProxy")
 
 	TokenCredentialRequestAPIFrontendType = FrontendType("TokenCredentialRequestAPI")
 	ImpersonationProxyFrontendType        = FrontendType("ImpersonationProxy")
@@ -26,6 +27,10 @@ const (
 	SuccessStrategyStatus = StrategyStatus("Success")
 	ErrorStrategyStatus   = StrategyStatus("Error")
 
+	ListeningStrategyReason              = StrategyReason("Listening")
+	PendingStrategyReason                = StrategyReason("Pending")
+	DisabledStrategyReason               = StrategyReason("Disabled")
+	ErrorDuringSetupStrategyReason       = StrategyReason("ErrorDuringSetup")
 	CouldNotFetchKeyStrategyReason       = StrategyReason("CouldNotFetchKey")
 	CouldNotGetClusterInfoStrategyReason = StrategyReason("CouldNotGetClusterInfo")
 	FetchedKeyStrategyReason             = StrategyReason("FetchedKey")

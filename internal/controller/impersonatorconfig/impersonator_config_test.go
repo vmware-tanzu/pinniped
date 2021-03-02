@@ -694,7 +694,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			return v1alpha1.CredentialIssuerStrategy{
 				Type:           v1alpha1.ImpersonationProxyStrategyType,
 				Status:         v1alpha1.ErrorStrategyStatus,
-				Reason:         PendingStrategyReason,
+				Reason:         v1alpha1.PendingStrategyReason,
 				Message:        "waiting for load balancer Service to be assigned IP or hostname",
 				LastUpdateTime: metav1.NewTime(frozenNow),
 			}
@@ -704,7 +704,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			return v1alpha1.CredentialIssuerStrategy{
 				Type:           v1alpha1.ImpersonationProxyStrategyType,
 				Status:         v1alpha1.ErrorStrategyStatus,
-				Reason:         ErrorDuringSetupStrategyReason,
+				Reason:         v1alpha1.ErrorDuringSetupStrategyReason,
 				Message:        msg,
 				LastUpdateTime: metav1.NewTime(frozenNow),
 			}

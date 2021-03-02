@@ -250,8 +250,7 @@ func configureConcierge(credentialIssuer *configv1alpha1.CredentialIssuer, authe
 	var conciergeCABundleData []byte
 
 	// Autodiscover the --concierge-mode.
-	if flags.concierge.mode == modeUnknown {
-
+	if flags.concierge.mode == modeUnknown { //nolint:nestif
 		for _, strategy := range credentialIssuer.Status.Strategies {
 			fe := strategy.Frontend
 			if strategy.Status != configv1alpha1.SuccessStrategyStatus || fe == nil {
@@ -475,9 +474,9 @@ func copyCurrentClusterFromExistingKubeConfig(currentKubeConfig clientcmdapi.Con
 	if currentContextNameOverride != "" {
 		contextName = currentContextNameOverride
 	}
-	context := currentKubeConfig.Contexts[contextName]
-	if context == nil {
+	ctx := currentKubeConfig.Contexts[contextName]
+	if ctx == nil {
 		return nil, fmt.Errorf("no such context %q", contextName)
 	}
-	return currentKubeConfig.Clusters[context.Cluster], nil
+	return currentKubeConfig.Clusters[ctx.Cluster], nil
 }

@@ -303,9 +303,38 @@ func TestGetKubeconfig(t *testing.T) {
 				&configv1alpha1.CredentialIssuer{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
 					Status: configv1alpha1.CredentialIssuerStatus{
-						ImpersonationProxyInfo: &configv1alpha1.CredentialIssuerImpersonationProxyInfo{
-							Endpoint:                 "https://impersonation-endpoint",
-							CertificateAuthorityData: "invalid-base-64",
+						Strategies: []configv1alpha1.CredentialIssuerStrategy{
+							{
+								Type:           "SomeBrokenType",
+								Status:         configv1alpha1.ErrorStrategyStatus,
+								Reason:         "SomeFailureReason",
+								Message:        "Some error message",
+								LastUpdateTime: metav1.Now(),
+							},
+							{
+								Type:           "SomeUnknownType",
+								Status:         configv1alpha1.SuccessStrategyStatus,
+								Reason:         "SomeReason",
+								Message:        "Some error message",
+								LastUpdateTime: metav1.Now(),
+								Frontend: &configv1alpha1.CredentialIssuerFrontend{
+									Type: "SomeUnknownFrontendType",
+								},
+							},
+							{
+								Type:           "SomeType",
+								Status:         configv1alpha1.SuccessStrategyStatus,
+								Reason:         "SomeReason",
+								Message:        "Some message",
+								LastUpdateTime: metav1.Now(),
+								Frontend: &configv1alpha1.CredentialIssuerFrontend{
+									Type: configv1alpha1.ImpersonationProxyFrontendType,
+									ImpersonationProxyInfo: &configv1alpha1.ImpersonationProxyInfo{
+										Endpoint:                 "https://impersonation-endpoint",
+										CertificateAuthorityData: "invalid-base-64",
+									},
+								},
+							},
 						},
 					},
 				},
@@ -325,10 +354,20 @@ func TestGetKubeconfig(t *testing.T) {
 				&configv1alpha1.CredentialIssuer{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
 					Status: configv1alpha1.CredentialIssuerStatus{
-						KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
-							Server:                   "https://concierge-endpoint",
-							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
-						},
+						Strategies: []configv1alpha1.CredentialIssuerStrategy{{
+							Type:           "SomeType",
+							Status:         configv1alpha1.SuccessStrategyStatus,
+							Reason:         "SomeReason",
+							Message:        "Some message",
+							LastUpdateTime: metav1.Now(),
+							Frontend: &configv1alpha1.CredentialIssuerFrontend{
+								Type: configv1alpha1.TokenCredentialRequestAPIFrontendType,
+								TokenCredentialRequestAPIInfo: &configv1alpha1.TokenCredentialRequestAPIInfo{
+									Server:                   "https://concierge-endpoint",
+									CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
+								},
+							},
+						}},
 					},
 				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
@@ -749,10 +788,20 @@ func TestGetKubeconfig(t *testing.T) {
 				&configv1alpha1.CredentialIssuer{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
 					Status: configv1alpha1.CredentialIssuerStatus{
-						ImpersonationProxyInfo: &configv1alpha1.CredentialIssuerImpersonationProxyInfo{
-							Endpoint:                 "https://impersonation-proxy-endpoint.test",
-							CertificateAuthorityData: "dGVzdC1jb25jaWVyZ2UtY2E=",
-						},
+						Strategies: []configv1alpha1.CredentialIssuerStrategy{{
+							Type:           "SomeType",
+							Status:         configv1alpha1.SuccessStrategyStatus,
+							Reason:         "SomeReason",
+							Message:        "Some message",
+							LastUpdateTime: metav1.Now(),
+							Frontend: &configv1alpha1.CredentialIssuerFrontend{
+								Type: configv1alpha1.ImpersonationProxyFrontendType,
+								ImpersonationProxyInfo: &configv1alpha1.ImpersonationProxyInfo{
+									Endpoint:                 "https://impersonation-proxy-endpoint.test",
+									CertificateAuthorityData: "dGVzdC1jb25jaWVyZ2UtY2E=",
+								},
+							},
+						}},
 					},
 				},
 				&conciergev1alpha1.JWTAuthenticator{

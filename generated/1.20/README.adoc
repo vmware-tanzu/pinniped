@@ -236,21 +236,22 @@ Describes the configuration status of a Pinniped credential issuer.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerimpersonationproxyinfo"]
-==== CredentialIssuerImpersonationProxyInfo 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerfrontend"]
+==== CredentialIssuerFrontend 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerstatus[$$CredentialIssuerStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`endpoint`* __string__ | The HTTPS endpoint of the impersonation proxy.
-| *`certificateAuthorityData`* __string__ | The CA bundle to validate connections to the impersonation proxy.
+| *`type`* __FrontendType__ | Type describes which frontend mechanism clients can use with a strategy.
+| *`tokenCredentialRequestInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-tokencredentialrequestapiinfo[$$TokenCredentialRequestAPIInfo$$]__ | TokenCredentialRequestAPIInfo describes the parameters for the TokenCredentialRequest API on this Concierge. This field is only set when Type is "TokenCredentialRequestAPI".
+| *`impersonationProxyInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-impersonationproxyinfo[$$ImpersonationProxyInfo$$]__ | ImpersonationProxyInfo describes the parameters for the impersonation proxy on this Concierge. This field is only set when Type is "ImpersonationProxy".
 |===
 
 
@@ -267,8 +268,8 @@ Describes the configuration status of a Pinniped credential issuer.
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`server`* __string__ | The Kubernetes API server URL.
-| *`certificateAuthorityData`* __string__ | The Kubernetes API server CA bundle.
+| *`server`* __string__ | The K8s API server URL.
+| *`certificateAuthorityData`* __string__ | The K8s API server CA bundle.
 |===
 
 
@@ -288,8 +289,7 @@ Status of a credential issuer.
 |===
 | Field | Description
 | *`strategies`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$] array__ | List of integration strategies that were attempted by Pinniped.
-| *`kubeConfigInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerkubeconfiginfo[$$CredentialIssuerKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using the TokenCredentialRequest API.
-| *`impersonationProxyInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerimpersonationproxyinfo[$$CredentialIssuerImpersonationProxyInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using the impersonation proxy.
+| *`kubeConfigInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerkubeconfiginfo[$$CredentialIssuerKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using this credential issuer. This field is deprecated and will be removed in a future version.
 |===
 
 
@@ -311,6 +311,43 @@ Status of a credential issuer.
 | *`reason`* __StrategyReason__ | Reason for the current status.
 | *`message`* __string__ | Human-readable description of the current status.
 | *`lastUpdateTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.2/#time-v1-meta[$$Time$$]__ | When the status was last checked.
+| *`frontend`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerfrontend[$$CredentialIssuerFrontend$$]__ | Frontend describes how clients can connect using this strategy.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-impersonationproxyinfo"]
+==== ImpersonationProxyInfo 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerfrontend[$$CredentialIssuerFrontend$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`server`* __string__ | Endpoint is the HTTPS endpoint of the impersonation proxy.
+| *`certificateAuthorityData`* __string__ | CertificateAuthorityData is the base64-encoded PEM CA bundle of the impersonation proxy.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-tokencredentialrequestapiinfo"]
+==== TokenCredentialRequestAPIInfo 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-concierge-config-v1alpha1-credentialissuerfrontend[$$CredentialIssuerFrontend$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`server`* __string__ | Server is the Kubernetes API server URL.
+| *`certificateAuthorityData`* __string__ | CertificateAuthorityData is the Kubernetes API server CA bundle.
 |===
 
 

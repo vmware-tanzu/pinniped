@@ -8,6 +8,9 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 // +kubebuilder:validation:Enum=KubeClusterSigningCertificate
 type StrategyType string
 
+// +kubebuilder:validation:Enum=TokenCredentialRequestAPI
+type FrontendType string
+
 // +kubebuilder:validation:Enum=Success;Error
 type StrategyStatus string
 
@@ -16,15 +19,16 @@ type StrategyReason string
 
 const (
 	KubeClusterSigningCertificateStrategyType = StrategyType("KubeClusterSigningCertificate")
-	ImpersonationProxyStrategyType            = StrategyType("ImpersonationProxy")
+
+	TokenCredentialRequestAPIFrontendType = FrontendType("TokenCredentialRequestAPI")
+	ImpersonationProxyFrontendType        = FrontendType("ImpersonationProxy")
 
 	SuccessStrategyStatus = StrategyStatus("Success")
 	ErrorStrategyStatus   = StrategyStatus("Error")
 
-	CouldNotFetchKeyStrategyReason = StrategyReason("CouldNotFetchKey")
-	FetchedKeyStrategyReason       = StrategyReason("FetchedKey")
-	ListeningStrategyReason        = StrategyReason("Listening")
-	DisabledStrategyReason         = StrategyReason("Disabled")
+	CouldNotFetchKeyStrategyReason       = StrategyReason("CouldNotFetchKey")
+	CouldNotGetClusterInfoStrategyReason = StrategyReason("CouldNotGetClusterInfo")
+	FetchedKeyStrategyReason             = StrategyReason("FetchedKey")
 )
 
 // Status of a credential issuer.
@@ -32,35 +36,20 @@ type CredentialIssuerStatus struct {
 	// List of integration strategies that were attempted by Pinniped.
 	Strategies []CredentialIssuerStrategy `json:"strategies"`
 
-	// Information needed to form a valid Pinniped-based kubeconfig using the TokenCredentialRequest API.
+	// Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
+	// This field is deprecated and will be removed in a future version.
 	// +optional
 	KubeConfigInfo *CredentialIssuerKubeConfigInfo `json:"kubeConfigInfo,omitempty"`
-
-	// Information needed to form a valid Pinniped-based kubeconfig using the impersonation proxy.
-	// +optional
-	ImpersonationProxyInfo *CredentialIssuerImpersonationProxyInfo `json:"impersonationProxyInfo,omitempty"`
 }
 
-// Information needed to connect to the TokenCredentialRequest API on this cluster.
+// Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
 type CredentialIssuerKubeConfigInfo struct {
-	// The Kubernetes API server URL.
+	// The K8s API server URL.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:Pattern=`^https://|^http://`
 	Server string `json:"server"`
 
-	// The Kubernetes API server CA bundle.
-	// +kubebuilder:validation:MinLength=1
-	CertificateAuthorityData string `json:"certificateAuthorityData"`
-}
-
-// Information needed to connect to the TokenCredentialRequest API on this cluster.
-type CredentialIssuerImpersonationProxyInfo struct {
-	// The HTTPS endpoint of the impersonation proxy.
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:Pattern=`^https://`
-	Endpoint string `json:"endpoint"`
-
-	// The CA bundle to validate connections to the impersonation proxy.
+	// The K8s API server CA bundle.
 	// +kubebuilder:validation:MinLength=1
 	CertificateAuthorityData string `json:"certificateAuthorityData"`
 }
@@ -82,6 +71,46 @@ type CredentialIssuerStrategy struct {
 
 	// When the status was last checked.
 	LastUpdateTime metav1.Time `json:"lastUpdateTime"`
+
+	// Frontend describes how clients can connect using this strategy.
+	Frontend *CredentialIssuerFrontend `json:"frontend,omitempty"`
+}
+
+type CredentialIssuerFrontend struct {
+	// Type describes which frontend mechanism clients can use with a strategy.
+	Type FrontendType `json:"type"`
+
+	// TokenCredentialRequestAPIInfo describes the parameters for the TokenCredentialRequest API on this Concierge.
+	// This field is only set when Type is "TokenCredentialRequestAPI".
+	TokenCredentialRequestAPIInfo *TokenCredentialRequestAPIInfo `json:"tokenCredentialRequestInfo,omitempty"`
+
+	// ImpersonationProxyInfo describes the parameters for the impersonation proxy on this Concierge.
+	// This field is only set when Type is "ImpersonationProxy".
+	ImpersonationProxyInfo *ImpersonationProxyInfo `json:"impersonationProxyInfo,omitempty"`
+}
+
+// TokenCredentialRequestAPIInfo describes the parameters for the TokenCredentialRequest API on this Concierge.
+type TokenCredentialRequestAPIInfo struct {
+	// Server is the Kubernetes API server URL.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^https://|^http://`
+	Server string `json:"server"`
+
+	// CertificateAuthorityData is the Kubernetes API server CA bundle.
+	// +kubebuilder:validation:MinLength=1
+	CertificateAuthorityData string `json:"certificateAuthorityData"`
+}
+
+// ImpersonationProxyInfo describes the parameters for the impersonation proxy on this Concierge.
+type ImpersonationProxyInfo struct {
+	// Endpoint is the HTTPS endpoint of the impersonation proxy.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^https://`
+	Endpoint string `json:"server"`
+
+	// CertificateAuthorityData is the base64-encoded PEM CA bundle of the impersonation proxy.
+	// +kubebuilder:validation:MinLength=1
+	CertificateAuthorityData string `json:"certificateAuthorityData"`
 }
 
 // Describes the configuration status of a Pinniped credential issuer.

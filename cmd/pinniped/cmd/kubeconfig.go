@@ -251,24 +251,35 @@ func configureConcierge(credentialIssuer *configv1alpha1.CredentialIssuer, authe
 
 	// Autodiscover the --concierge-mode.
 	if flags.concierge.mode == modeUnknown {
-		switch {
-		case credentialIssuer.Status.KubeConfigInfo != nil:
-			// Prefer the TokenCredentialRequest API if available.
-			flags.concierge.mode = modeTokenCredentialRequestAPI
-		case credentialIssuer.Status.ImpersonationProxyInfo != nil:
-			// Otherwise prefer the impersonation proxy if it seems configured.
-			flags.concierge.mode = modeImpersonationProxy
-		default:
-			return fmt.Errorf("could not autodiscover --concierge-mode and none was provided")
-		}
-	}
 
-	if flags.concierge.mode == modeImpersonationProxy && credentialIssuer.Status.ImpersonationProxyInfo != nil {
-		flags.concierge.endpoint = credentialIssuer.Status.ImpersonationProxyInfo.Endpoint
-		var err error
-		conciergeCABundleData, err = base64.StdEncoding.DecodeString(credentialIssuer.Status.ImpersonationProxyInfo.CertificateAuthorityData)
-		if err != nil {
-			return fmt.Errorf("autodiscovered Concierge CA bundle is invalid: %w", err)
+		for _, strategy := range credentialIssuer.Status.Strategies {
+			fe := strategy.Frontend
+			if strategy.Status != configv1alpha1.SuccessStrategyStatus || fe == nil {
+				continue
+			}
+
+			switch fe.Type {
+			case configv1alpha1.TokenCredentialRequestAPIFrontendType:
+				flags.concierge.mode = modeTokenCredentialRequestAPI
+			case configv1alpha1.ImpersonationProxyFrontendType:
+				flags.concierge.mode = modeImpersonationProxy
+				flags.concierge.endpoint = fe.ImpersonationProxyInfo.Endpoint
+				var err error
+				conciergeCABundleData, err = base64.StdEncoding.DecodeString(fe.ImpersonationProxyInfo.CertificateAuthorityData)
+				if err != nil {
+					return fmt.Errorf("autodiscovered Concierge CA bundle is invalid: %w", err)
+				}
+			default:
+				//	Skip any unknown frontend types.
+			}
+		}
+		if flags.concierge.mode == modeUnknown {
+			// Fall back to deprecated field for backwards compatibility.
+			if credentialIssuer.Status.KubeConfigInfo != nil {
+				flags.concierge.mode = modeTokenCredentialRequestAPI
+			} else {
+				return fmt.Errorf("could not autodiscover --concierge-mode and none was provided")
+			}
 		}
 	}
 

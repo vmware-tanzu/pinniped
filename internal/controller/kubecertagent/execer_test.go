@@ -49,6 +49,7 @@ func TestExecerControllerOptions(t *testing.T) {
 				&CredentialIssuerLocationConfig{
 					Name: "ignored by this test",
 				},
+				nil, // credentialIssuerLabels, not needed for this test
 				nil, // discoveryURLOverride, not needed for this test
 				nil, // dynamicCertProvider, not needed for this test
 				nil, // podCommandExecutor, not needed for this test
@@ -152,6 +153,7 @@ func TestManagerControllerSync(t *testing.T) {
 		var kubeInformerFactory kubeinformers.SharedInformerFactory
 		var kubeClientset *kubernetesfake.Clientset
 		var fakeExecutor *fakePodExecutor
+		var credentialIssuerLabels map[string]string
 		var discoveryURLOverride *string
 		var dynamicCertProvider dynamiccert.Provider
 		var fakeCertPEM, fakeKeyPEM string
@@ -166,6 +168,7 @@ func TestManagerControllerSync(t *testing.T) {
 				&CredentialIssuerLocationConfig{
 					Name: credentialIssuerResourceName,
 				},
+				credentialIssuerLabels,
 				discoveryURLOverride,
 				dynamicCertProvider,
 				fakeExecutor,
@@ -516,23 +519,26 @@ func TestManagerControllerSync(t *testing.T) {
 						it.Before(func() {
 							server := "https://overridden-server-url.example.com"
 							discoveryURLOverride = &server
+							credentialIssuerLabels = map[string]string{"foo": "bar"}
 							startInformersAndController()
 						})
 
-						it("also creates the the CredentialIssuer with the appropriate status field", func() {
+						it("also creates the the CredentialIssuer with the appropriate status field and labels", func() {
 							r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 
 							expectedCreateCredentialIssuer := &configv1alpha1.CredentialIssuer{
 								TypeMeta: metav1.TypeMeta{},
 								ObjectMeta: metav1.ObjectMeta{
-									Name: credentialIssuerResourceName,
+									Name:   credentialIssuerResourceName,
+									Labels: map[string]string{"foo": "bar"},
 								},
 							}
 
 							expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
 								TypeMeta: metav1.TypeMeta{},
 								ObjectMeta: metav1.ObjectMeta{
-									Name: credentialIssuerResourceName,
+									Name:   credentialIssuerResourceName,
+									Labels: map[string]string{"foo": "bar"},
 								},
 								Status: configv1alpha1.CredentialIssuerStatus{
 									Strategies: []configv1alpha1.CredentialIssuerStrategy{

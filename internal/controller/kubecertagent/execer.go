@@ -31,6 +31,7 @@ const (
 
 type execerController struct {
 	credentialIssuerLocationConfig *CredentialIssuerLocationConfig
+	credentialIssuerLabels         map[string]string
 	discoveryURLOverride           *string
 	dynamicCertProvider            dynamiccert.Provider
 	podCommandExecutor             PodCommandExecutor
@@ -48,6 +49,7 @@ type execerController struct {
 // credentialIssuerLocationConfig, with any errors that it encounters.
 func NewExecerController(
 	credentialIssuerLocationConfig *CredentialIssuerLocationConfig,
+	credentialIssuerLabels map[string]string,
 	discoveryURLOverride *string,
 	dynamicCertProvider dynamiccert.Provider,
 	podCommandExecutor PodCommandExecutor,
@@ -62,6 +64,7 @@ func NewExecerController(
 			Name: "kube-cert-agent-execer-controller",
 			Syncer: &execerController{
 				credentialIssuerLocationConfig: credentialIssuerLocationConfig,
+				credentialIssuerLabels:         credentialIssuerLabels,
 				discoveryURLOverride:           discoveryURLOverride,
 				dynamicCertProvider:            dynamicCertProvider,
 				podCommandExecutor:             podCommandExecutor,
@@ -112,7 +115,7 @@ func (c *execerController) Sync(ctx controllerlib.Context) error {
 		strategyResultUpdateErr := issuerconfig.UpdateStrategy(
 			ctx.Context,
 			c.credentialIssuerLocationConfig.Name,
-			nil,
+			c.credentialIssuerLabels,
 			c.pinnipedAPIClient,
 			strategyError(c.clock, err),
 		)
@@ -125,7 +128,7 @@ func (c *execerController) Sync(ctx controllerlib.Context) error {
 		strategyResultUpdateErr := issuerconfig.UpdateStrategy(
 			ctx.Context,
 			c.credentialIssuerLocationConfig.Name,
-			nil,
+			c.credentialIssuerLabels,
 			c.pinnipedAPIClient,
 			strategyError(c.clock, err),
 		)
@@ -140,7 +143,7 @@ func (c *execerController) Sync(ctx controllerlib.Context) error {
 		strategyResultUpdateErr := issuerconfig.UpdateStrategy(
 			ctx.Context,
 			c.credentialIssuerLocationConfig.Name,
-			nil,
+			c.credentialIssuerLabels,
 			c.pinnipedAPIClient,
 			configv1alpha1.CredentialIssuerStrategy{
 				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
@@ -157,7 +160,7 @@ func (c *execerController) Sync(ctx controllerlib.Context) error {
 	return issuerconfig.UpdateStrategy(
 		ctx.Context,
 		c.credentialIssuerLocationConfig.Name,
-		nil,
+		c.credentialIssuerLabels,
 		c.pinnipedAPIClient,
 		configv1alpha1.CredentialIssuerStrategy{
 			Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,

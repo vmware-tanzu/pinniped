@@ -41,6 +41,7 @@ func TestAnnotaterControllerFilter(t *testing.T) {
 		) {
 			_ = NewAnnotaterController(
 				agentPodConfig,
+				nil, // credentialIssuerLabels, shouldn't matter
 				nil, // credentialIssuerLocationConfig, shouldn't matter
 				nil, // clock, shouldn't matter
 				nil, // k8sClient, shouldn't matter
@@ -85,6 +86,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 		var podsGVR schema.GroupVersionResource
 		var credentialIssuerGVR schema.GroupVersionResource
 		var frozenNow time.Time
+		var credentialIssuerLabels map[string]string
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
@@ -103,6 +105,7 @@ func TestAnnotaterControllerSync(t *testing.T) {
 				&CredentialIssuerLocationConfig{
 					Name: credentialIssuerResourceName,
 				},
+				credentialIssuerLabels,
 				clock.NewFakeClock(frozenNow),
 				kubeAPIClient,
 				pinnipedAPIClient,
@@ -297,6 +300,10 @@ func TestAnnotaterControllerSync(t *testing.T) {
 					})
 
 					when("there is not already a CredentialIssuer", func() {
+						it.Before(func() {
+							credentialIssuerLabels = map[string]string{"foo": "bar"}
+						})
+
 						it("creates the CredentialIssuer status with the error", func() {
 							startInformersAndController()
 							err := controllerlib.TestSync(t, subject, *syncContext)
@@ -304,14 +311,16 @@ func TestAnnotaterControllerSync(t *testing.T) {
 							expectedCreateCredentialIssuer := &configv1alpha1.CredentialIssuer{
 								TypeMeta: metav1.TypeMeta{},
 								ObjectMeta: metav1.ObjectMeta{
-									Name: credentialIssuerResourceName,
+									Name:   credentialIssuerResourceName,
+									Labels: map[string]string{"foo": "bar"},
 								},
 							}
 
 							expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
 								TypeMeta: metav1.TypeMeta{},
 								ObjectMeta: metav1.ObjectMeta{
-									Name: credentialIssuerResourceName,
+									Name:   credentialIssuerResourceName,
+									Labels: map[string]string{"foo": "bar"},
 								},
 								Status: configv1alpha1.CredentialIssuerStatus{
 									Strategies: []configv1alpha1.CredentialIssuerStrategy{

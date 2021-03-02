@@ -204,6 +204,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			kubecertagent.NewAnnotaterController(
 				agentPodConfig,
 				credentialIssuerLocationConfig,
+				c.Labels,
 				clock.RealClock{},
 				client.Kubernetes,
 				client.PinnipedConcierge,
@@ -216,6 +217,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		WithController(
 			kubecertagent.NewExecerController(
 				credentialIssuerLocationConfig,
+				c.Labels,
 				c.DiscoveryURLOverride,
 				c.DynamicSigningCertProvider,
 				kubecertagent.NewPodCommandExecutor(client.JSONConfig, client.Kubernetes),

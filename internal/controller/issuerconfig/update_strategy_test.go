@@ -48,6 +48,48 @@ func TestMergeStrategy(t *testing.T) {
 			},
 		},
 		{
+			name: "new entry updating deprecated kubeConfigInfo",
+			configToUpdate: v1alpha1.CredentialIssuerStatus{
+				Strategies: nil,
+			},
+			strategy: v1alpha1.CredentialIssuerStrategy{
+				Type:           "Type1",
+				Status:         v1alpha1.SuccessStrategyStatus,
+				Reason:         "some reason",
+				Message:        "some message",
+				LastUpdateTime: t1,
+				Frontend: &v1alpha1.CredentialIssuerFrontend{
+					Type: "TokenCredentialRequestAPI",
+					TokenCredentialRequestAPIInfo: &v1alpha1.TokenCredentialRequestAPIInfo{
+						Server:                   "https://test-server",
+						CertificateAuthorityData: "test-ca-bundle",
+					},
+				},
+			},
+			expected: v1alpha1.CredentialIssuerStatus{
+				Strategies: []v1alpha1.CredentialIssuerStrategy{
+					{
+						Type:           "Type1",
+						Status:         v1alpha1.SuccessStrategyStatus,
+						Reason:         "some reason",
+						Message:        "some message",
+						LastUpdateTime: t1,
+						Frontend: &v1alpha1.CredentialIssuerFrontend{
+							Type: "TokenCredentialRequestAPI",
+							TokenCredentialRequestAPIInfo: &v1alpha1.TokenCredentialRequestAPIInfo{
+								Server:                   "https://test-server",
+								CertificateAuthorityData: "test-ca-bundle",
+							},
+						},
+					},
+				},
+				KubeConfigInfo: &v1alpha1.CredentialIssuerKubeConfigInfo{
+					Server:                   "https://test-server",
+					CertificateAuthorityData: "test-ca-bundle",
+				},
+			},
+		},
+		{
 			name: "existing entry to update",
 			configToUpdate: v1alpha1.CredentialIssuerStatus{
 				Strategies: []v1alpha1.CredentialIssuerStrategy{

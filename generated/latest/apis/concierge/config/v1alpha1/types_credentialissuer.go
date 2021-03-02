@@ -8,6 +8,9 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 // +kubebuilder:validation:Enum=KubeClusterSigningCertificate
 type StrategyType string
 
+// +kubebuilder:validation:Enum=TokenCredentialRequestAPI
+type FrontendType string
+
 // +kubebuilder:validation:Enum=Success;Error
 type StrategyStatus string
 
@@ -17,11 +20,14 @@ type StrategyReason string
 const (
 	KubeClusterSigningCertificateStrategyType = StrategyType("KubeClusterSigningCertificate")
 
+	TokenCredentialRequestAPIFrontendType = FrontendType("TokenCredentialRequestAPI")
+
 	SuccessStrategyStatus = StrategyStatus("Success")
 	ErrorStrategyStatus   = StrategyStatus("Error")
 
-	CouldNotFetchKeyStrategyReason = StrategyReason("CouldNotFetchKey")
-	FetchedKeyStrategyReason       = StrategyReason("FetchedKey")
+	CouldNotFetchKeyStrategyReason       = StrategyReason("CouldNotFetchKey")
+	CouldNotGetClusterInfoStrategyReason = StrategyReason("CouldNotGetClusterInfo")
+	FetchedKeyStrategyReason             = StrategyReason("FetchedKey")
 )
 
 // Status of a credential issuer.
@@ -30,6 +36,7 @@ type CredentialIssuerStatus struct {
 	Strategies []CredentialIssuerStrategy `json:"strategies"`
 
 	// Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
+	// This field is deprecated and will be removed in a future version.
 	// +optional
 	KubeConfigInfo *CredentialIssuerKubeConfigInfo `json:"kubeConfigInfo,omitempty"`
 }
@@ -63,6 +70,30 @@ type CredentialIssuerStrategy struct {
 
 	// When the status was last checked.
 	LastUpdateTime metav1.Time `json:"lastUpdateTime"`
+
+	// Frontend describes how clients can connect using this strategy.
+	Frontend *CredentialIssuerFrontend `json:"frontend,omitempty"`
+}
+
+type CredentialIssuerFrontend struct {
+	// Type describes which frontend mechanism clients can use with a strategy.
+	Type FrontendType `json:"type"`
+
+	// TokenCredentialRequestAPIInfo describes the parameters for the TokenCredentialRequest API on this Concierge.
+	// This field is only set when Type is "TokenCredentialRequestAPI".
+	TokenCredentialRequestAPIInfo *TokenCredentialRequestAPIInfo `json:"tokenCredentialRequestInfo,omitempty"`
+}
+
+// TokenCredentialRequestAPIInfo describes the parameters for the TokenCredentialRequest API on this Concierge.
+type TokenCredentialRequestAPIInfo struct {
+	// Server is the Kubernetes API server URL.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^https://|^http://`
+	Server string `json:"server"`
+
+	// CertificateAuthorityData is the Kubernetes API server CA bundle.
+	// +kubebuilder:validation:MinLength=1
+	CertificateAuthorityData string `json:"certificateAuthorityData"`
 }
 
 // Describes the configuration status of a Pinniped credential issuer.

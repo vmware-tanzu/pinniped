@@ -277,16 +277,6 @@ func findControllerManagerPodForSpecificAgentPod(
 	return maybeControllerManagerPod, nil
 }
 
-func strategySuccess(clock clock.Clock) configv1alpha1.CredentialIssuerStrategy {
-	return configv1alpha1.CredentialIssuerStrategy{
-		Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-		Status:         configv1alpha1.SuccessStrategyStatus,
-		Reason:         configv1alpha1.FetchedKeyStrategyReason,
-		Message:        "Key was fetched successfully",
-		LastUpdateTime: metav1.NewTime(clock.Now()),
-	}
-}
-
 func strategyError(clock clock.Clock, err error) configv1alpha1.CredentialIssuerStrategy {
 	return configv1alpha1.CredentialIssuerStrategy{
 		Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,

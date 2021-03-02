@@ -309,10 +309,6 @@ func TestCreaterControllerSync(t *testing.T) {
 								},
 								Status: configv1alpha1.CredentialIssuerStatus{
 									Strategies: []configv1alpha1.CredentialIssuerStrategy{},
-									KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
-										Server:                   "some-server",
-										CertificateAuthorityData: "some-ca-value",
-									},
 								},
 							}
 							r.NoError(pinnipedAPIClient.Tracker().Add(initialCredentialIssuer))
@@ -449,10 +445,6 @@ func TestCreaterControllerSync(t *testing.T) {
 						},
 						Status: configv1alpha1.CredentialIssuerStatus{
 							Strategies: []configv1alpha1.CredentialIssuerStrategy{},
-							KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
-								Server:                   "some-server",
-								CertificateAuthorityData: "some-ca-value",
-							},
 						},
 					}
 					r.NoError(pinnipedAPIClient.Tracker().Add(initialCredentialIssuer))

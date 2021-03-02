@@ -24,7 +24,6 @@ import (
 	"go.pinniped.dev/internal/controller/authenticator/cachecleaner"
 	"go.pinniped.dev/internal/controller/authenticator/jwtcachefiller"
 	"go.pinniped.dev/internal/controller/authenticator/webhookcachefiller"
-	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controller/kubecertagent"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/deploymentref"
@@ -124,20 +123,6 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 	controllerManager := controllerlib.
 		NewManager().
 
-		// KubeConfig info publishing controller is responsible for writing the KubeConfig information to the
-		// CredentialIssuer resource and keeping that information up to date.
-		WithController(
-			issuerconfig.NewKubeConfigInfoPublisherController(
-				c.NamesConfig.CredentialIssuer,
-				c.Labels,
-				c.DiscoveryURLOverride,
-				client.PinnipedConcierge,
-				informers.kubePublicNamespaceK8s.Core().V1().ConfigMaps(),
-				controllerlib.WithInformer,
-			),
-			singletonWorker,
-		).
-
 		// API certs controllers are responsible for managing the TLS certificates used to serve Pinniped's API.
 		WithController(
 			apicerts.NewCertsManagerController(
@@ -219,6 +204,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			kubecertagent.NewAnnotaterController(
 				agentPodConfig,
 				credentialIssuerLocationConfig,
+				c.Labels,
 				clock.RealClock{},
 				client.Kubernetes,
 				client.PinnipedConcierge,
@@ -231,11 +217,14 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		WithController(
 			kubecertagent.NewExecerController(
 				credentialIssuerLocationConfig,
+				c.Labels,
+				c.DiscoveryURLOverride,
 				c.DynamicSigningCertProvider,
 				kubecertagent.NewPodCommandExecutor(client.JSONConfig, client.Kubernetes),
 				client.PinnipedConcierge,
 				clock.RealClock{},
 				informers.installationNamespaceK8s.Core().V1().Pods(),
+				informers.kubePublicNamespaceK8s.Core().V1().ConfigMaps(),
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -303,7 +292,7 @@ func createInformers(
 		kubePublicNamespaceK8s: k8sinformers.NewSharedInformerFactoryWithOptions(
 			k8sClient,
 			defaultResyncInterval,
-			k8sinformers.WithNamespace(issuerconfig.ClusterInfoNamespace),
+			k8sinformers.WithNamespace(kubecertagent.ClusterInfoNamespace),
 		),
 		kubeSystemNamespaceK8s: k8sinformers.NewSharedInformerFactoryWithOptions(
 			k8sClient,

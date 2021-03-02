@@ -236,6 +236,24 @@ Describes the configuration status of a Pinniped credential issuer.
 |===
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerfrontend"]
+==== CredentialIssuerFrontend 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`type`* __FrontendType__ | Type describes which frontend mechanism clients can use with a strategy.
+| *`tokenCredentialRequestInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-tokencredentialrequestapiinfo[$$TokenCredentialRequestAPIInfo$$]__ | TokenCredentialRequestAPIInfo describes the parameters for the TokenCredentialRequest API on this Concierge. This field is only set when Type is "TokenCredentialRequestAPI".
+|===
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerkubeconfiginfo"]
 ==== CredentialIssuerKubeConfigInfo 
 
@@ -270,7 +288,7 @@ Status of a credential issuer.
 |===
 | Field | Description
 | *`strategies`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$] array__ | List of integration strategies that were attempted by Pinniped.
-| *`kubeConfigInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerkubeconfiginfo[$$CredentialIssuerKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
+| *`kubeConfigInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerkubeconfiginfo[$$CredentialIssuerKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using this credential issuer. This field is deprecated and will be removed in a future version.
 |===
 
 
@@ -292,6 +310,25 @@ Status of a credential issuer.
 | *`reason`* __StrategyReason__ | Reason for the current status.
 | *`message`* __string__ | Human-readable description of the current status.
 | *`lastUpdateTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#time-v1-meta[$$Time$$]__ | When the status was last checked.
+| *`frontend`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerfrontend[$$CredentialIssuerFrontend$$]__ | Frontend describes how clients can connect using this strategy.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-tokencredentialrequestapiinfo"]
+==== TokenCredentialRequestAPIInfo 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerfrontend[$$CredentialIssuerFrontend$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`server`* __string__ | Server is the Kubernetes API server URL.
+| *`certificateAuthorityData`* __string__ | CertificateAuthorityData is the Kubernetes API server CA bundle.
 |===
 
 

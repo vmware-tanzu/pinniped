@@ -72,12 +72,20 @@ func TestCredentialIssuer(t *testing.T) {
 			require.Equal(t, configv1alpha1.SuccessStrategyStatus, actualStatusStrategy.Status)
 			require.Equal(t, configv1alpha1.FetchedKeyStrategyReason, actualStatusStrategy.Reason)
 			require.Equal(t, "Key was fetched successfully", actualStatusStrategy.Message)
+			require.NotNil(t, actualStatusStrategy.Frontend)
+			require.Equal(t, configv1alpha1.TokenCredentialRequestAPIFrontendType, actualStatusStrategy.Frontend.Type)
+			expectedTokenRequestAPIInfo := configv1alpha1.TokenCredentialRequestAPIInfo{
+				Server:                   config.Host,
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.TLSClientConfig.CAData),
+			}
+			require.Equal(t, &expectedTokenRequestAPIInfo, actualStatusStrategy.Frontend.TokenCredentialRequestAPIInfo)
+
 			// Verify the published kube config info.
 			require.Equal(
 				t,
 				&configv1alpha1.CredentialIssuerKubeConfigInfo{
-					Server:                   config.Host,
-					CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.TLSClientConfig.CAData),
+					Server:                   expectedTokenRequestAPIInfo.Server,
+					CertificateAuthorityData: expectedTokenRequestAPIInfo.CertificateAuthorityData,
 				},
 				actualStatusKubeConfigInfo,
 			)

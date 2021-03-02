@@ -33,6 +33,7 @@ const (
 type annotaterController struct {
 	agentPodConfig                 *AgentPodConfig
 	credentialIssuerLocationConfig *CredentialIssuerLocationConfig
+	credentialIssuerLabels         map[string]string
 	clock                          clock.Clock
 	k8sClient                      kubernetes.Interface
 	pinnipedAPIClient              pinnipedclientset.Interface
@@ -51,6 +52,7 @@ type annotaterController struct {
 func NewAnnotaterController(
 	agentPodConfig *AgentPodConfig,
 	credentialIssuerLocationConfig *CredentialIssuerLocationConfig,
+	credentialIssuerLabels map[string]string,
 	clock clock.Clock,
 	k8sClient kubernetes.Interface,
 	pinnipedAPIClient pinnipedclientset.Interface,
@@ -64,6 +66,7 @@ func NewAnnotaterController(
 			Syncer: &annotaterController{
 				agentPodConfig:                 agentPodConfig,
 				credentialIssuerLocationConfig: credentialIssuerLocationConfig,
+				credentialIssuerLabels:         credentialIssuerLabels,
 				clock:                          clock,
 				k8sClient:                      k8sClient,
 				pinnipedAPIClient:              pinnipedAPIClient,
@@ -125,7 +128,7 @@ func (c *annotaterController) Sync(ctx controllerlib.Context) error {
 			strategyResultUpdateErr := issuerconfig.UpdateStrategy(
 				ctx.Context,
 				c.credentialIssuerLocationConfig.Name,
-				nil,
+				c.credentialIssuerLabels,
 				c.pinnipedAPIClient,
 				strategyError(c.clock, err),
 			)

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package certauthority implements a simple x509 certificate authority suitable for use in an aggregated API service.
@@ -44,11 +44,16 @@ type env struct {
 
 // CA holds the state for a simple x509 certificate authority suitable for use in an aggregated API service.
 type CA struct {
-	// caCert is the DER-encoded certificate for the current CA.
+	// caCertBytes is the DER-encoded certificate for the current CA.
 	caCertBytes []byte
 
 	// signer is the private key for the current CA.
 	signer crypto.Signer
+
+	// privateKey is the same private key represented by signer, but in a format which allows export.
+	// It is only set by New, not by Load, since Load can handle various types of PrivateKey but New
+	// only needs to create keys of type ecdsa.PrivateKey.
+	privateKey *ecdsa.PrivateKey
 
 	// env is our reference to the outside world (clocks and random number generation).
 	env env
@@ -99,11 +104,11 @@ func newInternal(subject pkix.Name, ttl time.Duration, env env) (*CA, error) {
 	}
 
 	// Generate a new P256 keypair.
-	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), env.keygenRNG)
+	ca.privateKey, err = ecdsa.GenerateKey(elliptic.P256(), env.keygenRNG)
 	if err != nil {
 		return nil, fmt.Errorf("could not generate CA private key: %w", err)
 	}
-	ca.signer = privateKey
+	ca.signer = ca.privateKey
 
 	// Make a CA certificate valid for some ttl and backdated by some amount.
 	now := env.clock()
@@ -123,7 +128,7 @@ func newInternal(subject pkix.Name, ttl time.Duration, env env) (*CA, error) {
 	}
 
 	// Self-sign the CA to get the DER certificate.
-	caCertBytes, err := x509.CreateCertificate(env.signingRNG, &caTemplate, &caTemplate, &privateKey.PublicKey, privateKey)
+	caCertBytes, err := x509.CreateCertificate(env.signingRNG, &caTemplate, &caTemplate, &ca.privateKey.PublicKey, ca.privateKey)
 	if err != nil {
 		return nil, fmt.Errorf("could not issue CA certificate: %w", err)
 	}
@@ -134,6 +139,18 @@ func newInternal(subject pkix.Name, ttl time.Duration, env env) (*CA, error) {
 // Bundle returns the current CA signing bundle in concatenated PEM format.
 func (c *CA) Bundle() []byte {
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: c.caCertBytes})
+}
+
+// PrivateKeyToPEM returns the current CA private key in PEM format, if this CA was constructed by New.
+func (c *CA) PrivateKeyToPEM() ([]byte, error) {
+	if c.privateKey == nil {
+		return nil, fmt.Errorf("no private key data (did you try to use this after Load?)")
+	}
+	derKey, err := x509.MarshalECPrivateKey(c.privateKey)
+	if err != nil {
+		return nil, err
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: derKey}), nil
 }
 
 // Pool returns the current CA signing bundle as a *x509.CertPool.

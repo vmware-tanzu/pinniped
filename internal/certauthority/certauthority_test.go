@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package certauthority
@@ -80,22 +80,25 @@ func TestLoad(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, ca.caCertBytes)
 			require.NotNil(t, ca.signer)
+			require.Nil(t, ca.privateKey) // this struct field is only used for CA's created by New()
 		})
 	}
 }
 
 func TestNew(t *testing.T) {
 	now := time.Now()
-	got, err := New(pkix.Name{CommonName: "Test CA"}, time.Minute)
+	ca, err := New(pkix.Name{CommonName: "Test CA"}, time.Minute)
 	require.NoError(t, err)
-	require.NotNil(t, got)
+	require.NotNil(t, ca)
 
 	// Make sure the CA certificate looks roughly like what we expect.
-	caCert, err := x509.ParseCertificate(got.caCertBytes)
+	caCert, err := x509.ParseCertificate(ca.caCertBytes)
 	require.NoError(t, err)
 	require.Equal(t, "Test CA", caCert.Subject.CommonName)
 	require.WithinDuration(t, now.Add(-10*time.Second), caCert.NotBefore, 10*time.Second)
 	require.WithinDuration(t, now.Add(time.Minute), caCert.NotAfter, 10*time.Second)
+
+	require.NotNil(t, ca.privateKey)
 }
 
 func TestNewInternal(t *testing.T) {
@@ -175,21 +178,34 @@ func TestNewInternal(t *testing.T) {
 }
 
 func TestBundle(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		ca := CA{caCertBytes: []byte{1, 2, 3, 4, 5, 6, 7, 8}}
-		got := ca.Bundle()
-		require.Equal(t, "-----BEGIN CERTIFICATE-----\nAQIDBAUGBwg=\n-----END CERTIFICATE-----\n", string(got))
-	})
+	ca := CA{caCertBytes: []byte{1, 2, 3, 4, 5, 6, 7, 8}}
+	certPEM := ca.Bundle()
+	require.Equal(t, "-----BEGIN CERTIFICATE-----\nAQIDBAUGBwg=\n-----END CERTIFICATE-----\n", string(certPEM))
+}
+
+func TestPrivateKeyToPEM(t *testing.T) {
+	ca, err := New(pkix.Name{CommonName: "Test CA"}, time.Hour)
+	require.NoError(t, err)
+	keyPEM, err := ca.PrivateKeyToPEM()
+	require.NoError(t, err)
+	require.Regexp(t, "(?s)-----BEGIN EC "+"PRIVATE KEY-----\n.*\n-----END EC PRIVATE KEY-----", string(keyPEM))
+	certPEM := ca.Bundle()
+	// Check that the public and private keys work together.
+	_, err = tls.X509KeyPair(certPEM, keyPEM)
+	require.NoError(t, err)
+
+	reloaded, err := Load(string(certPEM), string(keyPEM))
+	require.NoError(t, err)
+	_, err = reloaded.PrivateKeyToPEM()
+	require.EqualError(t, err, "no private key data (did you try to use this after Load?)")
 }
 
 func TestPool(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		ca, err := New(pkix.Name{CommonName: "test"}, 1*time.Hour)
-		require.NoError(t, err)
+	ca, err := New(pkix.Name{CommonName: "test"}, 1*time.Hour)
+	require.NoError(t, err)
 
-		got := ca.Pool()
-		require.Len(t, got.Subjects(), 1)
-	})
+	pool := ca.Pool()
+	require.Len(t, pool.Subjects(), 1)
 }
 
 type errSigner struct {

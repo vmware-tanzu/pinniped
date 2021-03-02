@@ -33,6 +33,7 @@ const (
 	// TODO don't hard code "pinniped-concierge-" in these strings. It should be constructed from the env app name.
 	impersonationProxyConfigMapName    = "pinniped-concierge-impersonation-proxy-config"
 	impersonationProxyTLSSecretName    = "pinniped-concierge-impersonation-proxy-tls-serving-certificate" //nolint:gosec // this is not a credential
+	impersonationProxyCASecretName     = "pinniped-concierge-impersonation-proxy-ca-certificate"
 	impersonationProxyLoadBalancerName = "pinniped-concierge-impersonation-proxy-load-balancer"
 )
 
@@ -160,21 +161,30 @@ func TestImpersonationProxy(t *testing.T) {
 		})
 	}
 
-	// Wait for ca data to be available at the secret location.
+	// Check that the controller generated a CA. Get the CA data so we can use it as a client.
+	// TODO We should be getting the CA data from the CredentialIssuer's status instead, once that is implemented.
 	var caSecret *corev1.Secret
-	require.Eventually(t,
-		func() bool {
-			caSecret, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName, metav1.GetOptions{})
-			return caSecret != nil && caSecret.Data["ca.crt"] != nil
-		}, 5*time.Minute, 250*time.Millisecond)
+	require.Eventually(t, func() bool {
+		caSecret, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyCASecretName, metav1.GetOptions{})
+		return err == nil && caSecret != nil && caSecret.Data["ca.crt"] != nil
+	}, 10*time.Second, 250*time.Millisecond)
+	caCertPEM := caSecret.Data["ca.crt"]
+
+	// Check that the generated TLS cert Secret was created by the controller.
+	// This could take a while if we are waiting for the load balancer to get an IP or hostname assigned to it, and it
+	// should be fast when we are not waiting for a load balancer (e.g. on kind).
+	require.Eventually(t, func() bool {
+		_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName, metav1.GetOptions{})
+		return err == nil
+	}, 5*time.Minute, 250*time.Millisecond)
 
 	// Create an impersonation proxy client with that CA data to use for the rest of this test.
 	// This client performs TLS checks, so it also provides test coverage that the impersonation proxy server is generating TLS certs correctly.
 	var impersonationProxyClient *kubernetes.Clientset
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
-		impersonationProxyClient = impersonationProxyViaLoadBalancerClient(impersonationProxyLoadBalancerIngress, caSecret.Data["ca.crt"])
+		impersonationProxyClient = impersonationProxyViaLoadBalancerClient(impersonationProxyLoadBalancerIngress, caCertPEM)
 	} else {
-		impersonationProxyClient = impersonationProxyViaSquidClient(caSecret.Data["ca.crt"])
+		impersonationProxyClient = impersonationProxyViaSquidClient(caCertPEM)
 	}
 
 	// Test that the user can perform basic actions through the client with their username and group membership
@@ -381,7 +391,7 @@ func TestImpersonationProxy(t *testing.T) {
 
 	// Check that the generated TLS cert Secret was deleted by the controller.
 	require.Eventually(t, func() bool {
-		caSecret, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName, metav1.GetOptions{})
+		_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName, metav1.GetOptions{})
 		return k8serrors.IsNotFound(err)
 	}, 10*time.Second, 250*time.Millisecond)
 }

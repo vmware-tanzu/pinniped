@@ -301,6 +301,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				controllerlib.WithInitialEvent,
 				"pinniped-concierge-impersonation-proxy-load-balancer",           // TODO this string should come from `c.NamesConfig`
 				"pinniped-concierge-impersonation-proxy-tls-serving-certificate", // TODO this string should come from `c.NamesConfig`
+				"pinniped-concierge-impersonation-proxy-ca-certificate",          // TODO this string should come from `c.NamesConfig`
 				c.Labels,
 				tls.Listen,
 				func() (http.Handler, error) {

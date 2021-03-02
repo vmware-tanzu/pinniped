@@ -99,7 +99,7 @@ func TestImpersonationProxy(t *testing.T) {
 		// Check that load balancer has been created.
 		library.RequireEventuallyWithoutError(t, func() (bool, error) {
 			return hasImpersonationProxyLoadBalancerService(ctx, env, adminClient)
-		}, 10*time.Second, 500*time.Millisecond)
+		}, 30*time.Second, 500*time.Millisecond)
 
 		// TODO this information should come from the CredentialIssuer status once that is implemented
 		// Wait for the load balancer to get an ingress and make a note of its address.

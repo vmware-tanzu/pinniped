@@ -41,7 +41,7 @@ import (
 
 // TestE2EFullIntegration tests a full integration scenario that combines the supervisor, concierge, and CLI.
 func TestE2EFullIntegration(t *testing.T) {
-	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+	env := library.IntegrationEnv(t)
 
 	// If anything in this test crashes, dump out the supervisor and proxy pod logs.
 	defer library.DumpLogs(t, env.SupervisorNamespace, "")
@@ -157,6 +157,8 @@ func TestE2EFullIntegration(t *testing.T) {
 	)
 	require.Equal(t, "", stderr)
 
+	t.Logf("test kubeconfig:\n%s\n\n", kubeconfigYAML)
+
 	restConfig := library.NewRestConfigFromKubeconfig(t, kubeconfigYAML)
 	require.NotNil(t, restConfig.ExecProvider)
 	require.Equal(t, []string{"login", "oidc"}, restConfig.ExecProvider.Args[:2])
@@ -171,7 +173,9 @@ func TestE2EFullIntegration(t *testing.T) {
 	// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 	start := time.Now()
 	kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-	kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+	if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+	}
 	stderrPipe, err := kubectlCmd.StderrPipe()
 	require.NoError(t, err)
 	stdoutPipe, err := kubectlCmd.StdoutPipe()
@@ -279,7 +283,9 @@ func TestE2EFullIntegration(t *testing.T) {
 
 	// 	Run kubectl again, which should work with no browser interaction.
 	kubectlCmd2 := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-	kubectlCmd2.Env = append(os.Environ(), env.ProxyEnv()...)
+	if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
+		kubectlCmd2.Env = append(os.Environ(), env.ProxyEnv()...)
+	}
 	start = time.Now()
 	kubectlOutput2, err := kubectlCmd2.CombinedOutput()
 	require.NoError(t, err)

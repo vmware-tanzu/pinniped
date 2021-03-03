@@ -113,7 +113,7 @@ docker build .
 1. Run the Pinniped integration tests:
 
    ```bash
-   source /tmp/integration-test-env && go test -v -count 1 ./test/integration
+   source /tmp/integration-test-env && go test -v -count 1 -timeout 0 ./test/integration
    ```
 
 1. After making production code changes, recompile, redeploy, and run tests again by repeating the same

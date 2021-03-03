@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -209,8 +210,8 @@ func (c *impersonatorConfigController) doSync(ctx context.Context) (*v1alpha1.Cr
 	}
 
 	waitingForLoadBalancer := false
+	var impersonationCA *certauthority.CA
 	if c.shouldHaveTLSSecret(config) {
-		var impersonationCA *certauthority.CA
 		if impersonationCA, err = c.ensureCASecretIsCreated(ctx); err != nil {
 			return nil, err
 		}
@@ -221,7 +222,7 @@ func (c *impersonatorConfigController) doSync(ctx context.Context) (*v1alpha1.Cr
 		return nil, err
 	}
 
-	return c.doSyncResult(waitingForLoadBalancer, config), nil
+	return c.doSyncResult(waitingForLoadBalancer, config, impersonationCA), nil
 }
 
 func (c *impersonatorConfigController) loadImpersonationProxyConfiguration() (*impersonator.Config, error) {
@@ -730,7 +731,7 @@ func (c *impersonatorConfigController) ensureTLSSecretIsRemoved(ctx context.Cont
 	return nil
 }
 
-func (c *impersonatorConfigController) doSyncResult(waitingForLoadBalancer bool, config *impersonator.Config) *v1alpha1.CredentialIssuerStrategy {
+func (c *impersonatorConfigController) doSyncResult(waitingForLoadBalancer bool, config *impersonator.Config, ca *certauthority.CA) *v1alpha1.CredentialIssuerStrategy {
 	switch {
 	case waitingForLoadBalancer:
 		return &v1alpha1.CredentialIssuerStrategy{
@@ -757,12 +758,33 @@ func (c *impersonatorConfigController) doSyncResult(waitingForLoadBalancer bool,
 			LastUpdateTime: metav1.NewTime(c.clock.Now()),
 		}
 	default:
+		var endpointName string
+		if config.Endpoint != "" {
+			endpointName = config.Endpoint
+		} else {
+			desiredIP, desiredHostname, _, _ := c.findTLSCertificateNameFromLoadBalancer()
+			switch {
+			case desiredIP != nil:
+				endpointName = desiredIP.String()
+			case desiredHostname != "":
+				endpointName = desiredHostname
+			default:
+				endpointName = "" // this shouldn't actually happen in practice
+			}
+		}
 		return &v1alpha1.CredentialIssuerStrategy{
 			Type:           v1alpha1.ImpersonationProxyStrategyType,
 			Status:         v1alpha1.SuccessStrategyStatus,
 			Reason:         v1alpha1.ListeningStrategyReason,
 			Message:        "impersonation proxy is ready to accept client connections",
 			LastUpdateTime: metav1.NewTime(c.clock.Now()),
+			Frontend: &v1alpha1.CredentialIssuerFrontend{
+				Type: v1alpha1.ImpersonationProxyFrontendType,
+				ImpersonationProxyInfo: &v1alpha1.ImpersonationProxyInfo{
+					Endpoint:                 "https://" + endpointName,
+					CertificateAuthorityData: base64.StdEncoding.EncodeToString(ca.Bundle()),
+				},
+			},
 		}
 	}
 }

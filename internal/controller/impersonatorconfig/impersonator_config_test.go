@@ -942,9 +942,8 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 				it("does not start the load balancer automatically", func() {
 					requireTLSServerIsRunningWithoutCerts()
-					r.Len(kubeAPIClient.Actions(), 2)
+					r.Len(kubeAPIClient.Actions(), 1)
 					requireNodesListed(kubeAPIClient.Actions()[0])
-					requireCASecretWasCreated(kubeAPIClient.Actions()[1])
 					requireCredentialIssuer(newErrorStrategy("could not find valid IP addresses or hostnames from load balancer some-namespace/some-service-resource-name"))
 				})
 			})

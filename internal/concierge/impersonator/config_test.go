@@ -18,6 +18,13 @@ func TestNewConfig(t *testing.T) {
 	require.Equal(t, &Config{Mode: ModeAuto}, NewConfig())
 }
 
+func TestHasEndpoint(t *testing.T) {
+	configWithoutEndpoint := Config{}
+	configWithEndpoint := Config{Endpoint: "something"}
+	require.False(t, configWithoutEndpoint.HasEndpoint())
+	require.True(t, configWithEndpoint.HasEndpoint())
+}
+
 func TestConfigFromConfigMap(t *testing.T) {
 	tests := []struct {
 		name       string

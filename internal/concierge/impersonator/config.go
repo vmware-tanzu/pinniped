@@ -41,6 +41,10 @@ type Config struct {
 	Endpoint string `json:"endpoint,omitempty"`
 }
 
+func (c *Config) HasEndpoint() bool {
+	return c.Endpoint != ""
+}
+
 func NewConfig() *Config {
 	return &Config{Mode: ModeAuto}
 }

@@ -170,6 +170,22 @@ func (c *impersonatorConfigController) Sync(syncCtx controllerlib.Context) error
 	return err
 }
 
+type certNameInfo struct {
+	// ready will be true when the certificate name information is known.
+	// ready will be false when it is pending because we are waiting for a load balancer to get assigned an ip/hostname.
+	// When false, the other fields in this struct should not be considered meaningful and may be zero values.
+	ready bool
+
+	// The IP address or hostname which was selected to be used as the name in the cert.
+	// Either selectedIP or selectedHostname will be set, but not both.
+	selectedIP       net.IP
+	selectedHostname string
+
+	// The name of the endpoint to which a client should connect to talk to the impersonator.
+	// This may be a hostname or an IP, and may include a port number.
+	clientEndpoint string
+}
+
 func (c *impersonatorConfigController) doSync(ctx context.Context) (*v1alpha1.CredentialIssuerStrategy, error) {
 	config, err := c.loadImpersonationProxyConfiguration()
 	if err != nil {
@@ -209,20 +225,24 @@ func (c *impersonatorConfigController) doSync(ctx context.Context) (*v1alpha1.Cr
 		}
 	}
 
-	waitingForLoadBalancer := false
+	nameInfo, err := c.findDesiredTLSCertificateName(config)
+	if err != nil {
+		return nil, err
+	}
+
 	var impersonationCA *certauthority.CA
 	if c.shouldHaveTLSSecret(config) {
 		if impersonationCA, err = c.ensureCASecretIsCreated(ctx); err != nil {
 			return nil, err
 		}
-		if waitingForLoadBalancer, err = c.ensureTLSSecret(ctx, config, impersonationCA); err != nil {
+		if err = c.ensureTLSSecret(ctx, nameInfo, impersonationCA); err != nil {
 			return nil, err
 		}
 	} else if err = c.ensureTLSSecretIsRemoved(ctx); err != nil {
 		return nil, err
 	}
 
-	return c.doSyncResult(waitingForLoadBalancer, config, impersonationCA), nil
+	return c.doSyncResult(nameInfo, config, impersonationCA), nil
 }
 
 func (c *impersonatorConfigController) loadImpersonationProxyConfiguration() (*impersonator.Config, error) {
@@ -270,7 +290,7 @@ func (c *impersonatorConfigController) disabledExplicitly(config *impersonator.C
 }
 
 func (c *impersonatorConfigController) shouldHaveLoadBalancer(config *impersonator.Config) bool {
-	return c.shouldHaveImpersonator(config) && config.Endpoint == ""
+	return c.shouldHaveImpersonator(config) && !config.HasEndpoint()
 }
 
 func (c *impersonatorConfigController) shouldHaveTLSSecret(config *impersonator.Config) bool {
@@ -400,17 +420,17 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.C
 	return c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedLoadBalancerServiceName, metav1.DeleteOptions{})
 }
 
-func (c *impersonatorConfigController) ensureTLSSecret(ctx context.Context, config *impersonator.Config, ca *certauthority.CA) (bool, error) {
+func (c *impersonatorConfigController) ensureTLSSecret(ctx context.Context, nameInfo *certNameInfo, ca *certauthority.CA) error {
 	secretFromInformer, err := c.secretsInformer.Lister().Secrets(c.namespace).Get(c.tlsSecretName)
 	notFound := k8serrors.IsNotFound(err)
 	if !notFound && err != nil {
-		return false, err
+		return err
 	}
 
 	if !notFound {
-		secretWasDeleted, err := c.deleteTLSSecretWhenCertificateDoesNotMatchDesiredState(ctx, config, ca, secretFromInformer)
+		secretWasDeleted, err := c.deleteTLSSecretWhenCertificateDoesNotMatchDesiredState(ctx, nameInfo, ca, secretFromInformer)
 		if err != nil {
-			return false, err
+			return err
 		}
 		// If it was deleted by the above call, then set it to nil. This allows us to avoid waiting
 		// for the informer cache to update before deciding to proceed to create the new Secret below.
@@ -419,10 +439,10 @@ func (c *impersonatorConfigController) ensureTLSSecret(ctx context.Context, conf
 		}
 	}
 
-	return c.ensureTLSSecretIsCreatedAndLoaded(ctx, config, secretFromInformer, ca)
+	return c.ensureTLSSecretIsCreatedAndLoaded(ctx, nameInfo, secretFromInformer, ca)
 }
 
-func (c *impersonatorConfigController) deleteTLSSecretWhenCertificateDoesNotMatchDesiredState(ctx context.Context, config *impersonator.Config, ca *certauthority.CA, secret *v1.Secret) (bool, error) {
+func (c *impersonatorConfigController) deleteTLSSecretWhenCertificateDoesNotMatchDesiredState(ctx context.Context, nameInfo *certNameInfo, ca *certauthority.CA, secret *v1.Secret) (bool, error) {
 	certPEM := secret.Data[v1.TLSCertKey]
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
@@ -471,11 +491,7 @@ func (c *impersonatorConfigController) deleteTLSSecretWhenCertificateDoesNotMatc
 		return true, nil
 	}
 
-	desiredIP, desiredHostname, nameIsReady, err := c.findDesiredTLSCertificateName(config)
-	if err != nil {
-		return false, err
-	}
-	if !nameIsReady {
+	if !nameInfo.ready {
 		// We currently have a secret but we are waiting for a load balancer to be assigned an ingress, so
 		// our current secret must be old/unwanted.
 		if err = c.ensureTLSSecretIsRemoved(ctx); err != nil {
@@ -487,14 +503,14 @@ func (c *impersonatorConfigController) deleteTLSSecretWhenCertificateDoesNotMatc
 	actualIPs := actualCertFromSecret.IPAddresses
 	actualHostnames := actualCertFromSecret.DNSNames
 	plog.Info("Checking TLS certificate names",
-		"desiredIP", desiredIP,
-		"desiredHostname", desiredHostname,
+		"desiredIP", nameInfo.selectedIP,
+		"desiredHostname", nameInfo.selectedHostname,
 		"actualIPs", actualIPs,
 		"actualHostnames", actualHostnames,
 		"secret", c.tlsSecretName,
 		"namespace", c.namespace)
 
-	if certHostnameAndIPMatchDesiredState(desiredIP, actualIPs, desiredHostname, actualHostnames) {
+	if certHostnameAndIPMatchDesiredState(nameInfo.selectedIP, actualIPs, nameInfo.selectedHostname, actualHostnames) {
 		// The cert already matches the desired state, so there is no need to delete/recreate it.
 		return false, nil
 	}
@@ -515,36 +531,30 @@ func certHostnameAndIPMatchDesiredState(desiredIP net.IP, actualIPs []net.IP, de
 	return false
 }
 
-func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx context.Context, config *impersonator.Config, secret *v1.Secret, ca *certauthority.CA) (bool, error) {
+func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx context.Context, nameInfo *certNameInfo, secret *v1.Secret, ca *certauthority.CA) error {
 	if secret != nil {
 		err := c.loadTLSCertFromSecret(secret)
 		if err != nil {
-			return false, err
+			return err
 		}
-		return false, nil
+		return nil
 	}
 
-	ip, hostname, nameIsReady, err := c.findDesiredTLSCertificateName(config)
-	if err != nil {
-		return false, err
-	}
-	if !nameIsReady {
-		// Sync will get called again when the load balancer is updated with its ingress info, so this is not an error.
-		// Return "true" meaning that we are waiting for the load balancer.
-		return true, nil
+	if !nameInfo.ready {
+		return nil
 	}
 
-	newTLSSecret, err := c.createNewTLSSecret(ctx, ca, ip, hostname)
+	newTLSSecret, err := c.createNewTLSSecret(ctx, ca, nameInfo.selectedIP, nameInfo.selectedHostname)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	err = c.loadTLSCertFromSecret(newTLSSecret)
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	return false, nil
+	return nil
 }
 
 func (c *impersonatorConfigController) ensureCASecretIsCreated(ctx context.Context) (*certauthority.CA, error) {
@@ -602,55 +612,55 @@ func (c *impersonatorConfigController) createCASecret(ctx context.Context) (*cer
 	return impersonationCA, nil
 }
 
-func (c *impersonatorConfigController) findDesiredTLSCertificateName(config *impersonator.Config) (net.IP, string, bool, error) {
-	if config.Endpoint != "" {
+func (c *impersonatorConfigController) findDesiredTLSCertificateName(config *impersonator.Config) (*certNameInfo, error) {
+	if config.HasEndpoint() {
 		return c.findTLSCertificateNameFromEndpointConfig(config)
 	}
 	return c.findTLSCertificateNameFromLoadBalancer()
 }
 
-func (c *impersonatorConfigController) findTLSCertificateNameFromEndpointConfig(config *impersonator.Config) (net.IP, string, bool, error) {
-	endpointWithoutPort := strings.Split(config.Endpoint, ":")[0]
+func (c *impersonatorConfigController) findTLSCertificateNameFromEndpointConfig(config *impersonator.Config) (*certNameInfo, error) {
+	endpointMaybeWithPort := config.Endpoint
+	endpointWithoutPort := strings.Split(endpointMaybeWithPort, ":")[0]
 	parsedAsIP := net.ParseIP(endpointWithoutPort)
 	if parsedAsIP != nil {
-		return parsedAsIP, "", true, nil
+		return &certNameInfo{ready: true, selectedIP: parsedAsIP, clientEndpoint: endpointMaybeWithPort}, nil
 	}
-	return nil, endpointWithoutPort, true, nil
+	return &certNameInfo{ready: true, selectedHostname: endpointWithoutPort, clientEndpoint: endpointMaybeWithPort}, nil
 }
 
-func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() (net.IP, string, bool, error) {
+func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() (*certNameInfo, error) {
 	lb, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedLoadBalancerServiceName)
 	notFound := k8serrors.IsNotFound(err)
 	if notFound {
-		// Although we created the load balancer, maybe it hasn't been cached in the informer yet.
 		// We aren't ready and will try again later in this case.
-		return nil, "", false, nil
+		return &certNameInfo{ready: false}, nil
 	}
 	if err != nil {
-		return nil, "", false, err
+		return nil, err
 	}
 	ingresses := lb.Status.LoadBalancer.Ingress
 	if len(ingresses) == 0 || (ingresses[0].Hostname == "" && ingresses[0].IP == "") {
 		plog.Info("load balancer for impersonation proxy does not have an ingress yet, so skipping tls cert generation while we wait",
 			"service", c.generatedLoadBalancerServiceName,
 			"namespace", c.namespace)
-		return nil, "", false, nil
+		return &certNameInfo{ready: false}, nil
 	}
 	for _, ingress := range ingresses {
 		hostname := ingress.Hostname
 		if hostname != "" {
-			return nil, hostname, true, nil
+			return &certNameInfo{ready: true, selectedHostname: hostname, clientEndpoint: hostname}, nil
 		}
 	}
 	for _, ingress := range ingresses {
 		ip := ingress.IP
 		parsedIP := net.ParseIP(ip)
 		if parsedIP != nil {
-			return parsedIP, "", true, nil
+			return &certNameInfo{ready: true, selectedIP: parsedIP, clientEndpoint: ip}, nil
 		}
 	}
 
-	return nil, "", false, fmt.Errorf("could not find valid IP addresses or hostnames from load balancer %s/%s", c.namespace, lb.Name)
+	return nil, fmt.Errorf("could not find valid IP addresses or hostnames from load balancer %s/%s", c.namespace, lb.Name)
 }
 
 func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, ca *certauthority.CA, ip net.IP, hostname string) (*v1.Secret, error) {
@@ -731,16 +741,8 @@ func (c *impersonatorConfigController) ensureTLSSecretIsRemoved(ctx context.Cont
 	return nil
 }
 
-func (c *impersonatorConfigController) doSyncResult(waitingForLoadBalancer bool, config *impersonator.Config, ca *certauthority.CA) *v1alpha1.CredentialIssuerStrategy {
+func (c *impersonatorConfigController) doSyncResult(nameInfo *certNameInfo, config *impersonator.Config, ca *certauthority.CA) *v1alpha1.CredentialIssuerStrategy {
 	switch {
-	case waitingForLoadBalancer:
-		return &v1alpha1.CredentialIssuerStrategy{
-			Type:           v1alpha1.ImpersonationProxyStrategyType,
-			Status:         v1alpha1.ErrorStrategyStatus,
-			Reason:         v1alpha1.PendingStrategyReason,
-			Message:        "waiting for load balancer Service to be assigned IP or hostname",
-			LastUpdateTime: metav1.NewTime(c.clock.Now()),
-		}
 	case c.disabledExplicitly(config):
 		return &v1alpha1.CredentialIssuerStrategy{
 			Type:           v1alpha1.ImpersonationProxyStrategyType,
@@ -757,21 +759,15 @@ func (c *impersonatorConfigController) doSyncResult(waitingForLoadBalancer bool,
 			Message:        "automatically determined that impersonation proxy should be disabled",
 			LastUpdateTime: metav1.NewTime(c.clock.Now()),
 		}
-	default:
-		var endpointName string
-		if config.Endpoint != "" {
-			endpointName = config.Endpoint
-		} else {
-			desiredIP, desiredHostname, _, _ := c.findTLSCertificateNameFromLoadBalancer()
-			switch {
-			case desiredIP != nil:
-				endpointName = desiredIP.String()
-			case desiredHostname != "":
-				endpointName = desiredHostname
-			default:
-				endpointName = "" // this shouldn't actually happen in practice
-			}
+	case !nameInfo.ready:
+		return &v1alpha1.CredentialIssuerStrategy{
+			Type:           v1alpha1.ImpersonationProxyStrategyType,
+			Status:         v1alpha1.ErrorStrategyStatus,
+			Reason:         v1alpha1.PendingStrategyReason,
+			Message:        "waiting for load balancer Service to be assigned IP or hostname",
+			LastUpdateTime: metav1.NewTime(c.clock.Now()),
 		}
+	default:
 		return &v1alpha1.CredentialIssuerStrategy{
 			Type:           v1alpha1.ImpersonationProxyStrategyType,
 			Status:         v1alpha1.SuccessStrategyStatus,
@@ -781,7 +777,7 @@ func (c *impersonatorConfigController) doSyncResult(waitingForLoadBalancer bool,
 			Frontend: &v1alpha1.CredentialIssuerFrontend{
 				Type: v1alpha1.ImpersonationProxyFrontendType,
 				ImpersonationProxyInfo: &v1alpha1.ImpersonationProxyInfo{
-					Endpoint:                 "https://" + endpointName,
+					Endpoint:                 "https://" + nameInfo.clientEndpoint,
 					CertificateAuthorityData: base64.StdEncoding.EncodeToString(ca.Bundle()),
 				},
 			},

@@ -5,16 +5,16 @@ package v1alpha1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-// +kubebuilder:validation:Enum=KubeClusterSigningCertificate
+// +kubebuilder:validation:Enum=KubeClusterSigningCertificate;ImpersonationProxy
 type StrategyType string
 
-// +kubebuilder:validation:Enum=TokenCredentialRequestAPI
+// +kubebuilder:validation:Enum=TokenCredentialRequestAPI;ImpersonationProxy
 type FrontendType string
 
 // +kubebuilder:validation:Enum=Success;Error
 type StrategyStatus string
 
-// +kubebuilder:validation:Enum=FetchedKey;CouldNotFetchKey
+// +kubebuilder:validation:Enum=Listening;Pending;Disabled;ErrorDuringSetup;CouldNotFetchKey;CouldNotGetClusterInfo;FetchedKey
 type StrategyReason string
 
 const (

@@ -95,8 +95,6 @@ func TestImpersonationProxy(t *testing.T) {
 		require.NoError(t, adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, impersonationProxyConfigMapName(env), metav1.DeleteOptions{}))
 	}
 
-	impersonationProxyLoadBalancerIngress := ""
-
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) { //nolint:nestif // come on... it's just a test
 		// Check that load balancer has been automatically created by the impersonator's "auto" mode.
 		library.RequireEventuallyWithoutError(t, func() (bool, error) {
@@ -331,7 +329,7 @@ func TestImpersonationProxy(t *testing.T) {
 		// impersonate headers to the request.
 		var doubleImpersonationClient *kubernetes.Clientset
 		if env.HasCapability(library.HasExternalLoadBalancerProvider) {
-			doubleImpersonationClient = impersonationProxyViaLoadBalancerClient(impersonationProxyLoadBalancerIngress, impersonationProxyCACertPEM, "other-user-to-impersonate")
+			doubleImpersonationClient = impersonationProxyViaLoadBalancerClient(impersonationProxyURL, impersonationProxyCACertPEM, "other-user-to-impersonate")
 		} else {
 			doubleImpersonationClient = impersonationProxyViaSquidClient(impersonationProxyCACertPEM, "other-user-to-impersonate")
 		}

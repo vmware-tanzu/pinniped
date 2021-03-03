@@ -5,6 +5,7 @@ package integration
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -24,6 +25,8 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
 
+	"go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	"go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/concierge/impersonator"
 	"go.pinniped.dev/internal/testutil/impersonationtoken"
 	"go.pinniped.dev/test/library"
@@ -36,11 +39,12 @@ import (
 func TestImpersonationProxy(t *testing.T) {
 	env := library.IntegrationEnv(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 
 	// Create a client using the admin kubeconfig.
 	adminClient := library.NewKubernetesClientset(t)
+	adminConciergeClient := library.NewConciergeClientset(t)
 
 	// Create a WebhookAuthenticator.
 	authenticator := library.CreateTestWebhookAuthenticator(ctx, t)
@@ -64,8 +68,7 @@ func TestImpersonationProxy(t *testing.T) {
 
 	impersonationProxyViaSquidClient := func(caData []byte, doubleImpersonateUser string) *kubernetes.Clientset {
 		t.Helper()
-		host := fmt.Sprintf("https://%s", proxyServiceEndpoint)
-		kubeconfig := impersonationProxyRestConfig(host, caData, doubleImpersonateUser)
+		kubeconfig := impersonationProxyRestConfig("https://"+proxyServiceEndpoint, caData, doubleImpersonateUser)
 		kubeconfig.Proxy = func(req *http.Request) (*url.URL, error) {
 			proxyURL, err := url.Parse(env.Proxy)
 			require.NoError(t, err)
@@ -77,10 +80,9 @@ func TestImpersonationProxy(t *testing.T) {
 		return impersonationProxyClient
 	}
 
-	impersonationProxyViaLoadBalancerClient := func(host string, caData []byte, doubleImpersonateUser string) *kubernetes.Clientset {
+	impersonationProxyViaLoadBalancerClient := func(proxyURL string, caData []byte, doubleImpersonateUser string) *kubernetes.Clientset {
 		t.Helper()
-		host = fmt.Sprintf("https://%s", host)
-		kubeconfig := impersonationProxyRestConfig(host, caData, doubleImpersonateUser)
+		kubeconfig := impersonationProxyRestConfig(proxyURL, caData, doubleImpersonateUser)
 		impersonationProxyClient, err := kubernetes.NewForConfig(kubeconfig)
 		require.NoError(t, err, "unexpected failure from kubernetes.NewForConfig()")
 		return impersonationProxyClient
@@ -96,33 +98,16 @@ func TestImpersonationProxy(t *testing.T) {
 	impersonationProxyLoadBalancerIngress := ""
 
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) { //nolint:nestif // come on... it's just a test
-		// Check that load balancer has been created.
+		// Check that load balancer has been automatically created by the impersonator's "auto" mode.
 		library.RequireEventuallyWithoutError(t, func() (bool, error) {
 			return hasImpersonationProxyLoadBalancerService(ctx, env, adminClient)
 		}, 30*time.Second, 500*time.Millisecond)
-
-		// TODO this information should come from the CredentialIssuer status once that is implemented
-		// Wait for the load balancer to get an ingress and make a note of its address.
-		var ingress *corev1.LoadBalancerIngress
-		library.RequireEventuallyWithoutError(t, func() (bool, error) {
-			ingress, err = getImpersonationProxyLoadBalancerIngress(ctx, env, adminClient)
-			if err != nil {
-				return false, err
-			}
-			return ingress != nil, nil
-		}, 10*time.Second, 500*time.Millisecond)
-		if ingress.Hostname != "" {
-			impersonationProxyLoadBalancerIngress = ingress.Hostname
-		} else {
-			require.NotEmpty(t, ingress.IP, "the ingress should have either a hostname or IP, but it didn't")
-			impersonationProxyLoadBalancerIngress = ingress.IP
-		}
 	} else {
 		require.NotEmpty(t, env.Proxy,
 			"test cluster does not support load balancers but also doesn't have a squid proxy... "+
 				"this is not a supported configuration for test clusters")
 
-		// Check that no load balancer has been created.
+		// Check that no load balancer has been created by the impersonator's "auto" mode.
 		library.RequireNeverWithoutError(t, func() (bool, error) {
 			return hasImpersonationProxyLoadBalancerService(ctx, env, adminClient)
 		}, 10*time.Second, 500*time.Millisecond)
@@ -131,7 +116,7 @@ func TestImpersonationProxy(t *testing.T) {
 		_, err = impersonationProxyViaSquidClient(nil, "").CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 		require.EqualError(t, err, serviceUnavailableViaSquidError)
 
-		// Create configuration to make the impersonation proxy turn on with a hard coded endpoint (without a LoadBalancer).
+		// Create configuration to make the impersonation proxy turn on with a hard coded endpoint (without a load balancer).
 		configMap := configMapForConfig(t, env, impersonator.Config{
 			Mode:     impersonator.ModeEnabled,
 			Endpoint: proxyServiceEndpoint,
@@ -159,29 +144,21 @@ func TestImpersonationProxy(t *testing.T) {
 		})
 	}
 
-	// Check that the controller generated a CA. Get the CA data so we can use it as a client.
-	// TODO We should be getting the CA data from the CredentialIssuer's status instead, once that is implemented.
-	var caSecret *corev1.Secret
-	require.Eventually(t, func() bool {
-		caSecret, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyCASecretName(env), metav1.GetOptions{})
-		return err == nil && caSecret != nil && caSecret.Data["ca.crt"] != nil
-	}, 10*time.Second, 250*time.Millisecond)
-	impersonationProxyCACertPEM := caSecret.Data["ca.crt"]
-
-	// Check that the generated TLS cert Secret was created by the controller.
-	// This could take a while if we are waiting for the load balancer to get an IP or hostname assigned to it, and it
-	// should be fast when we are not waiting for a load balancer (e.g. on kind).
-	require.Eventually(t, func() bool {
-		_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
-		return err == nil
-	}, 5*time.Minute, 250*time.Millisecond)
+	// At this point the impersonator should be starting/running. When it is ready, the CredentialIssuer's
+	// strategies array should be updated to include a successful impersonation strategy which can be used
+	// to discover the impersonator's URL and CA certificate. Until it has finished starting, it may not be included
+	// in the strategies array or it may be included in an error state. It can be in an error state for
+	// awhile when it is waiting for the load balancer to be assigned an ip/hostname.
+	impersonationProxyURL, impersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
 
 	// Create an impersonation proxy client with that CA data to use for the rest of this test.
 	// This client performs TLS checks, so it also provides test coverage that the impersonation proxy server is generating TLS certs correctly.
 	var impersonationProxyClient *kubernetes.Clientset
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
-		impersonationProxyClient = impersonationProxyViaLoadBalancerClient(impersonationProxyLoadBalancerIngress, impersonationProxyCACertPEM, "")
+		impersonationProxyClient = impersonationProxyViaLoadBalancerClient(impersonationProxyURL, impersonationProxyCACertPEM, "")
 	} else {
+		// In this case, we specified the endpoint in the configmap, so check that it was reported correctly in the CredentialIssuer.
+		require.Equal(t, "https://"+proxyServiceEndpoint, impersonationProxyURL)
 		impersonationProxyClient = impersonationProxyViaSquidClient(impersonationProxyCACertPEM, "")
 	}
 
@@ -359,8 +336,8 @@ func TestImpersonationProxy(t *testing.T) {
 			doubleImpersonationClient = impersonationProxyViaSquidClient(impersonationProxyCACertPEM, "other-user-to-impersonate")
 		}
 
-		// We already know that this Secret exists because we checked above. Now see that we can get it through
-		// the impersonation proxy without any impersonation headers on the request.
+		// Check that we can get some resource through the impersonation proxy without any impersonation headers on the request.
+		// We could use any resource for this, but we happen to know that this one should exist.
 		_, err = impersonationProxyClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
 		require.NoError(t, err)
 
@@ -385,12 +362,12 @@ func TestImpersonationProxy(t *testing.T) {
 	}
 
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
-		// The load balancer should not exist after we disable the impersonation proxy.
+		// The load balancer should have been deleted when we disabled the impersonation proxy.
 		// Note that this can take kind of a long time on real cloud providers (e.g. ~22 seconds on EKS).
 		library.RequireEventuallyWithoutError(t, func() (bool, error) {
 			hasService, err := hasImpersonationProxyLoadBalancerService(ctx, env, adminClient)
 			return !hasService, err
-		}, time.Minute, 500*time.Millisecond)
+		}, 2*time.Minute, 500*time.Millisecond)
 	}
 
 	// Check that the impersonation proxy port has shut down.
@@ -407,14 +384,100 @@ func TestImpersonationProxy(t *testing.T) {
 		}, 20*time.Second, 500*time.Millisecond)
 	}
 
-	// Check that the generated TLS cert Secret was deleted by the controller.
+	// Check that the generated TLS cert Secret was deleted by the controller because it's supposed to clean this up
+	// when we disable the impersonator.
 	require.Eventually(t, func() bool {
 		_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
 		return k8serrors.IsNotFound(err)
 	}, 10*time.Second, 250*time.Millisecond)
+
+	// Check that the generated CA cert Secret was not deleted by the controller because it's supposed to keep this
+	// around in case we decide to later re-enable the impersonator. We want to avoid generating new CA certs when
+	// possible because they make their way into kubeconfigs on client machines.
+	_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyCASecretName(env), metav1.GetOptions{})
+	require.NoError(t, err)
+
+	// At this point the impersonator should be stopped. The CredentialIssuer's strategies array should be updated to
+	// include an unsuccessful impersonation strategy saying that it was manually configured to be disabled.
+	requireDisabledByConfigurationStrategy(ctx, t, env, adminConciergeClient)
+}
+
+func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *library.TestEnv, adminConciergeClient versioned.Interface) (string, []byte) {
+	t.Helper()
+	var impersonationProxyURL string
+	var impersonationProxyCACertPEM []byte
+
+	t.Log("Waiting for CredentialIssuer strategy to be successful")
+
+	library.RequireEventuallyWithoutError(t, func() (bool, error) {
+		credentialIssuer, err := adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuerName(env), metav1.GetOptions{})
+		if err != nil || credentialIssuer.Status.Strategies == nil {
+			t.Log("Did not find any CredentialIssuer with any strategies")
+			return false, nil // didn't find it, but keep trying
+		}
+		for _, strategy := range credentialIssuer.Status.Strategies {
+			// There will be other strategy types in the list, so ignore those.
+			if strategy.Type == v1alpha1.ImpersonationProxyStrategyType && strategy.Status == v1alpha1.SuccessStrategyStatus { //nolint:nestif
+				if strategy.Frontend == nil {
+					return false, fmt.Errorf("did not find a Frontend") // unexpected, fail the test
+				}
+				if strategy.Frontend.ImpersonationProxyInfo == nil {
+					return false, fmt.Errorf("did not find an ImpersonationProxyInfo") // unexpected, fail the test
+				}
+				impersonationProxyURL = strategy.Frontend.ImpersonationProxyInfo.Endpoint
+				impersonationProxyCACertPEM, err = base64.StdEncoding.DecodeString(strategy.Frontend.ImpersonationProxyInfo.CertificateAuthorityData)
+				if err != nil {
+					return false, err // unexpected, fail the test
+				}
+				return true, nil // found it, continue the test!
+			} else if strategy.Type == v1alpha1.ImpersonationProxyStrategyType {
+				t.Logf("Waiting for successful impersonation proxy strategy on %s: found status %s with reason %s and message: %s",
+					credentialIssuerName(env), strategy.Status, strategy.Reason, strategy.Message)
+				if strategy.Reason == v1alpha1.ErrorDuringSetupStrategyReason {
+					// The server encountered an unexpected error while starting the impersonator, so fail the test fast.
+					return false, fmt.Errorf("found impersonation strategy in %s state with message: %s", strategy.Reason, strategy.Message)
+				}
+			}
+		}
+		t.Log("Did not find any impersonation proxy strategy on CredentialIssuer")
+		return false, nil // didn't find it, but keep trying
+	}, 10*time.Minute, 10*time.Second)
+
+	t.Log("Found successful CredentialIssuer strategy")
+	return impersonationProxyURL, impersonationProxyCACertPEM
+}
+
+func requireDisabledByConfigurationStrategy(ctx context.Context, t *testing.T, env *library.TestEnv, adminConciergeClient versioned.Interface) {
+	t.Helper()
+
+	library.RequireEventuallyWithoutError(t, func() (bool, error) {
+		credentialIssuer, err := adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuerName(env), metav1.GetOptions{})
+		if err != nil || credentialIssuer.Status.Strategies == nil {
+			t.Log("Did not find any CredentialIssuer with any strategies")
+			return false, nil // didn't find it, but keep trying
+		}
+		for _, strategy := range credentialIssuer.Status.Strategies {
+			// There will be other strategy types in the list, so ignore those.
+			if strategy.Type == v1alpha1.ImpersonationProxyStrategyType &&
+				strategy.Status == v1alpha1.ErrorStrategyStatus &&
+				strategy.Reason == v1alpha1.DisabledStrategyReason { //nolint:nestif
+				return true, nil // found it, continue the test!
+			} else if strategy.Type == v1alpha1.ImpersonationProxyStrategyType {
+				t.Logf("Waiting for disabled impersonation proxy strategy on %s: found status %s with reason %s and message: %s",
+					credentialIssuerName(env), strategy.Status, strategy.Reason, strategy.Message)
+				if strategy.Reason == v1alpha1.ErrorDuringSetupStrategyReason {
+					// The server encountered an unexpected error while stopping the impersonator, so fail the test fast.
+					return false, fmt.Errorf("found impersonation strategy in %s state with message: %s", strategy.Reason, strategy.Message)
+				}
+			}
+		}
+		t.Log("Did not find any impersonation proxy strategy on CredentialIssuer")
+		return false, nil // didn't find it, but keep trying
+	}, 1*time.Minute, 500*time.Millisecond)
 }
 
 func configMapForConfig(t *testing.T, env *library.TestEnv, config impersonator.Config) corev1.ConfigMap {
+	t.Helper()
 	configString, err := yaml.Marshal(config)
 	require.NoError(t, err)
 	configMap := corev1.ConfigMap{
@@ -438,21 +501,6 @@ func hasImpersonationProxyLoadBalancerService(ctx context.Context, env *library.
 	return service.Spec.Type == corev1.ServiceTypeLoadBalancer, nil
 }
 
-func getImpersonationProxyLoadBalancerIngress(ctx context.Context, env *library.TestEnv, client kubernetes.Interface) (*corev1.LoadBalancerIngress, error) {
-	service, err := client.CoreV1().Services(env.ConciergeNamespace).Get(ctx, impersonationProxyLoadBalancerName(env), metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-	ingresses := service.Status.LoadBalancer.Ingress
-	if len(ingresses) > 1 {
-		return nil, fmt.Errorf("didn't expect multiple ingresses, but if it happens then maybe this test needs to be adjusted")
-	}
-	if len(ingresses) == 0 {
-		return nil, nil
-	}
-	return &ingresses[0], nil
-}
-
 func impersonationProxyConfigMapName(env *library.TestEnv) string {
 	return env.ConciergeAppName + "-impersonation-proxy-config"
 }
@@ -467,4 +515,8 @@ func impersonationProxyCASecretName(env *library.TestEnv) string {
 
 func impersonationProxyLoadBalancerName(env *library.TestEnv) string {
 	return env.ConciergeAppName + "-impersonation-proxy-load-balancer"
+}
+
+func credentialIssuerName(env *library.TestEnv) string {
+	return env.ConciergeAppName + "-config"
 }

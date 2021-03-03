@@ -101,7 +101,7 @@ type TokenCredentialRequestAPIInfo struct {
 	// +kubebuilder:validation:Pattern=`^https://|^http://`
 	Server string `json:"server"`
 
-	// CertificateAuthorityData is the Kubernetes API server CA bundle.
+	// CertificateAuthorityData is the base64-encoded Kubernetes API server CA bundle.
 	// +kubebuilder:validation:MinLength=1
 	CertificateAuthorityData string `json:"certificateAuthorityData"`
 }

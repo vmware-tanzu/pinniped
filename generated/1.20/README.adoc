@@ -347,7 +347,7 @@ Status of a credential issuer.
 |===
 | Field | Description
 | *`server`* __string__ | Server is the Kubernetes API server URL.
-| *`certificateAuthorityData`* __string__ | CertificateAuthorityData is the Kubernetes API server CA bundle.
+| *`certificateAuthorityData`* __string__ | CertificateAuthorityData is the base64-encoded Kubernetes API server CA bundle.
 |===
 
 

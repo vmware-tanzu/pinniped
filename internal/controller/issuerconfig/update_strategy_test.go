@@ -4,9 +4,13 @@
 package issuerconfig
 
 import (
+	"math/rand"
+	"sort"
 	"testing"
+	"testing/quick"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -184,4 +188,31 @@ func TestMergeStrategy(t *testing.T) {
 			require.Equal(t, &tt.expected, updated)
 		})
 	}
+}
+
+func TestStrategySorting(t *testing.T) {
+	expected := []v1alpha1.CredentialIssuerStrategy{
+		{Type: v1alpha1.KubeClusterSigningCertificateStrategyType},
+		{Type: v1alpha1.ImpersonationProxyStrategyType},
+		{Type: "Type1"},
+		{Type: "Type2"},
+		{Type: "Type3"},
+	}
+	require.NoError(t, quick.Check(func(seed int64) bool {
+		// Create a randomly shuffled copy of the expected output.
+		//nolint:gosec // this is not meant to be a secure random, just a seeded RNG for shuffling deterministically
+		rng := rand.New(rand.NewSource(seed))
+		output := make([]v1alpha1.CredentialIssuerStrategy, len(expected))
+		copy(output, expected)
+		rng.Shuffle(
+			len(output),
+			func(i, j int) { output[i], output[j] = output[j], output[i] },
+		)
+
+		// Sort it using the code under test.
+		sort.Stable(sortableStrategies(output))
+
+		// Assert that it's sorted back to the expected output order.
+		return assert.Equal(t, expected, output)
+	}, nil))
 }

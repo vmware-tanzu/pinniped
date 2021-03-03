@@ -2116,7 +2116,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
 				requireCASecretWasCreated(kubeAPIClient.Actions()[2])
 				credentialIssuer := getCredentialIssuer()
-				r.Equal([]v1alpha1.CredentialIssuerStrategy{newPendingStrategy(), preExistingStrategy}, credentialIssuer.Status.Strategies)
+				r.Equal([]v1alpha1.CredentialIssuerStrategy{preExistingStrategy, newPendingStrategy()}, credentialIssuer.Status.Strategies)
 			})
 		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))

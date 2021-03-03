@@ -28,7 +28,6 @@ import (
 	"go.pinniped.dev/internal/kubeclient"
 )
 
-// nolint: gochecknoglobals
 var impersonateHeaderRegex = regexp.MustCompile("Impersonate-.*")
 
 type proxy struct {

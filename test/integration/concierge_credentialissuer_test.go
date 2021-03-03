@@ -64,9 +64,20 @@ func TestCredentialIssuer(t *testing.T) {
 
 		// Verify the cluster strategy status based on what's expected of the test cluster's ability to share signing keys.
 		actualStatusStrategies := actualConfigList.Items[0].Status.Strategies
-		require.Len(t, actualStatusStrategies, 1)
-		actualStatusStrategy := actualStatusStrategies[0]
-		require.Equal(t, configv1alpha1.KubeClusterSigningCertificateStrategyType, actualStatusStrategy.Type)
+
+		// There should be two. One of type KubeClusterSigningCertificate and one of type ImpersonationProxy.
+		require.Len(t, actualStatusStrategies, 2)
+
+		// The details of the ImpersonationProxy type is tested by a different integration test for the impersonator.
+		// Grab the KubeClusterSigningCertificate result so we can check it in detail below.
+		var actualStatusStrategy configv1alpha1.CredentialIssuerStrategy
+		for _, s := range actualStatusStrategies {
+			if s.Type == configv1alpha1.KubeClusterSigningCertificateStrategyType {
+				actualStatusStrategy = s
+				break
+			}
+		}
+		require.NotNil(t, actualStatusStrategy)
 
 		if env.HasCapability(library.ClusterSigningKeyIsAvailable) {
 			require.Equal(t, configv1alpha1.SuccessStrategyStatus, actualStatusStrategy.Status)

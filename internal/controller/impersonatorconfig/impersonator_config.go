@@ -385,7 +385,7 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.C
 			Type: v1.ServiceTypeLoadBalancer,
 			Ports: []v1.ServicePort{
 				{
-					TargetPort: intstr.FromString(impersonationProxyPort),
+					TargetPort: intstr.Parse(impersonationProxyPort),
 					Port:       defaultHTTPSPort,
 					Protocol:   v1.ProtocolTCP,
 				},

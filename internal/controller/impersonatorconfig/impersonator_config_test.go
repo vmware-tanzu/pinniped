@@ -721,14 +721,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			}
 		}
 
-		var requireCredentialIssuer = func(expectedStrategy v1alpha1.CredentialIssuerStrategy) {
-			// Rather than looking at the specific API actions on pinnipedAPIClient, we just look
-			// at the final result here.
-			// This is because the implementation is using a helper from another package to create
-			// and update the CredentialIssuer, and the specific API actions performed by that
-			// implementation are pretty complex and are already tested by its own unit tests.
-			// As long as we get the final result that we wanted then we are happy for the purposes
-			// of this test.
+		var getCredentialIssuer = func() *v1alpha1.CredentialIssuer {
 			credentialIssuerObj, err := pinnipedAPIClient.Tracker().Get(
 				schema.GroupVersionResource{
 					Group:    v1alpha1.SchemeGroupVersion.Group,
@@ -739,6 +732,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.NoError(err)
 			credentialIssuer, ok := credentialIssuerObj.(*v1alpha1.CredentialIssuer)
 			r.True(ok, "should have been able to cast this obj to CredentialIssuer: %v", credentialIssuerObj)
+			return credentialIssuer
+		}
+
+		var requireCredentialIssuer = func(expectedStrategy v1alpha1.CredentialIssuerStrategy) {
+			// Rather than looking at the specific API actions on pinnipedAPIClient, we just look
+			// at the final result here.
+			// This is because the implementation is using a helper from another package to create
+			// and update the CredentialIssuer, and the specific API actions performed by that
+			// implementation are pretty complex and are already tested by its own unit tests.
+			// As long as we get the final result that we wanted then we are happy for the purposes
+			// of this test.
+			credentialIssuer := getCredentialIssuer()
 			r.Equal(labels, credentialIssuer.Labels)
 			r.Equal([]v1alpha1.CredentialIssuerStrategy{expectedStrategy}, credentialIssuer.Status.Strategies)
 		}
@@ -2079,6 +2084,39 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					startInformersAndController()
 					r.EqualError(runControllerSync(), "error on service creation")
 				})
+			})
+		})
+
+		when("there is already a CredentialIssuer", func() {
+			preExistingStrategy := v1alpha1.CredentialIssuerStrategy{
+				Type:           v1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         v1alpha1.SuccessStrategyStatus,
+				Reason:         v1alpha1.FetchedKeyStrategyReason,
+				Message:        "happy other unrelated strategy",
+				LastUpdateTime: metav1.NewTime(frozenNow),
+				Frontend: &v1alpha1.CredentialIssuerFrontend{
+					Type: v1alpha1.TokenCredentialRequestAPIFrontendType,
+				},
+			}
+
+			it.Before(func() {
+				r.NoError(pinnipedAPIClient.Tracker().Add(&v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Status:     v1alpha1.CredentialIssuerStatus{Strategies: []v1alpha1.CredentialIssuerStrategy{preExistingStrategy}},
+				}))
+				addNodeWithRoleToTracker("worker", kubeAPIClient)
+			})
+
+			it("merges into the existing strategy array on the CredentialIssuer", func() {
+				startInformersAndController()
+				r.NoError(runControllerSync())
+				requireTLSServerIsRunningWithoutCerts()
+				r.Len(kubeAPIClient.Actions(), 3)
+				requireNodesListed(kubeAPIClient.Actions()[0])
+				requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
+				requireCASecretWasCreated(kubeAPIClient.Actions()[2])
+				credentialIssuer := getCredentialIssuer()
+				r.Equal([]v1alpha1.CredentialIssuerStrategy{newPendingStrategy(), preExistingStrategy}, credentialIssuer.Status.Strategies)
 			})
 		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))

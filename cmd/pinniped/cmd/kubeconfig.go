@@ -73,10 +73,11 @@ type getKubeconfigOIDCParams struct {
 }
 
 type getKubeconfigConciergeParams struct {
-	disabled          bool
-	authenticatorName string
-	authenticatorType string
-	apiGroupSuffix    string
+	disabled            bool
+	authenticatorName   string
+	authenticatorType   string
+	apiGroupSuffix      string
+	credentialCachePath string
 }
 
 type getKubeconfigParams struct {
@@ -103,12 +104,14 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f := cmd.Flags()
 	f.StringVar(&flags.staticToken, "static-token", "", "Instead of doing an OIDC-based login, specify a static token")
 	f.StringVar(&flags.staticTokenEnvName, "static-token-env", "", "Instead of doing an OIDC-based login, read a static token from the environment")
+	f.BoolVar(&flags.oidc.debugSessionCache, "debug-cache", false, "Print debug logs related to the OpenID Connect and Concierge caches")
 
 	f.BoolVar(&flags.concierge.disabled, "no-concierge", false, "Generate a configuration which does not use the concierge, but sends the credential to the cluster directly")
 	f.StringVar(&namespace, "concierge-namespace", "pinniped-concierge", "Namespace in which the concierge was installed")
 	f.StringVar(&flags.concierge.authenticatorType, "concierge-authenticator-type", "", "Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)")
 	f.StringVar(&flags.concierge.authenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name (default: autodiscover)")
 	f.StringVar(&flags.concierge.apiGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
+	f.StringVar(&flags.concierge.credentialCachePath, "concierge-credential-cache", "", "Path to short-lived cluster credentials cache file")
 
 	f.StringVar(&flags.oidc.issuer, "oidc-issuer", "", "OpenID Connect issuer URL (default: autodiscover)")
 	f.StringVar(&flags.oidc.clientID, "oidc-client-id", "pinniped-cli", "OpenID Connect client ID (default: autodiscover)")
@@ -117,12 +120,11 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.BoolVar(&flags.oidc.skipBrowser, "oidc-skip-browser", false, "During OpenID Connect login, skip opening the browser (just print the URL)")
 	f.StringVar(&flags.oidc.sessionCachePath, "oidc-session-cache", "", "Path to OpenID Connect session cache file")
 	f.StringSliceVar(&flags.oidc.caBundlePaths, "oidc-ca-bundle", nil, "Path to TLS certificate authority bundle (PEM format, optional, can be repeated)")
-	f.BoolVar(&flags.oidc.debugSessionCache, "oidc-debug-session-cache", false, "Print debug logs related to the OpenID Connect session cache")
 	f.StringVar(&flags.oidc.requestAudience, "oidc-request-audience", "", "Request a token with an alternate audience using RFC8693 token exchange")
 	f.StringVar(&flags.kubeconfigPath, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to kubeconfig file")
 	f.StringVar(&flags.kubeconfigContextOverride, "kubeconfig-context", "", "Kubeconfig context name (default: current active context)")
 
-	mustMarkHidden(cmd, "oidc-debug-session-cache")
+	mustMarkHidden(cmd, "debug-cache")
 
 	mustMarkDeprecated(cmd, "concierge-namespace", "not needed anymore")
 	mustMarkHidden(cmd, "concierge-namespace")
@@ -222,7 +224,7 @@ func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigPar
 		execConfig.Args = append(execConfig.Args, "--session-cache="+flags.oidc.sessionCachePath)
 	}
 	if flags.oidc.debugSessionCache {
-		execConfig.Args = append(execConfig.Args, "--debug-session-cache")
+		execConfig.Args = append(execConfig.Args, "--debug-cache")
 	}
 	if flags.oidc.requestAudience != "" {
 		execConfig.Args = append(execConfig.Args, "--request-audience="+flags.oidc.requestAudience)
@@ -277,6 +279,9 @@ func configureConcierge(authenticator metav1.Object, flags *getKubeconfigParams,
 		"--concierge-endpoint="+v1Cluster.Server,
 		"--concierge-ca-bundle-data="+base64.StdEncoding.EncodeToString(v1Cluster.CertificateAuthorityData),
 	)
+	if flags.concierge.credentialCachePath != "" {
+		execConfig.Args = append(execConfig.Args, "--concierge-credential-cache="+flags.concierge.credentialCachePath)
+	}
 	return nil
 }
 

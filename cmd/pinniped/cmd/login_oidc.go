@@ -24,6 +24,7 @@ import (
 
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/pkg/conciergeclient"
+	"go.pinniped.dev/pkg/conciergeclient/filecredcache"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/filesession"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -55,9 +56,10 @@ type oidcLoginFlags struct {
 	scopes                     []string
 	skipBrowser                bool
 	sessionCachePath           string
+	credentialCachePath        string
 	caBundlePaths              []string
 	caBundleData               []string
-	debugSessionCache          bool
+	debugCache                 bool
 	requestAudience            string
 	conciergeEnabled           bool
 	conciergeAuthenticatorType string
@@ -86,7 +88,7 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.sessionCachePath, "session-cache", filepath.Join(mustGetConfigDir(), "sessions.yaml"), "Path to session cache file")
 	cmd.Flags().StringSliceVar(&flags.caBundlePaths, "ca-bundle", nil, "Path to TLS certificate authority bundle (PEM format, optional, can be repeated)")
 	cmd.Flags().StringSliceVar(&flags.caBundleData, "ca-bundle-data", nil, "Base64 endcoded TLS certificate authority bundle (base64 encoded PEM format, optional, can be repeated)")
-	cmd.Flags().BoolVar(&flags.debugSessionCache, "debug-session-cache", false, "Print debug logs related to the session cache")
+	cmd.Flags().BoolVar(&flags.debugCache, "debug-cache", false, "Print debug logs related to the session/credential caches")
 	cmd.Flags().StringVar(&flags.requestAudience, "request-audience", "", "Request a token with an alternate audience using RFC8693 token exchange")
 	cmd.Flags().BoolVar(&flags.conciergeEnabled, "enable-concierge", false, "Exchange the OIDC ID token with the Pinniped concierge during login")
 	cmd.Flags().StringVar(&conciergeNamespace, "concierge-namespace", "pinniped-concierge", "Namespace in which the concierge was installed")
@@ -95,8 +97,9 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeEndpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")
 	cmd.Flags().StringVar(&flags.conciergeCABundle, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the concierge")
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
+	cmd.Flags().StringVar(&flags.credentialCachePath, "concierge-credential-cache", filepath.Join(mustGetConfigDir(), "cluster-credentials.yaml"), "Path to short-lived cluster credentials cache file")
 
-	mustMarkHidden(cmd, "debug-session-cache")
+	mustMarkHidden(cmd, "debug-cache")
 	mustMarkRequired(cmd, "issuer")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runOIDCLogin(cmd, deps, flags) }
 
@@ -107,17 +110,24 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 }
 
 func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLoginFlags) error {
-	// Initialize the session cache.
-	var sessionOptions []filesession.Option
+	// Initialize the session and credential cache.
+	var (
+		sessionOptions         []filesession.Option
+		credentialCacheOptions []filecredcache.Option
+	)
 
-	// If the hidden --debug-session-cache option is passed, log all the errors from the session cache with klog.
-	if flags.debugSessionCache {
-		logger := klogr.New().WithName("session")
+	// If the hidden --debug-cache option is passed, log all the errors from the session cache with klog.
+	if flags.debugCache {
+		logger := klogr.New().WithName("cache")
 		sessionOptions = append(sessionOptions, filesession.WithErrorReporter(func(err error) {
 			logger.Error(err, "error during session cache operation")
 		}))
+		credentialCacheOptions = append(credentialCacheOptions, filecredcache.WithErrorReporter(func(err error) {
+			logger.Error(err, "error during cluster credential cache operation")
+		}))
 	}
 	sessionCache := filesession.New(flags.sessionCachePath, sessionOptions...)
+	credCache := filecredcache.New(flags.credentialCachePath, credentialCacheOptions...)
 
 	// Initialize the login handler.
 	opts := []oidcclient.Option{
@@ -142,6 +152,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 			conciergeclient.WithBase64CABundle(flags.conciergeCABundle),
 			conciergeclient.WithAuthenticator(flags.conciergeAuthenticatorType, flags.conciergeAuthenticatorName),
 			conciergeclient.WithAPIGroupSuffix(flags.conciergeAPIGroupSuffix),
+			conciergeclient.WithCache(credCache),
 		)
 		if err != nil {
 			return fmt.Errorf("invalid concierge parameters: %w", err)

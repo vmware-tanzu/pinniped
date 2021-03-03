@@ -61,6 +61,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --concierge-api-group-suffix string     Concierge API group suffix (default "pinniped.dev")
 				      --concierge-authenticator-name string   Concierge authenticator name (default: autodiscover)
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)
+				      --concierge-credential-cache string     Path to short-lived cluster credentials cache file
 				  -h, --help                                  help for kubeconfig
 				      --kubeconfig string                     Path to kubeconfig file
 				      --kubeconfig-context string             Kubeconfig context name (default: current active context)
@@ -442,7 +443,8 @@ func TestGetKubeconfig(t *testing.T) {
 				"--oidc-listen-port", "1234",
 				"--oidc-ca-bundle", testCABundlePath,
 				"--oidc-session-cache", "/path/to/cache/dir/sessions.yaml",
-				"--oidc-debug-session-cache",
+				"--concierge-credential-cache", "/path/to/cache/dir/creds.yaml",
+				"--debug-cache",
 				"--oidc-request-audience", "test-audience",
 			},
 			conciergeObjects: []runtime.Object{
@@ -479,6 +481,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-type=webhook
         		      - --concierge-endpoint=https://fake-server-url-value
         		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+        		      - --concierge-credential-cache=/path/to/cache/dir/creds.yaml
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
         		      - --scopes=offline_access,openid,pinniped:request-audience
@@ -486,7 +489,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --listen-port=1234
         		      - --ca-bundle-data=%s
         		      - --session-cache=/path/to/cache/dir/sessions.yaml
-        		      - --debug-session-cache
+        		      - --debug-cache
         		      - --request-audience=test-audience
         		      command: '.../path/to/pinniped'
         		      env: []

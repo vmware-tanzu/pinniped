@@ -64,6 +64,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				      --concierge-authenticator-name string   Concierge authenticator name
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt')
 				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the concierge
+				      --concierge-credential-cache string     Path to short-lived cluster credentials cache file (default "` + cfgDir + `/cluster-credentials.yaml")
 				      --concierge-endpoint string             API base for the Pinniped concierge endpoint
 				      --enable-concierge                      Exchange the OIDC ID token with the Pinniped concierge during login
 				  -h, --help                                  help for oidc
@@ -180,7 +181,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--issuer", "test-issuer",
 				"--skip-browser",
 				"--listen-port", "1234",
-				"--debug-session-cache",
+				"--debug-cache",
 				"--request-audience", "cluster-1234",
 				"--ca-bundle-data", base64.StdEncoding.EncodeToString(testCA.Bundle()),
 				"--ca-bundle", testCABundlePath,

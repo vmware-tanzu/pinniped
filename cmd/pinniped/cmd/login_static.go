@@ -9,13 +9,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
+	"k8s.io/klog/v2/klogr"
 
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/pkg/conciergeclient"
+	"go.pinniped.dev/pkg/conciergeclient/filecredcache"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
@@ -47,6 +50,8 @@ type staticLoginParams struct {
 	conciergeEndpoint          string
 	conciergeCABundle          string
 	conciergeAPIGroupSuffix    string
+	credentialCachePath        string
+	debugCache                 bool
 }
 
 func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
@@ -69,9 +74,12 @@ func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeEndpoint, "concierge-endpoint", "", "API base for the Pinniped concierge endpoint")
 	cmd.Flags().StringVar(&flags.conciergeCABundle, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the concierge")
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
+	cmd.Flags().StringVar(&flags.credentialCachePath, "concierge-credential-cache", filepath.Join(mustGetConfigDir(), "cluster-credentials.yaml"), "Path to short-lived cluster credentials cache file")
+	cmd.Flags().BoolVar(&flags.debugCache, "debug-cache", false, "Print debug logs related to the session/credential caches")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runStaticLogin(cmd.OutOrStdout(), deps, flags) }
 
 	mustMarkDeprecated(cmd, "concierge-namespace", "not needed anymore")
+	mustMarkHidden(cmd, "debug-cache")
 	mustMarkHidden(cmd, "concierge-namespace")
 
 	return cmd
@@ -84,12 +92,24 @@ func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams
 
 	var concierge *conciergeclient.Client
 	if flags.conciergeEnabled {
+		var credentialCacheOptions []filecredcache.Option
+
+		// If the hidden --debug-cache option is passed, log all the errors from the session cache with klog.
+		if flags.debugCache {
+			logger := klogr.New().WithName("cache")
+			credentialCacheOptions = append(credentialCacheOptions, filecredcache.WithErrorReporter(func(err error) {
+				logger.Error(err, "error during cluster credential cache operation")
+			}))
+		}
+		credCache := filecredcache.New(flags.credentialCachePath, credentialCacheOptions...)
+
 		var err error
 		concierge, err = conciergeclient.New(
 			conciergeclient.WithEndpoint(flags.conciergeEndpoint),
 			conciergeclient.WithBase64CABundle(flags.conciergeCABundle),
 			conciergeclient.WithAuthenticator(flags.conciergeAuthenticatorType, flags.conciergeAuthenticatorName),
 			conciergeclient.WithAPIGroupSuffix(flags.conciergeAPIGroupSuffix),
+			conciergeclient.WithCache(credCache),
 		)
 		if err != nil {
 			return fmt.Errorf("invalid concierge parameters: %w", err)

@@ -24,6 +24,7 @@ import (
 )
 
 func TestLoginStaticCommand(t *testing.T) {
+	cfgDir := mustGetConfigDir()
 	testCA, err := certauthority.New(pkix.Name{CommonName: "Test CA"}, 1*time.Hour)
 	require.NoError(t, err)
 	tmpdir := testutil.TempDir(t)
@@ -55,6 +56,7 @@ func TestLoginStaticCommand(t *testing.T) {
 				      --concierge-authenticator-name string   Concierge authenticator name
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt')
 				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the concierge
+				      --concierge-credential-cache string     Path to short-lived cluster credentials cache file (default "` + cfgDir + `/cluster-credentials.yaml")
 				      --concierge-endpoint string             API base for the Pinniped concierge endpoint
 				      --enable-concierge                      Exchange the token with the Pinniped concierge during login
 				  -h, --help                                  help for static
@@ -138,6 +140,7 @@ func TestLoginStaticCommand(t *testing.T) {
 				"--concierge-authenticator-type", "jwt",
 				"--concierge-authenticator-name", "test-authenticator",
 				"--concierge-endpoint", "https://127.0.0.1:1234/",
+				"--debug-cache",
 			},
 			wantError: true,
 			wantStderr: here.Doc(`

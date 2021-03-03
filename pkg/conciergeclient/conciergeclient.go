@@ -6,8 +6,11 @@ package conciergeclient
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -38,6 +41,20 @@ type Client struct {
 	caBundle       string
 	endpoint       *url.URL
 	apiGroupSuffix string
+	cache          Cache
+}
+
+type Cache interface {
+	GetClusterCredential(key string) *clientauthenticationv1beta1.ExecCredentialStatus
+	PutClusterCredential(key string, cred *clientauthenticationv1beta1.ExecCredentialStatus)
+}
+
+// WithCache configures a cache for temporary credentials returned from the TokenCredentialRequest API.
+func WithCache(cache Cache) Option {
+	return func(c *Client) error {
+		c.cache = cache
+		return nil
+	}
 }
 
 // WithAuthenticator configures the authenticator reference (spec.authenticator) of the TokenCredentialRequests.
@@ -167,6 +184,13 @@ func (c *Client) clientset() (conciergeclientset.Interface, error) {
 
 // ExchangeToken performs a TokenCredentialRequest against the Pinniped concierge and returns the result as an ExecCredential.
 func (c *Client) ExchangeToken(ctx context.Context, token string) (*clientauthenticationv1beta1.ExecCredential, error) {
+	// If there is a cached credential for this token, return it immediately.
+	if c.cache != nil {
+		if cached := c.cache.GetClusterCredential(c.cacheKey(token)); cached != nil {
+			return execCred(cached), nil
+		}
+	}
+
 	clientset, err := c.clientset()
 	if err != nil {
 		return nil, err
@@ -187,16 +211,48 @@ func (c *Client) ExchangeToken(ctx context.Context, token string) (*clientauthen
 		return nil, fmt.Errorf("%w: unknown cause", ErrLoginFailed)
 	}
 
+	credStatus := clientauthenticationv1beta1.ExecCredentialStatus{
+		ExpirationTimestamp:   &resp.Status.Credential.ExpirationTimestamp,
+		ClientCertificateData: resp.Status.Credential.ClientCertificateData,
+		ClientKeyData:         resp.Status.Credential.ClientKeyData,
+		Token:                 resp.Status.Credential.Token,
+	}
+
+	// Save the new credential into the cache.
+	if c.cache != nil {
+		c.cache.PutClusterCredential(c.cacheKey(token), &credStatus)
+	}
+	return execCred(&credStatus), nil
+}
+
+// cacheKey returns a unique key under which a particular token's credentials should be cached.
+// this is intentionally a bit conservative because we never want to return the wrong cached value.
+func (c *Client) cacheKey(token string) string {
+	hash := sha256.New()
+	if err := json.NewEncoder(hash).Encode(struct {
+		Token          string
+		Authenticator  *corev1.TypedLocalObjectReference
+		APIGroupSuffix string
+		Endpoint       string
+		CABundle       string
+	}{
+		Token:          token,
+		Authenticator:  c.authenticator,
+		APIGroupSuffix: c.apiGroupSuffix,
+		Endpoint:       c.endpoint.String(),
+		CABundle:       c.caBundle,
+	}); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(hash.Sum(nil))
+}
+
+func execCred(credStatus *clientauthenticationv1beta1.ExecCredentialStatus) *clientauthenticationv1beta1.ExecCredential {
 	return &clientauthenticationv1beta1.ExecCredential{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ExecCredential",
 			APIVersion: "client.authentication.k8s.io/v1beta1",
 		},
-		Status: &clientauthenticationv1beta1.ExecCredentialStatus{
-			ExpirationTimestamp:   &resp.Status.Credential.ExpirationTimestamp,
-			ClientCertificateData: resp.Status.Credential.ClientCertificateData,
-			ClientKeyData:         resp.Status.Credential.ClientKeyData,
-			Token:                 resp.Status.Credential.Token,
-		},
-	}, nil
+		Status: credStatus,
+	}
 }

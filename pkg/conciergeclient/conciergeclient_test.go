@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
@@ -215,6 +216,33 @@ func TestExchangeToken(t *testing.T) {
 		require.Nil(t, got)
 	})
 
+	t.Run("success from cache", func(t *testing.T) {
+		cache := mockCredCache{
+			t: t,
+			getReturnsCred: &clientauthenticationv1beta1.ExecCredentialStatus{
+				Token: "test-token",
+			},
+		}
+		c := Client{cache: &cache, endpoint: &url.URL{}, authenticator: &corev1.TypedLocalObjectReference{}}
+		got, err := c.ExchangeToken(ctx, "some-token")
+		require.NoError(t, err)
+		require.Equal(t,
+			// some opaque value that's a SHA256 of a bunch of input parameters but should be static across test runs.
+			[]string{"08a6c37d4d9b9b537def2a275517abe8a70c687cb1cffa8cd3b317c005a38c93"},
+			cache.sawGetKeys,
+		)
+		require.Empty(t, cache.sawPutKeys)
+		require.Equal(t, &clientauthenticationv1beta1.ExecCredential{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ExecCredential",
+				APIVersion: "client.authentication.k8s.io/v1beta1",
+			},
+			Status: &clientauthenticationv1beta1.ExecCredentialStatus{
+				Token: "test-token",
+			},
+		}, got)
+	})
+
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 		expires := metav1.NewTime(time.Now().Truncate(time.Second))
@@ -260,7 +288,13 @@ func TestExchangeToken(t *testing.T) {
 			})
 		})
 
-		client, err := New(WithEndpoint(endpoint), WithCABundle(caBundle), WithAuthenticator("webhook", "test-webhook"))
+		cache := mockCredCache{t: t}
+		client, err := New(
+			WithEndpoint(endpoint),
+			WithCABundle(caBundle),
+			WithAuthenticator("webhook", "test-webhook"),
+			WithCache(&cache),
+		)
 		require.NoError(t, err)
 
 		got, err := client.ExchangeToken(ctx, "test-token")
@@ -276,5 +310,28 @@ func TestExchangeToken(t *testing.T) {
 				ExpirationTimestamp:   &expires,
 			},
 		}, got)
+		require.Len(t, cache.sawPutCreds, 1)
+		require.Equal(t, cache.sawPutCreds[0].ClientCertificateData, "test-certificate")
 	})
+}
+
+// mockCredCache exists to avoid an import cycle if we generate mocks into another package.
+type mockCredCache struct {
+	t              *testing.T
+	sawGetKeys     []string
+	getReturnsCred *clientauthenticationv1beta1.ExecCredentialStatus
+	sawPutKeys     []string
+	sawPutCreds    []*clientauthenticationv1beta1.ExecCredentialStatus
+}
+
+func (m *mockCredCache) GetClusterCredential(key string) *clientauthenticationv1beta1.ExecCredentialStatus {
+	m.t.Logf("saw mock GetClusterCredential() with key %s", key)
+	m.sawGetKeys = append(m.sawGetKeys, key)
+	return m.getReturnsCred
+}
+
+func (m *mockCredCache) PutClusterCredential(key string, cred *clientauthenticationv1beta1.ExecCredentialStatus) {
+	m.t.Logf("saw mock PutClusterCredential() with key %s and cred %s", key, cred)
+	m.sawPutKeys = append(m.sawPutKeys, key)
+	m.sawPutCreds = append(m.sawPutCreds, cred)
 }

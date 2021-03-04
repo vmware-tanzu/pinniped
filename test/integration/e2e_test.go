@@ -26,7 +26,6 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
 	authv1alpha "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -166,13 +165,8 @@ func TestE2EFullIntegration(t *testing.T) {
 
 	// If there is a proxy, we always want the "pinniped login oidc" command to use it, even if the
 	// parent kubectl process is connecting to an external load balancer and not using the proxy.
-	if env.Proxy != "" {
-		restConfig.ExecProvider.Env = append(restConfig.ExecProvider.Env,
-			clientcmdapi.ExecEnvVar{Name: "http_proxy", Value: env.Proxy},
-			clientcmdapi.ExecEnvVar{Name: "https_proxy", Value: env.Proxy},
-			clientcmdapi.ExecEnvVar{Name: "no_proxy", Value: "127.0.0.1"},
-		)
-	}
+	kubeconfigYAML = env.InjectProxyEnvIntoKubeconfig(kubeconfigYAML)
+	t.Logf("test kubeconfig after proxy environment addition:\n%s\n\n", kubeconfigYAML)
 
 	kubeconfigPath := filepath.Join(tempDir, "kubeconfig.yaml")
 	require.NoError(t, ioutil.WriteFile(kubeconfigPath, []byte(kubeconfigYAML), 0600))

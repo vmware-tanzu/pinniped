@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/yaml"
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
@@ -67,10 +69,47 @@ type TestOIDCUpstream struct {
 
 // ProxyEnv returns a set of environment variable strings (e.g., to combine with os.Environ()) which set up the configured test HTTP proxy.
 func (e *TestEnv) ProxyEnv() []string {
+	vars := e.proxyVars()
+	if vars == nil {
+		return nil
+	}
+	res := make([]string, 0, len(vars))
+	for k, v := range vars {
+		res = append(res, k+"="+v)
+	}
+	return res
+}
+
+func (e *TestEnv) InjectProxyEnvIntoKubeconfig(kubeconfigYAML string) string {
+	proxyVars := e.proxyVars()
+	if proxyVars == nil {
+		return kubeconfigYAML
+	}
+
+	kubeconfig, err := clientcmd.Load([]byte(kubeconfigYAML))
+	require.NoError(e.t, err)
+	for i := range kubeconfig.AuthInfos {
+		if exec := kubeconfig.AuthInfos[i].Exec; exec != nil {
+			for k, v := range proxyVars {
+				exec.Env = append(exec.Env, clientcmdapi.ExecEnvVar{Name: k, Value: v})
+			}
+		}
+	}
+
+	newYAML, err := clientcmd.Write(*kubeconfig)
+	require.NoError(t, err)
+	return string(newYAML)
+}
+
+func (e *TestEnv) proxyVars() map[string] {
 	if e.Proxy == "" {
 		return nil
 	}
-	return []string{"http_proxy=" + e.Proxy, "https_proxy=" + e.Proxy, "no_proxy=127.0.0.1"}
+	return map[string]string{
+		"http_proxy":  e.Proxy,
+		"https_proxy": e.Proxy,
+		"no_proxy":    "127.0.0.1",
+	}
 }
 
 // IntegrationEnv gets the integration test environment from OS environment variables. This

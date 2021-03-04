@@ -27,31 +27,17 @@ import (
 	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/groupsuffix"
-	"go.pinniped.dev/internal/kubeclient"
 )
 
 type kubeconfigDeps struct {
 	getPathToSelf func() (string, error)
-	getClientset  func(clientConfig clientcmd.ClientConfig, apiGroupSuffix string) (conciergeclientset.Interface, error)
+	getClientset  getConciergeClientsetFunc
 }
 
 func kubeconfigRealDeps() kubeconfigDeps {
 	return kubeconfigDeps{
 		getPathToSelf: os.Executable,
-		getClientset: func(clientConfig clientcmd.ClientConfig, apiGroupSuffix string) (conciergeclientset.Interface, error) {
-			restConfig, err := clientConfig.ClientConfig()
-			if err != nil {
-				return nil, err
-			}
-			client, err := kubeclient.New(
-				kubeclient.WithConfig(restConfig),
-				kubeclient.WithMiddleware(groupsuffix.New(apiGroupSuffix)),
-			)
-			if err != nil {
-				return nil, err
-			}
-			return client.PinnipedConcierge, nil
-		},
+		getClientset:  getRealConciergeClientset,
 	}
 }
 
@@ -348,15 +334,6 @@ func lookupAuthenticator(clientset conciergeclientset.Interface, authType, authN
 		return nil, fmt.Errorf("multiple authenticators were found, so the --concierge-authenticator-type/--concierge-authenticator-name flags must be specified")
 	}
 	return results[0], nil
-}
-
-func newClientConfig(kubeconfigPathOverride string, currentContextName string) clientcmd.ClientConfig {
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	loadingRules.ExplicitPath = kubeconfigPathOverride
-	clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &clientcmd.ConfigOverrides{
-		CurrentContext: currentContextName,
-	})
-	return clientConfig
 }
 
 func writeConfigAsYAML(out io.Writer, config clientcmdapi.Config) error {

@@ -41,7 +41,7 @@ import (
 
 // TestE2EFullIntegration tests a full integration scenario that combines the supervisor, concierge, and CLI.
 func TestE2EFullIntegration(t *testing.T) {
-	env := library.IntegrationEnv(t)
+	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
 	// If anything in this test crashes, dump out the supervisor and proxy pod logs.
 	defer library.DumpLogs(t, env.SupervisorNamespace, "")

@@ -6,11 +6,14 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -26,7 +29,6 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/client-go/rest"
 
 	authv1alpha "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -270,16 +272,33 @@ func TestE2EFullIntegration(t *testing.T) {
 	require.Equal(t, "you have been logged in and may now close this tab", msg)
 
 	// Verify that we can actually reach the endpoint in the kubeconfig.
-	restClient, err := rest.UnversionedRESTClientFor(restConfig)
-	require.NoError(t, err)
 	require.Eventually(t, func() bool {
-		var status int
-		_, err := restClient.Get().AbsPath("/version").Do(ctx).StatusCode(&status).Raw()
-		if status == 200 || status == 403 {
-			return true
+		kubeconfigCA := x509.NewCertPool()
+		require.True(t, kubeconfigCA.AppendCertsFromPEM(restConfig.TLSClientConfig.CAData), "expected to load kubeconfig CA")
+
+		// Create an HTTP client that can reach the downstream discovery endpoint using the CA certs.
+		httpClient := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{RootCAs: kubeconfigCA},
+				Proxy: func(req *http.Request) (*url.URL, error) {
+					if env.Proxy == "" {
+						t.Logf("passing request for %s with no proxy", req.URL)
+						return nil, nil
+					}
+					proxyURL, err := url.Parse(env.Proxy)
+					require.NoError(t, err)
+					t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
+					return proxyURL, nil
+				},
+			},
 		}
-		t.Logf("attempted to connect to API server's /version endpoint, got response code %d with error %v", status, err)
-		return false
+		resp, err := httpClient.Get(restConfig.Host)
+		if err != nil {
+			t.Logf("could not connect to the API server at %q: %v", restConfig.Host, err)
+			return false
+		}
+		t.Logf("got %d response from API server at %q", resp.StatusCode, restConfig.Host)
+		return resp.StatusCode == 200 || resp.StatusCode == 403
 	}, 5*time.Minute, time.Second)
 
 	// Expect the CLI to output a list of namespaces in JSON format.

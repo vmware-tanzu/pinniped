@@ -333,4 +333,15 @@ status:
       username: `+env.SupervisorTestUpstream.Username+`
 `,
 		string(kubectlOutput3))
+
+	// Validate that `pinniped whoami` returns the correct identity.
+	assertWhoami(
+		ctx,
+		t,
+		true,
+		pinnipedExe,
+		kubeconfigPath,
+		env.SupervisorTestUpstream.Username,
+		append(env.SupervisorTestUpstream.ExpectedGroups, "system:authenticated"),
+	)
 }

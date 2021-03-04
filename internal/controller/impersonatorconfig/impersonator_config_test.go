@@ -15,12 +15,14 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -286,6 +288,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		const caSecretName = "some-ca-secret-name"
 		const localhostIP = "127.0.0.1"
 		const httpsPort = ":443"
+		const fakeServerResponseBody = "hello, world!"
 		var labels = map[string]string{"app": "app-name", "other-key": "other-value"}
 
 		var r *require.Assertions
@@ -367,14 +370,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			url := "https://" + addr
 			req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
 			r.NoError(err)
-			resp, err := client.Do(req)
+			var resp *http.Response
+			assert.Eventually(t, func() bool {
+				resp, err = client.Do(req.Clone(context.Background())) //nolint:bodyclose
+				return err == nil
+			}, 5*time.Second, 50*time.Millisecond)
 			r.NoError(err)
 
 			r.Equal(http.StatusOK, resp.StatusCode)
 			body, err := ioutil.ReadAll(resp.Body)
 			r.NoError(resp.Body.Close())
 			r.NoError(err)
-			r.Equal("hello world", string(body))
+			r.Equal(fakeServerResponseBody, string(body))
 		}
 
 		var requireTLSServerIsRunningWithoutCerts = func() {
@@ -386,20 +393,33 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			url := "https://" + testServerAddr()
 			req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
 			r.NoError(err)
-			_, err = client.Do(req) //nolint:bodyclose
+			expectedErrorRegex := "Get .*: remote error: tls: unrecognized name"
+			expectedErrorRegexCompiled, err := regexp.Compile(expectedErrorRegex)
+			r.NoError(err)
+			assert.Eventually(t, func() bool {
+				_, err = client.Do(req.Clone(context.Background())) //nolint:bodyclose
+				return err != nil && expectedErrorRegexCompiled.MatchString(err.Error())
+			}, 5*time.Second, 50*time.Millisecond)
 			r.Error(err)
-			r.Regexp("Get .*: remote error: tls: unrecognized name", err.Error())
+			r.Regexp(expectedErrorRegex, err.Error())
 		}
 
 		var requireTLSServerIsNoLongerRunning = func() {
 			r.Greater(startTLSListenerFuncWasCalled, 0)
-			_, err := tls.Dial(
-				startedTLSListener.Addr().Network(),
-				testServerAddr(),
-				&tls.Config{InsecureSkipVerify: true}, //nolint:gosec
-			)
+			var err error
+			expectedErrorRegex := "dial tcp .*: connect: connection refused"
+			expectedErrorRegexCompiled, err := regexp.Compile(expectedErrorRegex)
+			r.NoError(err)
+			assert.Eventually(t, func() bool {
+				_, err = tls.Dial(
+					startedTLSListener.Addr().Network(),
+					testServerAddr(),
+					&tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+				)
+				return err != nil && expectedErrorRegexCompiled.MatchString(err.Error())
+			}, 5*time.Second, 50*time.Millisecond)
 			r.Error(err)
-			r.Regexp(`dial tcp .*: connect: connection refused`, err.Error())
+			r.Regexp(expectedErrorRegex, err.Error())
 		}
 
 		var requireTLSServerWasNeverStarted = func() {
@@ -449,7 +469,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				startTLSListenerFunc,
 				func() (http.Handler, error) {
 					return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-						_, err := fmt.Fprintf(w, "hello world")
+						_, err := fmt.Fprint(w, fakeServerResponseBody)
 						r.NoError(err)
 					}), httpHandlerFactoryFuncError
 				},
@@ -475,10 +495,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
 					Namespace: installedInNamespace,
-					// Note that this seems to be ignored by the informer during initial creation, so actually
-					// the informer will see this as resource version "". Leaving it here to express the intent
-					// that the initial version is version 0.
-					ResourceVersion: "0",
 				},
 				Data: map[string]string{
 					"config.yaml": configYAML,
@@ -511,10 +527,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
 					Namespace: installedInNamespace,
-					// Note that this seems to be ignored by the informer during initial creation, so actually
-					// the informer will see this as resource version "". Leaving it here to express the intent
-					// that the initial version is version 0.
-					ResourceVersion: "0",
 				},
 				Data: data,
 			}
@@ -564,13 +576,16 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		var addSecretFromCreateActionToTracker = func(action coretesting.Action, client *kubernetesfake.Clientset, resourceVersion string) {
 			createdSecret, ok := action.(coretesting.CreateAction).GetObject().(*corev1.Secret)
-			r.True(ok, "should have been able to cast this action to CreateAction: %v", action)
+			r.True(ok, "should have been able to cast this action's object to Secret: %v", action)
+			createdSecret = createdSecret.DeepCopy()
 			createdSecret.ResourceVersion = resourceVersion
 			r.NoError(client.Tracker().Add(createdSecret))
 		}
 
 		var addServiceFromCreateActionToTracker = func(action coretesting.Action, client *kubernetesfake.Clientset, resourceVersion string) {
-			createdService := action.(coretesting.CreateAction).GetObject().(*corev1.Service)
+			createdService, ok := action.(coretesting.CreateAction).GetObject().(*corev1.Service)
+			r.True(ok, "should have been able to cast this action's object to Service: %v", action)
+			createdService = createdService.DeepCopy()
 			createdService.ResourceVersion = resourceVersion
 			r.NoError(client.Tracker().Add(createdService))
 		}
@@ -580,10 +595,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
 					Namespace: installedInNamespace,
-					// Note that this seems to be ignored by the informer during initial creation, so actually
-					// the informer will see this as resource version "". Leaving it here to express the intent
-					// that the initial version is version 0.
-					ResourceVersion: "0",
 				},
 				Spec: corev1.ServiceSpec{
 					Type: corev1.ServiceTypeLoadBalancer,
@@ -606,7 +617,8 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		var addSecretToTrackers = func(secret *corev1.Secret, clients ...*kubernetesfake.Clientset) {
 			for _, client := range clients {
-				r.NoError(client.Tracker().Add(secret))
+				secretCopy := secret.DeepCopy()
+				r.NoError(client.Tracker().Add(secretCopy))
 			}
 		}
 
@@ -618,6 +630,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			)
 			r.NoError(err)
 			service := serviceObj.(*corev1.Service)
+			service = service.DeepCopy()
 			service.ResourceVersion = newResourceVersion
 			service.Status = corev1.ServiceStatus{LoadBalancer: corev1.LoadBalancerStatus{Ingress: ingresses}}
 			r.NoError(client.Tracker().Update(
@@ -972,10 +985,10 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireCredentialIssuer(newSuccessStrategy(fakeIP, ca))
 
 					// Simulate the informer cache's background update from its watch.
-					addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[1], kubeInformerClient, "0")
-					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "0")
-					addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[2], kubeInformerClient, "1")
+					addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[1], kubeInformerClient, "1")
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "1")
+					addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[2], kubeInformerClient, "2")
+					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "2")
 
 					// keeps the secret around after resync
 					r.NoError(runControllerSync())
@@ -1003,10 +1016,10 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireCredentialIssuer(newSuccessStrategy(firstHostname, ca))
 
 					// Simulate the informer cache's background update from its watch.
-					addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[1], kubeInformerClient, "0")
-					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "0")
-					addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[2], kubeInformerClient, "1")
+					addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[1], kubeInformerClient, "1")
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "1")
+					addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[2], kubeInformerClient, "2")
+					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "2")
 
 					// keeps the secret around after resync
 					r.NoError(runControllerSync())
@@ -1034,10 +1047,10 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireCredentialIssuer(newSuccessStrategy(firstHostname, ca))
 
 					// Simulate the informer cache's background update from its watch.
-					addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[1], kubeInformerClient, "0")
-					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "0")
-					addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[2], kubeInformerClient, "1")
+					addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[1], kubeInformerClient, "1")
 					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "1")
+					addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[2], kubeInformerClient, "2")
+					waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "2")
 
 					// keeps the secret around after resync
 					r.NoError(runControllerSync())
@@ -1706,13 +1719,13 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireCredentialIssuer(newPendingStrategy())
 
 				// Simulate the informer cache's background update from its watch.
-				addServiceFromCreateActionToTracker(kubeAPIClient.Actions()[1], kubeInformerClient, "0")
-				waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "0")
+				addServiceFromCreateActionToTracker(kubeAPIClient.Actions()[1], kubeInformerClient, "1")
+				waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "1")
 				addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[2], kubeInformerClient, "1")
 				waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "1")
 
-				updateLoadBalancerServiceInTracker(loadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP}}, kubeInformerClient, "1")
-				waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "1")
+				updateLoadBalancerServiceInTracker(loadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP}}, kubeInformerClient, "2")
+				waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "2")
 
 				r.NoError(runControllerSync())
 				r.Equal(1, startTLSListenerFuncWasCalled) // wasn't started a second time
@@ -1744,13 +1757,13 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireCredentialIssuer(newPendingStrategy())
 
 				// Simulate the informer cache's background update from its watch.
-				addServiceFromCreateActionToTracker(kubeAPIClient.Actions()[1], kubeInformerClient, "0")
-				waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "0")
-				addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[2], kubeInformerClient, "0")
-				waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "0")
-
-				updateLoadBalancerServiceInTracker(loadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP, Hostname: hostname}}, kubeInformerClient, "1")
+				addServiceFromCreateActionToTracker(kubeAPIClient.Actions()[1], kubeInformerClient, "1")
 				waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "1")
+				addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[2], kubeInformerClient, "1")
+				waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "1")
+
+				updateLoadBalancerServiceInTracker(loadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP, Hostname: hostname}}, kubeInformerClient, "2")
+				waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Services().Informer(), "2")
 
 				r.NoError(runControllerSync())
 				r.Equal(1, startTLSListenerFuncWasCalled) // wasn't started a second time
@@ -1760,8 +1773,8 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireCredentialIssuer(newSuccessStrategy(hostname, ca))
 
 				// Simulate the informer cache's background update from its watch.
-				addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[3], kubeInformerClient, "1")
-				waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "1")
+				addSecretFromCreateActionToTracker(kubeAPIClient.Actions()[3], kubeInformerClient, "2")
+				waitForInformerCacheToSeeResourceVersion(kubeInformers.Core().V1().Secrets().Informer(), "2")
 
 				r.NoError(runControllerSync())
 				r.Equal(1, startTLSListenerFuncWasCalled)                                                          // wasn't started a third time
@@ -1925,7 +1938,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						Namespace: installedInNamespace,
 					},
 					Data: map[string][]byte{
-						// "aGVsbG8gd29ybGQK" is "hello world" base64 encoded
+						// "aGVsbG8gd29ybGQK" is "hello world" base64 encoded which is not a valid cert
 						corev1.TLSCertKey: []byte("-----BEGIN CERTIFICATE-----\naGVsbG8gd29ybGQK\n-----END CERTIFICATE-----\n"),
 					},
 				}

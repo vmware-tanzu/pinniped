@@ -97,11 +97,11 @@ func (e *TestEnv) InjectProxyEnvIntoKubeconfig(kubeconfigYAML string) string {
 	}
 
 	newYAML, err := clientcmd.Write(*kubeconfig)
-	require.NoError(t, err)
+	require.NoError(e.t, err)
 	return string(newYAML)
 }
 
-func (e *TestEnv) proxyVars() map[string] {
+func (e *TestEnv) proxyVars() map[string]string {
 	if e.Proxy == "" {
 		return nil
 	}

@@ -94,6 +94,28 @@ func TestImpersonationProxy(t *testing.T) {
 		t.Logf("stashing a pre-existing configmap %s", oldConfigMap.Name)
 		require.NoError(t, adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, impersonationProxyConfigMapName(env), metav1.DeleteOptions{}))
 	}
+	// At the end of the test, clean up the ConfigMap.
+	t.Cleanup(func() {
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		// Delete any version that was created by this test.
+		t.Logf("cleaning up configmap at end of test %s", impersonationProxyConfigMapName(env))
+		err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, impersonationProxyConfigMapName(env), metav1.DeleteOptions{})
+		if !k8serrors.IsNotFound(err) {
+			require.NoError(t, err) // only not found errors are acceptable
+		}
+
+		// Only recreate it if it already existed at the start of this test.
+		if len(oldConfigMap.Data) != 0 {
+			t.Log(oldConfigMap)
+			oldConfigMap.UID = "" // cant have a UID yet
+			oldConfigMap.ResourceVersion = ""
+			t.Logf("restoring a pre-existing configmap %s", oldConfigMap.Name)
+			_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, oldConfigMap, metav1.CreateOptions{})
+			require.NoError(t, err)
+		}
+	})
 
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) { //nolint:nestif // come on... it's just a test
 		// Check that load balancer has been automatically created by the impersonator's "auto" mode.
@@ -122,24 +144,6 @@ func TestImpersonationProxy(t *testing.T) {
 		t.Logf("creating configmap %s", configMap.Name)
 		_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, &configMap, metav1.CreateOptions{})
 		require.NoError(t, err)
-
-		// At the end of the test, clean up the ConfigMap.
-		t.Cleanup(func() {
-			ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			t.Logf("cleaning up configmap at end of test %s", impersonationProxyConfigMapName(env))
-			err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, impersonationProxyConfigMapName(env), metav1.DeleteOptions{})
-			require.NoError(t, err)
-
-			if len(oldConfigMap.Data) != 0 {
-				t.Log(oldConfigMap)
-				oldConfigMap.UID = "" // cant have a UID yet
-				oldConfigMap.ResourceVersion = ""
-				t.Logf("restoring a pre-existing configmap %s", oldConfigMap.Name)
-				_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, oldConfigMap, metav1.CreateOptions{})
-				require.NoError(t, err)
-			}
-		})
 	}
 
 	// At this point the impersonator should be starting/running. When it is ready, the CredentialIssuer's

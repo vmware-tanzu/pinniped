@@ -270,7 +270,7 @@ func TestE2EFullIntegration(t *testing.T) {
 	require.Equal(t, "you have been logged in and may now close this tab", msg)
 
 	// Verify that we can actually reach the endpoint in the kubeconfig.
-	restClient, err := rest.RESTClientFor(restConfig)
+	restClient, err := rest.UnversionedRESTClientFor(restConfig)
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		var status int

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -20,13 +21,21 @@ func TestGetPinnipedCategory(t *testing.T) {
 	t.Run("category, no special params", func(t *testing.T) {
 		var stdOut, stdErr bytes.Buffer
 
-		cmd := exec.Command("kubectl", "get", "pinniped", "-A")
-		cmd.Stdout = &stdOut
-		cmd.Stderr = &stdErr
-		err := cmd.Run()
-		require.NoError(t, err, stdErr.String(), stdOut.String())
+		var err error
+		require.Eventuallyf(t, func() bool {
+			cmd := exec.Command("kubectl", "get", "pinniped", "-A")
+			cmd.Stdout = &stdOut
+			cmd.Stderr = &stdErr
+			err = cmd.Run()
+			return err == nil
+		},
+			60*time.Second,
+			1*time.Second,
+			"never ran 'kubectl get pinniped -A' successfully:\n%s\n\n%s",
+			stdErr.String(),
+			stdOut.String(),
+		)
 		require.Empty(t, stdErr.String())
-
 		require.NotContains(t, stdOut.String(), "MethodNotAllowed")
 		require.Contains(t, stdOut.String(), dotSuffix)
 	})

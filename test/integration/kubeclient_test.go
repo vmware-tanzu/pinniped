@@ -5,6 +5,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -74,15 +75,18 @@ func TestKubeClientOwnerRef(t *testing.T) {
 		UID:        parentSecret.UID,
 	}
 
+	snorlaxAPIGroup := fmt.Sprintf("%s.snorlax.dev", library.RandHex(t, 8))
 	parentAPIService, err := regularAggregationClient.ApiregistrationV1().APIServices().Create(
 		ctx,
 		&apiregistrationv1.APIService{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "v1.snorlax.dev",
+				Name:        "v1." + snorlaxAPIGroup,
+				Labels:      map[string]string{"pinniped.dev/test": ""},
+				Annotations: map[string]string{"pinniped.dev/testName": t.Name()},
 			},
 			Spec: apiregistrationv1.APIServiceSpec{
 				Version:              "v1",
-				Group:                "snorlax.dev",
+				Group:                snorlaxAPIGroup,
 				GroupPriorityMinimum: 10_000,
 				VersionPriority:      500,
 			},
@@ -184,16 +188,19 @@ func TestKubeClientOwnerRef(t *testing.T) {
 	})
 
 	// cluster scoped API service should be owned by the other one we created above
+	pandasAPIGroup := fmt.Sprintf("%s.pandas.dev", library.RandHex(t, 8))
 	apiService, err := ownerRefClient.Aggregation.ApiregistrationV1().APIServices().Create(
 		ctx,
 		&apiregistrationv1.APIService{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:            "v1.pandas.dev",
+				Name:            "v1." + pandasAPIGroup,
 				OwnerReferences: nil, // no owner refs set
+				Labels:          map[string]string{"pinniped.dev/test": ""},
+				Annotations:     map[string]string{"pinniped.dev/testName": t.Name()},
 			},
 			Spec: apiregistrationv1.APIServiceSpec{
 				Version:              "v1",
-				Group:                "pandas.dev",
+				Group:                pandasAPIGroup,
 				GroupPriorityMinimum: 10_000,
 				VersionPriority:      500,
 			},

@@ -5,6 +5,7 @@
 package discovery
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 
@@ -40,28 +41,38 @@ type Metadata struct {
 
 // NewHandler returns an http.Handler that serves an OIDC discovery endpoint.
 func NewHandler(issuerURL string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+	oidcConfig := Metadata{
+		Issuer:                            issuerURL,
+		AuthorizationEndpoint:             issuerURL + oidc.AuthorizationEndpointPath,
+		TokenEndpoint:                     issuerURL + oidc.TokenEndpointPath,
+		JWKSURI:                           issuerURL + oidc.JWKSEndpointPath,
+		ResponseTypesSupported:            []string{"code"},
+		SubjectTypesSupported:             []string{"public"},
+		IDTokenSigningAlgValuesSupported:  []string{"ES256"},
+		TokenEndpointAuthMethodsSupported: []string{"client_secret_basic"},
+		ScopesSupported:                   []string{"openid", "offline"},
+		ClaimsSupported:                   []string{"groups"},
+	}
 
+	var b bytes.Buffer
+	encodeErr := json.NewEncoder(&b).Encode(&oidcConfig)
+	encodedMetadata := b.Bytes()
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, `Method not allowed (try GET)`, http.StatusMethodNotAllowed)
 			return
 		}
 
-		oidcConfig := Metadata{
-			Issuer:                            issuerURL,
-			AuthorizationEndpoint:             issuerURL + oidc.AuthorizationEndpointPath,
-			TokenEndpoint:                     issuerURL + oidc.TokenEndpointPath,
-			JWKSURI:                           issuerURL + oidc.JWKSEndpointPath,
-			ResponseTypesSupported:            []string{"code"},
-			SubjectTypesSupported:             []string{"public"},
-			IDTokenSigningAlgValuesSupported:  []string{"ES256"},
-			TokenEndpointAuthMethodsSupported: []string{"client_secret_basic"},
-			ScopesSupported:                   []string{"openid", "offline"},
-			ClaimsSupported:                   []string{"groups"},
+		if encodeErr != nil {
+			http.Error(w, encodeErr.Error(), http.StatusInternalServerError)
+			return
 		}
-		if err := json.NewEncoder(w).Encode(&oidcConfig); err != nil {
+
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write(encodedMetadata); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 	})
 }

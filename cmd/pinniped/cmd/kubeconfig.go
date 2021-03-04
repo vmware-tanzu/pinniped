@@ -251,23 +251,25 @@ func configureConcierge(credentialIssuer *configv1alpha1.CredentialIssuer, authe
 
 	// Autodiscover the --concierge-mode.
 	if flags.concierge.mode == modeUnknown { //nolint:nestif
+
+	strategyLoop:
 		for _, strategy := range credentialIssuer.Status.Strategies {
-			fe := strategy.Frontend
-			if strategy.Status != configv1alpha1.SuccessStrategyStatus || fe == nil {
+			if strategy.Status != configv1alpha1.SuccessStrategyStatus || strategy.Frontend == nil {
 				continue
 			}
-
-			switch fe.Type {
+			switch strategy.Frontend.Type {
 			case configv1alpha1.TokenCredentialRequestAPIFrontendType:
 				flags.concierge.mode = modeTokenCredentialRequestAPI
+				break strategyLoop
 			case configv1alpha1.ImpersonationProxyFrontendType:
 				flags.concierge.mode = modeImpersonationProxy
-				flags.concierge.endpoint = fe.ImpersonationProxyInfo.Endpoint
+				flags.concierge.endpoint = strategy.Frontend.ImpersonationProxyInfo.Endpoint
 				var err error
-				conciergeCABundleData, err = base64.StdEncoding.DecodeString(fe.ImpersonationProxyInfo.CertificateAuthorityData)
+				conciergeCABundleData, err = base64.StdEncoding.DecodeString(strategy.Frontend.ImpersonationProxyInfo.CertificateAuthorityData)
 				if err != nil {
 					return fmt.Errorf("autodiscovered Concierge CA bundle is invalid: %w", err)
 				}
+				break strategyLoop
 			default:
 				//	Skip any unknown frontend types.
 			}

@@ -788,20 +788,36 @@ func TestGetKubeconfig(t *testing.T) {
 				&configv1alpha1.CredentialIssuer{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
 					Status: configv1alpha1.CredentialIssuerStatus{
-						Strategies: []configv1alpha1.CredentialIssuerStrategy{{
-							Type:           "SomeType",
-							Status:         configv1alpha1.SuccessStrategyStatus,
-							Reason:         "SomeReason",
-							Message:        "Some message",
-							LastUpdateTime: metav1.Now(),
-							Frontend: &configv1alpha1.CredentialIssuerFrontend{
-								Type: configv1alpha1.ImpersonationProxyFrontendType,
-								ImpersonationProxyInfo: &configv1alpha1.ImpersonationProxyInfo{
-									Endpoint:                 "https://impersonation-proxy-endpoint.test",
-									CertificateAuthorityData: "dGVzdC1jb25jaWVyZ2UtY2E=",
+						Strategies: []configv1alpha1.CredentialIssuerStrategy{
+							{
+								Type:           "SomeType",
+								Status:         configv1alpha1.SuccessStrategyStatus,
+								Reason:         "SomeReason",
+								Message:        "Some message",
+								LastUpdateTime: metav1.Now(),
+								Frontend: &configv1alpha1.CredentialIssuerFrontend{
+									Type: configv1alpha1.ImpersonationProxyFrontendType,
+									ImpersonationProxyInfo: &configv1alpha1.ImpersonationProxyInfo{
+										Endpoint:                 "https://impersonation-proxy-endpoint.test",
+										CertificateAuthorityData: "dGVzdC1jb25jaWVyZ2UtY2E=",
+									},
 								},
 							},
-						}},
+							{
+								Type:           "SomeOtherType",
+								Status:         configv1alpha1.SuccessStrategyStatus,
+								Reason:         "SomeOtherReason",
+								Message:        "Some other message",
+								LastUpdateTime: metav1.Now(),
+								Frontend: &configv1alpha1.CredentialIssuerFrontend{
+									Type: configv1alpha1.ImpersonationProxyFrontendType,
+									ImpersonationProxyInfo: &configv1alpha1.ImpersonationProxyInfo{
+										Endpoint:                 "https://some-other-impersonation-endpoint",
+										CertificateAuthorityData: "dGVzdC1jb25jaWVyZ2UtY2E=",
+									},
+								},
+							},
+						},
 					},
 				},
 				&conciergev1alpha1.JWTAuthenticator{

@@ -16,9 +16,9 @@ type conciergeMode int
 var _ flag.Value = new(conciergeMode)
 
 const (
-	modeUnknown                   conciergeMode = iota
-	modeTokenCredentialRequestAPI conciergeMode = iota
-	modeImpersonationProxy        conciergeMode = iota
+	modeUnknown conciergeMode = iota
+	modeTokenCredentialRequestAPI
+	modeImpersonationProxy
 )
 
 func (c *conciergeMode) String() string {

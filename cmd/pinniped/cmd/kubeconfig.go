@@ -251,7 +251,6 @@ func configureConcierge(credentialIssuer *configv1alpha1.CredentialIssuer, authe
 
 	// Autodiscover the --concierge-mode.
 	if flags.concierge.mode == modeUnknown { //nolint:nestif
-
 	strategyLoop:
 		for _, strategy := range credentialIssuer.Status.Strategies {
 			if strategy.Status != configv1alpha1.SuccessStrategyStatus || strategy.Frontend == nil {

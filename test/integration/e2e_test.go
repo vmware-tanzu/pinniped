@@ -26,6 +26,7 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/client-go/rest"
 
 	authv1alpha "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
@@ -162,12 +163,6 @@ func TestE2EFullIntegration(t *testing.T) {
 	restConfig := library.NewRestConfigFromKubeconfig(t, kubeconfigYAML)
 	require.NotNil(t, restConfig.ExecProvider)
 	require.Equal(t, []string{"login", "oidc"}, restConfig.ExecProvider.Args[:2])
-
-	// If there is a proxy, we always want the "pinniped login oidc" command to use it, even if the
-	// parent kubectl process is connecting to an external load balancer and not using the proxy.
-	kubeconfigYAML = env.InjectProxyEnvIntoKubeconfig(kubeconfigYAML)
-	t.Logf("test kubeconfig after proxy environment addition:\n%s\n\n", kubeconfigYAML)
-
 	kubeconfigPath := filepath.Join(tempDir, "kubeconfig.yaml")
 	require.NoError(t, ioutil.WriteFile(kubeconfigPath, []byte(kubeconfigYAML), 0600))
 
@@ -179,9 +174,7 @@ func TestE2EFullIntegration(t *testing.T) {
 	// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 	start := time.Now()
 	kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-	if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
-	}
+	kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 	stderrPipe, err := kubectlCmd.StderrPipe()
 	require.NoError(t, err)
 	stdoutPipe, err := kubectlCmd.StdoutPipe()
@@ -276,6 +269,19 @@ func TestE2EFullIntegration(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "you have been logged in and may now close this tab", msg)
 
+	// Verify that we can actually reach the endpoint in the kubeconfig.
+	restClient, err := rest.RESTClientFor(restConfig)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		var status int
+		_, err := restClient.Get().AbsPath("/version").Do(ctx).StatusCode(&status).Raw()
+		if status == 200 || status == 403 {
+			return true
+		}
+		t.Logf("attempted to connect to API server's /version endpoint, got response code %d with error %v", status, err)
+		return false
+	}, 5*time.Minute, time.Second)
+
 	// Expect the CLI to output a list of namespaces in JSON format.
 	t.Logf("waiting for kubectl to output namespace list JSON")
 	var kubectlOutput string
@@ -289,9 +295,7 @@ func TestE2EFullIntegration(t *testing.T) {
 
 	// 	Run kubectl again, which should work with no browser interaction.
 	kubectlCmd2 := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-	if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
-		kubectlCmd2.Env = append(os.Environ(), env.ProxyEnv()...)
-	}
+	kubectlCmd2.Env = append(os.Environ(), env.ProxyEnv()...)
 	start = time.Now()
 	kubectlOutput2, err := kubectlCmd2.CombinedOutput()
 	require.NoError(t, err)

@@ -91,6 +91,7 @@ type getKubeconfigConciergeParams struct {
 type getKubeconfigParams struct {
 	kubeconfigPath            string
 	kubeconfigContextOverride string
+	outputPath                string
 	staticToken               string
 	staticTokenEnvName        string
 	oidc                      getKubeconfigOIDCParams
@@ -135,13 +136,24 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.StringVar(&flags.oidc.requestAudience, "oidc-request-audience", "", "Request a token with an alternate audience using RFC8693 token exchange")
 	f.StringVar(&flags.kubeconfigPath, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to kubeconfig file")
 	f.StringVar(&flags.kubeconfigContextOverride, "kubeconfig-context", "", "Kubeconfig context name (default: current active context)")
+	f.StringVarP(&flags.outputPath, "output", "o", "", "Output file path (default: stdout)")
 
 	mustMarkHidden(cmd, "oidc-debug-session-cache")
 
 	mustMarkDeprecated(cmd, "concierge-namespace", "not needed anymore")
 	mustMarkHidden(cmd, "concierge-namespace")
 
-	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runGetKubeconfig(cmd.OutOrStdout(), deps, flags) }
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		if flags.outputPath != "" {
+			out, err := os.Create(flags.outputPath)
+			if err != nil {
+				return fmt.Errorf("could not open output file: %w", err)
+			}
+			defer func() { _ = out.Close() }()
+			cmd.SetOut(out)
+		}
+		return runGetKubeconfig(cmd.OutOrStdout(), deps, flags)
+	}
 	return cmd
 }
 

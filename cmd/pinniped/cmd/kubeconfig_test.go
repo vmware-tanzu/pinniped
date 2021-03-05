@@ -83,6 +83,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --oidc-scopes strings                   OpenID Connect scopes to request during login (default [offline_access,openid,pinniped:request-audience])
 				      --oidc-session-cache string             Path to OpenID Connect session cache file
 				      --oidc-skip-browser                     During OpenID Connect login, skip opening the browser (just print the URL)
+				  -o, --output string                         Output file path (default: stdout)
 				      --static-token string                   Instead of doing an OIDC-based login, specify a static token
 				      --static-token-env string               Instead of doing an OIDC-based login, read a static token from the environment
 			`),

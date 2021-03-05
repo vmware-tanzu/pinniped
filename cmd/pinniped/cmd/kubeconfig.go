@@ -598,16 +598,19 @@ func validateKubeconfig(ctx context.Context, flags getKubeconfigParams, kubeconf
 
 	log.Info("could not immediately connect to the cluster but it may be initializing, will retry until timeout")
 	deadline, _ := ctx.Deadline()
+	attempts := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
+			attempts++
 			err := pingCluster()
 			if err == nil {
+				log.Info("validated connection to the cluster", "attempts", attempts)
 				return nil
 			}
-			log.Error(err, "could not connect to cluster, retrying...", "remaining", time.Until(deadline).Round(time.Second).String())
+			log.Error(err, "could not connect to cluster, retrying...", "attempts", attempts, "remaining", time.Until(deadline).Round(time.Second).String())
 		}
 	}
 }

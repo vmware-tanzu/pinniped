@@ -173,6 +173,42 @@ func TestE2EFullIntegration(t *testing.T) {
 	t.Log("sleeping 10s to wait for JWTAuthenticator to become initialized")
 	time.Sleep(10 * time.Second)
 
+	// Verify that we can actually reach the endpoint in the kubeconfig.
+	require.Eventually(t, func() bool {
+		kubeconfigCA := x509.NewCertPool()
+		require.True(t, kubeconfigCA.AppendCertsFromPEM(restConfig.TLSClientConfig.CAData), "expected to load kubeconfig CA")
+
+		// Create an HTTP client that can reach the downstream discovery endpoint using the CA certs.
+		httpClient := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					MinVersion: tls.VersionTLS12,
+					RootCAs:    kubeconfigCA,
+				},
+				Proxy: func(req *http.Request) (*url.URL, error) {
+					if env.Proxy == "" {
+						t.Logf("passing request for %s with no proxy", req.URL)
+						return nil, nil
+					}
+					proxyURL, err := url.Parse(env.Proxy)
+					require.NoError(t, err)
+					t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
+					return proxyURL, nil
+				},
+			},
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, restConfig.Host, nil)
+		require.NoError(t, err)
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			t.Logf("could not connect to the API server at %q: %v", restConfig.Host, err)
+			return false
+		}
+		t.Logf("got %d response from API server at %q", resp.StatusCode, restConfig.Host)
+		require.NoError(t, resp.Body.Close())
+		return resp.StatusCode < 500
+	}, 5*time.Minute, 2*time.Second)
+
 	// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 	start := time.Now()
 	kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
@@ -270,42 +306,6 @@ func TestE2EFullIntegration(t *testing.T) {
 	msg, err := page.First("pre").Text()
 	require.NoError(t, err)
 	require.Equal(t, "you have been logged in and may now close this tab", msg)
-
-	// Verify that we can actually reach the endpoint in the kubeconfig.
-	require.Eventually(t, func() bool {
-		kubeconfigCA := x509.NewCertPool()
-		require.True(t, kubeconfigCA.AppendCertsFromPEM(restConfig.TLSClientConfig.CAData), "expected to load kubeconfig CA")
-
-		// Create an HTTP client that can reach the downstream discovery endpoint using the CA certs.
-		httpClient := &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					MinVersion: tls.VersionTLS12,
-					RootCAs:    kubeconfigCA,
-				},
-				Proxy: func(req *http.Request) (*url.URL, error) {
-					if env.Proxy == "" {
-						t.Logf("passing request for %s with no proxy", req.URL)
-						return nil, nil
-					}
-					proxyURL, err := url.Parse(env.Proxy)
-					require.NoError(t, err)
-					t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
-					return proxyURL, nil
-				},
-			},
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, restConfig.Host, nil)
-		require.NoError(t, err)
-		resp, err := httpClient.Do(req)
-		if err != nil {
-			t.Logf("could not connect to the API server at %q: %v", restConfig.Host, err)
-			return false
-		}
-		t.Logf("got %d response from API server at %q", resp.StatusCode, restConfig.Host)
-		require.NoError(t, resp.Body.Close())
-		return resp.StatusCode < 500
-	}, 5*time.Minute, 2*time.Second)
 
 	// Expect the CLI to output a list of namespaces in JSON format.
 	t.Logf("waiting for kubectl to output namespace list JSON")

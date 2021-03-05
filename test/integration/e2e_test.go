@@ -155,8 +155,7 @@ func TestE2EFullIntegration(t *testing.T) {
 		"--oidc-ca-bundle", testCABundlePath,
 		"--oidc-session-cache", sessionCachePath,
 	)
-	require.Equal(t, "", stderr)
-
+	t.Logf("stderr output from 'pinnipedget kubeconfig':\n%s\n\n", stderr)
 	t.Logf("test kubeconfig:\n%s\n\n", kubeconfigYAML)
 
 	restConfig := library.NewRestConfigFromKubeconfig(t, kubeconfigYAML)

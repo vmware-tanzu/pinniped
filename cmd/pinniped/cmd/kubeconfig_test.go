@@ -26,6 +26,7 @@ import (
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/testutil/testlogger"
 )
 
 func TestGetKubeconfig(t *testing.T) {
@@ -46,6 +47,7 @@ func TestGetKubeconfig(t *testing.T) {
 		getClientsetErr    error
 		conciergeObjects   []runtime.Object
 		conciergeReactions []kubetesting.Reactor
+		wantLogs           []string
 		wantError          bool
 		wantStdout         string
 		wantStderr         string
@@ -171,6 +173,9 @@ func TestGetKubeconfig(t *testing.T) {
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
 			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+			},
 			wantError: true,
 			wantStderr: here.Doc(`
 				Error: webhookauthenticators.authentication.concierge.pinniped.dev "test-authenticator" not found
@@ -185,6 +190,9 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
@@ -201,6 +209,9 @@ func TestGetKubeconfig(t *testing.T) {
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
 			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+			},
 			wantError: true,
 			wantStderr: here.Doc(`
 				Error: invalid authenticator type "invalid", supported values are "webhook" and "jwt"
@@ -213,6 +224,9 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
 			},
 			conciergeReactions: []kubetesting.Reactor{
 				&kubetesting.SimpleReactor{
@@ -245,6 +259,9 @@ func TestGetKubeconfig(t *testing.T) {
 					},
 				},
 			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+			},
 			wantError: true,
 			wantStderr: here.Doc(`
 				Error: failed to list WebhookAuthenticator objects for autodiscovery: some list error
@@ -257,6 +274,9 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
@@ -275,6 +295,13 @@ func TestGetKubeconfig(t *testing.T) {
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-3"}},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-4"}},
 			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="found JWTAuthenticator"  "name"="test-authenticator-1"`,
+				`"level"=0 "msg"="found JWTAuthenticator"  "name"="test-authenticator-2"`,
+				`"level"=0 "msg"="found WebhookAuthenticator"  "name"="test-authenticator-3"`,
+				`"level"=0 "msg"="found WebhookAuthenticator"  "name"="test-authenticator-4"`,
+			},
 			wantError: true,
 			wantStderr: here.Doc(`
 				Error: multiple authenticators were found, so the --concierge-authenticator-type/--concierge-authenticator-name flags must be specified
@@ -288,6 +315,9 @@ func TestGetKubeconfig(t *testing.T) {
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
+			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
@@ -340,6 +370,9 @@ func TestGetKubeconfig(t *testing.T) {
 				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+			},
 			wantError: true,
 			wantStderr: here.Doc(`
 				Error: autodiscovered Concierge CA bundle is invalid: illegal base64 data at input byte 7
@@ -372,6 +405,13 @@ func TestGetKubeconfig(t *testing.T) {
 				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="detected Concierge in TokenCredentialRequest API mode"`,
+				`"level"=0 "msg"="discovered WebhookAuthenticator"  "name"="test-authenticator"`,
+				`"level"=0 "msg"="detected concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+				`"level"=0 "msg"="detected concierge CA bundle"  "length"=37`,
+			},
 			wantError: true,
 			wantStderr: here.Doc(`
 				Error: could not autodiscover --oidc-issuer and none was provided
@@ -401,6 +441,12 @@ func TestGetKubeconfig(t *testing.T) {
 					},
 				},
 			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
+				`"level"=0 "msg"="detected OIDC issuer"  "issuer"=""`,
+				`"level"=0 "msg"="detected OIDC audience"  "audience"=""`,
+			},
 			wantError: true,
 			wantStderr: here.Doc(`
 				Error: tried to autodiscover --oidc-ca-bundle, but JWTAuthenticator test-authenticator has invalid spec.tls.certificateAuthorityData: illegal base64 data at input byte 7
@@ -428,6 +474,9 @@ func TestGetKubeconfig(t *testing.T) {
 				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+			},
 			wantError: true,
 			wantStderr: here.Doc(`
 				Error: could not read --concierge-ca-bundle: open ./does/not/exist: no such file or directory
@@ -451,6 +500,12 @@ func TestGetKubeconfig(t *testing.T) {
 					},
 				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
+			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="discovered WebhookAuthenticator"  "name"="test-authenticator"`,
+				`"level"=0 "msg"="detected concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+				`"level"=0 "msg"="detected concierge CA bundle"  "length"=37`,
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
@@ -484,6 +539,12 @@ func TestGetKubeconfig(t *testing.T) {
 					},
 				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
+			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="discovered WebhookAuthenticator"  "name"="test-authenticator"`,
+				`"level"=0 "msg"="detected concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+				`"level"=0 "msg"="detected concierge CA bundle"  "length"=37`,
 			},
 			wantStdout: here.Doc(`
         		apiVersion: v1
@@ -538,6 +599,12 @@ func TestGetKubeconfig(t *testing.T) {
 					},
 				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
+			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="discovered WebhookAuthenticator"  "name"="test-authenticator"`,
+				`"level"=0 "msg"="detected concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+				`"level"=0 "msg"="detected concierge CA bundle"  "length"=37`,
 			},
 			wantStdout: here.Doc(`
         		apiVersion: v1
@@ -601,6 +668,15 @@ func TestGetKubeconfig(t *testing.T) {
 					},
 				},
 			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
+				`"level"=0 "msg"="detected OIDC issuer"  "issuer"="https://example.com/issuer"`,
+				`"level"=0 "msg"="detected OIDC audience"  "audience"="test-audience"`,
+				`"level"=0 "msg"="detected OIDC CA bundle"  "length"=587`,
+				`"level"=0 "msg"="detected concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+				`"level"=0 "msg"="detected concierge CA bundle"  "length"=37`,
+			},
 			wantStdout: here.Docf(`
         		apiVersion: v1
         		clusters:
@@ -645,9 +721,12 @@ func TestGetKubeconfig(t *testing.T) {
 			name: "autodetect nothing, set a bunch of options",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
+				"--concierge-credential-issuer", "test-credential-issuer",
 				"--concierge-api-group-suffix", "tuna.io",
 				"--concierge-authenticator-type", "webhook",
 				"--concierge-authenticator-name", "test-authenticator",
+				"--concierge-endpoint", "https://concierge-endpoint.example.com",
+				"--concierge-ca-bundle", testConciergeCABundlePath,
 				"--oidc-issuer", "https://example.com/issuer",
 				"--oidc-skip-browser",
 				"--oidc-listen-port", "1234",
@@ -697,8 +776,8 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-api-group-suffix=tuna.io
         		      - --concierge-authenticator-name=test-authenticator
         		      - --concierge-authenticator-type=webhook
-        		      - --concierge-endpoint=https://fake-server-url-value
-        		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+        		      - --concierge-endpoint=https://concierge-endpoint.example.com
+        		      - --concierge-ca-bundle-data=dGVzdC1jb25jaWVyZ2UtY2E=
         		      - --concierge-mode=TokenCredentialRequestAPI
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
@@ -738,6 +817,14 @@ func TestGetKubeconfig(t *testing.T) {
 						},
 					},
 				},
+			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
+				`"level"=0 "msg"="detected OIDC issuer"  "issuer"="https://example.com/issuer"`,
+				`"level"=0 "msg"="detected OIDC audience"  "audience"="test-audience"`,
+				`"level"=0 "msg"="detected OIDC CA bundle"  "length"=587`,
+				`"level"=0 "msg"="switching kubeconfig cluster to point at impersonation proxy endpoint"  "endpoint"="https://impersonation-proxy-endpoint.test"`,
 			},
 			wantStdout: here.Docf(`
         		apiVersion: v1
@@ -831,6 +918,15 @@ func TestGetKubeconfig(t *testing.T) {
 					},
 				},
 			},
+			wantLogs: []string{
+				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="detected Concierge in impersonation proxy mode"  "endpoint"="https://impersonation-proxy-endpoint.test"`,
+				`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
+				`"level"=0 "msg"="detected OIDC issuer"  "issuer"="https://example.com/issuer"`,
+				`"level"=0 "msg"="detected OIDC audience"  "audience"="test-audience"`,
+				`"level"=0 "msg"="detected OIDC CA bundle"  "length"=587`,
+				`"level"=0 "msg"="switching kubeconfig cluster to point at impersonation proxy endpoint"  "endpoint"="https://impersonation-proxy-endpoint.test"`,
+			},
 			wantStdout: here.Docf(`
         		apiVersion: v1
         		clusters:
@@ -875,6 +971,7 @@ func TestGetKubeconfig(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			testLog := testlogger.New(t)
 			cmd := kubeconfigCommand(kubeconfigDeps{
 				getPathToSelf: func() (string, error) {
 					if tt.getPathToSelfErr != nil {
@@ -897,6 +994,7 @@ func TestGetKubeconfig(t *testing.T) {
 					}
 					return fake, nil
 				},
+				log: testLog,
 			})
 			require.NotNil(t, cmd)
 
@@ -910,6 +1008,7 @@ func TestGetKubeconfig(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+			testLog.Expect(tt.wantLogs)
 			require.Equal(t, tt.wantStdout, stdout.String(), "unexpected stdout")
 			require.Equal(t, tt.wantStderr, stderr.String(), "unexpected stderr")
 		})

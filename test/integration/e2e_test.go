@@ -303,8 +303,8 @@ func TestE2EFullIntegration(t *testing.T) {
 			return false
 		}
 		t.Logf("got %d response from API server at %q", resp.StatusCode, restConfig.Host)
-		return resp.StatusCode == 200 || resp.StatusCode == 403
-	}, 5*time.Minute, time.Second)
+		return resp.StatusCode < 500
+	}, 5*time.Minute, 2*time.Second)
 
 	// Expect the CLI to output a list of namespaces in JSON format.
 	t.Logf("waiting for kubectl to output namespace list JSON")

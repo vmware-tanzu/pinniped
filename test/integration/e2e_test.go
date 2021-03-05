@@ -279,7 +279,10 @@ func TestE2EFullIntegration(t *testing.T) {
 		// Create an HTTP client that can reach the downstream discovery endpoint using the CA certs.
 		httpClient := &http.Client{
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{RootCAs: kubeconfigCA},
+				TLSClientConfig: &tls.Config{
+					MinVersion: tls.VersionTLS12,
+					RootCAs:    kubeconfigCA,
+				},
 				Proxy: func(req *http.Request) (*url.URL, error) {
 					if env.Proxy == "" {
 						t.Logf("passing request for %s with no proxy", req.URL)
@@ -292,7 +295,9 @@ func TestE2EFullIntegration(t *testing.T) {
 				},
 			},
 		}
-		resp, err := httpClient.Get(restConfig.Host)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, restConfig.Host, nil)
+		require.NoError(t, err)
+		resp, err := httpClient.Do(req) //nolint:bodyclose
 		if err != nil {
 			t.Logf("could not connect to the API server at %q: %v", restConfig.Host, err)
 			return false

@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
@@ -124,16 +123,16 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 		const installedInNamespace = "some-namespace"
 
 		var (
-			r                      *require.Assertions
-			subject                controllerlib.Controller
-			pinnipedInformerClient *pinnipedfake.Clientset
-			kubeInformerClient     *kubernetesfake.Clientset
-			pinnipedInformers      pinnipedinformers.SharedInformerFactory
-			kubeInformers          kubeinformers.SharedInformerFactory
-			timeoutContext         context.Context
-			timeoutContextCancel   context.CancelFunc
-			syncContext            *controllerlib.Context
-			issuerToJWKSSetter     *fakeIssuerToJWKSMapSetter
+			r                       *require.Assertions
+			subject                 controllerlib.Controller
+			pinnipedInformerClient  *pinnipedfake.Clientset
+			kubeInformerClient      *kubernetesfake.Clientset
+			pinnipedInformers       pinnipedinformers.SharedInformerFactory
+			kubeInformers           kubeinformers.SharedInformerFactory
+			cancelContext           context.Context
+			cancelContextCancelFunc context.CancelFunc
+			syncContext             *controllerlib.Context
+			issuerToJWKSSetter      *fakeIssuerToJWKSMapSetter
 		)
 
 		// Defer starting the informers until the last possible moment so that the
@@ -149,7 +148,7 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 
 			// Set this at the last second to support calling subject.Name().
 			syncContext = &controllerlib.Context{
-				Context: timeoutContext,
+				Context: cancelContext,
 				Name:    subject.Name(),
 				Key: controllerlib.Key{
 					Namespace: installedInNamespace,
@@ -158,15 +157,15 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 			}
 
 			// Must start informers before calling TestRunSynchronously()
-			kubeInformers.Start(timeoutContext.Done())
-			pinnipedInformers.Start(timeoutContext.Done())
+			kubeInformers.Start(cancelContext.Done())
+			pinnipedInformers.Start(cancelContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
 		it.Before(func() {
 			r = require.New(t)
 
-			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
+			cancelContext, cancelContextCancelFunc = context.WithCancel(context.Background())
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
@@ -184,7 +183,7 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 		})
 
 		it.After(func() {
-			timeoutContextCancel()
+			cancelContextCancelFunc()
 		})
 
 		when("there are no FederationDomains and no JWKS Secrets yet", func() {

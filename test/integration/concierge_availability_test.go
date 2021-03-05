@@ -20,7 +20,7 @@ func TestGetDeployment(t *testing.T) {
 	env := library.IntegrationEnv(t)
 	client := library.NewKubernetesClientset(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	appDeployment, err := client.AppsV1().Deployments(env.ConciergeNamespace).Get(ctx, env.ConciergeAppName, metav1.GetOptions{})

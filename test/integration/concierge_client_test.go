@@ -59,7 +59,7 @@ func TestClient(t *testing.T) {
 
 	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	webhook := library.CreateTestWebhookAuthenticator(ctx, t)

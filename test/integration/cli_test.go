@@ -38,7 +38,7 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
 	// Create a test webhook configuration to use with the CLI.
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 4*time.Minute)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancelFunc()
 
 	authenticator := library.CreateTestWebhookAuthenticator(ctx, t)

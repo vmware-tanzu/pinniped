@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -630,7 +629,7 @@ func TestFederationDomainSecretsControllerSync(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			pinnipedAPIClient := pinnipedfake.NewSimpleClientset()

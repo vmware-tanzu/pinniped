@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apicerts
@@ -6,7 +6,6 @@ package apicerts
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
@@ -104,8 +103,8 @@ func TestObserverControllerSync(t *testing.T) {
 		var subject controllerlib.Controller
 		var kubeInformerClient *kubernetesfake.Clientset
 		var kubeInformers kubeinformers.SharedInformerFactory
-		var timeoutContext context.Context
-		var timeoutContextCancel context.CancelFunc
+		var cancelContext context.Context
+		var cancelContextCancelFunc context.CancelFunc
 		var syncContext *controllerlib.Context
 		var dynamicCertProvider dynamiccert.Provider
 
@@ -123,7 +122,7 @@ func TestObserverControllerSync(t *testing.T) {
 
 			// Set this at the last second to support calling subject.Name().
 			syncContext = &controllerlib.Context{
-				Context: timeoutContext,
+				Context: cancelContext,
 				Name:    subject.Name(),
 				Key: controllerlib.Key{
 					Namespace: installedInNamespace,
@@ -132,14 +131,14 @@ func TestObserverControllerSync(t *testing.T) {
 			}
 
 			// Must start informers before calling TestRunSynchronously()
-			kubeInformers.Start(timeoutContext.Done())
+			kubeInformers.Start(cancelContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
 		it.Before(func() {
 			r = require.New(t)
 
-			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
+			cancelContext, cancelContextCancelFunc = context.WithCancel(context.Background())
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
@@ -147,7 +146,7 @@ func TestObserverControllerSync(t *testing.T) {
 		})
 
 		it.After(func() {
-			timeoutContextCancel()
+			cancelContextCancelFunc()
 		})
 
 		when("there is not yet a serving cert Secret in the installation namespace or it was deleted", func() {

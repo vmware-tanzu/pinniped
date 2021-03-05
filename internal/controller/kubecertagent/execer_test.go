@@ -146,8 +146,8 @@ func TestManagerControllerSync(t *testing.T) {
 		var r *require.Assertions
 
 		var subject controllerlib.Controller
-		var timeoutContext context.Context
-		var timeoutContextCancel context.CancelFunc
+		var cancelContext context.Context
+		var cancelContextCancelFunc context.CancelFunc
 		var syncContext *controllerlib.Context
 		var pinnipedAPIClient *pinnipedfake.Clientset
 		var kubeInformerFactory kubeinformers.SharedInformerFactory
@@ -181,7 +181,7 @@ func TestManagerControllerSync(t *testing.T) {
 
 			// Set this at the last second to support calling subject.Name().
 			syncContext = &controllerlib.Context{
-				Context: timeoutContext,
+				Context: cancelContext,
 				Name:    subject.Name(),
 				Key: controllerlib.Key{
 					Namespace: agentPodNamespace,
@@ -190,7 +190,7 @@ func TestManagerControllerSync(t *testing.T) {
 			}
 
 			// Must start informers before calling TestRunSynchronously()
-			kubeInformerFactory.Start(timeoutContext.Done())
+			kubeInformerFactory.Start(cancelContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
@@ -228,7 +228,7 @@ func TestManagerControllerSync(t *testing.T) {
 		it.Before(func() {
 			r = require.New(t)
 
-			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
+			cancelContext, cancelContextCancelFunc = context.WithCancel(context.Background())
 			pinnipedAPIClient = pinnipedfake.NewSimpleClientset()
 			kubeClientset = kubernetesfake.NewSimpleClientset()
 			kubeInformerFactory = kubeinformers.NewSharedInformerFactory(kubeClientset, 0)
@@ -253,7 +253,7 @@ func TestManagerControllerSync(t *testing.T) {
 		})
 
 		it.After(func() {
-			timeoutContextCancel()
+			cancelContextCancelFunc()
 		})
 
 		when("there is not yet any agent pods or they were deleted", func() {

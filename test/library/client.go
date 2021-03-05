@@ -156,7 +156,7 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 	client := NewConciergeClientset(t)
 	webhooks := client.AuthenticationV1alpha1().WebhookAuthenticators()
 
-	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
+	createContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
 	webhook, err := webhooks.Create(createContext, &auth1alpha1.WebhookAuthenticator{
@@ -169,7 +169,7 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 	t.Cleanup(func() {
 		t.Helper()
 		t.Logf("cleaning up test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
-		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		deleteCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		err := webhooks.Delete(deleteCtx, webhook.Name, metav1.DeleteOptions{})
 		require.NoErrorf(t, err, "could not cleanup test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
@@ -219,7 +219,7 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 	client := NewConciergeClientset(t)
 	jwtAuthenticators := client.AuthenticationV1alpha1().JWTAuthenticators()
 
-	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
+	createContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
 	jwtAuthenticator, err := jwtAuthenticators.Create(createContext, &auth1alpha1.JWTAuthenticator{
@@ -232,7 +232,7 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 	t.Cleanup(func() {
 		t.Helper()
 		t.Logf("cleaning up test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
-		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		deleteCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		err := jwtAuthenticators.Delete(deleteCtx, jwtAuthenticator.Name, metav1.DeleteOptions{})
 		require.NoErrorf(t, err, "could not cleanup test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
@@ -255,7 +255,7 @@ func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
-	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
+	createContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
 	if issuer == "" {
@@ -276,7 +276,7 @@ func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string
 	t.Cleanup(func() {
 		t.Helper()
 		t.Logf("cleaning up test FederationDomain %s/%s", federationDomain.Namespace, federationDomain.Name)
-		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		deleteCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		err := federationDomains.Delete(deleteCtx, federationDomain.Name, metav1.DeleteOptions{})
 		notFound := k8serrors.IsNotFound(err)
@@ -330,7 +330,7 @@ func RandHex(t *testing.T, numBytes int) string {
 func CreateTestSecret(t *testing.T, namespace string, baseName string, secretType corev1.SecretType, stringData map[string]string) *corev1.Secret {
 	t.Helper()
 	client := NewKubernetesClientset(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	created, err := client.CoreV1().Secrets(namespace).Create(ctx, &corev1.Secret{
@@ -401,7 +401,7 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 func CreateTestClusterRoleBinding(t *testing.T, subject rbacv1.Subject, roleRef rbacv1.RoleRef) *rbacv1.ClusterRoleBinding {
 	t.Helper()
 	client := NewKubernetesClientset(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	// Create the ClusterRoleBinding using GenerateName to get a random name.
@@ -426,7 +426,7 @@ func CreateTestClusterRoleBinding(t *testing.T, subject rbacv1.Subject, roleRef 
 func WaitForUserToHaveAccess(t *testing.T, user string, groups []string, shouldHaveAccessTo *authorizationv1.ResourceAttributes) {
 	t.Helper()
 	client := NewKubernetesClientset(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	RequireEventuallyWithoutError(t, func() (bool, error) {
@@ -441,7 +441,7 @@ func WaitForUserToHaveAccess(t *testing.T, user string, groups []string, shouldH
 			return false, err
 		}
 		return subjectAccessReview.Status.Allowed, nil
-	}, 10*time.Second, 500*time.Millisecond)
+	}, time.Minute, 500*time.Millisecond)
 }
 
 func testObjectMeta(t *testing.T, baseName string) metav1.ObjectMeta {

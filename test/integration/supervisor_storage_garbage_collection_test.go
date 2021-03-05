@@ -99,7 +99,7 @@ func createSecret(ctx context.Context, t *testing.T, secrets corev1client.Secret
 
 	// Make sure the Secret is deleted when the test ends.
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		err := secrets.Delete(ctx, secret.Name, metav1.DeleteOptions{})
 		notFound := k8serrors.IsNotFound(err)

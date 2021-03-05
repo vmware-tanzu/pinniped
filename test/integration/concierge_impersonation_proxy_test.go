@@ -96,7 +96,7 @@ func TestImpersonationProxy(t *testing.T) {
 	}
 	// At the end of the test, clean up the ConfigMap.
 	t.Cleanup(func() {
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
 		// Delete any version that was created by this test.

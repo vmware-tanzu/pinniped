@@ -25,7 +25,7 @@ func TestCredentialIssuer(t *testing.T) {
 
 	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	t.Run("test successful CredentialIssuer", func(t *testing.T) {

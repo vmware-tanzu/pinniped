@@ -34,7 +34,7 @@ func TestWhoAmI_Kubeadm(t *testing.T) {
 	// we should add more robust logic around skipping clusters based on vendor
 	_ = library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	whoAmI, err := library.NewConciergeClientset(t).IdentityV1alpha1().WhoAmIRequests().
@@ -63,7 +63,7 @@ func TestWhoAmI_Kubeadm(t *testing.T) {
 func TestWhoAmI_ServiceAccount_Legacy(t *testing.T) {
 	_ = library.IntegrationEnv(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	kubeClient := library.NewKubernetesClientset(t).CoreV1()
@@ -107,7 +107,7 @@ func TestWhoAmI_ServiceAccount_Legacy(t *testing.T) {
 			return false, err
 		}
 		return len(secret.Data[corev1.ServiceAccountTokenKey]) > 0, nil
-	}, 30*time.Second, time.Second)
+	}, time.Minute, time.Second)
 
 	saConfig := library.NewAnonymousClientRestConfig(t)
 	saConfig.BearerToken = string(secret.Data[corev1.ServiceAccountTokenKey])
@@ -140,7 +140,7 @@ func TestWhoAmI_ServiceAccount_Legacy(t *testing.T) {
 func TestWhoAmI_ServiceAccount_TokenRequest(t *testing.T) {
 	_ = library.IntegrationEnv(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	kubeClient := library.NewKubernetesClientset(t).CoreV1()
@@ -258,7 +258,7 @@ func TestWhoAmI_CSR(t *testing.T) {
 	// we should add more robust logic around skipping clusters based on vendor
 	_ = library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	kubeClient := library.NewKubernetesClientset(t)
@@ -346,7 +346,7 @@ func TestWhoAmI_CSR(t *testing.T) {
 func TestWhoAmI_Anonymous(t *testing.T) {
 	_ = library.IntegrationEnv(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	anonymousConfig := library.NewAnonymousClientRestConfig(t)
@@ -377,7 +377,7 @@ func TestWhoAmI_Anonymous(t *testing.T) {
 func TestWhoAmI_ImpersonateDirectly(t *testing.T) {
 	_ = library.IntegrationEnv(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	impersonationConfig := library.NewClientConfig(t)

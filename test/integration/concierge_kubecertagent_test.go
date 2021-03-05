@@ -30,7 +30,7 @@ func TestKubeCertAgent(t *testing.T) {
 
 	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	kubeClient := library.NewKubernetesClientset(t)

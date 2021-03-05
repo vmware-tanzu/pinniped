@@ -240,7 +240,7 @@ func verifyTokenResponse(
 	nonceParam nonce.Nonce,
 	expectedIDTokenClaims []string,
 ) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	// Verify the ID Token.
@@ -310,7 +310,7 @@ func (s *localCallbackServer) waitForCallback(timeout time.Duration) *http.Reque
 }
 
 func doTokenExchange(t *testing.T, config *oauth2.Config, tokenResponse *oauth2.Token, httpClient *http.Client, provider *coreosoidc.Provider) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	// Form the HTTP POST request with the parameters specified by RFC8693.

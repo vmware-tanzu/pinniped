@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package main
@@ -99,7 +99,7 @@ func TestWebhook(t *testing.T) {
 		},
 	}))
 
-	secretInformer := createSecretInformer(t, kubeClient)
+	secretInformer := createSecretInformer(ctx, t, kubeClient)
 
 	certProvider, caBundle, serverName := newCertProvider(t)
 	w := newWebhook(certProvider, secretInformer)
@@ -437,7 +437,7 @@ func TestWebhook(t *testing.T) {
 	}
 }
 
-func createSecretInformer(t *testing.T, kubeClient kubernetes.Interface) corev1informers.SecretInformer {
+func createSecretInformer(ctx context.Context, t *testing.T, kubeClient kubernetes.Interface) corev1informers.SecretInformer {
 	t.Helper()
 
 	kubeInformers := kubeinformers.NewSharedInformerFactory(kubeClient, 0)
@@ -447,9 +447,6 @@ func createSecretInformer(t *testing.T, kubeClient kubernetes.Interface) corev1i
 	// We need to call Informer() on the secretInformer to lazily instantiate the
 	// informer factory before syncing it.
 	secretInformer.Informer()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
-	defer cancel()
 
 	kubeInformers.Start(ctx.Done())
 

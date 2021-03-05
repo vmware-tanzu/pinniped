@@ -297,8 +297,8 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		var pinnipedAPIClient *pinnipedfake.Clientset
 		var kubeInformerClient *kubernetesfake.Clientset
 		var kubeInformers kubeinformers.SharedInformerFactory
-		var timeoutContext context.Context
-		var timeoutContextCancel context.CancelFunc
+		var cancelContext context.Context
+		var cancelContextCancelFunc context.CancelFunc
 		var syncContext *controllerlib.Context
 		var startTLSListenerFuncWasCalled int
 		var startTLSListenerFuncError error
@@ -369,11 +369,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			url := "https://" + addr
 			req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
 			r.NoError(err)
+
 			var resp *http.Response
 			assert.Eventually(t, func() bool {
 				resp, err = client.Do(req.Clone(context.Background())) //nolint:bodyclose
 				return err == nil
-			}, 5*time.Second, 5*time.Millisecond)
+			}, 20*time.Second, 50*time.Millisecond)
 			r.NoError(err)
 
 			r.Equal(http.StatusOK, resp.StatusCode)
@@ -392,13 +393,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			url := "https://" + testServerAddr()
 			req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
 			r.NoError(err)
+
 			expectedErrorRegex := "Get .*: remote error: tls: unrecognized name"
 			expectedErrorRegexCompiled, err := regexp.Compile(expectedErrorRegex)
 			r.NoError(err)
 			assert.Eventually(t, func() bool {
 				_, err = client.Do(req.Clone(context.Background())) //nolint:bodyclose
 				return err != nil && expectedErrorRegexCompiled.MatchString(err.Error())
-			}, 5*time.Second, 5*time.Millisecond)
+			}, 20*time.Second, 50*time.Millisecond)
 			r.Error(err)
 			r.Regexp(expectedErrorRegex, err.Error())
 		}
@@ -416,7 +418,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					&tls.Config{InsecureSkipVerify: true}, //nolint:gosec
 				)
 				return err != nil && expectedErrorRegexCompiled.MatchString(err.Error())
-			}, 5*time.Second, 5*time.Millisecond)
+			}, 20*time.Second, 50*time.Millisecond)
 			r.Error(err)
 			r.Regexp(expectedErrorRegex, err.Error())
 		}
@@ -456,7 +458,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 			// Set this at the last second to support calling subject.Name().
 			syncContext = &controllerlib.Context{
-				Context: timeoutContext,
+				Context: cancelContext,
 				Name:    subject.Name(),
 				Key: controllerlib.Key{
 					Namespace: installedInNamespace,
@@ -465,7 +467,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			}
 
 			// Must start informers before calling TestRunSynchronously()
-			kubeInformers.Start(timeoutContext.Done())
+			kubeInformers.Start(cancelContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
@@ -552,18 +554,29 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		// If an object is added to the informer's client *before* the informer is started, then waiting is
 		// not needed because the informer's initial "list" will pick up the object.
 		var waitForObjectToAppearInInformer = func(obj kubeclient.Object, informer controllerlib.InformerGetter) {
-			r.Eventually(func() bool {
-				gotObj, exists, err := informer.Informer().GetIndexer().GetByKey(installedInNamespace + "/" + obj.GetName())
-				return err == nil && exists && reflect.DeepEqual(gotObj.(kubeclient.Object), obj)
-			}, 10*time.Second, 5*time.Millisecond)
+			var objFromInformer interface{}
+			var exists bool
+			var err error
+			assert.Eventually(t, func() bool {
+				objFromInformer, exists, err = informer.Informer().GetIndexer().GetByKey(installedInNamespace + "/" + obj.GetName())
+				return err == nil && exists && reflect.DeepEqual(objFromInformer.(kubeclient.Object), obj)
+			}, 30*time.Second, 10*time.Millisecond)
+			r.NoError(err)
+			r.True(exists, "this object should have existed in informer but didn't: %+v", obj)
+			r.Equal(obj, objFromInformer, "was waiting for expected to be found in informer, but found actual")
 		}
 
 		// See comment for waitForObjectToAppearInInformer above.
 		var waitForObjectToBeDeletedFromInformer = func(resourceName string, informer controllerlib.InformerGetter) {
-			r.Eventually(func() bool {
-				_, exists, err := informer.Informer().GetIndexer().GetByKey(installedInNamespace + "/" + resourceName)
+			var objFromInformer interface{}
+			var exists bool
+			var err error
+			assert.Eventually(t, func() bool {
+				objFromInformer, exists, err = informer.Informer().GetIndexer().GetByKey(installedInNamespace + "/" + resourceName)
 				return err == nil && !exists
-			}, 10*time.Second, 5*time.Millisecond)
+			}, 30*time.Second, 10*time.Millisecond)
+			r.NoError(err)
+			r.False(exists, "this object should have been deleted from informer but wasn't: %s", objFromInformer)
 		}
 
 		var addObjectToInformerAndWait = func(obj kubeclient.Object, informer controllerlib.InformerGetter) {
@@ -835,7 +848,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		it.Before(func() {
 			r = require.New(t)
-			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
+			cancelContext, cancelContextCancelFunc = context.WithCancel(context.Background())
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeInformers = kubeinformers.NewSharedInformerFactoryWithOptions(kubeInformerClient, 0,
 				kubeinformers.WithNamespace(installedInNamespace),
@@ -846,7 +859,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		})
 
 		it.After(func() {
-			timeoutContextCancel()
+			cancelContextCancelFunc()
 			closeTLSListener()
 		})
 

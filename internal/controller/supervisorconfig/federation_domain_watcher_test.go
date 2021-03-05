@@ -103,8 +103,8 @@ func TestSync(t *testing.T) {
 		var federationDomainInformerClient *pinnipedfake.Clientset
 		var federationDomainInformers pinnipedinformers.SharedInformerFactory
 		var pinnipedAPIClient *pinnipedfake.Clientset
-		var timeoutContext context.Context
-		var timeoutContextCancel context.CancelFunc
+		var cancelContext context.Context
+		var cancelContextCancelFunc context.CancelFunc
 		var syncContext *controllerlib.Context
 		var frozenNow time.Time
 		var providersSetter *fakeProvidersSetter
@@ -124,7 +124,7 @@ func TestSync(t *testing.T) {
 
 			// Set this at the last second to support calling subject.Name().
 			syncContext = &controllerlib.Context{
-				Context: timeoutContext,
+				Context: cancelContext,
 				Name:    subject.Name(),
 				Key: controllerlib.Key{
 					Namespace: namespace,
@@ -133,7 +133,7 @@ func TestSync(t *testing.T) {
 			}
 
 			// Must start informers before calling TestRunSynchronously()
-			federationDomainInformers.Start(timeoutContext.Done())
+			federationDomainInformers.Start(cancelContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
@@ -143,7 +143,7 @@ func TestSync(t *testing.T) {
 			providersSetter = &fakeProvidersSetter{}
 			frozenNow = time.Date(2020, time.September, 23, 7, 42, 0, 0, time.Local)
 
-			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
+			cancelContext, cancelContextCancelFunc = context.WithCancel(context.Background())
 
 			federationDomainInformerClient = pinnipedfake.NewSimpleClientset()
 			federationDomainInformers = pinnipedinformers.NewSharedInformerFactory(federationDomainInformerClient, 0)
@@ -157,7 +157,7 @@ func TestSync(t *testing.T) {
 		})
 
 		it.After(func() {
-			timeoutContextCancel()
+			cancelContextCancelFunc()
 		})
 
 		when("there are some valid FederationDomains in the informer", func() {

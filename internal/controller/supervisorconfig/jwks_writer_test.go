@@ -12,7 +12,6 @@ import (
 	"io"
 	"io/ioutil"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -674,7 +673,7 @@ func TestJWKSWriterControllerSync(t *testing.T) {
 				return goodKey, test.generateKeyErr
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			kubeAPIClient := kubernetesfake.NewSimpleClientset()

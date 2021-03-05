@@ -27,7 +27,7 @@ func TestUnsuccessfulCredentialRequest(t *testing.T) {
 
 	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	response, err := makeRequest(ctx, t, validCredentialRequestSpecWithRealToken(t, corev1.TypedLocalObjectReference{
@@ -137,7 +137,7 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 
 	// Create a testWebhook so we have a legitimate authenticator to pass to the
 	// TokenCredentialRequest API.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
 
@@ -160,7 +160,7 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T
 
 	// Create a testWebhook so we have a legitimate authenticator to pass to the
 	// TokenCredentialRequest API.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
 
@@ -188,7 +188,7 @@ func TestCredentialRequest_OtherwiseValidRequestWithRealTokenShouldFailWhenTheCl
 
 	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
@@ -208,7 +208,7 @@ func makeRequest(ctx context.Context, t *testing.T, spec loginv1alpha1.TokenCred
 
 	client := library.NewAnonymousConciergeClientset(t)
 
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
 	return client.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{

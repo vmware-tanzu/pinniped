@@ -42,13 +42,13 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 	secrets := client.CoreV1().Secrets(env.SupervisorNamespace)
 
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		err := secrets.Delete(ctx, name, metav1.DeleteOptions{})
 		require.NoError(t, err)
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	// get a session with most of the data filled out

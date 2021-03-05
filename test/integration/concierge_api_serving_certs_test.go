@@ -78,7 +78,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			kubeClient := library.NewKubernetesClientset(t)
 			aggregatedClient := library.NewAggregatedClientset(t)
 			conciergeClient := library.NewConciergeClientset(t)
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
 			apiServiceName := "v1alpha1.login.concierge." + env.APIGroupSuffix

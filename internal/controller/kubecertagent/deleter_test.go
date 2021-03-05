@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubecertagent
@@ -6,7 +6,6 @@ package kubecertagent
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
@@ -57,8 +56,8 @@ func TestDeleterControllerSync(t *testing.T) {
 		var kubeSystemInformers kubeinformers.SharedInformerFactory
 		var agentInformerClient *kubernetesfake.Clientset
 		var agentInformers kubeinformers.SharedInformerFactory
-		var timeoutContext context.Context
-		var timeoutContextCancel context.CancelFunc
+		var cancelContext context.Context
+		var cancelContextCancelFunc context.CancelFunc
 		var syncContext *controllerlib.Context
 		var controllerManagerPod, agentPod *corev1.Pod
 		var podsGVR schema.GroupVersionResource
@@ -85,7 +84,7 @@ func TestDeleterControllerSync(t *testing.T) {
 
 			// Set this at the last second to support calling subject.Name().
 			syncContext = &controllerlib.Context{
-				Context: timeoutContext,
+				Context: cancelContext,
 				Name:    subject.Name(),
 				Key: controllerlib.Key{
 					Namespace: kubeSystemNamespace,
@@ -94,8 +93,8 @@ func TestDeleterControllerSync(t *testing.T) {
 			}
 
 			// Must start informers before calling TestRunSynchronously()
-			kubeSystemInformers.Start(timeoutContext.Done())
-			agentInformers.Start(timeoutContext.Done())
+			kubeSystemInformers.Start(cancelContext.Done())
+			agentInformers.Start(cancelContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
@@ -109,7 +108,7 @@ func TestDeleterControllerSync(t *testing.T) {
 		it.Before(func() {
 			r = require.New(t)
 
-			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
+			cancelContext, cancelContextCancelFunc = context.WithCancel(context.Background())
 
 			kubeAPIClient = kubernetesfake.NewSimpleClientset()
 
@@ -139,7 +138,7 @@ func TestDeleterControllerSync(t *testing.T) {
 		})
 
 		it.After(func() {
-			timeoutContextCancel()
+			cancelContextCancelFunc()
 		})
 
 		when("there is an agent pod", func() {

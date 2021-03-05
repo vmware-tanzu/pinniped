@@ -84,8 +84,10 @@ func TestGetKubeconfig(t *testing.T) {
 				      --oidc-session-cache string             Path to OpenID Connect session cache file
 				      --oidc-skip-browser                     During OpenID Connect login, skip opening the browser (just print the URL)
 				  -o, --output string                         Output file path (default: stdout)
+				      --skip-validation                       Skip final validation of the kubeconfig (default: false)
 				      --static-token string                   Instead of doing an OIDC-based login, specify a static token
 				      --static-token-env string               Instead of doing an OIDC-based login, read a static token from the environment
+				      --timeout duration                      Timeout for autodiscovery and validation (default 10m0s)
 			`),
 		},
 		{
@@ -528,6 +530,7 @@ func TestGetKubeconfig(t *testing.T) {
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 				"--static-token", "test-token",
+				"--skip-validation",
 			},
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{
@@ -588,6 +591,7 @@ func TestGetKubeconfig(t *testing.T) {
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 				"--static-token-env", "TEST_TOKEN",
+				"--skip-validation",
 			},
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{
@@ -647,6 +651,7 @@ func TestGetKubeconfig(t *testing.T) {
 			name: "autodetect JWT authenticator",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
+				"--skip-validation",
 			},
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{
@@ -735,6 +740,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--oidc-session-cache", "/path/to/cache/dir/sessions.yaml",
 				"--oidc-debug-session-cache",
 				"--oidc-request-audience", "test-audience",
+				"--skip-validation",
 			},
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{
@@ -802,6 +808,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--concierge-ca-bundle", testConciergeCABundlePath,
 				"--concierge-endpoint", "https://impersonation-proxy-endpoint.test",
 				"--concierge-mode", "ImpersonationProxy",
+				"--skip-validation",
 			},
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{
@@ -871,6 +878,7 @@ func TestGetKubeconfig(t *testing.T) {
 			name: "autodetect impersonation proxy with autodetected JWT authenticator",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
+				"--skip-validation",
 			},
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{

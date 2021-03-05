@@ -6,11 +6,14 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -91,6 +94,8 @@ type getKubeconfigConciergeParams struct {
 type getKubeconfigParams struct {
 	kubeconfigPath            string
 	kubeconfigContextOverride string
+	skipValidate              bool
+	timeout                   time.Duration
 	outputPath                string
 	staticToken               string
 	staticTokenEnvName        string
@@ -136,6 +141,8 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.StringVar(&flags.oidc.requestAudience, "oidc-request-audience", "", "Request a token with an alternate audience using RFC8693 token exchange")
 	f.StringVar(&flags.kubeconfigPath, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to kubeconfig file")
 	f.StringVar(&flags.kubeconfigContextOverride, "kubeconfig-context", "", "Kubeconfig context name (default: current active context)")
+	f.BoolVar(&flags.skipValidate, "skip-validation", false, "Skip final validation of the kubeconfig (default: false)")
+	f.DurationVar(&flags.timeout, "timeout", 10*time.Minute, "Timeout for autodiscovery and validation")
 	f.StringVarP(&flags.outputPath, "output", "o", "", "Output file path (default: stdout)")
 
 	mustMarkHidden(cmd, "oidc-debug-session-cache")
@@ -152,13 +159,16 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 			defer func() { _ = out.Close() }()
 			cmd.SetOut(out)
 		}
-		return runGetKubeconfig(cmd.OutOrStdout(), deps, flags)
+		return runGetKubeconfig(cmd.Context(), cmd.OutOrStdout(), deps, flags)
 	}
 	return cmd
 }
 
 //nolint:funlen
-func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigParams) error {
+func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, flags getKubeconfigParams) error {
+	ctx, cancel := context.WithTimeout(ctx, flags.timeout)
+	defer cancel()
+
 	// Validate api group suffix and immediately return an error if it is invalid.
 	if err := groupsuffix.Validate(flags.concierge.apiGroupSuffix); err != nil {
 		return fmt.Errorf("invalid api group suffix: %w", err)
@@ -229,7 +239,12 @@ func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigPar
 		if flags.staticTokenEnvName != "" {
 			execConfig.Args = append(execConfig.Args, "--token-env="+flags.staticTokenEnvName)
 		}
-		return writeConfigAsYAML(out, newExecKubeconfig(cluster, &execConfig))
+
+		kubeconfig := newExecKubeconfig(cluster, &execConfig)
+		if err := validateKubeconfig(ctx, flags, kubeconfig, deps.log); err != nil {
+			return err
+		}
+		return writeConfigAsYAML(out, kubeconfig)
 	}
 
 	// Otherwise continue to parse the OIDC-related flags and output a config that runs `pinniped login oidc`.
@@ -260,7 +275,11 @@ func runGetKubeconfig(out io.Writer, deps kubeconfigDeps, flags getKubeconfigPar
 	if flags.oidc.requestAudience != "" {
 		execConfig.Args = append(execConfig.Args, "--request-audience="+flags.oidc.requestAudience)
 	}
-	return writeConfigAsYAML(out, newExecKubeconfig(cluster, &execConfig))
+	kubeconfig := newExecKubeconfig(cluster, &execConfig)
+	if err := validateKubeconfig(ctx, flags, kubeconfig, deps.log); err != nil {
+		return err
+	}
+	return writeConfigAsYAML(out, kubeconfig)
 }
 
 func configureConcierge(credentialIssuer *configv1alpha1.CredentialIssuer, authenticator metav1.Object, flags *getKubeconfigParams, v1Cluster *clientcmdapi.Cluster, oidcCABundle *string, execConfig *clientcmdapi.ExecConfig, log logr.Logger) error {
@@ -517,4 +536,78 @@ func copyCurrentClusterFromExistingKubeConfig(currentKubeConfig clientcmdapi.Con
 		return nil, fmt.Errorf("no such context %q", contextName)
 	}
 	return currentKubeConfig.Clusters[ctx.Cluster], nil
+}
+
+func validateKubeconfig(ctx context.Context, flags getKubeconfigParams, kubeconfig clientcmdapi.Config, log logr.Logger) error {
+	if flags.skipValidate {
+		return nil
+	}
+
+	kubeContext := kubeconfig.Contexts[kubeconfig.CurrentContext]
+	if kubeContext == nil {
+		return fmt.Errorf("invalid kubeconfig (no context)")
+	}
+	cluster := kubeconfig.Clusters[kubeContext.Cluster]
+	if cluster == nil {
+		return fmt.Errorf("invalid kubeconfig (no cluster)")
+	}
+
+	kubeconfigCA := x509.NewCertPool()
+	if !kubeconfigCA.AppendCertsFromPEM(cluster.CertificateAuthorityData) {
+		return fmt.Errorf("invalid kubeconfig (no certificateAuthorityData)")
+	}
+
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				MinVersion: tls.VersionTLS12,
+				RootCAs:    kubeconfigCA,
+			},
+			Proxy:               http.ProxyFromEnvironment,
+			TLSHandshakeTimeout: 10 * time.Second,
+		},
+		Timeout: 10 * time.Second,
+	}
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	pingCluster := func() error {
+		reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, cluster.Server, nil)
+		if err != nil {
+			return fmt.Errorf("could not form request to validate cluster: %w", err)
+		}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return err
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode >= 500 {
+			return fmt.Errorf("unexpected status code %d", resp.StatusCode)
+		}
+		return nil
+	}
+
+	err := pingCluster()
+	if err == nil {
+		log.Info("validated connection to the cluster")
+		return nil
+	}
+
+	log.Info("could not immediately connect to the cluster but it may be initializing, will retry until timeout")
+	deadline, _ := ctx.Deadline()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			err := pingCluster()
+			if err == nil {
+				return nil
+			}
+			log.Error(err, "could not connect to cluster, retrying...", "remaining", time.Until(deadline).Round(time.Second).String())
+		}
+	}
 }

@@ -297,12 +297,13 @@ func TestE2EFullIntegration(t *testing.T) {
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, restConfig.Host, nil)
 		require.NoError(t, err)
-		resp, err := httpClient.Do(req) //nolint:bodyclose
+		resp, err := httpClient.Do(req)
 		if err != nil {
 			t.Logf("could not connect to the API server at %q: %v", restConfig.Host, err)
 			return false
 		}
 		t.Logf("got %d response from API server at %q", resp.StatusCode, restConfig.Host)
+		require.NoError(t, resp.Body.Close())
 		return resp.StatusCode < 500
 	}, 5*time.Minute, 2*time.Second)
 

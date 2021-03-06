@@ -4,11 +4,17 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +34,7 @@ import (
 	"go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	"go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/concierge/impersonator"
+	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/impersonationtoken"
 	"go.pinniped.dev/test/library"
 )
@@ -349,6 +356,89 @@ func TestImpersonationProxy(t *testing.T) {
 		// Double impersonation is not supported yet, so we should get an error.
 		expectedErr := fmt.Sprintf("the server rejected our request for an unknown reason (get secrets %s)", impersonationProxyTLSSecretName(env))
 		require.EqualError(t, err, expectedErr)
+	})
+
+	t.Run("kubectl as a client", func(t *testing.T) {
+		// Create an RBAC rule to allow this user to read/write everything.
+		library.CreateTestClusterRoleBinding(t,
+			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
+			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "edit"},
+		)
+		// Wait for the above RBAC rule to take effect.
+		library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
+			Verb: "get", Group: "", Version: "v1", Resource: "namespaces",
+		})
+
+		pinnipedExe := library.PinnipedCLIPath(t)
+		tempDir := testutil.TempDir(t)
+
+		var envVarsWithProxy []string
+		if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
+			// Only if you don't have a load balancer, use the squid proxy when it's available.
+			envVarsWithProxy = append(os.Environ(), env.ProxyEnv()...)
+		}
+
+		// Get the kubeconfig.
+		getKubeConfigCmd := []string{"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--oidc-skip-browser",
+			"--static-token", env.TestUser.Token,
+			// Force the use of impersonation proxy strategy, but let it auto-discover the endpoint and CA.
+			"--concierge-mode", "ImpersonationProxy"}
+		t.Log("Running:", pinnipedExe, getKubeConfigCmd)
+		kubeconfigYAML, getKubeConfigStderr := runPinnipedCLI(t, envVarsWithProxy, pinnipedExe, getKubeConfigCmd...)
+		// "pinniped get kubectl" prints some status messages to stderr
+		t.Log(getKubeConfigStderr)
+		// Make sure that the "pinniped get kubeconfig" auto-discovered the impersonation proxy and we're going to
+		// make our kubectl requests through the impersonation proxy. Avoid using require.Contains because the error
+		// message would contain credentials.
+		require.True(t,
+			strings.Contains(kubeconfigYAML, "server: "+impersonationProxyURL+"\n"),
+			"the generated kubeconfig did not include the expected impersonation server address: %s",
+			impersonationProxyURL,
+		)
+		require.True(t,
+			strings.Contains(kubeconfigYAML, "- --concierge-ca-bundle-data="+base64.StdEncoding.EncodeToString(impersonationProxyCACertPEM)+"\n"),
+			"the generated kubeconfig did not include the base64 encoded version of this expected impersonation CA cert: %s",
+			impersonationProxyCACertPEM,
+		)
+
+		// Write the kubeconfig to a temp file.
+		kubeconfigPath := filepath.Join(tempDir, "kubeconfig.yaml")
+		require.NoError(t, ioutil.WriteFile(kubeconfigPath, []byte(kubeconfigYAML), 0600))
+
+		// Func to run kubeconfig commands.
+		kubectl := func(args ...string) (string, string, error) {
+			timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
+			defer cancelFunc()
+
+			allArgs := append([]string{"--kubeconfig", kubeconfigPath}, args...)
+			//nolint:gosec // we are not performing malicious argument injection against ourselves
+			kubectlCmd := exec.CommandContext(timeout, "kubectl", allArgs...)
+			var stdout, stderr bytes.Buffer
+			kubectlCmd.Stdout = &stdout
+			kubectlCmd.Stderr = &stderr
+			kubectlCmd.Env = envVarsWithProxy
+
+			t.Log("starting kubectl subprocess: kubectl", strings.Join(allArgs, " "))
+			err := kubectlCmd.Run()
+			t.Logf("kubectl stdout output: %s", stdout.String())
+			t.Logf("kubectl stderr output: %s", stderr.String())
+			return stdout.String(), stderr.String(), err
+		}
+
+		// Get pods in concierge namespace and pick one.
+		// We don't actually care which pod, just want to see that we can "exec echo" in one of them.
+		pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{})
+		require.NoError(t, err)
+		require.Greater(t, len(pods.Items), 0)
+		podName := pods.Items[0].Name
+
+		// Try "kubectl exec" through the impersonation proxy.
+		echoString := "hello world"
+		stdout, _, err := kubectl("exec", "--namespace", env.ConciergeNamespace, podName, "--", "echo", echoString)
+		require.NoError(t, err)
+		require.Equal(t, stdout, echoString+"\n")
 	})
 
 	// Update configuration to force the proxy to disabled mode

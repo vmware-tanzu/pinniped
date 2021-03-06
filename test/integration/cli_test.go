@@ -64,7 +64,7 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 	} {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			stdout, stderr := runPinnipedCLI(t, pinnipedExe, tt.args...)
+			stdout, stderr := runPinnipedCLI(t, nil, pinnipedExe, tt.args...)
 			require.Equal(t, tt.expectStderr, stderr)
 
 			// Even the deprecated command should now generate a kubeconfig with the new "pinniped login static" command.
@@ -99,12 +99,13 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 	}
 }
 
-func runPinnipedCLI(t *testing.T, pinnipedExe string, args ...string) (string, string) {
+func runPinnipedCLI(t *testing.T, envVars []string, pinnipedExe string, args ...string) (string, string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command(pinnipedExe, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	cmd.Env = envVars
 	require.NoErrorf(t, cmd.Run(), "stderr:\n%s\n\nstdout:\n%s\n\n", stderr.String(), stdout.String())
 	return stdout.String(), stderr.String()
 }

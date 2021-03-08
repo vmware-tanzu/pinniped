@@ -283,43 +283,56 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 }
 
 func configureConcierge(credentialIssuer *configv1alpha1.CredentialIssuer, authenticator metav1.Object, flags *getKubeconfigParams, v1Cluster *clientcmdapi.Cluster, oidcCABundle *string, execConfig *clientcmdapi.ExecConfig, log logr.Logger) error {
-	var conciergeCABundleData []byte
-
 	// Autodiscover the --concierge-mode.
-	if flags.concierge.mode == modeUnknown { //nolint:nestif
-	strategyLoop:
-		for _, strategy := range credentialIssuer.Status.Strategies {
-			if strategy.Status != configv1alpha1.SuccessStrategyStatus || strategy.Frontend == nil {
-				continue
-			}
-			switch strategy.Frontend.Type {
-			case configv1alpha1.TokenCredentialRequestAPIFrontendType:
-				log.Info("detected Concierge in TokenCredentialRequest API mode")
-				flags.concierge.mode = modeTokenCredentialRequestAPI
-				break strategyLoop
-			case configv1alpha1.ImpersonationProxyFrontendType:
+	frontend, err := getConciergeFrontend(credentialIssuer, flags.concierge.mode)
+	if err != nil {
+		return err
+	}
 
-				flags.concierge.mode = modeImpersonationProxy
-				flags.concierge.endpoint = strategy.Frontend.ImpersonationProxyInfo.Endpoint
-				var err error
-				conciergeCABundleData, err = base64.StdEncoding.DecodeString(strategy.Frontend.ImpersonationProxyInfo.CertificateAuthorityData)
-				if err != nil {
-					return fmt.Errorf("autodiscovered Concierge CA bundle is invalid: %w", err)
-				}
-				log.Info("detected Concierge in impersonation proxy mode", "endpoint", strategy.Frontend.ImpersonationProxyInfo.Endpoint)
-				break strategyLoop
-			default:
-				//	Skip any unknown frontend types.
+	// Auto-set --concierge-mode if it wasn't explicitly set.
+	if flags.concierge.mode == modeUnknown {
+		switch frontend.Type {
+		case configv1alpha1.TokenCredentialRequestAPIFrontendType:
+			log.Info("discovered Concierge operating in TokenCredentialRequest API mode")
+			flags.concierge.mode = modeTokenCredentialRequestAPI
+		case configv1alpha1.ImpersonationProxyFrontendType:
+			log.Info("discovered Concierge operating in impersonation proxy mode")
+			flags.concierge.mode = modeImpersonationProxy
+		}
+	}
+
+	// Auto-set --concierge-endpoint if it wasn't explicitly set.
+	if flags.concierge.endpoint == "" {
+		switch frontend.Type {
+		case configv1alpha1.TokenCredentialRequestAPIFrontendType:
+			flags.concierge.endpoint = v1Cluster.Server
+		case configv1alpha1.ImpersonationProxyFrontendType:
+			flags.concierge.endpoint = frontend.ImpersonationProxyInfo.Endpoint
+		}
+		log.Info("discovered Concierge endpoint", "endpoint", flags.concierge.endpoint)
+	}
+
+	// Load specified --concierge-ca-bundle or autodiscover a value.
+	var conciergeCABundleData []byte
+	if flags.concierge.caBundlePath != "" {
+		caBundleString, err := loadCABundlePaths([]string{flags.concierge.caBundlePath})
+		if err != nil {
+			return fmt.Errorf("could not read --concierge-ca-bundle: %w", err)
+		}
+		conciergeCABundleData = []byte(caBundleString)
+		log.Info("loaded Concierge certificate authority bundle", "roots", countCACerts(conciergeCABundleData))
+	} else {
+		switch frontend.Type {
+		case configv1alpha1.TokenCredentialRequestAPIFrontendType:
+			conciergeCABundleData = v1Cluster.CertificateAuthorityData
+		case configv1alpha1.ImpersonationProxyFrontendType:
+			var err error
+			conciergeCABundleData, err = base64.StdEncoding.DecodeString(frontend.ImpersonationProxyInfo.CertificateAuthorityData)
+			if err != nil {
+				return fmt.Errorf("autodiscovered Concierge CA bundle is invalid: %w", err)
 			}
 		}
-		if flags.concierge.mode == modeUnknown {
-			// Fall back to deprecated field for backwards compatibility.
-			if credentialIssuer.Status.KubeConfigInfo != nil {
-				flags.concierge.mode = modeTokenCredentialRequestAPI
-			} else {
-				return fmt.Errorf("could not autodiscover --concierge-mode and none was provided")
-			}
-		}
+		log.Info("discovered Concierge certificate authority bundle", "roots", countCACerts(conciergeCABundleData))
 	}
 
 	switch auth := authenticator.(type) {
@@ -342,13 +355,13 @@ func configureConcierge(credentialIssuer *configv1alpha1.CredentialIssuer, authe
 
 		// If the --oidc-issuer flag was not set explicitly, default it to the spec.issuer field of the JWTAuthenticator.
 		if flags.oidc.issuer == "" {
-			log.Info("detected OIDC issuer", "issuer", auth.Spec.Issuer)
+			log.Info("discovered OIDC issuer", "issuer", auth.Spec.Issuer)
 			flags.oidc.issuer = auth.Spec.Issuer
 		}
 
 		// If the --oidc-request-audience flag was not set explicitly, default it to the spec.audience field of the JWTAuthenticator.
 		if flags.oidc.requestAudience == "" {
-			log.Info("detected OIDC audience", "audience", auth.Spec.Audience)
+			log.Info("discovered OIDC audience", "audience", auth.Spec.Audience)
 			flags.oidc.requestAudience = auth.Spec.Audience
 		}
 
@@ -359,26 +372,8 @@ func configureConcierge(credentialIssuer *configv1alpha1.CredentialIssuer, authe
 			if err != nil {
 				return fmt.Errorf("tried to autodiscover --oidc-ca-bundle, but JWTAuthenticator %s has invalid spec.tls.certificateAuthorityData: %w", auth.Name, err)
 			}
-			log.Info("detected OIDC CA bundle", "length", len(decoded))
+			log.Info("discovered OIDC CA bundle", "roots", countCACerts(decoded))
 			*oidcCABundle = string(decoded)
-		}
-	}
-
-	if flags.concierge.endpoint == "" {
-		log.Info("detected concierge endpoint", "endpoint", v1Cluster.Server)
-		flags.concierge.endpoint = v1Cluster.Server
-	}
-
-	if conciergeCABundleData == nil {
-		if flags.concierge.caBundlePath == "" {
-			log.Info("detected concierge CA bundle", "length", len(v1Cluster.CertificateAuthorityData))
-			conciergeCABundleData = v1Cluster.CertificateAuthorityData
-		} else {
-			caBundleString, err := loadCABundlePaths([]string{flags.concierge.caBundlePath})
-			if err != nil {
-				return fmt.Errorf("could not read --concierge-ca-bundle: %w", err)
-			}
-			conciergeCABundleData = []byte(caBundleString)
 		}
 	}
 
@@ -393,14 +388,53 @@ func configureConcierge(credentialIssuer *configv1alpha1.CredentialIssuer, authe
 		"--concierge-mode="+flags.concierge.mode.String(),
 	)
 
-	// If we're in impersonation proxy mode, the main server endpoint for the kubeconfig also needs to point to the proxy
-	if flags.concierge.mode == modeImpersonationProxy {
-		log.Info("switching kubeconfig cluster to point at impersonation proxy endpoint", "endpoint", flags.concierge.endpoint)
-		v1Cluster.CertificateAuthorityData = conciergeCABundleData
-		v1Cluster.Server = flags.concierge.endpoint
+	// Point kubectl at the concierge endpoint.
+	v1Cluster.Server = flags.concierge.endpoint
+	v1Cluster.CertificateAuthorityData = conciergeCABundleData
+	return nil
+}
+
+func getConciergeFrontend(credentialIssuer *configv1alpha1.CredentialIssuer, mode conciergeMode) (*configv1alpha1.CredentialIssuerFrontend, error) {
+	for _, strategy := range credentialIssuer.Status.Strategies {
+		// Skip unhealthy strategies.
+		if strategy.Status != configv1alpha1.SuccessStrategyStatus {
+			continue
+		}
+
+		// Backfill the .status.strategies[].frontend field from .status.kubeConfigInfo for backwards compatibility.
+		if strategy.Type == configv1alpha1.KubeClusterSigningCertificateStrategyType && strategy.Frontend == nil && credentialIssuer.Status.KubeConfigInfo != nil {
+			strategy = *strategy.DeepCopy()
+			strategy.Frontend = &configv1alpha1.CredentialIssuerFrontend{
+				Type: configv1alpha1.TokenCredentialRequestAPIFrontendType,
+				TokenCredentialRequestAPIInfo: &configv1alpha1.TokenCredentialRequestAPIInfo{
+					Server:                   credentialIssuer.Status.KubeConfigInfo.Server,
+					CertificateAuthorityData: credentialIssuer.Status.KubeConfigInfo.CertificateAuthorityData,
+				},
+			}
+		}
+
+		// If the strategy frontend is still nil, skip.
+		if strategy.Frontend == nil {
+			continue
+		}
+
+		//	Skip any unknown frontend types.
+		switch strategy.Frontend.Type {
+		case configv1alpha1.TokenCredentialRequestAPIFrontendType, configv1alpha1.ImpersonationProxyFrontendType:
+		default:
+			continue
+		}
+		// Skip strategies that don't match --concierge-mode.
+		if !mode.MatchesFrontend(strategy.Frontend) {
+			continue
+		}
+		return strategy.Frontend, nil
 	}
 
-	return nil
+	if mode == modeUnknown {
+		return nil, fmt.Errorf("could not autodiscover --concierge-mode")
+	}
+	return nil, fmt.Errorf("could not find successful Concierge strategy matching --concierge-mode=%s", mode.String())
 }
 
 func loadCABundlePaths(paths []string) (string, error) {
@@ -613,4 +647,10 @@ func validateKubeconfig(ctx context.Context, flags getKubeconfigParams, kubeconf
 			log.Error(err, "could not connect to cluster, retrying...", "attempts", attempts, "remaining", time.Until(deadline).Round(time.Second).String())
 		}
 	}
+}
+
+func countCACerts(pemData []byte) int {
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(pemData)
+	return len(pool.Subjects())
 }

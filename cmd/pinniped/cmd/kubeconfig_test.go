@@ -36,8 +36,10 @@ func TestGetKubeconfig(t *testing.T) {
 	testOIDCCABundlePath := filepath.Join(tmpdir, "testca.pem")
 	require.NoError(t, ioutil.WriteFile(testOIDCCABundlePath, testOIDCCA.Bundle(), 0600))
 
+	testConciergeCA, err := certauthority.New(pkix.Name{CommonName: "Test Concierge CA"}, 1*time.Hour)
+	require.NoError(t, err)
 	testConciergeCABundlePath := filepath.Join(tmpdir, "testconciergeca.pem")
-	require.NoError(t, ioutil.WriteFile(testConciergeCABundlePath, []byte("test-concierge-ca"), 0600))
+	require.NoError(t, ioutil.WriteFile(testConciergeCABundlePath, testConciergeCA.Bundle(), 0600))
 
 	tests := []struct {
 		name               string
@@ -324,7 +326,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: could not autodiscover --concierge-mode and none was provided
+				Error: could not autodiscover --concierge-mode
 			`),
 		},
 		{
@@ -375,6 +377,8 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: []string{
 				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="discovered Concierge operating in impersonation proxy mode"`,
+				`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://impersonation-endpoint"`,
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
@@ -410,10 +414,10 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: []string{
 				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-				`"level"=0 "msg"="detected Concierge in TokenCredentialRequest API mode"`,
+				`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
+				`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+				`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
 				`"level"=0 "msg"="discovered WebhookAuthenticator"  "name"="test-authenticator"`,
-				`"level"=0 "msg"="detected concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-				`"level"=0 "msg"="detected concierge CA bundle"  "length"=37`,
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
@@ -433,11 +437,22 @@ func TestGetKubeconfig(t *testing.T) {
 							Server:                   "https://concierge-endpoint",
 							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
 						},
+						Strategies: []configv1alpha1.CredentialIssuerStrategy{{
+							Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+							Status:         configv1alpha1.SuccessStrategyStatus,
+							Reason:         configv1alpha1.FetchedKeyStrategyReason,
+							Message:        "Successfully fetched key",
+							LastUpdateTime: metav1.Now(),
+							// Simulate a previous version of CredentialIssuer that's missing this Frontend field.
+							Frontend: nil,
+						}},
 					},
 				},
 				&conciergev1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
 					Spec: conciergev1alpha1.JWTAuthenticatorSpec{
+						Issuer:   "https://test-issuer.example.com",
+						Audience: "some-test-audience",
 						TLS: &conciergev1alpha1.TLSSpec{
 							CertificateAuthorityData: "invalid-base64",
 						},
@@ -446,9 +461,12 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: []string{
 				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
+				`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+				`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
 				`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-				`"level"=0 "msg"="detected OIDC issuer"  "issuer"=""`,
-				`"level"=0 "msg"="detected OIDC audience"  "audience"=""`,
+				`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="https://test-issuer.example.com"`,
+				`"level"=0 "msg"="discovered OIDC audience"  "audience"="some-test-audience"`,
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
@@ -469,10 +487,18 @@ func TestGetKubeconfig(t *testing.T) {
 				&configv1alpha1.CredentialIssuer{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
 					Status: configv1alpha1.CredentialIssuerStatus{
-						KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
-							Server:                   "https://concierge-endpoint",
-							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
-						},
+						Strategies: []configv1alpha1.CredentialIssuerStrategy{{
+							Type:   configv1alpha1.ImpersonationProxyStrategyType,
+							Status: configv1alpha1.SuccessStrategyStatus,
+							Reason: configv1alpha1.ListeningStrategyReason,
+							Frontend: &configv1alpha1.CredentialIssuerFrontend{
+								Type: configv1alpha1.ImpersonationProxyFrontendType,
+								ImpersonationProxyInfo: &configv1alpha1.ImpersonationProxyInfo{
+									Endpoint:                 "https://impersonation-proxy-endpoint.example.com",
+									CertificateAuthorityData: base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
+								},
+							},
+						}},
 					},
 				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
@@ -496,19 +522,28 @@ func TestGetKubeconfig(t *testing.T) {
 				&configv1alpha1.CredentialIssuer{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
 					Status: configv1alpha1.CredentialIssuerStatus{
-						KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
-							Server:                   "https://concierge-endpoint",
-							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
-						},
+						Strategies: []configv1alpha1.CredentialIssuerStrategy{{
+							Type:   configv1alpha1.ImpersonationProxyStrategyType,
+							Status: configv1alpha1.SuccessStrategyStatus,
+							Reason: configv1alpha1.ListeningStrategyReason,
+							Frontend: &configv1alpha1.CredentialIssuerFrontend{
+								Type: configv1alpha1.ImpersonationProxyFrontendType,
+								ImpersonationProxyInfo: &configv1alpha1.ImpersonationProxyInfo{
+									Endpoint:                 "https://impersonation-proxy-endpoint.example.com",
+									CertificateAuthorityData: base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
+								},
+							},
+						}},
 					},
 				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
 			wantLogs: []string{
 				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="discovered Concierge operating in impersonation proxy mode"`,
+				`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://impersonation-proxy-endpoint.example.com"`,
+				`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=1`,
 				`"level"=0 "msg"="discovered WebhookAuthenticator"  "name"="test-authenticator"`,
-				`"level"=0 "msg"="detected concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-				`"level"=0 "msg"="detected concierge CA bundle"  "length"=37`,
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
@@ -536,19 +571,28 @@ func TestGetKubeconfig(t *testing.T) {
 				&configv1alpha1.CredentialIssuer{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
 					Status: configv1alpha1.CredentialIssuerStatus{
-						KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
-							Server:                   "https://concierge-endpoint",
-							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
-						},
+						Strategies: []configv1alpha1.CredentialIssuerStrategy{{
+							Type:   configv1alpha1.KubeClusterSigningCertificateStrategyType,
+							Status: configv1alpha1.SuccessStrategyStatus,
+							Reason: configv1alpha1.FetchedKeyStrategyReason,
+							Frontend: &configv1alpha1.CredentialIssuerFrontend{
+								Type: configv1alpha1.TokenCredentialRequestAPIFrontendType,
+								TokenCredentialRequestAPIInfo: &configv1alpha1.TokenCredentialRequestAPIInfo{
+									Server:                   "https://concierge-endpoint.example.com",
+									CertificateAuthorityData: base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
+								},
+							},
+						}},
 					},
 				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
 			wantLogs: []string{
 				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
+				`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+				`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
 				`"level"=0 "msg"="discovered WebhookAuthenticator"  "name"="test-authenticator"`,
-				`"level"=0 "msg"="detected concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-				`"level"=0 "msg"="detected concierge CA bundle"  "length"=37`,
 			},
 			wantStdout: here.Doc(`
         		apiVersion: v1
@@ -597,19 +641,28 @@ func TestGetKubeconfig(t *testing.T) {
 				&configv1alpha1.CredentialIssuer{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
 					Status: configv1alpha1.CredentialIssuerStatus{
-						KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
-							Server:                   "https://concierge-endpoint",
-							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
-						},
+						Strategies: []configv1alpha1.CredentialIssuerStrategy{{
+							Type:   configv1alpha1.KubeClusterSigningCertificateStrategyType,
+							Status: configv1alpha1.SuccessStrategyStatus,
+							Reason: configv1alpha1.FetchedKeyStrategyReason,
+							Frontend: &configv1alpha1.CredentialIssuerFrontend{
+								Type: configv1alpha1.TokenCredentialRequestAPIFrontendType,
+								TokenCredentialRequestAPIInfo: &configv1alpha1.TokenCredentialRequestAPIInfo{
+									Server:                   "https://concierge-endpoint.example.com",
+									CertificateAuthorityData: base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
+								},
+							},
+						}},
 					},
 				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
 			wantLogs: []string{
 				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
+				`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+				`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
 				`"level"=0 "msg"="discovered WebhookAuthenticator"  "name"="test-authenticator"`,
-				`"level"=0 "msg"="detected concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-				`"level"=0 "msg"="detected concierge CA bundle"  "length"=37`,
 			},
 			wantStdout: here.Doc(`
         		apiVersion: v1
@@ -657,10 +710,18 @@ func TestGetKubeconfig(t *testing.T) {
 				&configv1alpha1.CredentialIssuer{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
 					Status: configv1alpha1.CredentialIssuerStatus{
-						KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
-							Server:                   "https://concierge-endpoint",
-							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
-						},
+						Strategies: []configv1alpha1.CredentialIssuerStrategy{{
+							Type:   configv1alpha1.KubeClusterSigningCertificateStrategyType,
+							Status: configv1alpha1.SuccessStrategyStatus,
+							Reason: configv1alpha1.FetchedKeyStrategyReason,
+							Frontend: &configv1alpha1.CredentialIssuerFrontend{
+								Type: configv1alpha1.TokenCredentialRequestAPIFrontendType,
+								TokenCredentialRequestAPIInfo: &configv1alpha1.TokenCredentialRequestAPIInfo{
+									Server:                   "https://concierge-endpoint.example.com",
+									CertificateAuthorityData: base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
+								},
+							},
+						}},
 					},
 				},
 				&conciergev1alpha1.JWTAuthenticator{
@@ -676,12 +737,13 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: []string{
 				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
+				`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+				`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
 				`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-				`"level"=0 "msg"="detected OIDC issuer"  "issuer"="https://example.com/issuer"`,
-				`"level"=0 "msg"="detected OIDC audience"  "audience"="test-audience"`,
-				`"level"=0 "msg"="detected OIDC CA bundle"  "length"=587`,
-				`"level"=0 "msg"="detected concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-				`"level"=0 "msg"="detected concierge CA bundle"  "length"=37`,
+				`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="https://example.com/issuer"`,
+				`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
+				`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
 			},
 			wantStdout: here.Docf(`
         		apiVersion: v1
@@ -731,7 +793,8 @@ func TestGetKubeconfig(t *testing.T) {
 				"--concierge-api-group-suffix", "tuna.io",
 				"--concierge-authenticator-type", "webhook",
 				"--concierge-authenticator-name", "test-authenticator",
-				"--concierge-endpoint", "https://concierge-endpoint.example.com",
+				"--concierge-mode", "TokenCredentialRequestAPI",
+				"--concierge-endpoint", "https://explicit-concierge-endpoint.example.com",
 				"--concierge-ca-bundle", testConciergeCABundlePath,
 				"--oidc-issuer", "https://example.com/issuer",
 				"--oidc-skip-browser",
@@ -746,22 +809,33 @@ func TestGetKubeconfig(t *testing.T) {
 				&configv1alpha1.CredentialIssuer{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
 					Status: configv1alpha1.CredentialIssuerStatus{
-						KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
-							Server:                   "https://concierge-endpoint",
-							CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
-						},
+						Strategies: []configv1alpha1.CredentialIssuerStrategy{{
+							Type:   configv1alpha1.KubeClusterSigningCertificateStrategyType,
+							Status: configv1alpha1.SuccessStrategyStatus,
+							Reason: configv1alpha1.FetchedKeyStrategyReason,
+							Frontend: &configv1alpha1.CredentialIssuerFrontend{
+								Type: configv1alpha1.TokenCredentialRequestAPIFrontendType,
+								TokenCredentialRequestAPIInfo: &configv1alpha1.TokenCredentialRequestAPIInfo{
+									Server:                   "https://concierge-endpoint.example.com",
+									CertificateAuthorityData: "dGVzdC10Y3ItYXBpLWNh",
+								},
+							},
+						}},
 					},
 				},
 				&conciergev1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
 				},
 			},
+			wantLogs: []string{
+				`"level"=0 "msg"="loaded Concierge certificate authority bundle"  "roots"=1`,
+			},
 			wantStdout: here.Docf(`
         		apiVersion: v1
         		clusters:
         		- cluster:
-        		    certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
-        		    server: https://fake-server-url-value
+        		    certificate-authority-data: %s
+        		    server: https://explicit-concierge-endpoint.example.com
         		  name: pinniped
         		contexts:
         		- context:
@@ -783,8 +857,8 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-api-group-suffix=tuna.io
         		      - --concierge-authenticator-name=test-authenticator
         		      - --concierge-authenticator-type=webhook
-        		      - --concierge-endpoint=https://concierge-endpoint.example.com
-        		      - --concierge-ca-bundle-data=dGVzdC1jb25jaWVyZ2UtY2E=
+        		      - --concierge-endpoint=https://explicit-concierge-endpoint.example.com
+        		      - --concierge-ca-bundle-data=%s
         		      - --concierge-mode=TokenCredentialRequestAPI
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
@@ -798,22 +872,58 @@ func TestGetKubeconfig(t *testing.T) {
         		      command: '.../path/to/pinniped'
         		      env: []
         		      provideClusterInfo: true
-			`, base64.StdEncoding.EncodeToString(testOIDCCA.Bundle())),
+			`,
+				base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
+				base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
+				base64.StdEncoding.EncodeToString(testOIDCCA.Bundle()),
+			),
 			wantAPIGroupSuffix: "tuna.io",
 		},
 		{
-			name: "configure impersonation proxy with autodetected JWT authenticator",
+			name: "configure impersonation proxy with autodiscovered JWT authenticator",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
-				"--concierge-ca-bundle", testConciergeCABundlePath,
-				"--concierge-endpoint", "https://impersonation-proxy-endpoint.test",
 				"--concierge-mode", "ImpersonationProxy",
 				"--skip-validation",
 			},
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
-					Status:     configv1alpha1.CredentialIssuerStatus{},
+					Status: configv1alpha1.CredentialIssuerStatus{
+						Strategies: []configv1alpha1.CredentialIssuerStrategy{
+							// This TokenCredentialRequestAPI strategy would normally be chosen, but
+							// --concierge-mode=ImpersonationProxy should force it to be skipped.
+							{
+								Type:           "SomeType",
+								Status:         configv1alpha1.SuccessStrategyStatus,
+								Reason:         "SomeReason",
+								Message:        "Some message",
+								LastUpdateTime: metav1.Now(),
+								Frontend: &configv1alpha1.CredentialIssuerFrontend{
+									Type: configv1alpha1.TokenCredentialRequestAPIFrontendType,
+									TokenCredentialRequestAPIInfo: &configv1alpha1.TokenCredentialRequestAPIInfo{
+										Server:                   "https://token-credential-request-api-endpoint.test",
+										CertificateAuthorityData: "dGVzdC10Y3ItYXBpLWNh",
+									},
+								},
+							},
+							// The endpoint and CA from this impersonation proxy strategy should be autodiscovered.
+							{
+								Type:           "SomeOtherType",
+								Status:         configv1alpha1.SuccessStrategyStatus,
+								Reason:         "SomeOtherReason",
+								Message:        "Some other message",
+								LastUpdateTime: metav1.Now(),
+								Frontend: &configv1alpha1.CredentialIssuerFrontend{
+									Type: configv1alpha1.ImpersonationProxyFrontendType,
+									ImpersonationProxyInfo: &configv1alpha1.ImpersonationProxyInfo{
+										Endpoint:                 "https://impersonation-proxy-endpoint.test",
+										CertificateAuthorityData: base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
+									},
+								},
+							},
+						},
+					},
 				},
 				&conciergev1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
@@ -828,17 +938,18 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: []string{
 				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://impersonation-proxy-endpoint.test"`,
+				`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=1`,
 				`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-				`"level"=0 "msg"="detected OIDC issuer"  "issuer"="https://example.com/issuer"`,
-				`"level"=0 "msg"="detected OIDC audience"  "audience"="test-audience"`,
-				`"level"=0 "msg"="detected OIDC CA bundle"  "length"=587`,
-				`"level"=0 "msg"="switching kubeconfig cluster to point at impersonation proxy endpoint"  "endpoint"="https://impersonation-proxy-endpoint.test"`,
+				`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="https://example.com/issuer"`,
+				`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
+				`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
 			},
 			wantStdout: here.Docf(`
         		apiVersion: v1
         		clusters:
         		- cluster:
-        		    certificate-authority-data: dGVzdC1jb25jaWVyZ2UtY2E=
+        		    certificate-authority-data: %s
         		    server: https://impersonation-proxy-endpoint.test
         		  name: pinniped
         		contexts:
@@ -862,7 +973,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-name=test-authenticator
         		      - --concierge-authenticator-type=jwt
         		      - --concierge-endpoint=https://impersonation-proxy-endpoint.test
-        		      - --concierge-ca-bundle-data=dGVzdC1jb25jaWVyZ2UtY2E=
+        		      - --concierge-ca-bundle-data=%s
         		      - --concierge-mode=ImpersonationProxy
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
@@ -872,10 +983,14 @@ func TestGetKubeconfig(t *testing.T) {
         		      command: '.../path/to/pinniped'
         		      env: []
         		      provideClusterInfo: true
-			`, base64.StdEncoding.EncodeToString(testOIDCCA.Bundle())),
+			`,
+				base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
+				base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
+				base64.StdEncoding.EncodeToString(testOIDCCA.Bundle()),
+			),
 		},
 		{
-			name: "autodetect impersonation proxy with autodetected JWT authenticator",
+			name: "autodetect impersonation proxy with autodiscovered JWT authenticator",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 				"--skip-validation",
@@ -929,12 +1044,13 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: []string{
 				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-				`"level"=0 "msg"="detected Concierge in impersonation proxy mode"  "endpoint"="https://impersonation-proxy-endpoint.test"`,
+				`"level"=0 "msg"="discovered Concierge operating in impersonation proxy mode"`,
+				`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://impersonation-proxy-endpoint.test"`,
+				`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
 				`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-				`"level"=0 "msg"="detected OIDC issuer"  "issuer"="https://example.com/issuer"`,
-				`"level"=0 "msg"="detected OIDC audience"  "audience"="test-audience"`,
-				`"level"=0 "msg"="detected OIDC CA bundle"  "length"=587`,
-				`"level"=0 "msg"="switching kubeconfig cluster to point at impersonation proxy endpoint"  "endpoint"="https://impersonation-proxy-endpoint.test"`,
+				`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="https://example.com/issuer"`,
+				`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
+				`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
 			},
 			wantStdout: here.Docf(`
         		apiVersion: v1

@@ -7,6 +7,8 @@ import (
 	"flag"
 	"fmt"
 	"strings"
+
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 )
 
 // conciergeMode represents the method by which we should connect to the Concierge on a cluster during login.
@@ -25,7 +27,7 @@ func (c *conciergeMode) String() string {
 	switch *c {
 	case modeImpersonationProxy:
 		return "ImpersonationProxy"
-	case modeTokenCredentialRequestAPI, modeUnknown:
+	case modeTokenCredentialRequestAPI:
 		return "TokenCredentialRequestAPI"
 	default:
 		return "TokenCredentialRequestAPI"
@@ -50,4 +52,16 @@ func (c *conciergeMode) Set(s string) error {
 
 func (c *conciergeMode) Type() string {
 	return "mode"
+}
+
+// MatchesFrontend returns true iff the flag matches the type of the provided frontend.
+func (c *conciergeMode) MatchesFrontend(frontend *configv1alpha1.CredentialIssuerFrontend) bool {
+	switch *c {
+	case modeImpersonationProxy:
+		return frontend.Type == configv1alpha1.ImpersonationProxyFrontendType
+	case modeTokenCredentialRequestAPI:
+		return frontend.Type == configv1alpha1.TokenCredentialRequestAPIFrontendType
+	default:
+		return true
+	}
 }

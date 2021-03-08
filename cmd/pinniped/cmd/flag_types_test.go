@@ -20,34 +20,34 @@ import (
 )
 
 func TestConciergeModeFlag(t *testing.T) {
-	var m conciergeMode
-	require.Equal(t, "mode", m.Type())
-	require.Equal(t, modeUnknown, m)
-	require.NoError(t, m.Set(""))
-	require.Equal(t, modeUnknown, m)
-	require.EqualError(t, m.Set("foo"), `invalid mode "foo", valid modes are TokenCredentialRequestAPI and ImpersonationProxy`)
-	require.True(t, m.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.TokenCredentialRequestAPIFrontendType}))
-	require.True(t, m.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.ImpersonationProxyFrontendType}))
+	var f conciergeModeFlag
+	require.Equal(t, "mode", f.Type())
+	require.Equal(t, modeUnknown, f)
+	require.NoError(t, f.Set(""))
+	require.Equal(t, modeUnknown, f)
+	require.EqualError(t, f.Set("foo"), `invalid mode "foo", valid modes are TokenCredentialRequestAPI and ImpersonationProxy`)
+	require.True(t, f.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.TokenCredentialRequestAPIFrontendType}))
+	require.True(t, f.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.ImpersonationProxyFrontendType}))
 
-	require.NoError(t, m.Set("TokenCredentialRequestAPI"))
-	require.Equal(t, modeTokenCredentialRequestAPI, m)
-	require.Equal(t, "TokenCredentialRequestAPI", m.String())
-	require.True(t, m.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.TokenCredentialRequestAPIFrontendType}))
-	require.False(t, m.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.ImpersonationProxyFrontendType}))
+	require.NoError(t, f.Set("TokenCredentialRequestAPI"))
+	require.Equal(t, modeTokenCredentialRequestAPI, f)
+	require.Equal(t, "TokenCredentialRequestAPI", f.String())
+	require.True(t, f.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.TokenCredentialRequestAPIFrontendType}))
+	require.False(t, f.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.ImpersonationProxyFrontendType}))
 
-	require.NoError(t, m.Set("tokencredentialrequestapi"))
-	require.Equal(t, modeTokenCredentialRequestAPI, m)
-	require.Equal(t, "TokenCredentialRequestAPI", m.String())
+	require.NoError(t, f.Set("tokencredentialrequestapi"))
+	require.Equal(t, modeTokenCredentialRequestAPI, f)
+	require.Equal(t, "TokenCredentialRequestAPI", f.String())
 
-	require.NoError(t, m.Set("ImpersonationProxy"))
-	require.Equal(t, modeImpersonationProxy, m)
-	require.Equal(t, "ImpersonationProxy", m.String())
-	require.False(t, m.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.TokenCredentialRequestAPIFrontendType}))
-	require.True(t, m.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.ImpersonationProxyFrontendType}))
+	require.NoError(t, f.Set("ImpersonationProxy"))
+	require.Equal(t, modeImpersonationProxy, f)
+	require.Equal(t, "ImpersonationProxy", f.String())
+	require.False(t, f.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.TokenCredentialRequestAPIFrontendType}))
+	require.True(t, f.MatchesFrontend(&configv1alpha1.CredentialIssuerFrontend{Type: configv1alpha1.ImpersonationProxyFrontendType}))
 
-	require.NoError(t, m.Set("impersonationproxy"))
-	require.Equal(t, modeImpersonationProxy, m)
-	require.Equal(t, "ImpersonationProxy", m.String())
+	require.NoError(t, f.Set("impersonationproxy"))
+	require.Equal(t, modeImpersonationProxy, f)
+	require.Equal(t, "ImpersonationProxy", f.String())
 }
 
 func TestCABundleFlag(t *testing.T) {
@@ -60,15 +60,15 @@ func TestCABundleFlag(t *testing.T) {
 	testCAPath := filepath.Join(tmpdir, "testca.pem")
 	require.NoError(t, ioutil.WriteFile(testCAPath, testCA.Bundle(), 0600))
 
-	c := caBundleVar{}
-	require.Equal(t, "path", c.Type())
-	require.Equal(t, "", c.String())
-	require.EqualError(t, c.Set("./does/not/exist"), "could not read CA bundle path: open ./does/not/exist: no such file or directory")
-	require.EqualError(t, c.Set(emptyFilePath), fmt.Sprintf("failed to load any CA certificates from %q", emptyFilePath))
+	f := caBundleFlag{}
+	require.Equal(t, "path", f.Type())
+	require.Equal(t, "", f.String())
+	require.EqualError(t, f.Set("./does/not/exist"), "could not read CA bundle path: open ./does/not/exist: no such file or directory")
+	require.EqualError(t, f.Set(emptyFilePath), fmt.Sprintf("failed to load any CA certificates from %q", emptyFilePath))
 
-	require.NoError(t, c.Set(testCAPath))
-	require.Equal(t, 1, bytes.Count(c, []byte("BEGIN CERTIFICATE")))
+	require.NoError(t, f.Set(testCAPath))
+	require.Equal(t, 1, bytes.Count(f, []byte("BEGIN CERTIFICATE")))
 
-	require.NoError(t, c.Set(testCAPath))
-	require.Equal(t, 2, bytes.Count(c, []byte("BEGIN CERTIFICATE")))
+	require.NoError(t, f.Set(testCAPath))
+	require.Equal(t, 2, bytes.Count(f, []byte("BEGIN CERTIFICATE")))
 }

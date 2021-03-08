@@ -47,7 +47,7 @@ type staticLoginParams struct {
 	conciergeEndpoint          string
 	conciergeCABundle          string
 	conciergeAPIGroupSuffix    string
-	conciergeMode              conciergeMode
+	conciergeMode              conciergeModeFlag
 }
 
 func staticLoginCommand(deps staticLoginDeps) *cobra.Command {

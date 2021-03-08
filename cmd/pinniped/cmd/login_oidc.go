@@ -71,7 +71,7 @@ type oidcLoginFlags struct {
 	conciergeEndpoint          string
 	conciergeCABundle          string
 	conciergeAPIGroupSuffix    string
-	conciergeMode              conciergeMode
+	conciergeMode              conciergeModeFlag
 }
 
 func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {

@@ -74,7 +74,7 @@ type getKubeconfigOIDCParams struct {
 	skipBrowser       bool
 	sessionCachePath  string
 	debugSessionCache bool
-	caBundle          caBundleVar
+	caBundle          caBundleFlag
 	requestAudience   string
 }
 
@@ -84,9 +84,9 @@ type getKubeconfigConciergeParams struct {
 	authenticatorName string
 	authenticatorType string
 	apiGroupSuffix    string
-	caBundle          caBundleVar
+	caBundle          caBundleFlag
 	endpoint          string
-	mode              conciergeMode
+	mode              conciergeModeFlag
 }
 
 type getKubeconfigParams struct {
@@ -383,7 +383,7 @@ func discoverAuthenticatorParams(authenticator metav1.Object, flags *getKubeconf
 	return nil
 }
 
-func getConciergeFrontend(credentialIssuer *configv1alpha1.CredentialIssuer, mode conciergeMode) (*configv1alpha1.CredentialIssuerFrontend, error) {
+func getConciergeFrontend(credentialIssuer *configv1alpha1.CredentialIssuer, mode conciergeModeFlag) (*configv1alpha1.CredentialIssuerFrontend, error) {
 	for _, strategy := range credentialIssuer.Status.Strategies {
 		// Skip unhealthy strategies.
 		if strategy.Status != configv1alpha1.SuccessStrategyStatus {

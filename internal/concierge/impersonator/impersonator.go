@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 
@@ -27,8 +26,6 @@ import (
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/kubeclient"
 )
-
-var impersonateHeaderRegex = regexp.MustCompile("Impersonate-.*")
 
 type proxy struct {
 	cache       *authncache.Cache
@@ -150,11 +147,10 @@ func (e *httpError) Error() string { return e.message }
 
 func ensureNoImpersonationHeaders(r *http.Request) error {
 	for key := range r.Header {
-		if impersonateHeaderRegex.MatchString(key) {
+		if isImpersonationHeader(key) {
 			return fmt.Errorf("%q header already exists", key)
 		}
 	}
-
 	return nil
 }
 
@@ -163,7 +159,9 @@ type roundTripperFunc func(*http.Request) (*http.Response, error)
 func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func getProxyHeaders(userInfo user.Info, requestHeaders http.Header) http.Header {
-	newHeaders := http.Header{}
+	// Copy over all headers except the Authorization header from the original request to the new request.
+	newHeaders := requestHeaders.Clone()
+	newHeaders.Del("Authorization")
 
 	// Leverage client-go's impersonation RoundTripper to set impersonation headers for us in the new
 	// request. The client-go RoundTripper not only sets all of the impersonation headers for us, but
@@ -176,12 +174,8 @@ func getProxyHeaders(userInfo user.Info, requestHeaders http.Header) http.Header
 		Extra:    userInfo.GetExtra(),
 	}
 	impersonateHeaderSpy := roundTripperFunc(func(r *http.Request) (*http.Response, error) {
-		newHeaders.Set(transport.ImpersonateUserHeader, r.Header.Get(transport.ImpersonateUserHeader))
-		for _, groupHeaderValue := range r.Header.Values(transport.ImpersonateGroupHeader) {
-			newHeaders.Add(transport.ImpersonateGroupHeader, groupHeaderValue)
-		}
 		for headerKey, headerValues := range r.Header {
-			if strings.HasPrefix(headerKey, transport.ImpersonateUserExtraHeaderPrefix) {
+			if isImpersonationHeader(headerKey) {
 				for _, headerValue := range headerValues {
 					newHeaders.Add(headerKey, headerValue)
 				}
@@ -192,17 +186,11 @@ func getProxyHeaders(userInfo user.Info, requestHeaders http.Header) http.Header
 	fakeReq, _ := http.NewRequestWithContext(context.Background(), "", "", nil)
 	//nolint:bodyclose // We return a nil http.Response above, so there is nothing to close.
 	_, _ = transport.NewImpersonatingRoundTripper(impersonateConfig, impersonateHeaderSpy).RoundTrip(fakeReq)
-
-	// Copy over all headers except the Authorization header from the original request to the new request.
-	for key := range requestHeaders {
-		if key != "Authorization" {
-			for _, val := range requestHeaders.Values(key) {
-				newHeaders.Add(key, val)
-			}
-		}
-	}
-
 	return newHeaders
+}
+
+func isImpersonationHeader(header string) bool {
+	return strings.HasPrefix(http.CanonicalHeaderKey(header), "Impersonate")
 }
 
 func extractToken(token string, jsonDecoder runtime.Decoder) (*login.TokenCredentialRequest, error) {

@@ -69,7 +69,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --concierge-api-group-suffix string     Concierge API group suffix (default "pinniped.dev")
 				      --concierge-authenticator-name string   Concierge authenticator name (default: autodiscover)
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)
-				      --concierge-ca-bundle string            Path to TLS certificate authority bundle (PEM format, optional, can be repeated) to use when connecting to the Concierge
+				      --concierge-ca-bundle path              Path to TLS certificate authority bundle (PEM format, optional, can be repeated) to use when connecting to the Concierge
 				      --concierge-credential-issuer string    Concierge CredentialIssuer object to use for autodiscovery (default: autodiscover)
 				      --concierge-endpoint string             API base for the Concierge endpoint
 				      --concierge-mode mode                   Concierge mode of operation (default TokenCredentialRequestAPI)
@@ -77,7 +77,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --kubeconfig string                     Path to kubeconfig file
 				      --kubeconfig-context string             Kubeconfig context name (default: current active context)
 				      --no-concierge                          Generate a configuration which does not use the Concierge, but sends the credential to the cluster directly
-				      --oidc-ca-bundle strings                Path to TLS certificate authority bundle (PEM format, optional, can be repeated)
+				      --oidc-ca-bundle path                   Path to TLS certificate authority bundle (PEM format, optional, can be repeated)
 				      --oidc-client-id string                 OpenID Connect client ID (default: autodiscover) (default "pinniped-cli")
 				      --oidc-issuer string                    OpenID Connect issuer URL (default: autodiscover)
 				      --oidc-listen-port uint16               TCP port for localhost listener (authorization code flow only)
@@ -102,13 +102,24 @@ func TestGetKubeconfig(t *testing.T) {
 			`),
 		},
 		{
-			name: "invalid CA bundle paths",
+			name: "invalid OIDC CA bundle path",
 			args: []string{
 				"--oidc-ca-bundle", "./does/not/exist",
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: could not read --oidc-ca-bundle: open ./does/not/exist: no such file or directory
+				Error: invalid argument "./does/not/exist" for "--oidc-ca-bundle" flag: could not read CA bundle path: open ./does/not/exist: no such file or directory
+			`),
+		},
+		{
+			name: "invalid Concierge CA bundle",
+			args: []string{
+				"--kubeconfig", "./testdata/kubeconfig.yaml",
+				"--concierge-ca-bundle", "./does/not/exist",
+			},
+			wantError: true,
+			wantStderr: here.Doc(`
+				Error: invalid argument "./does/not/exist" for "--concierge-ca-bundle" flag: could not read CA bundle path: open ./does/not/exist: no such file or directory
 			`),
 		},
 		{
@@ -474,44 +485,6 @@ func TestGetKubeconfig(t *testing.T) {
 			`),
 		},
 		{
-			name: "invalid concierge ca bundle",
-			args: []string{
-				"--kubeconfig", "./testdata/kubeconfig.yaml",
-				"--concierge-ca-bundle", "./does/not/exist",
-				"--concierge-endpoint", "https://impersonation-proxy-endpoint.test",
-				"--concierge-authenticator-name", "test-authenticator",
-				"--concierge-authenticator-type", "webhook",
-				"--concierge-mode", "ImpersonationProxy",
-			},
-			conciergeObjects: []runtime.Object{
-				&configv1alpha1.CredentialIssuer{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
-					Status: configv1alpha1.CredentialIssuerStatus{
-						Strategies: []configv1alpha1.CredentialIssuerStrategy{{
-							Type:   configv1alpha1.ImpersonationProxyStrategyType,
-							Status: configv1alpha1.SuccessStrategyStatus,
-							Reason: configv1alpha1.ListeningStrategyReason,
-							Frontend: &configv1alpha1.CredentialIssuerFrontend{
-								Type: configv1alpha1.ImpersonationProxyFrontendType,
-								ImpersonationProxyInfo: &configv1alpha1.ImpersonationProxyInfo{
-									Endpoint:                 "https://impersonation-proxy-endpoint.example.com",
-									CertificateAuthorityData: base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
-								},
-							},
-						}},
-					},
-				},
-				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
-			},
-			wantLogs: []string{
-				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-			},
-			wantError: true,
-			wantStderr: here.Doc(`
-				Error: could not read --concierge-ca-bundle: open ./does/not/exist: no such file or directory
-			`),
-		},
-		{
 			name: "invalid static token flags",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
@@ -827,9 +800,7 @@ func TestGetKubeconfig(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
 				},
 			},
-			wantLogs: []string{
-				`"level"=0 "msg"="loaded Concierge certificate authority bundle"  "roots"=1`,
-			},
+			wantLogs: nil,
 			wantStdout: here.Docf(`
         		apiVersion: v1
         		clusters:

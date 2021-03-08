@@ -4,9 +4,14 @@
 package cmd
 
 import (
+	"bytes"
+	"crypto/x509"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"strings"
+
+	"github.com/spf13/pflag"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 )
@@ -29,6 +34,8 @@ func (c *conciergeMode) String() string {
 		return "ImpersonationProxy"
 	case modeTokenCredentialRequestAPI:
 		return "TokenCredentialRequestAPI"
+	case modeUnknown:
+		fallthrough
 	default:
 		return "TokenCredentialRequestAPI"
 	}
@@ -61,7 +68,39 @@ func (c *conciergeMode) MatchesFrontend(frontend *configv1alpha1.CredentialIssue
 		return frontend.Type == configv1alpha1.ImpersonationProxyFrontendType
 	case modeTokenCredentialRequestAPI:
 		return frontend.Type == configv1alpha1.TokenCredentialRequestAPIFrontendType
+	case modeUnknown:
+		fallthrough
 	default:
 		return true
 	}
+}
+
+// caBundlePathsVar represents a list of CA bundle paths, which load from disk when the flag is populated.
+type caBundleVar []byte
+
+var _ pflag.Value = new(caBundleVar)
+
+func (c *caBundleVar) String() string {
+	return string(*c)
+}
+
+func (c *caBundleVar) Set(path string) error {
+	pem, err := ioutil.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("could not read CA bundle path: %w", err)
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pem) {
+		return fmt.Errorf("failed to load any CA certificates from %q", path)
+	}
+	if len(*c) == 0 {
+		*c = pem
+		return nil
+	}
+	*c = bytes.Join([][]byte{*c, pem}, []byte("\n"))
+	return nil
+}
+
+func (c *caBundleVar) Type() string {
+	return "path"
 }

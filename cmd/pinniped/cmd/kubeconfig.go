@@ -4,14 +4,12 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -76,7 +74,7 @@ type getKubeconfigOIDCParams struct {
 	skipBrowser       bool
 	sessionCachePath  string
 	debugSessionCache bool
-	caBundlePaths     []string
+	caBundle          caBundleVar
 	requestAudience   string
 }
 
@@ -86,7 +84,7 @@ type getKubeconfigConciergeParams struct {
 	authenticatorName string
 	authenticatorType string
 	apiGroupSuffix    string
-	caBundlePath      string
+	caBundle          caBundleVar
 	endpoint          string
 	mode              conciergeMode
 }
@@ -126,7 +124,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.StringVar(&flags.concierge.authenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name (default: autodiscover)")
 	f.StringVar(&flags.concierge.apiGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
 
-	f.StringVar(&flags.concierge.caBundlePath, "concierge-ca-bundle", "", "Path to TLS certificate authority bundle (PEM format, optional, can be repeated) to use when connecting to the Concierge")
+	f.Var(&flags.concierge.caBundle, "concierge-ca-bundle", "Path to TLS certificate authority bundle (PEM format, optional, can be repeated) to use when connecting to the Concierge")
 	f.StringVar(&flags.concierge.endpoint, "concierge-endpoint", "", "API base for the Concierge endpoint")
 	f.Var(&flags.concierge.mode, "concierge-mode", "Concierge mode of operation")
 
@@ -136,7 +134,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.StringSliceVar(&flags.oidc.scopes, "oidc-scopes", []string{oidc.ScopeOfflineAccess, oidc.ScopeOpenID, "pinniped:request-audience"}, "OpenID Connect scopes to request during login")
 	f.BoolVar(&flags.oidc.skipBrowser, "oidc-skip-browser", false, "During OpenID Connect login, skip opening the browser (just print the URL)")
 	f.StringVar(&flags.oidc.sessionCachePath, "oidc-session-cache", "", "Path to OpenID Connect session cache file")
-	f.StringSliceVar(&flags.oidc.caBundlePaths, "oidc-ca-bundle", nil, "Path to TLS certificate authority bundle (PEM format, optional, can be repeated)")
+	f.Var(&flags.oidc.caBundle, "oidc-ca-bundle", "Path to TLS certificate authority bundle (PEM format, optional, can be repeated)")
 	f.BoolVar(&flags.oidc.debugSessionCache, "oidc-debug-session-cache", false, "Print debug logs related to the OpenID Connect session cache")
 	f.StringVar(&flags.oidc.requestAudience, "oidc-request-audience", "", "Request a token with an alternate audience using RFC8693 token exchange")
 	f.StringVar(&flags.kubeconfigPath, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to kubeconfig file")
@@ -187,11 +185,6 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 	}
 	execConfig.ProvideClusterInfo = true
 
-	oidcCABundle, err := loadCABundlePaths(flags.oidc.caBundlePaths)
-	if err != nil {
-		return fmt.Errorf("could not read --oidc-ca-bundle: %w", err)
-	}
-
 	clientConfig := newClientConfig(flags.kubeconfigPath, flags.kubeconfigContextOverride)
 	currentKubeConfig, err := clientConfig.RawConfig()
 	if err != nil {
@@ -221,10 +214,26 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 		if err != nil {
 			return err
 		}
-
-		if err := configureConcierge(credentialIssuer, authenticator, &flags, cluster, &oidcCABundle, &execConfig, deps.log); err != nil {
+		if err := discoverConciergeParams(credentialIssuer, &flags, cluster, deps.log); err != nil {
 			return err
 		}
+		if err := discoverAuthenticatorParams(authenticator, &flags, deps.log); err != nil {
+			return err
+		}
+		// Append the flags to configure the Concierge credential exchange at runtime.
+		execConfig.Args = append(execConfig.Args,
+			"--enable-concierge",
+			"--concierge-api-group-suffix="+flags.concierge.apiGroupSuffix,
+			"--concierge-authenticator-name="+flags.concierge.authenticatorName,
+			"--concierge-authenticator-type="+flags.concierge.authenticatorType,
+			"--concierge-endpoint="+flags.concierge.endpoint,
+			"--concierge-ca-bundle-data="+base64.StdEncoding.EncodeToString(flags.concierge.caBundle),
+			"--concierge-mode="+flags.concierge.mode.String(),
+		)
+
+		// Point kubectl at the concierge endpoint.
+		cluster.Server = flags.concierge.endpoint
+		cluster.CertificateAuthorityData = flags.concierge.caBundle
 	}
 
 	// If one of the --static-* flags was passed, output a config that runs `pinniped login static`.
@@ -263,8 +272,8 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 	if flags.oidc.listenPort != 0 {
 		execConfig.Args = append(execConfig.Args, "--listen-port="+strconv.Itoa(int(flags.oidc.listenPort)))
 	}
-	if oidcCABundle != "" {
-		execConfig.Args = append(execConfig.Args, "--ca-bundle-data="+base64.StdEncoding.EncodeToString([]byte(oidcCABundle)))
+	if len(flags.oidc.caBundle) != 0 {
+		execConfig.Args = append(execConfig.Args, "--ca-bundle-data="+base64.StdEncoding.EncodeToString(flags.oidc.caBundle))
 	}
 	if flags.oidc.sessionCachePath != "" {
 		execConfig.Args = append(execConfig.Args, "--session-cache="+flags.oidc.sessionCachePath)
@@ -282,7 +291,7 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 	return writeConfigAsYAML(out, kubeconfig)
 }
 
-func configureConcierge(credentialIssuer *configv1alpha1.CredentialIssuer, authenticator metav1.Object, flags *getKubeconfigParams, v1Cluster *clientcmdapi.Cluster, oidcCABundle *string, execConfig *clientcmdapi.ExecConfig, log logr.Logger) error {
+func discoverConciergeParams(credentialIssuer *configv1alpha1.CredentialIssuer, flags *getKubeconfigParams, v1Cluster *clientcmdapi.Cluster, log logr.Logger) error {
 	// Autodiscover the --concierge-mode.
 	frontend, err := getConciergeFrontend(credentialIssuer, flags.concierge.mode)
 	if err != nil {
@@ -312,29 +321,24 @@ func configureConcierge(credentialIssuer *configv1alpha1.CredentialIssuer, authe
 		log.Info("discovered Concierge endpoint", "endpoint", flags.concierge.endpoint)
 	}
 
-	// Load specified --concierge-ca-bundle or autodiscover a value.
-	var conciergeCABundleData []byte
-	if flags.concierge.caBundlePath != "" {
-		caBundleString, err := loadCABundlePaths([]string{flags.concierge.caBundlePath})
-		if err != nil {
-			return fmt.Errorf("could not read --concierge-ca-bundle: %w", err)
-		}
-		conciergeCABundleData = []byte(caBundleString)
-		log.Info("loaded Concierge certificate authority bundle", "roots", countCACerts(conciergeCABundleData))
-	} else {
+	// Auto-set --concierge-ca-bundle if it wasn't explicitly set..
+	if len(flags.concierge.caBundle) == 0 {
 		switch frontend.Type {
 		case configv1alpha1.TokenCredentialRequestAPIFrontendType:
-			conciergeCABundleData = v1Cluster.CertificateAuthorityData
+			flags.concierge.caBundle = v1Cluster.CertificateAuthorityData
 		case configv1alpha1.ImpersonationProxyFrontendType:
-			var err error
-			conciergeCABundleData, err = base64.StdEncoding.DecodeString(frontend.ImpersonationProxyInfo.CertificateAuthorityData)
+			data, err := base64.StdEncoding.DecodeString(frontend.ImpersonationProxyInfo.CertificateAuthorityData)
 			if err != nil {
 				return fmt.Errorf("autodiscovered Concierge CA bundle is invalid: %w", err)
 			}
+			flags.concierge.caBundle = data
 		}
-		log.Info("discovered Concierge certificate authority bundle", "roots", countCACerts(conciergeCABundleData))
+		log.Info("discovered Concierge certificate authority bundle", "roots", countCACerts(flags.concierge.caBundle))
 	}
+	return nil
+}
 
+func discoverAuthenticatorParams(authenticator metav1.Object, flags *getKubeconfigParams, log logr.Logger) error {
 	switch auth := authenticator.(type) {
 	case *conciergev1alpha1.WebhookAuthenticator:
 		// If the --concierge-authenticator-type/--concierge-authenticator-name flags were not set explicitly, set
@@ -367,30 +371,15 @@ func configureConcierge(credentialIssuer *configv1alpha1.CredentialIssuer, authe
 
 		// If the --oidc-ca-bundle flags was not set explicitly, default it to the
 		// spec.tls.certificateAuthorityData field of the JWTAuthenticator.
-		if *oidcCABundle == "" && auth.Spec.TLS != nil && auth.Spec.TLS.CertificateAuthorityData != "" {
+		if len(flags.oidc.caBundle) == 0 && auth.Spec.TLS != nil && auth.Spec.TLS.CertificateAuthorityData != "" {
 			decoded, err := base64.StdEncoding.DecodeString(auth.Spec.TLS.CertificateAuthorityData)
 			if err != nil {
 				return fmt.Errorf("tried to autodiscover --oidc-ca-bundle, but JWTAuthenticator %s has invalid spec.tls.certificateAuthorityData: %w", auth.Name, err)
 			}
 			log.Info("discovered OIDC CA bundle", "roots", countCACerts(decoded))
-			*oidcCABundle = string(decoded)
+			flags.oidc.caBundle = decoded
 		}
 	}
-
-	// Append the flags to configure the Concierge credential exchange at runtime.
-	execConfig.Args = append(execConfig.Args,
-		"--enable-concierge",
-		"--concierge-api-group-suffix="+flags.concierge.apiGroupSuffix,
-		"--concierge-authenticator-name="+flags.concierge.authenticatorName,
-		"--concierge-authenticator-type="+flags.concierge.authenticatorType,
-		"--concierge-endpoint="+flags.concierge.endpoint,
-		"--concierge-ca-bundle-data="+base64.StdEncoding.EncodeToString(conciergeCABundleData),
-		"--concierge-mode="+flags.concierge.mode.String(),
-	)
-
-	// Point kubectl at the concierge endpoint.
-	v1Cluster.Server = flags.concierge.endpoint
-	v1Cluster.CertificateAuthorityData = conciergeCABundleData
 	return nil
 }
 
@@ -435,21 +424,6 @@ func getConciergeFrontend(credentialIssuer *configv1alpha1.CredentialIssuer, mod
 		return nil, fmt.Errorf("could not autodiscover --concierge-mode")
 	}
 	return nil, fmt.Errorf("could not find successful Concierge strategy matching --concierge-mode=%s", mode.String())
-}
-
-func loadCABundlePaths(paths []string) (string, error) {
-	if len(paths) == 0 {
-		return "", nil
-	}
-	blobs := make([][]byte, 0, len(paths))
-	for _, p := range paths {
-		pem, err := ioutil.ReadFile(p)
-		if err != nil {
-			return "", err
-		}
-		blobs = append(blobs, pem)
-	}
-	return string(bytes.Join(blobs, []byte("\n"))), nil
 }
 
 func newExecKubeconfig(cluster *clientcmdapi.Cluster, execConfig *clientcmdapi.ExecConfig) clientcmdapi.Config {

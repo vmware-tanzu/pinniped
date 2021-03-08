@@ -40,7 +40,7 @@ import (
 const (
 	impersonationProxyPort = "8444"
 	defaultHTTPSPort       = 443
-	oneYear                = 100 * 365 * 24 * time.Hour
+	oneHundredYears        = 100 * 365 * 24 * time.Hour
 	caCommonName           = "Pinniped Impersonation Proxy CA"
 	caCrtKey               = "ca.crt"
 	caKeyKey               = "ca.key"
@@ -579,7 +579,7 @@ func (c *impersonatorConfigController) ensureCASecretIsCreated(ctx context.Conte
 }
 
 func (c *impersonatorConfigController) createCASecret(ctx context.Context) (*certauthority.CA, error) {
-	impersonationCA, err := certauthority.New(pkix.Name{CommonName: caCommonName}, oneYear)
+	impersonationCA, err := certauthority.New(pkix.Name{CommonName: caCommonName}, oneHundredYears)
 	if err != nil {
 		return nil, fmt.Errorf("could not create impersonation CA: %w", err)
 	}
@@ -673,7 +673,7 @@ func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, c
 		ips = []net.IP{ip}
 	}
 
-	impersonationCert, err := ca.Issue(pkix.Name{}, hostnames, ips, oneYear)
+	impersonationCert, err := ca.Issue(pkix.Name{}, hostnames, ips, oneHundredYears)
 	if err != nil {
 		return nil, fmt.Errorf("could not create impersonation cert: %w", err)
 	}

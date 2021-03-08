@@ -210,7 +210,7 @@ fi
 test_username="test-username"
 test_groups="test-group-0,test-group-1"
 set +o pipefail
-test_password="$(cat /dev/urandom | env LC_CTYPE=C tr -dc 'a-z0-9' | fold -w 32 | head -n 1)"
+test_password="$(cat /dev/urandom | env LC_ALL=C tr -dc 'a-z0-9' | fold -w 32 | head -n 1)"
 set -o pipefail
 if [[ ${#test_password} -ne 32 ]]; then
   log_error "Could not create test user's random password"

@@ -73,7 +73,7 @@ func TestImpersonationProxy(t *testing.T) {
 		return &config
 	}
 
-	impersonationProxyViaSquidClient := func(caData []byte, doubleImpersonateUser string) *kubernetes.Clientset {
+	impersonationProxyViaSquidClient := func(caData []byte, doubleImpersonateUser string) kubernetes.Interface {
 		t.Helper()
 		kubeconfig := impersonationProxyRestConfig("https://"+proxyServiceEndpoint, caData, doubleImpersonateUser)
 		kubeconfig.Proxy = func(req *http.Request) (*url.URL, error) {
@@ -82,17 +82,13 @@ func TestImpersonationProxy(t *testing.T) {
 			t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
 			return proxyURL, nil
 		}
-		impersonationProxyClient, err := kubernetes.NewForConfig(kubeconfig)
-		require.NoError(t, err, "unexpected failure from kubernetes.NewForConfig()")
-		return impersonationProxyClient
+		return library.NewKubeclient(t, kubeconfig).Kubernetes
 	}
 
-	impersonationProxyViaLoadBalancerClient := func(proxyURL string, caData []byte, doubleImpersonateUser string) *kubernetes.Clientset {
+	impersonationProxyViaLoadBalancerClient := func(proxyURL string, caData []byte, doubleImpersonateUser string) kubernetes.Interface {
 		t.Helper()
 		kubeconfig := impersonationProxyRestConfig(proxyURL, caData, doubleImpersonateUser)
-		impersonationProxyClient, err := kubernetes.NewForConfig(kubeconfig)
-		require.NoError(t, err, "unexpected failure from kubernetes.NewForConfig()")
-		return impersonationProxyClient
+		return library.NewKubeclient(t, kubeconfig).Kubernetes
 	}
 
 	oldConfigMap, err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Get(ctx, impersonationProxyConfigMapName(env), metav1.GetOptions{})
@@ -162,7 +158,7 @@ func TestImpersonationProxy(t *testing.T) {
 
 	// Create an impersonation proxy client with that CA data to use for the rest of this test.
 	// This client performs TLS checks, so it also provides test coverage that the impersonation proxy server is generating TLS certs correctly.
-	var impersonationProxyClient *kubernetes.Clientset
+	var impersonationProxyClient kubernetes.Interface
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
 		impersonationProxyClient = impersonationProxyViaLoadBalancerClient(impersonationProxyURL, impersonationProxyCACertPEM, "")
 	} else {
@@ -338,7 +334,7 @@ func TestImpersonationProxy(t *testing.T) {
 
 		// Make a client which will send requests through the impersonation proxy and will also add
 		// impersonate headers to the request.
-		var doubleImpersonationClient *kubernetes.Clientset
+		var doubleImpersonationClient kubernetes.Interface
 		if env.HasCapability(library.HasExternalLoadBalancerProvider) {
 			doubleImpersonationClient = impersonationProxyViaLoadBalancerClient(impersonationProxyURL, impersonationProxyCACertPEM, "other-user-to-impersonate")
 		} else {

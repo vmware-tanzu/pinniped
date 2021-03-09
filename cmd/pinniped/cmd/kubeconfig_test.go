@@ -324,16 +324,27 @@ func TestGetKubeconfig(t *testing.T) {
 			`),
 		},
 		{
-			name: "autodetect webhook authenticator, bad credential issuer with no status",
+			name: "autodetect webhook authenticator, bad credential issuer with only failing strategy",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 			},
 			conciergeObjects: []runtime.Object{
-				&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+				&configv1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
+					Status: configv1alpha1.CredentialIssuerStatus{
+						Strategies: []configv1alpha1.CredentialIssuerStrategy{{
+							Type:    "SomeType",
+							Status:  configv1alpha1.ErrorStrategyStatus,
+							Reason:  "SomeReason",
+							Message: "Some message",
+						}},
+					},
+				},
 				&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 			},
 			wantLogs: []string{
 				`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+				`"level"=0 "msg"="found CredentialIssuer strategy"  "message"="Some message" "reason"="SomeReason" "status"="Error" "type"="SomeType"`,
 			},
 			wantError: true,
 			wantStderr: here.Doc(`

@@ -295,6 +295,14 @@ func discoverConciergeParams(credentialIssuer *configv1alpha1.CredentialIssuer, 
 	// Autodiscover the --concierge-mode.
 	frontend, err := getConciergeFrontend(credentialIssuer, flags.concierge.mode)
 	if err != nil {
+		for _, strategy := range credentialIssuer.Status.Strategies {
+			log.Info("found CredentialIssuer strategy",
+				"type", strategy.Type,
+				"status", strategy.Status,
+				"reason", strategy.Reason,
+				"message", strategy.Message,
+			)
+		}
 		return err
 	}
 

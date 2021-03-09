@@ -405,7 +405,6 @@ func TestImpersonationProxy(t *testing.T) {
 
 		// func to create kubectl commands with a kubeconfig
 		kubectlCommand := func(timeout context.Context, args ...string) (*exec.Cmd, *bytes.Buffer, *bytes.Buffer) {
-
 			allArgs := append([]string{"--kubeconfig", kubeconfigPath}, args...)
 			//nolint:gosec // we are not performing malicious argument injection against ourselves
 			kubectlCmd := exec.CommandContext(timeout, "kubectl", allArgs...)

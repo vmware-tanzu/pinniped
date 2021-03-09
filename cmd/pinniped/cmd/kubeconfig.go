@@ -202,36 +202,9 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 	}
 
 	if !flags.concierge.disabled {
-		credentialIssuer, err := lookupCredentialIssuer(clientset, flags.concierge.credentialIssuer, deps.log)
+		credentialIssuer, err := waitForCredentialIssuer(ctx, clientset, flags, deps)
 		if err != nil {
 			return err
-		}
-
-		if !flags.concierge.skipWait {
-			ticker := time.NewTicker(2 * time.Second)
-			defer ticker.Stop()
-
-			deadline, _ := ctx.Deadline()
-			attempts := 1
-
-			for {
-				if !hasPendingStrategy(credentialIssuer) {
-					break
-				}
-				deps.log.Info("waiting for CredentialIssuer pending strategies to finish",
-					"attempts", attempts,
-					"remaining", time.Until(deadline).Round(time.Second).String(),
-				)
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-ticker.C:
-					credentialIssuer, err = lookupCredentialIssuer(clientset, flags.concierge.credentialIssuer, deps.log)
-					if err != nil {
-						return err
-					}
-				}
-			}
 		}
 
 		authenticator, err := lookupAuthenticator(
@@ -318,6 +291,41 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 		return err
 	}
 	return writeConfigAsYAML(out, kubeconfig)
+}
+
+func waitForCredentialIssuer(ctx context.Context, clientset conciergeclientset.Interface, flags getKubeconfigParams, deps kubeconfigDeps) (*configv1alpha1.CredentialIssuer, error) {
+	credentialIssuer, err := lookupCredentialIssuer(clientset, flags.concierge.credentialIssuer, deps.log)
+	if err != nil {
+		return nil, err
+	}
+
+	if !flags.concierge.skipWait {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+
+		deadline, _ := ctx.Deadline()
+		attempts := 1
+
+		for {
+			if !hasPendingStrategy(credentialIssuer) {
+				break
+			}
+			deps.log.Info("waiting for CredentialIssuer pending strategies to finish",
+				"attempts", attempts,
+				"remaining", time.Until(deadline).Round(time.Second).String(),
+			)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-ticker.C:
+				credentialIssuer, err = lookupCredentialIssuer(clientset, flags.concierge.credentialIssuer, deps.log)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	return credentialIssuer, nil
 }
 
 func discoverConciergeParams(credentialIssuer *configv1alpha1.CredentialIssuer, flags *getKubeconfigParams, v1Cluster *clientcmdapi.Cluster, log logr.Logger) error {

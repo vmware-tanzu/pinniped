@@ -73,6 +73,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --concierge-credential-issuer string    Concierge CredentialIssuer object to use for autodiscovery (default: autodiscover)
 				      --concierge-endpoint string             API base for the Concierge endpoint
 				      --concierge-mode mode                   Concierge mode of operation (default TokenCredentialRequestAPI)
+				      --concierge-skip-wait                   Skip waiting for any pending Concierge strategies to become ready (default: false)
 				  -h, --help                                  help for kubeconfig
 				      --kubeconfig string                     Path to kubeconfig file
 				      --kubeconfig-context string             Kubeconfig context name (default: current active context)

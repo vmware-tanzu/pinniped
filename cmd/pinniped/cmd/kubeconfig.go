@@ -87,6 +87,7 @@ type getKubeconfigConciergeParams struct {
 	caBundle          caBundleFlag
 	endpoint          string
 	mode              conciergeModeFlag
+	skipWait          bool
 }
 
 type getKubeconfigParams struct {
@@ -123,6 +124,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.StringVar(&flags.concierge.authenticatorType, "concierge-authenticator-type", "", "Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)")
 	f.StringVar(&flags.concierge.authenticatorName, "concierge-authenticator-name", "", "Concierge authenticator name (default: autodiscover)")
 	f.StringVar(&flags.concierge.apiGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
+	f.BoolVar(&flags.concierge.skipWait, "concierge-skip-wait", false, "Skip waiting for any pending Concierge strategies to become ready (default: false)")
 
 	f.Var(&flags.concierge.caBundle, "concierge-ca-bundle", "Path to TLS certificate authority bundle (PEM format, optional, can be repeated) to use when connecting to the Concierge")
 	f.StringVar(&flags.concierge.endpoint, "concierge-endpoint", "", "API base for the Concierge endpoint")
@@ -203,6 +205,33 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 		credentialIssuer, err := lookupCredentialIssuer(clientset, flags.concierge.credentialIssuer, deps.log)
 		if err != nil {
 			return err
+		}
+
+		if !flags.concierge.skipWait {
+			ticker := time.NewTicker(2 * time.Second)
+			defer ticker.Stop()
+
+			deadline, _ := ctx.Deadline()
+			attempts := 1
+
+			for {
+				if !hasPendingStrategy(credentialIssuer) {
+					break
+				}
+				deps.log.Info("waiting for CredentialIssuer pending strategies to finish",
+					"attempts", attempts,
+					"remaining", time.Until(deadline).Round(time.Second).String(),
+				)
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-ticker.C:
+					credentialIssuer, err = lookupCredentialIssuer(clientset, flags.concierge.credentialIssuer, deps.log)
+					if err != nil {
+						return err
+					}
+				}
+			}
 		}
 
 		authenticator, err := lookupAuthenticator(
@@ -635,4 +664,13 @@ func countCACerts(pemData []byte) int {
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(pemData)
 	return len(pool.Subjects())
+}
+
+func hasPendingStrategy(credentialIssuer *configv1alpha1.CredentialIssuer) bool {
+	for _, strategy := range credentialIssuer.Status.Strategies {
+		if strategy.Reason == configv1alpha1.PendingStrategyReason {
+			return true
+		}
+	}
+	return false
 }

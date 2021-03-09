@@ -310,6 +310,7 @@ func waitForCredentialIssuer(ctx context.Context, clientset conciergeclientset.I
 			if !hasPendingStrategy(credentialIssuer) {
 				break
 			}
+			logStrategies(credentialIssuer, deps.log)
 			deps.log.Info("waiting for CredentialIssuer pending strategies to finish",
 				"attempts", attempts,
 				"remaining", time.Until(deadline).Round(time.Second).String(),
@@ -332,14 +333,7 @@ func discoverConciergeParams(credentialIssuer *configv1alpha1.CredentialIssuer, 
 	// Autodiscover the --concierge-mode.
 	frontend, err := getConciergeFrontend(credentialIssuer, flags.concierge.mode)
 	if err != nil {
-		for _, strategy := range credentialIssuer.Status.Strategies {
-			log.Info("found CredentialIssuer strategy",
-				"type", strategy.Type,
-				"status", strategy.Status,
-				"reason", strategy.Reason,
-				"message", strategy.Message,
-			)
-		}
+		logStrategies(credentialIssuer, log)
 		return err
 	}
 
@@ -381,6 +375,17 @@ func discoverConciergeParams(credentialIssuer *configv1alpha1.CredentialIssuer, 
 		log.Info("discovered Concierge certificate authority bundle", "roots", countCACerts(flags.concierge.caBundle))
 	}
 	return nil
+}
+
+func logStrategies(credentialIssuer *configv1alpha1.CredentialIssuer, log logr.Logger) {
+	for _, strategy := range credentialIssuer.Status.Strategies {
+		log.Info("found CredentialIssuer strategy",
+			"type", strategy.Type,
+			"status", strategy.Status,
+			"reason", strategy.Reason,
+			"message", strategy.Message,
+		)
+	}
 }
 
 func discoverAuthenticatorParams(authenticator metav1.Object, flags *getKubeconfigParams, log logr.Logger) error {

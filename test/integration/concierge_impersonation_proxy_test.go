@@ -6,7 +6,6 @@ package integration
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -22,8 +21,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
+
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/websocket"
 	v1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -558,30 +558,44 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	})
 
 	t.Run("websocket client", func(t *testing.T) {
+		library.CreateTestClusterRoleBinding(t,
+			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
+			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
+		)
+		// Wait for the above RBAC rule to take effect.
+		library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
+			Namespace: namespace.Name, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
+		})
+
+		impersonationRestConfig := impersonationProxyRestConfig(refreshCredential(), impersonationProxyURL, impersonationProxyCACertPEM, "")
+		tlsConfig, err := rest.TLSConfigFor(impersonationRestConfig)
+		require.NoError(t, err)
+
 		dest, _ := url.Parse(impersonationProxyURL)
 		dest.Scheme = "wss"
 		dest.Path = "/api/v1/namespaces/" + namespace.Name + "/configmaps"
 		dest.RawQuery = "watch=1&resourceVersion=0"
-		origin, _ := url.Parse("http://localhost")
 
-		rootCAs := x509.NewCertPool()
-		rootCAs.AppendCertsFromPEM(impersonationProxyCACertPEM)
-		tlsConfig := &tls.Config{
-			MinVersion: tls.VersionTLS12,
-			RootCAs:    rootCAs,
+		dialer := websocket.Dialer{
+			TLSClientConfig: tlsConfig,
 		}
-
-		websocketConfig := websocket.Config{
-			Location:  dest,
-			Origin:    origin,
-			TlsConfig: tlsConfig,
-			Version:   13,
-			Header:    http.Header(make(map[string][]string)),
+		if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
+			dialer.Proxy = func(req *http.Request) (*url.URL, error) {
+				proxyURL, err := url.Parse(env.Proxy)
+				require.NoError(t, err)
+				t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
+				return proxyURL, nil
+			}
 		}
-		ws, err := websocket.DialConfig(&websocketConfig)
-		if err != nil {
-			t.Fatalf("failed to dial websocket: %v", err)
+		c, r, err := dialer.Dial(dest.String(), nil)
+		if r != nil {
+			defer r.Body.Close()
 		}
+		if err != nil && r != nil {
+			body, _ := ioutil.ReadAll(r.Body)
+			t.Logf("websocket dial failed: %d:%s", r.StatusCode, body)
+		}
+		require.NoError(t, err)
 
 		// perform a create through the admin client
 		_, err = adminClient.CoreV1().ConfigMaps(namespace.Name).Create(ctx,
@@ -589,17 +603,22 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			metav1.CreateOptions{},
 		)
 		require.NoError(t, err)
+		t.Cleanup(func() {
+			err = adminClient.CoreV1().ConfigMaps(namespace.Name).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
+			require.NoError(t, err)
+		})
 
 		// see if the websocket client received an event for the create
-		var got watchJSON
-		err = websocket.JSON.Receive(ws, &got)
+		_, message, err := c.ReadMessage()
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
+		var got watchJSON
+		err = json.Unmarshal(message, &got)
+		require.NoError(t, err)
 		if got.Type != watch.Added {
 			t.Errorf("Unexpected type: %v", got.Type)
 		}
-
 		var createConfigMap corev1.ConfigMap
 		err = json.Unmarshal(got.Object, &createConfigMap)
 		require.NoError(t, err)

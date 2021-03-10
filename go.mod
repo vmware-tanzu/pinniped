@@ -15,6 +15,7 @@ require (
 	github.com/google/go-cmp v0.5.5
 	github.com/google/gofuzz v1.2.0
 	github.com/gorilla/securecookie v1.1.1
+	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/oleiade/reflections v1.0.1 // indirect
 	github.com/onsi/ginkgo v1.13.0 // indirect
 	github.com/ory/fosite v0.38.0

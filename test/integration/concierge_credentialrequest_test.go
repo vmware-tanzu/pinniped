@@ -31,11 +31,14 @@ func TestUnsuccessfulCredentialRequest(t *testing.T) {
 	defer cancel()
 
 	response, err := library.CreateTokenCredentialRequest(ctx, t,
-		validCredentialRequestSpecWithRealToken(t, corev1.TypedLocalObjectReference{
-			APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
-			Kind:     "WebhookAuthenticator",
-			Name:     "some-webhook-that-does-not-exist",
-		}),
+		loginv1alpha1.TokenCredentialRequestSpec{
+			Token: env.TestUser.Token,
+			Authenticator: corev1.TypedLocalObjectReference{
+				APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
+				Kind:     "WebhookAuthenticator",
+				Name:     "some-webhook-that-does-not-exist",
+			},
+		},
 	)
 	require.NoError(t, err)
 	require.Nil(t, response.Status.Credential)
@@ -180,32 +183,6 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T
 
 	require.Empty(t, response.Spec)
 	require.Nil(t, response.Status.Credential)
-}
-
-func TestCredentialRequest_OtherwiseValidRequestWithRealTokenShouldFailWhenTheClusterIsNotCapable(t *testing.T) {
-	env := library.IntegrationEnv(t).WithoutCapability(library.ClusterSigningKeyIsAvailable)
-
-	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
-
-	response, err := library.CreateTokenCredentialRequest(ctx, t, validCredentialRequestSpecWithRealToken(t, testWebhook))
-
-	require.NoError(t, err)
-
-	require.Empty(t, response.Spec)
-	require.Nil(t, response.Status.Credential)
-	require.Equal(t, stringPtr("authentication failed"), response.Status.Message)
-}
-
-func validCredentialRequestSpecWithRealToken(t *testing.T, authenticator corev1.TypedLocalObjectReference) loginv1alpha1.TokenCredentialRequestSpec {
-	return loginv1alpha1.TokenCredentialRequestSpec{
-		Token:         library.IntegrationEnv(t).TestUser.Token,
-		Authenticator: authenticator,
-	}
 }
 
 func stringPtr(s string) *string {

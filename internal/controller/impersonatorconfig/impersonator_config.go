@@ -357,7 +357,7 @@ func (c *impersonatorConfigController) ensureImpersonatorIsStarted(syncCtx contr
 			// The server has stopped, so finish shutting it down.
 			// If that fails too, return both errors for logging purposes.
 			// By returning an error, the sync function will be called again
-			// and we'll have a change to restart the server.
+			// and we'll have a chance to restart the server.
 			close(c.errorCh) // We don't want ensureImpersonatorIsStopped to block on reading this channel.
 			stoppingErr := c.ensureImpersonatorIsStopped(false)
 			return errors.NewAggregate([]error{runningErr, stoppingErr})

@@ -289,14 +289,15 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		var cancelContext context.Context
 		var cancelContextCancelFunc context.CancelFunc
 		var syncContext *controllerlib.Context
-		var impersonatorFuncWasCalled int
-		var impersonatorFuncError error
-		var impersonatorFuncReturnedFuncError error
-		var startedTLSListener net.Listener
 		var frozenNow time.Time
 		var signingCertProvider dynamiccert.Provider
 		var signingCACertPEM, signingCAKeyPEM []byte
 		var signingCASecret *corev1.Secret
+		var impersonatorFuncWasCalled int
+		var impersonatorFuncError error
+		var impersonatorFuncReturnedFuncError error
+		var startedTLSListener net.Listener
+		var startedTLSListenerMutex sync.RWMutex
 		var testHTTPServer *http.Server
 		var testHTTPServerMutex sync.RWMutex
 		var testHTTPServerInterruptCh chan struct{}
@@ -317,6 +318,48 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				return nil, impersonatorFuncError
 			}
 
+			startedTLSListenerMutex.Lock() // this is to satisfy the race detector
+			defer startedTLSListenerMutex.Unlock()
+			var err error
+			// Bind a listener to the port. Automatically choose the port for unit tests instead of using the real port.
+			startedTLSListener, err = tls.Listen("tcp", localhostIP+":0", &tls.Config{
+				MinVersion: tls.VersionTLS12,
+				GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+					certPEM, keyPEM := dynamicCertProvider.CurrentCertKeyContent()
+					if certPEM != nil && keyPEM != nil {
+						tlsCert, err := tls.X509KeyPair(certPEM, keyPEM)
+						r.NoError(err)
+						return &tlsCert, nil
+					}
+					return nil, nil // no cached TLS certs
+				},
+				ClientAuth: tls.RequestClientCert,
+				VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+					// Docs say that this will always be called in tls.RequestClientCert mode
+					// and that the second parameter will always be nil in that case.
+					// rawCerts will be raw ASN.1 certificates provided by the peer.
+					if len(rawCerts) != 1 {
+						return fmt.Errorf("expected to get one client cert on incoming request to test server")
+					}
+					clientCert := rawCerts[0]
+					currentClientCertCA := impersonationProxySignerCAProvider.CurrentCABundleContent()
+					if currentClientCertCA == nil {
+						return fmt.Errorf("impersonationProxySignerCAProvider does not have a current CA certificate")
+					}
+					// Assert that the client's cert was signed by the CA cert that the controller put into
+					// the CAContentProvider that was passed in.
+					parsed, err := x509.ParseCertificate(clientCert)
+					require.NoError(t, err)
+					roots := x509.NewCertPool()
+					require.True(t, roots.AppendCertsFromPEM(currentClientCertCA))
+					opts := x509.VerifyOptions{Roots: roots}
+					_, err = parsed.Verify(opts)
+					require.NoError(t, err)
+					return nil
+				},
+			})
+			r.NoError(err)
+
 			// Return a func that starts a fake server when called, and shuts down the fake server when stopCh is closed.
 			// This fake server is enough like the real impersonation proxy server for this unit test because it
 			// uses the supplied providers to serve TLS. The goal of this unit test is to make sure that the server
@@ -325,47 +368,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				if impersonatorFuncReturnedFuncError != nil {
 					return impersonatorFuncReturnedFuncError
 				}
-
-				var err error
-				// automatically choose the port for unit tests
-				startedTLSListener, err = tls.Listen("tcp", localhostIP+":0", &tls.Config{
-					MinVersion: tls.VersionTLS12,
-					GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-						certPEM, keyPEM := dynamicCertProvider.CurrentCertKeyContent()
-						if certPEM != nil && keyPEM != nil {
-							tlsCert, err := tls.X509KeyPair(certPEM, keyPEM)
-							r.NoError(err)
-							return &tlsCert, nil
-						}
-						return nil, nil // no cached TLS certs
-					},
-					ClientAuth: tls.RequestClientCert,
-					VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
-						// Docs say that this will always be called in tls.RequestClientCert mode
-						// and that the second parameter will always be nil in that case.
-						// rawCerts will be raw ASN.1 certificates provided by the peer.
-						if rawCerts == nil || len(rawCerts) != 1 {
-							return fmt.Errorf("expected to get one client cert on incoming request to test server")
-						}
-						clientCert := rawCerts[0]
-						currentClientCertCA := impersonationProxySignerCAProvider.CurrentCABundleContent()
-						if currentClientCertCA == nil {
-							return fmt.Errorf("impersonationProxySignerCAProvider does not have a current CA certificate")
-						}
-						// Assert that the client's cert was signed by the CA cert that the controller put into
-						// the CAContentProvider that was passed in.
-						parsed, err := x509.ParseCertificate(clientCert)
-						require.NoError(t, err)
-						t.Log("PARSED CLIENT CERT")
-						roots := x509.NewCertPool()
-						require.True(t, roots.AppendCertsFromPEM(currentClientCertCA))
-						opts := x509.VerifyOptions{Roots: roots}
-						_, err = parsed.Verify(opts)
-						require.NoError(t, err)
-						return nil
-					},
-				})
-				r.NoError(err)
 
 				testHTTPServerMutex.Lock() // this is to satisfy the race detector
 				testHTTPServer = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -376,7 +378,10 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 				// Start serving requests in the background.
 				go func() {
-					err := testHTTPServer.Serve(startedTLSListener)
+					startedTLSListenerMutex.RLock() // this is to satisfy the race detector
+					listener := startedTLSListener
+					startedTLSListenerMutex.RUnlock()
+					err := testHTTPServer.Serve(listener)
 					if !errors.Is(err, http.ErrServerClosed) {
 						t.Log("Got an unexpected error while starting the fake http server!")
 						r.NoError(err) // causes the test to crash, which is good enough because this should never happen
@@ -394,7 +399,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					<-testHTTPServerInterruptCh
 				}
 
-				err = testHTTPServer.Close()
+				err := testHTTPServer.Close()
 				t.Log("Got an unexpected error while stopping the fake http server!")
 				r.NoError(err) // causes the test to crash, which is good enough because this should never happen
 
@@ -403,11 +408,15 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		}
 
 		var testServerAddr = func() string {
+			var listener net.Listener
 			require.Eventually(t, func() bool {
-				return startedTLSListener != nil
+				startedTLSListenerMutex.RLock() // this is to satisfy the race detector
+				listener = startedTLSListener
+				defer startedTLSListenerMutex.RUnlock()
+				return listener != nil
 			}, 20*time.Second, 50*time.Millisecond, "TLS listener never became not nil")
 
-			return startedTLSListener.Addr().String()
+			return listener.Addr().String()
 		}
 
 		var closeTestHTTPServer = func() {
@@ -1967,9 +1976,15 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				startInformersAndController()
 				// The failure happens in a background goroutine, so the first sync succeeds.
 				r.NoError(runControllerSync())
-				// Eventually the server is not really running, because the startup failed.
-				r.Nil(startedTLSListener)
+				// The imperonatorFunc was called to construct an impersonator.
 				r.Equal(impersonatorFuncWasCalled, 1)
+				// Without waiting too long because we don't want the test to be slow, check if it seems like the
+				// server never started.
+				r.Never(func() bool {
+					testHTTPServerMutex.RLock() // this is to satisfy the race detector
+					defer testHTTPServerMutex.RUnlock()
+					return testHTTPServer != nil
+				}, 2*time.Second, 50*time.Millisecond)
 				r.Len(kubeAPIClient.Actions(), 3)
 				requireNodesListed(kubeAPIClient.Actions()[0])
 				requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])

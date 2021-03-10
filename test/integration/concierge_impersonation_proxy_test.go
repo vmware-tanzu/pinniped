@@ -6,7 +6,10 @@ package integration
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -18,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/websocket"
+
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -26,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/watch"
 	k8sinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -181,19 +187,20 @@ func TestImpersonationProxy(t *testing.T) {
 		)
 	}
 
+	// Create a namespace, because it will be easier to exercise "deletecollection" if we have a namespace.
+	namespace, err := adminClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: "impersonation-integration-test-"},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+	// Schedule the namespace for cleanup.
+	t.Cleanup(func() {
+		t.Logf("cleaning up test namespace %s", namespace.Name)
+		err = adminClient.CoreV1().Namespaces().Delete(context.Background(), namespace.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+
 	// Try more Kube API verbs through the impersonation proxy.
 	t.Run("watching all the basic verbs", func(t *testing.T) {
-		// Create a namespace, because it will be easier to exercise "deletecollection" if we have a namespace.
-		namespace, err := adminClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{GenerateName: "impersonation-integration-test-"},
-		}, metav1.CreateOptions{})
-		require.NoError(t, err)
-		// Schedule the namespace for cleanup.
-		t.Cleanup(func() {
-			t.Logf("cleaning up test namespace %s", namespace.Name)
-			err = adminClient.CoreV1().Namespaces().Delete(context.Background(), namespace.Name, metav1.DeleteOptions{})
-			require.NoError(t, err)
-		})
 
 		// Create an RBAC rule to allow this user to read/write everything.
 		library.CreateTestClusterRoleBinding(t,
@@ -478,6 +485,54 @@ func TestImpersonationProxy(t *testing.T) {
 		require.Contains(t, curlStdOut.String(), "\"forbidden: User \\\"system:anonymous\\\" cannot get path \\\"/\\\"\"")
 	})
 
+	t.Run("websocket client", func(t *testing.T) {
+		dest, _ := url.Parse(impersonationProxyURL)
+		dest.Scheme = "wss"
+		dest.Path = "/api/v1/namespaces/" + namespace.Name + "/configmaps"
+		dest.RawQuery = "watch=1&resourceVersion=0"
+		origin, _ := url.Parse("http://localhost")
+
+		rootCAs := x509.NewCertPool()
+		rootCAs.AppendCertsFromPEM(impersonationProxyCACertPEM)
+		tlsConfig := &tls.Config{
+			RootCAs: rootCAs,
+		}
+
+		websocketConfig := websocket.Config{
+			Location:  dest,
+			Origin:    origin,
+			TlsConfig: tlsConfig,
+			Version:   13,
+			Header:    http.Header(make(map[string][]string)),
+		}
+		ws, err := websocket.DialConfig(&websocketConfig)
+		if err != nil {
+			t.Fatalf("failed to dial websocket: %v", err)
+		}
+
+		// perform a create through the admin client
+		_, err = adminClient.CoreV1().ConfigMaps(namespace.Name).Create(ctx,
+			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-1"}},
+			metav1.CreateOptions{},
+		)
+		require.NoError(t, err)
+
+		// see if the websocket client received an event for the create
+		var got watchJSON
+		err = websocket.JSON.Receive(ws, &got)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if got.Type != watch.Added {
+			t.Errorf("Unexpected type: %v", got.Type)
+		}
+
+		var createConfigMap corev1.ConfigMap
+		err = json.Unmarshal(got.Object, &createConfigMap)
+		require.NoError(t, err)
+		require.Equal(t, "configmap-1", createConfigMap.Name)
+	})
+
 	// Update configuration to force the proxy to disabled mode
 	configMap := configMapForConfig(t, env, impersonator.Config{Mode: impersonator.ModeDisabled})
 	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
@@ -648,4 +703,10 @@ func impersonationProxyLoadBalancerName(env *library.TestEnv) string {
 
 func credentialIssuerName(env *library.TestEnv) string {
 	return env.ConciergeAppName + "-config"
+}
+
+// watchJSON defines the expected JSON wire equivalent of watch.Event
+type watchJSON struct {
+	Type   watch.EventType `json:"type,omitempty"`
+	Object json.RawMessage `json:"object,omitempty"`
 }

@@ -67,6 +67,11 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	// The error message that will be returned by squid when the impersonation proxy port inside the cluster is not listening.
 	serviceUnavailableViaSquidError := fmt.Sprintf(`Get "https://%s/api/v1/namespaces": Service Unavailable`, proxyServiceEndpoint)
 
+	credentialRequestSpecWithWorkingCredentials := loginv1alpha1.TokenCredentialRequestSpec{
+		Token:         env.TestUser.Token,
+		Authenticator: authenticator,
+	}
+
 	credentialAlmostExpired := func(credential *loginv1alpha1.TokenCredentialRequest) bool {
 		pemBlock, _ := pem.Decode([]byte(credential.Status.Credential.ClientCertificateData))
 		parsedCredential, err := x509.ParseCertificate(pemBlock.Bytes)
@@ -90,10 +95,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			//
 			// However, we issue short-lived certs, so this cert will only be valid for a few minutes.
 			// Cache it until it is almost expired and then refresh it whenever it is close to expired.
-			tokenCredentialRequestResponse, err = library.CreateTokenCredentialRequest(ctx, t, loginv1alpha1.TokenCredentialRequestSpec{
-				Token:         env.TestUser.Token,
-				Authenticator: authenticator,
-			})
+			tokenCredentialRequestResponse, err = library.CreateTokenCredentialRequest(ctx, t, credentialRequestSpecWithWorkingCredentials)
 			require.NoError(t, err)
 
 			require.Nil(t, tokenCredentialRequestResponse.Status.Message,
@@ -662,10 +664,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// impersonation strategy, we should be left with no working strategies.
 			// Given that there are no working strategies, a TokenCredentialRequest which would otherwise work should now
 			// fail, because there is no point handing out credentials that are not going to work for any strategy.
-			tokenCredentialRequestResponse, err = library.CreateTokenCredentialRequest(ctx, t,
-				loginv1alpha1.TokenCredentialRequestSpec{Token: env.TestUser.Token, Authenticator: authenticator},
-			)
+			tokenCredentialRequestResponse, err = library.CreateTokenCredentialRequest(ctx, t, credentialRequestSpecWithWorkingCredentials)
 			require.NoError(t, err)
+
 			require.NotNil(t, tokenCredentialRequestResponse.Status.Message, "expected an error message but got nil")
 			require.Equal(t, "authentication failed", *tokenCredentialRequestResponse.Status.Message)
 			require.Nil(t, tokenCredentialRequestResponse.Status.Credential)

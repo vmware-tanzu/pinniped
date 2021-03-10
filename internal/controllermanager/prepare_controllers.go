@@ -7,12 +7,9 @@ package controllermanager
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"net/http"
 	"time"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/clock"
 	k8sinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -67,9 +64,11 @@ type Config struct {
 
 	// DynamicServingCertProvider provides a setter and a getter to the Pinniped API's serving cert.
 	DynamicServingCertProvider dynamiccert.Provider
-	// DynamicSigningCertProvider provides a setter and a getter to the Pinniped API's
+	// DynamicSigningCertProvider provides a setter and a getter to the Pinniped API's  // TODO fix comment
 	// signing cert, i.e., the cert that it uses to sign certs for Pinniped clients wishing to login.
 	DynamicSigningCertProvider dynamiccert.Provider
+	// TODO fix comment
+	ImpersonationSigningCertProvider dynamiccert.Provider
 
 	// ServingCertDuration is the validity period, in seconds, of the API serving certificate.
 	ServingCertDuration time.Duration
@@ -80,10 +79,6 @@ type Config struct {
 
 	// AuthenticatorCache is a cache of authenticators shared amongst various authenticated-related controllers.
 	AuthenticatorCache *authncache.Cache
-
-	// LoginJSONDecoder can decode login.concierge.pinniped.dev types (e.g., TokenCredentialRequest)
-	// into their internal representation.
-	LoginJSONDecoder runtime.Decoder
 
 	// Labels are labels that should be added to any resources created by the controllers.
 	Labels map[string]string
@@ -188,6 +183,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 				c.ServingCertRenewBefore,
+				apicerts.TLSCertificateChainSecretKey,
 			),
 			singletonWorker,
 		).
@@ -295,18 +291,36 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				c.NamesConfig.ImpersonationCACertificateSecret,
 				c.Labels,
 				clock.RealClock{},
-				tls.Listen,
-				func() (http.Handler, error) {
-					impersonationProxyHandler, err := impersonator.New(
-						c.AuthenticatorCache,
-						c.LoginJSONDecoder,
-						klogr.New().WithName("impersonation-proxy"),
-					)
-					if err != nil {
-						return nil, fmt.Errorf("could not create impersonation proxy: %w", err)
-					}
-					return impersonationProxyHandler, nil
-				},
+				impersonator.New,
+				c.NamesConfig.ImpersonationSignerSecret,
+				c.ImpersonationSigningCertProvider,
+			),
+			singletonWorker,
+		).
+		WithController(
+			apicerts.NewCertsManagerController(
+				c.ServerInstallationInfo.Namespace,
+				c.NamesConfig.ImpersonationSignerSecret,
+				c.Labels,
+				client.Kubernetes,
+				informers.installationNamespaceK8s.Core().V1().Secrets(),
+				controllerlib.WithInformer,
+				controllerlib.WithInitialEvent,
+				365*24*time.Hour, // 1 year hard coded value
+				"Pinniped Impersonation Proxy CA",
+				"", // optional, means do not give me a serving cert
+			),
+			singletonWorker,
+		).
+		WithController(
+			apicerts.NewCertsExpirerController(
+				c.ServerInstallationInfo.Namespace,
+				c.NamesConfig.ImpersonationSignerSecret,
+				client.Kubernetes,
+				informers.installationNamespaceK8s.Core().V1().Secrets(),
+				controllerlib.WithInformer,
+				c.ServingCertRenewBefore,
+				apicerts.CACertificateSecretKey,
 			),
 			singletonWorker,
 		)

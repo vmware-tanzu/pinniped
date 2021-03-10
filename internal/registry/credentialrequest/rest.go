@@ -22,20 +22,17 @@ import (
 	"k8s.io/utils/trace"
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
+	"go.pinniped.dev/internal/issuer"
 )
 
 // clientCertificateTTL is the TTL for short-lived client certificates returned by this API.
 const clientCertificateTTL = 5 * time.Minute
 
-type CertIssuer interface {
-	IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) ([]byte, []byte, error)
-}
-
 type TokenCredentialRequestAuthenticator interface {
 	AuthenticateTokenCredentialRequest(ctx context.Context, req *loginapi.TokenCredentialRequest) (user.Info, error)
 }
 
-func NewREST(authenticator TokenCredentialRequestAuthenticator, issuer CertIssuer, resource schema.GroupResource) *REST {
+func NewREST(authenticator TokenCredentialRequestAuthenticator, issuer issuer.CertIssuer, resource schema.GroupResource) *REST {
 	return &REST{
 		authenticator:  authenticator,
 		issuer:         issuer,
@@ -45,7 +42,7 @@ func NewREST(authenticator TokenCredentialRequestAuthenticator, issuer CertIssue
 
 type REST struct {
 	authenticator  TokenCredentialRequestAuthenticator
-	issuer         CertIssuer
+	issuer         issuer.CertIssuer
 	tableConvertor rest.TableConvertor
 }
 

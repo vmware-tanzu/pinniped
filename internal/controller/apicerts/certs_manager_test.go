@@ -49,7 +49,7 @@ func TestManagerControllerOptions(t *testing.T) {
 				observableWithInitialEventOption.WithInitialEvent,
 				0,
 				"Pinniped CA",
-				"pinniped-api",
+				"ignored",
 			)
 			secretsInformerFilter = observableWithInformerOption.GetFilterForInformer(secretsInformer)
 		})
@@ -118,6 +118,7 @@ func TestManagerControllerSync(t *testing.T) {
 		const installedInNamespace = "some-namespace"
 		const certsSecretResourceName = "some-resource-name"
 		const certDuration = 12345678 * time.Second
+		const defaultServiceName = "pinniped-api"
 
 		var r *require.Assertions
 
@@ -131,7 +132,7 @@ func TestManagerControllerSync(t *testing.T) {
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
-		var startInformersAndController = func() {
+		var startInformersAndController = func(serviceName string) {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewCertsManagerController(
 				installedInNamespace,
@@ -146,7 +147,7 @@ func TestManagerControllerSync(t *testing.T) {
 				controllerlib.WithInitialEvent,
 				certDuration,
 				"Pinniped CA",
-				"pinniped-api",
+				serviceName,
 			)
 
 			// Set this at the last second to support calling subject.Name().
@@ -191,7 +192,7 @@ func TestManagerControllerSync(t *testing.T) {
 			})
 
 			it("creates the serving cert Secret", func() {
-				startInformersAndController()
+				startInformersAndController(defaultServiceName)
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
@@ -208,14 +209,17 @@ func TestManagerControllerSync(t *testing.T) {
 					"myLabelKey2": "myLabelValue2",
 				}, actualSecret.Labels)
 				actualCACert := actualSecret.StringData["caCertificate"]
+				actualCAPrivateKey := actualSecret.StringData["caCertificatePrivateKey"]
 				actualPrivateKey := actualSecret.StringData["tlsPrivateKey"]
 				actualCertChain := actualSecret.StringData["tlsCertificateChain"]
 				r.NotEmpty(actualCACert)
+				r.NotEmpty(actualCAPrivateKey)
 				r.NotEmpty(actualPrivateKey)
 				r.NotEmpty(actualCertChain)
+				r.Len(actualSecret.StringData, 4)
 
-				// Validate the created CA's lifetime.
 				validCACert := testutil.ValidateCertificate(t, actualCACert, actualCACert)
+				validCACert.RequireMatchesPrivateKey(actualCAPrivateKey)
 				validCACert.RequireLifetime(time.Now(), time.Now().Add(certDuration), 6*time.Minute)
 
 				// Validate the created cert using the CA, and also validate the cert's hostname
@@ -223,6 +227,34 @@ func TestManagerControllerSync(t *testing.T) {
 				validCert.RequireDNSName("pinniped-api." + installedInNamespace + ".svc")
 				validCert.RequireLifetime(time.Now(), time.Now().Add(certDuration), 6*time.Minute)
 				validCert.RequireMatchesPrivateKey(actualPrivateKey)
+			})
+
+			it("creates the CA but not service when the service name is empty", func() {
+				startInformersAndController("")
+				err := controllerlib.TestSync(t, subject, *syncContext)
+				r.NoError(err)
+
+				// Check all the relevant fields from the create Secret action
+				r.Len(kubeAPIClient.Actions(), 1)
+				actualAction := kubeAPIClient.Actions()[0].(coretesting.CreateActionImpl)
+				r.Equal(schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, actualAction.GetResource())
+				r.Equal(installedInNamespace, actualAction.GetNamespace())
+				actualSecret := actualAction.GetObject().(*corev1.Secret)
+				r.Equal(certsSecretResourceName, actualSecret.Name)
+				r.Equal(installedInNamespace, actualSecret.Namespace)
+				r.Equal(map[string]string{
+					"myLabelKey1": "myLabelValue1",
+					"myLabelKey2": "myLabelValue2",
+				}, actualSecret.Labels)
+				actualCACert := actualSecret.StringData["caCertificate"]
+				actualCAPrivateKey := actualSecret.StringData["caCertificatePrivateKey"]
+				r.NotEmpty(actualCACert)
+				r.NotEmpty(actualCAPrivateKey)
+				r.Len(actualSecret.StringData, 2)
+
+				validCACert := testutil.ValidateCertificate(t, actualCACert, actualCACert)
+				validCACert.RequireMatchesPrivateKey(actualCAPrivateKey)
+				validCACert.RequireLifetime(time.Now(), time.Now().Add(certDuration), 6*time.Minute)
 			})
 
 			when("creating the Secret fails", func() {
@@ -237,7 +269,7 @@ func TestManagerControllerSync(t *testing.T) {
 				})
 
 				it("returns the create error", func() {
-					startInformersAndController()
+					startInformersAndController(defaultServiceName)
 					err := controllerlib.TestSync(t, subject, *syncContext)
 					r.EqualError(err, "could not create secret: create failed")
 				})
@@ -257,7 +289,7 @@ func TestManagerControllerSync(t *testing.T) {
 			})
 
 			it("does not need to make any API calls with its API client", func() {
-				startInformersAndController()
+				startInformersAndController(defaultServiceName)
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 				r.Empty(kubeAPIClient.Actions())

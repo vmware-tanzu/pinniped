@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apicerts
@@ -64,7 +64,7 @@ func (c *apiServiceUpdaterController) Sync(ctx controllerlib.Context) error {
 	}
 
 	// Update the APIService to give it the new CA bundle.
-	if err := UpdateAPIService(ctx.Context, c.aggregatorClient, c.apiServiceName, c.namespace, certSecret.Data[caCertificateSecretKey]); err != nil {
+	if err := UpdateAPIService(ctx.Context, c.aggregatorClient, c.apiServiceName, c.namespace, certSecret.Data[CACertificateSecretKey]); err != nil {
 		return fmt.Errorf("could not update the API service: %w", err)
 	}
 

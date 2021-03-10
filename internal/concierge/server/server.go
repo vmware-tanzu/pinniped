@@ -17,7 +17,6 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 
-	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
 	"go.pinniped.dev/internal/certauthority/dynamiccertauthority"
 	"go.pinniped.dev/internal/concierge/apiserver"
 	conciergescheme "go.pinniped.dev/internal/concierge/scheme"
@@ -27,6 +26,7 @@ import (
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/issuer"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/registry/credentialrequest"
 )
@@ -116,9 +116,13 @@ func (a *App) runServer(ctx context.Context) error {
 	// keep incoming requests fast.
 	dynamicServingCertProvider := dynamiccert.New()
 
-	// This cert provider will be used to provide a signing key to the
+	// This cert provider will be used to provide the Kube signing key to the
 	// cert issuer used to issue certs to Pinniped clients wishing to login.
 	dynamicSigningCertProvider := dynamiccert.New()
+
+	// This cert provider will be used to provide the impersonation proxy signing key to the
+	// cert issuer used to issue certs to Pinniped clients wishing to login.
+	impersonationProxySigningCertProvider := dynamiccert.New()
 
 	// Get the "real" name of the login concierge API group (i.e., the API group name with the
 	// injected suffix).
@@ -128,29 +132,34 @@ func (a *App) runServer(ctx context.Context) error {
 	// post start hook of the aggregated API server.
 	startControllersFunc, err := controllermanager.PrepareControllers(
 		&controllermanager.Config{
-			ServerInstallationInfo:     podInfo,
-			APIGroupSuffix:             *cfg.APIGroupSuffix,
-			NamesConfig:                &cfg.NamesConfig,
-			Labels:                     cfg.Labels,
-			KubeCertAgentConfig:        &cfg.KubeCertAgentConfig,
-			DiscoveryURLOverride:       cfg.DiscoveryInfo.URL,
-			DynamicServingCertProvider: dynamicServingCertProvider,
-			DynamicSigningCertProvider: dynamicSigningCertProvider,
-			ServingCertDuration:        time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds) * time.Second,
-			ServingCertRenewBefore:     time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds) * time.Second,
-			AuthenticatorCache:         authenticators,
-			LoginJSONDecoder:           getLoginJSONDecoder(loginGV.Group, scheme),
+			ServerInstallationInfo:           podInfo,
+			APIGroupSuffix:                   *cfg.APIGroupSuffix,
+			NamesConfig:                      &cfg.NamesConfig,
+			Labels:                           cfg.Labels,
+			KubeCertAgentConfig:              &cfg.KubeCertAgentConfig,
+			DiscoveryURLOverride:             cfg.DiscoveryInfo.URL,
+			DynamicServingCertProvider:       dynamicServingCertProvider,
+			DynamicSigningCertProvider:       dynamicSigningCertProvider,
+			ImpersonationSigningCertProvider: impersonationProxySigningCertProvider,
+			ServingCertDuration:              time.Duration(*cfg.APIConfig.ServingCertificateConfig.DurationSeconds) * time.Second,
+			ServingCertRenewBefore:           time.Duration(*cfg.APIConfig.ServingCertificateConfig.RenewBeforeSeconds) * time.Second,
+			AuthenticatorCache:               authenticators,
 		},
 	)
 	if err != nil {
 		return fmt.Errorf("could not prepare controllers: %w", err)
 	}
 
+	certIssuer := issuer.CertIssuers{
+		dynamiccertauthority.New(dynamicSigningCertProvider),            // attempt to use the real Kube CA if possible
+		dynamiccertauthority.New(impersonationProxySigningCertProvider), // fallback to our internal CA if we need to
+	}
+
 	// Get the aggregated API server config.
 	aggregatedAPIServerConfig, err := getAggregatedAPIServerConfig(
 		dynamicServingCertProvider,
 		authenticators,
-		dynamiccertauthority.New(dynamicSigningCertProvider),
+		certIssuer,
 		startControllersFunc,
 		*cfg.APIGroupSuffix,
 		scheme,
@@ -175,7 +184,7 @@ func (a *App) runServer(ctx context.Context) error {
 func getAggregatedAPIServerConfig(
 	dynamicCertProvider dynamiccert.Provider,
 	authenticator credentialrequest.TokenCredentialRequestAuthenticator,
-	issuer credentialrequest.CertIssuer,
+	issuer issuer.CertIssuer,
 	startControllersPostStartHook func(context.Context),
 	apiGroupSuffix string,
 	scheme *runtime.Scheme,
@@ -221,17 +230,4 @@ func getAggregatedAPIServerConfig(
 		},
 	}
 	return apiServerConfig, nil
-}
-
-func getLoginJSONDecoder(loginConciergeAPIGroup string, loginConciergeScheme *runtime.Scheme) runtime.Decoder {
-	scheme := loginConciergeScheme
-	codecs := serializer.NewCodecFactory(scheme)
-	respInfo, ok := runtime.SerializerInfoForMediaType(codecs.SupportedMediaTypes(), runtime.ContentTypeJSON)
-	if !ok {
-		panic(fmt.Errorf("unknown content type: %s ", runtime.ContentTypeJSON)) // static input, programmer error
-	}
-	return codecs.DecoderToVersion(respInfo.Serializer, schema.GroupVersion{
-		Group:   loginConciergeAPIGroup,
-		Version: loginapi.SchemeGroupVersion.Version,
-	})
 }

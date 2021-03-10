@@ -41,6 +41,8 @@ func TestFromPath(t *testing.T) {
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
 				labels:
 				  myLabelKey1: myLabelValue1
 				  myLabelKey2: myLabelValue2
@@ -69,6 +71,7 @@ func TestFromPath(t *testing.T) {
 					ImpersonationLoadBalancerService:  "impersonationLoadBalancerService-value",
 					ImpersonationTLSCertificateSecret: "impersonationTLSCertificateSecret-value",
 					ImpersonationCACertificateSecret:  "impersonationCACertificateSecret-value",
+					ImpersonationSignerSecret:         "impersonationSignerSecret-value",
 				},
 				Labels: map[string]string{
 					"myLabelKey1": "myLabelValue1",
@@ -94,6 +97,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
 			wantConfig: &Config{
 				DiscoveryInfo: DiscoveryInfoSpec{
@@ -114,6 +118,7 @@ func TestFromPath(t *testing.T) {
 					ImpersonationLoadBalancerService:  "impersonationLoadBalancerService-value",
 					ImpersonationTLSCertificateSecret: "impersonationTLSCertificateSecret-value",
 					ImpersonationCACertificateSecret:  "impersonationCACertificateSecret-value",
+					ImpersonationSignerSecret:         "impersonationSignerSecret-value",
 				},
 				Labels: map[string]string{},
 				KubeCertAgentConfig: KubeCertAgentSpec{
@@ -127,7 +132,8 @@ func TestFromPath(t *testing.T) {
 			yaml: here.Doc(``),
 			wantError: "validate names: missing required names: servingCertificateSecret, credentialIssuer, " +
 				"apiService, impersonationConfigMap, impersonationLoadBalancerService, " +
-				"impersonationTLSCertificateSecret, impersonationCACertificateSecret",
+				"impersonationTLSCertificateSecret, impersonationCACertificateSecret, " +
+				"impersonationSignerSecret",
 		},
 		{
 			name: "Missing apiService name",
@@ -140,6 +146,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
 			wantError: "validate names: missing required names: apiService",
 		},
@@ -154,6 +161,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
 			wantError: "validate names: missing required names: credentialIssuer",
 		},
@@ -168,6 +176,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
 			wantError: "validate names: missing required names: servingCertificateSecret",
 		},
@@ -182,6 +191,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
 			wantError: "validate names: missing required names: impersonationConfigMap",
 		},
@@ -196,6 +206,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
 			wantError: "validate names: missing required names: impersonationLoadBalancerService",
 		},
@@ -210,6 +221,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
 			wantError: "validate names: missing required names: impersonationTLSCertificateSecret",
 		},
@@ -224,8 +236,24 @@ func TestFromPath(t *testing.T) {
 				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
 			wantError: "validate names: missing required names: impersonationCACertificateSecret",
+		},
+		{
+			name: "Missing impersonationSignerSecret name",
+			yaml: here.Doc(`
+				---
+				names:
+				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
+				  credentialIssuer: pinniped-config
+				  apiService: pinniped-api
+				  impersonationConfigMap: impersonationConfigMap-value
+				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
+				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
+				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+			`),
+			wantError: "validate names: missing required names: impersonationSignerSecret",
 		},
 		{
 			name: "Missing several required names",
@@ -236,6 +264,7 @@ func TestFromPath(t *testing.T) {
 				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
 			wantError: "validate names: missing required names: impersonationConfigMap, " +
 				"impersonationTLSCertificateSecret, impersonationCACertificateSecret",
@@ -256,6 +285,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
 			wantError: "validate api: durationSeconds cannot be smaller than renewBeforeSeconds",
 		},
@@ -275,6 +305,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
 			wantError: "validate api: renewBefore must be positive",
 		},
@@ -294,6 +325,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
 			wantError: "validate api: renewBefore must be positive",
 		},
@@ -314,6 +346,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
 			wantError: "validate apiGroupSuffix: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')",
 		},

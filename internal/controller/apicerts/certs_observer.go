@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apicerts
@@ -62,7 +62,7 @@ func (c *certsObserverController) Sync(_ controllerlib.Context) error {
 	}
 
 	// Mutate the in-memory cert provider to update with the latest cert values.
-	c.dynamicCertProvider.Set(certSecret.Data[tlsCertificateChainSecretKey], certSecret.Data[tlsPrivateKeySecretKey])
+	c.dynamicCertProvider.Set(certSecret.Data[TLSCertificateChainSecretKey], certSecret.Data[tlsPrivateKeySecretKey])
 	klog.Info("certsObserverController Sync updated certs in the dynamic cert provider")
 	return nil
 }

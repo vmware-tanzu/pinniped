@@ -24,6 +24,7 @@ import (
 	"k8s.io/klog/v2"
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
+	"go.pinniped.dev/internal/issuer"
 	"go.pinniped.dev/internal/mocks/credentialrequestmocks"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -353,12 +354,12 @@ func requireSuccessfulResponseWithAuthenticationFailureMessage(t *testing.T, err
 	})
 }
 
-func successfulIssuer(ctrl *gomock.Controller) CertIssuer {
-	issuer := credentialrequestmocks.NewMockCertIssuer(ctrl)
-	issuer.EXPECT().
+func successfulIssuer(ctrl *gomock.Controller) issuer.CertIssuer {
+	certIssuer := credentialrequestmocks.NewMockCertIssuer(ctrl)
+	certIssuer.EXPECT().
 		IssuePEM(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return([]byte("test-cert"), []byte("test-key"), nil)
-	return issuer
+	return certIssuer
 }
 
 func stringPtr(s string) *string {

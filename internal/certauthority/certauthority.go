@@ -187,11 +187,12 @@ func (c *CA) Issue(subject pkix.Name, dnsNames []string, ips []net.IP, ttl time.
 
 	// Sign a cert, getting back the DER-encoded certificate bytes.
 	template := x509.Certificate{
-		SerialNumber:          serialNumber,
-		Subject:               subject,
-		NotBefore:             notBefore,
-		NotAfter:              notAfter,
-		KeyUsage:              x509.KeyUsageDigitalSignature,
+		SerialNumber: serialNumber,
+		Subject:      subject,
+		NotBefore:    notBefore,
+		NotAfter:     notAfter,
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		// TODO split this function into two funcs that handle client and serving certs differently
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 		IsCA:                  false,

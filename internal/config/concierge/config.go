@@ -119,6 +119,9 @@ func validateNames(names *NamesConfigSpec) error {
 	if names.ImpersonationCACertificateSecret == "" {
 		missingNames = append(missingNames, "impersonationCACertificateSecret")
 	}
+	if names.ImpersonationSignerSecret == "" {
+		missingNames = append(missingNames, "impersonationSignerSecret")
+	}
 	if len(missingNames) > 0 {
 		return constable.Error("missing required names: " + strings.Join(missingNames, ", "))
 	}

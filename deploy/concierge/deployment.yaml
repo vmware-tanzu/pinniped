@@ -46,6 +46,7 @@ data:
       impersonationLoadBalancerService: (@= defaultResourceNameWithSuffix("impersonation-proxy-load-balancer") @)
       impersonationTLSCertificateSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-tls-serving-certificate") @)
       impersonationCACertificateSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-ca-certificate") @)
+      impersonationSignerSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-signer-ca-certificate") @)
     labels: (@= json.encode(labels()).rstrip() @)
     kubeCertAgent:
       namePrefix: (@= defaultResourceNameWithSuffix("kube-cert-agent-") @)

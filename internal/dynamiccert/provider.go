@@ -1,9 +1,10 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package dynamiccert
 
 import (
+	"crypto/x509"
 	"sync"
 
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
@@ -13,6 +14,8 @@ import (
 // certificate and matching key.
 type Provider interface {
 	dynamiccertificates.CertKeyContentProvider
+	// TODO dynamiccertificates.Notifier
+	// TODO dynamiccertificates.ControllerRunner ???
 	Set(certPEM, keyPEM []byte)
 }
 
@@ -43,3 +46,27 @@ func (p *provider) CurrentCertKeyContent() (cert []byte, key []byte) {
 	defer p.mutex.RUnlock()
 	return p.certPEM, p.keyPEM
 }
+
+func NewCAProvider(delegate dynamiccertificates.CertKeyContentProvider) dynamiccertificates.CAContentProvider {
+	return &caContentProvider{delegate: delegate}
+}
+
+type caContentProvider struct {
+	delegate dynamiccertificates.CertKeyContentProvider
+}
+
+func (c *caContentProvider) Name() string {
+	return "DynamicCAProvider"
+}
+
+func (c *caContentProvider) CurrentCABundleContent() []byte {
+	ca, _ := c.delegate.CurrentCertKeyContent()
+	return ca
+}
+
+func (c *caContentProvider) VerifyOptions() (x509.VerifyOptions, bool) {
+	return x509.VerifyOptions{}, false // assume we are unioned via dynamiccertificates.NewUnionCAContentProvider
+}
+
+// TODO look at both the serving side union struct and the ca side union struct for all optional interfaces
+//  and then implement everything that makes sense for us to implement

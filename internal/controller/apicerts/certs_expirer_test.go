@@ -98,7 +98,8 @@ func TestExpirerControllerFilters(t *testing.T) {
 				nil, // k8sClient, not needed
 				secretsInformer,
 				withInformer.WithInformer,
-				0, // renewBefore, not needed
+				0,  // renewBefore, not needed
+				"", // not needed
 			)
 
 			unrelated := corev1.Secret{}
@@ -115,6 +116,7 @@ func TestExpirerControllerSync(t *testing.T) {
 	t.Parallel()
 
 	const certsSecretResourceName = "some-resource-name"
+	const fakeTestKey = "some-awesome-key"
 
 	tests := []struct {
 		name                string
@@ -132,6 +134,7 @@ func TestExpirerControllerSync(t *testing.T) {
 			name:           "secret missing key",
 			fillSecretData: func(t *testing.T, m map[string][]byte) {},
 			wantDelete:     false,
+			wantError:      `failed to get cert bounds for secret "some-resource-name" with key "some-awesome-key": failed to find certificate`,
 		},
 		{
 			name:        "lifetime below threshold",
@@ -143,8 +146,7 @@ func TestExpirerControllerSync(t *testing.T) {
 				)
 				require.NoError(t, err)
 
-				// See certs_manager.go for this constant.
-				m["tlsCertificateChain"] = certPEM
+				m[fakeTestKey] = certPEM
 			},
 			wantDelete: false,
 		},
@@ -158,8 +160,7 @@ func TestExpirerControllerSync(t *testing.T) {
 				)
 				require.NoError(t, err)
 
-				// See certs_manager.go for this constant.
-				m["tlsCertificateChain"] = certPEM
+				m[fakeTestKey] = certPEM
 			},
 			wantDelete: true,
 		},
@@ -173,8 +174,7 @@ func TestExpirerControllerSync(t *testing.T) {
 				)
 				require.NoError(t, err)
 
-				// See certs_manager.go for this constant.
-				m["tlsCertificateChain"] = certPEM
+				m[fakeTestKey] = certPEM
 			},
 			wantDelete: true,
 		},
@@ -188,8 +188,7 @@ func TestExpirerControllerSync(t *testing.T) {
 				)
 				require.NoError(t, err)
 
-				// See certs_manager.go for this constant.
-				m["tlsCertificateChain"] = certPEM
+				m[fakeTestKey] = certPEM
 			},
 			configKubeAPIClient: func(c *kubernetesfake.Clientset) {
 				c.PrependReactor("delete", "secrets", func(_ kubetesting.Action) (bool, runtime.Object, error) {
@@ -204,11 +203,11 @@ func TestExpirerControllerSync(t *testing.T) {
 				privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 				require.NoError(t, err)
 
-				// See certs_manager.go for this constant.
-				m["tlsCertificateChain"], err = x509.MarshalPKCS8PrivateKey(privateKey)
+				m[fakeTestKey], err = x509.MarshalPKCS8PrivateKey(privateKey)
 				require.NoError(t, err)
 			},
 			wantDelete: false,
+			wantError:  `failed to get cert bounds for secret "some-resource-name" with key "some-awesome-key": failed to decode certificate PEM`,
 		},
 	}
 	for _, test := range tests {
@@ -253,6 +252,7 @@ func TestExpirerControllerSync(t *testing.T) {
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 				test.renewBefore,
+				fakeTestKey,
 			)
 
 			// Must start informers before calling TestRunSynchronously().

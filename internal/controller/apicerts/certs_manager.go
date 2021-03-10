@@ -21,9 +21,10 @@ import (
 )
 
 const (
-	caCertificateSecretKey       = "caCertificate"
-	tlsPrivateKeySecretKey       = "tlsPrivateKey"
-	tlsCertificateChainSecretKey = "tlsCertificateChain"
+	CACertificateSecretKey           = "caCertificate"
+	CACertificatePrivateKeySecretKey = "caCertificatePrivateKey"
+	tlsPrivateKeySecretKey           = "tlsPrivateKey"
+	TLSCertificateChainSecretKey     = "tlsCertificateChain"
 )
 
 type certsManagerController struct {
@@ -98,23 +99,11 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("could not initialize CA: %w", err)
 	}
 
-	// Using the CA from above, create a TLS server cert.
-	serviceEndpoint := c.serviceNameForGeneratedCertCommonName + "." + c.namespace + ".svc"
-	tlsCert, err := ca.Issue(
-		pkix.Name{CommonName: serviceEndpoint},
-		[]string{serviceEndpoint},
-		nil,
-		c.certDuration,
-	)
+	caPrivateKeyPEM, err := ca.PrivateKeyToPEM()
 	if err != nil {
-		return fmt.Errorf("could not issue serving certificate: %w", err)
+		return fmt.Errorf("could not get CA private key: %w", err)
 	}
 
-	// Write the CA's public key bundle and the serving certs to a secret.
-	tlsCertChainPEM, tlsPrivateKeyPEM, err := certauthority.ToPEM(tlsCert)
-	if err != nil {
-		return fmt.Errorf("could not PEM encode serving certificate: %w", err)
-	}
 	secret := corev1.Secret{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
@@ -123,11 +112,34 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 			Labels:    c.certsSecretLabels,
 		},
 		StringData: map[string]string{
-			caCertificateSecretKey:       string(ca.Bundle()),
-			tlsPrivateKeySecretKey:       string(tlsPrivateKeyPEM),
-			tlsCertificateChainSecretKey: string(tlsCertChainPEM),
+			CACertificateSecretKey:           string(ca.Bundle()),
+			CACertificatePrivateKeySecretKey: string(caPrivateKeyPEM),
 		},
 	}
+
+	// Using the CA from above, create a TLS server cert if we have service name.
+	if len(c.serviceNameForGeneratedCertCommonName) != 0 {
+		serviceEndpoint := c.serviceNameForGeneratedCertCommonName + "." + c.namespace + ".svc"
+		tlsCert, err := ca.Issue(
+			pkix.Name{CommonName: serviceEndpoint},
+			[]string{serviceEndpoint},
+			nil,
+			c.certDuration,
+		)
+		if err != nil {
+			return fmt.Errorf("could not issue serving certificate: %w", err)
+		}
+
+		// Write the CA's public key bundle and the serving certs to a secret.
+		tlsCertChainPEM, tlsPrivateKeyPEM, err := certauthority.ToPEM(tlsCert)
+		if err != nil {
+			return fmt.Errorf("could not PEM encode serving certificate: %w", err)
+		}
+
+		secret.StringData[tlsPrivateKeySecretKey] = string(tlsPrivateKeyPEM)
+		secret.StringData[TLSCertificateChainSecretKey] = string(tlsCertChainPEM)
+	}
+
 	_, err = c.k8sClient.CoreV1().Secrets(c.namespace).Create(ctx.Context, &secret, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("could not create secret: %w", err)

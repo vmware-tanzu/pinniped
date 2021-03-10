@@ -64,7 +64,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 	// The address of the ClusterIP service that points at the impersonation proxy's port (used when there is no load balancer).
 	proxyServiceEndpoint := fmt.Sprintf("%s-proxy.%s.svc.cluster.local", env.ConciergeAppName, env.ConciergeNamespace)
-	expectedProxyServiceEndpointURL := "https://" + proxyServiceEndpoint
 	// The error message that will be returned by squid when the impersonation proxy port inside the cluster is not listening.
 	serviceUnavailableViaSquidError := fmt.Sprintf(`Get "https://%s/api/v1/namespaces": Service Unavailable`, proxyServiceEndpoint)
 
@@ -97,7 +96,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			})
 			require.NoError(t, err)
 
-			require.Empty(t, tokenCredentialRequestResponse.Status.Message) // no error message
+			require.Nil(t, tokenCredentialRequestResponse.Status.Message,
+				"expected no error message but got: %s", library.Sdump(tokenCredentialRequestResponse.Status.Message))
 			require.NotEmpty(t, tokenCredentialRequestResponse.Status.Credential.ClientCertificateData)
 			require.NotEmpty(t, tokenCredentialRequestResponse.Status.Credential.ClientKeyData)
 
@@ -132,15 +132,27 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		return &config
 	}
 
-	impersonationProxyViaSquidClient := func(proxyURL string, caData []byte, doubleImpersonateUser string) kubernetes.Interface {
-		t.Helper()
-		kubeconfig := impersonationProxyRestConfig(refreshCredential(), proxyURL, caData, doubleImpersonateUser)
-		kubeconfig.Proxy = func(req *http.Request) (*url.URL, error) {
+	kubeconfigProxyFunc := func() func(req *http.Request) (*url.URL, error) {
+		return func(req *http.Request) (*url.URL, error) {
 			proxyURL, err := url.Parse(env.Proxy)
 			require.NoError(t, err)
 			t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
 			return proxyURL, nil
 		}
+	}
+
+	impersonationProxyViaSquidClient := func(proxyURL string, caData []byte, doubleImpersonateUser string) kubernetes.Interface {
+		t.Helper()
+		kubeconfig := impersonationProxyRestConfig(refreshCredential(), proxyURL, caData, doubleImpersonateUser)
+		kubeconfig.Proxy = kubeconfigProxyFunc()
+		return library.NewKubeclient(t, kubeconfig).Kubernetes
+	}
+
+	impersonationProxyViaSquidClientWithoutCredential := func() kubernetes.Interface {
+		t.Helper()
+		proxyURL := "https://" + proxyServiceEndpoint
+		kubeconfig := impersonationProxyRestConfig(&loginv1alpha1.ClusterCredential{}, proxyURL, nil, "")
+		kubeconfig.Proxy = kubeconfigProxyFunc()
 		return library.NewKubeclient(t, kubeconfig).Kubernetes
 	}
 
@@ -202,7 +214,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		}, 10*time.Second, 500*time.Millisecond)
 
 		// Check that we can't use the impersonation proxy to execute kubectl commands yet.
-		_, err = impersonationProxyViaSquidClient(expectedProxyServiceEndpointURL, nil, "").CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+		_, err = impersonationProxyViaSquidClientWithoutCredential().CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 		require.EqualError(t, err, serviceUnavailableViaSquidError)
 
 		// Create configuration to make the impersonation proxy turn on with a hard coded endpoint (without a load balancer).
@@ -592,57 +604,73 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		require.Equal(t, "configmap-1", createConfigMap.Name)
 	})
 
-	// Update configuration to force the proxy to disabled mode
-	configMap := configMapForConfig(t, env, impersonator.Config{Mode: impersonator.ModeDisabled})
-	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
-		t.Logf("creating configmap %s", configMap.Name)
-		_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, &configMap, metav1.CreateOptions{})
-		require.NoError(t, err)
-	} else {
-		t.Logf("updating configmap %s", configMap.Name)
-		_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Update(ctx, &configMap, metav1.UpdateOptions{})
-		require.NoError(t, err)
-	}
+	t.Run("manually disabling the impersonation proxy feature", func(t *testing.T) {
+		// Update configuration to force the proxy to disabled mode
+		configMap := configMapForConfig(t, env, impersonator.Config{Mode: impersonator.ModeDisabled})
+		if env.HasCapability(library.HasExternalLoadBalancerProvider) {
+			t.Logf("creating configmap %s", configMap.Name)
+			_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, &configMap, metav1.CreateOptions{})
+			require.NoError(t, err)
+		} else {
+			t.Logf("updating configmap %s", configMap.Name)
+			_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Update(ctx, &configMap, metav1.UpdateOptions{})
+			require.NoError(t, err)
+		}
 
-	if env.HasCapability(library.HasExternalLoadBalancerProvider) {
-		// The load balancer should have been deleted when we disabled the impersonation proxy.
-		// Note that this can take kind of a long time on real cloud providers (e.g. ~22 seconds on EKS).
-		library.RequireEventuallyWithoutError(t, func() (bool, error) {
-			hasService, err := hasImpersonationProxyLoadBalancerService(ctx, env, adminClient)
-			return !hasService, err
-		}, 2*time.Minute, 500*time.Millisecond)
-	}
+		if env.HasCapability(library.HasExternalLoadBalancerProvider) {
+			// The load balancer should have been deleted when we disabled the impersonation proxy.
+			// Note that this can take kind of a long time on real cloud providers (e.g. ~22 seconds on EKS).
+			library.RequireEventuallyWithoutError(t, func() (bool, error) {
+				hasService, err := hasImpersonationProxyLoadBalancerService(ctx, env, adminClient)
+				return !hasService, err
+			}, 2*time.Minute, 500*time.Millisecond)
+		}
 
-	// Check that the impersonation proxy port has shut down.
-	// Ideally we could always check that the impersonation proxy's port has shut down, but on clusters where we
-	// do not run the squid proxy we have no easy way to see beyond the load balancer to see inside the cluster,
-	// so we'll skip this check on clusters which have load balancers but don't run the squid proxy.
-	// The other cluster types that do run the squid proxy will give us sufficient coverage here.
-	if env.Proxy != "" {
+		// Check that the impersonation proxy port has shut down.
+		// Ideally we could always check that the impersonation proxy's port has shut down, but on clusters where we
+		// do not run the squid proxy we have no easy way to see beyond the load balancer to see inside the cluster,
+		// so we'll skip this check on clusters which have load balancers but don't run the squid proxy.
+		// The other cluster types that do run the squid proxy will give us sufficient coverage here.
+		if env.Proxy != "" {
+			require.Eventually(t, func() bool {
+				// It's okay if this returns RBAC errors because this user has no role bindings.
+				// What we want to see is that the proxy eventually shuts down entirely.
+				_, err = impersonationProxyViaSquidClientWithoutCredential().CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+				return err.Error() == serviceUnavailableViaSquidError
+			}, 20*time.Second, 500*time.Millisecond)
+		}
+
+		// Check that the generated TLS cert Secret was deleted by the controller because it's supposed to clean this up
+		// when we disable the impersonator.
 		require.Eventually(t, func() bool {
-			// It's okay if this returns RBAC errors because this user has no role bindings.
-			// What we want to see is that the proxy eventually shuts down entirely.
-			_, err = impersonationProxyViaSquidClient(expectedProxyServiceEndpointURL, nil, "").CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-			return err.Error() == serviceUnavailableViaSquidError
-		}, 20*time.Second, 500*time.Millisecond)
-	}
+			_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
+			return k8serrors.IsNotFound(err)
+		}, 10*time.Second, 250*time.Millisecond)
 
-	// Check that the generated TLS cert Secret was deleted by the controller because it's supposed to clean this up
-	// when we disable the impersonator.
-	require.Eventually(t, func() bool {
-		_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
-		return k8serrors.IsNotFound(err)
-	}, 10*time.Second, 250*time.Millisecond)
+		// Check that the generated CA cert Secret was not deleted by the controller because it's supposed to keep this
+		// around in case we decide to later re-enable the impersonator. We want to avoid generating new CA certs when
+		// possible because they make their way into kubeconfigs on client machines.
+		_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyCASecretName(env), metav1.GetOptions{})
+		require.NoError(t, err)
 
-	// Check that the generated CA cert Secret was not deleted by the controller because it's supposed to keep this
-	// around in case we decide to later re-enable the impersonator. We want to avoid generating new CA certs when
-	// possible because they make their way into kubeconfigs on client machines.
-	_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyCASecretName(env), metav1.GetOptions{})
-	require.NoError(t, err)
+		// At this point the impersonator should be stopped. The CredentialIssuer's strategies array should be updated to
+		// include an unsuccessful impersonation strategy saying that it was manually configured to be disabled.
+		requireDisabledByConfigurationStrategy(ctx, t, env, adminConciergeClient)
 
-	// At this point the impersonator should be stopped. The CredentialIssuer's strategies array should be updated to
-	// include an unsuccessful impersonation strategy saying that it was manually configured to be disabled.
-	requireDisabledByConfigurationStrategy(ctx, t, env, adminConciergeClient)
+		if !env.HasCapability(library.ClusterSigningKeyIsAvailable) {
+			// This cluster does not support the cluster signing key strategy, so now that we've manually disabled the
+			// impersonation strategy, we should be left with no working strategies.
+			// Given that there are no working strategies, a TokenCredentialRequest which would otherwise work should now
+			// fail, because there is no point handing out credentials that are not going to work for any strategy.
+			tokenCredentialRequestResponse, err = library.CreateTokenCredentialRequest(ctx, t,
+				loginv1alpha1.TokenCredentialRequestSpec{Token: env.TestUser.Token, Authenticator: authenticator},
+			)
+			require.NoError(t, err)
+			require.NotNil(t, tokenCredentialRequestResponse.Status.Message, "expected an error message but got nil")
+			require.Equal(t, "authentication failed", *tokenCredentialRequestResponse.Status.Message)
+			require.Nil(t, tokenCredentialRequestResponse.Status.Credential)
+		}
+	})
 }
 
 func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *library.TestEnv, adminConciergeClient versioned.Interface) (string, []byte) {

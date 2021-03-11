@@ -473,8 +473,9 @@ func newCertProvider(t *testing.T) (dynamiccert.Provider, []byte, string) {
 	certPEM, keyPEM, err := certauthority.ToPEM(cert)
 	require.NoError(t, err)
 
-	certProvider := dynamiccert.New()
-	certProvider.Set(certPEM, keyPEM)
+	certProvider := dynamiccert.New(t.Name())
+	err = certProvider.SetCertKeyContent(certPEM, keyPEM)
+	require.NoError(t, err)
 
 	return certProvider, ca.Bundle(), serverName
 }

@@ -114,15 +114,15 @@ func (a *App) runServer(ctx context.Context) error {
 	// is stored in a k8s Secret. Therefore it also effectively acting as
 	// an in-memory cache of what is stored in the k8s Secret, helping to
 	// keep incoming requests fast.
-	dynamicServingCertProvider := dynamiccert.New()
+	dynamicServingCertProvider := dynamiccert.New("concierge-serving-cert")
 
 	// This cert provider will be used to provide the Kube signing key to the
 	// cert issuer used to issue certs to Pinniped clients wishing to login.
-	dynamicSigningCertProvider := dynamiccert.New()
+	dynamicSigningCertProvider := dynamiccert.New("concierge-kube-signing-cert")
 
 	// This cert provider will be used to provide the impersonation proxy signing key to the
 	// cert issuer used to issue certs to Pinniped clients wishing to login.
-	impersonationProxySigningCertProvider := dynamiccert.New()
+	impersonationProxySigningCertProvider := dynamiccert.New("impersonation-proxy-signing-cert")
 
 	// Get the "real" name of the login concierge API group (i.e., the API group name with the
 	// injected suffix).

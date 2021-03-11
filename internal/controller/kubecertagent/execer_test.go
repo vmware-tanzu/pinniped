@@ -132,6 +132,7 @@ func (s *fakePodExecutor) Exec(podNamespace string, podName string, commandAndAr
 }
 
 func TestManagerControllerSync(t *testing.T) {
+	name := t.Name()
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const agentPodNamespace = "some-namespace"
 		const agentPodName = "some-agent-pod-name-123"
@@ -139,8 +140,6 @@ func TestManagerControllerSync(t *testing.T) {
 		const keyPathAnnotationName = "kube-cert-agent.pinniped.dev/key-path"
 		const fakeCertPath = "/some/cert/path"
 		const fakeKeyPath = "/some/key/path"
-		const defaultDynamicCertProviderCert = "initial-cert"
-		const defaultDynamicCertProviderKey = "initial-key"
 		const credentialIssuerResourceName = "ci-resource-name"
 
 		var r *require.Assertions
@@ -159,6 +158,8 @@ func TestManagerControllerSync(t *testing.T) {
 		var fakeCertPEM, fakeKeyPEM string
 		var credentialIssuerGVR schema.GroupVersionResource
 		var frozenNow time.Time
+		var defaultDynamicCertProviderCert string
+		var defaultDynamicCertProviderKey string
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
@@ -228,14 +229,23 @@ func TestManagerControllerSync(t *testing.T) {
 		it.Before(func() {
 			r = require.New(t)
 
+			crt, key, err := testutil.CreateCertificate(
+				time.Now().Add(-time.Hour),
+				time.Now().Add(time.Hour),
+			)
+			require.NoError(t, err)
+			defaultDynamicCertProviderCert = string(crt)
+			defaultDynamicCertProviderKey = string(key)
+
 			cancelContext, cancelContextCancelFunc = context.WithCancel(context.Background())
 			pinnipedAPIClient = pinnipedfake.NewSimpleClientset()
 			kubeClientset = kubernetesfake.NewSimpleClientset()
 			kubeInformerFactory = kubeinformers.NewSharedInformerFactory(kubeClientset, 0)
 			fakeExecutor = &fakePodExecutor{r: r}
 			frozenNow = time.Date(2020, time.September, 23, 7, 42, 0, 0, time.Local)
-			dynamicCertProvider = dynamiccert.New()
-			dynamicCertProvider.Set([]byte(defaultDynamicCertProviderCert), []byte(defaultDynamicCertProviderKey))
+			dynamicCertProvider = dynamiccert.New(name)
+			err = dynamicCertProvider.SetCertKeyContent([]byte(defaultDynamicCertProviderCert), []byte(defaultDynamicCertProviderKey))
+			r.NoError(err)
 
 			loadFile := func(filename string) string {
 				bytes, err := ioutil.ReadFile(filename)
@@ -658,6 +668,55 @@ func TestManagerControllerSync(t *testing.T) {
 									Status:         configv1alpha1.ErrorStrategyStatus,
 									Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
 									Message:        podExecErrorMessage,
+									LastUpdateTime: metav1.NewTime(frozenNow),
+								},
+							},
+						},
+					}
+					expectedGetAction := coretesting.NewRootGetAction(credentialIssuerGVR, credentialIssuerResourceName)
+					expectedCreateAction := coretesting.NewRootCreateAction(credentialIssuerGVR, expectedCreateCredentialIssuer)
+					expectedUpdateAction := coretesting.NewRootUpdateSubresourceAction(credentialIssuerGVR, "status", expectedCredentialIssuer)
+					r.Equal([]coretesting.Action{expectedGetAction, expectedCreateAction, expectedUpdateAction}, pinnipedAPIClient.Actions())
+				})
+			})
+
+			when("the third resulting pod exec has invalid key data", func() {
+				var keyParseErrorMessage string
+
+				it.Before(func() {
+					keyParseErrorMessage = "failed to set signing cert/key content from agent pod some-namespace/some-agent-pod-name-123: TestManagerControllerSync: attempt to set invalid key pair: tls: failed to find any PEM data in key input"
+					fakeExecutor.errorsToReturn = []error{nil, nil}
+					fakeExecutor.resultsToReturn = []string{fakeCertPEM, ""}
+					startInformersAndController()
+				})
+
+				it("does not update the dynamic certificates provider", func() {
+					r.EqualError(controllerlib.TestSync(t, subject, *syncContext), keyParseErrorMessage)
+					requireDynamicCertProviderHasDefaultValues()
+				})
+
+				it("creates or updates the the CredentialIssuer status field with an error", func() {
+					r.EqualError(controllerlib.TestSync(t, subject, *syncContext), keyParseErrorMessage)
+
+					expectedCreateCredentialIssuer := &configv1alpha1.CredentialIssuer{
+						TypeMeta: metav1.TypeMeta{},
+						ObjectMeta: metav1.ObjectMeta{
+							Name: credentialIssuerResourceName,
+						},
+					}
+
+					expectedCredentialIssuer := &configv1alpha1.CredentialIssuer{
+						TypeMeta: metav1.TypeMeta{},
+						ObjectMeta: metav1.ObjectMeta{
+							Name: credentialIssuerResourceName,
+						},
+						Status: configv1alpha1.CredentialIssuerStatus{
+							Strategies: []configv1alpha1.CredentialIssuerStrategy{
+								{
+									Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+									Status:         configv1alpha1.ErrorStrategyStatus,
+									Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+									Message:        keyParseErrorMessage,
 									LastUpdateTime: metav1.NewTime(frozenNow),
 								},
 							},

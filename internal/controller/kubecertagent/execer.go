@@ -11,9 +11,9 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/apimachinery/pkg/util/errors"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/klog/v2"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
@@ -119,8 +119,7 @@ func (c *execerController) Sync(ctx controllerlib.Context) error {
 			c.pinnipedAPIClient,
 			strategyError(c.clock, err),
 		)
-		klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuer with strategy success")
-		return err
+		return newAggregate(err, strategyResultUpdateErr)
 	}
 
 	keyPEM, err := c.podCommandExecutor.Exec(agentPod.Namespace, agentPod.Name, "cat", keyPath)
@@ -132,11 +131,20 @@ func (c *execerController) Sync(ctx controllerlib.Context) error {
 			c.pinnipedAPIClient,
 			strategyError(c.clock, err),
 		)
-		klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuer with strategy success")
-		return err
+		return newAggregate(err, strategyResultUpdateErr)
 	}
 
-	c.dynamicCertProvider.Set([]byte(certPEM), []byte(keyPEM))
+	if err := c.dynamicCertProvider.SetCertKeyContent([]byte(certPEM), []byte(keyPEM)); err != nil {
+		err = fmt.Errorf("failed to set signing cert/key content from agent pod %s/%s: %w", agentPod.Namespace, agentPod.Name, err)
+		strategyResultUpdateErr := issuerconfig.UpdateStrategy(
+			ctx.Context,
+			c.credentialIssuerLocationConfig.Name,
+			c.credentialIssuerLabels,
+			c.pinnipedAPIClient,
+			strategyError(c.clock, err),
+		)
+		return newAggregate(err, strategyResultUpdateErr)
+	}
 
 	apiInfo, err := c.getTokenCredentialRequestAPIInfo()
 	if err != nil {
@@ -153,8 +161,7 @@ func (c *execerController) Sync(ctx controllerlib.Context) error {
 				LastUpdateTime: metav1.NewTime(c.clock.Now()),
 			},
 		)
-		klog.ErrorS(strategyResultUpdateErr, "could not create or update CredentialIssuer with strategy success")
-		return err
+		return newAggregate(err, strategyResultUpdateErr)
 	}
 
 	return issuerconfig.UpdateStrategy(
@@ -218,4 +225,8 @@ func (c *execerController) getKeypairFilePaths(pod *v1.Pod) (string, string) {
 	keyPath := annotations[agentPodKeyPathAnnotationKey]
 
 	return certPath, keyPath
+}
+
+func newAggregate(errs ...error) error {
+	return errors.NewAggregate(errs)
 }

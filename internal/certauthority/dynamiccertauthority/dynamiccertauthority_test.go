@@ -17,7 +17,7 @@ import (
 func TestCAIssuePEM(t *testing.T) {
 	t.Parallel()
 
-	provider := dynamiccert.New()
+	provider := dynamiccert.New(t.Name())
 	ca := New(provider)
 
 	goodCACrtPEM0, goodCAKeyPEM0, err := testutil.CreateCertificate(
@@ -44,12 +44,12 @@ func TestCAIssuePEM(t *testing.T) {
 		{
 			name:      "only cert",
 			caCrtPEM:  goodCACrtPEM0,
-			wantError: "could not load CA: tls: failed to find any PEM data in key input",
+			wantError: "TestCAIssuePEM: attempt to set invalid key pair: tls: failed to find any PEM data in key input",
 		},
 		{
 			name:      "only key",
 			caKeyPEM:  goodCAKeyPEM0,
-			wantError: "could not load CA: tls: failed to find any PEM data in certificate input",
+			wantError: "TestCAIssuePEM: attempt to set invalid key pair: tls: failed to find any PEM data in certificate input",
 		},
 		{
 			name:     "new cert+key",
@@ -68,19 +68,19 @@ func TestCAIssuePEM(t *testing.T) {
 			name:      "bad cert",
 			caCrtPEM:  []byte("this is not a cert"),
 			caKeyPEM:  goodCAKeyPEM0,
-			wantError: "could not load CA: tls: failed to find any PEM data in certificate input",
+			wantError: "TestCAIssuePEM: attempt to set invalid key pair: tls: failed to find any PEM data in certificate input",
 		},
 		{
 			name:      "bad key",
 			caCrtPEM:  goodCACrtPEM0,
 			caKeyPEM:  []byte("this is not a key"),
-			wantError: "could not load CA: tls: failed to find any PEM data in key input",
+			wantError: "TestCAIssuePEM: attempt to set invalid key pair: tls: failed to find any PEM data in key input",
 		},
 		{
 			name:      "mismatch cert+key",
 			caCrtPEM:  goodCACrtPEM0,
 			caKeyPEM:  goodCAKeyPEM1,
-			wantError: "could not load CA: tls: private key does not match public key",
+			wantError: "TestCAIssuePEM: attempt to set invalid key pair: tls: private key does not match public key",
 		},
 		{
 			name:     "good cert+key again",
@@ -94,17 +94,7 @@ func TestCAIssuePEM(t *testing.T) {
 			// Can't run these steps in parallel, because each one depends on the previous steps being
 			// run.
 
-			if step.caCrtPEM != nil || step.caKeyPEM != nil {
-				provider.Set(step.caCrtPEM, step.caKeyPEM)
-			}
-
-			crtPEM, keyPEM, err := ca.IssuePEM(
-				pkix.Name{
-					CommonName: "some-common-name",
-				},
-				[]string{"some-dns-name", "some-other-dns-name"},
-				time.Hour*24,
-			)
+			crtPEM, keyPEM, err := issuePEM(provider, ca, step.caCrtPEM, step.caKeyPEM)
 
 			if step.wantError != "" {
 				require.EqualError(t, err, step.wantError)
@@ -125,4 +115,22 @@ func TestCAIssuePEM(t *testing.T) {
 			}
 		})
 	}
+}
+
+func issuePEM(provider dynamiccert.Provider, ca *CA, caCrt, caKey []byte) ([]byte, []byte, error) {
+	// if setting fails, look at that error
+	if caCrt != nil || caKey != nil {
+		if err := provider.SetCertKeyContent(caCrt, caKey); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// otherwise check to see if their is an issuing error
+	return ca.IssuePEM(
+		pkix.Name{
+			CommonName: "some-common-name",
+		},
+		[]string{"some-dns-name", "some-other-dns-name"},
+		time.Hour*24,
+	)
 }

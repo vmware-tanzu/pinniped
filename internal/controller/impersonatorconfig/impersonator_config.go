@@ -117,7 +117,7 @@ func NewImpersonatorConfigController(
 				clock:                             clock,
 				impersonationSigningCertProvider:  impersonationSigningCertProvider,
 				impersonatorFunc:                  impersonatorFunc,
-				tlsServingCertDynamicCertProvider: dynamiccert.New(),
+				tlsServingCertDynamicCertProvider: dynamiccert.New("impersonation-proxy-serving-cert"),
 			},
 		},
 		withInformer(
@@ -238,7 +238,7 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context) (*v
 	nameInfo, err := c.findDesiredTLSCertificateName(config)
 	if err != nil {
 		// Unexpected error while determining the name that should go into the certs, so clear any existing certs.
-		c.tlsServingCertDynamicCertProvider.Set(nil, nil)
+		c.tlsServingCertDynamicCertProvider.UnsetCertKeyContent()
 		return nil, err
 	}
 
@@ -371,7 +371,7 @@ func (c *impersonatorConfigController) ensureImpersonatorIsStarted(syncCtx contr
 	startImpersonatorFunc, err := c.impersonatorFunc(
 		impersonationProxyPort,
 		c.tlsServingCertDynamicCertProvider,
-		dynamiccert.NewCAProvider(c.impersonationSigningCertProvider),
+		c.impersonationSigningCertProvider,
 	)
 	if err != nil {
 		return err
@@ -750,16 +750,17 @@ func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, c
 func (c *impersonatorConfigController) loadTLSCertFromSecret(tlsSecret *v1.Secret) error {
 	certPEM := tlsSecret.Data[v1.TLSCertKey]
 	keyPEM := tlsSecret.Data[v1.TLSPrivateKeyKey]
-	_, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		c.tlsServingCertDynamicCertProvider.Set(nil, nil)
+
+	if err := c.tlsServingCertDynamicCertProvider.SetCertKeyContent(certPEM, keyPEM); err != nil {
+		c.tlsServingCertDynamicCertProvider.UnsetCertKeyContent()
 		return fmt.Errorf("could not parse TLS cert PEM data from Secret: %w", err)
 	}
+
 	plog.Info("Loading TLS certificates for impersonation proxy",
 		"certPEM", string(certPEM),
 		"secret", c.tlsSecretName,
 		"namespace", c.namespace)
-	c.tlsServingCertDynamicCertProvider.Set(certPEM, keyPEM)
+
 	return nil
 }
 
@@ -779,7 +780,7 @@ func (c *impersonatorConfigController) ensureTLSSecretIsRemoved(ctx context.Cont
 		return err
 	}
 
-	c.tlsServingCertDynamicCertProvider.Set(nil, nil)
+	c.tlsServingCertDynamicCertProvider.UnsetCertKeyContent()
 
 	return nil
 }
@@ -798,8 +799,8 @@ func (c *impersonatorConfigController) loadSignerCA(status v1alpha1.StrategyStat
 
 	certPEM := signingCertSecret.Data[apicerts.CACertificateSecretKey]
 	keyPEM := signingCertSecret.Data[apicerts.CACertificatePrivateKeySecretKey]
-	_, err = tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
+
+	if err := c.impersonationSigningCertProvider.SetCertKeyContent(certPEM, keyPEM); err != nil {
 		return fmt.Errorf("could not load the impersonator's credential signing secret: %w", err)
 	}
 
@@ -807,13 +808,13 @@ func (c *impersonatorConfigController) loadSignerCA(status v1alpha1.StrategyStat
 		"certPEM", string(certPEM),
 		"fromSecret", c.impersonationSignerSecretName,
 		"namespace", c.namespace)
-	c.impersonationSigningCertProvider.Set(certPEM, keyPEM)
+
 	return nil
 }
 
 func (c *impersonatorConfigController) clearSignerCA() {
 	plog.Info("Clearing credential signing certificate for impersonation proxy")
-	c.impersonationSigningCertProvider.Set(nil, nil)
+	c.impersonationSigningCertProvider.UnsetCertKeyContent()
 }
 
 func (c *impersonatorConfigController) doSyncResult(nameInfo *certNameInfo, config *impersonator.Config, ca *certauthority.CA) *v1alpha1.CredentialIssuerStrategy {

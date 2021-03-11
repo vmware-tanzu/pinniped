@@ -18,7 +18,6 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/features"
-	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/rest"
@@ -26,6 +25,7 @@ import (
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -35,11 +35,16 @@ func TestNew(t *testing.T) {
 
 	ca, err := certauthority.New(pkix.Name{CommonName: "ca"}, time.Hour)
 	require.NoError(t, err)
+	caKey, err := ca.PrivateKeyToPEM()
+	require.NoError(t, err)
+	caContent := dynamiccert.New("ca")
+	err = caContent.SetCertKeyContent(ca.Bundle(), caKey)
+	require.NoError(t, err)
+
 	cert, key, err := ca.IssuePEM(pkix.Name{CommonName: "example.com"}, []string{"example.com"}, time.Hour)
 	require.NoError(t, err)
-	certKeyContent, err := dynamiccertificates.NewStaticCertKeyContent("cert-key", cert, key)
-	require.NoError(t, err)
-	caContent, err := dynamiccertificates.NewStaticCAContent("ca", ca.Bundle())
+	certKeyContent := dynamiccert.New("cert-key")
+	err = certKeyContent.SetCertKeyContent(cert, key)
 	require.NoError(t, err)
 
 	// Punch out just enough stuff to make New actually run without error.

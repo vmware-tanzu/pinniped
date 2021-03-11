@@ -12,11 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/errors"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/request"
@@ -27,6 +26,7 @@ import (
 	"k8s.io/client-go/transport"
 
 	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"
@@ -39,22 +39,22 @@ import (
 // Instead, call the factory function again to get a new start function.
 type FactoryFunc func(
 	port int,
-	dynamicCertProvider dynamiccertificates.CertKeyContentProvider,
-	impersonationProxySignerCA dynamiccertificates.CAContentProvider,
+	dynamicCertProvider dynamiccert.Private,
+	impersonationProxySignerCA dynamiccert.Public,
 ) (func(stopCh <-chan struct{}) error, error)
 
 func New(
 	port int,
-	dynamicCertProvider dynamiccertificates.CertKeyContentProvider, //  TODO: we need to check those optional interfaces and see what we need to implement
-	impersonationProxySignerCA dynamiccertificates.CAContentProvider, //  TODO: we need to check those optional interfaces and see what we need to implement
+	dynamicCertProvider dynamiccert.Private,
+	impersonationProxySignerCA dynamiccert.Public,
 ) (func(stopCh <-chan struct{}) error, error) {
 	return newInternal(port, dynamicCertProvider, impersonationProxySignerCA, nil, nil)
 }
 
 func newInternal( //nolint:funlen // yeah, it's kind of long.
 	port int,
-	dynamicCertProvider dynamiccertificates.CertKeyContentProvider,
-	impersonationProxySignerCA dynamiccertificates.CAContentProvider,
+	dynamicCertProvider dynamiccert.Private,
+	impersonationProxySignerCA dynamiccert.Public,
 	clientOpts []kubeclient.Option, // for unit testing, should always be nil in production
 	recOpts func(*genericoptions.RecommendedOptions), // for unit testing, should always be nil in production
 ) (func(stopCh <-chan struct{}) error, error) {

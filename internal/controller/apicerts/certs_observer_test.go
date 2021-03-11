@@ -5,7 +5,9 @@ package apicerts
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
@@ -94,6 +96,7 @@ func TestObserverControllerInformerFilters(t *testing.T) {
 }
 
 func TestObserverControllerSync(t *testing.T) {
+	name := t.Name()
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
 		const certsSecretResourceName = "some-resource-name"
@@ -142,7 +145,7 @@ func TestObserverControllerSync(t *testing.T) {
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
-			dynamicCertProvider = dynamiccert.New()
+			dynamicCertProvider = dynamiccert.New(name)
 		})
 
 		it.After(func() {
@@ -160,7 +163,14 @@ func TestObserverControllerSync(t *testing.T) {
 				err := kubeInformerClient.Tracker().Add(unrelatedSecret)
 				r.NoError(err)
 
-				dynamicCertProvider.Set([]byte("some cert"), []byte("some private key"))
+				crt, key, err := testutil.CreateCertificate(
+					time.Now().Add(-time.Hour),
+					time.Now().Add(time.Hour),
+				)
+				require.NoError(t, err)
+
+				err = dynamicCertProvider.SetCertKeyContent(crt, key)
+				r.NoError(err)
 			})
 
 			it("sets the dynamicCertProvider's cert and key to nil", func() {
@@ -176,6 +186,12 @@ func TestObserverControllerSync(t *testing.T) {
 
 		when("there is a serving cert Secret with the expected keys already in the installation namespace", func() {
 			it.Before(func() {
+				crt, key, err := testutil.CreateCertificate(
+					time.Now().Add(-time.Hour),
+					time.Now().Add(time.Hour),
+				)
+				require.NoError(t, err)
+
 				apiServingCertSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      certsSecretResourceName,
@@ -183,24 +199,29 @@ func TestObserverControllerSync(t *testing.T) {
 					},
 					Data: map[string][]byte{
 						"caCertificate":       []byte("fake cert"),
-						"tlsPrivateKey":       []byte("fake private key"),
-						"tlsCertificateChain": []byte("fake cert chain"),
+						"tlsPrivateKey":       key,
+						"tlsCertificateChain": crt,
 					},
 				}
-				err := kubeInformerClient.Tracker().Add(apiServingCertSecret)
+				err = kubeInformerClient.Tracker().Add(apiServingCertSecret)
 				r.NoError(err)
 
-				dynamicCertProvider.Set(nil, nil)
+				dynamicCertProvider.UnsetCertKeyContent()
 			})
 
 			it("updates the dynamicCertProvider's cert and key", func() {
 				startInformersAndController()
+
+				actualCertChain, actualKey := dynamicCertProvider.CurrentCertKeyContent()
+				r.Nil(actualCertChain)
+				r.Nil(actualKey)
+
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				actualCertChain, actualKey := dynamicCertProvider.CurrentCertKeyContent()
-				r.Equal("fake cert chain", string(actualCertChain))
-				r.Equal("fake private key", string(actualKey))
+				actualCertChain, actualKey = dynamicCertProvider.CurrentCertKeyContent()
+				r.True(strings.HasPrefix(string(actualCertChain), `-----BEGIN CERTIFICATE-----`), "not a cert:\n%s", string(actualCertChain))
+				r.True(strings.HasPrefix(string(actualKey), `-----BEGIN PRIVATE KEY-----`), "not a key:\n%s", string(actualKey))
 			})
 		})
 
@@ -216,15 +237,20 @@ func TestObserverControllerSync(t *testing.T) {
 				err := kubeInformerClient.Tracker().Add(apiServingCertSecret)
 				r.NoError(err)
 
-				dynamicCertProvider.Set(nil, nil)
+				dynamicCertProvider.UnsetCertKeyContent()
 			})
 
-			it("set the missing values in the dynamicCertProvider as nil", func() {
+			it("returns an error and does not change the dynamicCertProvider", func() {
 				startInformersAndController()
-				err := controllerlib.TestSync(t, subject, *syncContext)
-				r.NoError(err)
 
 				actualCertChain, actualKey := dynamicCertProvider.CurrentCertKeyContent()
+				r.Nil(actualCertChain)
+				r.Nil(actualKey)
+
+				err := controllerlib.TestSync(t, subject, *syncContext)
+				r.EqualError(err, "failed to set serving cert/key content from secret some-namespace/some-resource-name: TestObserverControllerSync: attempt to set invalid key pair: tls: failed to find any PEM data in certificate input")
+
+				actualCertChain, actualKey = dynamicCertProvider.CurrentCertKeyContent()
 				r.Nil(actualCertChain)
 				r.Nil(actualKey)
 			})

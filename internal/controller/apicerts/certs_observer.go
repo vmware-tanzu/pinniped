@@ -57,12 +57,15 @@ func (c *certsObserverController) Sync(_ controllerlib.Context) error {
 	if notFound {
 		klog.Info("certsObserverController Sync found that the secret does not exist yet or was deleted")
 		// The secret does not exist yet or was deleted.
-		c.dynamicCertProvider.Set(nil, nil)
+		c.dynamicCertProvider.UnsetCertKeyContent()
 		return nil
 	}
 
 	// Mutate the in-memory cert provider to update with the latest cert values.
-	c.dynamicCertProvider.Set(certSecret.Data[TLSCertificateChainSecretKey], certSecret.Data[tlsPrivateKeySecretKey])
+	if err := c.dynamicCertProvider.SetCertKeyContent(certSecret.Data[TLSCertificateChainSecretKey], certSecret.Data[tlsPrivateKeySecretKey]); err != nil {
+		return fmt.Errorf("failed to set serving cert/key content from secret %s/%s: %w", c.namespace, c.certsSecretResourceName, err)
+	}
+
 	klog.Info("certsObserverController Sync updated certs in the dynamic cert provider")
 	return nil
 }

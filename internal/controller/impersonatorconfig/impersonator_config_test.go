@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/clock"
-	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
@@ -266,6 +265,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 }
 
 func TestImpersonatorConfigControllerSync(t *testing.T) {
+	name := t.Name()
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
 		const configMapResourceName = "some-configmap-resource-name"
@@ -306,8 +306,8 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		var impersonatorFunc = func(
 			port int,
-			dynamicCertProvider dynamiccertificates.CertKeyContentProvider,
-			impersonationProxySignerCAProvider dynamiccertificates.CAContentProvider,
+			dynamicCertProvider dynamiccert.Private,
+			impersonationProxySignerCAProvider dynamiccert.Public,
 		) (func(stopCh <-chan struct{}) error, error) {
 			impersonatorFuncWasCalled++
 			r.Equal(8444, port)
@@ -972,7 +972,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			kubeAPIClient = kubernetesfake.NewSimpleClientset()
 			pinnipedAPIClient = pinnipedfake.NewSimpleClientset()
 			frozenNow = time.Date(2021, time.March, 2, 7, 42, 0, 0, time.Local)
-			signingCertProvider = dynamiccert.New()
+			signingCertProvider = dynamiccert.New(name)
 
 			ca := newCA()
 			signingCACertPEM = ca.Bundle()
@@ -2408,7 +2408,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 				it("returns the error", func() {
 					startInformersAndController()
-					errString := `could not load the impersonator's credential signing secret: tls: failed to find any PEM data in certificate input`
+					errString := `could not load the impersonator's credential signing secret: TestImpersonatorConfigControllerSync: attempt to set invalid key pair: tls: failed to find any PEM data in certificate input`
 					r.EqualError(runControllerSync(), errString)
 					requireCredentialIssuer(newErrorStrategy(errString))
 					requireSigningCertProviderIsEmpty()
@@ -2423,7 +2423,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 				it("returns the error", func() {
 					startInformersAndController()
-					errString := `could not load the impersonator's credential signing secret: tls: failed to find any PEM data in certificate input`
+					errString := `could not load the impersonator's credential signing secret: TestImpersonatorConfigControllerSync: attempt to set invalid key pair: tls: failed to find any PEM data in certificate input`
 					r.EqualError(runControllerSync(), errString)
 					requireCredentialIssuer(newErrorStrategy(errString))
 					requireSigningCertProviderIsEmpty()
@@ -2459,7 +2459,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					addSecretToTrackers(updatedSigner, kubeInformerClient)
 					waitForObjectToAppearInInformer(updatedSigner, kubeInformers.Core().V1().Secrets())
 
-					errString := `could not load the impersonator's credential signing secret: tls: failed to find any PEM data in certificate input`
+					errString := `could not load the impersonator's credential signing secret: TestImpersonatorConfigControllerSync: attempt to set invalid key pair: tls: failed to find any PEM data in certificate input`
 					r.EqualError(runControllerSync(), errString)
 					requireCredentialIssuer(newErrorStrategy(errString))
 					requireSigningCertProviderIsEmpty()

@@ -355,7 +355,7 @@ func run() error {
 		kubeinformers.WithNamespace(namespace),
 	)
 
-	dynamicCertProvider := dynamiccert.New()
+	dynamicCertProvider := dynamiccert.New("local-user-authenticator-tls-serving-certificate")
 
 	startControllers(ctx, dynamicCertProvider, client.Kubernetes, kubeInformers)
 	plog.Debug("controllers are ready")

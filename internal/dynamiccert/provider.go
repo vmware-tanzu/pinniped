@@ -4,69 +4,112 @@
 package dynamiccert
 
 import (
+	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"sync"
 
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 )
 
-// Provider provides a getter, CurrentCertKeyContent(), and a setter, Set(), for a PEM-formatted
-// certificate and matching key.
 type Provider interface {
+	Private
+	Public
+}
+
+type Private interface {
 	dynamiccertificates.CertKeyContentProvider
-	// TODO dynamiccertificates.Notifier
-	// TODO dynamiccertificates.ControllerRunner ???
-	Set(certPEM, keyPEM []byte)
+	SetCertKeyContent(certPEM, keyPEM []byte) error
+	UnsetCertKeyContent()
+
+	notifier
+}
+
+type Public interface {
+	dynamiccertificates.CAContentProvider
+
+	notifier
+}
+
+type notifier interface {
+	dynamiccertificates.Notifier
+	dynamiccertificates.ControllerRunner // we do not need this today, but it could grow and change in the future
 }
 
 type provider struct {
-	certPEM []byte
-	keyPEM  []byte
-	mutex   sync.RWMutex
+	name string
+
+	// mutex guards all the fields below it
+	mutex     sync.RWMutex
+	certPEM   []byte
+	keyPEM    []byte
+	listeners []dynamiccertificates.Listener
 }
 
 // New returns an empty Provider. The returned Provider is thread-safe.
-func New() Provider {
-	return &provider{}
-}
-
-func (p *provider) Set(certPEM, keyPEM []byte) {
-	p.mutex.Lock() // acquire a write lock
-	defer p.mutex.Unlock()
-	p.certPEM = certPEM
-	p.keyPEM = keyPEM
+func New(name string) Provider {
+	return &provider{name: name}
 }
 
 func (p *provider) Name() string {
-	return "DynamicCertProvider"
+	return p.name // constant after struct initialization and thus does not need locking
 }
 
 func (p *provider) CurrentCertKeyContent() (cert []byte, key []byte) {
-	p.mutex.RLock() // acquire a read lock
+	p.mutex.RLock()
 	defer p.mutex.RUnlock()
+
 	return p.certPEM, p.keyPEM
 }
 
-func NewCAProvider(delegate dynamiccertificates.CertKeyContentProvider) dynamiccertificates.CAContentProvider {
-	return &caContentProvider{delegate: delegate}
+func (p *provider) SetCertKeyContent(certPEM, keyPEM []byte) error {
+	// always make sure that we have valid PEM data, otherwise
+	// dynamiccertificates.NewUnionCAContentProvider.VerifyOptions will panic
+	if _, err := tls.X509KeyPair(certPEM, keyPEM); err != nil {
+		return fmt.Errorf("%s: attempt to set invalid key pair: %w", p.name, err)
+	}
+
+	p.setCertKeyContent(certPEM, keyPEM)
+
+	return nil
 }
 
-type caContentProvider struct {
-	delegate dynamiccertificates.CertKeyContentProvider
+func (p *provider) UnsetCertKeyContent() {
+	p.setCertKeyContent(nil, nil)
 }
 
-func (c *caContentProvider) Name() string {
-	return "DynamicCAProvider"
+func (p *provider) setCertKeyContent(certPEM, keyPEM []byte) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.certPEM = certPEM
+	p.keyPEM = keyPEM
+
+	for _, listener := range p.listeners {
+		listener.Enqueue()
+	}
 }
 
-func (c *caContentProvider) CurrentCABundleContent() []byte {
-	ca, _ := c.delegate.CurrentCertKeyContent()
+func (p *provider) CurrentCABundleContent() []byte {
+	ca, _ := p.CurrentCertKeyContent()
 	return ca
 }
 
-func (c *caContentProvider) VerifyOptions() (x509.VerifyOptions, bool) {
+func (p *provider) VerifyOptions() (x509.VerifyOptions, bool) {
 	return x509.VerifyOptions{}, false // assume we are unioned via dynamiccertificates.NewUnionCAContentProvider
 }
 
-// TODO look at both the serving side union struct and the ca side union struct for all optional interfaces
-//  and then implement everything that makes sense for us to implement
+func (p *provider) AddListener(listener dynamiccertificates.Listener) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.listeners = append(p.listeners, listener)
+}
+
+func (p *provider) RunOnce() error {
+	return nil // no-op, but we want to make sure to stay in sync with dynamiccertificates.ControllerRunner
+}
+
+func (p *provider) Run(workers int, stopCh <-chan struct{}) {
+	// no-op, but we want to make sure to stay in sync with dynamiccertificates.ControllerRunner
+}

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -537,18 +538,21 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// run the kubectl port-forward command
 		timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancelFunc()
-		portForwardCmd, _, _ := kubectlCommand(timeout, "port-forward", "--namespace", env.ConciergeNamespace, podName, "443:8443")
+		portForwardCmd, _, stderr := kubectlCommand(timeout, "port-forward", "--namespace", env.ConciergeNamespace, podName, "8443:8443")
 		portForwardCmd.Env = envVarsWithProxy
 
 		// start, but don't wait for the command to finish
 		err = portForwardCmd.Start()
 		require.NoError(t, err, `"kubectl port-forward" failed`)
+		go func() {
+			assert.EqualErrorf(t, portForwardCmd.Wait(), "signal: killed", `wanted "kubectl port-forward" to get signaled because context was cancelled (stderr: %q)`, stderr.String())
+		}()
 
 		// then run curl something against it
 		time.Sleep(time.Second)
 		timeout, cancelFunc = context.WithTimeout(ctx, 2*time.Minute)
 		defer cancelFunc()
-		curlCmd := exec.CommandContext(timeout, "curl", "-k", "https://127.0.0.1")
+		curlCmd := exec.CommandContext(timeout, "curl", "-k", "https://127.0.0.1:8443")
 		var curlStdOut, curlStdErr bytes.Buffer
 		curlCmd.Stdout = &curlStdOut
 		curlCmd.Stderr = &curlStdErr

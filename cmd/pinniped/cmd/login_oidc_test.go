@@ -92,7 +92,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: invalid concierge parameters: endpoint must not be empty
+				Error: invalid Concierge parameters: endpoint must not be empty
 			`),
 		},
 		{
@@ -131,7 +131,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: invalid concierge parameters: invalid API group suffix: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')
+				Error: invalid Concierge parameters: invalid API group suffix: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')
 			`),
 		},
 		{
@@ -161,7 +161,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantOptionsCount: 3,
 			wantError:        true,
 			wantStderr: here.Doc(`
-				Error: could not complete concierge credential exchange: some concierge error
+				Error: could not complete Concierge credential exchange: some concierge error
 			`),
 		},
 		{

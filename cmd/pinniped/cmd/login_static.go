@@ -93,7 +93,7 @@ func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams
 			conciergeclient.WithAPIGroupSuffix(flags.conciergeAPIGroupSuffix),
 		)
 		if err != nil {
-			return fmt.Errorf("invalid concierge parameters: %w", err)
+			return fmt.Errorf("invalid Concierge parameters: %w", err)
 		}
 	}
 
@@ -121,7 +121,7 @@ func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams
 		var err error
 		cred, err = deps.exchangeToken(ctx, concierge, token)
 		if err != nil {
-			return fmt.Errorf("could not complete concierge credential exchange: %w", err)
+			return fmt.Errorf("could not complete Concierge credential exchange: %w", err)
 		}
 	}
 	return json.NewEncoder(out).Encode(cred)

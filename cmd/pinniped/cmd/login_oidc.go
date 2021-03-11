@@ -144,7 +144,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 			conciergeclient.WithAPIGroupSuffix(flags.conciergeAPIGroupSuffix),
 		)
 		if err != nil {
-			return fmt.Errorf("invalid concierge parameters: %w", err)
+			return fmt.Errorf("invalid Concierge parameters: %w", err)
 		}
 	}
 
@@ -178,7 +178,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 
 		cred, err = deps.exchangeToken(ctx, concierge, token.IDToken.Token)
 		if err != nil {
-			return fmt.Errorf("could not complete concierge credential exchange: %w", err)
+			return fmt.Errorf("could not complete Concierge credential exchange: %w", err)
 		}
 	}
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(cred)

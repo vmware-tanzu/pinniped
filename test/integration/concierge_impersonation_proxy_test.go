@@ -412,7 +412,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		impersonationProxyServiceAccountPinnipedConciergeClient := newImpersonationProxyClientWithCredentials(
 			&loginv1alpha1.ClusterCredential{Token: createServiceAccountToken(ctx, t, adminClient, namespaceName)},
 			impersonationProxyURL, impersonationProxyCACertPEM, "").PinnipedConcierge
-		whoAmI, err = impersonationProxyServiceAccountPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
+		_, err = impersonationProxyServiceAccountPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
 			Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 		require.Error(t, err)
 		// The server checks that we have a UID in the request and rejects it with a 422 Unprocessable Entity.

@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/square/go-jose.v2"
@@ -47,9 +48,9 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 	pinnipedExe := library.PinnipedCLIPath(t)
 
 	for _, tt := range []struct {
-		name         string
-		args         []string
-		expectStderr string
+		name                 string
+		args                 []string
+		expectStderrContains []string
 	}{
 		{
 			name: "newer command, but still using static parameters",
@@ -60,12 +61,20 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 				"--concierge-authenticator-type", "webhook",
 				"--concierge-authenticator-name", authenticator.Name,
 			},
+			expectStderrContains: []string{
+				"discovered CredentialIssuer",
+				"discovered Concierge endpoint",
+				"discovered Concierge certificate authority bundle",
+				"validated connection to the cluster",
+			},
 		},
 	} {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			stdout, stderr := runPinnipedCLI(t, nil, pinnipedExe, tt.args...)
-			require.Equal(t, tt.expectStderr, stderr)
+			for _, s := range tt.expectStderrContains {
+				assert.Contains(t, stderr, s)
+			}
 
 			// Even the deprecated command should now generate a kubeconfig with the new "pinniped login static" command.
 			restConfig := library.NewRestConfigFromKubeconfig(t, stdout)

@@ -230,7 +230,6 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 			"--concierge-authenticator-type="+flags.concierge.authenticatorType,
 			"--concierge-endpoint="+flags.concierge.endpoint,
 			"--concierge-ca-bundle-data="+base64.StdEncoding.EncodeToString(flags.concierge.caBundle),
-			"--concierge-mode="+flags.concierge.mode.String(),
 		)
 
 		// Point kubectl at the concierge endpoint.

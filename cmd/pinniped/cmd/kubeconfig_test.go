@@ -608,7 +608,6 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-type=webhook
         		      - --concierge-endpoint=https://fake-server-url-value
         		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
-        		      - --concierge-mode=TokenCredentialRequestAPI
         		      - --token=test-token
         		      command: '.../path/to/pinniped'
         		      env: []
@@ -678,7 +677,6 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-type=webhook
         		      - --concierge-endpoint=https://fake-server-url-value
         		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
-        		      - --concierge-mode=TokenCredentialRequestAPI
         		      - --token-env=TEST_TOKEN
         		      command: '.../path/to/pinniped'
         		      env: []
@@ -759,7 +757,6 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-type=jwt
         		      - --concierge-endpoint=https://fake-server-url-value
         		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
-        		      - --concierge-mode=TokenCredentialRequestAPI
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
         		      - --scopes=offline_access,openid,pinniped:request-audience
@@ -842,7 +839,6 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-type=webhook
         		      - --concierge-endpoint=https://explicit-concierge-endpoint.example.com
         		      - --concierge-ca-bundle-data=%s
-        		      - --concierge-mode=TokenCredentialRequestAPI
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
         		      - --scopes=offline_access,openid,pinniped:request-audience
@@ -957,7 +953,6 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-type=jwt
         		      - --concierge-endpoint=https://impersonation-proxy-endpoint.test
         		      - --concierge-ca-bundle-data=%s
-        		      - --concierge-mode=ImpersonationProxy
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
         		      - --scopes=offline_access,openid,pinniped:request-audience
@@ -1064,7 +1059,6 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-type=jwt
         		      - --concierge-endpoint=https://impersonation-proxy-endpoint.test
         		      - --concierge-ca-bundle-data=dGVzdC1jb25jaWVyZ2UtY2E=
-        		      - --concierge-mode=ImpersonationProxy
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
         		      - --scopes=offline_access,openid,pinniped:request-audience

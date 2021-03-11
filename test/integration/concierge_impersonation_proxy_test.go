@@ -214,20 +214,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		)
 	}
 
-	// Create a namespace, because it will be easier to exercise "deletecollection" if we have a namespace.
-	namespace, err := adminClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{GenerateName: "impersonation-integration-test-"},
-	}, metav1.CreateOptions{})
-	require.NoError(t, err)
-	// Schedule the namespace for cleanup.
-	t.Cleanup(func() {
-		t.Logf("cleaning up test namespace %s", namespace.Name)
-		err = adminClient.CoreV1().Namespaces().Delete(context.Background(), namespace.Name, metav1.DeleteOptions{})
-		require.NoError(t, err)
-	})
+	t.Run("using and watching all the basic verbs", func(t *testing.T) {
+		// Create a namespace, because it will be easier to exercise "deletecollection" if we have a namespace.
+		namespaceName := createTestNamespace(t, adminClient)
 
-	// Try more Kube API verbs through the impersonation proxy.
-	t.Run("watching all the basic verbs", func(t *testing.T) {
 		// Create an RBAC rule to allow this user to read/write everything.
 		library.CreateTestClusterRoleBinding(t,
 			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
@@ -235,14 +225,14 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		)
 		// Wait for the above RBAC rule to take effect.
 		library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
-			Namespace: namespace.Name, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
+			Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
 		})
 
 		// Create and start informer to exercise the "watch" verb for us.
 		informerFactory := k8sinformers.NewSharedInformerFactoryWithOptions(
 			impersonationProxyKubeClient(),
 			0,
-			k8sinformers.WithNamespace(namespace.Name))
+			k8sinformers.WithNamespace(namespaceName))
 		informer := informerFactory.Core().V1().ConfigMaps()
 		informer.Informer() // makes sure that the informer will cache
 		stopChannel := make(chan struct{})
@@ -260,17 +250,17 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		}
 
 		// Test "create" verb through the impersonation proxy.
-		_, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespace.Name).Create(ctx,
+		_, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Create(ctx,
 			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-1", Labels: configMapLabels}},
 			metav1.CreateOptions{},
 		)
 		require.NoError(t, err)
-		_, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespace.Name).Create(ctx,
+		_, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Create(ctx,
 			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-2", Labels: configMapLabels}},
 			metav1.CreateOptions{},
 		)
 		require.NoError(t, err)
-		_, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespace.Name).Create(ctx,
+		_, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Create(ctx,
 			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-3", Labels: configMapLabels}},
 			metav1.CreateOptions{},
 		)
@@ -279,18 +269,18 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// Make sure that all of the created ConfigMaps show up in the informer's cache to
 		// demonstrate that the informer's "watch" verb is working through the impersonation proxy.
 		require.Eventually(t, func() bool {
-			_, err1 := informer.Lister().ConfigMaps(namespace.Name).Get("configmap-1")
-			_, err2 := informer.Lister().ConfigMaps(namespace.Name).Get("configmap-2")
-			_, err3 := informer.Lister().ConfigMaps(namespace.Name).Get("configmap-3")
+			_, err1 := informer.Lister().ConfigMaps(namespaceName).Get("configmap-1")
+			_, err2 := informer.Lister().ConfigMaps(namespaceName).Get("configmap-2")
+			_, err3 := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
 			return err1 == nil && err2 == nil && err3 == nil
 		}, 10*time.Second, 50*time.Millisecond)
 
 		// Test "get" verb through the impersonation proxy.
-		configMap3, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespace.Name).Get(ctx, "configmap-3", metav1.GetOptions{})
+		configMap3, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Get(ctx, "configmap-3", metav1.GetOptions{})
 		require.NoError(t, err)
 
 		// Test "list" verb through the impersonation proxy.
-		listResult, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespace.Name).List(ctx, metav1.ListOptions{
+		listResult, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).List(ctx, metav1.ListOptions{
 			LabelSelector: configMapLabels.String(),
 		})
 		require.NoError(t, err)
@@ -298,18 +288,18 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// Test "update" verb through the impersonation proxy.
 		configMap3.Data = map[string]string{"foo": "bar"}
-		updateResult, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespace.Name).Update(ctx, configMap3, metav1.UpdateOptions{})
+		updateResult, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Update(ctx, configMap3, metav1.UpdateOptions{})
 		require.NoError(t, err)
 		require.Equal(t, "bar", updateResult.Data["foo"])
 
 		// Make sure that the updated ConfigMap shows up in the informer's cache.
 		require.Eventually(t, func() bool {
-			configMap, err := informer.Lister().ConfigMaps(namespace.Name).Get("configmap-3")
+			configMap, err := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
 			return err == nil && configMap.Data["foo"] == "bar"
 		}, 10*time.Second, 50*time.Millisecond)
 
 		// Test "patch" verb through the impersonation proxy.
-		patchResult, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespace.Name).Patch(ctx,
+		patchResult, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Patch(ctx,
 			"configmap-3",
 			types.MergePatchType,
 			[]byte(`{"data":{"baz":"42"}}`),
@@ -321,33 +311,33 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// Make sure that the patched ConfigMap shows up in the informer's cache.
 		require.Eventually(t, func() bool {
-			configMap, err := informer.Lister().ConfigMaps(namespace.Name).Get("configmap-3")
+			configMap, err := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
 			return err == nil && configMap.Data["foo"] == "bar" && configMap.Data["baz"] == "42"
 		}, 10*time.Second, 50*time.Millisecond)
 
 		// Test "delete" verb through the impersonation proxy.
-		err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespace.Name).Delete(ctx, "configmap-3", metav1.DeleteOptions{})
+		err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Delete(ctx, "configmap-3", metav1.DeleteOptions{})
 		require.NoError(t, err)
 
 		// Make sure that the deleted ConfigMap shows up in the informer's cache.
 		require.Eventually(t, func() bool {
-			_, getErr := informer.Lister().ConfigMaps(namespace.Name).Get("configmap-3")
-			list, listErr := informer.Lister().ConfigMaps(namespace.Name).List(configMapLabels.AsSelector())
+			_, getErr := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
+			list, listErr := informer.Lister().ConfigMaps(namespaceName).List(configMapLabels.AsSelector())
 			return k8serrors.IsNotFound(getErr) && listErr == nil && len(list) == 2
 		}, 10*time.Second, 50*time.Millisecond)
 
 		// Test "deletecollection" verb through the impersonation proxy.
-		err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespace.Name).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
+		err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
 		require.NoError(t, err)
 
 		// Make sure that the deleted ConfigMaps shows up in the informer's cache.
 		require.Eventually(t, func() bool {
-			list, listErr := informer.Lister().ConfigMaps(namespace.Name).List(configMapLabels.AsSelector())
+			list, listErr := informer.Lister().ConfigMaps(namespaceName).List(configMapLabels.AsSelector())
 			return listErr == nil && len(list) == 0
 		}, 10*time.Second, 50*time.Millisecond)
 
 		// There should be no ConfigMaps left.
-		listResult, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespace.Name).List(ctx, metav1.ListOptions{
+		listResult, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).List(ctx, metav1.ListOptions{
 			LabelSelector: configMapLabels.String(),
 		})
 		require.NoError(t, err)
@@ -385,11 +375,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			env.TestUser.ExpectedUsername))
 	})
 
-	t.Run("using service account tokens to authenticate to impersonation proxy", func(t *testing.T) {
-		// TODO: test that this is not currently allowed
-	})
-
-	t.Run("WhoAmIRequests through the impersonation proxy", func(t *testing.T) {
+	t.Run("WhoAmIRequests and different kinds of authentication through the impersonation proxy", func(t *testing.T) {
 		// Test using the TokenCredentialRequest for authentication.
 		impersonationProxyPinnipedConciergeClient := newImpersonationProxyClient(
 			impersonationProxyURL, impersonationProxyCACertPEM, "",
@@ -398,7 +384,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 		require.NoError(t, err)
 		require.Equal(t,
-			expectedWhoAmIRequestResponse(env.TestUser.ExpectedUsername, append(env.TestUser.ExpectedGroups, "system:authenticated")),
+			expectedWhoAmIRequestResponse(
+				env.TestUser.ExpectedUsername,
+				append(env.TestUser.ExpectedGroups, "system:authenticated"),
+			),
 			whoAmI,
 		)
 
@@ -410,9 +399,25 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 		require.NoError(t, err)
 		require.Equal(t,
-			expectedWhoAmIRequestResponse("system:anonymous", []string{"system:unauthenticated"}),
+			expectedWhoAmIRequestResponse(
+				"system:anonymous",
+				[]string{"system:unauthenticated"},
+			),
 			whoAmI,
 		)
+
+		// Test using a service account token. Authenticating as Service Accounts through the impersonation
+		// proxy is not supported, so it should fail.
+		namespaceName := createTestNamespace(t, adminClient)
+		impersonationProxyServiceAccountPinnipedConciergeClient := newImpersonationProxyClientWithCredentials(
+			&loginv1alpha1.ClusterCredential{Token: createServiceAccountToken(ctx, t, adminClient, namespaceName)},
+			impersonationProxyURL, impersonationProxyCACertPEM, "").PinnipedConcierge
+		whoAmI, err = impersonationProxyServiceAccountPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
+			Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
+		require.Error(t, err)
+		// The server checks that we have a UID in the request and rejects it with a 422 Unprocessable Entity.
+		// The API machinery turns 422's into this error text...
+		require.Contains(t, err.Error(), "the server rejected our request due to an error in our request")
 	})
 
 	t.Run("kubectl as a client", func(t *testing.T) {
@@ -558,13 +563,15 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	})
 
 	t.Run("websocket client", func(t *testing.T) {
+		namespaceName := createTestNamespace(t, adminClient)
+
 		library.CreateTestClusterRoleBinding(t,
 			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
 			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
 		)
 		// Wait for the above RBAC rule to take effect.
 		library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
-			Namespace: namespace.Name, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
+			Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
 		})
 
 		impersonationRestConfig := impersonationProxyRestConfig(refreshCredential(), impersonationProxyURL, impersonationProxyCACertPEM, "")
@@ -573,7 +580,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		dest, _ := url.Parse(impersonationProxyURL)
 		dest.Scheme = "wss"
-		dest.Path = "/api/v1/namespaces/" + namespace.Name + "/configmaps"
+		dest.Path = "/api/v1/namespaces/" + namespaceName + "/configmaps"
 		dest.RawQuery = "watch=1&resourceVersion=0"
 
 		dialer := websocket.Dialer{
@@ -600,14 +607,14 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		require.NoError(t, err)
 
 		// perform a create through the admin client
-		_, err = adminClient.CoreV1().ConfigMaps(namespace.Name).Create(ctx,
+		_, err = adminClient.CoreV1().ConfigMaps(namespaceName).Create(ctx,
 			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-1"}},
 			metav1.CreateOptions{},
 		)
 		require.NoError(t, err)
 		t.Cleanup(func() {
-			err = adminClient.CoreV1().ConfigMaps(namespace.Name).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
-			require.NoError(t, err)
+			require.NoError(t, adminClient.CoreV1().ConfigMaps(namespaceName).
+				DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{}))
 		})
 
 		// see if the websocket client received an event for the create
@@ -693,6 +700,64 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.Nil(t, tokenCredentialRequestResponse.Status.Credential)
 		}
 	})
+}
+
+func createTestNamespace(t *testing.T, adminClient kubernetes.Interface) string {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	namespace, err := adminClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: "impersonation-integration-test-"},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		t.Logf("cleaning up test namespace %s", namespace.Name)
+		require.NoError(t, adminClient.CoreV1().Namespaces().Delete(ctx, namespace.Name, metav1.DeleteOptions{}))
+	})
+	return namespace.Name
+}
+
+func createServiceAccountToken(ctx context.Context, t *testing.T, adminClient kubernetes.Interface, namespaceName string) string {
+	t.Helper()
+
+	serviceAccount, err := adminClient.CoreV1().ServiceAccounts(namespaceName).Create(ctx,
+		&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{GenerateName: "int-test-service-account-"}}, metav1.CreateOptions{})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, adminClient.CoreV1().ServiceAccounts(namespaceName).
+			Delete(context.Background(), serviceAccount.Name, metav1.DeleteOptions{}))
+	})
+
+	secret, err := adminClient.CoreV1().Secrets(namespaceName).Create(ctx, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "int-test-service-account-token-",
+			Annotations: map[string]string{
+				corev1.ServiceAccountNameKey: serviceAccount.Name,
+			},
+		},
+		Type: corev1.SecretTypeServiceAccountToken,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, adminClient.CoreV1().Secrets(namespaceName).
+			Delete(context.Background(), secret.Name, metav1.DeleteOptions{}))
+	})
+
+	library.RequireEventuallyWithoutError(t, func() (bool, error) {
+		secret, err = adminClient.CoreV1().Secrets(namespaceName).Get(ctx, secret.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return len(secret.Data[corev1.ServiceAccountTokenKey]) > 0, nil
+	}, time.Minute, time.Second)
+
+	return string(secret.Data[corev1.ServiceAccountTokenKey])
 }
 
 func expectedWhoAmIRequestResponse(username string, groups []string) *identityv1alpha1.WhoAmIRequest {

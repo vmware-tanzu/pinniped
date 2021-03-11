@@ -75,13 +75,9 @@ func TestWhoAmI_ServiceAccount_Legacy(t *testing.T) {
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	defer func() {
-		if t.Failed() {
-			return
-		}
-		err := kubeClient.Namespaces().Delete(ctx, ns.Name, metav1.DeleteOptions{})
-		require.NoError(t, err)
-	}()
+	t.Cleanup(func() {
+		require.NoError(t, kubeClient.Namespaces().Delete(context.Background(), ns.Name, metav1.DeleteOptions{}))
+	})
 
 	sa, err := kubeClient.ServiceAccounts(ns.Name).Create(ctx, &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -152,13 +148,9 @@ func TestWhoAmI_ServiceAccount_TokenRequest(t *testing.T) {
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	defer func() {
-		if t.Failed() {
-			return
-		}
-		err := kubeClient.Namespaces().Delete(ctx, ns.Name, metav1.DeleteOptions{})
-		require.NoError(t, err)
-	}()
+	t.Cleanup(func() {
+		require.NoError(t, kubeClient.Namespaces().Delete(context.Background(), ns.Name, metav1.DeleteOptions{}))
+	})
 
 	sa, err := kubeClient.ServiceAccounts(ns.Name).Create(ctx, &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -287,13 +279,10 @@ func TestWhoAmI_CSR(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	defer func() {
-		if t.Failed() {
-			return
-		}
-		err := kubeClient.CertificatesV1beta1().CertificateSigningRequests().Delete(ctx, csrName, metav1.DeleteOptions{})
-		require.NoError(t, err)
-	}()
+	t.Cleanup(func() {
+		require.NoError(t, kubeClient.CertificatesV1beta1().CertificateSigningRequests().
+			Delete(context.Background(), csrName, metav1.DeleteOptions{}))
+	})
 
 	// this is a blind update with no resource version checks, which is only safe during tests
 	// use the beta CSR API to support older clusters

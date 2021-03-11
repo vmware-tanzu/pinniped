@@ -28,6 +28,7 @@ import (
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	"go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
@@ -54,7 +55,9 @@ func NewClientsetForKubeConfig(t *testing.T, kubeConfig string) kubernetes.Inter
 func NewRestConfigFromKubeconfig(t *testing.T, kubeConfig string) *rest.Config {
 	kubeConfigFile, err := ioutil.TempFile("", "pinniped-cli-test-*")
 	require.NoError(t, err)
-	defer os.Remove(kubeConfigFile.Name())
+	defer func() {
+		require.NoError(t, os.Remove(kubeConfigFile.Name()))
+	}()
 
 	_, err = kubeConfigFile.Write([]byte(kubeConfig))
 	require.NoError(t, err)
@@ -421,6 +424,19 @@ func CreateTestClusterRoleBinding(t *testing.T, subject rbacv1.Subject, roleRef 
 		require.NoError(t, err)
 	})
 	return created
+}
+
+func CreateTokenCredentialRequest(ctx context.Context, t *testing.T, spec v1alpha1.TokenCredentialRequestSpec) (*v1alpha1.TokenCredentialRequest, error) {
+	t.Helper()
+
+	client := NewAnonymousConciergeClientset(t)
+
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
+	return client.LoginV1alpha1().TokenCredentialRequests().Create(ctx,
+		&v1alpha1.TokenCredentialRequest{Spec: spec}, metav1.CreateOptions{},
+	)
 }
 
 func WaitForUserToHaveAccess(t *testing.T, user string, groups []string, shouldHaveAccessTo *authorizationv1.ResourceAttributes) {

@@ -443,11 +443,3 @@ func TestWhoAmI_ImpersonateDirectly(t *testing.T) {
 		whoAmIAnonymous,
 	)
 }
-
-func TestWhoAmI_ImpersonateViaProxy(t *testing.T) {
-	_ = library.IntegrationEnv(t)
-
-	// TODO: add this test after the impersonation proxy is done
-	//  this should test all forms of auth understood by the proxy (certs, SA token, token cred req, anonymous, etc)
-	//  remember that impersonation does not support UID: https://github.com/kubernetes/kubernetes/issues/93699
-}

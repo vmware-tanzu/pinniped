@@ -8,7 +8,6 @@ import (
 	"context"
 	"crypto/x509/pkix"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -16,12 +15,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
-	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
@@ -69,7 +65,6 @@ func TestLoginOIDCCommand(t *testing.T) {
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt')
 				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the Concierge
 				      --concierge-endpoint string             API base for the Concierge endpoint
-				      --concierge-mode mode                   Concierge mode of operation (default TokenCredentialRequestAPI)
 				      --enable-concierge                      Use the Concierge to login
 				  -h, --help                                  help for oidc
 				      --issuer string                         OpenID Connect issuer URL
@@ -199,21 +194,6 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantOptionsCount: 7,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"exchanged-token"}}` + "\n",
 		},
-		{
-			name: "success with impersonation proxy",
-			args: []string{
-				"--client-id", "test-client-id",
-				"--issuer", "test-issuer",
-				"--enable-concierge",
-				"--concierge-mode", "ImpersonationProxy",
-				"--concierge-authenticator-type", "webhook",
-				"--concierge-authenticator-name", "test-authenticator",
-				"--concierge-endpoint", "https://127.0.0.1:1234/",
-				"--concierge-ca-bundle-data", base64.StdEncoding.EncodeToString(testCA.Bundle()),
-			},
-			wantOptionsCount: 3,
-			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"` + impersonationProxyTestToken("test-id-token") + `"}}` + "\n",
-		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -269,22 +249,4 @@ func TestLoginOIDCCommand(t *testing.T) {
 			require.Len(t, gotOptions, tt.wantOptionsCount)
 		})
 	}
-}
-
-func impersonationProxyTestToken(token string) string {
-	reqJSON, _ := json.Marshal(&loginv1alpha1.TokenCredentialRequest{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "TokenCredentialRequest",
-			APIVersion: loginv1alpha1.GroupName + "/v1alpha1",
-		},
-		Spec: loginv1alpha1.TokenCredentialRequestSpec{
-			Token: token,
-			Authenticator: corev1.TypedLocalObjectReference{
-				APIGroup: &authenticationv1alpha1.SchemeGroupVersion.Group,
-				Kind:     "WebhookAuthenticator",
-				Name:     "test-authenticator",
-			},
-		},
-	})
-	return base64.StdEncoding.EncodeToString(reqJSON)
 }

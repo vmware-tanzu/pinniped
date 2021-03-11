@@ -14,13 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
-
-	corev1 "k8s.io/api/core/v1"
-
-	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/spf13/cobra"
@@ -71,7 +65,6 @@ type oidcLoginFlags struct {
 	conciergeEndpoint          string
 	conciergeCABundle          string
 	conciergeAPIGroupSuffix    string
-	conciergeMode              conciergeModeFlag
 }
 
 func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
@@ -102,7 +95,6 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeEndpoint, "concierge-endpoint", "", "API base for the Concierge endpoint")
 	cmd.Flags().StringVar(&flags.conciergeCABundle, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the Concierge")
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
-	cmd.Flags().Var(&flags.conciergeMode, "concierge-mode", "Concierge mode of operation")
 
 	mustMarkHidden(cmd, "debug-session-cache")
 	mustMarkRequired(cmd, "issuer")
@@ -179,37 +171,17 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	}
 	cred := tokenCredential(token)
 
-	// If there is no concierge configuration, return the credential directly.
-	if concierge == nil {
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(cred)
-	}
+	// If the concierge was configured, exchange the credential for a separate short-lived, cluster-specific credential.
+	if concierge != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 
-	// If the concierge was configured, we need to do extra steps to make the credential usable.
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// The exact behavior depends on in which mode the Concierge is operating.
-	switch flags.conciergeMode {
-	case modeUnknown, modeTokenCredentialRequestAPI:
-		// do a credential exchange request
-		cred, err := deps.exchangeToken(ctx, concierge, token.IDToken.Token)
+		cred, err = deps.exchangeToken(ctx, concierge, token.IDToken.Token)
 		if err != nil {
 			return fmt.Errorf("could not complete concierge credential exchange: %w", err)
 		}
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(cred)
-
-	case modeImpersonationProxy:
-		// Put the token into a TokenCredentialRequest
-		// put the TokenCredentialRequest in an ExecCredential
-		req, err := execCredentialForImpersonationProxy(token.IDToken.Token, flags.conciergeAuthenticatorType, flags.conciergeAuthenticatorName, &token.IDToken.Expiry)
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(req)
-
-	default:
-		return fmt.Errorf("unsupported Concierge mode %q", flags.conciergeMode.String())
 	}
+	return json.NewEncoder(cmd.OutOrStdout()).Encode(cred)
 }
 
 func makeClient(caBundlePaths []string, caBundleData []string) (*http.Client, error) {
@@ -270,54 +242,4 @@ func mustGetConfigDir() string {
 		panic(err)
 	}
 	return filepath.Join(home, ".config", xdgAppName)
-}
-
-func execCredentialForImpersonationProxy(
-	idToken string,
-	conciergeAuthenticatorType string,
-	conciergeAuthenticatorName string,
-	tokenExpiry *metav1.Time,
-) (*clientauthv1beta1.ExecCredential, error) {
-	// TODO maybe de-dup this with conciergeclient.go
-	// TODO reuse code from internal/testutil/impersonationtoken here to create token
-	var kind string
-	switch strings.ToLower(conciergeAuthenticatorType) {
-	case "webhook":
-		kind = "WebhookAuthenticator"
-	case "jwt":
-		kind = "JWTAuthenticator"
-	default:
-		return nil, fmt.Errorf(`invalid authenticator type: %q, supported values are "webhook" and "jwt"`, kind)
-	}
-	reqJSON, err := json.Marshal(&loginv1alpha1.TokenCredentialRequest{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "TokenCredentialRequest",
-			APIVersion: loginv1alpha1.GroupName + "/v1alpha1",
-		},
-		Spec: loginv1alpha1.TokenCredentialRequestSpec{
-			Token: idToken, // TODO
-			Authenticator: corev1.TypedLocalObjectReference{
-				APIGroup: &authenticationv1alpha1.SchemeGroupVersion.Group,
-				Kind:     kind,
-				Name:     conciergeAuthenticatorName,
-			},
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("Error creating TokenCredentialRequest for impersonation proxy: %w", err)
-	}
-	encodedToken := base64.StdEncoding.EncodeToString(reqJSON)
-	cred := &clientauthv1beta1.ExecCredential{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ExecCredential",
-			APIVersion: "client.authentication.k8s.io/v1beta1",
-		},
-		Status: &clientauthv1beta1.ExecCredentialStatus{
-			Token: encodedToken,
-		},
-	}
-	if !tokenExpiry.IsZero() {
-		cred.Status.ExpirationTimestamp = tokenExpiry
-	}
-	return cred, nil
 }

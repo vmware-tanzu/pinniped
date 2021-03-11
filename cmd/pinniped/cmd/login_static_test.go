@@ -56,7 +56,6 @@ func TestLoginStaticCommand(t *testing.T) {
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt')
 				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the Concierge
 				      --concierge-endpoint string             API base for the Concierge endpoint
-				      --concierge-mode mode                   Concierge mode of operation (default TokenCredentialRequestAPI)
 				      --enable-concierge                      Use the Concierge to login
 				  -h, --help                                  help for static
 				      --token string                          Static token to present during login
@@ -151,18 +150,6 @@ func TestLoginStaticCommand(t *testing.T) {
 				"--token", "test-token",
 			},
 			wantStdout: `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"test-token"}}` + "\n",
-		},
-		{
-			name: "impersonation proxy success",
-			args: []string{
-				"--enable-concierge",
-				"--concierge-mode", "ImpersonationProxy",
-				"--token", "test-token",
-				"--concierge-endpoint", "https://127.0.0.1/",
-				"--concierge-authenticator-type", "webhook",
-				"--concierge-authenticator-name", "test-authenticator",
-			},
-			wantStdout: `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"` + impersonationProxyTestToken("test-token") + `"}}` + "\n",
 		},
 	}
 	for _, tt := range tests {

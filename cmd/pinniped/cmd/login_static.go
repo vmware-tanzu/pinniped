@@ -47,7 +47,6 @@ type staticLoginParams struct {
 	conciergeEndpoint          string
 	conciergeCABundle          string
 	conciergeAPIGroupSuffix    string
-	conciergeMode              conciergeModeFlag
 }
 
 func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
@@ -70,7 +69,6 @@ func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeEndpoint, "concierge-endpoint", "", "API base for the Concierge endpoint")
 	cmd.Flags().StringVar(&flags.conciergeCABundle, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the Concierge")
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
-	cmd.Flags().Var(&flags.conciergeMode, "concierge-mode", "Concierge mode of operation")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runStaticLogin(cmd.OutOrStdout(), deps, flags) }
 
@@ -115,34 +113,16 @@ func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams
 	}
 	cred := tokenCredential(&oidctypes.Token{IDToken: &oidctypes.IDToken{Token: token}})
 
-	// If there is no concierge configuration, return the credential directly.
-	if concierge == nil {
-		return json.NewEncoder(out).Encode(cred)
-	}
-
-	// If the concierge is enabled, we need to do extra steps.
-	switch flags.conciergeMode {
-	case modeUnknown, modeTokenCredentialRequestAPI:
-		// do a credential exchange request
+	// If the concierge was configured, exchange the credential for a separate short-lived, cluster-specific credential.
+	if concierge != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		cred, err := deps.exchangeToken(ctx, concierge, token)
+		var err error
+		cred, err = deps.exchangeToken(ctx, concierge, token)
 		if err != nil {
 			return fmt.Errorf("could not complete concierge credential exchange: %w", err)
 		}
-		return json.NewEncoder(out).Encode(cred)
-
-	case modeImpersonationProxy:
-		// Put the token into a TokenCredentialRequest
-		// put the TokenCredentialRequest in an ExecCredential
-		req, err := execCredentialForImpersonationProxy(token, flags.conciergeAuthenticatorType, flags.conciergeAuthenticatorName, nil)
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(out).Encode(req)
-
-	default:
-		return fmt.Errorf("unsupported Concierge mode %q", flags.conciergeMode.String())
 	}
+	return json.NewEncoder(out).Encode(cred)
 }

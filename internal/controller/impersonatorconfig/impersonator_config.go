@@ -378,16 +378,18 @@ func (c *impersonatorConfigController) ensureImpersonatorIsStarted(syncCtx contr
 	}
 
 	c.serverStopCh = make(chan struct{})
-	c.errorCh = make(chan error)
+	// use a buffered channel so that startImpersonatorFunc can send
+	// on it without coordinating with the main controller go routine
+	c.errorCh = make(chan error, 1)
 
 	// startImpersonatorFunc will block until the server shuts down (or fails to start), so run it in the background.
 	go func() {
-		startOrStopErr := startImpersonatorFunc(c.serverStopCh)
-		// The server has stopped, so enqueue ourselves for another sync, so we can
-		// try to start the server again as quickly as possible.
-		syncCtx.Queue.AddRateLimited(syncCtx.Key) // TODO this a race because the main controller go routine could run and complete before we send on the err chan
+		// The server has stopped, so enqueue ourselves for another sync,
+		// so we can try to start the server again as quickly as possible.
+		defer syncCtx.Queue.AddRateLimited(syncCtx.Key)
+
 		// Forward any errors returned by startImpersonatorFunc on the errorCh.
-		c.errorCh <- startOrStopErr
+		c.errorCh <- startImpersonatorFunc(c.serverStopCh)
 	}()
 
 	return nil

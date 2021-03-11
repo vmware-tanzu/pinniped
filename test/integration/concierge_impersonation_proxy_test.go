@@ -507,9 +507,21 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// Try "kubectl exec" through the impersonation proxy.
 		echoString := "hello world"
-		stdout, _, err := runKubectl("exec", "--namespace", env.ConciergeNamespace, podName, "--", "echo", echoString)
+		remoteEchoFile := fmt.Sprintf("/tmp/test-impersonation-proxy-echo-file-%d.txt", time.Now().Unix())
+		stdout, _, err := runKubectl("exec", "--namespace", env.ConciergeNamespace, podName, "--", "bash", "-c", fmt.Sprintf(`echo "%s" | tee %s`, echoString, remoteEchoFile))
 		require.NoError(t, err, `"kubectl exec" failed`)
 		require.Equal(t, echoString+"\n", stdout)
+
+		// run the kubectl cp command
+		localEchoFile := filepath.Join(tempDir, filepath.Base(remoteEchoFile))
+		_, _, err = runKubectl("cp", fmt.Sprintf("%s/%s:%s", env.ConciergeNamespace, podName, remoteEchoFile), localEchoFile)
+		require.NoError(t, err, `"kubectl cp" failed`)
+		localEchoFileData, err := os.ReadFile(localEchoFile)
+		require.NoError(t, err)
+		require.Equal(t, echoString+"\n", string(localEchoFileData))
+		defer func() {
+			_, _, _ = runKubectl("exec", "--namespace", env.ConciergeNamespace, podName, "--", "rm", remoteEchoFile) // cleanup remote echo file
+		}()
 
 		// run the kubectl port-forward command
 		timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)

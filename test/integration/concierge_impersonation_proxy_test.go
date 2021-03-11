@@ -516,7 +516,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		localEchoFile := filepath.Join(tempDir, filepath.Base(remoteEchoFile))
 		_, _, err = runKubectl("cp", fmt.Sprintf("%s/%s:%s", env.ConciergeNamespace, podName, remoteEchoFile), localEchoFile)
 		require.NoError(t, err, `"kubectl cp" failed`)
-		localEchoFileData, err := os.ReadFile(localEchoFile)
+		localEchoFileData, err := ioutil.ReadFile(localEchoFile)
 		require.NoError(t, err)
 		require.Equal(t, echoString+"\n", string(localEchoFileData))
 		defer func() {

@@ -24,6 +24,7 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
@@ -181,11 +182,15 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 
 	// Update the config to with a new .spec.tls.secretName.
 	certSecretName1update := "integration-test-cert-1-update"
-	federationDomain1LatestVersion, err := pinnipedClient.ConfigV1alpha1().FederationDomains(ns).Get(ctx, federationDomain1.Name, metav1.GetOptions{})
-	require.NoError(t, err)
-	federationDomain1LatestVersion.Spec.TLS = &v1alpha1.FederationDomainTLSSpec{SecretName: certSecretName1update}
-	_, err = pinnipedClient.ConfigV1alpha1().FederationDomains(ns).Update(ctx, federationDomain1LatestVersion, metav1.UpdateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		federationDomain1LatestVersion, err := pinnipedClient.ConfigV1alpha1().FederationDomains(ns).Get(ctx, federationDomain1.Name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		federationDomain1LatestVersion.Spec.TLS = &v1alpha1.FederationDomainTLSSpec{SecretName: certSecretName1update}
+		_, err = pinnipedClient.ConfigV1alpha1().FederationDomains(ns).Update(ctx, federationDomain1LatestVersion, metav1.UpdateOptions{})
+		return err
+	}))
 
 	// The the endpoints should fail with TLS errors again.
 	requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
@@ -579,13 +584,16 @@ func editFederationDomainIssuerName(
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	mostRecentVersion, err := client.ConfigV1alpha1().FederationDomains(ns).Get(ctx, existingFederationDomain.Name, metav1.GetOptions{})
-	require.NoError(t, err)
-
-	mostRecentVersion.Spec.Issuer = newIssuerName
-	updated, err := client.ConfigV1alpha1().FederationDomains(ns).Update(ctx, mostRecentVersion, metav1.UpdateOptions{})
-	require.NoError(t, err)
-
+	var updated *v1alpha1.FederationDomain
+	require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		mostRecentVersion, err := client.ConfigV1alpha1().FederationDomains(ns).Get(ctx, existingFederationDomain.Name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		mostRecentVersion.Spec.Issuer = newIssuerName
+		updated, err = client.ConfigV1alpha1().FederationDomains(ns).Update(ctx, mostRecentVersion, metav1.UpdateOptions{})
+		return err
+	}))
 	return updated
 }
 

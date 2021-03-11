@@ -25,6 +25,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/net/http2"
 	v1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -662,7 +663,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 	t.Run("websocket client", func(t *testing.T) {
 		namespaceName := createTestNamespace(t, adminClient)
-
 		library.CreateTestClusterRoleBinding(t,
 			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
 			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
@@ -676,11 +676,15 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		tlsConfig, err := rest.TLSConfigFor(impersonationRestConfig)
 		require.NoError(t, err)
 
+		wantConfigMapLabelKey, wantConfigMapLabelValue := "some-label-key", "some-label-value"
 		dest, _ := url.Parse(impersonationProxyURL)
 		dest.Scheme = "wss"
 		dest.Path = "/api/v1/namespaces/" + namespaceName + "/configmaps"
-		dest.RawQuery = "watch=1&resourceVersion=0"
-
+		dest.RawQuery = url.Values{
+			"watch":           {"1"},
+			"labelSelector":   {fmt.Sprintf("%s=%s", wantConfigMapLabelKey, wantConfigMapLabelValue)},
+			"resourceVersion": {"0"},
+		}.Encode()
 		dialer := websocket.Dialer{
 			TLSClientConfig: tlsConfig,
 		}
@@ -705,8 +709,11 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		require.NoError(t, err)
 
 		// perform a create through the admin client
-		_, err = adminClient.CoreV1().ConfigMaps(namespaceName).Create(ctx,
-			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-1"}},
+		wantConfigMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "configmap-1", Labels: map[string]string{wantConfigMapLabelKey: wantConfigMapLabelValue}},
+		}
+		wantConfigMap, err = adminClient.CoreV1().ConfigMaps(namespaceName).Create(ctx,
+			wantConfigMap,
 			metav1.CreateOptions{},
 		)
 		require.NoError(t, err)
@@ -726,10 +733,99 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		if got.Type != watch.Added {
 			t.Errorf("Unexpected type: %v", got.Type)
 		}
-		var createConfigMap corev1.ConfigMap
-		err = json.Unmarshal(got.Object, &createConfigMap)
+		var actualConfigMap corev1.ConfigMap
+		require.NoError(t, json.Unmarshal(got.Object, &actualConfigMap))
+		actualConfigMap.TypeMeta = metav1.TypeMeta{} // This isn't filled out in the wantConfigMap we got back from create.
+		require.Equal(t, *wantConfigMap, actualConfigMap)
+	})
+
+	t.Run("http2 client", func(t *testing.T) {
+		namespaceName := createTestNamespace(t, adminClient)
+		library.CreateTestClusterRoleBinding(t,
+			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
+			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
+		)
+		// Wait for the above RBAC rule to take effect.
+		library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
+			Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
+		})
+
+		wantConfigMapLabelKey, wantConfigMapLabelValue := "some-label-key", "some-label-value"
+		wantConfigMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "configmap-1", Labels: map[string]string{wantConfigMapLabelKey: wantConfigMapLabelValue}},
+		}
+		wantConfigMap, err = adminClient.CoreV1().ConfigMaps(namespaceName).Create(ctx,
+			wantConfigMap,
+			metav1.CreateOptions{},
+		)
 		require.NoError(t, err)
-		require.Equal(t, "configmap-1", createConfigMap.Name)
+		t.Cleanup(func() {
+			_ = adminClient.CoreV1().ConfigMaps(namespaceName).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
+		})
+
+		// create rest client
+		restConfig := impersonationProxyRestConfig(refreshCredential(), impersonationProxyURL, impersonationProxyCACertPEM, "")
+
+		tlsConfig, err := rest.TLSConfigFor(restConfig)
+		require.NoError(t, err)
+		httpTransport := http.Transport{
+			TLSClientConfig: tlsConfig,
+		}
+		if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
+			httpTransport.Proxy = func(req *http.Request) (*url.URL, error) {
+				proxyURL, err := url.Parse(env.Proxy)
+				require.NoError(t, err)
+				t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
+				return proxyURL, nil
+			}
+		}
+		err = http2.ConfigureTransport(&httpTransport)
+		require.NoError(t, err)
+
+		httpClient := http.Client{
+			Transport: &httpTransport,
+		}
+
+		dest, _ := url.Parse(impersonationProxyURL)
+		dest.Path = "/api/v1/namespaces/" + namespaceName + "/configmaps/configmap-1"
+		response, err := httpClient.Get(dest.String())
+		require.NoError(t, err)
+		body, _ := ioutil.ReadAll(response.Body)
+		t.Logf("http2 status code: %d, proto: %s, message: %s", response.StatusCode, response.Proto, body)
+		require.Equal(t, "HTTP/2.0", response.Proto)
+		require.Equal(t, http.StatusOK, response.StatusCode)
+		defer response.Body.Close()
+		var actualConfigMap corev1.ConfigMap
+		require.NoError(t, json.Unmarshal(body, &actualConfigMap))
+		actualConfigMap.TypeMeta = metav1.TypeMeta{} // This isn't filled out in the wantConfigMap we got back from create.
+		require.Equal(t, *wantConfigMap, actualConfigMap)
+
+		// watch configmaps
+		dest.Path = "/api/v1/namespaces/" + namespaceName + "/configmaps"
+		dest.RawQuery = url.Values{
+			"watch":           {"1"},
+			"labelSelector":   {fmt.Sprintf("%s=%s", wantConfigMapLabelKey, wantConfigMapLabelValue)},
+			"resourceVersion": {"0"},
+		}.Encode()
+		response, err = httpClient.Get(dest.String())
+		require.NoError(t, err)
+		require.Equal(t, "HTTP/2.0", response.Proto)
+		require.Equal(t, http.StatusOK, response.StatusCode)
+		defer response.Body.Close()
+
+		// decode
+		decoder := json.NewDecoder(response.Body)
+		var got watchJSON
+		err = decoder.Decode(&got)
+		require.NoError(t, err)
+		if got.Type != watch.Added {
+			t.Errorf("Unexpected type: %v", got.Type)
+		}
+		err = json.Unmarshal(got.Object, &actualConfigMap)
+		require.NoError(t, err)
+		require.Equal(t, "configmap-1", actualConfigMap.Name)
+		actualConfigMap.TypeMeta = metav1.TypeMeta{} // This isn't filled out in the wantConfigMap we got back from create.
+		require.Equal(t, *wantConfigMap, actualConfigMap)
 	})
 
 	t.Run("manually disabling the impersonation proxy feature", func(t *testing.T) {

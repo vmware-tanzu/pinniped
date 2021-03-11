@@ -171,7 +171,7 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 
 	// Validate api group suffix and immediately return an error if it is invalid.
 	if err := groupsuffix.Validate(flags.concierge.apiGroupSuffix); err != nil {
-		return fmt.Errorf("invalid api group suffix: %w", err)
+		return fmt.Errorf("invalid API group suffix: %w", err)
 	}
 
 	execConfig := clientcmdapi.ExecConfig{

@@ -523,6 +523,12 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			_, _, _ = runKubectl("exec", "--namespace", env.ConciergeNamespace, podName, "--", "rm", remoteEchoFile) // cleanup remote echo file
 		}()
 
+		// run the kubectl logs command
+		logLinesCount := 10
+		stdout, _, err = runKubectl("logs", "--namespace", env.ConciergeNamespace, podName, fmt.Sprintf("--tail=%d", logLinesCount))
+		require.NoError(t, err, `"kubectl logs" failed`)
+		require.Equalf(t, logLinesCount, strings.Count(stdout, "\n"), "wanted %d newlines in kubectl logs output:\n%s", logLinesCount, stdout)
+
 		// run the kubectl port-forward command
 		timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancelFunc()

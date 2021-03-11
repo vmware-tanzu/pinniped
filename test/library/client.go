@@ -439,6 +439,35 @@ func CreateTokenCredentialRequest(ctx context.Context, t *testing.T, spec v1alph
 	)
 }
 
+func CreatePod(ctx context.Context, t *testing.T, name, namespace string, spec corev1.PodSpec) *corev1.Pod {
+	t.Helper()
+
+	client := NewKubernetesClientset(t)
+	pods := client.CoreV1().Pods(namespace)
+
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
+	created, err := pods.Create(ctx, &corev1.Pod{ObjectMeta: testObjectMeta(t, name), Spec: spec}, metav1.CreateOptions{})
+	require.NoError(t, err)
+	t.Logf("created test Pod %s", created.Name)
+
+	t.Cleanup(func() {
+		t.Logf("cleaning up test Pod %s", created.Name)
+		err := pods.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+
+	var result *corev1.Pod
+	require.Eventuallyf(t, func() bool {
+		var err error
+		result, err = pods.Get(ctx, created.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		return result.Status.Phase == corev1.PodRunning
+	}, 15*time.Second, 1*time.Second, "expected the Pod to go into phase %s", corev1.PodRunning)
+	return result
+}
+
 func WaitForUserToHaveAccess(t *testing.T, user string, groups []string, shouldHaveAccessTo *authorizationv1.ResourceAttributes) {
 	t.Helper()
 	client := NewKubernetesClientset(t)

@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -46,6 +47,30 @@ import (
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/test/library"
 )
+
+// syncBuffer wraps bytes.Buffer with a mutex so we don't have races in our test code.
+type syncBuffer struct {
+	buf bytes.Buffer
+	mu  sync.Mutex
+}
+
+func (sb *syncBuffer) String() string {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+	return sb.buf.String()
+}
+
+func (sb *syncBuffer) Read(b []byte) (int, error) {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+	return sb.buf.Read(b)
+}
+
+func (sb *syncBuffer) Write(b []byte) (int, error) {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+	return sb.buf.Write(b)
+}
 
 // Note that this test supports being run on all of our integration test cluster types:
 //   - load balancers not supported, has squid proxy (e.g. kind)
@@ -471,11 +496,11 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		require.NoError(t, ioutil.WriteFile(kubeconfigPath, []byte(kubeconfigYAML), 0600))
 
 		// func to create kubectl commands with a kubeconfig
-		kubectlCommand := func(timeout context.Context, args ...string) (*exec.Cmd, *bytes.Buffer, *bytes.Buffer) {
+		kubectlCommand := func(timeout context.Context, args ...string) (*exec.Cmd, *syncBuffer, *syncBuffer) {
 			allArgs := append([]string{"--kubeconfig", kubeconfigPath}, args...)
 			//nolint:gosec // we are not performing malicious argument injection against ourselves
 			kubectlCmd := exec.CommandContext(timeout, "kubectl", allArgs...)
-			var stdout, stderr bytes.Buffer
+			var stdout, stderr syncBuffer
 			kubectlCmd.Stdout = &stdout
 			kubectlCmd.Stderr = &stderr
 			kubectlCmd.Env = envVarsWithProxy
@@ -501,44 +526,45 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{})
 		require.NoError(t, err)
 		require.Greater(t, len(pods.Items), 0)
-		var podName string
+		var conciergePod *corev1.Pod
 		for _, pod := range pods.Items {
+			pod := pod
 			if !strings.Contains(pod.Name, "kube-cert-agent") {
-				podName = pod.Name
+				conciergePod = &pod
 			}
 		}
-		if podName == "" {
+		if conciergePod == nil {
 			t.Error("could not find a concierge pod")
 		}
 
 		// Try "kubectl exec" through the impersonation proxy.
 		echoString := "hello world"
 		remoteEchoFile := fmt.Sprintf("/tmp/test-impersonation-proxy-echo-file-%d.txt", time.Now().Unix())
-		stdout, _, err := runKubectl("exec", "--namespace", env.ConciergeNamespace, podName, "--", "bash", "-c", fmt.Sprintf(`echo "%s" | tee %s`, echoString, remoteEchoFile))
+		stdout, _, err := runKubectl("exec", "--namespace", env.ConciergeNamespace, conciergePod.Name, "--", "bash", "-c", fmt.Sprintf(`echo "%s" | tee %s`, echoString, remoteEchoFile))
 		require.NoError(t, err, `"kubectl exec" failed`)
 		require.Equal(t, echoString+"\n", stdout)
 
 		// run the kubectl cp command
 		localEchoFile := filepath.Join(tempDir, filepath.Base(remoteEchoFile))
-		_, _, err = runKubectl("cp", fmt.Sprintf("%s/%s:%s", env.ConciergeNamespace, podName, remoteEchoFile), localEchoFile)
+		_, _, err = runKubectl("cp", fmt.Sprintf("%s/%s:%s", env.ConciergeNamespace, conciergePod.Name, remoteEchoFile), localEchoFile)
 		require.NoError(t, err, `"kubectl cp" failed`)
 		localEchoFileData, err := ioutil.ReadFile(localEchoFile)
 		require.NoError(t, err)
 		require.Equal(t, echoString+"\n", string(localEchoFileData))
 		defer func() {
-			_, _, _ = runKubectl("exec", "--namespace", env.ConciergeNamespace, podName, "--", "rm", remoteEchoFile) // cleanup remote echo file
+			_, _, _ = runKubectl("exec", "--namespace", env.ConciergeNamespace, conciergePod.Name, "--", "rm", remoteEchoFile) // cleanup remote echo file
 		}()
 
 		// run the kubectl logs command
 		logLinesCount := 10
-		stdout, _, err = runKubectl("logs", "--namespace", env.ConciergeNamespace, podName, fmt.Sprintf("--tail=%d", logLinesCount))
+		stdout, _, err = runKubectl("logs", "--namespace", env.ConciergeNamespace, conciergePod.Name, fmt.Sprintf("--tail=%d", logLinesCount))
 		require.NoError(t, err, `"kubectl logs" failed`)
 		require.Equalf(t, logLinesCount, strings.Count(stdout, "\n"), "wanted %d newlines in kubectl logs output:\n%s", logLinesCount, stdout)
 
 		// run the kubectl port-forward command
 		timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancelFunc()
-		portForwardCmd, _, stderr := kubectlCommand(timeout, "port-forward", "--namespace", env.ConciergeNamespace, podName, "8443:8443")
+		portForwardCmd, _, stderr := kubectlCommand(timeout, "port-forward", "--namespace", env.ConciergeNamespace, conciergePod.Name, "8443:8443")
 		portForwardCmd.Env = envVarsWithProxy
 
 		// start, but don't wait for the command to finish
@@ -564,6 +590,42 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		}
 		// we expect this to 403, but all we care is that it gets through
 		require.Contains(t, curlStdOut.String(), "\"forbidden: User \\\"system:anonymous\\\" cannot get path \\\"/\\\"\"")
+
+		// run the kubectl attach command
+		namespaceName := createTestNamespace(t, adminClient)
+		attachPod := library.CreatePod(ctx, t, "impersonation-proxy-attach", namespaceName, corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:    "impersonation-proxy-attach",
+					Image:   conciergePod.Spec.Containers[0].Image,
+					Command: []string{"bash"},
+					Args:    []string{"-c", `while true; do read VAR; echo "VAR: $VAR"; done`},
+					Stdin:   true,
+				},
+			},
+		})
+		attachCmd, attachStdout, attachStderr := kubectlCommand(timeout, "attach", "--stdin=true", "--namespace", namespaceName, attachPod.Name)
+		attachCmd.Env = envVarsWithProxy
+		attachStdin, err := attachCmd.StdinPipe()
+		require.NoError(t, err)
+
+		// start but don't wait for the attach command
+		err = attachCmd.Start()
+		require.NoError(t, err)
+
+		// write to stdin on the attach process
+		_, err = attachStdin.Write([]byte(echoString + "\n"))
+		require.NoError(t, err)
+
+		// see that we can read stdout and it spits out stdin output back to us
+		wantAttachStdout := fmt.Sprintf("VAR: %s\n", echoString)
+		require.Eventuallyf(t, func() bool { return attachStdout.String() == wantAttachStdout }, time.Second*30, time.Second, `got "kubectl attach" stdout: %q, wanted: %q (stderr: %q)`, attachStdout.String(), wantAttachStdout, attachStderr.String())
+
+		// close stdin and attach process should exit
+		err = attachStdin.Close()
+		require.NoError(t, err)
+		err = attachCmd.Wait()
+		require.NoError(t, err)
 	})
 
 	t.Run("websocket client", func(t *testing.T) {

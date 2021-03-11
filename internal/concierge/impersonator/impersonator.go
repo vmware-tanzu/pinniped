@@ -61,12 +61,12 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 	var listener net.Listener
 
 	constructServer := func() (func(stopCh <-chan struct{}) error, error) {
-		// bare minimum server side scheme to allow for status messages to be encoded
+		// Bare minimum server side scheme to allow for status messages to be encoded.
 		scheme := runtime.NewScheme()
 		metav1.AddToGroupVersion(scheme, metav1.Unversioned)
 		codecs := serializer.NewCodecFactory(scheme)
 
-		// this is unused for now but it is a safe value that we could use in the future
+		// This is unused for now but it is a safe value that we could use in the future.
 		defaultEtcdPathPrefix := "/pinniped-impersonation-proxy-registry"
 
 		recommendedOptions := genericoptions.NewRecommendedOptions(
@@ -77,18 +77,22 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		recommendedOptions.SecureServing.ServerCert.GeneratedCert = dynamicCertProvider // serving certs (end user facing)
 		recommendedOptions.SecureServing.BindPort = port
 
-		// wire up the impersonation proxy signer CA as a valid authenticator for client cert auth
-		// TODO fix comments
+		// Wire up the impersonation proxy signer CA as another valid authenticator for client cert auth,
+		// along with the Kube API server's CA.
 		kubeClient, err := kubeclient.New(clientOpts...)
 		if err != nil {
 			return nil, err
 		}
-		kubeClientCA, err := dynamiccertificates.NewDynamicCAFromConfigMapController("client-ca", metav1.NamespaceSystem, "extension-apiserver-authentication", "client-ca-file", kubeClient.Kubernetes)
+		kubeClientCA, err := dynamiccertificates.NewDynamicCAFromConfigMapController(
+			"client-ca", metav1.NamespaceSystem, "extension-apiserver-authentication", "client-ca-file", kubeClient.Kubernetes,
+		)
 		if err != nil {
 			return nil, err
 		}
 		recommendedOptions.Authentication.ClientCert.ClientCA = "---irrelevant-but-needs-to-be-non-empty---" // drop when we pick up https://github.com/kubernetes/kubernetes/pull/100055
-		recommendedOptions.Authentication.ClientCert.CAContentProvider = dynamiccertificates.NewUnionCAContentProvider(impersonationProxySignerCA, kubeClientCA)
+		recommendedOptions.Authentication.ClientCert.CAContentProvider = dynamiccertificates.NewUnionCAContentProvider(
+			impersonationProxySignerCA, kubeClientCA,
+		)
 
 		if recOpts != nil {
 			recOpts(recommendedOptions)
@@ -108,16 +112,16 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 			return nil, err
 		}
 
-		// loopback authentication to this server does not really make sense since we just proxy everything to KAS
-		// thus we replace loopback connection config with one that does direct connections to KAS
-		// loopback config is mainly used by post start hooks, so this is mostly future proofing
+		// Loopback authentication to this server does not really make sense since we just proxy everything to
+		// the Kube API server, thus we replace loopback connection config with one that does direct connections
+		// the Kube API server. Loopback config is mainly used by post start hooks, so this is mostly future proofing.
 		serverConfig.LoopbackClientConfig = rest.CopyConfig(kubeClient.ProtoConfig) // assume proto is safe (hooks can override)
-		// remove the bearer token so our authorizer does not get stomped on by AuthorizeClientBearerToken
-		// see sanity checks at the end of this function
+		// Remove the bearer token so our authorizer does not get stomped on by AuthorizeClientBearerToken.
+		// See sanity checks at the end of this function.
 		serverConfig.LoopbackClientConfig.BearerToken = ""
 
-		// assume proto config is safe because transport level configs do not use rest.ContentConfig
-		// thus if we are interacting with actual APIs, they should be using pre-built clients
+		// Assume proto config is safe because transport level configs do not use rest.ContentConfig.
+		// Thus if we are interacting with actual APIs, they should be using pre-built clients.
 		impersonationProxy, err := newImpersonationReverseProxy(rest.CopyConfig(kubeClient.ProtoConfig))
 		if err != nil {
 			return nil, err
@@ -125,23 +129,22 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 
 		defaultBuildHandlerChainFunc := serverConfig.BuildHandlerChainFunc
 		serverConfig.BuildHandlerChainFunc = func(_ http.Handler, c *genericapiserver.Config) http.Handler {
-			// we ignore the passed in handler because we never have any REST APIs to delegate to
+			// We ignore the passed in handler because we never have any REST APIs to delegate to.
 			handler := defaultBuildHandlerChainFunc(impersonationProxy, c)
 			handler = securityheader.Wrap(handler)
 			return handler
 		}
 
-		// TODO integration test this authorizer logic with system:masters + double impersonation
-		// overwrite the delegating authorizer with one that only cares about impersonation
-		// empty string is disallowed because request info has had bugs in the past where it would leave it empty
+		// Overwrite the delegating authorizer with one that only cares about impersonation.
+		// Empty string is disallowed because request info has had bugs in the past where it would leave it empty.
 		disallowedVerbs := sets.NewString("", "impersonate")
 		noImpersonationAuthorizer := &comparableAuthorizer{
 			AuthorizerFunc: func(a authorizer.Attributes) (authorizer.Decision, string, error) {
-				// supporting impersonation is not hard, it would just require a bunch of testing
-				// and configuring the audit layer (to preserve the caller) which we can do later
-				// we would also want to delete the incoming impersonation headers
+				// Supporting impersonation is not hard, it would just require a bunch of testing
+				// and configuring the audit layer (to preserve the caller) which we can do later.
+				// We would also want to delete the incoming impersonation headers
 				// instead of overwriting the delegating authorizer, we would
-				// actually use it to make the impersonation authorization checks
+				// actually use it to make the impersonation authorization checks.
 				if disallowedVerbs.Has(a.GetVerb()) {
 					return authorizer.DecisionDeny, "impersonation is not allowed or invalid verb", nil
 				}
@@ -149,7 +152,7 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 				return authorizer.DecisionAllow, "deferring authorization to kube API server", nil
 			},
 		}
-		// TODO write a big comment explaining wth this is doing
+		// Set our custom authorizer before calling Compete(), which will use it.
 		serverConfig.Authorization.Authorizer = noImpersonationAuthorizer
 
 		impersonationProxyServer, err := serverConfig.Complete().New("impersonation-proxy", genericapiserver.NewEmptyDelegate())
@@ -159,19 +162,15 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 
 		preparedRun := impersonationProxyServer.PrepareRun()
 
-		// wait until the very end to do sanity checks
-
+		// Sanity check. Make sure that our custom authorizer is still in place and did not get changed or wrapped.
 		if preparedRun.Authorizer != noImpersonationAuthorizer {
 			return nil, constable.Error("invalid mutation of impersonation authorizer detected")
 		}
 
-		// assert that we have a functioning token file to use and no bearer token
+		// Sanity check. Assert that we have a functioning token file to use and no bearer token.
 		if len(preparedRun.LoopbackClientConfig.BearerToken) != 0 || len(preparedRun.LoopbackClientConfig.BearerTokenFile) == 0 {
 			return nil, constable.Error("invalid impersonator loopback rest config has wrong bearer token semantics")
 		}
-
-		// TODO make sure this is closed on error
-		_ = preparedRun.SecureServingInfo.Listener
 
 		return preparedRun.Run, nil
 	}

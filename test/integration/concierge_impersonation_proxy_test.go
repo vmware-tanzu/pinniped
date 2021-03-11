@@ -370,7 +370,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		require.Len(t, listResult.Items, 0)
 	})
 
-	t.Run("double impersonation is blocked", func(t *testing.T) {
+	t.Run("double impersonation as a regular user is blocked", func(t *testing.T) {
 		// Create an RBAC rule to allow this user to read/write everything.
 		library.CreateTestClusterRoleBinding(t,
 			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
@@ -399,6 +399,38 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				`User "%s" cannot impersonate resource "users" in API group "" at the cluster scope: `+
 				`impersonation is not allowed or invalid verb`,
 			env.TestUser.ExpectedUsername))
+	})
+
+	// This is a separate test from the above double impersonation test because the cluster admin user gets special
+	// authorization treatment from the Kube API server code that we are using, and we want to ensure that we are blocking
+	// double impersonation even for the cluster admin.
+	t.Run("double impersonation as a cluster admin user is blocked", func(t *testing.T) {
+		// Copy the admin credentials from the admin kubeconfig.
+		adminClientRestConfig := library.NewClientConfig(t)
+
+		if adminClientRestConfig.BearerToken == "" && adminClientRestConfig.CertData == nil && adminClientRestConfig.KeyData == nil {
+			t.Skip("The admin kubeconfig does not include credentials, so skipping this test.")
+		}
+
+		clusterAdminCredentials := &loginv1alpha1.ClusterCredential{
+			Token:                 adminClientRestConfig.BearerToken,
+			ClientCertificateData: string(adminClientRestConfig.CertData),
+			ClientKeyData:         string(adminClientRestConfig.KeyData),
+		}
+
+		// Make a client using the admin credentials which will send requests through the impersonation proxy
+		// and will also add impersonate headers to the request.
+		doubleImpersonationKubeClient := newImpersonationProxyClientWithCredentials(
+			clusterAdminCredentials, impersonationProxyURL, impersonationProxyCACertPEM, "other-user-to-impersonate",
+		).Kubernetes
+
+		_, err = doubleImpersonationKubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
+		// Double impersonation is not supported yet, so we should get an error.
+		require.EqualError(t, err, fmt.Sprintf(
+			`users "other-user-to-impersonate" is forbidden: `+
+				`User "%s" cannot impersonate resource "users" in API group "" at the cluster scope: `+
+				`impersonation is not allowed or invalid verb`,
+			"kubernetes-admin"))
 	})
 
 	t.Run("WhoAmIRequests and different kinds of authentication through the impersonation proxy", func(t *testing.T) {

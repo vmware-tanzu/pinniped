@@ -52,10 +52,6 @@ func TestImpersonator(t *testing.T) {
 
 	unrelatedCA, err := certauthority.New(pkix.Name{CommonName: "ca"}, time.Hour)
 	require.NoError(t, err)
-	badClientCertPEM, badClientKeyPEM, err := unrelatedCA.IssuePEM(
-		pkix.Name{CommonName: "test-user", Organization: []string{"test-group1"}}, nil, nil, time.Hour,
-	)
-	require.NoError(t, err)
 
 	// Punch out just enough stuff to make New actually run without error.
 	recOpts := func(options *genericoptions.RecommendedOptions) {
@@ -68,10 +64,7 @@ func TestImpersonator(t *testing.T) {
 
 	tests := []struct {
 		name                               string
-		clientUsername                     string
-		clientGroups                       []string
-		clientCertPEM                      string
-		clientKeyPEM                       string
+		clientCert                         *clientCert
 		clientImpersonateUser              rest.ImpersonationConfig
 		kubeAPIServerClientBearerTokenFile string
 		kubeAPIServerStatusCode            int
@@ -81,8 +74,7 @@ func TestImpersonator(t *testing.T) {
 	}{
 		{
 			name:                               "happy path",
-			clientUsername:                     "test-username",
-			clientGroups:                       []string{"test-group1", "test-group2"},
+			clientCert:                         newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
 			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
 			wantKubeAPIServerRequestHeaders: http.Header{
 				"Impersonate-User":  {"test-username"},
@@ -97,8 +89,7 @@ func TestImpersonator(t *testing.T) {
 		{
 			name:                               "user is authenticated but the kube API request returns an error",
 			kubeAPIServerStatusCode:            http.StatusNotFound,
-			clientUsername:                     "test-username",
-			clientGroups:                       []string{"test-group1", "test-group2"},
+			clientCert:                         newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
 			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
 			wantError:                          `the server could not find the requested resource (get namespaces)`,
 			wantKubeAPIServerRequestHeaders: http.Header{
@@ -113,8 +104,7 @@ func TestImpersonator(t *testing.T) {
 		},
 		{
 			name:                               "when there is no client cert on request, it is an anonymous request",
-			clientCertPEM:                      "present so we will use the empty keyPEM",
-			clientKeyPEM:                       "",
+			clientCert:                         &clientCert{},
 			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
 			wantKubeAPIServerRequestHeaders: http.Header{
 				"Impersonate-User":  {"system:anonymous"},
@@ -128,15 +118,13 @@ func TestImpersonator(t *testing.T) {
 		},
 		{
 			name:                               "failed client cert authentication",
-			clientCertPEM:                      string(badClientCertPEM),
-			clientKeyPEM:                       string(badClientKeyPEM),
+			clientCert:                         newClientCert(t, unrelatedCA, "test-username", []string{"test-group1"}),
 			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
 			wantError:                          "Unauthorized",
 		},
 		{
 			name:                               "double impersonation is not allowed by regular users",
-			clientUsername:                     "test-username",
-			clientGroups:                       []string{"test-group1", "test-group2"},
+			clientCert:                         newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
 			clientImpersonateUser:              rest.ImpersonationConfig{UserName: "some-other-username"},
 			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
 			wantError: `users "some-other-username" is forbidden: User "test-username" ` +
@@ -144,8 +132,7 @@ func TestImpersonator(t *testing.T) {
 		},
 		{
 			name:                               "double impersonation is not allowed by admin users",
-			clientUsername:                     "test-admin",
-			clientGroups:                       []string{"system:masters", "test-group2"},
+			clientCert:                         newClientCert(t, ca, "test-admin", []string{"system:masters", "test-group2"}),
 			clientImpersonateUser:              rest.ImpersonationConfig{UserName: "some-other-username"},
 			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
 			wantError: `users "some-other-username" is forbidden: User "test-admin" ` +
@@ -230,25 +217,13 @@ func TestImpersonator(t *testing.T) {
 				errCh <- stopErr
 			}()
 
-			// Create client certs for authentication to the impersonator.
-			var clientCertPEM, clientKeyPEM []byte
-			if len(tt.clientCertPEM) == 0 {
-				clientCertPEM, clientKeyPEM, err = ca.IssuePEM(
-					pkix.Name{CommonName: tt.clientUsername, Organization: tt.clientGroups}, nil, nil, time.Hour,
-				)
-				require.NoError(t, err)
-			} else {
-				clientCertPEM = []byte(tt.clientCertPEM)
-				clientKeyPEM = []byte(tt.clientKeyPEM)
-			}
-
 			// Create a kubeconfig to talk to the impersonator as a client.
 			clientKubeconfig := &rest.Config{
 				Host: "https://127.0.0.1:" + strconv.Itoa(port),
 				TLSClientConfig: rest.TLSClientConfig{
 					CAData:   ca.Bundle(),
-					CertData: clientCertPEM,
-					KeyData:  clientKeyPEM,
+					CertData: tt.clientCert.certPEM,
+					KeyData:  tt.clientCert.keyPEM,
 				},
 				UserAgent: "test-agent",
 				// BearerToken should be ignored during auth when there are valid client certs,
@@ -290,12 +265,6 @@ func TestImpersonator(t *testing.T) {
 			requireCanBindToPort(t, port)
 		})
 	}
-}
-
-func requireCanBindToPort(t *testing.T, port int) {
-	ln, _, listenErr := genericoptions.CreateListener("", "0.0.0.0:"+strconv.Itoa(port), net.ListenConfig{})
-	require.NoError(t, listenErr)
-	require.NoError(t, ln.Close())
 }
 
 func TestImpersonatorHTTPHandler(t *testing.T) {
@@ -509,4 +478,25 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 			}
 		})
 	}
+}
+
+type clientCert struct {
+	certPEM, keyPEM []byte
+}
+
+func newClientCert(t *testing.T, ca *certauthority.CA, username string, groups []string) *clientCert {
+	certPEM, keyPEM, err := ca.IssuePEM(
+		pkix.Name{CommonName: username, Organization: groups}, nil, nil, time.Hour,
+	)
+	require.NoError(t, err)
+	return &clientCert{
+		certPEM: certPEM,
+		keyPEM:  keyPEM,
+	}
+}
+
+func requireCanBindToPort(t *testing.T, port int) {
+	ln, _, listenErr := genericoptions.CreateListener("", "0.0.0.0:"+strconv.Itoa(port), net.ListenConfig{})
+	require.NoError(t, listenErr)
+	require.NoError(t, ln.Close())
 }

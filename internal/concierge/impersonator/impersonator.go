@@ -22,6 +22,7 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
+	"k8s.io/apiserver/pkg/server/filters"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
@@ -122,6 +123,12 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		// Remove the bearer token so our authorizer does not get stomped on by AuthorizeClientBearerToken.
 		// See sanity checks at the end of this function.
 		serverConfig.LoopbackClientConfig.BearerToken = ""
+
+		// match KAS exactly since our long running operations are just a proxy to it
+		serverConfig.LongRunningFunc = filters.BasicLongRunningRequestCheck(
+			sets.NewString("watch", "proxy"),
+			sets.NewString("attach", "exec", "proxy", "log", "portforward"),
+		)
 
 		// Assume proto config is safe because transport level configs do not use rest.ContentConfig.
 		// Thus if we are interacting with actual APIs, they should be using pre-built clients.

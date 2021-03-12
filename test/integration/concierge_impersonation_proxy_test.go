@@ -597,7 +597,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// run the kubectl port-forward command
 		timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancelFunc()
-		portForwardCmd, portForwardStdout, portForwardStderr := kubectlCommand(timeout, "port-forward", "--namespace", env.ConciergeNamespace, conciergePod.Name, "8443:8443")
+		portForwardCmd, _, portForwardStderr := kubectlCommand(timeout, "port-forward", "--namespace", env.ConciergeNamespace, conciergePod.Name, "8443:8443")
 		portForwardCmd.Env = envVarsWithProxy
 
 		// start, but don't wait for the command to finish
@@ -607,22 +607,23 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			assert.EqualErrorf(t, portForwardCmd.Wait(), "signal: killed", `wanted "kubectl port-forward" to get signaled because context was cancelled (stderr: %q)`, portForwardStderr.String())
 		}()
 
-		// then run curl something against it
-		time.Sleep(time.Second)
-		timeout, cancelFunc = context.WithTimeout(ctx, 2*time.Minute)
-		defer cancelFunc()
-		curlCmd := exec.CommandContext(timeout, "curl", "-k", "https://127.0.0.1:8443")
-		var curlStdOut, curlStdErr bytes.Buffer
-		curlCmd.Stdout = &curlStdOut
-		curlCmd.Stderr = &curlStdErr
-		err = curlCmd.Run()
-		if err != nil {
-			t.Log("curl error: " + err.Error())
-			t.Log("curlStdErr: " + curlStdErr.String())
-			t.Log("stdout: " + curlStdOut.String())
-		}
-		// we expect this to 403, but all we care is that it gets through
-		require.Containsf(t, curlStdOut.String(), "\"forbidden: User \\\"system:anonymous\\\" cannot get path \\\"/\\\"\"", "unexpected curl response\nport-forward stdout:\n%q\nport-forward stderr:\n%q", portForwardStdout.String(), portForwardStderr.String())
+		require.Eventually(t, func() bool {
+			// then run curl something against it
+			timeout, cancelFunc = context.WithTimeout(ctx, 2*time.Minute)
+			defer cancelFunc()
+			curlCmd := exec.CommandContext(timeout, "curl", "-k", "https://127.0.0.1:8443")
+			var curlStdOut, curlStdErr bytes.Buffer
+			curlCmd.Stdout = &curlStdOut
+			curlCmd.Stderr = &curlStdErr
+			err = curlCmd.Run()
+			if err != nil {
+				t.Log("curl error: " + err.Error())
+				t.Log("curlStdErr: " + curlStdErr.String())
+				t.Log("stdout: " + curlStdOut.String())
+			}
+			// we expect this to 403, but all we care is that it gets through
+			return err == nil && strings.Contains(curlStdOut.String(), "\"forbidden: User \\\"system:anonymous\\\" cannot get path \\\"/\\\"\"")
+		}, 5*time.Minute, 500*time.Millisecond)
 
 		// run the kubectl attach command
 		namespaceName := createTestNamespace(t, adminClient)
@@ -637,6 +638,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				},
 			},
 		})
+		timeout, cancelFunc = context.WithTimeout(ctx, 2*time.Minute)
+		defer cancelFunc()
 		attachCmd, attachStdout, attachStderr := kubectlCommand(timeout, "attach", "--stdin=true", "--namespace", namespaceName, attachPod.Name)
 		attachCmd.Env = envVarsWithProxy
 		attachStdin, err := attachCmd.StdinPipe()

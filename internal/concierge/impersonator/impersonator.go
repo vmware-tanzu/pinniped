@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -79,6 +80,8 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 
 		// Wire up the impersonation proxy signer CA as another valid authenticator for client cert auth,
 		// along with the Kube API server's CA.
+		// Note: any changes to the the Authentication stack need to be kept in sync with any assumptions made
+		// by getTransportForUser, especially if we ever update the TCR API to start returning bearer tokens.
 		kubeClient, err := kubeclient.New(clientOpts...)
 		if err != nil {
 			return nil, err
@@ -241,12 +244,13 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 				return
 			}
 
-			if len(userInfo.GetUID()) > 0 {
-				plog.Warning("rejecting request with UID since we cannot impersonate UIDs",
+			rt, err := getTransportForUser(userInfo, kubeRoundTripper)
+			if err != nil {
+				plog.WarningErr("rejecting request as we cannot act as the current user", err,
 					"url", r.URL.String(),
 					"method", r.Method,
 				)
-				http.Error(w, "unexpected uid", http.StatusUnprocessableEntity)
+				http.Error(w, "unable to act as user", http.StatusUnprocessableEntity)
 				return
 			}
 
@@ -257,15 +261,8 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 			)
 
 			reverseProxy := httputil.NewSingleHostReverseProxy(serverURL)
-			impersonateConfig := transport.ImpersonationConfig{
-				UserName: userInfo.GetName(),
-				Groups:   userInfo.GetGroups(),
-				Extra:    userInfo.GetExtra(),
-			}
-			reverseProxy.Transport = transport.NewImpersonatingRoundTripper(impersonateConfig, kubeRoundTripper)
+			reverseProxy.Transport = rt
 			reverseProxy.FlushInterval = 200 * time.Millisecond // the "watch" verb will not work without this line
-			// transport.NewImpersonatingRoundTripper clones the request before setting headers
-			// so this call will not accidentally mutate the input request (see http.Handler docs)
 			reverseProxy.ServeHTTP(w, r)
 		})
 	}, nil
@@ -279,4 +276,29 @@ func ensureNoImpersonationHeaders(r *http.Request) error {
 	}
 
 	return nil
+}
+
+func getTransportForUser(userInfo user.Info, delegate http.RoundTripper) (http.RoundTripper, error) {
+	if len(userInfo.GetUID()) == 0 {
+		impersonateConfig := transport.ImpersonationConfig{
+			UserName: userInfo.GetName(),
+			Groups:   userInfo.GetGroups(),
+			Extra:    userInfo.GetExtra(),
+		}
+		// transport.NewImpersonatingRoundTripper clones the request before setting headers
+		// thus it will not accidentally mutate the input request (see http.Handler docs)
+		return transport.NewImpersonatingRoundTripper(impersonateConfig, delegate), nil
+	}
+
+	// 0. in the case of a request that is not attempting to do nested impersonation
+	// 1. if we make the assumption that the TCR API does not issue tokens (or pass the TCR API bearer token
+	//    authenticator into this func - we need to know the authentication cred is something KAS would honor)
+	// 2. then if preserve the incoming authorization header into the request's context
+	// 3. we could reauthenticate it here (it would be a free cache hit)
+	// 4. confirm that it matches the passed in user info (i.e. it was actually the cred used to authenticate and not a client cert)
+	// 5. then we could issue a reverse proxy request using an anonymous rest config and the bearer token
+	// 6. thus instead of impersonating the user, we would just be passing their request through
+	// 7. this would preserve the UID info and thus allow us to safely support all token based auth
+	// 8. the above would be safe even if in the future Kube started supporting UIDs asserted by client certs
+	return nil, constable.Error("unexpected uid")
 }

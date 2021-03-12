@@ -361,7 +361,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 		{
 			name:           "unexpected UID",
 			request:        newRequest(map[string][]string{}, &user.DefaultInfo{UID: "007"}),
-			wantHTTPBody:   "unexpected uid\n",
+			wantHTTPBody:   "unable to act as user\n",
 			wantHTTPStatus: http.StatusUnprocessableEntity,
 		},
 		// happy path

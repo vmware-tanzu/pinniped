@@ -64,14 +64,22 @@ type Config struct {
 
 	// DynamicServingCertProvider provides a setter and a getter to the Pinniped API's serving cert.
 	DynamicServingCertProvider dynamiccert.Provider
-	// DynamicSigningCertProvider provides a setter and a getter to the Pinniped API's  // TODO fix comment
+
+	// DynamicSigningCertProvider provides a setter and a getter to the Pinniped API's
 	// signing cert, i.e., the cert that it uses to sign certs for Pinniped clients wishing to login.
+	// This is filled with the Kube API server's signing cert by a controller, if it can be found.
 	DynamicSigningCertProvider dynamiccert.Provider
-	// TODO fix comment
+
+	// ImpersonationSigningCertProvider provides a setter and a getter to the CA cert that should be
+	// used to sign client certs for authentication to the impersonation proxy. This CA is used by
+	// the TokenCredentialRequest to sign certs and by the impersonation proxy to check certs.
+	// When the impersonation proxy is not running, the getter will return nil cert and nil key.
+	// (Note that the impersonation proxy also accepts client certs signed by the Kube API server's cert.)
 	ImpersonationSigningCertProvider dynamiccert.Provider
 
 	// ServingCertDuration is the validity period, in seconds, of the API serving certificate.
 	ServingCertDuration time.Duration
+
 	// ServingCertRenewBefore is the period of time, in seconds, that pinniped will wait before
 	// rotating the serving certificate. This period of time starts upon issuance of the serving
 	// certificate.

@@ -427,11 +427,13 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		_, err = doubleImpersonationKubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
 		// Double impersonation is not supported yet, so we should get an error.
-		require.EqualError(t, err, fmt.Sprintf(
+		require.Error(t, err)
+		require.Regexp(t,
 			`users "other-user-to-impersonate" is forbidden: `+
-				`User "%s" cannot impersonate resource "users" in API group "" at the cluster scope: `+
+				`User ".*" cannot impersonate resource "users" in API group "" at the cluster scope: `+
 				`impersonation is not allowed or invalid verb`,
-			"kubernetes-admin"))
+			err.Error(),
+		)
 	})
 
 	t.Run("WhoAmIRequests and different kinds of authentication through the impersonation proxy", func(t *testing.T) {

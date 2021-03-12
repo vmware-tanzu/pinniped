@@ -220,8 +220,8 @@ func (c *CA) Issue(subject pkix.Name, dnsNames []string, ips []net.IP, ttl time.
 
 // IssuePEM issues a new server certificate for the given identity and duration, returning it as a pair of
 // PEM-formatted byte slices for the certificate and private key.
-func (c *CA) IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) ([]byte, []byte, error) {
-	return toPEM(c.Issue(subject, dnsNames, nil, ttl))
+func (c *CA) IssuePEM(subject pkix.Name, dnsNames []string, ips []net.IP, ttl time.Duration) ([]byte, []byte, error) {
+	return toPEM(c.Issue(subject, dnsNames, ips, ttl))
 }
 
 func toPEM(cert *tls.Certificate, err error) ([]byte, []byte, error) {

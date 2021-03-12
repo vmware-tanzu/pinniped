@@ -36,5 +36,5 @@ func (c *CA) IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) (
 		return nil, nil, err
 	}
 
-	return ca.IssuePEM(subject, dnsNames, ttl)
+	return ca.IssuePEM(subject, dnsNames, nil, ttl)
 }

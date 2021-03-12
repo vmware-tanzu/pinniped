@@ -325,7 +325,7 @@ func TestIssuePEM(t *testing.T) {
 	realCA, err := loadFromFiles(t, "./testdata/test.crt", "./testdata/test.key")
 	require.NoError(t, err)
 
-	certPEM, keyPEM, err := realCA.IssuePEM(pkix.Name{CommonName: "Test Server"}, []string{"example.com"}, 10*time.Minute)
+	certPEM, keyPEM, err := realCA.IssuePEM(pkix.Name{CommonName: "Test Server"}, []string{"example.com"}, nil, 10*time.Minute)
 	require.NoError(t, err)
 	require.NotEmpty(t, certPEM)
 	require.NotEmpty(t, keyPEM)

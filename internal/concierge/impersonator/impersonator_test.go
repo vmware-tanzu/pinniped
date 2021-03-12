@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/features"
@@ -26,12 +28,13 @@ import (
 
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/dynamiccert"
+	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/testutil"
 )
 
-func TestNew(t *testing.T) {
-	const port = 8444
+func TestImpersonator(t *testing.T) {
+	const port = 9444
 
 	ca, err := certauthority.New(pkix.Name{CommonName: "ca"}, time.Hour)
 	require.NoError(t, err)
@@ -41,7 +44,7 @@ func TestNew(t *testing.T) {
 	err = caContent.SetCertKeyContent(ca.Bundle(), caKey)
 	require.NoError(t, err)
 
-	cert, key, err := ca.IssuePEM(pkix.Name{CommonName: "example.com"}, []string{"example.com"}, time.Hour)
+	cert, key, err := ca.IssuePEM(pkix.Name{}, nil, []net.IP{net.ParseIP("127.0.0.1")}, time.Hour)
 	require.NoError(t, err)
 	certKeyContent := dynamiccert.New("cert-key")
 	err = certKeyContent.SetCertKeyContent(cert, key)
@@ -57,77 +60,195 @@ func TestNew(t *testing.T) {
 	defer featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.APIPriorityAndFairness, false)()
 
 	tests := []struct {
-		name       string
-		clientOpts []kubeclient.Option
-		wantErr    string
+		name                               string
+		clientUsername                     string
+		clientGroups                       []string
+		clientImpersonateUser              rest.ImpersonationConfig
+		kubeAPIServerClientBearerTokenFile string
+		kubeAPIServerStatusCode            int
+		wantError                          string
+		wantConstructionError              string
 	}{
 		{
-			name: "happy path",
-			clientOpts: []kubeclient.Option{
-				kubeclient.WithConfig(&rest.Config{
-					BearerToken:     "should-be-ignored",
-					BearerTokenFile: "required-to-be-set",
-				}),
-			},
+			name:                               "happy path",
+			clientUsername:                     "test-username",
+			clientGroups:                       []string{"test-group1", "test-group2"},
+			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
 		},
 		{
-			name: "no bearer token file",
-			clientOpts: []kubeclient.Option{
-				kubeclient.WithConfig(&rest.Config{
-					BearerToken: "should-be-ignored",
-				}),
-			},
-			wantErr: "invalid impersonator loopback rest config has wrong bearer token semantics",
+			name:                  "no bearer token file in Kube API server client config",
+			wantConstructionError: "invalid impersonator loopback rest config has wrong bearer token semantics",
+		},
+		{
+			name:                               "user is authenticated but the kube API request returns an error",
+			kubeAPIServerStatusCode:            http.StatusNotFound,
+			clientUsername:                     "test-username",
+			clientGroups:                       []string{"test-group1", "test-group2"},
+			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			wantError:                          `the server could not find the requested resource (get namespaces)`,
+		},
+		{
+			name:                               "double impersonation is not allowed by regular users",
+			clientUsername:                     "test-username",
+			clientGroups:                       []string{"test-group1", "test-group2"},
+			clientImpersonateUser:              rest.ImpersonationConfig{UserName: "some-other-username"},
+			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			wantError: `users "some-other-username" is forbidden: User "test-username" ` +
+				`cannot impersonate resource "users" in API group "" at the cluster scope: impersonation is not allowed or invalid verb`,
+		},
+		{
+			name:                               "double impersonation is not allowed by admin users",
+			clientUsername:                     "test-admin",
+			clientGroups:                       []string{"system:masters", "test-group2"},
+			clientImpersonateUser:              rest.ImpersonationConfig{UserName: "some-other-username"},
+			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			wantError: `users "some-other-username" is forbidden: User "test-admin" ` +
+				`cannot impersonate resource "users" in API group "" at the cluster scope: impersonation is not allowed or invalid verb`,
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
+		// This is a serial test because the production code binds to the port.
 		t.Run(tt.name, func(t *testing.T) {
-			// This is a serial test because the production code binds to the port.
-			runner, constructionErr := newInternal(port, certKeyContent, caContent, tt.clientOpts, recOpts)
-
-			if len(tt.wantErr) != 0 {
-				require.EqualError(t, constructionErr, tt.wantErr)
-				require.Nil(t, runner)
-			} else {
-				require.NoError(t, constructionErr)
-				require.NotNil(t, runner)
-
-				stopCh := make(chan struct{})
-				errCh := make(chan error)
-				go func() {
-					stopErr := runner(stopCh)
-					errCh <- stopErr
-				}()
-
-				select {
-				case unexpectedExit := <-errCh:
-					t.Errorf("unexpected exit, err=%v (even nil error is failure)", unexpectedExit)
-				case <-time.After(10 * time.Second):
-				}
-
-				close(stopCh)
-				exitErr := <-errCh
-				require.NoError(t, exitErr)
+			if tt.kubeAPIServerStatusCode == 0 {
+				tt.kubeAPIServerStatusCode = http.StatusOK
 			}
 
-			// assert listener is closed is both cases above by trying to make another one on the same port
-			ln, _, listenErr := genericoptions.CreateListener("", "0.0.0.0:"+strconv.Itoa(port), net.ListenConfig{})
-			defer func() {
-				if ln == nil {
+			// Set up a fake Kube API server which will stand in for the real one. The impersonator
+			// will proxy incoming calls to this fake server.
+			testKubeAPIServerWasCalled := false
+			testKubeAPIServerSawHeaders := http.Header{}
+			testKubeAPIServerCA, testKubeAPIServerURL := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				require.Equal(t, http.MethodGet, r.Method)
+				switch r.URL.Path {
+				case "/api/v1/namespaces/kube-system/configmaps":
+					// The production code uses NewDynamicCAFromConfigMapController which fetches a ConfigMap,
+					// so treat that differently. It wants to read the Kube API server CA from that ConfigMap
+					// to use it to validate client certs. We don't need it for this test, so return NotFound.
+					http.NotFound(w, r)
 					return
+				case "/api/v1/namespaces":
+					testKubeAPIServerWasCalled = true
+					testKubeAPIServerSawHeaders = r.Header
+					if tt.kubeAPIServerStatusCode != http.StatusOK {
+						w.WriteHeader(tt.kubeAPIServerStatusCode)
+					} else {
+						w.Header().Add("Content-Type", "application/json; charset=UTF-8")
+						_, _ = w.Write([]byte(here.Doc(`
+						{
+							"kind": "NamespaceList",
+							"apiVersion":"v1",
+							"items": [
+								{"metadata":{"name": "namespace1"}},
+								{"metadata":{"name": "namespace2"}}
+							]
+						}
+					`)))
+					}
+				default:
+					require.Fail(t, "fake Kube API server got an unexpected request")
 				}
-				require.NoError(t, ln.Close())
-			}()
-			require.NoError(t, listenErr)
+			})
+			testKubeAPIServerKubeconfig := rest.Config{
+				Host:            testKubeAPIServerURL,
+				BearerToken:     "some-service-account-token",
+				TLSClientConfig: rest.TLSClientConfig{CAData: []byte(testKubeAPIServerCA)},
+				BearerTokenFile: tt.kubeAPIServerClientBearerTokenFile,
+			}
+			clientOpts := []kubeclient.Option{kubeclient.WithConfig(&testKubeAPIServerKubeconfig)}
 
-			// TODO: create some client certs and assert the authorizer works correctly with system:masters
-			//  and nested impersonation - we could also try to test what headers are sent to KAS
+			// Create an impersonator.
+			runner, constructionErr := newInternal(port, certKeyContent, caContent, clientOpts, recOpts)
+			if len(tt.wantConstructionError) > 0 {
+				require.EqualError(t, constructionErr, tt.wantConstructionError)
+				require.Nil(t, runner)
+				// After failing to start, the impersonator port should be available again.
+				requireCanBindToPort(t, port)
+				// The rest of the test doesn't make sense when you expect a construction error, so stop here.
+				return
+			}
+			require.NoError(t, constructionErr)
+			require.NotNil(t, runner)
+
+			// Start the impersonator.
+			stopCh := make(chan struct{})
+			errCh := make(chan error)
+			go func() {
+				stopErr := runner(stopCh)
+				errCh <- stopErr
+			}()
+
+			// Create client certs for authentication to the impersonator.
+			clientCertPEM, clientKeyPEM, err := ca.IssuePEM(
+				pkix.Name{CommonName: tt.clientUsername, Organization: tt.clientGroups}, nil, nil, time.Hour,
+			)
+			require.NoError(t, err)
+
+			// Create a kubeconfig to talk to the impersonator as a client.
+			clientKubeconfig := &rest.Config{
+				Host: "https://127.0.0.1:" + strconv.Itoa(port),
+				TLSClientConfig: rest.TLSClientConfig{
+					CAData:   ca.Bundle(),
+					CertData: clientCertPEM,
+					KeyData:  clientKeyPEM,
+				},
+				UserAgent:   "test-agent",
+				Impersonate: tt.clientImpersonateUser,
+			}
+
+			// Create a real Kube client to make API requests to the impersonator.
+			client, err := kubeclient.New(kubeclient.WithConfig(clientKubeconfig))
+			require.NoError(t, err)
+
+			// The fake Kube API server knows how to to list namespaces, so make that request using the client
+			// through the impersonator.
+			listResponse, err := client.Kubernetes.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+			if len(tt.wantError) > 0 {
+				require.EqualError(t, err, tt.wantError)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, &v1.NamespaceList{
+					Items: []v1.Namespace{
+						{ObjectMeta: metav1.ObjectMeta{Name: "namespace1"}},
+						{ObjectMeta: metav1.ObjectMeta{Name: "namespace2"}},
+					},
+				}, listResponse)
+
+				// The impersonator should have proxied the request to the fake Kube API server, which should have seen
+				// the headers of the original request mutated by the impersonator.
+				require.True(t, testKubeAPIServerWasCalled)
+				require.Equal(t,
+					http.Header{
+						"Impersonate-User":  {tt.clientUsername},
+						"Impersonate-Group": append(tt.clientGroups, "system:authenticated"),
+						"Authorization":     {"Bearer some-service-account-token"},
+						"User-Agent":        {"test-agent"},
+						"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+						"Accept-Encoding":   {"gzip"},
+						"X-Forwarded-For":   {"127.0.0.1"},
+					},
+					testKubeAPIServerSawHeaders,
+				)
+			}
+
+			// Stop the impersonator server.
+			close(stopCh)
+			exitErr := <-errCh
+			require.NoError(t, exitErr)
+
+			// After shutdown, the impersonator port should be available again.
+			requireCanBindToPort(t, port)
 		})
 	}
 }
 
-func TestImpersonator(t *testing.T) {
+func requireCanBindToPort(t *testing.T, port int) {
+	ln, _, listenErr := genericoptions.CreateListener("", "0.0.0.0:"+strconv.Itoa(port), net.ListenConfig{})
+	require.NoError(t, listenErr)
+	require.NoError(t, ln.Close())
+}
+
+func TestImpersonatorHTTPHandler(t *testing.T) {
 	const testUser = "test-user"
 
 	testGroups := []string{"test-group-1", "test-group-2"}

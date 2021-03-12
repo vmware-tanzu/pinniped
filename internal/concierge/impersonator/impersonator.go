@@ -122,7 +122,7 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 
 		// Assume proto config is safe because transport level configs do not use rest.ContentConfig.
 		// Thus if we are interacting with actual APIs, they should be using pre-built clients.
-		impersonationProxy, err := newImpersonationReverseProxy(rest.CopyConfig(kubeClient.ProtoConfig))
+		impersonationProxyFunc, err := newImpersonationReverseProxyFunc(rest.CopyConfig(kubeClient.ProtoConfig))
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +130,8 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		defaultBuildHandlerChainFunc := serverConfig.BuildHandlerChainFunc
 		serverConfig.BuildHandlerChainFunc = func(_ http.Handler, c *genericapiserver.Config) http.Handler {
 			// We ignore the passed in handler because we never have any REST APIs to delegate to.
-			handler := defaultBuildHandlerChainFunc(impersonationProxy, c)
+			handler := impersonationProxyFunc(c)
+			handler = defaultBuildHandlerChainFunc(handler, c)
 			handler = securityheader.Wrap(handler)
 			return handler
 		}
@@ -192,7 +193,7 @@ type comparableAuthorizer struct {
 	authorizer.AuthorizerFunc
 }
 
-func newImpersonationReverseProxy(restConfig *rest.Config) (http.Handler, error) {
+func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapiserver.Config) http.Handler, error) {
 	serverURL, err := url.Parse(restConfig.Host)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse host URL from in-cluster config: %w", err)
@@ -209,63 +210,65 @@ func newImpersonationReverseProxy(restConfig *rest.Config) (http.Handler, error)
 		return nil, fmt.Errorf("could not get in-cluster transport: %w", err)
 	}
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if len(r.Header.Values("Authorization")) != 0 {
-			plog.Warning("aggregated API server logic did not delete authorization header but it is always supposed to do so",
+	return func(c *genericapiserver.Config) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if len(r.Header.Values("Authorization")) != 0 {
+				plog.Warning("aggregated API server logic did not delete authorization header but it is always supposed to do so",
+					"url", r.URL.String(),
+					"method", r.Method,
+				)
+				http.Error(w, "invalid authorization header", http.StatusInternalServerError)
+				return
+			}
+
+			if err := ensureNoImpersonationHeaders(r); err != nil {
+				plog.Error("noImpersonationAuthorizer logic did not prevent nested impersonation but it is always supposed to do so",
+					err,
+					"url", r.URL.String(),
+					"method", r.Method,
+				)
+				http.Error(w, "invalid impersonation", http.StatusInternalServerError)
+				return
+			}
+
+			userInfo, ok := request.UserFrom(r.Context())
+			if !ok {
+				plog.Warning("aggregated API server logic did not set user info but it is always supposed to do so",
+					"url", r.URL.String(),
+					"method", r.Method,
+				)
+				http.Error(w, "invalid user", http.StatusInternalServerError)
+				return
+			}
+
+			if len(userInfo.GetUID()) > 0 {
+				plog.Warning("rejecting request with UID since we cannot impersonate UIDs",
+					"url", r.URL.String(),
+					"method", r.Method,
+				)
+				http.Error(w, "unexpected uid", http.StatusUnprocessableEntity)
+				return
+			}
+
+			plog.Trace("proxying authenticated request",
 				"url", r.URL.String(),
 				"method", r.Method,
+				"username", userInfo.GetName(), // this info leak seems fine for trace level logs
 			)
-			http.Error(w, "invalid authorization header", http.StatusInternalServerError)
-			return
-		}
 
-		if err := ensureNoImpersonationHeaders(r); err != nil {
-			plog.Error("noImpersonationAuthorizer logic did not prevent nested impersonation but it is always supposed to do so",
-				err,
-				"url", r.URL.String(),
-				"method", r.Method,
-			)
-			http.Error(w, "invalid impersonation", http.StatusInternalServerError)
-			return
-		}
-
-		userInfo, ok := request.UserFrom(r.Context())
-		if !ok {
-			plog.Warning("aggregated API server logic did not set user info but it is always supposed to do so",
-				"url", r.URL.String(),
-				"method", r.Method,
-			)
-			http.Error(w, "invalid user", http.StatusInternalServerError)
-			return
-		}
-
-		if len(userInfo.GetUID()) > 0 {
-			plog.Warning("rejecting request with UID since we cannot impersonate UIDs",
-				"url", r.URL.String(),
-				"method", r.Method,
-			)
-			http.Error(w, "unexpected uid", http.StatusUnprocessableEntity)
-			return
-		}
-
-		plog.Trace("proxying authenticated request",
-			"url", r.URL.String(),
-			"method", r.Method,
-			"username", userInfo.GetName(), // this info leak seems fine for trace level logs
-		)
-
-		reverseProxy := httputil.NewSingleHostReverseProxy(serverURL)
-		impersonateConfig := transport.ImpersonationConfig{
-			UserName: userInfo.GetName(),
-			Groups:   userInfo.GetGroups(),
-			Extra:    userInfo.GetExtra(),
-		}
-		reverseProxy.Transport = transport.NewImpersonatingRoundTripper(impersonateConfig, kubeRoundTripper)
-		reverseProxy.FlushInterval = 200 * time.Millisecond // the "watch" verb will not work without this line
-		// transport.NewImpersonatingRoundTripper clones the request before setting headers
-		// so this call will not accidentally mutate the input request (see http.Handler docs)
-		reverseProxy.ServeHTTP(w, r)
-	}), nil
+			reverseProxy := httputil.NewSingleHostReverseProxy(serverURL)
+			impersonateConfig := transport.ImpersonationConfig{
+				UserName: userInfo.GetName(),
+				Groups:   userInfo.GetGroups(),
+				Extra:    userInfo.GetExtra(),
+			}
+			reverseProxy.Transport = transport.NewImpersonatingRoundTripper(impersonateConfig, kubeRoundTripper)
+			reverseProxy.FlushInterval = 200 * time.Millisecond // the "watch" verb will not work without this line
+			// transport.NewImpersonatingRoundTripper clones the request before setting headers
+			// so this call will not accidentally mutate the input request (see http.Handler docs)
+			reverseProxy.ServeHTTP(w, r)
+		})
+	}, nil
 }
 
 func ensureNoImpersonationHeaders(r *http.Request) error {

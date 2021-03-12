@@ -450,17 +450,18 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 				tt.restConfig = &testKubeAPIServerKubeconfig
 			}
 
-			impersonatorHTTPHandler, err := newImpersonationReverseProxy(tt.restConfig)
+			impersonatorHTTPHandlerFunc, err := newImpersonationReverseProxyFunc(tt.restConfig)
 			if tt.wantCreationErr != "" {
 				require.EqualError(t, err, tt.wantCreationErr)
+				require.Nil(t, impersonatorHTTPHandlerFunc)
 				return
 			}
 			require.NoError(t, err)
-			require.NotNil(t, impersonatorHTTPHandler)
+			require.NotNil(t, impersonatorHTTPHandlerFunc)
 
 			w := httptest.NewRecorder()
 			requestBeforeServe := tt.request.Clone(tt.request.Context())
-			impersonatorHTTPHandler.ServeHTTP(w, tt.request)
+			impersonatorHTTPHandlerFunc(nil).ServeHTTP(w, tt.request)
 
 			require.Equal(t, requestBeforeServe, tt.request, "ServeHTTP() mutated the request, and it should not per http.Handler docs")
 			if tt.wantHTTPStatus != 0 {

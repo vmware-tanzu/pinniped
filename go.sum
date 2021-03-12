@@ -1528,8 +1528,8 @@ k8s.io/gengo v0.0.0-20201113003025-83324d819ded/go.mod h1:FiNAH4ZV3gBg2Kwh89tzAE
 k8s.io/klog/v2 v2.0.0/go.mod h1:PBfzABfn139FHAV07az/IF9Wp1bkk3vpT2XSJ76fSDE=
 k8s.io/klog/v2 v2.2.0/go.mod h1:Od+F08eJP+W3HUb4pSrPpgp9DGU4GzlpG/TmITuYh/Y=
 k8s.io/klog/v2 v2.4.0/go.mod h1:Od+F08eJP+W3HUb4pSrPpgp9DGU4GzlpG/TmITuYh/Y=
-k8s.io/klog/v2 v2.6.0 h1:c1wFxejFMBkp/VxCdc6kYdgrBkC2gzmcl6afuJAkJyU=
-k8s.io/klog/v2 v2.6.0/go.mod h1:hy9LJ/NvuK+iVyP4Ehqva4HxZG/oXyIS3n3Jmire4Ec=
+k8s.io/klog/v2 v2.7.0 h1:qqqz049vc4dT+0UBxt4BGzvcGr7iVbNiGRYo5NMz1Yc=
+k8s.io/klog/v2 v2.7.0/go.mod h1:hy9LJ/NvuK+iVyP4Ehqva4HxZG/oXyIS3n3Jmire4Ec=
 k8s.io/kube-aggregator v0.20.4 h1:j/SUwPy1eO+ud3XOUGmH18gISPyerqhXOoNRZDbv3fs=
 k8s.io/kube-aggregator v0.20.4/go.mod h1:0ixQ9De7KXyHteXizS6nVtrnKqGa4kiuxl9rEBsNccw=
 k8s.io/kube-openapi v0.0.0-20201113171705-d219536bb9fd h1:sOHNzJIkytDF6qadMNKhhDRpc6ODik8lVC6nOur7B2c=

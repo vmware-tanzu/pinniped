@@ -111,7 +111,7 @@ type ImpersonationProxyInfo struct {
 	// Endpoint is the HTTPS endpoint of the impersonation proxy.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:Pattern=`^https://`
-	Endpoint string `json:"server"`
+	Endpoint string `json:"endpoint"`
 
 	// CertificateAuthorityData is the base64-encoded PEM CA bundle of the impersonation proxy.
 	// +kubebuilder:validation:MinLength=1

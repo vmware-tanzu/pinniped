@@ -328,7 +328,7 @@ Status of a credential issuer.
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`server`* __string__ | Endpoint is the HTTPS endpoint of the impersonation proxy.
+| *`endpoint`* __string__ | Endpoint is the HTTPS endpoint of the impersonation proxy.
 | *`certificateAuthorityData`* __string__ | CertificateAuthorityData is the base64-encoded PEM CA bundle of the impersonation proxy.
 |===
 

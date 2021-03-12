@@ -696,7 +696,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				return proxyURL, nil
 			}
 		}
-		c, r, err := dialer.Dial(dest.String(), nil)
+		c, r, err := dialer.Dial(dest.String(), http.Header{"Origin": {dest.String()}})
 		if r != nil {
 			defer func() {
 				require.NoError(t, r.Body.Close())

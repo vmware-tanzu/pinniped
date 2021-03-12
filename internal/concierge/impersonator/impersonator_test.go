@@ -50,6 +50,13 @@ func TestImpersonator(t *testing.T) {
 	err = certKeyContent.SetCertKeyContent(cert, key)
 	require.NoError(t, err)
 
+	unrelatedCA, err := certauthority.New(pkix.Name{CommonName: "ca"}, time.Hour)
+	require.NoError(t, err)
+	badClientCertPEM, badClientKeyPEM, err := unrelatedCA.IssuePEM(
+		pkix.Name{CommonName: "test-user", Organization: []string{"test-group1"}}, nil, nil, time.Hour,
+	)
+	require.NoError(t, err)
+
 	// Punch out just enough stuff to make New actually run without error.
 	recOpts := func(options *genericoptions.RecommendedOptions) {
 		options.Authentication.RemoteKubeConfigFileOptional = true
@@ -63,9 +70,12 @@ func TestImpersonator(t *testing.T) {
 		name                               string
 		clientUsername                     string
 		clientGroups                       []string
+		clientCertPEM                      string
+		clientKeyPEM                       string
 		clientImpersonateUser              rest.ImpersonationConfig
 		kubeAPIServerClientBearerTokenFile string
 		kubeAPIServerStatusCode            int
+		wantKubeAPIServerRequestHeaders    http.Header
 		wantError                          string
 		wantConstructionError              string
 	}{
@@ -74,10 +84,15 @@ func TestImpersonator(t *testing.T) {
 			clientUsername:                     "test-username",
 			clientGroups:                       []string{"test-group1", "test-group2"},
 			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
-		},
-		{
-			name:                  "no bearer token file in Kube API server client config",
-			wantConstructionError: "invalid impersonator loopback rest config has wrong bearer token semantics",
+			wantKubeAPIServerRequestHeaders: http.Header{
+				"Impersonate-User":  {"test-username"},
+				"Impersonate-Group": {"test-group1", "test-group2", "system:authenticated"},
+				"Authorization":     {"Bearer some-service-account-token"},
+				"User-Agent":        {"test-agent"},
+				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+				"Accept-Encoding":   {"gzip"},
+				"X-Forwarded-For":   {"127.0.0.1"},
+			},
 		},
 		{
 			name:                               "user is authenticated but the kube API request returns an error",
@@ -86,6 +101,37 @@ func TestImpersonator(t *testing.T) {
 			clientGroups:                       []string{"test-group1", "test-group2"},
 			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
 			wantError:                          `the server could not find the requested resource (get namespaces)`,
+			wantKubeAPIServerRequestHeaders: http.Header{
+				"Impersonate-User":  {"test-username"},
+				"Impersonate-Group": {"test-group1", "test-group2", "system:authenticated"},
+				"Authorization":     {"Bearer some-service-account-token"},
+				"User-Agent":        {"test-agent"},
+				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+				"Accept-Encoding":   {"gzip"},
+				"X-Forwarded-For":   {"127.0.0.1"},
+			},
+		},
+		{
+			name:                               "when there is no client cert on request, it is an anonymous request",
+			clientCertPEM:                      "present so we will use the empty keyPEM",
+			clientKeyPEM:                       "",
+			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			wantKubeAPIServerRequestHeaders: http.Header{
+				"Impersonate-User":  {"system:anonymous"},
+				"Impersonate-Group": {"system:unauthenticated"},
+				"Authorization":     {"Bearer some-service-account-token"},
+				"User-Agent":        {"test-agent"},
+				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+				"Accept-Encoding":   {"gzip"},
+				"X-Forwarded-For":   {"127.0.0.1"},
+			},
+		},
+		{
+			name:                               "failed client cert authentication",
+			clientCertPEM:                      string(badClientCertPEM),
+			clientKeyPEM:                       string(badClientKeyPEM),
+			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			wantError:                          "Unauthorized",
 		},
 		{
 			name:                               "double impersonation is not allowed by regular users",
@@ -104,6 +150,10 @@ func TestImpersonator(t *testing.T) {
 			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
 			wantError: `users "some-other-username" is forbidden: User "test-admin" ` +
 				`cannot impersonate resource "users" in API group "" at the cluster scope: impersonation is not allowed or invalid verb`,
+		},
+		{
+			name:                  "no bearer token file in Kube API server client config",
+			wantConstructionError: "invalid impersonator loopback rest config has wrong bearer token semantics",
 		},
 	}
 	for _, tt := range tests {
@@ -181,10 +231,16 @@ func TestImpersonator(t *testing.T) {
 			}()
 
 			// Create client certs for authentication to the impersonator.
-			clientCertPEM, clientKeyPEM, err := ca.IssuePEM(
-				pkix.Name{CommonName: tt.clientUsername, Organization: tt.clientGroups}, nil, nil, time.Hour,
-			)
-			require.NoError(t, err)
+			var clientCertPEM, clientKeyPEM []byte
+			if len(tt.clientCertPEM) == 0 {
+				clientCertPEM, clientKeyPEM, err = ca.IssuePEM(
+					pkix.Name{CommonName: tt.clientUsername, Organization: tt.clientGroups}, nil, nil, time.Hour,
+				)
+				require.NoError(t, err)
+			} else {
+				clientCertPEM = []byte(tt.clientCertPEM)
+				clientKeyPEM = []byte(tt.clientKeyPEM)
+			}
 
 			// Create a kubeconfig to talk to the impersonator as a client.
 			clientKubeconfig := &rest.Config{
@@ -195,7 +251,7 @@ func TestImpersonator(t *testing.T) {
 					KeyData:  clientKeyPEM,
 				},
 				UserAgent: "test-agent",
-				// BearerToken should be ignored during auth because there are valid client certs,
+				// BearerToken should be ignored during auth when there are valid client certs,
 				// and it should not passed into the impersonator handler func as an authorization header.
 				BearerToken: "must-be-ignored",
 				Impersonate: tt.clientImpersonateUser,
@@ -222,18 +278,7 @@ func TestImpersonator(t *testing.T) {
 				// The impersonator should have proxied the request to the fake Kube API server, which should have seen
 				// the headers of the original request mutated by the impersonator.
 				require.True(t, testKubeAPIServerWasCalled)
-				require.Equal(t,
-					http.Header{
-						"Impersonate-User":  {tt.clientUsername},
-						"Impersonate-Group": append(tt.clientGroups, "system:authenticated"),
-						"Authorization":     {"Bearer some-service-account-token"},
-						"User-Agent":        {"test-agent"},
-						"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
-						"Accept-Encoding":   {"gzip"},
-						"X-Forwarded-For":   {"127.0.0.1"},
-					},
-					testKubeAPIServerSawHeaders,
-				)
+				require.Equal(t, tt.wantKubeAPIServerRequestHeaders, testKubeAPIServerSawHeaders)
 			}
 
 			// Stop the impersonator server.

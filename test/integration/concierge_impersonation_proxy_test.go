@@ -597,14 +597,14 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// run the kubectl port-forward command
 		timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancelFunc()
-		portForwardCmd, _, stderr := kubectlCommand(timeout, "port-forward", "--namespace", env.ConciergeNamespace, conciergePod.Name, "8443:8443")
+		portForwardCmd, portForwardStdout, portForwardStderr := kubectlCommand(timeout, "port-forward", "--namespace", env.ConciergeNamespace, conciergePod.Name, "8443:8443")
 		portForwardCmd.Env = envVarsWithProxy
 
 		// start, but don't wait for the command to finish
 		err = portForwardCmd.Start()
 		require.NoError(t, err, `"kubectl port-forward" failed`)
 		go func() {
-			assert.EqualErrorf(t, portForwardCmd.Wait(), "signal: killed", `wanted "kubectl port-forward" to get signaled because context was cancelled (stderr: %q)`, stderr.String())
+			assert.EqualErrorf(t, portForwardCmd.Wait(), "signal: killed", `wanted "kubectl port-forward" to get signaled because context was cancelled (stderr: %q)`, portForwardStderr.String())
 		}()
 
 		// then run curl something against it
@@ -622,7 +622,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			t.Log("stdout: " + curlStdOut.String())
 		}
 		// we expect this to 403, but all we care is that it gets through
-		require.Contains(t, curlStdOut.String(), "\"forbidden: User \\\"system:anonymous\\\" cannot get path \\\"/\\\"\"")
+		require.Containsf(t, curlStdOut.String(), "\"forbidden: User \\\"system:anonymous\\\" cannot get path \\\"/\\\"\"", "unexpected curl response\nport-forward stdout:\n%q\nport-forward stderr:\n%q", portForwardStdout.String(), portForwardStderr.String())
 
 		// run the kubectl attach command
 		namespaceName := createTestNamespace(t, adminClient)

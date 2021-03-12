@@ -566,9 +566,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				conciergePod = &pod
 			}
 		}
-		if conciergePod == nil {
-			t.Error("could not find a concierge pod")
-		}
+		require.NotNil(t, conciergePod, "could not find a concierge pod")
 
 		// Try "kubectl exec" through the impersonation proxy.
 		echoString := "hello world"
@@ -788,13 +786,17 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		dest, _ := url.Parse(impersonationProxyURL)
 		dest.Path = "/api/v1/namespaces/" + namespaceName + "/configmaps/configmap-1"
-		response, err := httpClient.Get(dest.String())
+		getConfigmapRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, dest.String(), nil)
+		require.NoError(t, err)
+		response, err := httpClient.Do(getConfigmapRequest)
 		require.NoError(t, err)
 		body, _ := ioutil.ReadAll(response.Body)
 		t.Logf("http2 status code: %d, proto: %s, message: %s", response.StatusCode, response.Proto, body)
 		require.Equal(t, "HTTP/2.0", response.Proto)
 		require.Equal(t, http.StatusOK, response.StatusCode)
-		defer response.Body.Close()
+		defer func() {
+			require.NoError(t, response.Body.Close())
+		}()
 		var actualConfigMap corev1.ConfigMap
 		require.NoError(t, json.Unmarshal(body, &actualConfigMap))
 		actualConfigMap.TypeMeta = metav1.TypeMeta{} // This isn't filled out in the wantConfigMap we got back from create.
@@ -807,11 +809,15 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			"labelSelector":   {fmt.Sprintf("%s=%s", wantConfigMapLabelKey, wantConfigMapLabelValue)},
 			"resourceVersion": {"0"},
 		}.Encode()
-		response, err = httpClient.Get(dest.String())
+		watchConfigmapsRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, dest.String(), nil)
+		require.NoError(t, err)
+		response, err = httpClient.Do(watchConfigmapsRequest)
 		require.NoError(t, err)
 		require.Equal(t, "HTTP/2.0", response.Proto)
 		require.Equal(t, http.StatusOK, response.StatusCode)
-		defer response.Body.Close()
+		defer func() {
+			require.NoError(t, response.Body.Close())
+		}()
 
 		// decode
 		decoder := json.NewDecoder(response.Body)

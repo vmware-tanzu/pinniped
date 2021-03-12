@@ -210,7 +210,6 @@ func newImpersonationReverseProxy(restConfig *rest.Config) (http.Handler, error)
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// TODO integration test using a bearer token
 		if len(r.Header.Values("Authorization")) != 0 {
 			plog.Warning("aggregated API server logic did not delete authorization header but it is always supposed to do so",
 				"url", r.URL.String(),

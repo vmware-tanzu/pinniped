@@ -149,6 +149,8 @@ func TestImpersonator(t *testing.T) {
 					require.Fail(t, "fake Kube API server got an unexpected request")
 				}
 			})
+
+			// Create the client config that the impersonation server should use to talk to the Kube API server.
 			testKubeAPIServerKubeconfig := rest.Config{
 				Host:            testKubeAPIServerURL,
 				BearerToken:     "some-service-account-token",
@@ -192,7 +194,10 @@ func TestImpersonator(t *testing.T) {
 					CertData: clientCertPEM,
 					KeyData:  clientKeyPEM,
 				},
-				UserAgent:   "test-agent",
+				UserAgent: "test-agent",
+				// BearerToken should be ignored during auth because there are valid client certs,
+				// and it should not passed into the impersonator handler func as an authorization header.
+				BearerToken: "must-be-ignored",
 				Impersonate: tt.clientImpersonateUser,
 			}
 
@@ -405,40 +410,44 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if tt.kubeAPIServerStatusCode == 0 {
 				tt.kubeAPIServerStatusCode = http.StatusOK
 			}
 
-			serverWasCalled := false
-			serverSawHeaders := http.Header{}
-			testServerCA, testServerURL := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-				serverWasCalled = true
-				serverSawHeaders = r.Header
+			testKubeAPIServerWasCalled := false
+			testKubeAPIServerSawHeaders := http.Header{}
+			testKubeAPIServerCA, testKubeAPIServerURL := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				testKubeAPIServerWasCalled = true
+				testKubeAPIServerSawHeaders = r.Header
 				if tt.kubeAPIServerStatusCode != http.StatusOK {
 					w.WriteHeader(tt.kubeAPIServerStatusCode)
 				} else {
 					_, _ = w.Write([]byte("successful proxied response"))
 				}
 			})
-			testServerKubeconfig := rest.Config{
-				Host:            testServerURL,
+			testKubeAPIServerKubeconfig := rest.Config{
+				Host:            testKubeAPIServerURL,
 				BearerToken:     "some-service-account-token",
-				TLSClientConfig: rest.TLSClientConfig{CAData: []byte(testServerCA)},
+				TLSClientConfig: rest.TLSClientConfig{CAData: []byte(testKubeAPIServerCA)},
 			}
 			if tt.restConfig == nil {
-				tt.restConfig = &testServerKubeconfig
+				tt.restConfig = &testKubeAPIServerKubeconfig
 			}
 
-			proxy, err := newImpersonationReverseProxy(tt.restConfig)
+			impersonatorHTTPHandler, err := newImpersonationReverseProxy(tt.restConfig)
 			if tt.wantCreationErr != "" {
 				require.EqualError(t, err, tt.wantCreationErr)
 				return
 			}
 			require.NoError(t, err)
-			require.NotNil(t, proxy)
+			require.NotNil(t, impersonatorHTTPHandler)
+
 			w := httptest.NewRecorder()
 			requestBeforeServe := tt.request.Clone(tt.request.Context())
-			proxy.ServeHTTP(w, tt.request)
+			impersonatorHTTPHandler.ServeHTTP(w, tt.request)
+
 			require.Equal(t, requestBeforeServe, tt.request, "ServeHTTP() mutated the request, and it should not per http.Handler docs")
 			if tt.wantHTTPStatus != 0 {
 				require.Equalf(t, tt.wantHTTPStatus, w.Code, "fyi, response body was %q", w.Body.String())
@@ -448,10 +457,10 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 			}
 
 			if tt.wantHTTPStatus == http.StatusOK || tt.kubeAPIServerStatusCode != http.StatusOK {
-				require.True(t, serverWasCalled, "Should have proxied the request to the Kube API server, but didn't")
-				require.Equal(t, tt.wantKubeAPIServerRequestHeaders, serverSawHeaders)
+				require.True(t, testKubeAPIServerWasCalled, "Should have proxied the request to the Kube API server, but didn't")
+				require.Equal(t, tt.wantKubeAPIServerRequestHeaders, testKubeAPIServerSawHeaders)
 			} else {
-				require.False(t, serverWasCalled, "Should not have proxied the request to the Kube API server, but did")
+				require.False(t, testKubeAPIServerWasCalled, "Should not have proxied the request to the Kube API server, but did")
 			}
 		})
 	}

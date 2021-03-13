@@ -4,7 +4,6 @@
 package apicerts
 
 import (
-	"crypto/x509/pkix"
 	"fmt"
 	"time"
 
@@ -94,7 +93,7 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 	}
 
 	// Create a CA.
-	ca, err := certauthority.New(pkix.Name{CommonName: c.generatedCACommonName}, c.certDuration)
+	ca, err := certauthority.New(c.generatedCACommonName, c.certDuration)
 	if err != nil {
 		return fmt.Errorf("could not initialize CA: %w", err)
 	}
@@ -120,12 +119,7 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 	// Using the CA from above, create a TLS server cert if we have service name.
 	if len(c.serviceNameForGeneratedCertCommonName) != 0 {
 		serviceEndpoint := c.serviceNameForGeneratedCertCommonName + "." + c.namespace + ".svc"
-		tlsCert, err := ca.Issue(
-			pkix.Name{CommonName: serviceEndpoint},
-			[]string{serviceEndpoint},
-			nil,
-			c.certDuration,
-		)
+		tlsCert, err := ca.IssueServerCert([]string{serviceEndpoint}, nil, c.certDuration)
 		if err != nil {
 			return fmt.Errorf("could not issue serving certificate: %w", err)
 		}

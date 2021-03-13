@@ -4,7 +4,6 @@
 package issuer
 
 import (
-	"crypto/x509/pkix"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/errors"
@@ -14,19 +13,19 @@ import (
 
 const defaultCertIssuerErr = constable.Error("failed to issue cert")
 
-type CertIssuer interface {
-	IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) (certPEM, keyPEM []byte, err error)
+type ClientCertIssuer interface {
+	IssueClientCertPEM(username string, groups []string, ttl time.Duration) (certPEM, keyPEM []byte, err error)
 }
 
-var _ CertIssuer = CertIssuers{}
+var _ ClientCertIssuer = ClientCertIssuers{}
 
-type CertIssuers []CertIssuer
+type ClientCertIssuers []ClientCertIssuer
 
-func (c CertIssuers) IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) ([]byte, []byte, error) {
+func (c ClientCertIssuers) IssueClientCertPEM(username string, groups []string, ttl time.Duration) ([]byte, []byte, error) {
 	var errs []error
 
 	for _, issuer := range c {
-		certPEM, keyPEM, err := issuer.IssuePEM(subject, dnsNames, ttl)
+		certPEM, keyPEM, err := issuer.IssueClientCertPEM(username, groups, ttl)
 		if err != nil {
 			errs = append(errs, err)
 			continue

@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
@@ -352,7 +351,10 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					require.NoError(t, err)
 					roots := x509.NewCertPool()
 					require.True(t, roots.AppendCertsFromPEM(currentClientCertCA))
-					opts := x509.VerifyOptions{Roots: roots}
+					opts := x509.VerifyOptions{
+						Roots:     roots,
+						KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+					}
 					_, err = parsed.Verify(opts)
 					require.NoError(t, err)
 					return nil
@@ -594,7 +596,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		}
 
 		var newCA = func() *certauthority.CA {
-			ca, err := certauthority.New(pkix.Name{CommonName: "test CA"}, 24*time.Hour)
+			ca, err := certauthority.New("test CA", 24*time.Hour)
 			r.NoError(err)
 			return ca
 		}
@@ -609,7 +611,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		}
 
 		var newTLSCertSecretData = func(ca *certauthority.CA, dnsNames []string, ip string) map[string][]byte {
-			impersonationCert, err := ca.Issue(pkix.Name{}, dnsNames, []net.IP{net.ParseIP(ip)}, 24*time.Hour)
+			impersonationCert, err := ca.IssueServerCert(dnsNames, []net.IP{net.ParseIP(ip)}, 24*time.Hour)
 			r.NoError(err)
 			certPEM, keyPEM, err := certauthority.ToPEM(impersonationCert)
 			r.NoError(err)
@@ -939,7 +941,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			createdKeyPEM := createdSecret.Data[corev1.TLSPrivateKeyKey]
 			r.NotNil(createdKeyPEM)
 			r.NotNil(createdCertPEM)
-			validCert := testutil.ValidateCertificate(t, string(caCert), string(createdCertPEM))
+			validCert := testutil.ValidateServerCertificate(t, string(caCert), string(createdCertPEM))
 			validCert.RequireMatchesPrivateKey(string(createdKeyPEM))
 			validCert.RequireLifetime(time.Now().Add(-10*time.Second), time.Now().Add(100*time.Hour*24*365), 10*time.Second)
 		}
@@ -980,7 +982,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			signingCAKeyPEM, err = ca.PrivateKeyToPEM()
 			r.NoError(err)
 			signingCASecret = newSigningKeySecret(caSignerName, signingCACertPEM, signingCAKeyPEM)
-			validClientCert, err = ca.Issue(pkix.Name{}, nil, nil, time.Hour)
+			validClientCert, err = ca.IssueClientCert("username", nil, time.Hour)
 			r.NoError(err)
 		})
 

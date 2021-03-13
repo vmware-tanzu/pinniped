@@ -6,7 +6,6 @@
 package dynamiccertauthority
 
 import (
-	"crypto/x509/pkix"
 	"time"
 
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
@@ -27,14 +26,14 @@ func New(provider dynamiccertificates.CertKeyContentProvider) *CA {
 	}
 }
 
-// IssuePEM issues a new server certificate for the given identity and duration, returning it as a
+// IssueClientCertPEM issues a new client certificate for the given identity and duration, returning it as a
 // pair of PEM-formatted byte slices for the certificate and private key.
-func (c *CA) IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) ([]byte, []byte, error) {
+func (c *CA) IssueClientCertPEM(username string, groups []string, ttl time.Duration) ([]byte, []byte, error) {
 	caCrtPEM, caKeyPEM := c.provider.CurrentCertKeyContent()
 	ca, err := certauthority.Load(string(caCrtPEM), string(caKeyPEM))
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return ca.IssuePEM(subject, dnsNames, nil, ttl)
+	return ca.IssueClientCertPEM(username, groups, ttl)
 }

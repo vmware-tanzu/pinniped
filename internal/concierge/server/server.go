@@ -150,7 +150,7 @@ func (a *App) runServer(ctx context.Context) error {
 		return fmt.Errorf("could not prepare controllers: %w", err)
 	}
 
-	certIssuer := issuer.CertIssuers{
+	certIssuer := issuer.ClientCertIssuers{
 		dynamiccertauthority.New(dynamicSigningCertProvider),            // attempt to use the real Kube CA if possible
 		dynamiccertauthority.New(impersonationProxySigningCertProvider), // fallback to our internal CA if we need to
 	}
@@ -184,7 +184,7 @@ func (a *App) runServer(ctx context.Context) error {
 func getAggregatedAPIServerConfig(
 	dynamicCertProvider dynamiccert.Provider,
 	authenticator credentialrequest.TokenCredentialRequestAuthenticator,
-	issuer issuer.CertIssuer,
+	issuer issuer.ClientCertIssuer,
 	startControllersPostStartHook func(context.Context),
 	apiGroupSuffix string,
 	scheme *runtime.Scheme,

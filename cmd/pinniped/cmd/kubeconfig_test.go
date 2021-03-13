@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/x509/pkix"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -30,13 +29,13 @@ import (
 )
 
 func TestGetKubeconfig(t *testing.T) {
-	testOIDCCA, err := certauthority.New(pkix.Name{CommonName: "Test CA"}, 1*time.Hour)
+	testOIDCCA, err := certauthority.New("Test CA", 1*time.Hour)
 	require.NoError(t, err)
 	tmpdir := testutil.TempDir(t)
 	testOIDCCABundlePath := filepath.Join(tmpdir, "testca.pem")
 	require.NoError(t, ioutil.WriteFile(testOIDCCABundlePath, testOIDCCA.Bundle(), 0600))
 
-	testConciergeCA, err := certauthority.New(pkix.Name{CommonName: "Test Concierge CA"}, 1*time.Hour)
+	testConciergeCA, err := certauthority.New("Test Concierge CA", 1*time.Hour)
 	require.NoError(t, err)
 	testConciergeCABundlePath := filepath.Join(tmpdir, "testconciergeca.pem")
 	require.NoError(t, ioutil.WriteFile(testConciergeCABundlePath, testConciergeCA.Bundle(), 0600))

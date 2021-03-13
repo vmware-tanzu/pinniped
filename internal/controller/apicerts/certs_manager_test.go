@@ -218,12 +218,12 @@ func TestManagerControllerSync(t *testing.T) {
 				r.NotEmpty(actualCertChain)
 				r.Len(actualSecret.StringData, 4)
 
-				validCACert := testutil.ValidateCertificate(t, actualCACert, actualCACert)
+				validCACert := testutil.ValidateServerCertificate(t, actualCACert, actualCACert)
 				validCACert.RequireMatchesPrivateKey(actualCAPrivateKey)
 				validCACert.RequireLifetime(time.Now(), time.Now().Add(certDuration), 6*time.Minute)
 
 				// Validate the created cert using the CA, and also validate the cert's hostname
-				validCert := testutil.ValidateCertificate(t, actualCACert, actualCertChain)
+				validCert := testutil.ValidateServerCertificate(t, actualCACert, actualCertChain)
 				validCert.RequireDNSName("pinniped-api." + installedInNamespace + ".svc")
 				validCert.RequireLifetime(time.Now(), time.Now().Add(certDuration), 6*time.Minute)
 				validCert.RequireMatchesPrivateKey(actualPrivateKey)
@@ -252,7 +252,7 @@ func TestManagerControllerSync(t *testing.T) {
 				r.NotEmpty(actualCAPrivateKey)
 				r.Len(actualSecret.StringData, 2)
 
-				validCACert := testutil.ValidateCertificate(t, actualCACert, actualCACert)
+				validCACert := testutil.ValidateServerCertificate(t, actualCACert, actualCACert)
 				validCACert.RequireMatchesPrivateKey(actualCAPrivateKey)
 				validCACert.RequireLifetime(time.Now(), time.Now().Add(certDuration), 6*time.Minute)
 			})

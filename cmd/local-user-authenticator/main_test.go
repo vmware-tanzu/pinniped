@@ -8,7 +8,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -464,10 +463,10 @@ func newCertProvider(t *testing.T) (dynamiccert.Provider, []byte, string) {
 
 	serverName := "local-user-authenticator"
 
-	ca, err := certauthority.New(pkix.Name{CommonName: serverName + " CA"}, time.Hour*24)
+	ca, err := certauthority.New(serverName+" CA", time.Hour*24)
 	require.NoError(t, err)
 
-	cert, err := ca.Issue(pkix.Name{CommonName: serverName}, []string{serverName}, nil, time.Hour*24)
+	cert, err := ca.IssueServerCert([]string{serverName}, nil, time.Hour*24)
 	require.NoError(t, err)
 
 	certPEM, keyPEM, err := certauthority.ToPEM(cert)

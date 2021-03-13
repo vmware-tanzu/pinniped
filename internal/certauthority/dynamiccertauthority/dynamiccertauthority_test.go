@@ -1,10 +1,9 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package dynamiccertauthority
 
 import (
-	"crypto/x509/pkix"
 	"testing"
 	"time"
 
@@ -106,10 +105,9 @@ func TestCAIssuePEM(t *testing.T) {
 				require.NotEmpty(t, keyPEM)
 
 				caCrtPEM, _ := provider.CurrentCertKeyContent()
-				crtAssertions := testutil.ValidateCertificate(t, string(caCrtPEM), string(crtPEM))
-				crtAssertions.RequireCommonName("some-common-name")
-				crtAssertions.RequireDNSName("some-dns-name")
-				crtAssertions.RequireDNSName("some-other-dns-name")
+				crtAssertions := testutil.ValidateClientCertificate(t, string(caCrtPEM), string(crtPEM))
+				crtAssertions.RequireCommonName("some-username")
+				crtAssertions.RequireOrganizations([]string{"some-group1", "some-group2"})
 				crtAssertions.RequireLifetime(time.Now(), time.Now().Add(time.Hour*24), time.Minute*10)
 				crtAssertions.RequireMatchesPrivateKey(string(keyPEM))
 			}
@@ -126,11 +124,5 @@ func issuePEM(provider dynamiccert.Provider, ca *CA, caCrt, caKey []byte) ([]byt
 	}
 
 	// otherwise check to see if their is an issuing error
-	return ca.IssuePEM(
-		pkix.Name{
-			CommonName: "some-common-name",
-		},
-		[]string{"some-dns-name", "some-other-dns-name"},
-		time.Hour*24,
-	)
+	return ca.IssueClientCertPEM("some-username", []string{"some-group1", "some-group2"}, time.Hour*24)
 }

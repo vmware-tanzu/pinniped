@@ -6,7 +6,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"crypto/x509/pkix"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -29,7 +28,7 @@ import (
 func TestLoginOIDCCommand(t *testing.T) {
 	cfgDir := mustGetConfigDir()
 
-	testCA, err := certauthority.New(pkix.Name{CommonName: "Test CA"}, 1*time.Hour)
+	testCA, err := certauthority.New("Test CA", 1*time.Hour)
 	require.NoError(t, err)
 	tmpdir := testutil.TempDir(t)
 	testCABundlePath := filepath.Join(tmpdir, "testca.pem")

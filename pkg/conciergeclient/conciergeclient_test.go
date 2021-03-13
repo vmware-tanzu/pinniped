@@ -5,7 +5,6 @@ package conciergeclient
 
 import (
 	"context"
-	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -26,7 +25,7 @@ import (
 
 func TestNew(t *testing.T) {
 	t.Parallel()
-	testCA, err := certauthority.New(pkix.Name{}, 1*time.Hour)
+	testCA, err := certauthority.New("Test CA", 1*time.Hour)
 	require.NoError(t, err)
 
 	tests := []struct {

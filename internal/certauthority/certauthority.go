@@ -89,13 +89,13 @@ func Load(certPEM string, keyPEM string) (*CA, error) {
 	}, nil
 }
 
-// New generates a fresh certificate authority with the given subject and ttl.
-func New(subject pkix.Name, ttl time.Duration) (*CA, error) {
-	return newInternal(subject, ttl, secureEnv())
+// New generates a fresh certificate authority with the given Common Name and TTL.
+func New(commonName string, ttl time.Duration) (*CA, error) {
+	return newInternal(commonName, ttl, secureEnv())
 }
 
 // newInternal is the internal guts of New, broken out for easier testing.
-func newInternal(subject pkix.Name, ttl time.Duration, env env) (*CA, error) {
+func newInternal(commonName string, ttl time.Duration, env env) (*CA, error) {
 	ca := CA{env: env}
 	// Generate a random serial for the CA
 	serialNumber, err := randomSerial(env.serialRNG)
@@ -118,7 +118,7 @@ func newInternal(subject pkix.Name, ttl time.Duration, env env) (*CA, error) {
 	// Create CA cert template
 	caTemplate := x509.Certificate{
 		SerialNumber:          serialNumber,
-		Subject:               subject,
+		Subject:               pkix.Name{CommonName: commonName},
 		NotBefore:             notBefore,
 		NotAfter:              notAfter,
 		IsCA:                  true,
@@ -160,8 +160,31 @@ func (c *CA) Pool() *x509.CertPool {
 	return pool
 }
 
-// Issue a new server certificate for the given identity and duration.
-func (c *CA) Issue(subject pkix.Name, dnsNames []string, ips []net.IP, ttl time.Duration) (*tls.Certificate, error) {
+// IssueClientCert issues a new client certificate with username and groups included in the Kube-style
+// certificate subject for the given identity and duration.
+func (c *CA) IssueClientCert(username string, groups []string, ttl time.Duration) (*tls.Certificate, error) {
+	return c.issueCert(x509.ExtKeyUsageClientAuth, pkix.Name{CommonName: username, Organization: groups}, nil, nil, ttl)
+}
+
+// IssueServerCert issues a new server certificate for the given identity and duration.
+// The dnsNames and ips are each optional, but at least one of them should be specified.
+func (c *CA) IssueServerCert(dnsNames []string, ips []net.IP, ttl time.Duration) (*tls.Certificate, error) {
+	return c.issueCert(x509.ExtKeyUsageServerAuth, pkix.Name{}, dnsNames, ips, ttl)
+}
+
+// Similar to IssueClientCert, but returning the new cert as a pair of PEM-formatted byte slices
+// for the certificate and private key.
+func (c *CA) IssueClientCertPEM(username string, groups []string, ttl time.Duration) ([]byte, []byte, error) {
+	return toPEM(c.IssueClientCert(username, groups, ttl))
+}
+
+// Similar to IssueServerCert, but returning the new cert as a pair of PEM-formatted byte slices
+// for the certificate and private key.
+func (c *CA) IssueServerCertPEM(dnsNames []string, ips []net.IP, ttl time.Duration) ([]byte, []byte, error) {
+	return toPEM(c.IssueServerCert(dnsNames, ips, ttl))
+}
+
+func (c *CA) issueCert(extKeyUsage x509.ExtKeyUsage, subject pkix.Name, dnsNames []string, ips []net.IP, ttl time.Duration) (*tls.Certificate, error) {
 	// Choose a random 128 bit serial number.
 	serialNumber, err := randomSerial(c.env.serialRNG)
 	if err != nil {
@@ -187,13 +210,11 @@ func (c *CA) Issue(subject pkix.Name, dnsNames []string, ips []net.IP, ttl time.
 
 	// Sign a cert, getting back the DER-encoded certificate bytes.
 	template := x509.Certificate{
-		SerialNumber: serialNumber,
-		Subject:      subject,
-		NotBefore:    notBefore,
-		NotAfter:     notAfter,
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-		// TODO split this function into two funcs that handle client and serving certs differently
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		SerialNumber:          serialNumber,
+		Subject:               subject,
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		ExtKeyUsage:           []x509.ExtKeyUsage{extKeyUsage},
 		BasicConstraintsValid: true,
 		IsCA:                  false,
 		DNSNames:              dnsNames,
@@ -218,14 +239,8 @@ func (c *CA) Issue(subject pkix.Name, dnsNames []string, ips []net.IP, ttl time.
 	}, nil
 }
 
-// IssuePEM issues a new server certificate for the given identity and duration, returning it as a pair of
-// PEM-formatted byte slices for the certificate and private key.
-func (c *CA) IssuePEM(subject pkix.Name, dnsNames []string, ips []net.IP, ttl time.Duration) ([]byte, []byte, error) {
-	return toPEM(c.Issue(subject, dnsNames, ips, ttl))
-}
-
 func toPEM(cert *tls.Certificate, err error) ([]byte, []byte, error) {
-	// If the wrapped Issue() returned an error, pass it back.
+	// If the wrapped IssueServerCert() returned an error, pass it back.
 	if err != nil {
 		return nil, nil, err
 	}

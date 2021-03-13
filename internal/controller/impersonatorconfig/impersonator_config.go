@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
@@ -40,13 +39,13 @@ import (
 )
 
 const (
-	impersonationProxyPort = 8444
-	defaultHTTPSPort       = 443
-	oneHundredYears        = 100 * 365 * 24 * time.Hour
-	caCommonName           = "Pinniped Impersonation Proxy CA"
-	caCrtKey               = "ca.crt"
-	caKeyKey               = "ca.key"
-	appLabelKey            = "app"
+	impersonationProxyPort       = 8444
+	defaultHTTPSPort             = 443
+	approximatelyOneHundredYears = 100 * 365 * 24 * time.Hour
+	caCommonName                 = "Pinniped Impersonation Proxy CA"
+	caCrtKey                     = "ca.crt"
+	caKeyKey                     = "ca.key"
+	appLabelKey                  = "app"
 )
 
 type impersonatorConfigController struct {
@@ -622,7 +621,7 @@ func (c *impersonatorConfigController) ensureCASecretIsCreated(ctx context.Conte
 }
 
 func (c *impersonatorConfigController) createCASecret(ctx context.Context) (*certauthority.CA, error) {
-	impersonationCA, err := certauthority.New(pkix.Name{CommonName: caCommonName}, oneHundredYears)
+	impersonationCA, err := certauthority.New(caCommonName, approximatelyOneHundredYears)
 	if err != nil {
 		return nil, fmt.Errorf("could not create impersonation CA: %w", err)
 	}
@@ -716,7 +715,7 @@ func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, c
 		ips = []net.IP{ip}
 	}
 
-	impersonationCert, err := ca.Issue(pkix.Name{}, hostnames, ips, oneHundredYears)
+	impersonationCert, err := ca.IssueServerCert(hostnames, ips, approximatelyOneHundredYears)
 	if err != nil {
 		return nil, fmt.Errorf("could not create impersonation cert: %w", err)
 	}

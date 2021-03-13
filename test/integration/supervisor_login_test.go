@@ -6,7 +6,6 @@ package integration
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -58,7 +57,7 @@ func TestSupervisorLogin(t *testing.T) {
 
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")
-	ca, err := certauthority.New(pkix.Name{CommonName: "Downstream Test CA"}, 1*time.Hour)
+	ca, err := certauthority.New("Downstream Test CA", 1*time.Hour)
 	require.NoError(t, err)
 
 	// Create an HTTP client that can reach the downstream discovery endpoint using the CA certs.
@@ -85,12 +84,7 @@ func TestSupervisorLogin(t *testing.T) {
 
 	// Use the CA to issue a TLS server cert.
 	t.Logf("issuing test certificate")
-	tlsCert, err := ca.Issue(
-		pkix.Name{CommonName: issuerURL.Hostname()},
-		[]string{issuerURL.Hostname()},
-		nil,
-		1*time.Hour,
-	)
+	tlsCert, err := ca.IssueServerCert([]string{issuerURL.Hostname()}, nil, 1*time.Hour)
 	require.NoError(t, err)
 	certPEM, keyPEM, err := certauthority.ToPEM(tlsCert)
 	require.NoError(t, err)

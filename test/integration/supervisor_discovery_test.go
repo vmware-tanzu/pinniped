@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -288,11 +287,11 @@ func defaultTLSCertSecretName(env *library.TestEnv) string {
 
 func createTLSCertificateSecret(ctx context.Context, t *testing.T, ns string, hostname string, ips []net.IP, secretName string, kubeClient kubernetes.Interface) *certauthority.CA {
 	// Create a CA.
-	ca, err := certauthority.New(pkix.Name{CommonName: "Acme Corp"}, 1000*time.Hour)
+	ca, err := certauthority.New("Acme Corp", 1000*time.Hour)
 	require.NoError(t, err)
 
 	// Using the CA, create a TLS server cert.
-	tlsCert, err := ca.Issue(pkix.Name{CommonName: hostname}, []string{hostname}, ips, 1000*time.Hour)
+	tlsCert, err := ca.IssueServerCert([]string{hostname}, ips, 1000*time.Hour)
 	require.NoError(t, err)
 
 	// Write the serving cert to the SNI secret.

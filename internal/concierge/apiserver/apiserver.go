@@ -28,7 +28,7 @@ type Config struct {
 
 type ExtraConfig struct {
 	Authenticator                 credentialrequest.TokenCredentialRequestAuthenticator
-	Issuer                        issuer.CertIssuer
+	Issuer                        issuer.ClientCertIssuer
 	StartControllersPostStartHook func(ctx context.Context)
 	Scheme                        *runtime.Scheme
 	NegotiatedSerializer          runtime.NegotiatedSerializer

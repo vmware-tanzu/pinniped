@@ -7,7 +7,6 @@ import (
 	"crypto"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -17,6 +16,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"go.pinniped.dev/internal/testutil"
 )
 
 func loadFromFiles(t *testing.T, certPath string, keyPath string) (*CA, error) {
@@ -87,7 +88,7 @@ func TestLoad(t *testing.T) {
 
 func TestNew(t *testing.T) {
 	now := time.Now()
-	ca, err := New(pkix.Name{CommonName: "Test CA"}, time.Minute)
+	ca, err := New("Test CA", time.Minute)
 	require.NoError(t, err)
 	require.NotNil(t, ca)
 
@@ -158,7 +159,7 @@ func TestNewInternal(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := newInternal(pkix.Name{CommonName: "Test CA"}, tt.ttl, tt.env)
+			got, err := newInternal("Test CA", tt.ttl, tt.env)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				require.Nil(t, got)
@@ -184,7 +185,7 @@ func TestBundle(t *testing.T) {
 }
 
 func TestPrivateKeyToPEM(t *testing.T) {
-	ca, err := New(pkix.Name{CommonName: "Test CA"}, time.Hour)
+	ca, err := New("Test CA", time.Hour)
 	require.NoError(t, err)
 	keyPEM, err := ca.PrivateKeyToPEM()
 	require.NoError(t, err)
@@ -201,7 +202,7 @@ func TestPrivateKeyToPEM(t *testing.T) {
 }
 
 func TestPool(t *testing.T) {
-	ca, err := New(pkix.Name{CommonName: "test"}, 1*time.Hour)
+	ca, err := New("test", 1*time.Hour)
 	require.NoError(t, err)
 
 	pool := ca.Pool()
@@ -220,6 +221,8 @@ func (e *errSigner) Sign(_ io.Reader, _ []byte, _ crypto.SignerOpts) ([]byte, er
 }
 
 func TestIssue(t *testing.T) {
+	const numRandBytes = 64 * 2 // each call to issue a cert will consume 64 bytes from the reader
+
 	now := time.Date(2020, 7, 10, 12, 41, 12, 1234, time.UTC)
 
 	realCA, err := loadFromFiles(t, "./testdata/test.crt", "./testdata/test.key")
@@ -243,7 +246,7 @@ func TestIssue(t *testing.T) {
 			name: "failed to generate keypair",
 			ca: CA{
 				env: env{
-					serialRNG: strings.NewReader(strings.Repeat("x", 64)),
+					serialRNG: strings.NewReader(strings.Repeat("x", numRandBytes)),
 					keygenRNG: strings.NewReader(""),
 				},
 			},
@@ -253,8 +256,8 @@ func TestIssue(t *testing.T) {
 			name: "invalid CA certificate",
 			ca: CA{
 				env: env{
-					serialRNG: strings.NewReader(strings.Repeat("x", 64)),
-					keygenRNG: strings.NewReader(strings.Repeat("x", 64)),
+					serialRNG: strings.NewReader(strings.Repeat("x", numRandBytes)),
+					keygenRNG: strings.NewReader(strings.Repeat("x", numRandBytes)),
 					clock:     func() time.Time { return now },
 				},
 			},
@@ -264,8 +267,8 @@ func TestIssue(t *testing.T) {
 			name: "signing error",
 			ca: CA{
 				env: env{
-					serialRNG: strings.NewReader(strings.Repeat("x", 64)),
-					keygenRNG: strings.NewReader(strings.Repeat("x", 64)),
+					serialRNG: strings.NewReader(strings.Repeat("x", numRandBytes)),
+					keygenRNG: strings.NewReader(strings.Repeat("x", numRandBytes)),
 					clock:     func() time.Time { return now },
 				},
 				caCertBytes: realCA.caCertBytes,
@@ -277,11 +280,11 @@ func TestIssue(t *testing.T) {
 			wantErr: "could not sign certificate: some signer error",
 		},
 		{
-			name: "success",
+			name: "parse certificate error",
 			ca: CA{
 				env: env{
-					serialRNG: strings.NewReader(strings.Repeat("x", 64)),
-					keygenRNG: strings.NewReader(strings.Repeat("x", 64)),
+					serialRNG: strings.NewReader(strings.Repeat("x", numRandBytes)),
+					keygenRNG: strings.NewReader(strings.Repeat("x", numRandBytes)),
 					clock:     func() time.Time { return now },
 					parseCert: func(_ []byte) (*x509.Certificate, error) {
 						return nil, fmt.Errorf("some parse certificate error")
@@ -296,8 +299,8 @@ func TestIssue(t *testing.T) {
 			name: "success",
 			ca: CA{
 				env: env{
-					serialRNG: strings.NewReader(strings.Repeat("x", 64)),
-					keygenRNG: strings.NewReader(strings.Repeat("x", 64)),
+					serialRNG: strings.NewReader(strings.Repeat("x", numRandBytes)),
+					keygenRNG: strings.NewReader(strings.Repeat("x", numRandBytes)),
 					clock:     func() time.Time { return now },
 					parseCert: x509.ParseCertificate,
 				},
@@ -309,26 +312,24 @@ func TestIssue(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.ca.Issue(pkix.Name{CommonName: "Test Server"}, []string{"example.com"}, []net.IP{net.IPv4(1, 2, 3, 4)}, 10*time.Minute)
+			got, err := tt.ca.IssueServerCert([]string{"example.com"}, []net.IP{net.IPv4(1, 2, 3, 4)}, 10*time.Minute)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				require.Nil(t, got)
-				return
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, got)
 			}
-			require.NoError(t, err)
-			require.NotNil(t, got)
+			got, err = tt.ca.IssueClientCert("test-user", []string{"group1", "group2"}, 10*time.Minute)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+				require.Nil(t, got)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, got)
+			}
 		})
 	}
-}
-
-func TestIssuePEM(t *testing.T) {
-	realCA, err := loadFromFiles(t, "./testdata/test.crt", "./testdata/test.key")
-	require.NoError(t, err)
-
-	certPEM, keyPEM, err := realCA.IssuePEM(pkix.Name{CommonName: "Test Server"}, []string{"example.com"}, nil, 10*time.Minute)
-	require.NoError(t, err)
-	require.NotEmpty(t, certPEM)
-	require.NotEmpty(t, keyPEM)
 }
 
 func TestToPEM(t *testing.T) {
@@ -357,4 +358,91 @@ func TestToPEM(t *testing.T) {
 		require.NotEmpty(t, certPEM)
 		require.NotEmpty(t, keyPEM)
 	})
+}
+
+func TestIssueMethods(t *testing.T) {
+	// One CA can be used to issue both kinds of certs.
+	ca, err := New("Test CA", time.Hour)
+	require.NoError(t, err)
+
+	ttl := 121 * time.Hour
+
+	t.Run("client certs", func(t *testing.T) {
+		user := "test-username"
+		groups := []string{"group1", "group2"}
+
+		clientCert, err := ca.IssueClientCert(user, groups, ttl)
+		require.NoError(t, err)
+		certPEM, keyPEM, err := ToPEM(clientCert)
+		require.NoError(t, err)
+		validateClientCert(t, ca.Bundle(), certPEM, keyPEM, user, groups, ttl)
+
+		certPEM, keyPEM, err = ca.IssueClientCertPEM(user, groups, ttl)
+		require.NoError(t, err)
+		validateClientCert(t, ca.Bundle(), certPEM, keyPEM, user, groups, ttl)
+
+		certPEM, keyPEM, err = ca.IssueClientCertPEM(user, nil, ttl)
+		require.NoError(t, err)
+		validateClientCert(t, ca.Bundle(), certPEM, keyPEM, user, nil, ttl)
+
+		certPEM, keyPEM, err = ca.IssueClientCertPEM(user, []string{}, ttl)
+		require.NoError(t, err)
+		validateClientCert(t, ca.Bundle(), certPEM, keyPEM, user, nil, ttl)
+
+		certPEM, keyPEM, err = ca.IssueClientCertPEM("", []string{}, ttl)
+		require.NoError(t, err)
+		validateClientCert(t, ca.Bundle(), certPEM, keyPEM, "", nil, ttl)
+	})
+
+	t.Run("server certs", func(t *testing.T) {
+		dnsNames := []string{"example.com", "pinniped.dev"}
+		ips := []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("1.2.3.4")}
+
+		serverCert, err := ca.IssueServerCert(dnsNames, ips, ttl)
+		require.NoError(t, err)
+		certPEM, keyPEM, err := ToPEM(serverCert)
+		require.NoError(t, err)
+		validateServerCert(t, ca.Bundle(), certPEM, keyPEM, dnsNames, ips, ttl)
+
+		certPEM, keyPEM, err = ca.IssueServerCertPEM(dnsNames, ips, ttl)
+		require.NoError(t, err)
+		validateServerCert(t, ca.Bundle(), certPEM, keyPEM, dnsNames, ips, ttl)
+
+		certPEM, keyPEM, err = ca.IssueServerCertPEM(nil, ips, ttl)
+		require.NoError(t, err)
+		validateServerCert(t, ca.Bundle(), certPEM, keyPEM, nil, ips, ttl)
+
+		certPEM, keyPEM, err = ca.IssueServerCertPEM(dnsNames, nil, ttl)
+		require.NoError(t, err)
+		validateServerCert(t, ca.Bundle(), certPEM, keyPEM, dnsNames, nil, ttl)
+
+		certPEM, keyPEM, err = ca.IssueServerCertPEM([]string{}, ips, ttl)
+		require.NoError(t, err)
+		validateServerCert(t, ca.Bundle(), certPEM, keyPEM, nil, ips, ttl)
+
+		certPEM, keyPEM, err = ca.IssueServerCertPEM(dnsNames, []net.IP{}, ttl)
+		require.NoError(t, err)
+		validateServerCert(t, ca.Bundle(), certPEM, keyPEM, dnsNames, nil, ttl)
+	})
+}
+
+func validateClientCert(t *testing.T, caBundle []byte, certPEM []byte, keyPEM []byte, expectedUser string, expectedGroups []string, expectedTTL time.Duration) {
+	const fudgeFactor = 10 * time.Second
+	v := testutil.ValidateClientCertificate(t, string(caBundle), string(certPEM))
+	v.RequireLifetime(time.Now(), time.Now().Add(expectedTTL), certBackdate+fudgeFactor)
+	v.RequireMatchesPrivateKey(string(keyPEM))
+	v.RequireCommonName(expectedUser)
+	v.RequireOrganizations(expectedGroups)
+	v.RequireEmptyDNSNames()
+	v.RequireEmptyIPs()
+}
+
+func validateServerCert(t *testing.T, caBundle []byte, certPEM []byte, keyPEM []byte, expectedDNSNames []string, expectedIPs []net.IP, expectedTTL time.Duration) {
+	const fudgeFactor = 10 * time.Second
+	v := testutil.ValidateServerCertificate(t, string(caBundle), string(certPEM))
+	v.RequireLifetime(time.Now(), time.Now().Add(expectedTTL), certBackdate+fudgeFactor)
+	v.RequireMatchesPrivateKey(string(keyPEM))
+	v.RequireCommonName("")
+	v.RequireDNSNames(expectedDNSNames)
+	v.RequireIPs(expectedIPs)
 }

@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/x509/pkix"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -51,7 +50,7 @@ func TestConciergeModeFlag(t *testing.T) {
 }
 
 func TestCABundleFlag(t *testing.T) {
-	testCA, err := certauthority.New(pkix.Name{CommonName: "Test CA"}, 1*time.Hour)
+	testCA, err := certauthority.New("Test CA", 1*time.Hour)
 	require.NoError(t, err)
 	tmpdir := testutil.TempDir(t)
 	emptyFilePath := filepath.Join(tmpdir, "empty")

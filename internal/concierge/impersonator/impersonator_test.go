@@ -5,7 +5,6 @@ package impersonator
 
 import (
 	"context"
-	"crypto/x509/pkix"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -36,7 +35,7 @@ import (
 func TestImpersonator(t *testing.T) {
 	const port = 9444
 
-	ca, err := certauthority.New(pkix.Name{CommonName: "ca"}, time.Hour)
+	ca, err := certauthority.New("ca", time.Hour)
 	require.NoError(t, err)
 	caKey, err := ca.PrivateKeyToPEM()
 	require.NoError(t, err)
@@ -44,13 +43,13 @@ func TestImpersonator(t *testing.T) {
 	err = caContent.SetCertKeyContent(ca.Bundle(), caKey)
 	require.NoError(t, err)
 
-	cert, key, err := ca.IssuePEM(pkix.Name{}, nil, []net.IP{net.ParseIP("127.0.0.1")}, time.Hour)
+	cert, key, err := ca.IssueServerCertPEM(nil, []net.IP{net.ParseIP("127.0.0.1")}, time.Hour)
 	require.NoError(t, err)
 	certKeyContent := dynamiccert.New("cert-key")
 	err = certKeyContent.SetCertKeyContent(cert, key)
 	require.NoError(t, err)
 
-	unrelatedCA, err := certauthority.New(pkix.Name{CommonName: "ca"}, time.Hour)
+	unrelatedCA, err := certauthority.New("ca", time.Hour)
 	require.NoError(t, err)
 
 	// Punch out just enough stuff to make New actually run without error.
@@ -486,9 +485,7 @@ type clientCert struct {
 }
 
 func newClientCert(t *testing.T, ca *certauthority.CA, username string, groups []string) *clientCert {
-	certPEM, keyPEM, err := ca.IssuePEM(
-		pkix.Name{CommonName: username, Organization: groups}, nil, nil, time.Hour,
-	)
+	certPEM, keyPEM, err := ca.IssueClientCertPEM(username, groups, time.Hour)
 	require.NoError(t, err)
 	return &clientCert{
 		certPEM: certPEM,

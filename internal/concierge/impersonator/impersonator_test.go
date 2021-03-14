@@ -16,9 +16,12 @@ import (
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/features"
+	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/rest"
@@ -284,6 +287,12 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 		r, err := http.NewRequestWithContext(ctx, http.MethodGet, validURL.String(), nil)
 		require.NoError(t, err)
 		r.Header = h
+		reqInfo := &request.RequestInfo{
+			IsResourceRequest: false,
+			Path:              validURL.Path,
+			Verb:              "get",
+		}
+		r = r.WithContext(request.WithRequestInfo(ctx, reqInfo))
 		return r
 	}
 
@@ -324,44 +333,44 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 		{
 			name:           "Impersonate-User header already in request",
 			request:        newRequest(map[string][]string{"Impersonate-User": {"some-user"}}, nil),
-			wantHTTPBody:   "invalid impersonation\n",
+			wantHTTPBody:   `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Internal error occurred: invalid impersonation","reason":"InternalError","details":{"causes":[{"message":"invalid impersonation"}]},"code":500}` + "\n",
 			wantHTTPStatus: http.StatusInternalServerError,
 		},
 		{
 			name:           "Impersonate-Group header already in request",
 			request:        newRequest(map[string][]string{"Impersonate-Group": {"some-group"}}, nil),
-			wantHTTPBody:   "invalid impersonation\n",
+			wantHTTPBody:   `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Internal error occurred: invalid impersonation","reason":"InternalError","details":{"causes":[{"message":"invalid impersonation"}]},"code":500}` + "\n",
 			wantHTTPStatus: http.StatusInternalServerError,
 		},
 		{
 			name:           "Impersonate-Extra header already in request",
 			request:        newRequest(map[string][]string{"Impersonate-Extra-something": {"something"}}, nil),
-			wantHTTPBody:   "invalid impersonation\n",
+			wantHTTPBody:   `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Internal error occurred: invalid impersonation","reason":"InternalError","details":{"causes":[{"message":"invalid impersonation"}]},"code":500}` + "\n",
 			wantHTTPStatus: http.StatusInternalServerError,
 		},
 		{
 			name:           "Impersonate-* header already in request",
 			request:        newRequest(map[string][]string{"Impersonate-Something": {"some-newfangled-impersonate-header"}}, nil),
-			wantHTTPBody:   "invalid impersonation\n",
+			wantHTTPBody:   `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Internal error occurred: invalid impersonation","reason":"InternalError","details":{"causes":[{"message":"invalid impersonation"}]},"code":500}` + "\n",
 			wantHTTPStatus: http.StatusInternalServerError,
 		},
 		{
 			name:           "unexpected authorization header",
 			request:        newRequest(map[string][]string{"Authorization": {"panda"}}, nil),
-			wantHTTPBody:   "invalid authorization header\n",
+			wantHTTPBody:   `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Internal error occurred: invalid authorization header","reason":"InternalError","details":{"causes":[{"message":"invalid authorization header"}]},"code":500}` + "\n",
 			wantHTTPStatus: http.StatusInternalServerError,
 		},
 		{
 			name:           "missing user",
 			request:        newRequest(map[string][]string{}, nil),
-			wantHTTPBody:   "invalid user\n",
+			wantHTTPBody:   `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Internal error occurred: invalid user","reason":"InternalError","details":{"causes":[{"message":"invalid user"}]},"code":500}` + "\n",
 			wantHTTPStatus: http.StatusInternalServerError,
 		},
 		{
 			name:           "unexpected UID",
 			request:        newRequest(map[string][]string{}, &user.DefaultInfo{UID: "007"}),
-			wantHTTPBody:   "unable to act as user\n",
-			wantHTTPStatus: http.StatusUnprocessableEntity,
+			wantHTTPBody:   `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Internal error occurred: unimplemented functionality - unable to act as current user","reason":"InternalError","details":{"causes":[{"message":"unimplemented functionality - unable to act as current user"}]},"code":500}` + "\n",
+			wantHTTPStatus: http.StatusInternalServerError,
 		},
 		// happy path
 		{
@@ -458,9 +467,15 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, impersonatorHTTPHandlerFunc)
 
+			// this is not a valid way to get a server config, but it is good enough for a unit test
+			scheme := runtime.NewScheme()
+			metav1.AddToGroupVersion(scheme, metav1.Unversioned)
+			codecs := serializer.NewCodecFactory(scheme)
+			serverConfig := genericapiserver.NewRecommendedConfig(codecs)
+
 			w := httptest.NewRecorder()
 			requestBeforeServe := tt.request.Clone(tt.request.Context())
-			impersonatorHTTPHandlerFunc(nil).ServeHTTP(w, tt.request)
+			impersonatorHTTPHandlerFunc(&serverConfig.Config).ServeHTTP(w, tt.request)
 
 			require.Equal(t, requestBeforeServe, tt.request, "ServeHTTP() mutated the request, and it should not per http.Handler docs")
 			if tt.wantHTTPStatus != 0 {

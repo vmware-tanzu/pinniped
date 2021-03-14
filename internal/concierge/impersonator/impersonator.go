@@ -12,14 +12,18 @@ import (
 	"strings"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
+	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
 	"k8s.io/apiserver/pkg/endpoints/request"
+	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/apiserver/pkg/server/filters"
@@ -227,7 +231,7 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 					"url", r.URL.String(),
 					"method", r.Method,
 				)
-				http.Error(w, "invalid authorization header", http.StatusInternalServerError)
+				newInternalErrResponse(w, r, c.Serializer, "invalid authorization header")
 				return
 			}
 
@@ -237,7 +241,7 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 					"url", r.URL.String(),
 					"method", r.Method,
 				)
-				http.Error(w, "invalid impersonation", http.StatusInternalServerError)
+				newInternalErrResponse(w, r, c.Serializer, "invalid impersonation")
 				return
 			}
 
@@ -247,7 +251,7 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 					"url", r.URL.String(),
 					"method", r.Method,
 				)
-				http.Error(w, "invalid user", http.StatusInternalServerError)
+				newInternalErrResponse(w, r, c.Serializer, "invalid user")
 				return
 			}
 
@@ -257,7 +261,7 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 					"url", r.URL.String(),
 					"method", r.Method,
 				)
-				http.Error(w, "unable to act as user", http.StatusUnprocessableEntity)
+				newInternalErrResponse(w, r, c.Serializer, "unimplemented functionality - unable to act as current user")
 				return
 			}
 
@@ -308,4 +312,19 @@ func getTransportForUser(userInfo user.Info, delegate http.RoundTripper) (http.R
 	// 7. this would preserve the UID info and thus allow us to safely support all token based auth
 	// 8. the above would be safe even if in the future Kube started supporting UIDs asserted by client certs
 	return nil, constable.Error("unexpected uid")
+}
+
+func newInternalErrResponse(w http.ResponseWriter, r *http.Request, s runtime.NegotiatedSerializer, msg string) {
+	newStatusErrResponse(w, r, s, apierrors.NewInternalError(constable.Error(msg)))
+}
+
+func newStatusErrResponse(w http.ResponseWriter, r *http.Request, s runtime.NegotiatedSerializer, err *apierrors.StatusError) {
+	requestInfo, ok := genericapirequest.RequestInfoFrom(r.Context())
+	if !ok {
+		responsewriters.InternalError(w, r, constable.Error("no RequestInfo found in the context"))
+		return
+	}
+
+	gv := schema.GroupVersion{Group: requestInfo.APIGroup, Version: requestInfo.APIVersion}
+	responsewriters.ErrorNegotiated(err, s, gv, w, r)
 }

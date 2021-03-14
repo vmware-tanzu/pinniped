@@ -475,10 +475,23 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			impersonationProxyURL, impersonationProxyCACertPEM, "").PinnipedConcierge
 		_, err = impersonationProxyServiceAccountPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
 			Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-		require.Error(t, err)
-		// The server checks that we have a UID in the request and rejects it with a 422 Unprocessable Entity.
-		// The API machinery turns 422's into this error text...
-		require.Contains(t, err.Error(), "the server rejected our request due to an error in our request")
+		require.EqualError(t, err, "Internal error occurred: unimplemented functionality - unable to act as current user")
+		require.True(t, k8serrors.IsInternalError(err), err)
+		require.Equal(t, &k8serrors.StatusError{
+			ErrStatus: metav1.Status{
+				Status: metav1.StatusFailure,
+				Code:   http.StatusInternalServerError,
+				Reason: metav1.StatusReasonInternalError,
+				Details: &metav1.StatusDetails{
+					Causes: []metav1.StatusCause{
+						{
+							Message: "unimplemented functionality - unable to act as current user",
+						},
+					},
+				},
+				Message: "Internal error occurred: unimplemented functionality - unable to act as current user",
+			},
+		}, err)
 	})
 
 	t.Run("kubectl as a client", func(t *testing.T) {

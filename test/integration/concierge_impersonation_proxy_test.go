@@ -163,7 +163,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// Delete any version that was created by this test.
 		t.Logf("cleaning up configmap at end of test %s", impersonationProxyConfigMapName(env))
-		err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, impersonationProxyConfigMapName(env), metav1.DeleteOptions{})
+		err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, impersonationProxyConfigMapName(env), metav1.DeleteOptions{})
 		if !k8serrors.IsNotFound(err) {
 			require.NoError(t, err) // only not found errors are acceptable
 		}

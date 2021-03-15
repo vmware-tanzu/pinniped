@@ -269,9 +269,8 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 				return
 			}
 
-			plog.Trace("proxying authenticated request",
-				"url", r.URL.String(),
-				"method", r.Method,
+			plog.Debug("impersonation proxy servicing request", "method", r.Method, "url", r.URL.String())
+			plog.Trace("impersonation proxy servicing request was for user",
 				"username", userInfo.GetName(), // this info leak seems fine for trace level logs
 			)
 
@@ -279,6 +278,8 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 			reverseProxy.Transport = rt
 			reverseProxy.FlushInterval = 200 * time.Millisecond // the "watch" verb will not work without this line
 			reverseProxy.ServeHTTP(w, r)
+
+			plog.Debug("impersonation proxy finished servicing request", "method", r.Method, "url", r.URL.String())
 		})
 	}, nil
 }

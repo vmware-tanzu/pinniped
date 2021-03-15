@@ -129,6 +129,10 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		serverConfig.LoopbackClientConfig.BearerToken = ""
 
 		// match KAS exactly since our long running operations are just a proxy to it
+		// this must be kept in sync with github.com/kubernetes/kubernetes/cmd/kube-apiserver/app/server.go
+		// this is nothing to stress about - it has not changed since the beginning of Kube:
+		// v1.6 no-op move away from regex to request info https://github.com/kubernetes/kubernetes/pull/38119
+		// v1.1 added pods/attach to the list https://github.com/kubernetes/kubernetes/pull/13705
 		serverConfig.LongRunningFunc = filters.BasicLongRunningRequestCheck(
 			sets.NewString("watch", "proxy"),
 			sets.NewString("attach", "exec", "proxy", "log", "portforward"),

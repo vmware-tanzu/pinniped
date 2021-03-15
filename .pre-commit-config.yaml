@@ -1,4 +1,6 @@
-exclude: '^(generated|hack/lib/tilt/tilt_modules)/'
+# This is a configuration for https://pre-commit.com/.
+# On macOS, try `brew install pre-commit` and then run `pre-commit install`.
+exclude: '^(site|generated|hack/lib/tilt/tilt_modules)/'
 repos:
 - repo: git://github.com/pre-commit/pre-commit-hooks
   rev: v3.2.0
@@ -21,3 +23,7 @@ repos:
     name: Validate copyright year
     entry: hack/check-copyright-year.sh
     language: script
+- repo: https://github.com/golangci/golangci-lint
+  rev: v1.33.0
+  hooks:
+  - id: golangci-lint

@@ -241,6 +241,68 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		)
 	}
 
+	t.Run("watching for a full minute", func(t *testing.T) {
+		kubeconfigPath, envVarsWithProxy, _ := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM)
+
+		namespaceName := createTestNamespace(t, adminClient)
+
+		// Create an RBAC rule to allow this user to read/write everything.
+		library.CreateTestClusterRoleBinding(t,
+			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
+			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
+		)
+		// Wait for the above RBAC rule to take effect.
+		library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
+			Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
+		})
+
+		// Get pods in concierge namespace and pick one.
+		// We want to make sure it's a concierge pod (not cert agent), because we need to be able to "exec echo" and port-forward a running port.
+		pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{})
+		require.NoError(t, err)
+		require.Greater(t, len(pods.Items), 0)
+		var conciergePod *corev1.Pod
+		for _, pod := range pods.Items {
+			pod := pod
+			if !strings.Contains(pod.Name, "kube-cert-agent") {
+				conciergePod = &pod
+			}
+		}
+		require.NotNil(t, conciergePod, "could not find a concierge pod")
+
+		// run the kubectl port-forward command
+		timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancelFunc()
+		portForwardCmd, _, portForwardStderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, "port-forward", "--namespace", env.ConciergeNamespace, conciergePod.Name, "8443:8443")
+		portForwardCmd.Env = envVarsWithProxy
+
+		// start, but don't wait for the command to finish
+		err = portForwardCmd.Start()
+		require.NoError(t, err, `"kubectl port-forward" failed`)
+		go func() {
+			assert.EqualErrorf(t, portForwardCmd.Wait(), "signal: killed", `wanted "kubectl port-forward" to get signaled because context was cancelled (stderr: %q)`, portForwardStderr.String())
+		}()
+		time.Sleep(1 * time.Minute)
+
+		require.Eventually(t, func() bool {
+			// then run curl something against it
+			timeout, cancelFunc = context.WithTimeout(ctx, 2*time.Minute)
+			defer cancelFunc()
+			curlCmd := exec.CommandContext(timeout, "curl", "-k", "https://127.0.0.1:8443")
+			var curlStdOut, curlStdErr bytes.Buffer
+			curlCmd.Stdout = &curlStdOut
+			curlCmd.Stderr = &curlStdErr
+			err = curlCmd.Run()
+			if err != nil {
+				t.Log("curl error: " + err.Error())
+				t.Log("curlStdErr: " + curlStdErr.String())
+				t.Log("stdout: " + curlStdOut.String())
+			}
+			// we expect this to 403, but all we care is that it gets through
+			return err == nil && strings.Contains(curlStdOut.String(), "\"forbidden: User \\\"system:anonymous\\\" cannot get path \\\"/\\\"\"")
+		}, 5*time.Minute, 500*time.Millisecond)
+	})
+
 	t.Run("using and watching all the basic verbs", func(t *testing.T) {
 		// Create a namespace, because it will be easier to exercise "deletecollection" if we have a namespace.
 		namespaceName := createTestNamespace(t, adminClient)
@@ -505,69 +567,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			Verb: "get", Group: "", Version: "v1", Resource: "namespaces",
 		})
 
-		pinnipedExe := library.PinnipedCLIPath(t)
-		tempDir := testutil.TempDir(t)
-
-		var envVarsWithProxy []string
-		if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
-			// Only if you don't have a load balancer, use the squid proxy when it's available.
-			envVarsWithProxy = append(os.Environ(), env.ProxyEnv()...)
-		}
-
-		// Get the kubeconfig.
-		getKubeConfigCmd := []string{"get", "kubeconfig",
-			"--concierge-api-group-suffix", env.APIGroupSuffix,
-			"--oidc-skip-browser",
-			"--static-token", env.TestUser.Token,
-			// Force the use of impersonation proxy strategy, but let it auto-discover the endpoint and CA.
-			"--concierge-mode", "ImpersonationProxy"}
-		t.Log("Running:", pinnipedExe, getKubeConfigCmd)
-		kubeconfigYAML, getKubeConfigStderr := runPinnipedCLI(t, envVarsWithProxy, pinnipedExe, getKubeConfigCmd...)
-		// "pinniped get kubectl" prints some status messages to stderr
-		t.Log(getKubeConfigStderr)
-		// Make sure that the "pinniped get kubeconfig" auto-discovered the impersonation proxy and we're going to
-		// make our kubectl requests through the impersonation proxy. Avoid using require.Contains because the error
-		// message would contain credentials.
-		require.True(t,
-			strings.Contains(kubeconfigYAML, "server: "+impersonationProxyURL+"\n"),
-			"the generated kubeconfig did not include the expected impersonation server address: %s",
-			impersonationProxyURL,
-		)
-		require.True(t,
-			strings.Contains(kubeconfigYAML, "- --concierge-ca-bundle-data="+base64.StdEncoding.EncodeToString(impersonationProxyCACertPEM)+"\n"),
-			"the generated kubeconfig did not include the base64 encoded version of this expected impersonation CA cert: %s",
-			impersonationProxyCACertPEM,
-		)
-
-		// Write the kubeconfig to a temp file.
-		kubeconfigPath := filepath.Join(tempDir, "kubeconfig.yaml")
-		require.NoError(t, ioutil.WriteFile(kubeconfigPath, []byte(kubeconfigYAML), 0600))
-
-		// func to create kubectl commands with a kubeconfig
-		kubectlCommand := func(timeout context.Context, args ...string) (*exec.Cmd, *syncBuffer, *syncBuffer) {
-			allArgs := append([]string{"--kubeconfig", kubeconfigPath}, args...)
-			//nolint:gosec // we are not performing malicious argument injection against ourselves
-			kubectlCmd := exec.CommandContext(timeout, "kubectl", allArgs...)
-			var stdout, stderr syncBuffer
-			kubectlCmd.Stdout = &stdout
-			kubectlCmd.Stderr = &stderr
-			kubectlCmd.Env = envVarsWithProxy
-
-			t.Log("starting kubectl subprocess: kubectl", strings.Join(allArgs, " "))
-			return kubectlCmd, &stdout, &stderr
-		}
-		// Func to run kubeconfig commands.
-		runKubectl := func(args ...string) (string, string, error) {
-			timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
-			defer cancelFunc()
-
-			kubectlCmd, stdout, stderr := kubectlCommand(timeout, args...)
-
-			err := kubectlCmd.Run()
-			t.Logf("kubectl stdout output: %s", stdout.String())
-			t.Logf("kubectl stderr output: %s", stderr.String())
-			return stdout.String(), stderr.String(), err
-		}
+		kubeconfigPath, envVarsWithProxy, tempDir := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM)
 
 		// Get pods in concierge namespace and pick one.
 		// We want to make sure it's a concierge pod (not cert agent), because we need to be able to "exec echo" and port-forward a running port.
@@ -586,57 +586,26 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// Try "kubectl exec" through the impersonation proxy.
 		echoString := "hello world"
 		remoteEchoFile := fmt.Sprintf("/tmp/test-impersonation-proxy-echo-file-%d.txt", time.Now().Unix())
-		stdout, _, err := runKubectl("exec", "--namespace", env.ConciergeNamespace, conciergePod.Name, "--", "bash", "-c", fmt.Sprintf(`echo "%s" | tee %s`, echoString, remoteEchoFile))
+		stdout, err := runKubectl(t, kubeconfigPath, envVarsWithProxy, "exec", "--namespace", env.ConciergeNamespace, conciergePod.Name, "--", "bash", "-c", fmt.Sprintf(`echo "%s" | tee %s`, echoString, remoteEchoFile))
 		require.NoError(t, err, `"kubectl exec" failed`)
 		require.Equal(t, echoString+"\n", stdout)
 
 		// run the kubectl cp command
 		localEchoFile := filepath.Join(tempDir, filepath.Base(remoteEchoFile))
-		_, _, err = runKubectl("cp", fmt.Sprintf("%s/%s:%s", env.ConciergeNamespace, conciergePod.Name, remoteEchoFile), localEchoFile)
+		_, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "cp", fmt.Sprintf("%s/%s:%s", env.ConciergeNamespace, conciergePod.Name, remoteEchoFile), localEchoFile)
 		require.NoError(t, err, `"kubectl cp" failed`)
 		localEchoFileData, err := ioutil.ReadFile(localEchoFile)
 		require.NoError(t, err)
 		require.Equal(t, echoString+"\n", string(localEchoFileData))
 		defer func() {
-			_, _, _ = runKubectl("exec", "--namespace", env.ConciergeNamespace, conciergePod.Name, "--", "rm", remoteEchoFile) // cleanup remote echo file
+			_, _ = runKubectl(t, kubeconfigPath, envVarsWithProxy, "exec", "--namespace", env.ConciergeNamespace, conciergePod.Name, "--", "rm", remoteEchoFile) // cleanup remote echo file
 		}()
 
 		// run the kubectl logs command
 		logLinesCount := 10
-		stdout, _, err = runKubectl("logs", "--namespace", env.ConciergeNamespace, conciergePod.Name, fmt.Sprintf("--tail=%d", logLinesCount))
+		stdout, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "logs", "--namespace", env.ConciergeNamespace, conciergePod.Name, fmt.Sprintf("--tail=%d", logLinesCount))
 		require.NoError(t, err, `"kubectl logs" failed`)
 		require.Equalf(t, logLinesCount, strings.Count(stdout, "\n"), "wanted %d newlines in kubectl logs output:\n%s", logLinesCount, stdout)
-
-		// run the kubectl port-forward command
-		timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
-		defer cancelFunc()
-		portForwardCmd, _, portForwardStderr := kubectlCommand(timeout, "port-forward", "--namespace", env.ConciergeNamespace, conciergePod.Name, "8443:8443")
-		portForwardCmd.Env = envVarsWithProxy
-
-		// start, but don't wait for the command to finish
-		err = portForwardCmd.Start()
-		require.NoError(t, err, `"kubectl port-forward" failed`)
-		go func() {
-			assert.EqualErrorf(t, portForwardCmd.Wait(), "signal: killed", `wanted "kubectl port-forward" to get signaled because context was cancelled (stderr: %q)`, portForwardStderr.String())
-		}()
-
-		require.Eventually(t, func() bool {
-			// then run curl something against it
-			timeout, cancelFunc = context.WithTimeout(ctx, 2*time.Minute)
-			defer cancelFunc()
-			curlCmd := exec.CommandContext(timeout, "curl", "-k", "https://127.0.0.1:8443")
-			var curlStdOut, curlStdErr bytes.Buffer
-			curlCmd.Stdout = &curlStdOut
-			curlCmd.Stderr = &curlStdErr
-			err = curlCmd.Run()
-			if err != nil {
-				t.Log("curl error: " + err.Error())
-				t.Log("curlStdErr: " + curlStdErr.String())
-				t.Log("stdout: " + curlStdOut.String())
-			}
-			// we expect this to 403, but all we care is that it gets through
-			return err == nil && strings.Contains(curlStdOut.String(), "\"forbidden: User \\\"system:anonymous\\\" cannot get path \\\"/\\\"\"")
-		}, 5*time.Minute, 500*time.Millisecond)
 
 		// run the kubectl attach command
 		namespaceName := createTestNamespace(t, adminClient)
@@ -651,9 +620,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				},
 			},
 		})
-		timeout, cancelFunc = context.WithTimeout(ctx, 2*time.Minute)
+		timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancelFunc()
-		attachCmd, attachStdout, attachStderr := kubectlCommand(timeout, "attach", "--stdin=true", "--namespace", namespaceName, attachPod.Name)
+		attachCmd, attachStdout, attachStderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, "attach", "--stdin=true", "--namespace", namespaceName, attachPod.Name)
 		attachCmd.Env = envVarsWithProxy
 		attachStdin, err := attachCmd.StdinPipe()
 		require.NoError(t, err)
@@ -1158,6 +1127,77 @@ func impersonationProxyLoadBalancerName(env *library.TestEnv) string {
 
 func credentialIssuerName(env *library.TestEnv) string {
 	return env.ConciergeAppName + "-config"
+}
+
+func getImpersonationKubeconfig(t *testing.T, env *library.TestEnv, impersonationProxyURL string, impersonationProxyCACertPEM []byte) (string, []string, string) {
+	t.Helper()
+
+	pinnipedExe := library.PinnipedCLIPath(t)
+	tempDir := testutil.TempDir(t)
+
+	var envVarsWithProxy []string
+	if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
+		// Only if you don't have a load balancer, use the squid proxy when it's available.
+		envVarsWithProxy = append(os.Environ(), env.ProxyEnv()...)
+	}
+
+	// Get the kubeconfig.
+	getKubeConfigCmd := []string{"get", "kubeconfig",
+		"--concierge-api-group-suffix", env.APIGroupSuffix,
+		"--oidc-skip-browser",
+		"--static-token", env.TestUser.Token,
+		// Force the use of impersonation proxy strategy, but let it auto-discover the endpoint and CA.
+		"--concierge-mode", "ImpersonationProxy"}
+	t.Log("Running:", pinnipedExe, getKubeConfigCmd)
+	kubeconfigYAML, getKubeConfigStderr := runPinnipedCLI(t, envVarsWithProxy, pinnipedExe, getKubeConfigCmd...)
+	// "pinniped get kubectl" prints some status messages to stderr
+	t.Log(getKubeConfigStderr)
+	// Make sure that the "pinniped get kubeconfig" auto-discovered the impersonation proxy and we're going to
+	// make our kubectl requests through the impersonation proxy. Avoid using require.Contains because the error
+	// message would contain credentials.
+	require.True(t,
+		strings.Contains(kubeconfigYAML, "server: "+impersonationProxyURL+"\n"),
+		"the generated kubeconfig did not include the expected impersonation server address: %s",
+		impersonationProxyURL,
+	)
+	require.True(t,
+		strings.Contains(kubeconfigYAML, "- --concierge-ca-bundle-data="+base64.StdEncoding.EncodeToString(impersonationProxyCACertPEM)+"\n"),
+		"the generated kubeconfig did not include the base64 encoded version of this expected impersonation CA cert: %s",
+		impersonationProxyCACertPEM,
+	)
+
+	// Write the kubeconfig to a temp file.
+	kubeconfigPath := filepath.Join(tempDir, "kubeconfig.yaml")
+	require.NoError(t, ioutil.WriteFile(kubeconfigPath, []byte(kubeconfigYAML), 0600))
+
+	return kubeconfigPath, envVarsWithProxy, tempDir
+}
+
+// func to create kubectl commands with a kubeconfig.
+func kubectlCommand(timeout context.Context, t *testing.T, kubeconfigPath string, envVarsWithProxy []string, args ...string) (*exec.Cmd, *syncBuffer, *syncBuffer) {
+	allArgs := append([]string{"--kubeconfig", kubeconfigPath}, args...)
+	//nolint:gosec // we are not performing malicious argument injection against ourselves
+	kubectlCmd := exec.CommandContext(timeout, "kubectl", allArgs...)
+	var stdout, stderr syncBuffer
+	kubectlCmd.Stdout = &stdout
+	kubectlCmd.Stderr = &stderr
+	kubectlCmd.Env = envVarsWithProxy
+
+	t.Log("starting kubectl subprocess: kubectl", strings.Join(allArgs, " "))
+	return kubectlCmd, &stdout, &stderr
+}
+
+// Func to run kubeconfig commands.
+func runKubectl(t *testing.T, kubeconfigPath string, envVarsWithProxy []string, args ...string) (string, error) {
+	timeout, cancelFunc := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancelFunc()
+
+	kubectlCmd, stdout, stderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, args...)
+
+	err := kubectlCmd.Run()
+	t.Logf("kubectl stdout output: %s", stdout.String())
+	t.Logf("kubectl stderr output: %s", stderr.String())
+	return stdout.String(), err
 }
 
 // watchJSON defines the expected JSON wire equivalent of watch.Event.

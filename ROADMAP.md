@@ -17,7 +17,7 @@ Discussion on the roadmap can take place in threads under [Issues](https://githu
 ### 
 **Need an idea for a contribution?**
 
-We’ve created an [Opportunity Areas](https://docs.google.com/document/d/1A5xqeOfT01CDjnd76ED2yFWMx1lkcJ6odFMUTDM-VcE/edit#heading=h.dfdy0cv2dm2q) discussion thread that outlines some areas we believe are excellent starting points for the community to get involved. In that discussion we’ve included specific work items that one might consider that also support the high-level items presented in our roadmap. 
+We’ve created an [Opportunity Areas](https://github.com/vmware-tanzu/pinniped/discussions/483) discussion thread that outlines some areas we believe are excellent starting points for the community to get involved. In that discussion we’ve included specific work items that one might consider that also support the high-level items presented in our roadmap. 
 
 
 ### 

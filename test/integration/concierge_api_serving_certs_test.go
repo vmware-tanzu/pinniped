@@ -159,10 +159,10 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 				return err == nil
 			}
 
-			// Unfortunately, although our code changes all the certs immediately, it seems to take ~1 minute for
-			// the API machinery to notice that we updated our serving cert, causing 1 minute of downtime for our endpoint.
-			assert.Eventually(t, aggregatedAPIWorking, 2*time.Minute, 250*time.Millisecond)
-			require.NoError(t, err) // prints out the error and stops the test in case of failure
+			// our code changes all the certs immediately thus this should be healthy fairly quickly
+			// if this starts flaking, check for bugs in our dynamiccertificates.Notifier implementation
+			assert.Eventually(t, aggregatedAPIWorking, 30*time.Second, 250*time.Millisecond)
+			require.NoError(t, err, "dynamiccertificates.Notifier broken?") // prints out the error and stops the test in case of failure
 		})
 	}
 }

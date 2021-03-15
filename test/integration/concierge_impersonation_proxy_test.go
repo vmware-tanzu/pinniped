@@ -284,7 +284,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			go func() {
 				assert.EqualErrorf(t, portForwardCmd.Wait(), "signal: killed", `wanted "kubectl port-forward" to get signaled because context was cancelled (stderr: %q)`, portForwardStderr.String())
 			}()
-			time.Sleep(1 * time.Minute)
+
+			time.Sleep(70 * time.Second)
 
 			require.Eventually(t, func() bool {
 				// then run curl something against it

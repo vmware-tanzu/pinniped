@@ -39,7 +39,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
 
-	"go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	conciergev1alpha "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
@@ -1008,7 +1008,7 @@ func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *librar
 		}
 		for _, strategy := range credentialIssuer.Status.Strategies {
 			// There will be other strategy types in the list, so ignore those.
-			if strategy.Type == v1alpha1.ImpersonationProxyStrategyType && strategy.Status == v1alpha1.SuccessStrategyStatus { //nolint:nestif
+			if strategy.Type == conciergev1alpha.ImpersonationProxyStrategyType && strategy.Status == conciergev1alpha.SuccessStrategyStatus { //nolint:nestif
 				if strategy.Frontend == nil {
 					return false, fmt.Errorf("did not find a Frontend") // unexpected, fail the test
 				}
@@ -1021,10 +1021,10 @@ func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *librar
 					return false, err // unexpected, fail the test
 				}
 				return true, nil // found it, continue the test!
-			} else if strategy.Type == v1alpha1.ImpersonationProxyStrategyType {
+			} else if strategy.Type == conciergev1alpha.ImpersonationProxyStrategyType {
 				t.Logf("Waiting for successful impersonation proxy strategy on %s: found status %s with reason %s and message: %s",
 					credentialIssuerName(env), strategy.Status, strategy.Reason, strategy.Message)
-				if strategy.Reason == v1alpha1.ErrorDuringSetupStrategyReason {
+				if strategy.Reason == conciergev1alpha.ErrorDuringSetupStrategyReason {
 					// The server encountered an unexpected error while starting the impersonator, so fail the test fast.
 					return false, fmt.Errorf("found impersonation strategy in %s state with message: %s", strategy.Reason, strategy.Message)
 				}
@@ -1049,14 +1049,14 @@ func requireDisabledByConfigurationStrategy(ctx context.Context, t *testing.T, e
 		}
 		for _, strategy := range credentialIssuer.Status.Strategies {
 			// There will be other strategy types in the list, so ignore those.
-			if strategy.Type == v1alpha1.ImpersonationProxyStrategyType &&
-				strategy.Status == v1alpha1.ErrorStrategyStatus &&
-				strategy.Reason == v1alpha1.DisabledStrategyReason { //nolint:nestif
+			if strategy.Type == conciergev1alpha.ImpersonationProxyStrategyType &&
+				strategy.Status == conciergev1alpha.ErrorStrategyStatus &&
+				strategy.Reason == conciergev1alpha.DisabledStrategyReason { //nolint:nestif
 				return true, nil // found it, continue the test!
-			} else if strategy.Type == v1alpha1.ImpersonationProxyStrategyType {
+			} else if strategy.Type == conciergev1alpha.ImpersonationProxyStrategyType {
 				t.Logf("Waiting for disabled impersonation proxy strategy on %s: found status %s with reason %s and message: %s",
 					credentialIssuerName(env), strategy.Status, strategy.Reason, strategy.Message)
-				if strategy.Reason == v1alpha1.ErrorDuringSetupStrategyReason {
+				if strategy.Reason == conciergev1alpha.ErrorDuringSetupStrategyReason {
 					// The server encountered an unexpected error while stopping the impersonator, so fail the test fast.
 					return false, fmt.Errorf("found impersonation strategy in %s state with message: %s", strategy.Reason, strategy.Message)
 				}

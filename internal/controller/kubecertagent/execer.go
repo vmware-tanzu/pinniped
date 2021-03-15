@@ -33,7 +33,7 @@ type execerController struct {
 	credentialIssuerLocationConfig *CredentialIssuerLocationConfig
 	credentialIssuerLabels         map[string]string
 	discoveryURLOverride           *string
-	dynamicCertProvider            dynamiccert.Provider
+	dynamicCertProvider            dynamiccert.Private
 	podCommandExecutor             PodCommandExecutor
 	clock                          clock.Clock
 	pinnipedAPIClient              pinnipedclientset.Interface
@@ -51,7 +51,7 @@ func NewExecerController(
 	credentialIssuerLocationConfig *CredentialIssuerLocationConfig,
 	credentialIssuerLabels map[string]string,
 	discoveryURLOverride *string,
-	dynamicCertProvider dynamiccert.Provider,
+	dynamicCertProvider dynamiccert.Private,
 	podCommandExecutor PodCommandExecutor,
 	pinnipedAPIClient pinnipedclientset.Interface,
 	clock clock.Clock,

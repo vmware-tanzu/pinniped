@@ -974,7 +974,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			kubeAPIClient = kubernetesfake.NewSimpleClientset()
 			pinnipedAPIClient = pinnipedfake.NewSimpleClientset()
 			frozenNow = time.Date(2021, time.March, 2, 7, 42, 0, 0, time.Local)
-			signingCertProvider = dynamiccert.New(name)
+			signingCertProvider = dynamiccert.NewCA(name)
 
 			ca := newCA()
 			signingCACertPEM = ca.Bundle()

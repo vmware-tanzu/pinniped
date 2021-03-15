@@ -54,12 +54,12 @@ const (
 )
 
 type webhook struct {
-	certProvider   dynamiccert.Provider
+	certProvider   dynamiccert.Private
 	secretInformer corev1informers.SecretInformer
 }
 
 func newWebhook(
-	certProvider dynamiccert.Provider,
+	certProvider dynamiccert.Private,
 	secretInformer corev1informers.SecretInformer,
 ) *webhook {
 	return &webhook{
@@ -281,7 +281,7 @@ func respondWithAuthenticated(
 
 func startControllers(
 	ctx context.Context,
-	dynamicCertProvider dynamiccert.Provider,
+	dynamicCertProvider dynamiccert.Private,
 	kubeClient kubernetes.Interface,
 	kubeInformers kubeinformers.SharedInformerFactory,
 ) {
@@ -328,7 +328,7 @@ func startControllers(
 func startWebhook(
 	ctx context.Context,
 	l net.Listener,
-	dynamicCertProvider dynamiccert.Provider,
+	dynamicCertProvider dynamiccert.Private,
 	secretInformer corev1informers.SecretInformer,
 ) error {
 	return newWebhook(dynamicCertProvider, secretInformer).start(ctx, l)
@@ -355,7 +355,7 @@ func run() error {
 		kubeinformers.WithNamespace(namespace),
 	)
 
-	dynamicCertProvider := dynamiccert.New("local-user-authenticator-tls-serving-certificate")
+	dynamicCertProvider := dynamiccert.NewServingCert("local-user-authenticator-tls-serving-certificate")
 
 	startControllers(ctx, dynamicCertProvider, client.Kubernetes, kubeInformers)
 	plog.Debug("controllers are ready")

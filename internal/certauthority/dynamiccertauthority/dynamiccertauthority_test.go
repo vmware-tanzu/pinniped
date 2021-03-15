@@ -10,13 +10,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/dynamiccert"
+	"go.pinniped.dev/internal/issuer"
 	"go.pinniped.dev/internal/testutil"
 )
 
 func TestCAIssuePEM(t *testing.T) {
 	t.Parallel()
 
-	provider := dynamiccert.New(t.Name())
+	provider := dynamiccert.NewCA(t.Name())
 	ca := New(provider)
 
 	goodCACrtPEM0, goodCAKeyPEM0, err := testutil.CreateCertificate(
@@ -115,7 +116,7 @@ func TestCAIssuePEM(t *testing.T) {
 	}
 }
 
-func issuePEM(provider dynamiccert.Provider, ca *CA, caCrt, caKey []byte) ([]byte, []byte, error) {
+func issuePEM(provider dynamiccert.Provider, ca issuer.ClientCertIssuer, caCrt, caKey []byte) ([]byte, []byte, error) {
 	// if setting fails, look at that error
 	if caCrt != nil || caKey != nil {
 		if err := provider.SetCertKeyContent(caCrt, caKey); err != nil {

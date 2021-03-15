@@ -18,14 +18,14 @@ import (
 type certsObserverController struct {
 	namespace               string
 	certsSecretResourceName string
-	dynamicCertProvider     dynamiccert.Provider
+	dynamicCertProvider     dynamiccert.Private
 	secretInformer          corev1informers.SecretInformer
 }
 
 func NewCertsObserverController(
 	namespace string,
 	certsSecretResourceName string,
-	dynamicCertProvider dynamiccert.Provider,
+	dynamicCertProvider dynamiccert.Private,
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {

@@ -53,3 +53,17 @@ func (mr *MockClientCertIssuerMockRecorder) IssueClientCertPEM(arg0, arg1, arg2 
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IssueClientCertPEM", reflect.TypeOf((*MockClientCertIssuer)(nil).IssueClientCertPEM), arg0, arg1, arg2)
 }
+
+// Name mocks base method.
+func (m *MockClientCertIssuer) Name() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Name")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// Name indicates an expected call of Name.
+func (mr *MockClientCertIssuerMockRecorder) Name() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*MockClientCertIssuer)(nil).Name))
+}

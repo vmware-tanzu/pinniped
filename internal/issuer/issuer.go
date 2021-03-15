@@ -4,6 +4,8 @@
 package issuer
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/errors"
@@ -14,6 +16,7 @@ import (
 const defaultCertIssuerErr = constable.Error("failed to issue cert")
 
 type ClientCertIssuer interface {
+	Name() string
 	IssueClientCertPEM(username string, groups []string, ttl time.Duration) (certPEM, keyPEM []byte, err error)
 }
 
@@ -21,13 +24,26 @@ var _ ClientCertIssuer = ClientCertIssuers{}
 
 type ClientCertIssuers []ClientCertIssuer
 
+func (c ClientCertIssuers) Name() string {
+	if len(c) == 0 {
+		return "empty-client-cert-issuers"
+	}
+
+	names := make([]string, 0, len(c))
+	for _, issuer := range c {
+		names = append(names, issuer.Name())
+	}
+
+	return strings.Join(names, ",")
+}
+
 func (c ClientCertIssuers) IssueClientCertPEM(username string, groups []string, ttl time.Duration) ([]byte, []byte, error) {
 	var errs []error
 
 	for _, issuer := range c {
 		certPEM, keyPEM, err := issuer.IssueClientCertPEM(username, groups, ttl)
 		if err != nil {
-			errs = append(errs, err)
+			errs = append(errs, fmt.Errorf("%s failed to issue client cert: %w", issuer.Name(), err))
 			continue
 		}
 		return certPEM, keyPEM, nil

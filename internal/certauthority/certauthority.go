@@ -19,6 +19,8 @@ import (
 	"math/big"
 	"net"
 	"time"
+
+	"go.pinniped.dev/internal/constable"
 )
 
 // certBackdate is the amount of time before time.Now() that will be used to set
@@ -71,7 +73,7 @@ func secureEnv() env {
 }
 
 // ErrInvalidCACertificate is returned when the contents of the loaded CA certificate do not meet our assumptions.
-var ErrInvalidCACertificate = fmt.Errorf("invalid CA certificate")
+const ErrInvalidCACertificate = constable.Error("invalid CA certificate")
 
 // Load a certificate authority from an existing certificate and private key (in PEM format).
 func Load(certPEM string, keyPEM string) (*CA, error) {
@@ -81,6 +83,13 @@ func Load(certPEM string, keyPEM string) (*CA, error) {
 	}
 	if certCount := len(cert.Certificate); certCount != 1 {
 		return nil, fmt.Errorf("%w: expected a single certificate, found %d certificates", ErrInvalidCACertificate, certCount)
+	}
+	x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse key pair as x509 cert: %w", err)
+	}
+	if !x509Cert.IsCA {
+		return nil, fmt.Errorf("%w: passed in key pair is not a CA", ErrInvalidCACertificate)
 	}
 	return &CA{
 		caCertBytes: cert.Certificate[0],

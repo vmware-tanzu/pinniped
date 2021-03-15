@@ -11,25 +11,33 @@ import (
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/issuer"
 )
 
-// CA is a type capable of issuing certificates.
-type CA struct {
+// ca is a type capable of issuing certificates.
+type ca struct {
 	provider dynamiccertificates.CertKeyContentProvider
 }
 
-// New creates a new CA, ready to issue certs whenever the provided provider has a keypair to
-// provide.
-func New(provider dynamiccertificates.CertKeyContentProvider) *CA {
-	return &CA{
+// New creates a ClientCertIssuer, ready to issue certs whenever
+// the given CertKeyContentProvider has a keypair to provide.
+func New(provider dynamiccertificates.CertKeyContentProvider) issuer.ClientCertIssuer {
+	return &ca{
 		provider: provider,
 	}
 }
 
+func (c *ca) Name() string {
+	return c.provider.Name()
+}
+
 // IssueClientCertPEM issues a new client certificate for the given identity and duration, returning it as a
 // pair of PEM-formatted byte slices for the certificate and private key.
-func (c *CA) IssueClientCertPEM(username string, groups []string, ttl time.Duration) ([]byte, []byte, error) {
+func (c *ca) IssueClientCertPEM(username string, groups []string, ttl time.Duration) ([]byte, []byte, error) {
 	caCrtPEM, caKeyPEM := c.provider.CurrentCertKeyContent()
+	// in the future we could split dynamiccert.Private into two interfaces (Private and PrivateRead)
+	// and have this code take PrivateRead as input.  We would then add ourselves as a listener to
+	// the PrivateRead.  This would allow us to only reload the CA contents when they actually change.
 	ca, err := certauthority.Load(string(caCrtPEM), string(caKeyPEM))
 	if err != nil {
 		return nil, nil, err

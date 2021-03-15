@@ -458,7 +458,7 @@ func createSecretInformer(ctx context.Context, t *testing.T, kubeClient kubernet
 // newClientProvider returns a dynamiccert.Provider configured
 // with valid serving cert, the CA bundle that can be used to verify the serving
 // cert, and the server name that can be used to verify the TLS peer.
-func newCertProvider(t *testing.T) (dynamiccert.Provider, []byte, string) {
+func newCertProvider(t *testing.T) (dynamiccert.Private, []byte, string) {
 	t.Helper()
 
 	serverName := "local-user-authenticator"
@@ -472,7 +472,7 @@ func newCertProvider(t *testing.T) (dynamiccert.Provider, []byte, string) {
 	certPEM, keyPEM, err := certauthority.ToPEM(cert)
 	require.NoError(t, err)
 
-	certProvider := dynamiccert.New(t.Name())
+	certProvider := dynamiccert.NewServingCert(t.Name())
 	err = certProvider.SetCertKeyContent(certPEM, keyPEM)
 	require.NoError(t, err)
 

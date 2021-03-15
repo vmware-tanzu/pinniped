@@ -17,6 +17,7 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
+	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/testutil"
@@ -109,7 +110,7 @@ func TestObserverControllerSync(t *testing.T) {
 		var cancelContext context.Context
 		var cancelContextCancelFunc context.CancelFunc
 		var syncContext *controllerlib.Context
-		var dynamicCertProvider dynamiccert.Provider
+		var dynamicCertProvider dynamiccert.Private
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
@@ -145,7 +146,7 @@ func TestObserverControllerSync(t *testing.T) {
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
-			dynamicCertProvider = dynamiccert.New(name)
+			dynamicCertProvider = dynamiccert.NewServingCert(name)
 		})
 
 		it.After(func() {
@@ -163,10 +164,16 @@ func TestObserverControllerSync(t *testing.T) {
 				err := kubeInformerClient.Tracker().Add(unrelatedSecret)
 				r.NoError(err)
 
-				crt, key, err := testutil.CreateCertificate(
+				caCrt, caKey, err := testutil.CreateCertificate(
 					time.Now().Add(-time.Hour),
 					time.Now().Add(time.Hour),
 				)
+				require.NoError(t, err)
+
+				ca, err := certauthority.Load(string(caCrt), string(caKey))
+				require.NoError(t, err)
+
+				crt, key, err := ca.IssueServerCertPEM(nil, nil, time.Hour)
 				require.NoError(t, err)
 
 				err = dynamicCertProvider.SetCertKeyContent(crt, key)
@@ -186,10 +193,16 @@ func TestObserverControllerSync(t *testing.T) {
 
 		when("there is a serving cert Secret with the expected keys already in the installation namespace", func() {
 			it.Before(func() {
-				crt, key, err := testutil.CreateCertificate(
+				caCrt, caKey, err := testutil.CreateCertificate(
 					time.Now().Add(-time.Hour),
 					time.Now().Add(time.Hour),
 				)
+				require.NoError(t, err)
+
+				ca, err := certauthority.Load(string(caCrt), string(caKey))
+				require.NoError(t, err)
+
+				crt, key, err := ca.IssueServerCertPEM(nil, nil, time.Hour)
 				require.NoError(t, err)
 
 				apiServingCertSecret := &corev1.Secret{

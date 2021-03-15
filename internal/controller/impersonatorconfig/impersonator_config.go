@@ -72,7 +72,7 @@ type impersonatorConfigController struct {
 	hasControlPlaneNodes              *bool
 	serverStopCh                      chan struct{}
 	errorCh                           chan error
-	tlsServingCertDynamicCertProvider dynamiccert.Provider
+	tlsServingCertDynamicCertProvider dynamiccert.Private
 }
 
 func NewImpersonatorConfigController(
@@ -116,7 +116,7 @@ func NewImpersonatorConfigController(
 				clock:                             clock,
 				impersonationSigningCertProvider:  impersonationSigningCertProvider,
 				impersonatorFunc:                  impersonatorFunc,
-				tlsServingCertDynamicCertProvider: dynamiccert.New("impersonation-proxy-serving-cert"),
+				tlsServingCertDynamicCertProvider: dynamiccert.NewServingCert("impersonation-proxy-serving-cert"),
 			},
 		},
 		withInformer(

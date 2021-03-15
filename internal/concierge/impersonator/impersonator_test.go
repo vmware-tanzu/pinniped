@@ -42,13 +42,13 @@ func TestImpersonator(t *testing.T) {
 	require.NoError(t, err)
 	caKey, err := ca.PrivateKeyToPEM()
 	require.NoError(t, err)
-	caContent := dynamiccert.New("ca")
+	caContent := dynamiccert.NewCA("ca")
 	err = caContent.SetCertKeyContent(ca.Bundle(), caKey)
 	require.NoError(t, err)
 
 	cert, key, err := ca.IssueServerCertPEM(nil, []net.IP{net.ParseIP("127.0.0.1")}, time.Hour)
 	require.NoError(t, err)
-	certKeyContent := dynamiccert.New("cert-key")
+	certKeyContent := dynamiccert.NewServingCert("cert-key")
 	err = certKeyContent.SetCertKeyContent(cert, key)
 	require.NoError(t, err)
 

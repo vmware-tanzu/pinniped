@@ -63,12 +63,12 @@ type Config struct {
 	DiscoveryURLOverride *string
 
 	// DynamicServingCertProvider provides a setter and a getter to the Pinniped API's serving cert.
-	DynamicServingCertProvider dynamiccert.Provider
+	DynamicServingCertProvider dynamiccert.Private
 
 	// DynamicSigningCertProvider provides a setter and a getter to the Pinniped API's
 	// signing cert, i.e., the cert that it uses to sign certs for Pinniped clients wishing to login.
 	// This is filled with the Kube API server's signing cert by a controller, if it can be found.
-	DynamicSigningCertProvider dynamiccert.Provider
+	DynamicSigningCertProvider dynamiccert.Private
 
 	// ImpersonationSigningCertProvider provides a setter and a getter to the CA cert that should be
 	// used to sign client certs for authentication to the impersonation proxy. This CA is used by

@@ -243,7 +243,7 @@ func TestManagerControllerSync(t *testing.T) {
 			kubeInformerFactory = kubeinformers.NewSharedInformerFactory(kubeClientset, 0)
 			fakeExecutor = &fakePodExecutor{r: r}
 			frozenNow = time.Date(2020, time.September, 23, 7, 42, 0, 0, time.Local)
-			dynamicCertProvider = dynamiccert.New(name)
+			dynamicCertProvider = dynamiccert.NewCA(name)
 			err = dynamicCertProvider.SetCertKeyContent([]byte(defaultDynamicCertProviderCert), []byte(defaultDynamicCertProviderKey))
 			r.NoError(err)
 

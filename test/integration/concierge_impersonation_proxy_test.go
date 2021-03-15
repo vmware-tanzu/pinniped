@@ -140,7 +140,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	}
 
 	newImpersonationProxyClient := func(impersonationProxyURL string, impersonationProxyCACertPEM []byte, doubleImpersonateUser string) *kubeclient.Client {
-		refreshedCredentials := refreshCredential()
+		refreshedCredentials := refreshCredential().DeepCopy()
 		refreshedCredentials.Token = "not a valid token" // demonstrates that client certs take precedence over tokens by setting both on the requests
 		return newImpersonationProxyClientWithCredentials(refreshedCredentials, impersonationProxyURL, impersonationProxyCACertPEM, doubleImpersonateUser)
 	}
@@ -226,599 +226,616 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	impersonationProxyKubeClient := func() kubernetes.Interface {
 		return newImpersonationProxyClient(impersonationProxyURL, impersonationProxyCACertPEM, "").Kubernetes
 	}
-
-	// Test that the user can perform basic actions through the client with their username and group membership
-	// influencing RBAC checks correctly.
-	t.Run(
-		"access as user",
-		library.AccessAsUserTest(ctx, env.TestUser.ExpectedUsername, impersonationProxyKubeClient()),
-	)
-	for _, group := range env.TestUser.ExpectedGroups {
-		group := group
+	t.Run("positive tests", func(t *testing.T) {
+		// Test that the user can perform basic actions through the client with their username and group membership
+		// influencing RBAC checks correctly.
 		t.Run(
-			"access as group "+group,
-			library.AccessAsGroupTest(ctx, group, impersonationProxyKubeClient()),
+			"access as user",
+			library.AccessAsUserTest(ctx, env.TestUser.ExpectedUsername, impersonationProxyKubeClient()),
 		)
-	}
-
-	t.Run("watching for a full minute", func(t *testing.T) {
-		kubeconfigPath, envVarsWithProxy, _ := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM)
-
-		namespaceName := createTestNamespace(t, adminClient)
-
-		// Create an RBAC rule to allow this user to read/write everything.
-		library.CreateTestClusterRoleBinding(t,
-			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
-			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
-		)
-		// Wait for the above RBAC rule to take effect.
-		library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
-			Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
-		})
-
-		// Get pods in concierge namespace and pick one.
-		// We want to make sure it's a concierge pod (not cert agent), because we need to be able to "exec echo" and port-forward a running port.
-		pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{})
-		require.NoError(t, err)
-		require.Greater(t, len(pods.Items), 0)
-		var conciergePod *corev1.Pod
-		for _, pod := range pods.Items {
-			pod := pod
-			if !strings.Contains(pod.Name, "kube-cert-agent") {
-				conciergePod = &pod
-			}
+		for _, group := range env.TestUser.ExpectedGroups {
+			group := group
+			t.Run(
+				"access as group "+group,
+				library.AccessAsGroupTest(ctx, group, impersonationProxyKubeClient()),
+			)
 		}
-		require.NotNil(t, conciergePod, "could not find a concierge pod")
 
-		// run the kubectl port-forward command
-		timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
-		defer cancelFunc()
-		portForwardCmd, _, portForwardStderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, "port-forward", "--namespace", env.ConciergeNamespace, conciergePod.Name, "8443:8443")
-		portForwardCmd.Env = envVarsWithProxy
+		t.Run("watching for a full minute", func(t *testing.T) {
+			t.Parallel()
 
-		// start, but don't wait for the command to finish
-		err = portForwardCmd.Start()
-		require.NoError(t, err, `"kubectl port-forward" failed`)
-		go func() {
-			assert.EqualErrorf(t, portForwardCmd.Wait(), "signal: killed", `wanted "kubectl port-forward" to get signaled because context was cancelled (stderr: %q)`, portForwardStderr.String())
-		}()
-		time.Sleep(1 * time.Minute)
+			kubeconfigPath, envVarsWithProxy, _ := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM)
 
-		require.Eventually(t, func() bool {
-			// then run curl something against it
-			timeout, cancelFunc = context.WithTimeout(ctx, 2*time.Minute)
+			namespaceName := createTestNamespace(t, adminClient)
+
+			// Create an RBAC rule to allow this user to read/write everything.
+			library.CreateTestClusterRoleBinding(t,
+				rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
+				rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
+			)
+			// Wait for the above RBAC rule to take effect.
+			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
+				Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
+			})
+
+			// Get pods in concierge namespace and pick one.
+			// We want to make sure it's a concierge pod (not cert agent), because we need to be able to "exec echo" and port-forward a running port.
+			pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{})
+			require.NoError(t, err)
+			require.Greater(t, len(pods.Items), 0)
+			var conciergePod *corev1.Pod
+			for _, pod := range pods.Items {
+				pod := pod
+				if !strings.Contains(pod.Name, "kube-cert-agent") {
+					conciergePod = &pod
+				}
+			}
+			require.NotNil(t, conciergePod, "could not find a concierge pod")
+
+			// run the kubectl port-forward command
+			timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
 			defer cancelFunc()
-			curlCmd := exec.CommandContext(timeout, "curl", "-k", "https://127.0.0.1:8443")
-			var curlStdOut, curlStdErr bytes.Buffer
-			curlCmd.Stdout = &curlStdOut
-			curlCmd.Stderr = &curlStdErr
-			err = curlCmd.Run()
-			if err != nil {
-				t.Log("curl error: " + err.Error())
-				t.Log("curlStdErr: " + curlStdErr.String())
-				t.Log("stdout: " + curlStdOut.String())
+			portForwardCmd, _, portForwardStderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, "port-forward", "--namespace", env.ConciergeNamespace, conciergePod.Name, "8443:8443")
+			portForwardCmd.Env = envVarsWithProxy
+
+			// start, but don't wait for the command to finish
+			err = portForwardCmd.Start()
+			require.NoError(t, err, `"kubectl port-forward" failed`)
+			go func() {
+				assert.EqualErrorf(t, portForwardCmd.Wait(), "signal: killed", `wanted "kubectl port-forward" to get signaled because context was cancelled (stderr: %q)`, portForwardStderr.String())
+			}()
+			time.Sleep(1 * time.Minute)
+
+			require.Eventually(t, func() bool {
+				// then run curl something against it
+				timeout, cancelFunc = context.WithTimeout(ctx, 2*time.Minute)
+				defer cancelFunc()
+				curlCmd := exec.CommandContext(timeout, "curl", "-k", "https://127.0.0.1:8443")
+				var curlStdOut, curlStdErr bytes.Buffer
+				curlCmd.Stdout = &curlStdOut
+				curlCmd.Stderr = &curlStdErr
+				err = curlCmd.Run()
+				if err != nil {
+					t.Log("curl error: " + err.Error())
+					t.Log("curlStdErr: " + curlStdErr.String())
+					t.Log("stdout: " + curlStdOut.String())
+				}
+				// we expect this to 403, but all we care is that it gets through
+				return err == nil && strings.Contains(curlStdOut.String(), "\"forbidden: User \\\"system:anonymous\\\" cannot get path \\\"/\\\"\"")
+			}, 5*time.Minute, 500*time.Millisecond)
+		})
+
+		t.Run("using and watching all the basic verbs", func(t *testing.T) {
+			t.Parallel()
+
+			// Create a namespace, because it will be easier to exercise "deletecollection" if we have a namespace.
+			namespaceName := createTestNamespace(t, adminClient)
+
+			// Create an RBAC rule to allow this user to read/write everything.
+			library.CreateTestClusterRoleBinding(t,
+				rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
+				rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
+			)
+			// Wait for the above RBAC rule to take effect.
+			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
+				Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
+			})
+
+			// Create and start informer to exercise the "watch" verb for us.
+			informerFactory := k8sinformers.NewSharedInformerFactoryWithOptions(
+				impersonationProxyKubeClient(),
+				0,
+				k8sinformers.WithNamespace(namespaceName))
+			informer := informerFactory.Core().V1().ConfigMaps()
+			informer.Informer() // makes sure that the informer will cache
+			stopChannel := make(chan struct{})
+			informerFactory.Start(stopChannel)
+			t.Cleanup(func() {
+				// Shut down the informer.
+				close(stopChannel)
+			})
+			informerFactory.WaitForCacheSync(ctx.Done())
+
+			// Use labels on our created ConfigMaps to avoid accidentally listing other ConfigMaps that might
+			// exist in the namespace. In Kube 1.20+ there is a default ConfigMap in every namespace.
+			configMapLabels := labels.Set{
+				"pinniped.dev/testConfigMap": library.RandHex(t, 8),
 			}
-			// we expect this to 403, but all we care is that it gets through
-			return err == nil && strings.Contains(curlStdOut.String(), "\"forbidden: User \\\"system:anonymous\\\" cannot get path \\\"/\\\"\"")
-		}, 5*time.Minute, 500*time.Millisecond)
-	})
 
-	t.Run("using and watching all the basic verbs", func(t *testing.T) {
-		// Create a namespace, because it will be easier to exercise "deletecollection" if we have a namespace.
-		namespaceName := createTestNamespace(t, adminClient)
+			// Test "create" verb through the impersonation proxy.
+			_, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Create(ctx,
+				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-1", Labels: configMapLabels}},
+				metav1.CreateOptions{},
+			)
+			require.NoError(t, err)
+			_, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Create(ctx,
+				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-2", Labels: configMapLabels}},
+				metav1.CreateOptions{},
+			)
+			require.NoError(t, err)
+			_, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Create(ctx,
+				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-3", Labels: configMapLabels}},
+				metav1.CreateOptions{},
+			)
+			require.NoError(t, err)
 
-		// Create an RBAC rule to allow this user to read/write everything.
-		library.CreateTestClusterRoleBinding(t,
-			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
-			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
-		)
-		// Wait for the above RBAC rule to take effect.
-		library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
-			Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
+			// Make sure that all of the created ConfigMaps show up in the informer's cache to
+			// demonstrate that the informer's "watch" verb is working through the impersonation proxy.
+			require.Eventually(t, func() bool {
+				_, err1 := informer.Lister().ConfigMaps(namespaceName).Get("configmap-1")
+				_, err2 := informer.Lister().ConfigMaps(namespaceName).Get("configmap-2")
+				_, err3 := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
+				return err1 == nil && err2 == nil && err3 == nil
+			}, 10*time.Second, 50*time.Millisecond)
+
+			// Test "get" verb through the impersonation proxy.
+			configMap3, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Get(ctx, "configmap-3", metav1.GetOptions{})
+			require.NoError(t, err)
+
+			// Test "list" verb through the impersonation proxy.
+			listResult, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).List(ctx, metav1.ListOptions{
+				LabelSelector: configMapLabels.String(),
+			})
+			require.NoError(t, err)
+			require.Len(t, listResult.Items, 3)
+
+			// Test "update" verb through the impersonation proxy.
+			configMap3.Data = map[string]string{"foo": "bar"}
+			updateResult, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Update(ctx, configMap3, metav1.UpdateOptions{})
+			require.NoError(t, err)
+			require.Equal(t, "bar", updateResult.Data["foo"])
+
+			// Make sure that the updated ConfigMap shows up in the informer's cache.
+			require.Eventually(t, func() bool {
+				configMap, err := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
+				return err == nil && configMap.Data["foo"] == "bar"
+			}, 10*time.Second, 50*time.Millisecond)
+
+			// Test "patch" verb through the impersonation proxy.
+			patchResult, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Patch(ctx,
+				"configmap-3",
+				types.MergePatchType,
+				[]byte(`{"data":{"baz":"42"}}`),
+				metav1.PatchOptions{},
+			)
+			require.NoError(t, err)
+			require.Equal(t, "bar", patchResult.Data["foo"])
+			require.Equal(t, "42", patchResult.Data["baz"])
+
+			// Make sure that the patched ConfigMap shows up in the informer's cache.
+			require.Eventually(t, func() bool {
+				configMap, err := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
+				return err == nil && configMap.Data["foo"] == "bar" && configMap.Data["baz"] == "42"
+			}, 10*time.Second, 50*time.Millisecond)
+
+			// Test "delete" verb through the impersonation proxy.
+			err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Delete(ctx, "configmap-3", metav1.DeleteOptions{})
+			require.NoError(t, err)
+
+			// Make sure that the deleted ConfigMap shows up in the informer's cache.
+			require.Eventually(t, func() bool {
+				_, getErr := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
+				list, listErr := informer.Lister().ConfigMaps(namespaceName).List(configMapLabels.AsSelector())
+				return k8serrors.IsNotFound(getErr) && listErr == nil && len(list) == 2
+			}, 10*time.Second, 50*time.Millisecond)
+
+			// Test "deletecollection" verb through the impersonation proxy.
+			err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
+			require.NoError(t, err)
+
+			// Make sure that the deleted ConfigMaps shows up in the informer's cache.
+			require.Eventually(t, func() bool {
+				list, listErr := informer.Lister().ConfigMaps(namespaceName).List(configMapLabels.AsSelector())
+				return listErr == nil && len(list) == 0
+			}, 10*time.Second, 50*time.Millisecond)
+
+			// There should be no ConfigMaps left.
+			listResult, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).List(ctx, metav1.ListOptions{
+				LabelSelector: configMapLabels.String(),
+			})
+			require.NoError(t, err)
+			require.Len(t, listResult.Items, 0)
 		})
 
-		// Create and start informer to exercise the "watch" verb for us.
-		informerFactory := k8sinformers.NewSharedInformerFactoryWithOptions(
-			impersonationProxyKubeClient(),
-			0,
-			k8sinformers.WithNamespace(namespaceName))
-		informer := informerFactory.Core().V1().ConfigMaps()
-		informer.Informer() // makes sure that the informer will cache
-		stopChannel := make(chan struct{})
-		informerFactory.Start(stopChannel)
-		t.Cleanup(func() {
-			// Shut down the informer.
-			close(stopChannel)
-		})
-		informerFactory.WaitForCacheSync(ctx.Done())
+		t.Run("double impersonation as a regular user is blocked", func(t *testing.T) {
+			t.Parallel()
 
-		// Use labels on our created ConfigMaps to avoid accidentally listing other ConfigMaps that might
-		// exist in the namespace. In Kube 1.20+ there is a default ConfigMap in every namespace.
-		configMapLabels := labels.Set{
-			"pinniped.dev/testConfigMap": library.RandHex(t, 8),
-		}
+			// Create an RBAC rule to allow this user to read/write everything.
+			library.CreateTestClusterRoleBinding(t,
+				rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
+				rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "edit"},
+			)
+			// Wait for the above RBAC rule to take effect.
+			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
+				Namespace: env.ConciergeNamespace, Verb: "get", Group: "", Version: "v1", Resource: "secrets",
+			})
 
-		// Test "create" verb through the impersonation proxy.
-		_, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Create(ctx,
-			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-1", Labels: configMapLabels}},
-			metav1.CreateOptions{},
-		)
-		require.NoError(t, err)
-		_, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Create(ctx,
-			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-2", Labels: configMapLabels}},
-			metav1.CreateOptions{},
-		)
-		require.NoError(t, err)
-		_, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Create(ctx,
-			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-3", Labels: configMapLabels}},
-			metav1.CreateOptions{},
-		)
-		require.NoError(t, err)
+			// Make a client which will send requests through the impersonation proxy and will also add
+			// impersonate headers to the request.
+			doubleImpersonationKubeClient := newImpersonationProxyClient(impersonationProxyURL, impersonationProxyCACertPEM, "other-user-to-impersonate").Kubernetes
 
-		// Make sure that all of the created ConfigMaps show up in the informer's cache to
-		// demonstrate that the informer's "watch" verb is working through the impersonation proxy.
-		require.Eventually(t, func() bool {
-			_, err1 := informer.Lister().ConfigMaps(namespaceName).Get("configmap-1")
-			_, err2 := informer.Lister().ConfigMaps(namespaceName).Get("configmap-2")
-			_, err3 := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
-			return err1 == nil && err2 == nil && err3 == nil
-		}, 10*time.Second, 50*time.Millisecond)
+			// Check that we can get some resource through the impersonation proxy without any impersonation headers on the request.
+			// We could use any resource for this, but we happen to know that this one should exist.
+			_, err := impersonationProxyKubeClient().CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
+			require.NoError(t, err)
 
-		// Test "get" verb through the impersonation proxy.
-		configMap3, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Get(ctx, "configmap-3", metav1.GetOptions{})
-		require.NoError(t, err)
-
-		// Test "list" verb through the impersonation proxy.
-		listResult, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).List(ctx, metav1.ListOptions{
-			LabelSelector: configMapLabels.String(),
-		})
-		require.NoError(t, err)
-		require.Len(t, listResult.Items, 3)
-
-		// Test "update" verb through the impersonation proxy.
-		configMap3.Data = map[string]string{"foo": "bar"}
-		updateResult, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Update(ctx, configMap3, metav1.UpdateOptions{})
-		require.NoError(t, err)
-		require.Equal(t, "bar", updateResult.Data["foo"])
-
-		// Make sure that the updated ConfigMap shows up in the informer's cache.
-		require.Eventually(t, func() bool {
-			configMap, err := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
-			return err == nil && configMap.Data["foo"] == "bar"
-		}, 10*time.Second, 50*time.Millisecond)
-
-		// Test "patch" verb through the impersonation proxy.
-		patchResult, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Patch(ctx,
-			"configmap-3",
-			types.MergePatchType,
-			[]byte(`{"data":{"baz":"42"}}`),
-			metav1.PatchOptions{},
-		)
-		require.NoError(t, err)
-		require.Equal(t, "bar", patchResult.Data["foo"])
-		require.Equal(t, "42", patchResult.Data["baz"])
-
-		// Make sure that the patched ConfigMap shows up in the informer's cache.
-		require.Eventually(t, func() bool {
-			configMap, err := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
-			return err == nil && configMap.Data["foo"] == "bar" && configMap.Data["baz"] == "42"
-		}, 10*time.Second, 50*time.Millisecond)
-
-		// Test "delete" verb through the impersonation proxy.
-		err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Delete(ctx, "configmap-3", metav1.DeleteOptions{})
-		require.NoError(t, err)
-
-		// Make sure that the deleted ConfigMap shows up in the informer's cache.
-		require.Eventually(t, func() bool {
-			_, getErr := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
-			list, listErr := informer.Lister().ConfigMaps(namespaceName).List(configMapLabels.AsSelector())
-			return k8serrors.IsNotFound(getErr) && listErr == nil && len(list) == 2
-		}, 10*time.Second, 50*time.Millisecond)
-
-		// Test "deletecollection" verb through the impersonation proxy.
-		err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
-		require.NoError(t, err)
-
-		// Make sure that the deleted ConfigMaps shows up in the informer's cache.
-		require.Eventually(t, func() bool {
-			list, listErr := informer.Lister().ConfigMaps(namespaceName).List(configMapLabels.AsSelector())
-			return listErr == nil && len(list) == 0
-		}, 10*time.Second, 50*time.Millisecond)
-
-		// There should be no ConfigMaps left.
-		listResult, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).List(ctx, metav1.ListOptions{
-			LabelSelector: configMapLabels.String(),
-		})
-		require.NoError(t, err)
-		require.Len(t, listResult.Items, 0)
-	})
-
-	t.Run("double impersonation as a regular user is blocked", func(t *testing.T) {
-		// Create an RBAC rule to allow this user to read/write everything.
-		library.CreateTestClusterRoleBinding(t,
-			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
-			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "edit"},
-		)
-		// Wait for the above RBAC rule to take effect.
-		library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
-			Namespace: env.ConciergeNamespace, Verb: "get", Group: "", Version: "v1", Resource: "secrets",
+			// Now we'll see what happens when we add an impersonation header to the request. This should generate a
+			// request similar to the one above, except that it will also have an impersonation header.
+			_, err = doubleImpersonationKubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
+			// Double impersonation is not supported yet, so we should get an error.
+			require.EqualError(t, err, fmt.Sprintf(
+				`users "other-user-to-impersonate" is forbidden: `+
+					`User "%s" cannot impersonate resource "users" in API group "" at the cluster scope: `+
+					`impersonation is not allowed or invalid verb`,
+				env.TestUser.ExpectedUsername))
 		})
 
-		// Make a client which will send requests through the impersonation proxy and will also add
-		// impersonate headers to the request.
-		doubleImpersonationKubeClient := newImpersonationProxyClient(impersonationProxyURL, impersonationProxyCACertPEM, "other-user-to-impersonate").Kubernetes
+		// This is a separate test from the above double impersonation test because the cluster admin user gets special
+		// authorization treatment from the Kube API server code that we are using, and we want to ensure that we are blocking
+		// double impersonation even for the cluster admin.
+		t.Run("double impersonation as a cluster admin user is blocked", func(t *testing.T) {
+			t.Parallel()
 
-		// Check that we can get some resource through the impersonation proxy without any impersonation headers on the request.
-		// We could use any resource for this, but we happen to know that this one should exist.
-		_, err = impersonationProxyKubeClient().CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
-		require.NoError(t, err)
+			// Copy the admin credentials from the admin kubeconfig.
+			adminClientRestConfig := library.NewClientConfig(t)
 
-		// Now we'll see what happens when we add an impersonation header to the request. This should generate a
-		// request similar to the one above, except that it will also have an impersonation header.
-		_, err = doubleImpersonationKubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
-		// Double impersonation is not supported yet, so we should get an error.
-		require.EqualError(t, err, fmt.Sprintf(
-			`users "other-user-to-impersonate" is forbidden: `+
-				`User "%s" cannot impersonate resource "users" in API group "" at the cluster scope: `+
-				`impersonation is not allowed or invalid verb`,
-			env.TestUser.ExpectedUsername))
-	})
+			if adminClientRestConfig.BearerToken == "" && adminClientRestConfig.CertData == nil && adminClientRestConfig.KeyData == nil {
+				t.Skip("The admin kubeconfig does not include credentials, so skipping this test.")
+			}
 
-	// This is a separate test from the above double impersonation test because the cluster admin user gets special
-	// authorization treatment from the Kube API server code that we are using, and we want to ensure that we are blocking
-	// double impersonation even for the cluster admin.
-	t.Run("double impersonation as a cluster admin user is blocked", func(t *testing.T) {
-		// Copy the admin credentials from the admin kubeconfig.
-		adminClientRestConfig := library.NewClientConfig(t)
+			clusterAdminCredentials := &loginv1alpha1.ClusterCredential{
+				Token:                 adminClientRestConfig.BearerToken,
+				ClientCertificateData: string(adminClientRestConfig.CertData),
+				ClientKeyData:         string(adminClientRestConfig.KeyData),
+			}
 
-		if adminClientRestConfig.BearerToken == "" && adminClientRestConfig.CertData == nil && adminClientRestConfig.KeyData == nil {
-			t.Skip("The admin kubeconfig does not include credentials, so skipping this test.")
-		}
+			// Make a client using the admin credentials which will send requests through the impersonation proxy
+			// and will also add impersonate headers to the request.
+			doubleImpersonationKubeClient := newImpersonationProxyClientWithCredentials(
+				clusterAdminCredentials, impersonationProxyURL, impersonationProxyCACertPEM, "other-user-to-impersonate",
+			).Kubernetes
 
-		clusterAdminCredentials := &loginv1alpha1.ClusterCredential{
-			Token:                 adminClientRestConfig.BearerToken,
-			ClientCertificateData: string(adminClientRestConfig.CertData),
-			ClientKeyData:         string(adminClientRestConfig.KeyData),
-		}
+			_, err := doubleImpersonationKubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
+			// Double impersonation is not supported yet, so we should get an error.
+			require.Error(t, err)
+			require.Regexp(t,
+				`users "other-user-to-impersonate" is forbidden: `+
+					`User ".*" cannot impersonate resource "users" in API group "" at the cluster scope: `+
+					`impersonation is not allowed or invalid verb`,
+				err.Error(),
+			)
+		})
 
-		// Make a client using the admin credentials which will send requests through the impersonation proxy
-		// and will also add impersonate headers to the request.
-		doubleImpersonationKubeClient := newImpersonationProxyClientWithCredentials(
-			clusterAdminCredentials, impersonationProxyURL, impersonationProxyCACertPEM, "other-user-to-impersonate",
-		).Kubernetes
+		t.Run("WhoAmIRequests and different kinds of authentication through the impersonation proxy", func(t *testing.T) {
+			t.Parallel()
 
-		_, err = doubleImpersonationKubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
-		// Double impersonation is not supported yet, so we should get an error.
-		require.Error(t, err)
-		require.Regexp(t,
-			`users "other-user-to-impersonate" is forbidden: `+
-				`User ".*" cannot impersonate resource "users" in API group "" at the cluster scope: `+
-				`impersonation is not allowed or invalid verb`,
-			err.Error(),
-		)
-	})
+			// Test using the TokenCredentialRequest for authentication.
+			impersonationProxyPinnipedConciergeClient := newImpersonationProxyClient(
+				impersonationProxyURL, impersonationProxyCACertPEM, "",
+			).PinnipedConcierge
+			whoAmI, err := impersonationProxyPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
+				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			require.Equal(t,
+				expectedWhoAmIRequestResponse(
+					env.TestUser.ExpectedUsername,
+					append(env.TestUser.ExpectedGroups, "system:authenticated"),
+				),
+				whoAmI,
+			)
 
-	t.Run("WhoAmIRequests and different kinds of authentication through the impersonation proxy", func(t *testing.T) {
-		// Test using the TokenCredentialRequest for authentication.
-		impersonationProxyPinnipedConciergeClient := newImpersonationProxyClient(
-			impersonationProxyURL, impersonationProxyCACertPEM, "",
-		).PinnipedConcierge
-		whoAmI, err := impersonationProxyPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
-			Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-		require.NoError(t, err)
-		require.Equal(t,
-			expectedWhoAmIRequestResponse(
-				env.TestUser.ExpectedUsername,
-				append(env.TestUser.ExpectedGroups, "system:authenticated"),
-			),
-			whoAmI,
-		)
+			// Test an unauthenticated request which does not include any credentials.
+			impersonationProxyAnonymousPinnipedConciergeClient := newAnonymousImpersonationProxyClient(
+				impersonationProxyURL, impersonationProxyCACertPEM, "",
+			).PinnipedConcierge
+			whoAmI, err = impersonationProxyAnonymousPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
+				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
+			require.NoError(t, err)
+			require.Equal(t,
+				expectedWhoAmIRequestResponse(
+					"system:anonymous",
+					[]string{"system:unauthenticated"},
+				),
+				whoAmI,
+			)
 
-		// Test an unauthenticated request which does not include any credentials.
-		impersonationProxyAnonymousPinnipedConciergeClient := newAnonymousImpersonationProxyClient(
-			impersonationProxyURL, impersonationProxyCACertPEM, "",
-		).PinnipedConcierge
-		whoAmI, err = impersonationProxyAnonymousPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
-			Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-		require.NoError(t, err)
-		require.Equal(t,
-			expectedWhoAmIRequestResponse(
-				"system:anonymous",
-				[]string{"system:unauthenticated"},
-			),
-			whoAmI,
-		)
-
-		// Test using a service account token. Authenticating as Service Accounts through the impersonation
-		// proxy is not supported, so it should fail.
-		namespaceName := createTestNamespace(t, adminClient)
-		impersonationProxyServiceAccountPinnipedConciergeClient := newImpersonationProxyClientWithCredentials(
-			&loginv1alpha1.ClusterCredential{Token: createServiceAccountToken(ctx, t, adminClient, namespaceName)},
-			impersonationProxyURL, impersonationProxyCACertPEM, "").PinnipedConcierge
-		_, err = impersonationProxyServiceAccountPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
-			Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-		require.EqualError(t, err, "Internal error occurred: unimplemented functionality - unable to act as current user")
-		require.True(t, k8serrors.IsInternalError(err), err)
-		require.Equal(t, &k8serrors.StatusError{
-			ErrStatus: metav1.Status{
-				Status: metav1.StatusFailure,
-				Code:   http.StatusInternalServerError,
-				Reason: metav1.StatusReasonInternalError,
-				Details: &metav1.StatusDetails{
-					Causes: []metav1.StatusCause{
-						{
-							Message: "unimplemented functionality - unable to act as current user",
+			// Test using a service account token. Authenticating as Service Accounts through the impersonation
+			// proxy is not supported, so it should fail.
+			namespaceName := createTestNamespace(t, adminClient)
+			impersonationProxyServiceAccountPinnipedConciergeClient := newImpersonationProxyClientWithCredentials(
+				&loginv1alpha1.ClusterCredential{Token: createServiceAccountToken(ctx, t, adminClient, namespaceName)},
+				impersonationProxyURL, impersonationProxyCACertPEM, "").PinnipedConcierge
+			_, err = impersonationProxyServiceAccountPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
+				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
+			require.EqualError(t, err, "Internal error occurred: unimplemented functionality - unable to act as current user")
+			require.True(t, k8serrors.IsInternalError(err), err)
+			require.Equal(t, &k8serrors.StatusError{
+				ErrStatus: metav1.Status{
+					Status: metav1.StatusFailure,
+					Code:   http.StatusInternalServerError,
+					Reason: metav1.StatusReasonInternalError,
+					Details: &metav1.StatusDetails{
+						Causes: []metav1.StatusCause{
+							{
+								Message: "unimplemented functionality - unable to act as current user",
+							},
 						},
 					},
+					Message: "Internal error occurred: unimplemented functionality - unable to act as current user",
 				},
-				Message: "Internal error occurred: unimplemented functionality - unable to act as current user",
-			},
-		}, err)
-	})
-
-	t.Run("kubectl as a client", func(t *testing.T) {
-		// Create an RBAC rule to allow this user to read/write everything.
-		library.CreateTestClusterRoleBinding(t,
-			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
-			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "edit"},
-		)
-		// Wait for the above RBAC rule to take effect.
-		library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
-			Verb: "get", Group: "", Version: "v1", Resource: "namespaces",
+			}, err)
 		})
 
-		kubeconfigPath, envVarsWithProxy, tempDir := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM)
+		t.Run("kubectl as a client", func(t *testing.T) {
+			t.Parallel()
 
-		// Get pods in concierge namespace and pick one.
-		// We want to make sure it's a concierge pod (not cert agent), because we need to be able to "exec echo" and port-forward a running port.
-		pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{})
-		require.NoError(t, err)
-		require.Greater(t, len(pods.Items), 0)
-		var conciergePod *corev1.Pod
-		for _, pod := range pods.Items {
-			pod := pod
-			if !strings.Contains(pod.Name, "kube-cert-agent") {
-				conciergePod = &pod
+			// Create an RBAC rule to allow this user to read/write everything.
+			library.CreateTestClusterRoleBinding(t,
+				rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
+				rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "edit"},
+			)
+			// Wait for the above RBAC rule to take effect.
+			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
+				Verb: "get", Group: "", Version: "v1", Resource: "namespaces",
+			})
+
+			kubeconfigPath, envVarsWithProxy, tempDir := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM)
+
+			// Get pods in concierge namespace and pick one.
+			// We want to make sure it's a concierge pod (not cert agent), because we need to be able to "exec echo" and port-forward a running port.
+			pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{})
+			require.NoError(t, err)
+			require.Greater(t, len(pods.Items), 0)
+			var conciergePod *corev1.Pod
+			for _, pod := range pods.Items {
+				pod := pod
+				if !strings.Contains(pod.Name, "kube-cert-agent") {
+					conciergePod = &pod
+				}
 			}
-		}
-		require.NotNil(t, conciergePod, "could not find a concierge pod")
+			require.NotNil(t, conciergePod, "could not find a concierge pod")
 
-		// Try "kubectl exec" through the impersonation proxy.
-		echoString := "hello world"
-		remoteEchoFile := fmt.Sprintf("/tmp/test-impersonation-proxy-echo-file-%d.txt", time.Now().Unix())
-		stdout, err := runKubectl(t, kubeconfigPath, envVarsWithProxy, "exec", "--namespace", env.ConciergeNamespace, conciergePod.Name, "--", "bash", "-c", fmt.Sprintf(`echo "%s" | tee %s`, echoString, remoteEchoFile))
-		require.NoError(t, err, `"kubectl exec" failed`)
-		require.Equal(t, echoString+"\n", stdout)
+			// Try "kubectl exec" through the impersonation proxy.
+			echoString := "hello world"
+			remoteEchoFile := fmt.Sprintf("/tmp/test-impersonation-proxy-echo-file-%d.txt", time.Now().Unix())
+			stdout, err := runKubectl(t, kubeconfigPath, envVarsWithProxy, "exec", "--namespace", env.ConciergeNamespace, conciergePod.Name, "--", "bash", "-c", fmt.Sprintf(`echo "%s" | tee %s`, echoString, remoteEchoFile))
+			require.NoError(t, err, `"kubectl exec" failed`)
+			require.Equal(t, echoString+"\n", stdout)
 
-		// run the kubectl cp command
-		localEchoFile := filepath.Join(tempDir, filepath.Base(remoteEchoFile))
-		_, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "cp", fmt.Sprintf("%s/%s:%s", env.ConciergeNamespace, conciergePod.Name, remoteEchoFile), localEchoFile)
-		require.NoError(t, err, `"kubectl cp" failed`)
-		localEchoFileData, err := ioutil.ReadFile(localEchoFile)
-		require.NoError(t, err)
-		require.Equal(t, echoString+"\n", string(localEchoFileData))
-		defer func() {
-			_, _ = runKubectl(t, kubeconfigPath, envVarsWithProxy, "exec", "--namespace", env.ConciergeNamespace, conciergePod.Name, "--", "rm", remoteEchoFile) // cleanup remote echo file
-		}()
-
-		// run the kubectl logs command
-		logLinesCount := 10
-		stdout, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "logs", "--namespace", env.ConciergeNamespace, conciergePod.Name, fmt.Sprintf("--tail=%d", logLinesCount))
-		require.NoError(t, err, `"kubectl logs" failed`)
-		require.Equalf(t, logLinesCount, strings.Count(stdout, "\n"), "wanted %d newlines in kubectl logs output:\n%s", logLinesCount, stdout)
-
-		// run the kubectl attach command
-		namespaceName := createTestNamespace(t, adminClient)
-		attachPod := library.CreatePod(ctx, t, "impersonation-proxy-attach", namespaceName, corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:    "impersonation-proxy-attach",
-					Image:   conciergePod.Spec.Containers[0].Image,
-					Command: []string{"bash"},
-					Args:    []string{"-c", `while true; do read VAR; echo "VAR: $VAR"; done`},
-					Stdin:   true,
-				},
-			},
-		})
-		timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
-		defer cancelFunc()
-		attachCmd, attachStdout, attachStderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, "attach", "--stdin=true", "--namespace", namespaceName, attachPod.Name)
-		attachCmd.Env = envVarsWithProxy
-		attachStdin, err := attachCmd.StdinPipe()
-		require.NoError(t, err)
-
-		// start but don't wait for the attach command
-		err = attachCmd.Start()
-		require.NoError(t, err)
-
-		// write to stdin on the attach process
-		_, err = attachStdin.Write([]byte(echoString + "\n"))
-		require.NoError(t, err)
-
-		// see that we can read stdout and it spits out stdin output back to us
-		wantAttachStdout := fmt.Sprintf("VAR: %s\n", echoString)
-		require.Eventuallyf(t, func() bool { return attachStdout.String() == wantAttachStdout }, time.Second*30, time.Second, `got "kubectl attach" stdout: %q, wanted: %q (stderr: %q)`, attachStdout.String(), wantAttachStdout, attachStderr.String())
-
-		// close stdin and attach process should exit
-		err = attachStdin.Close()
-		require.NoError(t, err)
-		err = attachCmd.Wait()
-		require.NoError(t, err)
-	})
-
-	t.Run("websocket client", func(t *testing.T) {
-		namespaceName := createTestNamespace(t, adminClient)
-		library.CreateTestClusterRoleBinding(t,
-			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
-			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
-		)
-		// Wait for the above RBAC rule to take effect.
-		library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
-			Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
-		})
-
-		impersonationRestConfig := impersonationProxyRestConfig(refreshCredential(), impersonationProxyURL, impersonationProxyCACertPEM, "")
-		tlsConfig, err := rest.TLSConfigFor(impersonationRestConfig)
-		require.NoError(t, err)
-
-		wantConfigMapLabelKey, wantConfigMapLabelValue := "some-label-key", "some-label-value"
-		dest, _ := url.Parse(impersonationProxyURL)
-		dest.Scheme = "wss"
-		dest.Path = "/api/v1/namespaces/" + namespaceName + "/configmaps"
-		dest.RawQuery = url.Values{
-			"watch":           {"1"},
-			"labelSelector":   {fmt.Sprintf("%s=%s", wantConfigMapLabelKey, wantConfigMapLabelValue)},
-			"resourceVersion": {"0"},
-		}.Encode()
-		dialer := websocket.Dialer{
-			TLSClientConfig: tlsConfig,
-		}
-		if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
-			dialer.Proxy = func(req *http.Request) (*url.URL, error) {
-				proxyURL, err := url.Parse(env.Proxy)
-				require.NoError(t, err)
-				t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
-				return proxyURL, nil
-			}
-		}
-		c, r, err := dialer.Dial(dest.String(), http.Header{"Origin": {dest.String()}})
-		if r != nil {
+			// run the kubectl cp command
+			localEchoFile := filepath.Join(tempDir, filepath.Base(remoteEchoFile))
+			_, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "cp", fmt.Sprintf("%s/%s:%s", env.ConciergeNamespace, conciergePod.Name, remoteEchoFile), localEchoFile)
+			require.NoError(t, err, `"kubectl cp" failed`)
+			localEchoFileData, err := ioutil.ReadFile(localEchoFile)
+			require.NoError(t, err)
+			require.Equal(t, echoString+"\n", string(localEchoFileData))
 			defer func() {
-				require.NoError(t, r.Body.Close())
+				_, _ = runKubectl(t, kubeconfigPath, envVarsWithProxy, "exec", "--namespace", env.ConciergeNamespace, conciergePod.Name, "--", "rm", remoteEchoFile) // cleanup remote echo file
 			}()
-		}
-		if err != nil && r != nil {
-			body, _ := ioutil.ReadAll(r.Body)
-			t.Logf("websocket dial failed: %d:%s", r.StatusCode, body)
-		}
-		require.NoError(t, err)
 
-		// perform a create through the admin client
-		wantConfigMap := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{Name: "configmap-1", Labels: map[string]string{wantConfigMapLabelKey: wantConfigMapLabelValue}},
-		}
-		wantConfigMap, err = adminClient.CoreV1().ConfigMaps(namespaceName).Create(ctx,
-			wantConfigMap,
-			metav1.CreateOptions{},
-		)
-		require.NoError(t, err)
-		t.Cleanup(func() {
-			require.NoError(t, adminClient.CoreV1().ConfigMaps(namespaceName).
-				DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{}))
+			// run the kubectl logs command
+			logLinesCount := 10
+			stdout, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "logs", "--namespace", env.ConciergeNamespace, conciergePod.Name, fmt.Sprintf("--tail=%d", logLinesCount))
+			require.NoError(t, err, `"kubectl logs" failed`)
+			require.Equalf(t, logLinesCount, strings.Count(stdout, "\n"), "wanted %d newlines in kubectl logs output:\n%s", logLinesCount, stdout)
+
+			// run the kubectl attach command
+			namespaceName := createTestNamespace(t, adminClient)
+			attachPod := library.CreatePod(ctx, t, "impersonation-proxy-attach", namespaceName, corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:    "impersonation-proxy-attach",
+						Image:   conciergePod.Spec.Containers[0].Image,
+						Command: []string{"bash"},
+						Args:    []string{"-c", `while true; do read VAR; echo "VAR: $VAR"; done`},
+						Stdin:   true,
+					},
+				},
+			})
+			timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
+			defer cancelFunc()
+			attachCmd, attachStdout, attachStderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, "attach", "--stdin=true", "--namespace", namespaceName, attachPod.Name)
+			attachCmd.Env = envVarsWithProxy
+			attachStdin, err := attachCmd.StdinPipe()
+			require.NoError(t, err)
+
+			// start but don't wait for the attach command
+			err = attachCmd.Start()
+			require.NoError(t, err)
+
+			// write to stdin on the attach process
+			_, err = attachStdin.Write([]byte(echoString + "\n"))
+			require.NoError(t, err)
+
+			// see that we can read stdout and it spits out stdin output back to us
+			wantAttachStdout := fmt.Sprintf("VAR: %s\n", echoString)
+			require.Eventuallyf(t, func() bool { return attachStdout.String() == wantAttachStdout }, time.Second*30, time.Second, `got "kubectl attach" stdout: %q, wanted: %q (stderr: %q)`, attachStdout.String(), wantAttachStdout, attachStderr.String())
+
+			// close stdin and attach process should exit
+			err = attachStdin.Close()
+			require.NoError(t, err)
+			err = attachCmd.Wait()
+			require.NoError(t, err)
 		})
 
-		// see if the websocket client received an event for the create
-		_, message, err := c.ReadMessage()
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		var got watchJSON
-		err = json.Unmarshal(message, &got)
-		require.NoError(t, err)
-		if got.Type != watch.Added {
-			t.Errorf("Unexpected type: %v", got.Type)
-		}
-		var actualConfigMap corev1.ConfigMap
-		require.NoError(t, json.Unmarshal(got.Object, &actualConfigMap))
-		actualConfigMap.TypeMeta = metav1.TypeMeta{} // This isn't filled out in the wantConfigMap we got back from create.
-		require.Equal(t, *wantConfigMap, actualConfigMap)
-	})
+		t.Run("websocket client", func(t *testing.T) {
+			t.Parallel()
 
-	t.Run("http2 client", func(t *testing.T) {
-		namespaceName := createTestNamespace(t, adminClient)
-		library.CreateTestClusterRoleBinding(t,
-			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
-			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
-		)
-		// Wait for the above RBAC rule to take effect.
-		library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
-			Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
-		})
+			namespaceName := createTestNamespace(t, adminClient)
+			library.CreateTestClusterRoleBinding(t,
+				rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
+				rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
+			)
+			// Wait for the above RBAC rule to take effect.
+			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
+				Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
+			})
 
-		wantConfigMapLabelKey, wantConfigMapLabelValue := "some-label-key", "some-label-value"
-		wantConfigMap := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{Name: "configmap-1", Labels: map[string]string{wantConfigMapLabelKey: wantConfigMapLabelValue}},
-		}
-		wantConfigMap, err = adminClient.CoreV1().ConfigMaps(namespaceName).Create(ctx,
-			wantConfigMap,
-			metav1.CreateOptions{},
-		)
-		require.NoError(t, err)
-		t.Cleanup(func() {
-			_ = adminClient.CoreV1().ConfigMaps(namespaceName).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
-		})
+			impersonationRestConfig := impersonationProxyRestConfig(refreshCredential(), impersonationProxyURL, impersonationProxyCACertPEM, "")
+			tlsConfig, err := rest.TLSConfigFor(impersonationRestConfig)
+			require.NoError(t, err)
 
-		// create rest client
-		restConfig := impersonationProxyRestConfig(refreshCredential(), impersonationProxyURL, impersonationProxyCACertPEM, "")
-
-		tlsConfig, err := rest.TLSConfigFor(restConfig)
-		require.NoError(t, err)
-		httpTransport := http.Transport{
-			TLSClientConfig: tlsConfig,
-		}
-		if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
-			httpTransport.Proxy = func(req *http.Request) (*url.URL, error) {
-				proxyURL, err := url.Parse(env.Proxy)
-				require.NoError(t, err)
-				t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
-				return proxyURL, nil
+			wantConfigMapLabelKey, wantConfigMapLabelValue := "some-label-key", "some-label-value"
+			dest, _ := url.Parse(impersonationProxyURL)
+			dest.Scheme = "wss"
+			dest.Path = "/api/v1/namespaces/" + namespaceName + "/configmaps"
+			dest.RawQuery = url.Values{
+				"watch":           {"1"},
+				"labelSelector":   {fmt.Sprintf("%s=%s", wantConfigMapLabelKey, wantConfigMapLabelValue)},
+				"resourceVersion": {"0"},
+			}.Encode()
+			dialer := websocket.Dialer{
+				TLSClientConfig: tlsConfig,
 			}
-		}
-		err = http2.ConfigureTransport(&httpTransport)
-		require.NoError(t, err)
+			if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
+				dialer.Proxy = func(req *http.Request) (*url.URL, error) {
+					proxyURL, err := url.Parse(env.Proxy)
+					require.NoError(t, err)
+					t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
+					return proxyURL, nil
+				}
+			}
+			c, r, err := dialer.Dial(dest.String(), http.Header{"Origin": {dest.String()}})
+			if r != nil {
+				defer func() {
+					require.NoError(t, r.Body.Close())
+				}()
+			}
+			if err != nil && r != nil {
+				body, _ := ioutil.ReadAll(r.Body)
+				t.Logf("websocket dial failed: %d:%s", r.StatusCode, body)
+			}
+			require.NoError(t, err)
 
-		httpClient := http.Client{
-			Transport: &httpTransport,
-		}
+			// perform a create through the admin client
+			wantConfigMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: "configmap-1", Labels: map[string]string{wantConfigMapLabelKey: wantConfigMapLabelValue}},
+			}
+			wantConfigMap, err = adminClient.CoreV1().ConfigMaps(namespaceName).Create(ctx,
+				wantConfigMap,
+				metav1.CreateOptions{},
+			)
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				require.NoError(t, adminClient.CoreV1().ConfigMaps(namespaceName).
+					DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{}))
+			})
 
-		dest, _ := url.Parse(impersonationProxyURL)
-		dest.Path = "/api/v1/namespaces/" + namespaceName + "/configmaps/configmap-1"
-		getConfigmapRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, dest.String(), nil)
-		require.NoError(t, err)
-		response, err := httpClient.Do(getConfigmapRequest)
-		require.NoError(t, err)
-		body, _ := ioutil.ReadAll(response.Body)
-		t.Logf("http2 status code: %d, proto: %s, message: %s", response.StatusCode, response.Proto, body)
-		require.Equal(t, "HTTP/2.0", response.Proto)
-		require.Equal(t, http.StatusOK, response.StatusCode)
-		defer func() {
-			require.NoError(t, response.Body.Close())
-		}()
-		var actualConfigMap corev1.ConfigMap
-		require.NoError(t, json.Unmarshal(body, &actualConfigMap))
-		actualConfigMap.TypeMeta = metav1.TypeMeta{} // This isn't filled out in the wantConfigMap we got back from create.
-		require.Equal(t, *wantConfigMap, actualConfigMap)
+			// see if the websocket client received an event for the create
+			_, message, err := c.ReadMessage()
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			var got watchJSON
+			err = json.Unmarshal(message, &got)
+			require.NoError(t, err)
+			if got.Type != watch.Added {
+				t.Errorf("Unexpected type: %v", got.Type)
+			}
+			var actualConfigMap corev1.ConfigMap
+			require.NoError(t, json.Unmarshal(got.Object, &actualConfigMap))
+			actualConfigMap.TypeMeta = metav1.TypeMeta{} // This isn't filled out in the wantConfigMap we got back from create.
+			require.Equal(t, *wantConfigMap, actualConfigMap)
+		})
 
-		// watch configmaps
-		dest.Path = "/api/v1/namespaces/" + namespaceName + "/configmaps"
-		dest.RawQuery = url.Values{
-			"watch":           {"1"},
-			"labelSelector":   {fmt.Sprintf("%s=%s", wantConfigMapLabelKey, wantConfigMapLabelValue)},
-			"resourceVersion": {"0"},
-		}.Encode()
-		watchConfigmapsRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, dest.String(), nil)
-		require.NoError(t, err)
-		response, err = httpClient.Do(watchConfigmapsRequest)
-		require.NoError(t, err)
-		require.Equal(t, "HTTP/2.0", response.Proto)
-		require.Equal(t, http.StatusOK, response.StatusCode)
-		defer func() {
-			require.NoError(t, response.Body.Close())
-		}()
+		t.Run("http2 client", func(t *testing.T) {
+			t.Parallel()
 
-		// decode
-		decoder := json.NewDecoder(response.Body)
-		var got watchJSON
-		err = decoder.Decode(&got)
-		require.NoError(t, err)
-		if got.Type != watch.Added {
-			t.Errorf("Unexpected type: %v", got.Type)
-		}
-		err = json.Unmarshal(got.Object, &actualConfigMap)
-		require.NoError(t, err)
-		require.Equal(t, "configmap-1", actualConfigMap.Name)
-		actualConfigMap.TypeMeta = metav1.TypeMeta{} // This isn't filled out in the wantConfigMap we got back from create.
-		require.Equal(t, *wantConfigMap, actualConfigMap)
+			namespaceName := createTestNamespace(t, adminClient)
+			library.CreateTestClusterRoleBinding(t,
+				rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
+				rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
+			)
+			// Wait for the above RBAC rule to take effect.
+			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
+				Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
+			})
+
+			wantConfigMapLabelKey, wantConfigMapLabelValue := "some-label-key", "some-label-value"
+			wantConfigMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: "configmap-1", Labels: map[string]string{wantConfigMapLabelKey: wantConfigMapLabelValue}},
+			}
+			wantConfigMap, err = adminClient.CoreV1().ConfigMaps(namespaceName).Create(ctx,
+				wantConfigMap,
+				metav1.CreateOptions{},
+			)
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				_ = adminClient.CoreV1().ConfigMaps(namespaceName).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
+			})
+
+			// create rest client
+			restConfig := impersonationProxyRestConfig(refreshCredential(), impersonationProxyURL, impersonationProxyCACertPEM, "")
+
+			tlsConfig, err := rest.TLSConfigFor(restConfig)
+			require.NoError(t, err)
+			httpTransport := http.Transport{
+				TLSClientConfig: tlsConfig,
+			}
+			if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
+				httpTransport.Proxy = func(req *http.Request) (*url.URL, error) {
+					proxyURL, err := url.Parse(env.Proxy)
+					require.NoError(t, err)
+					t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
+					return proxyURL, nil
+				}
+			}
+			err = http2.ConfigureTransport(&httpTransport)
+			require.NoError(t, err)
+
+			httpClient := http.Client{
+				Transport: &httpTransport,
+			}
+
+			dest, _ := url.Parse(impersonationProxyURL)
+			dest.Path = "/api/v1/namespaces/" + namespaceName + "/configmaps/configmap-1"
+			getConfigmapRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, dest.String(), nil)
+			require.NoError(t, err)
+			response, err := httpClient.Do(getConfigmapRequest)
+			require.NoError(t, err)
+			body, _ := ioutil.ReadAll(response.Body)
+			t.Logf("http2 status code: %d, proto: %s, message: %s", response.StatusCode, response.Proto, body)
+			require.Equal(t, "HTTP/2.0", response.Proto)
+			require.Equal(t, http.StatusOK, response.StatusCode)
+			defer func() {
+				require.NoError(t, response.Body.Close())
+			}()
+			var actualConfigMap corev1.ConfigMap
+			require.NoError(t, json.Unmarshal(body, &actualConfigMap))
+			actualConfigMap.TypeMeta = metav1.TypeMeta{} // This isn't filled out in the wantConfigMap we got back from create.
+			require.Equal(t, *wantConfigMap, actualConfigMap)
+
+			// watch configmaps
+			dest.Path = "/api/v1/namespaces/" + namespaceName + "/configmaps"
+			dest.RawQuery = url.Values{
+				"watch":           {"1"},
+				"labelSelector":   {fmt.Sprintf("%s=%s", wantConfigMapLabelKey, wantConfigMapLabelValue)},
+				"resourceVersion": {"0"},
+			}.Encode()
+			watchConfigmapsRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, dest.String(), nil)
+			require.NoError(t, err)
+			response, err = httpClient.Do(watchConfigmapsRequest)
+			require.NoError(t, err)
+			require.Equal(t, "HTTP/2.0", response.Proto)
+			require.Equal(t, http.StatusOK, response.StatusCode)
+			defer func() {
+				require.NoError(t, response.Body.Close())
+			}()
+
+			// decode
+			decoder := json.NewDecoder(response.Body)
+			var got watchJSON
+			err = decoder.Decode(&got)
+			require.NoError(t, err)
+			if got.Type != watch.Added {
+				t.Errorf("Unexpected type: %v", got.Type)
+			}
+			err = json.Unmarshal(got.Object, &actualConfigMap)
+			require.NoError(t, err)
+			require.Equal(t, "configmap-1", actualConfigMap.Name)
+			actualConfigMap.TypeMeta = metav1.TypeMeta{} // This isn't filled out in the wantConfigMap we got back from create.
+			require.Equal(t, *wantConfigMap, actualConfigMap)
+		})
 	})
 
 	t.Run("manually disabling the impersonation proxy feature", func(t *testing.T) {

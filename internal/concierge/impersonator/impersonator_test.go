@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -31,6 +31,7 @@ import (
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/httputil/roundtripper"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -68,6 +69,7 @@ func TestImpersonator(t *testing.T) {
 		name                               string
 		clientCert                         *clientCert
 		clientImpersonateUser              rest.ImpersonationConfig
+		clientMutateHeaders                func(http.Header)
 		kubeAPIServerClientBearerTokenFile string
 		kubeAPIServerStatusCode            int
 		wantKubeAPIServerRequestHeaders    http.Header
@@ -144,11 +146,42 @@ func TestImpersonator(t *testing.T) {
 			name:                  "no bearer token file in Kube API server client config",
 			wantConstructionError: "invalid impersonator loopback rest config has wrong bearer token semantics",
 		},
+		{
+			name:       "header canonicalization user header",
+			clientCert: newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
+			clientMutateHeaders: func(header http.Header) {
+				header.Set("imPerSonaTE-USer", "PANDA")
+			},
+			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			wantError: `users "PANDA" is forbidden: User "test-username" ` +
+				`cannot impersonate resource "users" in API group "" at the cluster scope: impersonation is not allowed or invalid verb`,
+		},
+		{
+			name:       "header canonicalization future UID header",
+			clientCert: newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
+			clientMutateHeaders: func(header http.Header) {
+				header.Set("imPerSonaTE-uid", "007")
+			},
+			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			wantError:                          "Internal error occurred: invalid impersonation",
+		},
+		{
+			name:       "future UID header",
+			clientCert: newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
+			clientMutateHeaders: func(header http.Header) {
+				header.Set("Impersonate-Uid", "008")
+			},
+			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			wantError:                          "Internal error occurred: invalid impersonation",
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		// This is a serial test because the production code binds to the port.
 		t.Run(tt.name, func(t *testing.T) {
+			// After failing to start and after shutdown, the impersonator port should be available again.
+			defer requireCanBindToPort(t, port)
+
 			if tt.kubeAPIServerStatusCode == 0 {
 				tt.kubeAPIServerStatusCode = http.StatusOK
 			}
@@ -156,7 +189,7 @@ func TestImpersonator(t *testing.T) {
 			// Set up a fake Kube API server which will stand in for the real one. The impersonator
 			// will proxy incoming calls to this fake server.
 			testKubeAPIServerWasCalled := false
-			testKubeAPIServerSawHeaders := http.Header{}
+			var testKubeAPIServerSawHeaders http.Header
 			testKubeAPIServerCA, testKubeAPIServerURL := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 				require.Equal(t, http.MethodGet, r.Method)
 				switch r.URL.Path {
@@ -203,8 +236,6 @@ func TestImpersonator(t *testing.T) {
 			if len(tt.wantConstructionError) > 0 {
 				require.EqualError(t, constructionErr, tt.wantConstructionError)
 				require.Nil(t, runner)
-				// After failing to start, the impersonator port should be available again.
-				requireCanBindToPort(t, port)
 				// The rest of the test doesn't make sense when you expect a construction error, so stop here.
 				return
 			}
@@ -232,6 +263,17 @@ func TestImpersonator(t *testing.T) {
 				// and it should not passed into the impersonator handler func as an authorization header.
 				BearerToken: "must-be-ignored",
 				Impersonate: tt.clientImpersonateUser,
+				WrapTransport: func(rt http.RoundTripper) http.RoundTripper {
+					if tt.clientMutateHeaders == nil {
+						return rt
+					}
+
+					return roundtripper.Func(func(req *http.Request) (*http.Response, error) {
+						req = req.Clone(req.Context())
+						tt.clientMutateHeaders(req.Header)
+						return rt.RoundTrip(req)
+					})
+				},
 			}
 
 			// Create a real Kube client to make API requests to the impersonator.
@@ -243,28 +285,27 @@ func TestImpersonator(t *testing.T) {
 			listResponse, err := client.Kubernetes.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 			if len(tt.wantError) > 0 {
 				require.EqualError(t, err, tt.wantError)
+				require.Equal(t, &corev1.NamespaceList{}, listResponse)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, &v1.NamespaceList{
-					Items: []v1.Namespace{
+				require.Equal(t, &corev1.NamespaceList{
+					Items: []corev1.Namespace{
 						{ObjectMeta: metav1.ObjectMeta{Name: "namespace1"}},
 						{ObjectMeta: metav1.ObjectMeta{Name: "namespace2"}},
 					},
 				}, listResponse)
-
-				// The impersonator should have proxied the request to the fake Kube API server, which should have seen
-				// the headers of the original request mutated by the impersonator.
-				require.True(t, testKubeAPIServerWasCalled)
-				require.Equal(t, tt.wantKubeAPIServerRequestHeaders, testKubeAPIServerSawHeaders)
 			}
+
+			// If we expect to see some headers, then the fake KAS should have been called.
+			require.Equal(t, len(tt.wantKubeAPIServerRequestHeaders) != 0, testKubeAPIServerWasCalled)
+			// If the impersonator proxied the request to the fake Kube API server, we should see the headers
+			// of the original request mutated by the impersonator.  Otherwise the headers should be nil.
+			require.Equal(t, tt.wantKubeAPIServerRequestHeaders, testKubeAPIServerSawHeaders)
 
 			// Stop the impersonator server.
 			close(stopCh)
 			exitErr := <-errCh
 			require.NoError(t, exitErr)
-
-			// After shutdown, the impersonator port should be available again.
-			requireCanBindToPort(t, port)
 		})
 	}
 }

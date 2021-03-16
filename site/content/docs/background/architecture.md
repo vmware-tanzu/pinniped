@@ -1,3 +1,4 @@
+
 ---
 title: Architecture
 description: Dive into the overall design and implementation details of Pinniped.
@@ -90,14 +91,14 @@ cleanly enable this integration.
 
 Pinniped supports the following cluster integration strategies.
 
-* Pinniped hosts a credential exchange API endpoint via a Kubernetes aggregated API server.
+* Kube Cluster Signing Certificate: Pinniped hosts a credential exchange API endpoint via a Kubernetes aggregated API server.
 This API returns a new cluster-specific credential using the cluster's signing keypair to
 issue short-lived cluster certificates. (In the future, when the Kubernetes CSR API
 provides a way to issue short-lived certificates, then the Pinniped credential exchange API
 will use that instead of using the cluster's signing keypair.)
-
-More cluster integration strategies are coming soon, which will allow Pinniped to
-support more Kubernetes cluster types.
+* Impersonation Proxy: Pinniped hosts an [impersonation](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#user-impersonation)
+proxy that performs actions on behalf of the end user. The impersonation proxy accepts and modifies user requests before passing them through to the
+Kubernetes API server.
 
 ## kubectl Integration
 

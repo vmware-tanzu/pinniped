@@ -15,15 +15,20 @@ menu:
 | [VMware Tanzu Kubernetes Grid (TKG) clusters](https://tanzu.vmware.com/kubernetes-grid) | Yes |
 | [Kind clusters](https://kind.sigs.k8s.io/) | Yes |
 | [Kubeadm-based clusters](https://kubernetes.io/docs/reference/setup-tools/kubeadm/) | Yes |
-| [Amazon Elastic Kubernetes Service (EKS)](https://aws.amazon.com/eks/) | No |
-| [Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine) | No |
-| [Azure Kubernetes Service (AKS)](https://azure.microsoft.com/en-us/overview/kubernetes-on-azure) | No |
+| [Amazon Elastic Kubernetes Service (EKS)](https://aws.amazon.com/eks/) | Yes |
+| [Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine) | Yes |
+| [Azure Kubernetes Service (AKS)](https://azure.microsoft.com/en-us/overview/kubernetes-on-azure) | Yes |
 
 ## Background
 
-The Pinniped Concierge currently supports clusters where a custom pod can be executed on the  same node running `kube-controller-manager`.
+The Pinniped Concierge has two strategies available to support clusters, under the following conditions:
+
+1. Kube Cluster Signing Certificate: Can be run on any Kubernetes cluster where a custom pod can be executed on the same node running `kube-controller-manager`.
 This type of cluster is typically called "self-hosted" because the cluster's control plane is running on nodes that are part of the cluster itself.
+Most managed Kubernetes services do not support this.
 
-In practice, this means that many Kubernetes distributions are supported, but not most managed Kubernetes services
+2. Impersonation Proxy: Can be run on any Kubernetes cluster where a `LoadBalancer` service can be created. Most cloud-hosted Kubernetes environments have this
+capability. The Impersonation Proxy automatically provisions a `LoadBalancer` for ingress to the impersonation endpoint.
 
-Support for more cluster types, including managed Kubernetes environments, is planned.
+If a cluster is capable of supporting both strategies, the Pinniped Concierge will use the
+kube cluster signing certificate strategy.

@@ -356,7 +356,6 @@ func TestWhoAmI_Anonymous(t *testing.T) {
 	require.NoError(t, err)
 
 	// this also asserts that all users, even unauthenticated ones, can call this API when anonymous is enabled
-	// this test will need to be skipped when we start running the integration tests against AKS clusters
 	require.Equal(t,
 		&identityv1alpha1.WhoAmIRequest{
 			Status: identityv1alpha1.WhoAmIRequestStatus{

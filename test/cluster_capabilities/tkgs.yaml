@@ -1,4 +1,4 @@
-# Copyright 2020 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # Describe the capabilities of the cluster against which the integration tests will run.
@@ -6,3 +6,7 @@ capabilities:
 
   # Is it possible to borrow the cluster's signing key from the kube API server?
   clusterSigningKeyIsAvailable: true
+
+  # Does the cluster allow requests without authentication?
+  # https://kubernetes.io/docs/reference/access-authn-authz/authentication/#anonymous-requests
+  anonymousAuthenticationSupported: true

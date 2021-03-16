@@ -23,7 +23,7 @@ import (
 )
 
 func TestUnsuccessfulCredentialRequest(t *testing.T) {
-	env := library.IntegrationEnv(t)
+	env := library.IntegrationEnv(t).WithCapability(library.AnonymousAuthenticationSupported)
 
 	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
@@ -184,7 +184,7 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T
 }
 
 func TestCredentialRequest_OtherwiseValidRequestWithRealTokenShouldFailWhenTheClusterIsNotCapable(t *testing.T) {
-	env := library.IntegrationEnv(t).WithoutCapability(library.ClusterSigningKeyIsAvailable)
+	env := library.IntegrationEnv(t).WithoutCapability(library.ClusterSigningKeyIsAvailable).WithCapability(library.AnonymousAuthenticationSupported)
 
 	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 

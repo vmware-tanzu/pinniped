@@ -5,8 +5,8 @@
 capabilities:
 
   # Is it possible to borrow the cluster's signing key from the kube API server?
-  clusterSigningKeyIsAvailable: true
+  clusterSigningKeyIsAvailable: false
 
   # Does the cluster allow requests without authentication?
   # https://kubernetes.io/docs/reference/access-authn-authz/authentication/#anonymous-requests
-  anonymousAuthenticationSupported: true
+  anonymousAuthenticationSupported: false

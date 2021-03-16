@@ -9,3 +9,7 @@ capabilities:
 
   # Will the cluster successfully provision a load balancer if requested?
   hasExternalLoadBalancerProvider: true
+
+  # Does the cluster allow requests without authentication?
+  # https://kubernetes.io/docs/reference/access-authn-authz/authentication/#anonymous-requests
+  anonymousAuthenticationSupported: true

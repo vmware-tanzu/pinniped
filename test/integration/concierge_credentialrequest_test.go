@@ -23,7 +23,7 @@ import (
 )
 
 func TestUnsuccessfulCredentialRequest(t *testing.T) {
-	env := library.IntegrationEnv(t)
+	env := library.IntegrationEnv(t).WithCapability(library.AnonymousAuthenticationSupported)
 
 	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 

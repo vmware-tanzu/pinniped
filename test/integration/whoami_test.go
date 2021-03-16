@@ -333,7 +333,7 @@ func TestWhoAmI_CSR(t *testing.T) {
 }
 
 func TestWhoAmI_Anonymous(t *testing.T) {
-	_ = library.IntegrationEnv(t)
+	_ = library.IntegrationEnv(t).WithCapability(library.AnonymousAuthenticationSupported)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -345,7 +345,6 @@ func TestWhoAmI_Anonymous(t *testing.T) {
 	require.NoError(t, err)
 
 	// this also asserts that all users, even unauthenticated ones, can call this API when anonymous is enabled
-	// this test will need to be skipped when we start running the integration tests against AKS clusters
 	require.Equal(t,
 		&identityv1alpha1.WhoAmIRequest{
 			Status: identityv1alpha1.WhoAmIRequestStatus{

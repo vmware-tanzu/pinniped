@@ -227,6 +227,27 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		return newImpersonationProxyClient(impersonationProxyURL, impersonationProxyCACertPEM, "").Kubernetes
 	}
 	t.Run("positive tests", func(t *testing.T) {
+		// Create an RBAC rule to allow this user to read/write everything.
+		library.CreateTestClusterRoleBinding(t,
+			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
+			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "edit"},
+		)
+
+		// Get pods in concierge namespace and pick one.
+		// this is for tests that require performing actions against a running pod. We use the concierge pod because we already have it handy.
+		// We want to make sure it's a concierge pod (not cert agent), because we need to be able to "exec echo" and port-forward a running port.
+		pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{})
+		require.NoError(t, err)
+		require.Greater(t, len(pods.Items), 0)
+		var conciergePod *corev1.Pod
+		for _, pod := range pods.Items {
+			pod := pod
+			if !strings.Contains(pod.Name, "kube-cert-agent") {
+				conciergePod = &pod
+			}
+		}
+		require.NotNil(t, conciergePod, "could not find a concierge pod")
+
 		// Test that the user can perform basic actions through the client with their username and group membership
 		// influencing RBAC checks correctly.
 		t.Run(
@@ -248,29 +269,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			namespaceName := createTestNamespace(t, adminClient)
 
-			// Create an RBAC rule to allow this user to read/write everything.
-			library.CreateTestClusterRoleBinding(t,
-				rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
-				rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
-			)
 			// Wait for the above RBAC rule to take effect.
 			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
 				Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
 			})
-
-			// Get pods in concierge namespace and pick one.
-			// We want to make sure it's a concierge pod (not cert agent), because we need to be able to "exec echo" and port-forward a running port.
-			pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{})
-			require.NoError(t, err)
-			require.Greater(t, len(pods.Items), 0)
-			var conciergePod *corev1.Pod
-			for _, pod := range pods.Items {
-				pod := pod
-				if !strings.Contains(pod.Name, "kube-cert-agent") {
-					conciergePod = &pod
-				}
-			}
-			require.NotNil(t, conciergePod, "could not find a concierge pod")
 
 			// run the kubectl port-forward command
 			timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
@@ -285,6 +287,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				assert.EqualErrorf(t, portForwardCmd.Wait(), "signal: killed", `wanted "kubectl port-forward" to get signaled because context was cancelled (stderr: %q)`, portForwardStderr.String())
 			}()
 
+			// wait to see if we time out.
 			time.Sleep(70 * time.Second)
 
 			require.Eventually(t, func() bool {
@@ -312,11 +315,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// Create a namespace, because it will be easier to exercise "deletecollection" if we have a namespace.
 			namespaceName := createTestNamespace(t, adminClient)
 
-			// Create an RBAC rule to allow this user to read/write everything.
-			library.CreateTestClusterRoleBinding(t,
-				rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
-				rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
-			)
 			// Wait for the above RBAC rule to take effect.
 			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
 				Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
@@ -441,11 +439,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		t.Run("double impersonation as a regular user is blocked", func(t *testing.T) {
 			t.Parallel()
 
-			// Create an RBAC rule to allow this user to read/write everything.
-			library.CreateTestClusterRoleBinding(t,
-				rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
-				rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "edit"},
-			)
 			// Wait for the above RBAC rule to take effect.
 			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
 				Namespace: env.ConciergeNamespace, Verb: "get", Group: "", Version: "v1", Resource: "secrets",
@@ -570,31 +563,12 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		t.Run("kubectl as a client", func(t *testing.T) {
 			t.Parallel()
 
-			// Create an RBAC rule to allow this user to read/write everything.
-			library.CreateTestClusterRoleBinding(t,
-				rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
-				rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "edit"},
-			)
 			// Wait for the above RBAC rule to take effect.
 			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
 				Verb: "get", Group: "", Version: "v1", Resource: "namespaces",
 			})
 
 			kubeconfigPath, envVarsWithProxy, tempDir := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM)
-
-			// Get pods in concierge namespace and pick one.
-			// We want to make sure it's a concierge pod (not cert agent), because we need to be able to "exec echo" and port-forward a running port.
-			pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{})
-			require.NoError(t, err)
-			require.Greater(t, len(pods.Items), 0)
-			var conciergePod *corev1.Pod
-			for _, pod := range pods.Items {
-				pod := pod
-				if !strings.Contains(pod.Name, "kube-cert-agent") {
-					conciergePod = &pod
-				}
-			}
-			require.NotNil(t, conciergePod, "could not find a concierge pod")
 
 			// Try "kubectl exec" through the impersonation proxy.
 			echoString := "hello world"
@@ -663,10 +637,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			t.Parallel()
 
 			namespaceName := createTestNamespace(t, adminClient)
-			library.CreateTestClusterRoleBinding(t,
-				rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
-				rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
-			)
+
 			// Wait for the above RBAC rule to take effect.
 			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
 				Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
@@ -743,10 +714,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			t.Parallel()
 
 			namespaceName := createTestNamespace(t, adminClient)
-			library.CreateTestClusterRoleBinding(t,
-				rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
-				rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "cluster-admin"},
-			)
+
 			// Wait for the above RBAC rule to take effect.
 			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
 				Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",

@@ -270,7 +270,7 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 			}
 
 			plog.Debug("impersonation proxy servicing request", "method", r.Method, "url", r.URL.String())
-			plog.Trace("impersonation proxy servicing request was for user",
+			plog.Trace("impersonation proxy servicing request was for user", "method", r.Method, "url", r.URL.String(),
 				"username", userInfo.GetName(), // this info leak seems fine for trace level logs
 			)
 

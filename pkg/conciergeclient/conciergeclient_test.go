@@ -219,10 +219,19 @@ func TestExchangeToken(t *testing.T) {
 		expires := metav1.NewTime(time.Now().Truncate(time.Second))
 
 		// Start a test server that returns successfully and asserts various properties of the request.
+		requestCount := 0
 		caBundle, endpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			requestCount++
 			require.Equal(t, http.MethodPost, r.Method)
 			require.Equal(t, "/apis/login.concierge.pinniped.dev/v1alpha1/tokencredentialrequests", r.URL.Path)
 			require.Equal(t, "application/json", r.Header.Get("content-type"))
+
+			// Return an error the first couple of times we're called.
+			if requestCount <= 2 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = w.Write([]byte("some temporary server error"))
+				return
+			}
 
 			body, err := ioutil.ReadAll(r.Body)
 			require.NoError(t, err)

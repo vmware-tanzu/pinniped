@@ -17,6 +17,7 @@ import (
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/client-go/util/retry"
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
@@ -171,13 +172,23 @@ func (c *Client) ExchangeToken(ctx context.Context, token string) (*clientauthen
 	if err != nil {
 		return nil, err
 	}
-	resp, err := clientset.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{
-		Spec: loginv1alpha1.TokenCredentialRequestSpec{
-			Token:         token,
-			Authenticator: *c.authenticator,
+
+	var resp *loginv1alpha1.TokenCredentialRequest
+	if err := retry.OnError(retry.DefaultRetry,
+		func(err error) bool {
+			// retry on every type of failure for now
+			return true
 		},
-	}, metav1.CreateOptions{})
-	if err != nil {
+		func() error {
+			var err error
+			resp, err = clientset.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{
+				Spec: loginv1alpha1.TokenCredentialRequestSpec{
+					Token:         token,
+					Authenticator: *c.authenticator,
+				},
+			}, metav1.CreateOptions{})
+			return err
+		}); err != nil {
 		return nil, fmt.Errorf("could not login: %w", err)
 	}
 	if resp.Status.Credential == nil || resp.Status.Message != nil {

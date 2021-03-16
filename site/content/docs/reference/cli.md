@@ -43,6 +43,9 @@ pinniped get kubeconfig [flags]
 - `--concierge-authenticator-type string`:
 
   Concierge authenticator type (e.g., 'webhook', 'jwt') (default: autodiscover)
+- `--concierge-mode`:
+
+Concierge mode of operation (e.g. 'ImpersonationProxy', 'TokenCredentialRequestAPI')(default: TokenCredentialRequestAPI)
 - `--kubeconfig string`:
 
   Path to kubeconfig file

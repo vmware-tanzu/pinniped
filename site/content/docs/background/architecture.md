@@ -22,7 +22,8 @@ to be passed on to clusters based on the user information from the IDP.
 1. The Pinniped Concierge is a credential exchange API which takes as input a
 credential from an identity source (e.g., Pinniped Supervisor, proprietary IDP),
 authenticates the user via that credential, and returns another credential which is
-understood by the host Kubernetes cluster.
+understood by the host Kubernetes cluster or by an impersonation proxy which acts
+on behalf of the user.
 
 ![Pinniped Architecture Sketch](/docs/img/pinniped_architecture_concierge_supervisor.svg)
 
@@ -97,8 +98,7 @@ issue short-lived cluster certificates. (In the future, when the Kubernetes CSR 
 provides a way to issue short-lived certificates, then the Pinniped credential exchange API
 will use that instead of using the cluster's signing keypair.)
 * Impersonation Proxy: Pinniped hosts an [impersonation](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#user-impersonation)
-proxy that performs actions on behalf of the end user. The impersonation proxy accepts and modifies user requests before passing them through to the
-Kubernetes API server.
+proxy that sends requests to the Kubernetes API server with user information and permissions based on a token. 
 
 ## kubectl Integration
 

@@ -4,6 +4,7 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -131,13 +132,19 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			require.Equal(t, env.ConciergeAppName, secret.Labels["app"])
 
 			// Expect that the APIService was also updated with the new CA.
-			aggregatedAPIUpdated := func() bool {
-				apiService, err = aggregatedClient.ApiregistrationV1().APIServices().Get(ctx, apiServiceName, metav1.GetOptions{})
-				return err == nil
-			}
-			assert.Eventually(t, aggregatedAPIUpdated, 10*time.Second, 250*time.Millisecond)
-			require.NoError(t, err) // prints out the error and stops the test in case of failure
-			require.Equal(t, regeneratedCACert, apiService.Spec.CABundle)
+			require.Eventually(t, func() bool {
+				apiService, err := aggregatedClient.ApiregistrationV1().APIServices().Get(ctx, apiServiceName, metav1.GetOptions{})
+				if err != nil {
+					t.Logf("get for APIService %q returned error %v", apiServiceName, err)
+					return false
+				}
+				if !bytes.Equal(regeneratedCACert, apiService.Spec.CABundle) {
+					t.Logf("CA bundle in APIService %q does not yet have the expected value", apiServiceName)
+					return false
+				}
+				t.Logf("found that APIService %q was updated to expected CA certificate", apiServiceName)
+				return true
+			}, 10*time.Second, 250*time.Millisecond, "never saw CA certificate rotate to expected value")
 
 			// Check that we can still make requests to the aggregated API through the kube API server,
 			// because the kube API server uses these certs when proxying requests to the aggregated API server,

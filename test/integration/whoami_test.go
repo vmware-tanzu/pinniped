@@ -344,7 +344,7 @@ func TestWhoAmI_CSR(t *testing.T) {
 }
 
 func TestWhoAmI_Anonymous(t *testing.T) {
-	_ = library.IntegrationEnv(t)
+	_ = library.IntegrationEnv(t).WithCapability(library.AnonymousAuthenticationSupported)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

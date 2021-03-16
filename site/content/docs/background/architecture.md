@@ -91,7 +91,7 @@ cleanly enable this integration.
 
 Pinniped supports the following cluster integration strategies.
 
-* Kube Cluster Signing Certificate: Pinniped hosts a credential exchange API endpoint via a Kubernetes aggregated API server.
+* Token Credential Request API: Pinniped hosts a credential exchange API endpoint via a Kubernetes aggregated API server.
 This API returns a new cluster-specific credential using the cluster's signing keypair to
 issue short-lived cluster certificates. (In the future, when the Kubernetes CSR API
 provides a way to issue short-lived certificates, then the Pinniped credential exchange API

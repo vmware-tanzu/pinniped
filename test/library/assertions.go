@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 )
 
 // RequireEventuallyWithoutError is a wrapper around require.Eventually() that allows the caller to
@@ -33,48 +34,73 @@ func RequireEventuallyWithoutError(
 // provided namespace with the provided labelSelector during the lifetime of a test.
 func assertNoRestartsDuringTest(t *testing.T, namespace, labelSelector string) {
 	t.Helper()
+	kubeClient := NewKubernetesClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 
-	previousRestartCounts := getRestartCounts(t, namespace, labelSelector)
+	previousRestartCounts := getRestartCounts(ctx, t, kubeClient, namespace, labelSelector)
 
 	t.Cleanup(func() {
-		currentRestartCounts := getRestartCounts(t, namespace, labelSelector)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		currentRestartCounts := getRestartCounts(ctx, t, kubeClient, namespace, labelSelector)
 
 		for key, previousRestartCount := range previousRestartCounts {
 			currentRestartCount, ok := currentRestartCounts[key]
-			if assert.Truef(
+
+			// If the container no longer exists, that's a test failure.
+			if !assert.Truef(
 				t,
 				ok,
-				"pod namespace/name/container %s existed at beginning of the test, but not the end",
-				key,
+				"container %s existed at beginning of the test, but not the end",
+				key.String(),
 			) {
-				assert.Equal(
-					t,
-					previousRestartCount,
-					currentRestartCount,
-					"pod namespace/name/container %s has restarted %d times (original count was %d)",
-					key,
-					currentRestartCount,
-					previousRestartCount,
-				)
+				continue
+			}
+
+			// Expect the restart count to be the same as it was before the test.
+			if !assert.Equal(
+				t,
+				previousRestartCount,
+				currentRestartCount,
+				"container %s has restarted %d times (original count was %d)",
+				key.String(),
+				currentRestartCount,
+				previousRestartCount,
+			) {
+				// Attempt to dump the logs from the previous container that crashed.
+				dumpContainerLogs(ctx, t, kubeClient, key.namespace, key.pod, key.container, true)
 			}
 		}
 	})
 }
 
-func getRestartCounts(t *testing.T, namespace, labelSelector string) map[string]int32 {
-	t.Helper()
+type containerRestartKey struct {
+	namespace string
+	pod       string
+	container string
+}
 
-	kubeClient := NewKubernetesClientset(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
+func (k containerRestartKey) String() string {
+	return fmt.Sprintf("%s/%s/%s", k.namespace, k.pod, k.container)
+}
+
+type containerRestartMap map[containerRestartKey]int32
+
+func getRestartCounts(ctx context.Context, t *testing.T, kubeClient kubernetes.Interface, namespace, labelSelector string) containerRestartMap {
+	t.Helper()
 
 	pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
 	require.NoError(t, err)
 
-	restartCounts := make(map[string]int32)
+	restartCounts := make(containerRestartMap)
 	for _, pod := range pods.Items {
 		for _, container := range pod.Status.ContainerStatuses {
-			key := fmt.Sprintf("%s/%s/%s", pod.Namespace, pod.Name, container.Name)
+			key := containerRestartKey{
+				namespace: pod.Namespace,
+				pod:       pod.Name,
+				container: container.Name,
+			}
 			restartCounts[key] = container.RestartCount
 		}
 	}

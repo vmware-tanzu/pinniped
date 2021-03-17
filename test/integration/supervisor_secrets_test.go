@@ -24,8 +24,6 @@ func TestSupervisorSecrets(t *testing.T) {
 	kubeClient := library.NewKubernetesClientset(t)
 	supervisorClient := library.NewSupervisorClientset(t)
 
-	library.AssertNoRestartsDuringTest(t, env.SupervisorNamespace, "")
-
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 

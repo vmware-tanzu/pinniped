@@ -97,6 +97,10 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 
 	loadEnvVars(t, &result)
 
+	// In every integration test, assert that no pods in our namespaces restart during the test.
+	assertNoRestartsDuringTest(t, result.ConciergeNamespace, "")
+	assertNoRestartsDuringTest(t, result.SupervisorNamespace, "")
+
 	result.t = t
 	return &result
 }

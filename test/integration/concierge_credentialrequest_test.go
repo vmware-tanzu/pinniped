@@ -23,9 +23,7 @@ import (
 )
 
 func TestUnsuccessfulCredentialRequest(t *testing.T) {
-	env := library.IntegrationEnv(t).WithCapability(library.AnonymousAuthenticationSupported)
-
-	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
+	_ = library.IntegrationEnv(t).WithCapability(library.AnonymousAuthenticationSupported)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -43,8 +41,6 @@ func TestUnsuccessfulCredentialRequest(t *testing.T) {
 
 func TestSuccessfulCredentialRequest(t *testing.T) {
 	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
-
-	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
@@ -131,9 +127,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 }
 
 func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
-	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
-
-	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
+	_ = library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
 	// Create a testWebhook so we have a legitimate authenticator to pass to the
 	// TokenCredentialRequest API.
@@ -154,9 +148,7 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 }
 
 func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
-	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
-
-	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
+	_ = library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
 	// Create a testWebhook so we have a legitimate authenticator to pass to the
 	// TokenCredentialRequest API.
@@ -184,9 +176,7 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T
 }
 
 func TestCredentialRequest_OtherwiseValidRequestWithRealTokenShouldFailWhenTheClusterIsNotCapable(t *testing.T) {
-	env := library.IntegrationEnv(t).WithoutCapability(library.ClusterSigningKeyIsAvailable).WithCapability(library.AnonymousAuthenticationSupported)
-
-	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
+	_ = library.IntegrationEnv(t).WithoutCapability(library.ClusterSigningKeyIsAvailable).WithCapability(library.AnonymousAuthenticationSupported)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

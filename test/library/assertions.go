@@ -29,9 +29,9 @@ func RequireEventuallyWithoutError(
 	require.NoError(t, wait.PollImmediate(tick, waitFor, f), msgAndArgs...)
 }
 
-// NewRestartAssertion allows a caller to assert that there were no restarts for a Pod in the
+// assertNoRestartsDuringTest allows a caller to assert that there were no restarts for a Pod in the
 // provided namespace with the provided labelSelector during the lifetime of a test.
-func AssertNoRestartsDuringTest(t *testing.T, namespace, labelSelector string) {
+func assertNoRestartsDuringTest(t *testing.T, namespace, labelSelector string) {
 	t.Helper()
 
 	previousRestartCounts := getRestartCounts(t, namespace, labelSelector)

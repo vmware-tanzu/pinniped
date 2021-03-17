@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -73,9 +74,17 @@ func (e *TestEnv) ProxyEnv() []string {
 	return []string{"http_proxy=" + e.Proxy, "https_proxy=" + e.Proxy, "no_proxy=127.0.0.1"}
 }
 
+// memoizedTestEnvsByTest maps *testing.T pointers to *TestEnv. It exists so that we don't do all the
+// environment parsing N times per test and so that any implicit assertions happen only once.
+var memoizedTestEnvsByTest sync.Map //nolint: gochecknoglobals
+
 // IntegrationEnv gets the integration test environment from OS environment variables. This
 // method also implies SkipUnlessIntegration().
 func IntegrationEnv(t *testing.T) *TestEnv {
+	if existing, exists := memoizedTestEnvsByTest.Load(t); exists {
+		return existing.(*TestEnv)
+	}
+
 	t.Helper()
 	SkipUnlessIntegration(t)
 
@@ -96,12 +105,12 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 	require.NoErrorf(t, err, "capabilities specification was invalid YAML")
 
 	loadEnvVars(t, &result)
+	result.t = t
+	memoizedTestEnvsByTest.Store(t, &result)
 
 	// In every integration test, assert that no pods in our namespaces restart during the test.
 	assertNoRestartsDuringTest(t, result.ConciergeNamespace, "")
 	assertNoRestartsDuringTest(t, result.SupervisorNamespace, "")
-
-	result.t = t
 	return &result
 }
 

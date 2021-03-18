@@ -113,6 +113,7 @@ check_dependency ytt "Please install ytt. e.g. 'brew tap k14s/tap && brew instal
 check_dependency kapp "Please install kapp. e.g. 'brew tap k14s/tap && brew install kapp' for MacOS"
 check_dependency kubectl "Please install kubectl. e.g. 'brew install kubectl' for MacOS"
 check_dependency htpasswd "Please install htpasswd. Should be pre-installed on MacOS. Usually found in 'apache2-utils' package for linux."
+check_dependency openssl "Please install openssl. Should be pre-installed on MacOS."
 check_dependency chromedriver "Please install chromedriver. e.g. 'brew install chromedriver' for MacOS"
 
 # Require kubectl >= 1.18.x
@@ -209,13 +210,7 @@ fi
 
 test_username="test-username"
 test_groups="test-group-0,test-group-1"
-set +o pipefail
-test_password="$(cat /dev/urandom | env LC_ALL=C tr -dc 'a-z0-9' | fold -w 32 | head -n 1)"
-set -o pipefail
-if [[ ${#test_password} -ne 32 ]]; then
-  log_error "Could not create test user's random password"
-  exit 1
-fi
+test_password="$(openssl rand -hex 16)"
 log_note "Creating test user '$test_username'..."
 kubectl create secret generic "$test_username" \
   --namespace local-user-authenticator \

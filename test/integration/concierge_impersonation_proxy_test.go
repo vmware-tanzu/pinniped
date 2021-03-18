@@ -281,7 +281,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			portForwardCmd.Env = envVarsWithProxy
 
 			// start, but don't wait for the command to finish
-			err = portForwardCmd.Start()
+			err := portForwardCmd.Start()
 			require.NoError(t, err, `"kubectl port-forward" failed`)
 			go func() {
 				assert.EqualErrorf(t, portForwardCmd.Wait(), "signal: killed", `wanted "kubectl port-forward" to get signaled because context was cancelled (stderr: %q)`, portForwardStderr.String())
@@ -342,7 +342,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}
 
 			// Test "create" verb through the impersonation proxy.
-			_, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Create(ctx,
+			_, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Create(ctx,
 				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-1", Labels: configMapLabels}},
 				metav1.CreateOptions{},
 			)
@@ -812,11 +812,11 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		configMap := configMapForConfig(t, env, impersonator.Config{Mode: impersonator.ModeDisabled})
 		if env.HasCapability(library.HasExternalLoadBalancerProvider) {
 			t.Logf("creating configmap %s", configMap.Name)
-			_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, &configMap, metav1.CreateOptions{})
+			_, err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, &configMap, metav1.CreateOptions{})
 			require.NoError(t, err)
 		} else {
 			t.Logf("updating configmap %s", configMap.Name)
-			_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Update(ctx, &configMap, metav1.UpdateOptions{})
+			_, err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Update(ctx, &configMap, metav1.UpdateOptions{})
 			require.NoError(t, err)
 		}
 
@@ -838,7 +838,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.Eventually(t, func() bool {
 				// It's okay if this returns RBAC errors because this user has no role bindings.
 				// What we want to see is that the proxy eventually shuts down entirely.
-				_, err = impersonationProxyViaSquidKubeClientWithoutCredential().CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+				_, err := impersonationProxyViaSquidKubeClientWithoutCredential().CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 				return err.Error() == serviceUnavailableViaSquidError
 			}, 20*time.Second, 500*time.Millisecond)
 		}
@@ -846,14 +846,14 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// Check that the generated TLS cert Secret was deleted by the controller because it's supposed to clean this up
 		// when we disable the impersonator.
 		require.Eventually(t, func() bool {
-			_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
+			_, err := adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
 			return k8serrors.IsNotFound(err)
 		}, 10*time.Second, 250*time.Millisecond)
 
 		// Check that the generated CA cert Secret was not deleted by the controller because it's supposed to keep this
 		// around in case we decide to later re-enable the impersonator. We want to avoid generating new CA certs when
 		// possible because they make their way into kubeconfigs on client machines.
-		_, err = adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyCASecretName(env), metav1.GetOptions{})
+		_, err := adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyCASecretName(env), metav1.GetOptions{})
 		require.NoError(t, err)
 
 		// At this point the impersonator should be stopped. The CredentialIssuer's strategies array should be updated to

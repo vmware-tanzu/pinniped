@@ -606,7 +606,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			// see that we can read stdout and it spits out stdin output back to us
 			wantAttachStdout := fmt.Sprintf("VAR: %s\n", echoString)
-			require.Eventuallyf(t, func() bool { return attachStdout.String() == wantAttachStdout }, time.Second*30, time.Second, `got "kubectl attach" stdout: %q, wanted: %q (stderr: %q)`, attachStdout.String(), wantAttachStdout, attachStderr.String())
+			require.Eventuallyf(t, func() bool { return attachStdout.String() == wantAttachStdout }, time.Second*60, time.Second*5, `got "kubectl attach" stdout: %q, wanted: %q (stderr: %q)`, attachStdout.String(), wantAttachStdout, attachStderr.String())
 
 			// close stdin and attach process should exit
 			err = attachStdin.Close()

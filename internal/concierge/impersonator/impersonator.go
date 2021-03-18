@@ -270,10 +270,13 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 			}
 
 			plog.Debug("impersonation proxy servicing request", "method", r.Method, "url", r.URL.String())
-			defer plog.Debug("impersonation proxy finished servicing request", "method", r.Method, "url", r.URL.String())
 			plog.Trace("impersonation proxy servicing request was for user", "method", r.Method, "url", r.URL.String(),
 				"username", userInfo.GetName(), // this info leak seems fine for trace level logs
 			)
+
+			// The proxy library used below will panic when the client disconnects abruptly, so in order to
+			// assure that this log message is always printed at the end of this func, it must be deferred.
+			defer plog.Debug("impersonation proxy finished servicing request", "method", r.Method, "url", r.URL.String())
 
 			reverseProxy := httputil.NewSingleHostReverseProxy(serverURL)
 			reverseProxy.Transport = rt

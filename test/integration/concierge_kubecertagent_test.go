@@ -29,8 +29,6 @@ const (
 func TestKubeCertAgent(t *testing.T) {
 	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
-	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 

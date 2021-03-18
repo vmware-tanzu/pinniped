@@ -29,8 +29,6 @@ func TestSupervisorHealthz(t *testing.T) {
 		t.Skip("PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS not defined")
 	}
 
-	library.AssertNoRestartsDuringTest(t, env.SupervisorNamespace, "")
-
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 

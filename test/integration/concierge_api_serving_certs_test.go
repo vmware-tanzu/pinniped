@@ -23,8 +23,6 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 	env := library.IntegrationEnv(t)
 	defaultServingCertResourceName := env.ConciergeAppName + "-api-tls-serving-certificate"
 
-	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
-
 	tests := []struct {
 		name          string
 		forceRotation func(context.Context, kubernetes.Interface, string) error

@@ -44,8 +44,6 @@ func TestSupervisorOIDCDiscovery(t *testing.T) {
 	env := library.IntegrationEnv(t)
 	client := library.NewSupervisorClientset(t)
 
-	library.AssertNoRestartsDuringTest(t, env.SupervisorNamespace, "")
-
 	ns := env.SupervisorNamespace
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
@@ -151,8 +149,6 @@ func TestSupervisorTLSTerminationWithSNI(t *testing.T) {
 	pinnipedClient := library.NewSupervisorClientset(t)
 	kubeClient := library.NewKubernetesClientset(t)
 
-	library.AssertNoRestartsDuringTest(t, env.SupervisorNamespace, "")
-
 	ns := env.SupervisorNamespace
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -223,8 +219,6 @@ func TestSupervisorTLSTerminationWithDefaultCerts(t *testing.T) {
 	env := library.IntegrationEnv(t)
 	pinnipedClient := library.NewSupervisorClientset(t)
 	kubeClient := library.NewKubernetesClientset(t)
-
-	library.AssertNoRestartsDuringTest(t, env.SupervisorNamespace, "")
 
 	ns := env.SupervisorNamespace
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)

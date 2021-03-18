@@ -46,9 +46,6 @@ func TestE2EFullIntegration(t *testing.T) {
 	defer library.DumpLogs(t, env.SupervisorNamespace, "")
 	defer library.DumpLogs(t, "dex", "app=proxy")
 
-	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
-	library.AssertNoRestartsDuringTest(t, env.SupervisorNamespace, "")
-
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancelFunc()
 
@@ -338,4 +335,15 @@ status:
       username: `+env.SupervisorTestUpstream.Username+`
 `,
 		string(kubectlOutput3))
+
+	// Validate that `pinniped whoami` returns the correct identity.
+	assertWhoami(
+		ctx,
+		t,
+		true,
+		pinnipedExe,
+		kubeconfigPath,
+		env.SupervisorTestUpstream.Username,
+		append(env.SupervisorTestUpstream.ExpectedGroups, "system:authenticated"),
+	)
 }

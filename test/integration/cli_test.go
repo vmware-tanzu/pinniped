@@ -24,8 +24,19 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/square/go-jose.v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
+	identityapi "go.pinniped.dev/generated/latest/apis/concierge/identity"
+	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
+	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
+	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
+	"go.pinniped.dev/internal/groupsuffix"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/filesession"
@@ -35,8 +46,6 @@ import (
 
 func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
-
-	library.AssertNoRestartsDuringTest(t, env.ConciergeNamespace, "")
 
 	// Create a test webhook configuration to use with the CLI.
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -104,6 +113,19 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 				group := group
 				t.Run("access as group "+group+" with client-go", library.AccessAsGroupTest(ctx, group, kubeClient))
 			}
+
+			// Validate that `pinniped whoami` returns the correct identity.
+			kubeconfigPath := filepath.Join(testutil.TempDir(t), "whoami-kubeconfig")
+			require.NoError(t, ioutil.WriteFile(kubeconfigPath, []byte(stdout), 0600))
+			assertWhoami(
+				ctx,
+				t,
+				false,
+				pinnipedExe,
+				kubeconfigPath,
+				env.TestUser.ExpectedUsername,
+				append(env.TestUser.ExpectedGroups, "system:authenticated"),
+			)
 		})
 	}
 }
@@ -117,6 +139,49 @@ func runPinnipedCLI(t *testing.T, envVars []string, pinnipedExe string, args ...
 	cmd.Env = envVars
 	require.NoErrorf(t, cmd.Run(), "stderr:\n%s\n\nstdout:\n%s\n\n", stderr.String(), stdout.String())
 	return stdout.String(), stderr.String()
+}
+
+func assertWhoami(ctx context.Context, t *testing.T, useProxy bool, pinnipedExe, kubeconfigPath, wantUsername string, wantGroups []string) {
+	t.Helper()
+
+	apiGroupSuffix := library.IntegrationEnv(t).APIGroupSuffix
+
+	var stdout, stderr bytes.Buffer
+	cmd := exec.CommandContext(
+		ctx,
+		pinnipedExe,
+		"whoami",
+		"--kubeconfig",
+		kubeconfigPath,
+		"--output",
+		"yaml",
+		"--api-group-suffix",
+		apiGroupSuffix,
+	)
+	if useProxy {
+		cmd.Env = append(os.Environ(), library.IntegrationEnv(t).ProxyEnv()...)
+	}
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	require.NoErrorf(t, cmd.Run(), "stderr:\n%s\n\nstdout:\n%s\n\n", stderr.String(), stdout.String())
+
+	whoAmI := deserializeWhoAmIRequest(t, stdout.String(), apiGroupSuffix)
+	require.Equal(t, wantUsername, whoAmI.Status.KubernetesUserInfo.User.Username)
+	require.ElementsMatch(t, wantGroups, whoAmI.Status.KubernetesUserInfo.User.Groups)
+}
+
+func deserializeWhoAmIRequest(t *testing.T, data string, apiGroupSuffix string) *identityv1alpha1.WhoAmIRequest {
+	t.Helper()
+
+	scheme, _, _ := conciergeschemeNew(apiGroupSuffix)
+	codecs := serializer.NewCodecFactory(scheme)
+	respInfo, ok := runtime.SerializerInfoForMediaType(codecs.SupportedMediaTypes(), runtime.ContentTypeYAML)
+	require.True(t, ok)
+
+	obj, err := runtime.Decode(respInfo.Serializer, []byte(data))
+	require.NoError(t, err)
+
+	return obj.(*identityv1alpha1.WhoAmIRequest)
 }
 
 func TestCLILoginOIDC(t *testing.T) {
@@ -354,4 +419,111 @@ func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, ses
 	// If there is a custom proxy, set it using standard environment variables.
 	cmd.Env = append(os.Environ(), env.ProxyEnv()...)
 	return cmd
+}
+
+// conciergeschemeNew is a temporary private function to stand in place for
+// "go.pinniped.dev/internal/concierge/scheme".New until the later function is merged to main.
+func conciergeschemeNew(apiGroupSuffix string) (_ *runtime.Scheme, login, identity schema.GroupVersion) {
+	// standard set up of the server side scheme
+	scheme := runtime.NewScheme()
+
+	// add the options to empty v1
+	metav1.AddToGroupVersion(scheme, metav1.Unversioned)
+
+	// nothing fancy is required if using the standard group suffix
+	if apiGroupSuffix == groupsuffix.PinnipedDefaultSuffix {
+		schemeBuilder := runtime.NewSchemeBuilder(
+			loginv1alpha1.AddToScheme,
+			loginapi.AddToScheme,
+			identityv1alpha1.AddToScheme,
+			identityapi.AddToScheme,
+		)
+		utilruntime.Must(schemeBuilder.AddToScheme(scheme))
+		return scheme, loginv1alpha1.SchemeGroupVersion, identityv1alpha1.SchemeGroupVersion
+	}
+
+	loginConciergeGroupData, identityConciergeGroupData := groupsuffix.ConciergeAggregatedGroups(apiGroupSuffix)
+
+	addToSchemeAtNewGroup(scheme, loginv1alpha1.GroupName, loginConciergeGroupData.Group, loginv1alpha1.AddToScheme, loginapi.AddToScheme)
+	addToSchemeAtNewGroup(scheme, identityv1alpha1.GroupName, identityConciergeGroupData.Group, identityv1alpha1.AddToScheme, identityapi.AddToScheme)
+
+	// manually register conversions and defaulting into the correct scheme since we cannot directly call AddToScheme
+	schemeBuilder := runtime.NewSchemeBuilder(
+		loginv1alpha1.RegisterConversions,
+		loginv1alpha1.RegisterDefaults,
+		identityv1alpha1.RegisterConversions,
+		identityv1alpha1.RegisterDefaults,
+	)
+	utilruntime.Must(schemeBuilder.AddToScheme(scheme))
+
+	// we do not want to return errors from the scheme and instead would prefer to defer
+	// to the REST storage layer for consistency.  The simplest way to do this is to force
+	// a cache miss from the authenticator cache.  Kube API groups are validated via the
+	// IsDNS1123Subdomain func thus we can easily create a group that is guaranteed never
+	// to be in the authenticator cache.  Add a timestamp just to be extra sure.
+	const authenticatorCacheMissPrefix = "_INVALID_API_GROUP_"
+	authenticatorCacheMiss := authenticatorCacheMissPrefix + time.Now().UTC().String()
+
+	// we do not have any defaulting functions for *loginv1alpha1.TokenCredentialRequest
+	// today, but we may have some in the future.  Calling AddTypeDefaultingFunc overwrites
+	// any previously registered defaulting function.  Thus to make sure that we catch
+	// a situation where we add a defaulting func, we attempt to call it here with a nil
+	// *loginv1alpha1.TokenCredentialRequest.  This will do nothing when there is no
+	// defaulting func registered, but it will almost certainly panic if one is added.
+	scheme.Default((*loginv1alpha1.TokenCredentialRequest)(nil))
+
+	// on incoming requests, restore the authenticator API group to the standard group
+	// note that we are responsible for duplicating this logic for every external API version
+	scheme.AddTypeDefaultingFunc(&loginv1alpha1.TokenCredentialRequest{}, func(obj interface{}) {
+		credentialRequest := obj.(*loginv1alpha1.TokenCredentialRequest)
+
+		if credentialRequest.Spec.Authenticator.APIGroup == nil {
+			// force a cache miss because this is an invalid request
+			plog.Debug("invalid token credential request, nil group", "authenticator", credentialRequest.Spec.Authenticator)
+			credentialRequest.Spec.Authenticator.APIGroup = &authenticatorCacheMiss
+			return
+		}
+
+		restoredGroup, ok := groupsuffix.Unreplace(*credentialRequest.Spec.Authenticator.APIGroup, apiGroupSuffix)
+		if !ok {
+			// force a cache miss because this is an invalid request
+			plog.Debug("invalid token credential request, wrong group", "authenticator", credentialRequest.Spec.Authenticator)
+			credentialRequest.Spec.Authenticator.APIGroup = &authenticatorCacheMiss
+			return
+		}
+
+		credentialRequest.Spec.Authenticator.APIGroup = &restoredGroup
+	})
+
+	return scheme, schema.GroupVersion(loginConciergeGroupData), schema.GroupVersion(identityConciergeGroupData)
+}
+
+func addToSchemeAtNewGroup(scheme *runtime.Scheme, oldGroup, newGroup string, funcs ...func(*runtime.Scheme) error) {
+	// we need a temporary place to register our types to avoid double registering them
+	tmpScheme := runtime.NewScheme()
+	schemeBuilder := runtime.NewSchemeBuilder(funcs...)
+	utilruntime.Must(schemeBuilder.AddToScheme(tmpScheme))
+
+	for gvk := range tmpScheme.AllKnownTypes() {
+		if gvk.GroupVersion() == metav1.Unversioned {
+			continue // metav1.AddToGroupVersion registers types outside of our aggregated API group that we need to ignore
+		}
+
+		if gvk.Group != oldGroup {
+			panic(fmt.Errorf("tmp scheme has type not in the old aggregated API group %s: %s", oldGroup, gvk)) // programmer error
+		}
+
+		obj, err := tmpScheme.New(gvk)
+		if err != nil {
+			panic(err) // programmer error, scheme internal code is broken
+		}
+		newGVK := schema.GroupVersionKind{
+			Group:   newGroup,
+			Version: gvk.Version,
+			Kind:    gvk.Kind,
+		}
+
+		// register the existing type but with the new group in the correct scheme
+		scheme.AddKnownTypeWithName(newGVK, obj)
+	}
 }

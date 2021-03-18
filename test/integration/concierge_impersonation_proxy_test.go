@@ -226,12 +226,17 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	impersonationProxyKubeClient := func() kubernetes.Interface {
 		return newImpersonationProxyClient(impersonationProxyURL, impersonationProxyCACertPEM, "").Kubernetes
 	}
+
 	t.Run("positive tests", func(t *testing.T) {
 		// Create an RBAC rule to allow this user to read/write everything.
 		library.CreateTestClusterRoleBinding(t,
 			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.TestUser.ExpectedUsername},
 			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "edit"},
 		)
+		// Wait for the above RBAC rule to take effect.
+		library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
+			Verb: "get", Group: "", Version: "v1", Resource: "namespaces",
+		})
 
 		// Get pods in concierge namespace and pick one.
 		// this is for tests that require performing actions against a running pod. We use the concierge pod because we already have it handy.
@@ -267,13 +272,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			kubeconfigPath, envVarsWithProxy, _ := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM)
 
-			namespaceName := createTestNamespace(t, adminClient)
-
-			// Wait for the above RBAC rule to take effect.
-			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
-				Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
-			})
-
 			// run the kubectl port-forward command
 			timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
 			defer cancelFunc()
@@ -294,7 +292,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				// then run curl something against it
 				timeout, cancelFunc = context.WithTimeout(ctx, 2*time.Minute)
 				defer cancelFunc()
-				curlCmd := exec.CommandContext(timeout, "curl", "-k", "https://127.0.0.1:8443")
+				curlCmd := exec.CommandContext(timeout, "curl", "-k", "-s", "https://127.0.0.1:8443")
 				var curlStdOut, curlStdErr bytes.Buffer
 				curlCmd.Stdout = &curlStdOut
 				curlCmd.Stderr = &curlStdErr
@@ -306,7 +304,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				}
 				// we expect this to 403, but all we care is that it gets through
 				return err == nil && strings.Contains(curlStdOut.String(), "\"forbidden: User \\\"system:anonymous\\\" cannot get path \\\"/\\\"\"")
-			}, 5*time.Minute, 500*time.Millisecond)
+			}, 1*time.Minute, 500*time.Millisecond)
 		})
 
 		t.Run("using and watching all the basic verbs", func(t *testing.T) {
@@ -314,11 +312,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			// Create a namespace, because it will be easier to exercise "deletecollection" if we have a namespace.
 			namespaceName := createTestNamespace(t, adminClient)
-
-			// Wait for the above RBAC rule to take effect.
-			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
-				Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
-			})
 
 			// Create and start informer to exercise the "watch" verb for us.
 			informerFactory := k8sinformers.NewSharedInformerFactoryWithOptions(
@@ -439,11 +432,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		t.Run("double impersonation as a regular user is blocked", func(t *testing.T) {
 			t.Parallel()
 
-			// Wait for the above RBAC rule to take effect.
-			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
-				Namespace: env.ConciergeNamespace, Verb: "get", Group: "", Version: "v1", Resource: "secrets",
-			})
-
 			// Make a client which will send requests through the impersonation proxy and will also add
 			// impersonate headers to the request.
 			doubleImpersonationKubeClient := newImpersonationProxyClient(impersonationProxyURL, impersonationProxyCACertPEM, "other-user-to-impersonate").Kubernetes
@@ -563,11 +551,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		t.Run("kubectl as a client", func(t *testing.T) {
 			t.Parallel()
 
-			// Wait for the above RBAC rule to take effect.
-			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
-				Verb: "get", Group: "", Version: "v1", Resource: "namespaces",
-			})
-
 			kubeconfigPath, envVarsWithProxy, tempDir := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM)
 
 			// Try "kubectl exec" through the impersonation proxy.
@@ -637,11 +620,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			t.Parallel()
 
 			namespaceName := createTestNamespace(t, adminClient)
-
-			// Wait for the above RBAC rule to take effect.
-			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
-				Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
-			})
 
 			impersonationRestConfig := impersonationProxyRestConfig(refreshCredential(), impersonationProxyURL, impersonationProxyCACertPEM, "")
 			tlsConfig, err := rest.TLSConfigFor(impersonationRestConfig)
@@ -714,11 +692,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			t.Parallel()
 
 			namespaceName := createTestNamespace(t, adminClient)
-
-			// Wait for the above RBAC rule to take effect.
-			library.WaitForUserToHaveAccess(t, env.TestUser.ExpectedUsername, []string{}, &v1.ResourceAttributes{
-				Namespace: namespaceName, Verb: "create", Group: "", Version: "v1", Resource: "configmaps",
-			})
 
 			wantConfigMapLabelKey, wantConfigMapLabelValue := "some-label-key", "some-label-value"
 			wantConfigMap := &corev1.ConfigMap{

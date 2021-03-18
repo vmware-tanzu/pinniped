@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -383,6 +384,8 @@ func (c *impersonatorConfigController) ensureImpersonatorIsStarted(syncCtx contr
 
 	// startImpersonatorFunc will block until the server shuts down (or fails to start), so run it in the background.
 	go func() {
+		defer utilruntime.HandleCrash()
+
 		// The server has stopped, so enqueue ourselves for another sync,
 		// so we can try to start the server again as quickly as possible.
 		defer syncCtx.Queue.AddRateLimited(syncCtx.Key)

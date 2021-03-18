@@ -5,6 +5,7 @@ package impersonator
 
 import (
 	"context"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -359,7 +360,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 				ExecProvider: &api.ExecConfig{},
 				AuthProvider: &api.AuthProviderConfig{},
 			},
-			wantCreationErr: "could not get in-cluster transport config: execProvider and authProvider cannot be used in combination",
+			wantCreationErr: "could not get http/1.1 round tripper: could not get in-cluster transport config: execProvider and authProvider cannot be used in combination",
 		},
 		{
 			name: "fail to get transport from config",
@@ -369,7 +370,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 				Transport:       http.DefaultTransport,
 				TLSClientConfig: rest.TLSClientConfig{Insecure: true},
 			},
-			wantCreationErr: "could not get in-cluster transport: using a custom transport with TLS certificate options or the insecure flag is not allowed",
+			wantCreationErr: "could not get http/1.1 round tripper: using a custom transport with TLS certificate options or the insecure flag is not allowed",
 		},
 		{
 			name:           "Impersonate-User header already in request",
@@ -513,6 +514,10 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 			metav1.AddToGroupVersion(scheme, metav1.Unversioned)
 			codecs := serializer.NewCodecFactory(scheme)
 			serverConfig := genericapiserver.NewRecommendedConfig(codecs)
+			serverConfig.Config.LongRunningFunc = func(_ *http.Request, _ *request.RequestInfo) bool {
+				// take the HTTP/2.0 vs HTTP/1.1 branch randomly to make sure we exercise both branches
+				return rand.Int()%2 == 0 //nolint:gosec // we don't care whether this is cryptographically secure or not
+			}
 
 			w := httptest.NewRecorder()
 			requestBeforeServe := tt.request.Clone(tt.request.Context())

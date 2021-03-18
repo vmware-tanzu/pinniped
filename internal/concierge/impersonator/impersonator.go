@@ -217,15 +217,14 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 		return nil, fmt.Errorf("could not parse host URL from in-cluster config: %w", err)
 	}
 
-	kubeTransportConfig, err := restConfig.TransportConfig()
+	http1RoundTripper, err := getTransportForProtocol(restConfig, "http/1.1")
 	if err != nil {
-		return nil, fmt.Errorf("could not get in-cluster transport config: %w", err)
+		return nil, fmt.Errorf("could not get http/1.1 round tripper: %w", err)
 	}
-	kubeTransportConfig.TLS.NextProtos = []string{"http/1.1"} // TODO huh?
 
-	kubeRoundTripper, err := transport.New(kubeTransportConfig)
+	http2RoundTripper, err := getTransportForProtocol(restConfig, "h2")
 	if err != nil {
-		return nil, fmt.Errorf("could not get in-cluster transport: %w", err)
+		return nil, fmt.Errorf("could not get http/2.0 round tripper: %w", err)
 	}
 
 	return func(c *genericapiserver.Config) http.Handler {
@@ -259,7 +258,26 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 				return
 			}
 
-			rt, err := getTransportForUser(userInfo, kubeRoundTripper)
+			reqInfo, ok := request.RequestInfoFrom(r.Context())
+			if !ok {
+				plog.Warning("aggregated API server logic did not set request info but it is always supposed to do so",
+					"url", r.URL.String(),
+					"method", r.Method,
+				)
+				newInternalErrResponse(w, r, c.Serializer, "invalid request info")
+				return
+			}
+
+			// when we are running regular requests (e.g., CRUD) we should always be able to use HTTP/2.0
+			// since KAS always supports that and it goes through proxies just fine. for long running
+			// requests (e.g., proxy, watch), we know they use http/1.1 with an upgrade to
+			// websockets/SPDY (this upgrade is NEVER to HTTP/2.0 as the KAS does not support that).
+			baseRT := http2RoundTripper
+			if c.LongRunningFunc(r, reqInfo) {
+				baseRT = http1RoundTripper
+			}
+
+			rt, err := getTransportForUser(userInfo, baseRT)
 			if err != nil {
 				plog.WarningErr("rejecting request as we cannot act as the current user", err,
 					"url", r.URL.String(),
@@ -334,4 +352,14 @@ func newStatusErrResponse(w http.ResponseWriter, r *http.Request, s runtime.Nego
 
 	gv := schema.GroupVersion{Group: requestInfo.APIGroup, Version: requestInfo.APIVersion}
 	responsewriters.ErrorNegotiated(err, s, gv, w, r)
+}
+
+func getTransportForProtocol(restConfig *rest.Config, protocol string) (http.RoundTripper, error) {
+	transportConfig, err := restConfig.TransportConfig()
+	if err != nil {
+		return nil, fmt.Errorf("could not get in-cluster transport config: %w", err)
+	}
+	transportConfig.TLS.NextProtos = []string{protocol}
+
+	return transport.New(transportConfig)
 }

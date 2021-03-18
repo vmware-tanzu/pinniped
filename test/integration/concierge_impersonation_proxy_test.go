@@ -196,7 +196,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// Check that we can't use the impersonation proxy to execute kubectl commands yet.
 		_, err = impersonationProxyViaSquidKubeClientWithoutCredential().CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-		require.EqualError(t, err, serviceUnavailableViaSquidError)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), proxyServiceEndpoint)
+		require.Contains(t, err.Error(), ": Service Unavailable")
 
 		// Create configuration to make the impersonation proxy turn on with a hard coded endpoint (without a load balancer).
 		configMap := configMapForConfig(t, env, impersonator.Config{

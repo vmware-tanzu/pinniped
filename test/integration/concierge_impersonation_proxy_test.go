@@ -95,8 +95,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 	// The address of the ClusterIP service that points at the impersonation proxy's port (used when there is no load balancer).
 	proxyServiceEndpoint := fmt.Sprintf("%s-proxy.%s.svc.cluster.local", env.ConciergeAppName, env.ConciergeNamespace)
-	// The error message that will be returned by squid when the impersonation proxy port inside the cluster is not listening.
-	serviceUnavailableViaSquidError := fmt.Sprintf(`Get "https://%s/api/v1/namespaces": Service Unavailable`, proxyServiceEndpoint)
 
 	var mostRecentTokenCredentialRequestResponse *loginv1alpha1.TokenCredentialRequest
 	refreshCredential := func() *loginv1alpha1.ClusterCredential {
@@ -196,9 +194,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// Check that we can't use the impersonation proxy to execute kubectl commands yet.
 		_, err = impersonationProxyViaSquidKubeClientWithoutCredential().CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-		require.Error(t, err)
-		require.Contains(t, err.Error(), proxyServiceEndpoint)
-		require.Contains(t, err.Error(), ": Service Unavailable")
+		isErr, message := isServiceUnavailableViaSquidError(err, proxyServiceEndpoint)
+		require.Truef(t, isErr, "wanted error %q to be service unavailable via squid error, but: %s", err, message)
 
 		// Create configuration to make the impersonation proxy turn on with a hard coded endpoint (without a load balancer).
 		configMap := configMapForConfig(t, env, impersonator.Config{
@@ -814,7 +811,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				// It's okay if this returns RBAC errors because this user has no role bindings.
 				// What we want to see is that the proxy eventually shuts down entirely.
 				_, err := impersonationProxyViaSquidKubeClientWithoutCredential().CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-				return err.Error() == serviceUnavailableViaSquidError
+				isErr, _ := isServiceUnavailableViaSquidError(err, proxyServiceEndpoint)
+				return isErr
 			}, 20*time.Second, 500*time.Millisecond)
 		}
 
@@ -1165,4 +1163,23 @@ func runKubectl(t *testing.T, kubeconfigPath string, envVarsWithProxy []string, 
 type watchJSON struct {
 	Type   watch.EventType `json:"type,omitempty"`
 	Object json.RawMessage `json:"object,omitempty"`
+}
+
+// requireServiceUnavailableViaSquidError returns whether the provided err is the error that is
+// returned by squid when the impersonation proxy port inside the cluster is not listening.
+func isServiceUnavailableViaSquidError(err error, proxyServiceEndpoint string) (bool, string) {
+	if err == nil {
+		return false, "error is nil"
+	}
+
+	for _, wantContains := range []string{
+		fmt.Sprintf(`Get "https://%s/api/v1/namespaces"`, proxyServiceEndpoint),
+		": Service Unavailable",
+	} {
+		if !strings.Contains(err.Error(), wantContains) {
+			return false, fmt.Sprintf("error does not contain %q", wantContains)
+		}
+	}
+
+	return true, ""
 }

@@ -43,7 +43,7 @@ To learn more, see [architecture](https://pinniped.dev/docs/background/architect
 
 ## Getting started with Pinniped
 
-Care to kick the tires? It's easy to [install and try Pinniped](https://pinniped.dev/docs/demo/).
+Care to kick the tires? It's easy to [install and try Pinniped](https://pinniped.dev/docs/tutorials).
 
 ## Community meetings
 

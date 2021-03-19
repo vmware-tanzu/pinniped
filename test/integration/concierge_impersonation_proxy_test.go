@@ -599,6 +599,11 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// start but don't wait for the attach command
 			err = attachCmd.Start()
 			require.NoError(t, err)
+			attachExitCh := make(chan struct{})
+			go func() {
+				assert.NoError(t, attachCmd.Wait())
+				close(attachExitCh)
+			}()
 
 			// write to stdin on the attach process
 			_, err = attachStdin.Write([]byte(echoString + "\n"))
@@ -611,8 +616,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// close stdin and attach process should exit
 			err = attachStdin.Close()
 			require.NoError(t, err)
-			err = attachCmd.Wait()
-			require.NoError(t, err)
+			requireClose(t, attachExitCh, time.Second*20)
 		})
 
 		t.Run("websocket client", func(t *testing.T) {
@@ -1182,4 +1186,17 @@ func isServiceUnavailableViaSquidError(err error, proxyServiceEndpoint string) (
 	}
 
 	return true, ""
+}
+
+func requireClose(t *testing.T, c chan struct{}, timeout time.Duration) {
+	t.Helper()
+	timer := time.NewTimer(timeout)
+	select {
+	case <-c:
+		if !timer.Stop() {
+			<-timer.C
+		}
+	case <-timer.C:
+		require.FailNow(t, "failed to receive from channel within "+timeout.String())
+	}
 }

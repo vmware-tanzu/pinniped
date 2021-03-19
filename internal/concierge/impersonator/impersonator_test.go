@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/util/httpstream"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/features"
@@ -71,6 +72,7 @@ func TestImpersonator(t *testing.T) {
 		clientCert                         *clientCert
 		clientImpersonateUser              rest.ImpersonationConfig
 		clientMutateHeaders                func(http.Header)
+		clientNextProtos                   []string
 		kubeAPIServerClientBearerTokenFile string
 		kubeAPIServerStatusCode            int
 		wantKubeAPIServerRequestHeaders    http.Header
@@ -89,6 +91,31 @@ func TestImpersonator(t *testing.T) {
 				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
 				"Accept-Encoding":   {"gzip"},
 				"X-Forwarded-For":   {"127.0.0.1"},
+			},
+		},
+		{
+			name:                               "happy path with upgrade",
+			clientCert:                         newClientCert(t, ca, "test-username2", []string{"test-group3", "test-group4"}),
+			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			clientMutateHeaders: func(header http.Header) {
+				header.Add("Connection", "Upgrade")
+				header.Add("Upgrade", "spdy/3.1")
+
+				if ok := httpstream.IsUpgradeRequest(&http.Request{Header: header}); !ok {
+					panic("request must be upgrade in this test")
+				}
+			},
+			clientNextProtos: []string{"http/1.1"}, // we need to use http1 as http2 does not support upgrades, see http2checkConnHeaders
+			wantKubeAPIServerRequestHeaders: http.Header{
+				"Impersonate-User":  {"test-username2"},
+				"Impersonate-Group": {"test-group3", "test-group4", "system:authenticated"},
+				"Authorization":     {"Bearer some-service-account-token"},
+				"User-Agent":        {"test-agent"},
+				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+				"Accept-Encoding":   {"gzip"},
+				"X-Forwarded-For":   {"127.0.0.1"},
+				"Connection":        {"Upgrade"},
+				"Upgrade":           {"spdy/3.1"},
 			},
 		},
 		{
@@ -255,9 +282,10 @@ func TestImpersonator(t *testing.T) {
 			clientKubeconfig := &rest.Config{
 				Host: "https://127.0.0.1:" + strconv.Itoa(port),
 				TLSClientConfig: rest.TLSClientConfig{
-					CAData:   ca.Bundle(),
-					CertData: tt.clientCert.certPEM,
-					KeyData:  tt.clientCert.keyPEM,
+					CAData:     ca.Bundle(),
+					CertData:   tt.clientCert.certPEM,
+					KeyData:    tt.clientCert.keyPEM,
+					NextProtos: tt.clientNextProtos,
 				},
 				UserAgent: "test-agent",
 				// BearerToken should be ignored during auth when there are valid client certs,
@@ -514,16 +542,31 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 			metav1.AddToGroupVersion(scheme, metav1.Unversioned)
 			codecs := serializer.NewCodecFactory(scheme)
 			serverConfig := genericapiserver.NewRecommendedConfig(codecs)
-			serverConfig.Config.LongRunningFunc = func(_ *http.Request, _ *request.RequestInfo) bool {
-				// take the HTTP/2.0 vs HTTP/1.1 branch randomly to make sure we exercise both branches
-				return rand.Int()%2 == 0 //nolint:gosec // we don't care whether this is cryptographically secure or not
-			}
 
 			w := httptest.NewRecorder()
-			requestBeforeServe := tt.request.Clone(tt.request.Context())
-			impersonatorHTTPHandlerFunc(&serverConfig.Config).ServeHTTP(w, tt.request)
 
-			require.Equal(t, requestBeforeServe, tt.request, "ServeHTTP() mutated the request, and it should not per http.Handler docs")
+			r := tt.request
+			wantKubeAPIServerRequestHeaders := tt.wantKubeAPIServerRequestHeaders
+
+			// take the isUpgradeRequest branch randomly to make sure we exercise both branches
+			forceUpgradeRequest := rand.Int()%2 == 0 //nolint:gosec // we do not care if this is cryptographically secure
+			if forceUpgradeRequest && len(r.Header.Get("Upgrade")) == 0 {
+				r = r.Clone(r.Context())
+				r.Header.Add("Connection", "Upgrade")
+				r.Header.Add("Upgrade", "spdy/3.1")
+
+				wantKubeAPIServerRequestHeaders = wantKubeAPIServerRequestHeaders.Clone()
+				if wantKubeAPIServerRequestHeaders == nil {
+					wantKubeAPIServerRequestHeaders = http.Header{}
+				}
+				wantKubeAPIServerRequestHeaders.Add("Connection", "Upgrade")
+				wantKubeAPIServerRequestHeaders.Add("Upgrade", "spdy/3.1")
+			}
+
+			requestBeforeServe := r.Clone(r.Context())
+			impersonatorHTTPHandlerFunc(&serverConfig.Config).ServeHTTP(w, r)
+
+			require.Equal(t, requestBeforeServe, r, "ServeHTTP() mutated the request, and it should not per http.Handler docs")
 			if tt.wantHTTPStatus != 0 {
 				require.Equalf(t, tt.wantHTTPStatus, w.Code, "fyi, response body was %q", w.Body.String())
 			}
@@ -533,7 +576,7 @@ func TestImpersonatorHTTPHandler(t *testing.T) {
 
 			if tt.wantHTTPStatus == http.StatusOK || tt.kubeAPIServerStatusCode != http.StatusOK {
 				require.True(t, testKubeAPIServerWasCalled, "Should have proxied the request to the Kube API server, but didn't")
-				require.Equal(t, tt.wantKubeAPIServerRequestHeaders, testKubeAPIServerSawHeaders)
+				require.Equal(t, wantKubeAPIServerRequestHeaders, testKubeAPIServerSawHeaders)
 			} else {
 				require.False(t, testKubeAPIServerWasCalled, "Should not have proxied the request to the Kube API server, but did")
 			}

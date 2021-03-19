@@ -18,9 +18,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/httpstream"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
+	"k8s.io/apiserver/pkg/endpoints/filterlatency"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
@@ -148,9 +150,25 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		defaultBuildHandlerChainFunc := serverConfig.BuildHandlerChainFunc
 		serverConfig.BuildHandlerChainFunc = func(_ http.Handler, c *genericapiserver.Config) http.Handler {
 			// We ignore the passed in handler because we never have any REST APIs to delegate to.
-			handler := impersonationProxyFunc(c)
+			// This means we are ignoring the admission, discovery, REST storage, etc layers.
+			doNotDelegate := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {})
+
+			// Impersonation proxy business logic with timing information.
+			impersonationProxyCompleted := filterlatency.TrackCompleted(doNotDelegate)
+			impersonationProxy := impersonationProxyFunc(c)
+			handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				defer impersonationProxyCompleted.ServeHTTP(w, r)
+				impersonationProxy.ServeHTTP(w, r)
+			}))
+			handler = filterlatency.TrackStarted(handler, "impersonationproxy")
+
+			// The standard Kube handler chain (authn, authz, impersonation, audit, etc).
+			// See the genericapiserver.DefaultBuildHandlerChain func for details.
 			handler = defaultBuildHandlerChainFunc(handler, c)
+
+			// Always set security headers so browsers do the right thing.
 			handler = securityheader.Wrap(handler)
+
 			return handler
 		}
 
@@ -258,22 +276,11 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 				return
 			}
 
-			reqInfo, ok := request.RequestInfoFrom(r.Context())
-			if !ok {
-				plog.Warning("aggregated API server logic did not set request info but it is always supposed to do so",
-					"url", r.URL.String(),
-					"method", r.Method,
-				)
-				newInternalErrResponse(w, r, c.Serializer, "invalid request info")
-				return
-			}
-
-			// when we are running regular requests (e.g., CRUD) we should always be able to use HTTP/2.0
-			// since KAS always supports that and it goes through proxies just fine. for long running
-			// requests (e.g., proxy, watch), we know they use http/1.1 with an upgrade to
-			// websockets/SPDY (this upgrade is NEVER to HTTP/2.0 as the KAS does not support that).
+			// KAS only supports upgrades via http/1.1 to websockets/SPDY (upgrades never use http/2.0)
+			// Thus we default to using http/2.0 when the request is not an upgrade, otherwise we use http/1.1
 			baseRT := http2RoundTripper
-			if c.LongRunningFunc(r, reqInfo) {
+			isUpgradeRequest := httpstream.IsUpgradeRequest(r)
+			if isUpgradeRequest {
 				baseRT = http1RoundTripper
 			}
 
@@ -282,19 +289,31 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 				plog.WarningErr("rejecting request as we cannot act as the current user", err,
 					"url", r.URL.String(),
 					"method", r.Method,
+					"isUpgradeRequest", isUpgradeRequest,
 				)
 				newInternalErrResponse(w, r, c.Serializer, "unimplemented functionality - unable to act as current user")
 				return
 			}
 
-			plog.Debug("impersonation proxy servicing request", "method", r.Method, "url", r.URL.String())
-			plog.Trace("impersonation proxy servicing request was for user", "method", r.Method, "url", r.URL.String(),
+			plog.Debug("impersonation proxy servicing request",
+				"url", r.URL.String(),
+				"method", r.Method,
+				"isUpgradeRequest", isUpgradeRequest,
+			)
+			plog.Trace("impersonation proxy servicing request was for user",
+				"url", r.URL.String(),
+				"method", r.Method,
+				"isUpgradeRequest", isUpgradeRequest,
 				"username", userInfo.GetName(), // this info leak seems fine for trace level logs
 			)
 
 			// The proxy library used below will panic when the client disconnects abruptly, so in order to
 			// assure that this log message is always printed at the end of this func, it must be deferred.
-			defer plog.Debug("impersonation proxy finished servicing request", "method", r.Method, "url", r.URL.String())
+			defer plog.Debug("impersonation proxy finished servicing request",
+				"url", r.URL.String(),
+				"method", r.Method,
+				"isUpgradeRequest", isUpgradeRequest,
+			)
 
 			reverseProxy := httputil.NewSingleHostReverseProxy(serverURL)
 			reverseProxy.Transport = rt

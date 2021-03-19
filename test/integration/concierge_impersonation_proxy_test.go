@@ -556,8 +556,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("kubectl as a client", func(t *testing.T) {
-			t.Parallel()
-
 			kubeconfigPath, envVarsWithProxy, tempDir := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM)
 
 			// Try "kubectl exec" through the impersonation proxy.

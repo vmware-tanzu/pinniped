@@ -22,7 +22,7 @@ import (
 
 const (
 	accessRetryInterval = 250 * time.Millisecond
-	accessRetryTimeout  = 10 * time.Second
+	accessRetryTimeout  = 60 * time.Second
 )
 
 // AccessAsUserTest runs a generic test in which a clientUnderTest operating with username

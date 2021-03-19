@@ -274,29 +274,29 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			)
 		}
 
-		t.Run("watching for a full minute", func(t *testing.T) {
+		t.Run("kubectl port-forward and keeping the connection open for over a minute", func(t *testing.T) {
 			t.Parallel()
 
 			kubeconfigPath, envVarsWithProxy, _ := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM)
 
-			// run the kubectl port-forward command
+			// Run the kubectl port-forward command.
 			timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
 			defer cancelFunc()
 			portForwardCmd, _, portForwardStderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, "port-forward", "--namespace", env.ConciergeNamespace, conciergePod.Name, "8443:8443")
 			portForwardCmd.Env = envVarsWithProxy
 
-			// start, but don't wait for the command to finish
+			// Start, but don't wait for the command to finish.
 			err := portForwardCmd.Start()
 			require.NoError(t, err, `"kubectl port-forward" failed`)
 			go func() {
 				assert.EqualErrorf(t, portForwardCmd.Wait(), "signal: killed", `wanted "kubectl port-forward" to get signaled because context was cancelled (stderr: %q)`, portForwardStderr.String())
 			}()
 
-			// wait to see if we time out.
+			// Wait to see if we time out. The default timeout is 60 seconds, but the server should recognize this this
+			// is going to be a long-running command and keep the connection open as long as the client stays connected.
 			time.Sleep(70 * time.Second)
 
 			require.Eventually(t, func() bool {
-				// then run curl something against it
 				timeout, cancelFunc = context.WithTimeout(ctx, 2*time.Minute)
 				defer cancelFunc()
 				curlCmd := exec.CommandContext(timeout, "curl", "-k", "-s", "https://127.0.0.1:8443")
@@ -309,7 +309,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 					t.Log("curlStdErr: " + curlStdErr.String())
 					t.Log("stdout: " + curlStdOut.String())
 				}
-				// we expect this to 403, but all we care is that it gets through
+				// We expect this to 403, but all we care is that it gets through.
 				return err == nil && strings.Contains(curlStdOut.String(), "\"forbidden: User \\\"system:anonymous\\\" cannot get path \\\"/\\\"\"")
 			}, 1*time.Minute, 500*time.Millisecond)
 		})

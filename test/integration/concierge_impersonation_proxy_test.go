@@ -299,7 +299,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.Eventually(t, func() bool {
 				timeout, cancelFunc = context.WithTimeout(ctx, 2*time.Minute)
 				defer cancelFunc()
-				curlCmd := exec.CommandContext(timeout, "curl", "-k", "-s", "https://127.0.0.1:8443")
+				curlCmd := exec.CommandContext(timeout, "curl", "-k", "-sS", "https://127.0.0.1:8443") // -sS turns off the progressbar but still prints errors
 				var curlStdOut, curlStdErr bytes.Buffer
 				curlCmd.Stdout = &curlStdOut
 				curlCmd.Stderr = &curlStdErr

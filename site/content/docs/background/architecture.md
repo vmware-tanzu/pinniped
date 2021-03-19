@@ -117,8 +117,8 @@ both, or neither.
 ### Full Integration-- Concierge, Supervisor, and CLI
 
 Users can authenticate with the help of the Supervisor, which will issue tokens that
-can be exchanged at the Concierge for a credential that is understood by the host Kubernetes
-cluster.
+can be exchanged at the Concierge for a credential that can be used to authenticate to
+the host Kubernetes cluster.
 The Supervisor enables users to log in to their external identity provider
 once per day and access each cluster in a domain with a distinct scoped-down token.
 
@@ -137,8 +137,8 @@ JWT authenticator via the Pinniped Concierge.
 ### Dynamic Cluster Authentication-- Concierge and CLI
 
 Users can authenticate directly with their OIDC compliant external identity provider to get credentials which
-can be exchanged at the Concierge for a credential that is understood by the host Kubernetes
-cluster.
+can be exchanged at the Concierge for a credential that can be used to authenticate to
+the host Kubernetes cluster.
 
 The diagram below shows the components involved in the login flow when the Concierge is
 configured.

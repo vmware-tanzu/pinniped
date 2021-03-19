@@ -156,7 +156,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	}
 	// At the end of the test, clean up the ConfigMap.
 	t.Cleanup(func() {
-		ctx, cancel = context.WithTimeout(context.Background(), time.Minute)
+		ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 
 		// Delete any version that was created by this test.
@@ -174,6 +174,14 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			t.Logf("restoring a pre-existing configmap %s", oldConfigMap.Name)
 			_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, oldConfigMap, metav1.CreateOptions{})
 			require.NoError(t, err)
+		}
+
+		// If we are running on an environment that has a load balancer, expect that the
+		// CredentialIssuer will be updated eventually with a successful impersonation proxy frontend.
+		// We do this to ensure that future tests that use the impersonation proxy (e.g.,
+		// TestE2EFullIntegration) will start with a known-good state.
+		if env.HasCapability(library.HasExternalLoadBalancerProvider) {
+			performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
 		}
 	})
 

@@ -49,3 +49,10 @@ require (
 // We need this until none of our deps tries to pull in v1.0.0, otherwise some tools like
 // Dependabot will fail on our module.
 replace github.com/oleiade/reflections v1.0.0 => github.com/oleiade/reflections v1.0.1
+
+// We were never vulnerable to CVE-2020-26160 but this avoids future issues
+// This fork is not particularly better though:
+// https://github.com/form3tech-oss/jwt-go/issues/7
+// We use the SHA of github.com/form3tech-oss/jwt-go@v3.2.2 to get around "used for two different module paths"
+// https://golang.org/issues/26904
+replace github.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/form3tech-oss/jwt-go v0.0.0-20200915135329-9162a5abdbc0

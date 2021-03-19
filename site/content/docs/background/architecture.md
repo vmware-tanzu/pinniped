@@ -1,3 +1,4 @@
+
 ---
 title: Architecture
 description: Dive into the overall design and implementation details of Pinniped.
@@ -21,7 +22,8 @@ to be passed on to clusters based on the user information from the IDP.
 1. The Pinniped Concierge is a credential exchange API which takes as input a
 credential from an identity source (e.g., Pinniped Supervisor, proprietary IDP),
 authenticates the user via that credential, and returns another credential which is
-understood by the host Kubernetes cluster.
+understood by the host Kubernetes cluster or by an impersonation proxy which acts
+on behalf of the user.
 
 ![Pinniped Architecture Sketch](/docs/img/pinniped_architecture_concierge_supervisor.svg)
 
@@ -90,14 +92,13 @@ cleanly enable this integration.
 
 Pinniped supports the following cluster integration strategies.
 
-* Pinniped hosts a credential exchange API endpoint via a Kubernetes aggregated API server.
+* Token Credential Request API: Pinniped hosts a credential exchange API endpoint via a Kubernetes aggregated API server.
 This API returns a new cluster-specific credential using the cluster's signing keypair to
 issue short-lived cluster certificates. (In the future, when the Kubernetes CSR API
 provides a way to issue short-lived certificates, then the Pinniped credential exchange API
 will use that instead of using the cluster's signing keypair.)
-
-More cluster integration strategies are coming soon, which will allow Pinniped to
-support more Kubernetes cluster types.
+* Impersonation Proxy: Pinniped hosts an [impersonation](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#user-impersonation)
+proxy that sends requests to the Kubernetes API server with user information and permissions based on a token. 
 
 ## kubectl Integration
 
@@ -116,8 +117,8 @@ both, or neither.
 ### Full Integration-- Concierge, Supervisor, and CLI
 
 Users can authenticate with the help of the Supervisor, which will issue tokens that
-can be exchanged at the Concierge for a credential that is understood by the host Kubernetes
-cluster.
+can be exchanged at the Concierge for a credential that can be used to authenticate to
+the host Kubernetes cluster.
 The Supervisor enables users to log in to their external identity provider
 once per day and access each cluster in a domain with a distinct scoped-down token.
 
@@ -136,8 +137,8 @@ JWT authenticator via the Pinniped Concierge.
 ### Dynamic Cluster Authentication-- Concierge and CLI
 
 Users can authenticate directly with their OIDC compliant external identity provider to get credentials which
-can be exchanged at the Concierge for a credential that is understood by the host Kubernetes
-cluster.
+can be exchanged at the Concierge for a credential that can be used to authenticate to
+the host Kubernetes cluster.
 
 The diagram below shows the components involved in the login flow when the Concierge is
 configured.

@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/httpstream"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
@@ -314,6 +315,12 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 				"method", r.Method,
 				"isUpgradeRequest", isUpgradeRequest,
 			)
+
+			// do not allow the client to cause log confusion by spoofing this header
+			if len(r.Header.Values("X-Forwarded-For")) > 0 {
+				r = utilnet.CloneRequest(r)
+				r.Header.Del("X-Forwarded-For")
+			}
 
 			reverseProxy := httputil.NewSingleHostReverseProxy(serverURL)
 			reverseProxy.Transport = rt

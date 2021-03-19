@@ -119,6 +119,40 @@ func TestImpersonator(t *testing.T) {
 			},
 		},
 		{
+			name:                               "happy path ignores forwarded header",
+			clientCert:                         newClientCert(t, ca, "test-username2", []string{"test-group3", "test-group4"}),
+			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			clientMutateHeaders: func(header http.Header) {
+				header.Add("X-Forwarded-For", "example.com")
+			},
+			wantKubeAPIServerRequestHeaders: http.Header{
+				"Impersonate-User":  {"test-username2"},
+				"Impersonate-Group": {"test-group3", "test-group4", "system:authenticated"},
+				"Authorization":     {"Bearer some-service-account-token"},
+				"User-Agent":        {"test-agent"},
+				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+				"Accept-Encoding":   {"gzip"},
+				"X-Forwarded-For":   {"127.0.0.1"},
+			},
+		},
+		{
+			name:                               "happy path ignores forwarded header canonicalization",
+			clientCert:                         newClientCert(t, ca, "test-username2", []string{"test-group3", "test-group4"}),
+			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			clientMutateHeaders: func(header http.Header) {
+				header.Add("x-FORWARDED-for", "example.com")
+			},
+			wantKubeAPIServerRequestHeaders: http.Header{
+				"Impersonate-User":  {"test-username2"},
+				"Impersonate-Group": {"test-group3", "test-group4", "system:authenticated"},
+				"Authorization":     {"Bearer some-service-account-token"},
+				"User-Agent":        {"test-agent"},
+				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+				"Accept-Encoding":   {"gzip"},
+				"X-Forwarded-For":   {"127.0.0.1"},
+			},
+		},
+		{
 			name:                               "user is authenticated but the kube API request returns an error",
 			kubeAPIServerStatusCode:            http.StatusNotFound,
 			clientCert:                         newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),

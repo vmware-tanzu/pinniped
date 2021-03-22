@@ -73,7 +73,7 @@ func runWhoami(output io.Writer, getClientset getConciergeClientsetFunc, flags *
 		return fmt.Errorf("could not configure Kubernetes client: %w", err)
 	}
 
-	clusterInfo, err := getCurrentCluster(clientConfig)
+	clusterInfo, err := getCurrentCluster(clientConfig, flags.kubeconfigContextOverride)
 	if err != nil {
 		return fmt.Errorf("could not get current cluster info: %w", err)
 	}
@@ -96,24 +96,29 @@ func runWhoami(output io.Writer, getClientset getConciergeClientsetFunc, flags *
 	return nil
 }
 
-func getCurrentCluster(clientConfig clientcmd.ClientConfig) (*clusterInfo, error) {
-	currentKubeconfig, err := clientConfig.RawConfig()
+func getCurrentCluster(clientConfig clientcmd.ClientConfig, currentContextNameOverride string) (*clusterInfo, error) {
+	currentKubeConfig, err := clientConfig.RawConfig()
 	if err != nil {
 		return nil, err
 	}
 
+	contextName := currentKubeConfig.CurrentContext
+	if len(currentContextNameOverride) > 0 {
+		contextName = currentContextNameOverride
+	}
+
 	unknownClusterInfo := &clusterInfo{name: "???", url: "???"}
-	context, ok := currentKubeconfig.Contexts[currentKubeconfig.CurrentContext]
+	ctx, ok := currentKubeConfig.Contexts[contextName]
 	if !ok {
 		return unknownClusterInfo, nil
 	}
 
-	cluster, ok := currentKubeconfig.Clusters[context.Cluster]
+	cluster, ok := currentKubeConfig.Clusters[ctx.Cluster]
 	if !ok {
 		return unknownClusterInfo, nil
 	}
 
-	return &clusterInfo{name: context.Cluster, url: cluster.Server}, nil
+	return &clusterInfo{name: ctx.Cluster, url: cluster.Server}, nil
 }
 
 func writeWhoamiOutput(output io.Writer, flags *whoamiFlags, cInfo *clusterInfo, whoAmI *identityv1alpha1.WhoAmIRequest) error {

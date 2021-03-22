@@ -433,8 +433,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("double impersonation as a regular user is blocked", func(t *testing.T) {
-			t.Parallel()
-
 			// Make a client which will send requests through the impersonation proxy and will also add
 			// impersonate headers to the request.
 			doubleImpersonationKubeClient := newImpersonationProxyClient(impersonationProxyURL, impersonationProxyCACertPEM, "other-user-to-impersonate").Kubernetes
@@ -459,8 +457,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// authorization treatment from the Kube API server code that we are using, and we want to ensure that we are blocking
 		// double impersonation even for the cluster admin.
 		t.Run("double impersonation as a cluster admin user is blocked", func(t *testing.T) {
-			t.Parallel()
-
 			// Copy the admin credentials from the admin kubeconfig.
 			adminClientRestConfig := library.NewClientConfig(t)
 
@@ -492,8 +488,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("WhoAmIRequests and different kinds of authentication through the impersonation proxy", func(t *testing.T) {
-			t.Parallel()
-
 			// Test using the TokenCredentialRequest for authentication.
 			impersonationProxyPinnipedConciergeClient := newImpersonationProxyClient(
 				impersonationProxyURL, impersonationProxyCACertPEM, "",
@@ -622,8 +616,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("websocket client", func(t *testing.T) {
-			t.Parallel()
-
 			namespaceName := createTestNamespace(t, adminClient)
 
 			impersonationRestConfig := impersonationProxyRestConfig(refreshCredential(), impersonationProxyURL, impersonationProxyCACertPEM, "")
@@ -694,8 +686,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("http2 client", func(t *testing.T) {
-			t.Parallel()
-
 			namespaceName := createTestNamespace(t, adminClient)
 
 			wantConfigMapLabelKey, wantConfigMapLabelValue := "some-label-key", "some-label-value"

@@ -57,8 +57,8 @@ service_loadbalancer_ip: #! e.g. 1.2.3.4
 #! information), trace (timing information), all (kitchen sink).
 log_level: #! By default, when this value is left unset, only warnings and errors are printed. There is no way to suppress warning and error logs.
 
-run_as_user: 1001 #! run_as_user specifies the user ID that will own the local-user-authenticator process
-run_as_group: 1001 #! run_as_group specifies the group ID that will own the local-user-authenticator process
+run_as_user: 1001 #! run_as_user specifies the user ID that will own the process
+run_as_group: 1001 #! run_as_group specifies the group ID that will own the process
 
 #! Specify the API group suffix for all Pinniped API groups. By default, this is set to
 #! pinniped.dev, so Pinniped API groups will look like foo.pinniped.dev,

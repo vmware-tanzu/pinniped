@@ -206,6 +206,60 @@ func TestWhoami(t *testing.T) {
 			wantStderr: "Error: could not get current cluster info: stat this-file-does-not-exist: no such file or directory\n",
 		},
 		{
+			name: "different kubeconfig context, but same as current",
+			args: []string{
+				"--kubeconfig", "./testdata/kubeconfig.yaml",
+				"--kubeconfig-context", "kind-kind",
+			},
+			wantStdout: here.Doc(`
+				Current cluster info:
+
+				Name: kind-kind
+				URL: https://fake-server-url-value
+
+				Current user info:
+
+				Username: some-username
+				Groups: some-group-0, some-group-1
+			`),
+		},
+		{
+			name: "different kubeconfig context, not current",
+			args: []string{
+				"--kubeconfig", "./testdata/kubeconfig.yaml",
+				"--kubeconfig-context", "some-other-context",
+			},
+			wantStdout: here.Doc(`
+				Current cluster info:
+
+				Name: some-other-cluster
+				URL: https://some-other-fake-server-url-value
+
+				Current user info:
+
+				Username: some-username
+				Groups: some-group-0, some-group-1
+			`),
+		},
+		{
+			name: "invalid kubeconfig context prints ???",
+			args: []string{
+				"--kubeconfig", "./testdata/kubeconfig.yaml",
+				"--kubeconfig-context", "invalid",
+			},
+			wantStdout: here.Doc(`
+				Current cluster info:
+
+				Name: ???
+				URL: ???
+
+				Current user info:
+
+				Username: some-username
+				Groups: some-group-0, some-group-1
+			`),
+		},
+		{
 			name:                "getting clientset fails",
 			gettingClientsetErr: constable.Error("some get clientset error"),
 			wantError:           true,

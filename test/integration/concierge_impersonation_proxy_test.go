@@ -275,7 +275,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		}
 
 		t.Run("kubectl port-forward and keeping the connection open for over a minute", func(t *testing.T) {
-
 			kubeconfigPath, envVarsWithProxy, _ := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM)
 
 			// Run the kubectl port-forward command.
@@ -314,7 +313,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("using and watching all the basic verbs", func(t *testing.T) {
-
 			// Create a namespace, because it will be easier to exercise "deletecollection" if we have a namespace.
 			namespaceName := createTestNamespace(t, adminClient)
 

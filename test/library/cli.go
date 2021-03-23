@@ -1,10 +1,11 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package library
 
 import (
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
@@ -24,6 +25,13 @@ var pinnipedCLIBinaryCache struct {
 // PinnipedCLIPath returns the path to the Pinniped CLI binary, built on demand and cached between tests.
 func PinnipedCLIPath(t *testing.T) string {
 	t.Helper()
+
+	// Allow a pre-built binary passed in via $PINNIPED_TEST_CLI. This is how our tests run in CI for efficiency.
+	if ext, ok := os.LookupEnv("PINNIPED_TEST_CLI"); ok {
+		t.Log("using externally provided pinniped CLI binary")
+		return ext
+	}
+
 	pinnipedCLIBinaryCache.mutex.Lock()
 	defer pinnipedCLIBinaryCache.mutex.Unlock()
 	path := filepath.Join(testutil.TempDir(t), "pinniped")

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package library
@@ -41,6 +41,10 @@ func MaskTokens(in string) string {
 	return tokenLike.ReplaceAllStringFunc(in, func(t string) string {
 		// This is a silly heuristic, but things with multiple dots are more likely hostnames that we don't want masked.
 		if strings.Count(t, ".") >= 4 {
+			return t
+		}
+		// Another heuristic, things that start with "--" are probably CLI flags.
+		if strings.HasPrefix(t, "--") {
 			return t
 		}
 		return fmt.Sprintf("[...%d bytes...]", len(t))

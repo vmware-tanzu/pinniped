@@ -107,12 +107,14 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 
 func runPinnipedCLI(t *testing.T, envVars []string, pinnipedExe string, args ...string) (string, string) {
 	t.Helper()
+	start := time.Now()
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command(pinnipedExe, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	cmd.Env = envVars
 	require.NoErrorf(t, cmd.Run(), "stderr:\n%s\n\nstdout:\n%s\n\n", stderr.String(), stdout.String())
+	t.Logf("ran %q in %s", library.MaskTokens("pinniped "+strings.Join(args, " ")), time.Since(start).Round(time.Millisecond))
 	return stdout.String(), stderr.String()
 }
 

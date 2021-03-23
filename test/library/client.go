@@ -167,11 +167,11 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 		Spec:       testEnv.TestWebhook,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test WebhookAuthenticator")
-	t.Logf("created test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
+	t.Logf("created test WebhookAuthenticator %s", webhook.Name)
 
 	t.Cleanup(func() {
 		t.Helper()
-		t.Logf("cleaning up test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
+		t.Logf("cleaning up test WebhookAuthenticator %s", webhook.Name)
 		deleteCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		err := webhooks.Delete(deleteCtx, webhook.Name, metav1.DeleteOptions{})
@@ -230,7 +230,7 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 		Spec:       spec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test JWTAuthenticator")
-	t.Logf("created test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
+	t.Logf("created test JWTAuthenticator %s", jwtAuthenticator.Name)
 
 	t.Cleanup(func() {
 		t.Helper()
@@ -238,7 +238,7 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 		deleteCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		err := jwtAuthenticators.Delete(deleteCtx, jwtAuthenticator.Name, metav1.DeleteOptions{})
-		require.NoErrorf(t, err, "could not cleanup test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
+		require.NoErrorf(t, err, "could not cleanup test JWTAuthenticator %s", jwtAuthenticator.Name)
 	})
 
 	return corev1.TypedLocalObjectReference{

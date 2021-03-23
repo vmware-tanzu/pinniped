@@ -49,78 +49,60 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 	// Build pinniped CLI.
 	pinnipedExe := library.PinnipedCLIPath(t)
 
-	for _, tt := range []struct {
-		name                 string
-		args                 []string
-		expectStderrContains []string
-	}{
-		{
-			name: "newer command, but still using static parameters",
-			args: []string{
-				"get", "kubeconfig",
-				"--static-token", env.TestUser.Token,
-				"--concierge-api-group-suffix", env.APIGroupSuffix,
-				"--concierge-authenticator-type", "webhook",
-				"--concierge-authenticator-name", authenticator.Name,
-			},
-			expectStderrContains: []string{
-				"discovered CredentialIssuer",
-				"discovered Concierge endpoint",
-				"discovered Concierge certificate authority bundle",
-				"validated connection to the cluster",
-			},
-		},
-	} {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			stdout, stderr := runPinnipedCLI(t, nil, pinnipedExe, tt.args...)
-			for _, s := range tt.expectStderrContains {
-				assert.Contains(t, stderr, s)
-			}
+	stdout, stderr := runPinnipedCLI(t, nil, pinnipedExe, "get", "kubeconfig",
+		"--static-token", env.TestUser.Token,
+		"--concierge-api-group-suffix", env.APIGroupSuffix,
+		"--concierge-authenticator-type", "webhook",
+		"--concierge-authenticator-name", authenticator.Name,
+	)
+	assert.Contains(t, stderr, "discovered CredentialIssuer")
+	assert.Contains(t, stderr, "discovered Concierge endpoint")
+	assert.Contains(t, stderr, "discovered Concierge certificate authority bundle")
+	assert.Contains(t, stderr, "validated connection to the cluster")
 
-			// Even the deprecated command should now generate a kubeconfig with the new "pinniped login static" command.
-			restConfig := library.NewRestConfigFromKubeconfig(t, stdout)
-			require.NotNil(t, restConfig.ExecProvider)
-			require.Equal(t, []string{"login", "static"}, restConfig.ExecProvider.Args[:2])
+	// Even the deprecated command should now generate a kubeconfig with the new "pinniped login static" command.
+	restConfig := library.NewRestConfigFromKubeconfig(t, stdout)
+	require.NotNil(t, restConfig.ExecProvider)
+	require.Equal(t, []string{"login", "static"}, restConfig.ExecProvider.Args[:2])
 
-			// In addition to the client-go based testing below, also try the kubeconfig
-			// with kubectl to validate that it works.
-			t.Run(
-				"access as user with kubectl",
-				library.AccessAsUserWithKubectlTest(stdout, env.TestUser.ExpectedUsername, env.ConciergeNamespace),
-			)
-			for _, group := range env.TestUser.ExpectedGroups {
-				group := group
-				t.Run(
-					"access as group "+group+" with kubectl",
-					library.AccessAsGroupWithKubectlTest(stdout, group, env.ConciergeNamespace),
-				)
-			}
-
-			// Create Kubernetes client with kubeconfig from pinniped CLI.
-			kubeClient := library.NewClientsetForKubeConfig(t, stdout)
-
-			// Validate that we can auth to the API via our user.
-			t.Run("access as user with client-go", library.AccessAsUserTest(ctx, env.TestUser.ExpectedUsername, kubeClient))
-			for _, group := range env.TestUser.ExpectedGroups {
-				group := group
-				t.Run("access as group "+group+" with client-go", library.AccessAsGroupTest(ctx, group, kubeClient))
-			}
-
-			// Validate that `pinniped whoami` returns the correct identity.
-			kubeconfigPath := filepath.Join(testutil.TempDir(t), "whoami-kubeconfig")
-			require.NoError(t, ioutil.WriteFile(kubeconfigPath, []byte(stdout), 0600))
-			assertWhoami(
-				ctx,
-				t,
-				false,
-				pinnipedExe,
-				kubeconfigPath,
-				env.TestUser.ExpectedUsername,
-				append(env.TestUser.ExpectedGroups, "system:authenticated"),
-			)
-		})
+	// In addition to the client-go based testing below, also try the kubeconfig
+	// with kubectl to validate that it works.
+	t.Run(
+		"access as user with kubectl",
+		library.AccessAsUserWithKubectlTest(stdout, env.TestUser.ExpectedUsername, env.ConciergeNamespace),
+	)
+	for _, group := range env.TestUser.ExpectedGroups {
+		group := group
+		t.Run(
+			"access as group "+group+" with kubectl",
+			library.AccessAsGroupWithKubectlTest(stdout, group, env.ConciergeNamespace),
+		)
 	}
+
+	// Create Kubernetes client with kubeconfig from pinniped CLI.
+	kubeClient := library.NewClientsetForKubeConfig(t, stdout)
+
+	// Validate that we can auth to the API via our user.
+	t.Run("access as user with client-go", library.AccessAsUserTest(ctx, env.TestUser.ExpectedUsername, kubeClient))
+	for _, group := range env.TestUser.ExpectedGroups {
+		group := group
+		t.Run("access as group "+group+" with client-go", library.AccessAsGroupTest(ctx, group, kubeClient))
+	}
+
+	t.Run("whoami", func(t *testing.T) {
+		// Validate that `pinniped whoami` returns the correct identity.
+		kubeconfigPath := filepath.Join(testutil.TempDir(t), "whoami-kubeconfig")
+		require.NoError(t, ioutil.WriteFile(kubeconfigPath, []byte(stdout), 0600))
+		assertWhoami(
+			ctx,
+			t,
+			false,
+			pinnipedExe,
+			kubeconfigPath,
+			env.TestUser.ExpectedUsername,
+			append(env.TestUser.ExpectedGroups, "system:authenticated"),
+		)
+	})
 }
 
 func runPinnipedCLI(t *testing.T, envVars []string, pinnipedExe string, args ...string) (string, string) {

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package secret
@@ -68,7 +68,7 @@ func TestCacheSynchronized(t *testing.T) {
 	c.SetStateEncoderHashKey(issuer, stateEncoderHashKey)
 	c.SetStateEncoderBlockKey(issuer, stateEncoderBlockKey)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	eg, _ := errgroup.WithContext(ctx)

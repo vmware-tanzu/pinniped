@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -42,8 +43,10 @@ func PinnipedCLIPath(t *testing.T) string {
 	}
 
 	t.Log("building pinniped CLI binary")
+	start := time.Now()
 	output, err := exec.Command("go", "build", "-o", path, "go.pinniped.dev/cmd/pinniped").CombinedOutput()
 	require.NoError(t, err, string(output))
+	t.Logf("built CLI binary in %s", time.Since(start).Round(time.Millisecond))
 
 	// Fill our cache so we don't have to do this again.
 	pinnipedCLIBinaryCache.buf, err = ioutil.ReadFile(path)

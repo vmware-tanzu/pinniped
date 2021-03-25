@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	conciergev1alpha "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	"go.pinniped.dev/test/library"
 )
 
@@ -28,7 +29,7 @@ const (
 func TestKubeCertAgent(t *testing.T) {
 	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	kubeClient := library.NewKubernetesClientset(t)
@@ -125,6 +126,30 @@ func TestKubeCertAgent(t *testing.T) {
 		assert.Eventually(t, agentPodsReconciled, 10*time.Second, 250*time.Millisecond)
 		require.NoError(t, err)
 	})
+
+	// Because the above tests have purposefully put the kube cert issuer strategy into a broken
+	// state, wait for it to become healthy again before moving on to other integration tests,
+	// otherwise those tests would be polluted by this test and would have to wait for the
+	// strategy to become successful again.
+	library.RequireEventuallyWithoutError(t, func() (bool, error) {
+		adminConciergeClient := library.NewConciergeClientset(t)
+		credentialIssuer, err := adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuerName(env), metav1.GetOptions{})
+		if err != nil || credentialIssuer.Status.Strategies == nil {
+			t.Log("Did not find any CredentialIssuer with any strategies")
+			return false, nil // didn't find it, but keep trying
+		}
+		for _, strategy := range credentialIssuer.Status.Strategies {
+			// There will be other strategy types in the list, so ignore those.
+			if strategy.Type == conciergev1alpha.KubeClusterSigningCertificateStrategyType && strategy.Status == conciergev1alpha.SuccessStrategyStatus { //nolint:nestif
+				if strategy.Frontend == nil {
+					return false, fmt.Errorf("did not find a Frontend") // unexpected, fail the test
+				}
+				return true, nil // found it, continue the test!
+			}
+		}
+		t.Log("Did not find any successful KubeClusterSigningCertificate strategy on CredentialIssuer")
+		return false, nil // didn't find it, but keep trying
+	}, 3*time.Minute, 3*time.Second)
 }
 
 func ensureKubeCertAgentSteadyState(t *testing.T, agentPodsReconciled func() bool) {

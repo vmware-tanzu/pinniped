@@ -23,16 +23,21 @@ import (
 )
 
 func TestUnsuccessfulCredentialRequest(t *testing.T) {
-	_ = library.IntegrationEnv(t).WithCapability(library.AnonymousAuthenticationSupported)
+	env := library.IntegrationEnv(t).WithCapability(library.AnonymousAuthenticationSupported)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	response, err := makeRequest(ctx, t, validCredentialRequestSpecWithRealToken(t, corev1.TypedLocalObjectReference{
-		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
-		Kind:     "WebhookAuthenticator",
-		Name:     "some-webhook-that-does-not-exist",
-	}))
+	response, err := library.CreateTokenCredentialRequest(ctx, t,
+		loginv1alpha1.TokenCredentialRequestSpec{
+			Token: env.TestUser.Token,
+			Authenticator: corev1.TypedLocalObjectReference{
+				APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
+				Kind:     "WebhookAuthenticator",
+				Name:     "some-webhook-that-does-not-exist",
+			},
+		},
+	)
 	require.NoError(t, err)
 	require.Nil(t, response.Status.Credential)
 	require.NotNil(t, response.Status.Message)
@@ -84,10 +89,9 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 			var response *loginv1alpha1.TokenCredentialRequest
 			successfulResponse := func() bool {
 				var err error
-				response, err = makeRequest(ctx, t, loginv1alpha1.TokenCredentialRequestSpec{
-					Token:         token,
-					Authenticator: authenticator,
-				})
+				response, err = library.CreateTokenCredentialRequest(ctx, t,
+					loginv1alpha1.TokenCredentialRequestSpec{Token: token, Authenticator: authenticator},
+				)
 				require.NoError(t, err, "the request should never fail at the HTTP level")
 				return response.Status.Credential != nil
 			}
@@ -131,14 +135,13 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 
 	// Create a testWebhook so we have a legitimate authenticator to pass to the
 	// TokenCredentialRequest API.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
 
-	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{
-		Token:         "not a good token",
-		Authenticator: testWebhook,
-	})
+	response, err := library.CreateTokenCredentialRequest(context.Background(), t,
+		loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token", Authenticator: testWebhook},
+	)
 
 	require.NoError(t, err)
 
@@ -152,14 +155,13 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T
 
 	// Create a testWebhook so we have a legitimate authenticator to pass to the
 	// TokenCredentialRequest API.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
 
-	response, err := makeRequest(context.Background(), t, loginv1alpha1.TokenCredentialRequestSpec{
-		Token:         "",
-		Authenticator: testWebhook,
-	})
+	response, err := library.CreateTokenCredentialRequest(context.Background(), t,
+		loginv1alpha1.TokenCredentialRequestSpec{Token: "", Authenticator: testWebhook},
+	)
 
 	require.Error(t, err)
 	statusError, isStatus := err.(*errors.StatusError)
@@ -173,46 +175,6 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T
 
 	require.Empty(t, response.Spec)
 	require.Nil(t, response.Status.Credential)
-}
-
-func TestCredentialRequest_OtherwiseValidRequestWithRealTokenShouldFailWhenTheClusterIsNotCapable(t *testing.T) {
-	_ = library.IntegrationEnv(t).WithoutCapability(library.ClusterSigningKeyIsAvailable).WithCapability(library.AnonymousAuthenticationSupported)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-
-	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
-
-	response, err := makeRequest(ctx, t, validCredentialRequestSpecWithRealToken(t, testWebhook))
-
-	require.NoError(t, err)
-
-	require.Empty(t, response.Spec)
-	require.Nil(t, response.Status.Credential)
-	require.Equal(t, stringPtr("authentication failed"), response.Status.Message)
-}
-
-func makeRequest(ctx context.Context, t *testing.T, spec loginv1alpha1.TokenCredentialRequestSpec) (*loginv1alpha1.TokenCredentialRequest, error) {
-	t.Helper()
-	env := library.IntegrationEnv(t)
-
-	client := library.NewAnonymousConciergeClientset(t)
-
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	return client.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{
-		TypeMeta:   metav1.TypeMeta{},
-		ObjectMeta: metav1.ObjectMeta{Namespace: env.ConciergeNamespace},
-		Spec:       spec,
-	}, metav1.CreateOptions{})
-}
-
-func validCredentialRequestSpecWithRealToken(t *testing.T, authenticator corev1.TypedLocalObjectReference) loginv1alpha1.TokenCredentialRequestSpec {
-	return loginv1alpha1.TokenCredentialRequestSpec{
-		Token:         library.IntegrationEnv(t).TestUser.Token,
-		Authenticator: authenticator,
-	}
 }
 
 func stringPtr(s string) *string {

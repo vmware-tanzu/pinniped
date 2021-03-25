@@ -52,9 +52,21 @@ func mergeStrategy(configToUpdate *v1alpha1.CredentialIssuerStatus, strategy v1a
 	}
 }
 
-// TODO: sort strategies by server preference rather than alphanumerically by type.
+// weights are a set of priorities for each strategy type.
+//nolint: gochecknoglobals
+var weights = map[v1alpha1.StrategyType]int{
+	v1alpha1.KubeClusterSigningCertificateStrategyType: 2, // most preferred strategy
+	v1alpha1.ImpersonationProxyStrategyType:            1,
+	// unknown strategy types will have weight 0 by default
+}
+
 type sortableStrategies []v1alpha1.CredentialIssuerStrategy
 
-func (s sortableStrategies) Len() int           { return len(s) }
-func (s sortableStrategies) Less(i, j int) bool { return s[i].Type < s[j].Type }
-func (s sortableStrategies) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s sortableStrategies) Len() int { return len(s) }
+func (s sortableStrategies) Less(i, j int) bool {
+	if wi, wj := weights[s[i].Type], weights[s[j].Type]; wi != wj {
+		return wi > wj
+	}
+	return s[i].Type < s[j].Type
+}
+func (s sortableStrategies) Swap(i, j int) { s[i], s[j] = s[j], s[i] }

@@ -25,7 +25,7 @@ func DumpLogs(t *testing.T, namespace string, labelSelector string) {
 	}
 
 	kubeClient := NewKubernetesClientset(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})

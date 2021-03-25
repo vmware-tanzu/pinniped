@@ -6,7 +6,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"crypto/x509/pkix"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -24,7 +23,7 @@ import (
 )
 
 func TestLoginStaticCommand(t *testing.T) {
-	testCA, err := certauthority.New(pkix.Name{CommonName: "Test CA"}, 1*time.Hour)
+	testCA, err := certauthority.New("Test CA", 1*time.Hour)
 	require.NoError(t, err)
 	tmpdir := testutil.TempDir(t)
 	testCABundlePath := filepath.Join(tmpdir, "testca.pem")
@@ -54,9 +53,9 @@ func TestLoginStaticCommand(t *testing.T) {
 				      --concierge-api-group-suffix string     Concierge API group suffix (default "pinniped.dev")
 				      --concierge-authenticator-name string   Concierge authenticator name
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt')
-				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the concierge
-				      --concierge-endpoint string             API base for the Pinniped concierge endpoint
-				      --enable-concierge                      Exchange the token with the Pinniped concierge during login
+				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the Concierge
+				      --concierge-endpoint string             API base for the Concierge endpoint
+				      --enable-concierge                      Use the Concierge to login
 				  -h, --help                                  help for static
 				      --token string                          Static token to present during login
 				      --token-env string                      Environment variable containing a static token
@@ -78,7 +77,7 @@ func TestLoginStaticCommand(t *testing.T) {
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: invalid concierge parameters: endpoint must not be empty
+				Error: invalid Concierge parameters: endpoint must not be empty
 			`),
 		},
 		{
@@ -126,11 +125,11 @@ func TestLoginStaticCommand(t *testing.T) {
 			conciergeErr: fmt.Errorf("some concierge error"),
 			wantError:    true,
 			wantStderr: here.Doc(`
-				Error: could not complete concierge credential exchange: some concierge error
+				Error: could not complete Concierge credential exchange: some concierge error
 			`),
 		},
 		{
-			name: "invalid api group suffix",
+			name: "invalid API group suffix",
 			args: []string{
 				"--token", "test-token",
 				"--enable-concierge",
@@ -141,7 +140,7 @@ func TestLoginStaticCommand(t *testing.T) {
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: invalid concierge parameters: invalid api group suffix: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')
+				Error: invalid Concierge parameters: invalid API group suffix: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')
 			`),
 		},
 		{

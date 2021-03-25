@@ -12,12 +12,12 @@ menu:
 
 ## Prerequisites
 
-1. A Kubernetes cluster of a type supported by Pinniped as described in [architecture](/docs/architecture).
+1. A Kubernetes cluster of a type supported by Pinniped as described in [architecture](/docs/background/architecture).
 
    Don't have a cluster handy? Consider using [kind](https://kind.sigs.k8s.io/) on your local machine.
    See below for an example of using kind.
 
-1. An authenticator of a type supported by Pinniped as described in [architecture](/docs/architecture).
+1. An authenticator of a type supported by Pinniped as described in [architecture](/docs/background/architecture).
 
    Don't have an authenticator of a type supported by Pinniped handy? No problem, there is a demo authenticator
    available. Start by installing local-user-authenticator on the same cluster where you would like to try Pinniped

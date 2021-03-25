@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorstorage
@@ -108,16 +108,16 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		)
 
 		var (
-			r                    *require.Assertions
-			subject              controllerlib.Controller
-			kubeInformerClient   *kubernetesfake.Clientset
-			kubeClient           *kubernetesfake.Clientset
-			kubeInformers        kubeinformers.SharedInformerFactory
-			timeoutContext       context.Context
-			timeoutContextCancel context.CancelFunc
-			syncContext          *controllerlib.Context
-			fakeClock            *clock.FakeClock
-			frozenNow            time.Time
+			r                       *require.Assertions
+			subject                 controllerlib.Controller
+			kubeInformerClient      *kubernetesfake.Clientset
+			kubeClient              *kubernetesfake.Clientset
+			kubeInformers           kubeinformers.SharedInformerFactory
+			cancelContext           context.Context
+			cancelContextCancelFunc context.CancelFunc
+			syncContext             *controllerlib.Context
+			fakeClock               *clock.FakeClock
+			frozenNow               time.Time
 		)
 
 		// Defer starting the informers until the last possible moment so that the
@@ -133,7 +133,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 
 			// Set this at the last second to support calling subject.Name().
 			syncContext = &controllerlib.Context{
-				Context: timeoutContext,
+				Context: cancelContext,
 				Name:    subject.Name(),
 				Key: controllerlib.Key{
 					Namespace: "",
@@ -142,14 +142,14 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			}
 
 			// Must start informers before calling TestRunSynchronously()
-			kubeInformers.Start(timeoutContext.Done())
+			kubeInformers.Start(cancelContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
 		it.Before(func() {
 			r = require.New(t)
 
-			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
+			cancelContext, cancelContextCancelFunc = context.WithCancel(context.Background())
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeClient = kubernetesfake.NewSimpleClientset()
@@ -168,7 +168,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		})
 
 		it.After(func() {
-			timeoutContextCancel()
+			cancelContextCancelFunc()
 		})
 
 		when("there are secrets without the garbage-collect-after annotation", func() {

@@ -6,7 +6,6 @@ package cachecleaner
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -150,7 +149,7 @@ func TestController(t *testing.T) {
 			jwtAuthenticators := informers.Authentication().V1alpha1().JWTAuthenticators()
 			controller := New(cache, webhooks, jwtAuthenticators, testLog)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			informers.Start(ctx.Done())

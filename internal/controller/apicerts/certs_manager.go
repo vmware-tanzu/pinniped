@@ -1,10 +1,9 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apicerts
 
 import (
-	"crypto/x509/pkix"
 	"fmt"
 	"time"
 
@@ -21,9 +20,10 @@ import (
 )
 
 const (
-	caCertificateSecretKey       = "caCertificate"
-	tlsPrivateKeySecretKey       = "tlsPrivateKey"
-	tlsCertificateChainSecretKey = "tlsCertificateChain"
+	CACertificateSecretKey           = "caCertificate"
+	CACertificatePrivateKeySecretKey = "caCertificatePrivateKey"
+	tlsPrivateKeySecretKey           = "tlsPrivateKey"
+	TLSCertificateChainSecretKey     = "tlsCertificateChain"
 )
 
 type certsManagerController struct {
@@ -93,28 +93,16 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 	}
 
 	// Create a CA.
-	aggregatedAPIServerCA, err := certauthority.New(pkix.Name{CommonName: c.generatedCACommonName}, c.certDuration)
+	ca, err := certauthority.New(c.generatedCACommonName, c.certDuration)
 	if err != nil {
 		return fmt.Errorf("could not initialize CA: %w", err)
 	}
 
-	// Using the CA from above, create a TLS server cert for the aggregated API server to use.
-	serviceEndpoint := c.serviceNameForGeneratedCertCommonName + "." + c.namespace + ".svc"
-	aggregatedAPIServerTLSCert, err := aggregatedAPIServerCA.Issue(
-		pkix.Name{CommonName: serviceEndpoint},
-		[]string{serviceEndpoint},
-		nil,
-		c.certDuration,
-	)
+	caPrivateKeyPEM, err := ca.PrivateKeyToPEM()
 	if err != nil {
-		return fmt.Errorf("could not issue serving certificate: %w", err)
+		return fmt.Errorf("could not get CA private key: %w", err)
 	}
 
-	// Write the CA's public key bundle and the serving certs to a secret.
-	tlsCertChainPEM, tlsPrivateKeyPEM, err := certauthority.ToPEM(aggregatedAPIServerTLSCert)
-	if err != nil {
-		return fmt.Errorf("could not PEM encode serving certificate: %w", err)
-	}
 	secret := corev1.Secret{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
@@ -123,11 +111,29 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 			Labels:    c.certsSecretLabels,
 		},
 		StringData: map[string]string{
-			caCertificateSecretKey:       string(aggregatedAPIServerCA.Bundle()),
-			tlsPrivateKeySecretKey:       string(tlsPrivateKeyPEM),
-			tlsCertificateChainSecretKey: string(tlsCertChainPEM),
+			CACertificateSecretKey:           string(ca.Bundle()),
+			CACertificatePrivateKeySecretKey: string(caPrivateKeyPEM),
 		},
 	}
+
+	// Using the CA from above, create a TLS server cert if we have service name.
+	if len(c.serviceNameForGeneratedCertCommonName) != 0 {
+		serviceEndpoint := c.serviceNameForGeneratedCertCommonName + "." + c.namespace + ".svc"
+		tlsCert, err := ca.IssueServerCert([]string{serviceEndpoint}, nil, c.certDuration)
+		if err != nil {
+			return fmt.Errorf("could not issue serving certificate: %w", err)
+		}
+
+		// Write the CA's public key bundle and the serving certs to a secret.
+		tlsCertChainPEM, tlsPrivateKeyPEM, err := certauthority.ToPEM(tlsCert)
+		if err != nil {
+			return fmt.Errorf("could not PEM encode serving certificate: %w", err)
+		}
+
+		secret.StringData[tlsPrivateKeySecretKey] = string(tlsPrivateKeyPEM)
+		secret.StringData[TLSCertificateChainSecretKey] = string(tlsCertChainPEM)
+	}
+
 	_, err = c.k8sClient.CoreV1().Secrets(c.namespace).Create(ctx.Context, &secret, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("could not create secret: %w", err)

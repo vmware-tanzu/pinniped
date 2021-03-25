@@ -8,7 +8,6 @@ import (
 	"errors"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -412,7 +411,7 @@ func TestSupervisorSecretsControllerSync(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// We cannot currently run this test in parallel since it uses the global generateKey function.
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			if test.generateKey != nil {

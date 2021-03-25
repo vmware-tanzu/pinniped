@@ -6,7 +6,6 @@ package credentialrequest
 
 import (
 	"context"
-	"crypto/x509/pkix"
 	"fmt"
 	"time"
 
@@ -22,20 +21,17 @@ import (
 	"k8s.io/utils/trace"
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
+	"go.pinniped.dev/internal/issuer"
 )
 
 // clientCertificateTTL is the TTL for short-lived client certificates returned by this API.
 const clientCertificateTTL = 5 * time.Minute
 
-type CertIssuer interface {
-	IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) ([]byte, []byte, error)
-}
-
 type TokenCredentialRequestAuthenticator interface {
 	AuthenticateTokenCredentialRequest(ctx context.Context, req *loginapi.TokenCredentialRequest) (user.Info, error)
 }
 
-func NewREST(authenticator TokenCredentialRequestAuthenticator, issuer CertIssuer, resource schema.GroupResource) *REST {
+func NewREST(authenticator TokenCredentialRequestAuthenticator, issuer issuer.ClientCertIssuer, resource schema.GroupResource) *REST {
 	return &REST{
 		authenticator:  authenticator,
 		issuer:         issuer,
@@ -45,7 +41,7 @@ func NewREST(authenticator TokenCredentialRequestAuthenticator, issuer CertIssue
 
 type REST struct {
 	authenticator  TokenCredentialRequestAuthenticator
-	issuer         CertIssuer
+	issuer         issuer.ClientCertIssuer
 	tableConvertor rest.TableConvertor
 }
 
@@ -100,30 +96,23 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		return nil, err
 	}
 
-	user, err := r.authenticator.AuthenticateTokenCredentialRequest(ctx, credentialRequest)
+	userInfo, err := r.authenticator.AuthenticateTokenCredentialRequest(ctx, credentialRequest)
 	if err != nil {
 		traceFailureWithError(t, "token authentication", err)
 		return failureResponse(), nil
 	}
-	if user == nil || user.GetName() == "" {
-		traceSuccess(t, user, false)
+	if userInfo == nil || userInfo.GetName() == "" {
+		traceSuccess(t, userInfo, false)
 		return failureResponse(), nil
 	}
 
-	certPEM, keyPEM, err := r.issuer.IssuePEM(
-		pkix.Name{
-			CommonName:   user.GetName(),
-			Organization: user.GetGroups(),
-		},
-		[]string{},
-		clientCertificateTTL,
-	)
+	certPEM, keyPEM, err := r.issuer.IssueClientCertPEM(userInfo.GetName(), userInfo.GetGroups(), clientCertificateTTL)
 	if err != nil {
 		traceFailureWithError(t, "cert issuer", err)
 		return failureResponse(), nil
 	}
 
-	traceSuccess(t, user, true)
+	traceSuccess(t, userInfo, true)
 
 	return &loginapi.TokenCredentialRequest{
 		Status: loginapi.TokenCredentialRequestStatus{

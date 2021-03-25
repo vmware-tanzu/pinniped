@@ -94,8 +94,8 @@ func TestCreaterControllerSync(t *testing.T) {
 		var agentInformerClient *kubernetesfake.Clientset
 		var agentInformers kubeinformers.SharedInformerFactory
 		var pinnipedAPIClient *pinnipedfake.Clientset
-		var timeoutContext context.Context
-		var timeoutContextCancel context.CancelFunc
+		var cancelContext context.Context
+		var cancelContextCancelFunc context.CancelFunc
 		var syncContext *controllerlib.Context
 		var controllerManagerPod, agentPod *corev1.Pod
 		var podsGVR schema.GroupVersionResource
@@ -135,7 +135,7 @@ func TestCreaterControllerSync(t *testing.T) {
 
 			// Set this at the last second to support calling subject.Name().
 			syncContext = &controllerlib.Context{
-				Context: timeoutContext,
+				Context: cancelContext,
 				Name:    subject.Name(),
 				Key: controllerlib.Key{
 					Namespace: kubeSystemNamespace,
@@ -144,8 +144,8 @@ func TestCreaterControllerSync(t *testing.T) {
 			}
 
 			// Must start informers before calling TestRunSynchronously()
-			kubeSystemInformers.Start(timeoutContext.Done())
-			agentInformers.Start(timeoutContext.Done())
+			kubeSystemInformers.Start(cancelContext.Done())
+			agentInformers.Start(cancelContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
@@ -162,7 +162,7 @@ func TestCreaterControllerSync(t *testing.T) {
 
 			pinnipedAPIClient = pinnipedfake.NewSimpleClientset()
 
-			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
+			cancelContext, cancelContextCancelFunc = context.WithCancel(context.Background())
 
 			controllerManagerPod, agentPod = exampleControllerManagerAndAgentPods(
 				kubeSystemNamespace, agentPodNamespace, "ignored for this test", "ignored for this test",
@@ -201,7 +201,7 @@ func TestCreaterControllerSync(t *testing.T) {
 		})
 
 		it.After(func() {
-			timeoutContextCancel()
+			cancelContextCancelFunc()
 		})
 
 		when("there is a controller manager pod", func() {

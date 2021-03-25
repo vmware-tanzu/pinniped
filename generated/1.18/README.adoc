@@ -251,6 +251,7 @@ Describes the configuration status of a Pinniped credential issuer.
 | Field | Description
 | *`type`* __FrontendType__ | Type describes which frontend mechanism clients can use with a strategy.
 | *`tokenCredentialRequestInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-tokencredentialrequestapiinfo[$$TokenCredentialRequestAPIInfo$$]__ | TokenCredentialRequestAPIInfo describes the parameters for the TokenCredentialRequest API on this Concierge. This field is only set when Type is "TokenCredentialRequestAPI".
+| *`impersonationProxyInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-impersonationproxyinfo[$$ImpersonationProxyInfo$$]__ | ImpersonationProxyInfo describes the parameters for the impersonation proxy on this Concierge. This field is only set when Type is "ImpersonationProxy".
 |===
 
 
@@ -314,6 +315,24 @@ Status of a credential issuer.
 |===
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-impersonationproxyinfo"]
+==== ImpersonationProxyInfo 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-credentialissuerfrontend[$$CredentialIssuerFrontend$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`endpoint`* __string__ | Endpoint is the HTTPS endpoint of the impersonation proxy.
+| *`certificateAuthorityData`* __string__ | CertificateAuthorityData is the base64-encoded PEM CA bundle of the impersonation proxy.
+|===
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-concierge-config-v1alpha1-tokencredentialrequestapiinfo"]
 ==== TokenCredentialRequestAPIInfo 
 
@@ -328,7 +347,7 @@ Status of a credential issuer.
 |===
 | Field | Description
 | *`server`* __string__ | Server is the Kubernetes API server URL.
-| *`certificateAuthorityData`* __string__ | CertificateAuthorityData is the Kubernetes API server CA bundle.
+| *`certificateAuthorityData`* __string__ | CertificateAuthorityData is the base64-encoded Kubernetes API server CA bundle.
 |===
 
 

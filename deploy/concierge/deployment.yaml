@@ -42,6 +42,11 @@ data:
       servingCertificateSecret: (@= defaultResourceNameWithSuffix("api-tls-serving-certificate") @)
       credentialIssuer: (@= defaultResourceNameWithSuffix("config") @)
       apiService: (@= defaultResourceNameWithSuffix("api") @)
+      impersonationConfigMap: (@= defaultResourceNameWithSuffix("impersonation-proxy-config") @)
+      impersonationLoadBalancerService: (@= defaultResourceNameWithSuffix("impersonation-proxy-load-balancer") @)
+      impersonationTLSCertificateSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-tls-serving-certificate") @)
+      impersonationCACertificateSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-ca-certificate") @)
+      impersonationSignerSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-signer-ca-certificate") @)
     labels: (@= json.encode(labels()).rstrip() @)
     kubeCertAgent:
       namePrefix: (@= defaultResourceNameWithSuffix("kube-cert-agent-") @)
@@ -188,6 +193,20 @@ spec:
     - protocol: TCP
       port: 443
       targetPort: 8443
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: #@ defaultResourceNameWithSuffix("proxy")
+  namespace: #@ namespace()
+  labels: #@ labels()
+spec:
+  type: ClusterIP
+  selector: #@ defaultLabel()
+  ports:
+    - protocol: TCP
+      port: 443
+      targetPort: 8444
 ---
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService

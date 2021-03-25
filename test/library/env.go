@@ -21,6 +21,7 @@ type Capability string
 const (
 	ClusterSigningKeyIsAvailable     Capability = "clusterSigningKeyIsAvailable"
 	AnonymousAuthenticationSupported Capability = "anonymousAuthenticationSupported"
+	HasExternalLoadBalancerProvider  Capability = "hasExternalLoadBalancerProvider"
 )
 
 // TestEnv captures all the external parameters consumed by our integration tests.

@@ -57,7 +57,7 @@ var maskKey = func(s string) string { return strings.ReplaceAll(s, "TESTING KEY"
 func TestClient(t *testing.T) {
 	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	webhook := library.CreateTestWebhookAuthenticator(ctx, t)

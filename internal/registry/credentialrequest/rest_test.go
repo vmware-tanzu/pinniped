@@ -5,7 +5,6 @@ package credentialrequest
 
 import (
 	"context"
-	"crypto/x509/pkix"
 	"errors"
 	"fmt"
 	"testing"
@@ -24,7 +23,9 @@ import (
 	"k8s.io/klog/v2"
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
+	"go.pinniped.dev/internal/issuer"
 	"go.pinniped.dev/internal/mocks/credentialrequestmocks"
+	"go.pinniped.dev/internal/mocks/issuermocks"
 	"go.pinniped.dev/internal/testutil"
 )
 
@@ -88,16 +89,14 @@ func TestCreate(t *testing.T) {
 					Groups: []string{"test-group-1", "test-group-2"},
 				}, nil)
 
-			issuer := credentialrequestmocks.NewMockCertIssuer(ctrl)
-			issuer.EXPECT().IssuePEM(
-				pkix.Name{
-					CommonName:   "test-user",
-					Organization: []string{"test-group-1", "test-group-2"}},
-				[]string{},
+			clientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
+			clientCertIssuer.EXPECT().IssueClientCertPEM(
+				"test-user",
+				[]string{"test-group-1", "test-group-2"},
 				5*time.Minute,
 			).Return([]byte("test-cert"), []byte("test-key"), nil)
 
-			storage := NewREST(requestAuthenticator, issuer, schema.GroupResource{})
+			storage := NewREST(requestAuthenticator, clientCertIssuer, schema.GroupResource{})
 
 			response, err := callCreate(context.Background(), storage, req)
 
@@ -131,12 +130,12 @@ func TestCreate(t *testing.T) {
 					Groups: []string{"test-group-1", "test-group-2"},
 				}, nil)
 
-			issuer := credentialrequestmocks.NewMockCertIssuer(ctrl)
-			issuer.EXPECT().
-				IssuePEM(gomock.Any(), gomock.Any(), gomock.Any()).
+			clientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
+			clientCertIssuer.EXPECT().
+				IssueClientCertPEM(gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(nil, nil, fmt.Errorf("some certificate authority error"))
 
-			storage := NewREST(requestAuthenticator, issuer, schema.GroupResource{})
+			storage := NewREST(requestAuthenticator, clientCertIssuer, schema.GroupResource{})
 
 			response, err := callCreate(context.Background(), storage, req)
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
@@ -353,12 +352,12 @@ func requireSuccessfulResponseWithAuthenticationFailureMessage(t *testing.T, err
 	})
 }
 
-func successfulIssuer(ctrl *gomock.Controller) CertIssuer {
-	issuer := credentialrequestmocks.NewMockCertIssuer(ctrl)
-	issuer.EXPECT().
-		IssuePEM(gomock.Any(), gomock.Any(), gomock.Any()).
+func successfulIssuer(ctrl *gomock.Controller) issuer.ClientCertIssuer {
+	clientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
+	clientCertIssuer.EXPECT().
+		IssueClientCertPEM(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return([]byte("test-cert"), []byte("test-key"), nil)
-	return issuer
+	return clientCertIssuer
 }
 
 func stringPtr(s string) *string {

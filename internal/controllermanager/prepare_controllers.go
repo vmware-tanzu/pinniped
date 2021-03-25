@@ -18,12 +18,14 @@ import (
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/apiserviceref"
+	"go.pinniped.dev/internal/concierge/impersonator"
 	"go.pinniped.dev/internal/config/concierge"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controller/authenticator/cachecleaner"
 	"go.pinniped.dev/internal/controller/authenticator/jwtcachefiller"
 	"go.pinniped.dev/internal/controller/authenticator/webhookcachefiller"
+	"go.pinniped.dev/internal/controller/impersonatorconfig"
 	"go.pinniped.dev/internal/controller/kubecertagent"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/deploymentref"
@@ -61,13 +63,23 @@ type Config struct {
 	DiscoveryURLOverride *string
 
 	// DynamicServingCertProvider provides a setter and a getter to the Pinniped API's serving cert.
-	DynamicServingCertProvider dynamiccert.Provider
+	DynamicServingCertProvider dynamiccert.Private
+
 	// DynamicSigningCertProvider provides a setter and a getter to the Pinniped API's
 	// signing cert, i.e., the cert that it uses to sign certs for Pinniped clients wishing to login.
-	DynamicSigningCertProvider dynamiccert.Provider
+	// This is filled with the Kube API server's signing cert by a controller, if it can be found.
+	DynamicSigningCertProvider dynamiccert.Private
+
+	// ImpersonationSigningCertProvider provides a setter and a getter to the CA cert that should be
+	// used to sign client certs for authentication to the impersonation proxy. This CA is used by
+	// the TokenCredentialRequest to sign certs and by the impersonation proxy to check certs.
+	// When the impersonation proxy is not running, the getter will return nil cert and nil key.
+	// (Note that the impersonation proxy also accepts client certs signed by the Kube API server's cert.)
+	ImpersonationSigningCertProvider dynamiccert.Provider
 
 	// ServingCertDuration is the validity period, in seconds, of the API serving certificate.
 	ServingCertDuration time.Duration
+
 	// ServingCertRenewBefore is the period of time, in seconds, that pinniped will wait before
 	// rotating the serving certificate. This period of time starts upon issuance of the serving
 	// certificate.
@@ -179,6 +191,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 				c.ServingCertRenewBefore,
+				apicerts.TLSCertificateChainSecretKey,
 			),
 			singletonWorker,
 		).
@@ -264,6 +277,58 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
 				informers.pinniped.Authentication().V1alpha1().JWTAuthenticators(),
 				klogr.New(),
+			),
+			singletonWorker,
+		).
+
+		// The impersonator configuration controller dynamically configures the impersonation proxy feature.
+		WithController(
+			impersonatorconfig.NewImpersonatorConfigController(
+				c.ServerInstallationInfo.Namespace,
+				c.NamesConfig.ImpersonationConfigMap,
+				c.NamesConfig.CredentialIssuer,
+				client.Kubernetes,
+				client.PinnipedConcierge,
+				informers.installationNamespaceK8s.Core().V1().ConfigMaps(),
+				informers.installationNamespaceK8s.Core().V1().Services(),
+				informers.installationNamespaceK8s.Core().V1().Secrets(),
+				controllerlib.WithInformer,
+				controllerlib.WithInitialEvent,
+				c.NamesConfig.ImpersonationLoadBalancerService,
+				c.NamesConfig.ImpersonationTLSCertificateSecret,
+				c.NamesConfig.ImpersonationCACertificateSecret,
+				c.Labels,
+				clock.RealClock{},
+				impersonator.New,
+				c.NamesConfig.ImpersonationSignerSecret,
+				c.ImpersonationSigningCertProvider,
+			),
+			singletonWorker,
+		).
+		WithController(
+			apicerts.NewCertsManagerController(
+				c.ServerInstallationInfo.Namespace,
+				c.NamesConfig.ImpersonationSignerSecret,
+				c.Labels,
+				client.Kubernetes,
+				informers.installationNamespaceK8s.Core().V1().Secrets(),
+				controllerlib.WithInformer,
+				controllerlib.WithInitialEvent,
+				365*24*time.Hour, // 1 year hard coded value
+				"Pinniped Impersonation Proxy CA",
+				"", // optional, means do not give me a serving cert
+			),
+			singletonWorker,
+		).
+		WithController(
+			apicerts.NewCertsExpirerController(
+				c.ServerInstallationInfo.Namespace,
+				c.NamesConfig.ImpersonationSignerSecret,
+				client.Kubernetes,
+				informers.installationNamespaceK8s.Core().V1().Secrets(),
+				controllerlib.WithInformer,
+				c.ServingCertRenewBefore,
+				apicerts.CACertificateSecretKey,
 			),
 			singletonWorker,
 		)

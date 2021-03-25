@@ -1,45 +1,153 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package dynamiccert
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
 	"sync"
 
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
+
+	"go.pinniped.dev/internal/plog"
 )
 
-// Provider provides a getter, CurrentCertKeyContent(), and a setter, Set(), for a PEM-formatted
-// certificate and matching key.
 type Provider interface {
-	dynamiccertificates.CertKeyContentProvider
-	Set(certPEM, keyPEM []byte)
+	Private
+	Public
 }
+
+type Private interface {
+	dynamiccertificates.CertKeyContentProvider
+	SetCertKeyContent(certPEM, keyPEM []byte) error
+	UnsetCertKeyContent()
+
+	notifier
+}
+
+type Public interface {
+	dynamiccertificates.CAContentProvider
+
+	notifier
+}
+
+type notifier interface {
+	dynamiccertificates.Notifier
+	dynamiccertificates.ControllerRunner // we do not need this today, but it could grow and change in the future
+}
+
+var _ Provider = &provider{}
 
 type provider struct {
-	certPEM []byte
-	keyPEM  []byte
-	mutex   sync.RWMutex
+	// these fields are constant after struct initialization and thus do not need locking
+	name string
+	isCA bool
+
+	// mutex guards all the fields below it
+	mutex     sync.RWMutex
+	certPEM   []byte
+	keyPEM    []byte
+	listeners []dynamiccertificates.Listener
 }
 
-// New returns an empty Provider. The returned Provider is thread-safe.
-func New() Provider {
-	return &provider{}
+// NewServingCert returns a Private that is go routine safe.
+// It can only hold key pairs that have IsCA=false.
+func NewServingCert(name string) Private {
+	return &provider{name: name}
 }
 
-func (p *provider) Set(certPEM, keyPEM []byte) {
-	p.mutex.Lock() // acquire a write lock
-	defer p.mutex.Unlock()
-	p.certPEM = certPEM
-	p.keyPEM = keyPEM
+// NewCA returns a Provider that is go routine safe.
+// It can only hold key pairs that have IsCA=true.
+func NewCA(name string) Provider {
+	return &provider{name: name, isCA: true}
 }
 
 func (p *provider) Name() string {
-	return "DynamicCertProvider"
+	return p.name
 }
 
 func (p *provider) CurrentCertKeyContent() (cert []byte, key []byte) {
-	p.mutex.RLock() // acquire a read lock
+	p.mutex.RLock()
 	defer p.mutex.RUnlock()
+
 	return p.certPEM, p.keyPEM
+}
+
+func (p *provider) SetCertKeyContent(certPEM, keyPEM []byte) error {
+	// always make sure that we have valid PEM data, otherwise
+	// dynamiccertificates.NewUnionCAContentProvider.VerifyOptions will panic
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return fmt.Errorf("%s: attempt to set invalid key pair: %w", p.name, err)
+	}
+
+	// these checks should always pass if tls.X509KeyPair did not error
+	if len(cert.Certificate) == 0 {
+		return fmt.Errorf("%s: key pair has empty cert slice", p.name)
+	}
+	x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return fmt.Errorf("%s: failed to parse key pair as x509 cert: %w", p.name, err)
+	}
+
+	// confirm that we are not trying to use a CA as a serving cert and vice versa
+	if p.isCA != x509Cert.IsCA {
+		return fmt.Errorf("%s: attempt to set x509 cert with unexpected IsCA=%v", p.name, x509Cert.IsCA)
+	}
+
+	p.setCertKeyContent(certPEM, keyPEM)
+
+	return nil
+}
+
+func (p *provider) UnsetCertKeyContent() {
+	p.setCertKeyContent(nil, nil)
+}
+
+func (p *provider) setCertKeyContent(certPEM, keyPEM []byte) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.certPEM = certPEM
+	p.keyPEM = keyPEM
+
+	// technically this only reads a read lock but we already have the write lock
+	for _, listener := range p.listeners {
+		listener.Enqueue()
+	}
+}
+
+func (p *provider) CurrentCABundleContent() []byte {
+	if !p.isCA {
+		panic("*provider from NewServingCert was cast into wrong CA interface")
+	}
+
+	ca, _ := p.CurrentCertKeyContent()
+	return ca
+}
+
+func (p *provider) VerifyOptions() (x509.VerifyOptions, bool) {
+	if !p.isCA {
+		panic("*provider from NewServingCert was cast into wrong CA interface")
+	}
+
+	plog.Warning("unexpected call to *provider.VerifyOptions; CA union logic is broken")
+	return x509.VerifyOptions{}, false // assume we are unioned via dynamiccertificates.NewUnionCAContentProvider
+}
+
+func (p *provider) AddListener(listener dynamiccertificates.Listener) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.listeners = append(p.listeners, listener)
+}
+
+func (p *provider) RunOnce() error {
+	return nil // no-op, but we want to make sure to stay in sync with dynamiccertificates.ControllerRunner
+}
+
+func (p *provider) Run(workers int, stopCh <-chan struct{}) {
+	// no-op, but we want to make sure to stay in sync with dynamiccertificates.ControllerRunner
 }

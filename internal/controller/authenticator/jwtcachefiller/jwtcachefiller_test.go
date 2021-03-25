@@ -325,7 +325,7 @@ func TestController(t *testing.T) {
 
 			controller := New(cache, informers.Authentication().V1alpha1().JWTAuthenticators(), testLog)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			informers.Start(ctx.Done())

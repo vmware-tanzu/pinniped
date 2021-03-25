@@ -5,7 +5,6 @@ package conciergeclient
 
 import (
 	"context"
-	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -26,7 +25,7 @@ import (
 
 func TestNew(t *testing.T) {
 	t.Parallel()
-	testCA, err := certauthority.New(pkix.Name{}, 1*time.Hour)
+	testCA, err := certauthority.New("Test CA", 1*time.Hour)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -111,16 +110,16 @@ func TestNew(t *testing.T) {
 				WithEndpoint("https://example.com"),
 				WithAPIGroupSuffix(""),
 			},
-			wantErr: "invalid api group suffix: [must contain '.', a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')]",
+			wantErr: "invalid API group suffix: [must contain '.', a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')]",
 		},
 		{
-			name: "invalid api group suffix",
+			name: "invalid API group suffix",
 			opts: []Option{
 				WithAuthenticator("jwt", "test-authenticator"),
 				WithEndpoint("https://example.com"),
 				WithAPIGroupSuffix(".starts.with.dot"),
 			},
-			wantErr: "invalid api group suffix: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')",
+			wantErr: "invalid API group suffix: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')",
 		},
 		{
 			name: "valid",

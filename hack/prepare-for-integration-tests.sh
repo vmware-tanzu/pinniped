@@ -116,6 +116,22 @@ check_dependency htpasswd "Please install htpasswd. Should be pre-installed on M
 check_dependency openssl "Please install openssl. Should be pre-installed on MacOS."
 check_dependency chromedriver "Please install chromedriver. e.g. 'brew install chromedriver' for MacOS"
 
+# Check that Chrome and chromedriver versions match. If chromedriver falls a couple versions behind
+# then usually tests start to fail with strange error messages.
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  chrome_version=$(/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version | cut -d ' ' -f3 | cut -d '.' -f1)
+else
+  chrome_version=$(google-chrome --version | cut -d ' ' -f3 | cut -d '.' -f1)
+fi
+chromedriver_version=$(chromedriver --version | cut -d ' ' -f2 | cut -d '.' -f1)
+if [[ "$chrome_version" != "$chromedriver_version" ]]; then
+  log_error "It appears that you are using Chrome $chrome_version with chromedriver $chromedriver_version."
+  log_error "Please use the same version of chromedriver as Chrome."
+  log_error "If you are using the latest version of Chrome, then you can upgrade"
+  log_error "to the latest chromedriver, e.g. 'brew upgrade chromedriver' on MacOS."
+  exit 1
+fi
+
 # Require kubectl >= 1.18.x
 if [ "$(kubectl version --client=true --short | cut -d '.' -f 2)" -lt 18 ]; then
   log_error "kubectl >= 1.18.x is required, you have $(kubectl version --client=true --short | cut -d ':' -f2)"
@@ -292,7 +308,7 @@ kind_capabilities_file="$pinniped_path/test/cluster_capabilities/kind.yaml"
 pinniped_cluster_capability_file_content=$(cat "$kind_capabilities_file")
 
 cat <<EOF >/tmp/integration-test-env
-# The following env vars should be set before running 'go test -v -count 1 ./test/integration'
+# The following env vars should be set before running 'go test -v -count 1 -timeout 0 ./test/integration'
 export PINNIPED_TEST_CONCIERGE_NAMESPACE=${concierge_namespace}
 export PINNIPED_TEST_CONCIERGE_APP_NAME=${concierge_app_name}
 export PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS='${concierge_custom_labels}'
@@ -341,7 +357,7 @@ goland_vars=$(grep -v '^#' /tmp/integration-test-env | grep -E '^export .+=' | s
 log_note
 log_note "🚀 Ready to run integration tests! For example..."
 log_note "    cd $pinniped_path"
-log_note '    source /tmp/integration-test-env && go test -v -race -count 1 ./test/integration'
+log_note '    source /tmp/integration-test-env && go test -v -race -count 1 -timeout 0 ./test/integration'
 log_note
 log_note 'Want to run integration tests in GoLand? Copy/paste this "Environment" value for GoLand run configurations:'
 log_note "    ${goland_vars}PINNIPED_TEST_CLUSTER_CAPABILITY_FILE=${kind_capabilities_file}"

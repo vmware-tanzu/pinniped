@@ -96,36 +96,29 @@ docker build .
    - [`kapp`](https://carvel.dev/#getting-started)
    - [`kind`](https://kind.sigs.k8s.io/docs/user/quick-start)
    - [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-   - [`tilt`](https://docs.tilt.dev/install.html)
    - [`ytt`](https://carvel.dev/#getting-started)
 
    On macOS, these tools can be installed with [Homebrew](https://brew.sh/) (assuming you have Chrome installed already):
 
    ```bash
-   brew install kind tilt-dev/tap/tilt k14s/tap/ytt k14s/tap/kapp kubectl chromedriver && brew cask install docker
+   brew install kind k14s/tap/ytt k14s/tap/kapp kubectl chromedriver && brew cask install docker
    ```
 
-1. Create a local Kubernetes cluster using `kind`:
+1. Create a kind cluster, compile, create container images, and install Pinniped and supporting dependencies using:
 
    ```bash
-   ./hack/kind-up.sh
+   ./hack/prepare-for-integration-tests.sh
    ```
-
-1. Install Pinniped and supporting dependencies using `tilt`:
-
-   ```bash
-   ./hack/tilt-up.sh
-   ```
-
-   Tilt will continue running and live-updating the Pinniped deployment whenever the code changes.
 
 1. Run the Pinniped integration tests:
 
    ```bash
-   source /tmp/integration-test-env && go test -v -count 1 ./test/integration
+   source /tmp/integration-test-env && go test -v -count 1 -timeout 0 ./test/integration
    ```
 
-To uninstall the test environment, run `./hack/tilt-down.sh`.
+1. After making production code changes, recompile, redeploy, and run tests again by repeating the same
+   commands described above. If there are only test code changes, then simply run the tests again.
+
 To destroy the local Kubernetes cluster, run `./hack/kind-down.sh`.
 
 ### Observing Tests on the Continuous Integration Environment

@@ -43,13 +43,12 @@ func TestKubeClientOwnerRef(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	defer func() {
-		if t.Failed() {
-			return
-		}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
 		err := namespaces.Delete(ctx, namespace.Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
-	}()
+	})
 
 	// create something that we can point to
 	parentSecret, err := regularClient.CoreV1().Secrets(namespace.Name).Create(
@@ -95,13 +94,15 @@ func TestKubeClientOwnerRef(t *testing.T) {
 		metav1.CreateOptions{},
 	)
 	require.NoError(t, err)
-	defer func() {
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
 		err := regularAggregationClient.ApiregistrationV1().APIServices().Delete(ctx, parentAPIService.Name, metav1.DeleteOptions{})
 		if errors.IsNotFound(err) {
 			return
 		}
 		require.NoError(t, err)
-	}()
+	})
 
 	// work around stupid behavior of WithoutVersionDecoder.Decode
 	parentAPIService.APIVersion, parentAPIService.Kind = apiregistrationv1.SchemeGroupVersion.WithKind("APIService").ToAPIVersionAndKind()

@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/x509/pkix"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -23,6 +22,7 @@ import (
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/stretchr/testify/require"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
@@ -40,7 +40,7 @@ import (
 
 // TestE2EFullIntegration tests a full integration scenario that combines the supervisor, concierge, and CLI.
 func TestE2EFullIntegration(t *testing.T) {
-	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+	env := library.IntegrationEnv(t)
 
 	// If anything in this test crashes, dump out the supervisor and proxy pod logs.
 	defer library.DumpLogs(t, env.SupervisorNamespace, "")
@@ -65,7 +65,7 @@ func TestE2EFullIntegration(t *testing.T) {
 
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")
-	ca, err := certauthority.New(pkix.Name{CommonName: "Downstream Test CA"}, 1*time.Hour)
+	ca, err := certauthority.New("Downstream Test CA", 1*time.Hour)
 	require.NoError(t, err)
 
 	// Save that bundle plus the one that signs the upstream issuer, for test purposes.
@@ -76,12 +76,7 @@ func TestE2EFullIntegration(t *testing.T) {
 
 	// Use the CA to issue a TLS server cert.
 	t.Logf("issuing test certificate")
-	tlsCert, err := ca.Issue(
-		pkix.Name{CommonName: issuerURL.Hostname()},
-		[]string{issuerURL.Hostname()},
-		nil,
-		1*time.Hour,
-	)
+	tlsCert, err := ca.IssueServerCert([]string{issuerURL.Hostname()}, nil, 1*time.Hour)
 	require.NoError(t, err)
 	certPEM, keyPEM, err := certauthority.ToPEM(tlsCert)
 	require.NoError(t, err)
@@ -132,12 +127,18 @@ func TestE2EFullIntegration(t *testing.T) {
 		rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.SupervisorTestUpstream.Username},
 		rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
 	)
+	library.WaitForUserToHaveAccess(t, env.SupervisorTestUpstream.Username, []string{}, &authorizationv1.ResourceAttributes{
+		Verb:     "get",
+		Group:    "",
+		Version:  "v1",
+		Resource: "namespaces",
+	})
 
 	// Use a specific session cache for this test.
 	sessionCachePath := tempDir + "/sessions.yaml"
 
 	// Run "pinniped get kubeconfig" to get a kubeconfig YAML.
-	kubeconfigYAML, stderr := runPinnipedCLI(t, pinnipedExe, "get", "kubeconfig",
+	kubeconfigYAML, stderr := runPinnipedCLI(t, nil, pinnipedExe, "get", "kubeconfig",
 		"--concierge-api-group-suffix", env.APIGroupSuffix,
 		"--concierge-authenticator-type", "jwt",
 		"--concierge-authenticator-name", authenticator.Name,
@@ -145,7 +146,8 @@ func TestE2EFullIntegration(t *testing.T) {
 		"--oidc-ca-bundle", testCABundlePath,
 		"--oidc-session-cache", sessionCachePath,
 	)
-	require.Equal(t, "", stderr)
+	t.Logf("stderr output from 'pinniped get kubeconfig':\n%s\n\n", stderr)
+	t.Logf("test kubeconfig:\n%s\n\n", kubeconfigYAML)
 
 	restConfig := library.NewRestConfigFromKubeconfig(t, kubeconfigYAML)
 	require.NotNil(t, restConfig.ExecProvider)

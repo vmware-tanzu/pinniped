@@ -109,7 +109,7 @@ func WithEndpoint(endpoint string) Option {
 func WithAPIGroupSuffix(apiGroupSuffix string) Option {
 	return func(c *Client) error {
 		if err := groupsuffix.Validate(apiGroupSuffix); err != nil {
-			return fmt.Errorf("invalid api group suffix: %w", err)
+			return fmt.Errorf("invalid API group suffix: %w", err)
 		}
 		c.apiGroupSuffix = apiGroupSuffix
 		return nil

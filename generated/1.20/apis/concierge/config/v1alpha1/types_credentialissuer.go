@@ -1,30 +1,36 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-// +kubebuilder:validation:Enum=KubeClusterSigningCertificate
+// +kubebuilder:validation:Enum=KubeClusterSigningCertificate;ImpersonationProxy
 type StrategyType string
 
-// +kubebuilder:validation:Enum=TokenCredentialRequestAPI
+// +kubebuilder:validation:Enum=TokenCredentialRequestAPI;ImpersonationProxy
 type FrontendType string
 
 // +kubebuilder:validation:Enum=Success;Error
 type StrategyStatus string
 
-// +kubebuilder:validation:Enum=FetchedKey;CouldNotFetchKey
+// +kubebuilder:validation:Enum=Listening;Pending;Disabled;ErrorDuringSetup;CouldNotFetchKey;CouldNotGetClusterInfo;FetchedKey
 type StrategyReason string
 
 const (
 	KubeClusterSigningCertificateStrategyType = StrategyType("KubeClusterSigningCertificate")
+	ImpersonationProxyStrategyType            = StrategyType("ImpersonationProxy")
 
 	TokenCredentialRequestAPIFrontendType = FrontendType("TokenCredentialRequestAPI")
+	ImpersonationProxyFrontendType        = FrontendType("ImpersonationProxy")
 
 	SuccessStrategyStatus = StrategyStatus("Success")
 	ErrorStrategyStatus   = StrategyStatus("Error")
 
+	ListeningStrategyReason              = StrategyReason("Listening")
+	PendingStrategyReason                = StrategyReason("Pending")
+	DisabledStrategyReason               = StrategyReason("Disabled")
+	ErrorDuringSetupStrategyReason       = StrategyReason("ErrorDuringSetup")
 	CouldNotFetchKeyStrategyReason       = StrategyReason("CouldNotFetchKey")
 	CouldNotGetClusterInfoStrategyReason = StrategyReason("CouldNotGetClusterInfo")
 	FetchedKeyStrategyReason             = StrategyReason("FetchedKey")
@@ -82,6 +88,10 @@ type CredentialIssuerFrontend struct {
 	// TokenCredentialRequestAPIInfo describes the parameters for the TokenCredentialRequest API on this Concierge.
 	// This field is only set when Type is "TokenCredentialRequestAPI".
 	TokenCredentialRequestAPIInfo *TokenCredentialRequestAPIInfo `json:"tokenCredentialRequestInfo,omitempty"`
+
+	// ImpersonationProxyInfo describes the parameters for the impersonation proxy on this Concierge.
+	// This field is only set when Type is "ImpersonationProxy".
+	ImpersonationProxyInfo *ImpersonationProxyInfo `json:"impersonationProxyInfo,omitempty"`
 }
 
 // TokenCredentialRequestAPIInfo describes the parameters for the TokenCredentialRequest API on this Concierge.
@@ -91,7 +101,19 @@ type TokenCredentialRequestAPIInfo struct {
 	// +kubebuilder:validation:Pattern=`^https://|^http://`
 	Server string `json:"server"`
 
-	// CertificateAuthorityData is the Kubernetes API server CA bundle.
+	// CertificateAuthorityData is the base64-encoded Kubernetes API server CA bundle.
+	// +kubebuilder:validation:MinLength=1
+	CertificateAuthorityData string `json:"certificateAuthorityData"`
+}
+
+// ImpersonationProxyInfo describes the parameters for the impersonation proxy on this Concierge.
+type ImpersonationProxyInfo struct {
+	// Endpoint is the HTTPS endpoint of the impersonation proxy.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^https://`
+	Endpoint string `json:"endpoint"`
+
+	// CertificateAuthorityData is the base64-encoded PEM CA bundle of the impersonation proxy.
 	// +kubebuilder:validation:MinLength=1
 	CertificateAuthorityData string `json:"certificateAuthorityData"`
 }

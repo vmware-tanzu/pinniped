@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package certauthority implements a simple x509 certificate authority suitable for use in an aggregated API service.
@@ -19,6 +19,8 @@ import (
 	"math/big"
 	"net"
 	"time"
+
+	"go.pinniped.dev/internal/constable"
 )
 
 // certBackdate is the amount of time before time.Now() that will be used to set
@@ -44,11 +46,16 @@ type env struct {
 
 // CA holds the state for a simple x509 certificate authority suitable for use in an aggregated API service.
 type CA struct {
-	// caCert is the DER-encoded certificate for the current CA.
+	// caCertBytes is the DER-encoded certificate for the current CA.
 	caCertBytes []byte
 
 	// signer is the private key for the current CA.
 	signer crypto.Signer
+
+	// privateKey is the same private key represented by signer, but in a format which allows export.
+	// It is only set by New, not by Load, since Load can handle various types of PrivateKey but New
+	// only needs to create keys of type ecdsa.PrivateKey.
+	privateKey *ecdsa.PrivateKey
 
 	// env is our reference to the outside world (clocks and random number generation).
 	env env
@@ -66,7 +73,7 @@ func secureEnv() env {
 }
 
 // ErrInvalidCACertificate is returned when the contents of the loaded CA certificate do not meet our assumptions.
-var ErrInvalidCACertificate = fmt.Errorf("invalid CA certificate")
+const ErrInvalidCACertificate = constable.Error("invalid CA certificate")
 
 // Load a certificate authority from an existing certificate and private key (in PEM format).
 func Load(certPEM string, keyPEM string) (*CA, error) {
@@ -77,6 +84,13 @@ func Load(certPEM string, keyPEM string) (*CA, error) {
 	if certCount := len(cert.Certificate); certCount != 1 {
 		return nil, fmt.Errorf("%w: expected a single certificate, found %d certificates", ErrInvalidCACertificate, certCount)
 	}
+	x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse key pair as x509 cert: %w", err)
+	}
+	if !x509Cert.IsCA {
+		return nil, fmt.Errorf("%w: passed in key pair is not a CA", ErrInvalidCACertificate)
+	}
 	return &CA{
 		caCertBytes: cert.Certificate[0],
 		signer:      cert.PrivateKey.(crypto.Signer),
@@ -84,13 +98,13 @@ func Load(certPEM string, keyPEM string) (*CA, error) {
 	}, nil
 }
 
-// New generates a fresh certificate authority with the given subject and ttl.
-func New(subject pkix.Name, ttl time.Duration) (*CA, error) {
-	return newInternal(subject, ttl, secureEnv())
+// New generates a fresh certificate authority with the given Common Name and TTL.
+func New(commonName string, ttl time.Duration) (*CA, error) {
+	return newInternal(commonName, ttl, secureEnv())
 }
 
 // newInternal is the internal guts of New, broken out for easier testing.
-func newInternal(subject pkix.Name, ttl time.Duration, env env) (*CA, error) {
+func newInternal(commonName string, ttl time.Duration, env env) (*CA, error) {
 	ca := CA{env: env}
 	// Generate a random serial for the CA
 	serialNumber, err := randomSerial(env.serialRNG)
@@ -99,11 +113,11 @@ func newInternal(subject pkix.Name, ttl time.Duration, env env) (*CA, error) {
 	}
 
 	// Generate a new P256 keypair.
-	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), env.keygenRNG)
+	ca.privateKey, err = ecdsa.GenerateKey(elliptic.P256(), env.keygenRNG)
 	if err != nil {
 		return nil, fmt.Errorf("could not generate CA private key: %w", err)
 	}
-	ca.signer = privateKey
+	ca.signer = ca.privateKey
 
 	// Make a CA certificate valid for some ttl and backdated by some amount.
 	now := env.clock()
@@ -113,7 +127,7 @@ func newInternal(subject pkix.Name, ttl time.Duration, env env) (*CA, error) {
 	// Create CA cert template
 	caTemplate := x509.Certificate{
 		SerialNumber:          serialNumber,
-		Subject:               subject,
+		Subject:               pkix.Name{CommonName: commonName},
 		NotBefore:             notBefore,
 		NotAfter:              notAfter,
 		IsCA:                  true,
@@ -123,7 +137,7 @@ func newInternal(subject pkix.Name, ttl time.Duration, env env) (*CA, error) {
 	}
 
 	// Self-sign the CA to get the DER certificate.
-	caCertBytes, err := x509.CreateCertificate(env.signingRNG, &caTemplate, &caTemplate, &privateKey.PublicKey, privateKey)
+	caCertBytes, err := x509.CreateCertificate(env.signingRNG, &caTemplate, &caTemplate, &ca.privateKey.PublicKey, ca.privateKey)
 	if err != nil {
 		return nil, fmt.Errorf("could not issue CA certificate: %w", err)
 	}
@@ -136,6 +150,18 @@ func (c *CA) Bundle() []byte {
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: c.caCertBytes})
 }
 
+// PrivateKeyToPEM returns the current CA private key in PEM format, if this CA was constructed by New.
+func (c *CA) PrivateKeyToPEM() ([]byte, error) {
+	if c.privateKey == nil {
+		return nil, fmt.Errorf("no private key data (did you try to use this after Load?)")
+	}
+	derKey, err := x509.MarshalECPrivateKey(c.privateKey)
+	if err != nil {
+		return nil, err
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: derKey}), nil
+}
+
 // Pool returns the current CA signing bundle as a *x509.CertPool.
 func (c *CA) Pool() *x509.CertPool {
 	pool := x509.NewCertPool()
@@ -143,8 +169,31 @@ func (c *CA) Pool() *x509.CertPool {
 	return pool
 }
 
-// Issue a new server certificate for the given identity and duration.
-func (c *CA) Issue(subject pkix.Name, dnsNames []string, ips []net.IP, ttl time.Duration) (*tls.Certificate, error) {
+// IssueClientCert issues a new client certificate with username and groups included in the Kube-style
+// certificate subject for the given identity and duration.
+func (c *CA) IssueClientCert(username string, groups []string, ttl time.Duration) (*tls.Certificate, error) {
+	return c.issueCert(x509.ExtKeyUsageClientAuth, pkix.Name{CommonName: username, Organization: groups}, nil, nil, ttl)
+}
+
+// IssueServerCert issues a new server certificate for the given identity and duration.
+// The dnsNames and ips are each optional, but at least one of them should be specified.
+func (c *CA) IssueServerCert(dnsNames []string, ips []net.IP, ttl time.Duration) (*tls.Certificate, error) {
+	return c.issueCert(x509.ExtKeyUsageServerAuth, pkix.Name{}, dnsNames, ips, ttl)
+}
+
+// Similar to IssueClientCert, but returning the new cert as a pair of PEM-formatted byte slices
+// for the certificate and private key.
+func (c *CA) IssueClientCertPEM(username string, groups []string, ttl time.Duration) ([]byte, []byte, error) {
+	return toPEM(c.IssueClientCert(username, groups, ttl))
+}
+
+// Similar to IssueServerCert, but returning the new cert as a pair of PEM-formatted byte slices
+// for the certificate and private key.
+func (c *CA) IssueServerCertPEM(dnsNames []string, ips []net.IP, ttl time.Duration) ([]byte, []byte, error) {
+	return toPEM(c.IssueServerCert(dnsNames, ips, ttl))
+}
+
+func (c *CA) issueCert(extKeyUsage x509.ExtKeyUsage, subject pkix.Name, dnsNames []string, ips []net.IP, ttl time.Duration) (*tls.Certificate, error) {
 	// Choose a random 128 bit serial number.
 	serialNumber, err := randomSerial(c.env.serialRNG)
 	if err != nil {
@@ -174,8 +223,7 @@ func (c *CA) Issue(subject pkix.Name, dnsNames []string, ips []net.IP, ttl time.
 		Subject:               subject,
 		NotBefore:             notBefore,
 		NotAfter:              notAfter,
-		KeyUsage:              x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		ExtKeyUsage:           []x509.ExtKeyUsage{extKeyUsage},
 		BasicConstraintsValid: true,
 		IsCA:                  false,
 		DNSNames:              dnsNames,
@@ -200,14 +248,8 @@ func (c *CA) Issue(subject pkix.Name, dnsNames []string, ips []net.IP, ttl time.
 	}, nil
 }
 
-// IssuePEM issues a new server certificate for the given identity and duration, returning it as a pair of
-// PEM-formatted byte slices for the certificate and private key.
-func (c *CA) IssuePEM(subject pkix.Name, dnsNames []string, ttl time.Duration) ([]byte, []byte, error) {
-	return toPEM(c.Issue(subject, dnsNames, nil, ttl))
-}
-
 func toPEM(cert *tls.Certificate, err error) ([]byte, []byte, error) {
-	// If the wrapped Issue() returned an error, pass it back.
+	// If the wrapped IssueServerCert() returned an error, pass it back.
 	if err != nil {
 		return nil, nil, err
 	}

@@ -1,10 +1,11 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apicerts
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
+	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/testutil"
@@ -95,6 +97,7 @@ func TestObserverControllerInformerFilters(t *testing.T) {
 }
 
 func TestObserverControllerSync(t *testing.T) {
+	name := t.Name()
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
 		const certsSecretResourceName = "some-resource-name"
@@ -104,10 +107,10 @@ func TestObserverControllerSync(t *testing.T) {
 		var subject controllerlib.Controller
 		var kubeInformerClient *kubernetesfake.Clientset
 		var kubeInformers kubeinformers.SharedInformerFactory
-		var timeoutContext context.Context
-		var timeoutContextCancel context.CancelFunc
+		var cancelContext context.Context
+		var cancelContextCancelFunc context.CancelFunc
 		var syncContext *controllerlib.Context
-		var dynamicCertProvider dynamiccert.Provider
+		var dynamicCertProvider dynamiccert.Private
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
@@ -123,7 +126,7 @@ func TestObserverControllerSync(t *testing.T) {
 
 			// Set this at the last second to support calling subject.Name().
 			syncContext = &controllerlib.Context{
-				Context: timeoutContext,
+				Context: cancelContext,
 				Name:    subject.Name(),
 				Key: controllerlib.Key{
 					Namespace: installedInNamespace,
@@ -132,22 +135,22 @@ func TestObserverControllerSync(t *testing.T) {
 			}
 
 			// Must start informers before calling TestRunSynchronously()
-			kubeInformers.Start(timeoutContext.Done())
+			kubeInformers.Start(cancelContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
 		it.Before(func() {
 			r = require.New(t)
 
-			timeoutContext, timeoutContextCancel = context.WithTimeout(context.Background(), time.Second*3)
+			cancelContext, cancelContextCancelFunc = context.WithCancel(context.Background())
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeInformers = kubeinformers.NewSharedInformerFactory(kubeInformerClient, 0)
-			dynamicCertProvider = dynamiccert.New()
+			dynamicCertProvider = dynamiccert.NewServingCert(name)
 		})
 
 		it.After(func() {
-			timeoutContextCancel()
+			cancelContextCancelFunc()
 		})
 
 		when("there is not yet a serving cert Secret in the installation namespace or it was deleted", func() {
@@ -161,7 +164,20 @@ func TestObserverControllerSync(t *testing.T) {
 				err := kubeInformerClient.Tracker().Add(unrelatedSecret)
 				r.NoError(err)
 
-				dynamicCertProvider.Set([]byte("some cert"), []byte("some private key"))
+				caCrt, caKey, err := testutil.CreateCertificate(
+					time.Now().Add(-time.Hour),
+					time.Now().Add(time.Hour),
+				)
+				require.NoError(t, err)
+
+				ca, err := certauthority.Load(string(caCrt), string(caKey))
+				require.NoError(t, err)
+
+				crt, key, err := ca.IssueServerCertPEM(nil, nil, time.Hour)
+				require.NoError(t, err)
+
+				err = dynamicCertProvider.SetCertKeyContent(crt, key)
+				r.NoError(err)
 			})
 
 			it("sets the dynamicCertProvider's cert and key to nil", func() {
@@ -177,6 +193,18 @@ func TestObserverControllerSync(t *testing.T) {
 
 		when("there is a serving cert Secret with the expected keys already in the installation namespace", func() {
 			it.Before(func() {
+				caCrt, caKey, err := testutil.CreateCertificate(
+					time.Now().Add(-time.Hour),
+					time.Now().Add(time.Hour),
+				)
+				require.NoError(t, err)
+
+				ca, err := certauthority.Load(string(caCrt), string(caKey))
+				require.NoError(t, err)
+
+				crt, key, err := ca.IssueServerCertPEM(nil, nil, time.Hour)
+				require.NoError(t, err)
+
 				apiServingCertSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      certsSecretResourceName,
@@ -184,24 +212,29 @@ func TestObserverControllerSync(t *testing.T) {
 					},
 					Data: map[string][]byte{
 						"caCertificate":       []byte("fake cert"),
-						"tlsPrivateKey":       []byte("fake private key"),
-						"tlsCertificateChain": []byte("fake cert chain"),
+						"tlsPrivateKey":       key,
+						"tlsCertificateChain": crt,
 					},
 				}
-				err := kubeInformerClient.Tracker().Add(apiServingCertSecret)
+				err = kubeInformerClient.Tracker().Add(apiServingCertSecret)
 				r.NoError(err)
 
-				dynamicCertProvider.Set(nil, nil)
+				dynamicCertProvider.UnsetCertKeyContent()
 			})
 
 			it("updates the dynamicCertProvider's cert and key", func() {
 				startInformersAndController()
+
+				actualCertChain, actualKey := dynamicCertProvider.CurrentCertKeyContent()
+				r.Nil(actualCertChain)
+				r.Nil(actualKey)
+
 				err := controllerlib.TestSync(t, subject, *syncContext)
 				r.NoError(err)
 
-				actualCertChain, actualKey := dynamicCertProvider.CurrentCertKeyContent()
-				r.Equal("fake cert chain", string(actualCertChain))
-				r.Equal("fake private key", string(actualKey))
+				actualCertChain, actualKey = dynamicCertProvider.CurrentCertKeyContent()
+				r.True(strings.HasPrefix(string(actualCertChain), `-----BEGIN CERTIFICATE-----`), "not a cert:\n%s", string(actualCertChain))
+				r.True(strings.HasPrefix(string(actualKey), `-----BEGIN PRIVATE KEY-----`), "not a key:\n%s", string(actualKey))
 			})
 		})
 
@@ -217,15 +250,20 @@ func TestObserverControllerSync(t *testing.T) {
 				err := kubeInformerClient.Tracker().Add(apiServingCertSecret)
 				r.NoError(err)
 
-				dynamicCertProvider.Set(nil, nil)
+				dynamicCertProvider.UnsetCertKeyContent()
 			})
 
-			it("set the missing values in the dynamicCertProvider as nil", func() {
+			it("returns an error and does not change the dynamicCertProvider", func() {
 				startInformersAndController()
-				err := controllerlib.TestSync(t, subject, *syncContext)
-				r.NoError(err)
 
 				actualCertChain, actualKey := dynamicCertProvider.CurrentCertKeyContent()
+				r.Nil(actualCertChain)
+				r.Nil(actualKey)
+
+				err := controllerlib.TestSync(t, subject, *syncContext)
+				r.EqualError(err, "failed to set serving cert/key content from secret some-namespace/some-resource-name: TestObserverControllerSync: attempt to set invalid key pair: tls: failed to find any PEM data in certificate input")
+
+				actualCertChain, actualKey = dynamicCertProvider.CurrentCertKeyContent()
 				r.Nil(actualCertChain)
 				r.Nil(actualKey)
 			})

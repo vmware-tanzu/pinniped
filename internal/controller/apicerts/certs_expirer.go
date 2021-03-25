@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apicerts
@@ -30,6 +30,8 @@ type certsExpirerController struct {
 	// renewBefore is the amount of time after the cert's issuance where
 	// this controller will start to try to rotate it.
 	renewBefore time.Duration
+
+	secretKey string
 }
 
 // NewCertsExpirerController returns a controllerlib.Controller that will delete a
@@ -42,6 +44,7 @@ func NewCertsExpirerController(
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	renewBefore time.Duration,
+	secretKey string,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
@@ -52,6 +55,7 @@ func NewCertsExpirerController(
 				k8sClient:               k8sClient,
 				secretInformer:          secretInformer,
 				renewBefore:             renewBefore,
+				secretKey:               secretKey,
 			},
 		},
 		withInformer(
@@ -74,13 +78,9 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 		return nil
 	}
 
-	notBefore, notAfter, err := getCertBounds(secret)
+	notBefore, notAfter, err := c.getCertBounds(secret)
 	if err != nil {
-		// If we can't read the cert, then really all we can do is log something,
-		// since if we returned an error then the controller lib would just call us
-		// again and again, which would probably yield the same results.
-		klog.Warningf("certsExpirerController Sync found that the secret is malformed: %s", err.Error())
-		return nil
+		return fmt.Errorf("failed to get cert bounds for secret %q with key %q: %w", secret.Name, c.secretKey, err)
 	}
 
 	certAge := time.Since(notBefore)
@@ -105,8 +105,8 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 // certificate in the provided secret, or an error. Not that it expects the
 // provided secret to contain the well-known data keys from this package (see
 // certs_manager.go).
-func getCertBounds(secret *corev1.Secret) (time.Time, time.Time, error) {
-	certPEM := secret.Data[tlsCertificateChainSecretKey]
+func (c *certsExpirerController) getCertBounds(secret *corev1.Secret) (time.Time, time.Time, error) {
+	certPEM := secret.Data[c.secretKey]
 	if certPEM == nil {
 		return time.Time{}, time.Time{}, constable.Error("failed to find certificate")
 	}

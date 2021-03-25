@@ -34,7 +34,7 @@ func TestWhoAmI_Kubeadm(t *testing.T) {
 	// we should add more robust logic around skipping clusters based on vendor
 	_ = library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	whoAmI, err := library.NewConciergeClientset(t).IdentityV1alpha1().WhoAmIRequests().
@@ -63,7 +63,7 @@ func TestWhoAmI_Kubeadm(t *testing.T) {
 func TestWhoAmI_ServiceAccount_Legacy(t *testing.T) {
 	_ = library.IntegrationEnv(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	kubeClient := library.NewKubernetesClientset(t).CoreV1()
@@ -75,13 +75,9 @@ func TestWhoAmI_ServiceAccount_Legacy(t *testing.T) {
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	defer func() {
-		if t.Failed() {
-			return
-		}
-		err := kubeClient.Namespaces().Delete(ctx, ns.Name, metav1.DeleteOptions{})
-		require.NoError(t, err)
-	}()
+	t.Cleanup(func() {
+		require.NoError(t, kubeClient.Namespaces().Delete(context.Background(), ns.Name, metav1.DeleteOptions{}))
+	})
 
 	sa, err := kubeClient.ServiceAccounts(ns.Name).Create(ctx, &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -107,7 +103,7 @@ func TestWhoAmI_ServiceAccount_Legacy(t *testing.T) {
 			return false, err
 		}
 		return len(secret.Data[corev1.ServiceAccountTokenKey]) > 0, nil
-	}, 30*time.Second, time.Second)
+	}, time.Minute, time.Second)
 
 	saConfig := library.NewAnonymousClientRestConfig(t)
 	saConfig.BearerToken = string(secret.Data[corev1.ServiceAccountTokenKey])
@@ -140,7 +136,7 @@ func TestWhoAmI_ServiceAccount_Legacy(t *testing.T) {
 func TestWhoAmI_ServiceAccount_TokenRequest(t *testing.T) {
 	_ = library.IntegrationEnv(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	kubeClient := library.NewKubernetesClientset(t).CoreV1()
@@ -152,13 +148,9 @@ func TestWhoAmI_ServiceAccount_TokenRequest(t *testing.T) {
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	defer func() {
-		if t.Failed() {
-			return
-		}
-		err := kubeClient.Namespaces().Delete(ctx, ns.Name, metav1.DeleteOptions{})
-		require.NoError(t, err)
-	}()
+	t.Cleanup(func() {
+		require.NoError(t, kubeClient.Namespaces().Delete(context.Background(), ns.Name, metav1.DeleteOptions{}))
+	})
 
 	sa, err := kubeClient.ServiceAccounts(ns.Name).Create(ctx, &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -258,7 +250,7 @@ func TestWhoAmI_CSR(t *testing.T) {
 	// we should add more robust logic around skipping clusters based on vendor
 	_ = library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	kubeClient := library.NewKubernetesClientset(t)
@@ -287,13 +279,10 @@ func TestWhoAmI_CSR(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	defer func() {
-		if t.Failed() {
-			return
-		}
-		err := kubeClient.CertificatesV1beta1().CertificateSigningRequests().Delete(ctx, csrName, metav1.DeleteOptions{})
-		require.NoError(t, err)
-	}()
+	t.Cleanup(func() {
+		require.NoError(t, kubeClient.CertificatesV1beta1().CertificateSigningRequests().
+			Delete(context.Background(), csrName, metav1.DeleteOptions{}))
+	})
 
 	// this is a blind update with no resource version checks, which is only safe during tests
 	// use the beta CSR API to support older clusters
@@ -346,7 +335,7 @@ func TestWhoAmI_CSR(t *testing.T) {
 func TestWhoAmI_Anonymous(t *testing.T) {
 	_ = library.IntegrationEnv(t).WithCapability(library.AnonymousAuthenticationSupported)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	anonymousConfig := library.NewAnonymousClientRestConfig(t)
@@ -376,7 +365,7 @@ func TestWhoAmI_Anonymous(t *testing.T) {
 func TestWhoAmI_ImpersonateDirectly(t *testing.T) {
 	_ = library.IntegrationEnv(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	impersonationConfig := library.NewClientConfig(t)
@@ -441,12 +430,4 @@ func TestWhoAmI_ImpersonateDirectly(t *testing.T) {
 		},
 		whoAmIAnonymous,
 	)
-}
-
-func TestWhoAmI_ImpersonateViaProxy(t *testing.T) {
-	_ = library.IntegrationEnv(t)
-
-	// TODO: add this test after the impersonation proxy is done
-	//  this should test all forms of auth understood by the proxy (certs, SA token, token cred req, anonymous, etc)
-	//  remember that impersonation does not support UID: https://github.com/kubernetes/kubernetes/issues/93699
 }

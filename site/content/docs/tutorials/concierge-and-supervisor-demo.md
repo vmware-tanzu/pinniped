@@ -11,7 +11,7 @@ menu:
 
 ## Prerequisites
 
-1. A Kubernetes cluster of a type supported by Pinniped Concierge as described in [architecture](/docs/architecture).
+1. A Kubernetes cluster of a type supported by Pinniped Concierge as described in [architecture](/docs/background/architecture).
 
    Don't have a cluster handy? Consider using [kind](https://kind.sigs.k8s.io/) on your local machine.
    See below for an example of using kind.

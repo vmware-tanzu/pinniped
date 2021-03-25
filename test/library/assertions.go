@@ -5,6 +5,7 @@ package library
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -16,7 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// RequireEventuallyWithoutError is a wrapper around require.Eventually() that allows the caller to
+// RequireEventuallyWithoutError is similar to require.Eventually() except that it also allows the caller to
 // return an error from the condition function. If the condition function returns an error at any
 // point, the assertion will immediately fail.
 func RequireEventuallyWithoutError(
@@ -28,6 +29,28 @@ func RequireEventuallyWithoutError(
 ) {
 	t.Helper()
 	require.NoError(t, wait.PollImmediate(tick, waitFor, f), msgAndArgs...)
+}
+
+// RequireNeverWithoutError is similar to require.Never() except that it also allows the caller to
+// return an error from the condition function. If the condition function returns an error at any
+// point, the assertion will immediately fail.
+func RequireNeverWithoutError(
+	t *testing.T,
+	f func() (bool, error),
+	waitFor time.Duration,
+	tick time.Duration,
+	msgAndArgs ...interface{},
+) {
+	t.Helper()
+	err := wait.PollImmediate(tick, waitFor, f)
+	isWaitTimeout := errors.Is(err, wait.ErrWaitTimeout)
+	if err != nil && !isWaitTimeout {
+		require.NoError(t, err, msgAndArgs...) // this will fail and throw the right error message
+	}
+	if err == nil {
+		// This prints the same error message that require.Never would print in this case.
+		require.Fail(t, "Condition satisfied", msgAndArgs...)
+	}
 }
 
 // assertNoRestartsDuringTest allows a caller to assert that there were no restarts for a Pod in the

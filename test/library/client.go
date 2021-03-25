@@ -17,6 +17,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,6 +28,7 @@ import (
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	"go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
@@ -53,7 +55,9 @@ func NewClientsetForKubeConfig(t *testing.T, kubeConfig string) kubernetes.Inter
 func NewRestConfigFromKubeconfig(t *testing.T, kubeConfig string) *rest.Config {
 	kubeConfigFile, err := ioutil.TempFile("", "pinniped-cli-test-*")
 	require.NoError(t, err)
-	defer os.Remove(kubeConfigFile.Name())
+	defer func() {
+		require.NoError(t, os.Remove(kubeConfigFile.Name()))
+	}()
 
 	_, err = kubeConfigFile.Write([]byte(kubeConfig))
 	require.NoError(t, err)
@@ -155,7 +159,7 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 	client := NewConciergeClientset(t)
 	webhooks := client.AuthenticationV1alpha1().WebhookAuthenticators()
 
-	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
+	createContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
 	webhook, err := webhooks.Create(createContext, &auth1alpha1.WebhookAuthenticator{
@@ -163,18 +167,12 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 		Spec:       testEnv.TestWebhook,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test WebhookAuthenticator")
-	t.Logf("created test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
+	t.Logf("created test WebhookAuthenticator %s", webhook.Name)
 
 	t.Cleanup(func() {
 		t.Helper()
-
-		if t.Failed() {
-			t.Logf("skipping deletion of test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
-			return
-		}
-
-		t.Logf("cleaning up test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
-		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		t.Logf("cleaning up test WebhookAuthenticator %s", webhook.Name)
+		deleteCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		err := webhooks.Delete(deleteCtx, webhook.Name, metav1.DeleteOptions{})
 		require.NoErrorf(t, err, "could not cleanup test WebhookAuthenticator %s/%s", webhook.Namespace, webhook.Name)
@@ -224,7 +222,7 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 	client := NewConciergeClientset(t)
 	jwtAuthenticators := client.AuthenticationV1alpha1().JWTAuthenticators()
 
-	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
+	createContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
 	jwtAuthenticator, err := jwtAuthenticators.Create(createContext, &auth1alpha1.JWTAuthenticator{
@@ -232,21 +230,15 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 		Spec:       spec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test JWTAuthenticator")
-	t.Logf("created test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
+	t.Logf("created test JWTAuthenticator %s", jwtAuthenticator.Name)
 
 	t.Cleanup(func() {
 		t.Helper()
-
-		if t.Failed() {
-			t.Logf("skipping deletion of test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
-			return
-		}
-
 		t.Logf("cleaning up test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
-		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		deleteCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		err := jwtAuthenticators.Delete(deleteCtx, jwtAuthenticator.Name, metav1.DeleteOptions{})
-		require.NoErrorf(t, err, "could not cleanup test JWTAuthenticator %s/%s", jwtAuthenticator.Namespace, jwtAuthenticator.Name)
+		require.NoErrorf(t, err, "could not cleanup test JWTAuthenticator %s", jwtAuthenticator.Name)
 	})
 
 	return corev1.TypedLocalObjectReference{
@@ -266,7 +258,7 @@ func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
-	createContext, cancel := context.WithTimeout(ctx, 5*time.Second)
+	createContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
 	if issuer == "" {
@@ -287,7 +279,7 @@ func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string
 	t.Cleanup(func() {
 		t.Helper()
 		t.Logf("cleaning up test FederationDomain %s/%s", federationDomain.Namespace, federationDomain.Name)
-		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		deleteCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		err := federationDomains.Delete(deleteCtx, federationDomain.Name, metav1.DeleteOptions{})
 		notFound := k8serrors.IsNotFound(err)
@@ -341,7 +333,7 @@ func RandHex(t *testing.T, numBytes int) string {
 func CreateTestSecret(t *testing.T, namespace string, baseName string, secretType corev1.SecretType, stringData map[string]string) *corev1.Secret {
 	t.Helper()
 	client := NewKubernetesClientset(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	created, err := client.CoreV1().Secrets(namespace).Create(ctx, &corev1.Secret{
@@ -412,7 +404,7 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 func CreateTestClusterRoleBinding(t *testing.T, subject rbacv1.Subject, roleRef rbacv1.RoleRef) *rbacv1.ClusterRoleBinding {
 	t.Helper()
 	client := NewKubernetesClientset(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	// Create the ClusterRoleBinding using GenerateName to get a random name.
@@ -432,6 +424,69 @@ func CreateTestClusterRoleBinding(t *testing.T, subject rbacv1.Subject, roleRef 
 		require.NoError(t, err)
 	})
 	return created
+}
+
+func CreateTokenCredentialRequest(ctx context.Context, t *testing.T, spec v1alpha1.TokenCredentialRequestSpec) (*v1alpha1.TokenCredentialRequest, error) {
+	t.Helper()
+
+	client := NewAnonymousConciergeClientset(t)
+
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
+	return client.LoginV1alpha1().TokenCredentialRequests().Create(ctx,
+		&v1alpha1.TokenCredentialRequest{Spec: spec}, metav1.CreateOptions{},
+	)
+}
+
+func CreatePod(ctx context.Context, t *testing.T, name, namespace string, spec corev1.PodSpec) *corev1.Pod {
+	t.Helper()
+
+	client := NewKubernetesClientset(t)
+	pods := client.CoreV1().Pods(namespace)
+
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
+	created, err := pods.Create(ctx, &corev1.Pod{ObjectMeta: testObjectMeta(t, name), Spec: spec}, metav1.CreateOptions{})
+	require.NoError(t, err)
+	t.Logf("created test Pod %s", created.Name)
+
+	t.Cleanup(func() {
+		t.Logf("cleaning up test Pod %s", created.Name)
+		err := pods.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+
+	var result *corev1.Pod
+	require.Eventuallyf(t, func() bool {
+		var err error
+		result, err = pods.Get(ctx, created.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		return result.Status.Phase == corev1.PodRunning
+	}, 15*time.Second, 1*time.Second, "expected the Pod to go into phase %s", corev1.PodRunning)
+	return result
+}
+
+func WaitForUserToHaveAccess(t *testing.T, user string, groups []string, shouldHaveAccessTo *authorizationv1.ResourceAttributes) {
+	t.Helper()
+	client := NewKubernetesClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	RequireEventuallyWithoutError(t, func() (bool, error) {
+		subjectAccessReview, err := client.AuthorizationV1().SubjectAccessReviews().Create(ctx,
+			&authorizationv1.SubjectAccessReview{
+				Spec: authorizationv1.SubjectAccessReviewSpec{
+					ResourceAttributes: shouldHaveAccessTo,
+					User:               user,
+					Groups:             groups,
+				}}, metav1.CreateOptions{})
+		if err != nil {
+			return false, err
+		}
+		return subjectAccessReview.Status.Allowed, nil
+	}, time.Minute, 500*time.Millisecond)
 }
 
 func testObjectMeta(t *testing.T, baseName string) metav1.ObjectMeta {

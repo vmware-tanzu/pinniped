@@ -96,17 +96,31 @@ func maybeSetKubeCertAgentDefaults(cfg *KubeCertAgentSpec) {
 func validateNames(names *NamesConfigSpec) error {
 	missingNames := []string{}
 	if names == nil {
-		missingNames = append(missingNames, "servingCertificateSecret", "credentialIssuer", "apiService")
-	} else {
-		if names.ServingCertificateSecret == "" {
-			missingNames = append(missingNames, "servingCertificateSecret")
-		}
-		if names.CredentialIssuer == "" {
-			missingNames = append(missingNames, "credentialIssuer")
-		}
-		if names.APIService == "" {
-			missingNames = append(missingNames, "apiService")
-		}
+		names = &NamesConfigSpec{}
+	}
+	if names.ServingCertificateSecret == "" {
+		missingNames = append(missingNames, "servingCertificateSecret")
+	}
+	if names.CredentialIssuer == "" {
+		missingNames = append(missingNames, "credentialIssuer")
+	}
+	if names.APIService == "" {
+		missingNames = append(missingNames, "apiService")
+	}
+	if names.ImpersonationConfigMap == "" {
+		missingNames = append(missingNames, "impersonationConfigMap")
+	}
+	if names.ImpersonationLoadBalancerService == "" {
+		missingNames = append(missingNames, "impersonationLoadBalancerService")
+	}
+	if names.ImpersonationTLSCertificateSecret == "" {
+		missingNames = append(missingNames, "impersonationTLSCertificateSecret")
+	}
+	if names.ImpersonationCACertificateSecret == "" {
+		missingNames = append(missingNames, "impersonationCACertificateSecret")
+	}
+	if names.ImpersonationSignerSecret == "" {
+		missingNames = append(missingNames, "impersonationSignerSecret")
 	}
 	if len(missingNames) > 0 {
 		return constable.Error("missing required names: " + strings.Join(missingNames, ", "))

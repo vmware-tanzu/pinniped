@@ -275,7 +275,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		}
 
 		t.Run("kubectl port-forward and keeping the connection open for over a minute", func(t *testing.T) {
-			kubeconfigPath, envVarsWithProxy, _ := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM)
+			kubeconfigPath, envVarsWithProxy, _ := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM, credentialRequestSpecWithWorkingCredentials.Authenticator)
 
 			// Run the kubectl port-forward command.
 			timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
@@ -546,7 +546,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("kubectl as a client", func(t *testing.T) {
-			kubeconfigPath, envVarsWithProxy, tempDir := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM)
+			kubeconfigPath, envVarsWithProxy, tempDir := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM, credentialRequestSpecWithWorkingCredentials.Authenticator)
 
 			// Try "kubectl exec" through the impersonation proxy.
 			echoString := "hello world"
@@ -1084,7 +1084,7 @@ func credentialIssuerName(env *library.TestEnv) string {
 	return env.ConciergeAppName + "-config"
 }
 
-func getImpersonationKubeconfig(t *testing.T, env *library.TestEnv, impersonationProxyURL string, impersonationProxyCACertPEM []byte) (string, []string, string) {
+func getImpersonationKubeconfig(t *testing.T, env *library.TestEnv, impersonationProxyURL string, impersonationProxyCACertPEM []byte, authenticator corev1.TypedLocalObjectReference) (string, []string, string) {
 	t.Helper()
 
 	pinnipedExe := library.PinnipedCLIPath(t)
@@ -1101,6 +1101,8 @@ func getImpersonationKubeconfig(t *testing.T, env *library.TestEnv, impersonatio
 		"--concierge-api-group-suffix", env.APIGroupSuffix,
 		"--oidc-skip-browser",
 		"--static-token", env.TestUser.Token,
+		"--concierge-authenticator-name", authenticator.Name,
+		"--concierge-authenticator-type", authenticator.Kind,
 		// Force the use of impersonation proxy strategy, but let it auto-discover the endpoint and CA.
 		"--concierge-mode", "ImpersonationProxy"}
 	t.Log("Running:", pinnipedExe, getKubeConfigCmd)

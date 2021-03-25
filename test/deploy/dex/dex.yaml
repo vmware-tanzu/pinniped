@@ -32,7 +32,7 @@ enablePasswordDB: true
 staticPasswords:
 - username: "pinny"
   email: "pinny@example.com"
-  hash: "$2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYiFPm1leZck7Mc8T4W" #! bcrypt("password")
+  hash: #@ data.values.pinny_bcrypt_passwd_hash
   userID: "061d23d1-fe1e-4777-9ae9-59cd12abeaaa"
 #@ end
 

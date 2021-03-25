@@ -210,12 +210,14 @@ if ! tilt_mode; then
   #
   # Deploy dex
   #
+  dex_test_password="$(openssl rand -hex 16)"
   pushd test/deploy/dex >/dev/null
 
   log_note "Deploying Dex to the cluster..."
   ytt --file . >"$manifest"
   ytt --file . \
     --data-value-yaml "supervisor_redirect_uris=[https://pinniped-supervisor-clusterip.supervisor.svc.cluster.local/some/path/callback]" \
+    --data-value "pinny_bcrypt_passwd_hash=$(htpasswd -nbBC 10 x "$dex_test_password" | sed -e "s/^x://")" \
     >"$manifest"
 
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
@@ -328,7 +330,7 @@ export PINNIPED_TEST_CLI_OIDC_ISSUER_CA_BUNDLE="${test_ca_bundle_pem}"
 export PINNIPED_TEST_CLI_OIDC_CLIENT_ID=pinniped-cli
 export PINNIPED_TEST_CLI_OIDC_CALLBACK_URL=http://127.0.0.1:48095/callback
 export PINNIPED_TEST_CLI_OIDC_USERNAME=pinny@example.com
-export PINNIPED_TEST_CLI_OIDC_PASSWORD=password
+export PINNIPED_TEST_CLI_OIDC_PASSWORD=${dex_test_password}
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER=https://dex.dex.svc.cluster.local/dex
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER_CA_BUNDLE="${test_ca_bundle_pem}"
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ADDITIONAL_SCOPES=email
@@ -338,7 +340,7 @@ export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CLIENT_ID=pinniped-supervisor
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CLIENT_SECRET=pinniped-supervisor-secret
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_CALLBACK_URL=https://pinniped-supervisor-clusterip.supervisor.svc.cluster.local/some/path/callback
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME=pinny@example.com
-export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD=password
+export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD=${dex_test_password}
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_EXPECTED_GROUPS= # Dex's local user store does not let us configure groups.
 export PINNIPED_TEST_API_GROUP_SUFFIX='${api_group_suffix}'
 

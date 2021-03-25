@@ -19,3 +19,6 @@ ports:
 #! supervisor_redirect_uris is an array of redirect uris that dex will use for its pinniped-supervisor client.
 #! usage: --data-value-yaml "supervisor_redirect_uris=[some-redirect.com,some-other-redirect.com]"
 supervisor_redirect_uris: []
+
+#! The bcrypt-hashed password of the pinny test user account.
+pinny_bcrypt_passwd_hash:

@@ -7,6 +7,9 @@ capabilities:
   # Is it possible to borrow the cluster's signing key from the kube API server?
   clusterSigningKeyIsAvailable: false
 
+  # Will the cluster successfully provision a load balancer if requested?
+  hasExternalLoadBalancerProvider: true
+
   # Does the cluster allow requests without authentication?
   # https://kubernetes.io/docs/reference/access-authn-authz/authentication/#anonymous-requests
   anonymousAuthenticationSupported: true

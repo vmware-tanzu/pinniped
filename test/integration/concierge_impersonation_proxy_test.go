@@ -74,11 +74,17 @@ func (sb *syncBuffer) Write(b []byte) (int, error) {
 }
 
 // Note that this test supports being run on all of our integration test cluster types:
-//   - load balancers not supported, has squid proxy (e.g. kind)
-//   - load balancers supported, has squid proxy (e.g. EKS)
-//   - load balancers supported, no squid proxy (e.g. GKE)
+// - TKGS acceptance (long-running) cluster: auto mode will choose disabled, supports LBs, does not have squid.
+// - GKE acceptance (long-running) cluster: auto will choose enabled, support LBs, does not have squid.
+// - kind: auto mode will choose disabled, does not support LBs, has squid.
+// - GKE ephemeral clusters: auto mode will choose enabled, supports LBs, has squid.
+// - AKS ephemeral clusters: auto mode will choose enabled, supports LBs, has squid.
+// - EKS ephemeral clusters: auto mode will choose enabled, supports LBs, has squid.
 func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's complex.
 	env := library.IntegrationEnv(t)
+
+	impersonatorShouldHaveStartedAutomaticallyByDefault := !env.HasCapability(library.HasExternalLoadBalancerProvider)
+	clusterSupportsLoadBalancers := env.HasCapability(library.HasExternalLoadBalancerProvider)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
@@ -130,8 +136,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 	newImpersonationProxyClientWithCredentials := func(credentials *loginv1alpha1.ClusterCredential, impersonationProxyURL string, impersonationProxyCACertPEM []byte, doubleImpersonateUser string) *kubeclient.Client {
 		kubeconfig := impersonationProxyRestConfig(credentials, impersonationProxyURL, impersonationProxyCACertPEM, doubleImpersonateUser)
-		if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
-			// Send traffic through the Squid proxy
+		if !clusterSupportsLoadBalancers {
+			// Only if there is no possibility to send traffic through a load balancer, then send the traffic through the Squid proxy.
+			// Prefer to go through a load balancer because that's how the impersonator is intended to be used in the real world.
 			kubeconfig.Proxy = kubeconfigProxyFunc(t, env.Proxy)
 		}
 		return library.NewKubeclient(t, kubeconfig)
@@ -180,17 +187,45 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// CredentialIssuer will be updated eventually with a successful impersonation proxy frontend.
 		// We do this to ensure that future tests that use the impersonation proxy (e.g.,
 		// TestE2EFullIntegration) will start with a known-good state.
-		if env.HasCapability(library.HasExternalLoadBalancerProvider) {
+		if clusterSupportsLoadBalancers {
 			performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
 		}
 	})
 
-	if env.HasCapability(library.HasExternalLoadBalancerProvider) { //nolint:nestif // come on... it's just a test
+	// Done with set-up and ready to get started with the test. There are several states that we could be in at
+	// this point depending on the capabilities of the cluster under test. We handle each possible case here.
+	switch {
+	case impersonatorShouldHaveStartedAutomaticallyByDefault && clusterSupportsLoadBalancers:
+		// Auto mode should have decided that the impersonator will run and should have started a load balancer,
+		// and we will be able to use the load balancer to access the impersonator. (e.g. GKE, AKS, EKS)
 		// Check that load balancer has been automatically created by the impersonator's "auto" mode.
 		library.RequireEventuallyWithoutError(t, func() (bool, error) {
 			return hasImpersonationProxyLoadBalancerService(ctx, env, adminClient)
 		}, 30*time.Second, 500*time.Millisecond)
-	} else {
+
+	case impersonatorShouldHaveStartedAutomaticallyByDefault && !clusterSupportsLoadBalancers:
+		t.Fatal("None of the clusters types that we currently test against should automatically" +
+			"enable the impersonation proxy without also supporting load balancers. If we add such a" +
+			"cluster type in the future then we should enhance this test.")
+
+	case !impersonatorShouldHaveStartedAutomaticallyByDefault && clusterSupportsLoadBalancers:
+		// Auto mode should have decided that the impersonator will be disabled. We need to manually enable it.
+		// The cluster supports load balancers so we should enable it and let the impersonator create a load balancer
+		// automatically. (e.g. TKGS)
+		// The CredentialIssuer's strategies array should have been updated to include an unsuccessful impersonation
+		// strategy saying that it was automatically disabled.
+		requireDisabledStrategy(ctx, t, env, adminConciergeClient)
+
+		// Create configuration to make the impersonation proxy turn on with no endpoint (i.e. automatically create a load balancer).
+		configMap := impersonationProxyConfigMapForConfig(t, env, impersonator.Config{Mode: impersonator.ModeEnabled})
+		t.Logf("creating configmap %s", configMap.Name)
+		_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, &configMap, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+	default:
+		// Auto mode should have decided that the impersonator will be disabled. We need to manually enable it.
+		// However, the cluster does not support load balancers so we should enable it without a load balancer
+		// and use squid to make requests. (e.g. kind)
 		require.NotEmpty(t, env.Proxy,
 			"test cluster does not support load balancers but also doesn't have a squid proxy... "+
 				"this is not a supported configuration for test clusters")
@@ -206,7 +241,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		require.Truef(t, isErr, "wanted error %q to be service unavailable via squid error, but: %s", err, message)
 
 		// Create configuration to make the impersonation proxy turn on with a hard coded endpoint (without a load balancer).
-		configMap := configMapForConfig(t, env, impersonator.Config{
+		configMap := impersonationProxyConfigMapForConfig(t, env, impersonator.Config{
 			Mode:     impersonator.ModeEnabled,
 			Endpoint: proxyServiceEndpoint,
 		})
@@ -221,7 +256,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	// in the strategies array or it may be included in an error state. It can be in an error state for
 	// awhile when it is waiting for the load balancer to be assigned an ip/hostname.
 	impersonationProxyURL, impersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
-	if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
+	if !clusterSupportsLoadBalancers {
 		// In this case, we specified the endpoint in the configmap, so check that it was reported correctly in the CredentialIssuer.
 		require.Equal(t, "https://"+proxyServiceEndpoint, impersonationProxyURL)
 	}
@@ -634,7 +669,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			dialer := websocket.Dialer{
 				TLSClientConfig: tlsConfig,
 			}
-			if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
+			if !clusterSupportsLoadBalancers {
 				dialer.Proxy = func(req *http.Request) (*url.URL, error) {
 					proxyURL, err := url.Parse(env.Proxy)
 					require.NoError(t, err)
@@ -709,7 +744,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			httpTransport := http.Transport{
 				TLSClientConfig: tlsConfig,
 			}
-			if !env.HasCapability(library.HasExternalLoadBalancerProvider) {
+			if !clusterSupportsLoadBalancers {
 				httpTransport.Proxy = func(req *http.Request) (*url.URL, error) {
 					proxyURL, err := url.Parse(env.Proxy)
 					require.NoError(t, err)
@@ -777,8 +812,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 	t.Run("manually disabling the impersonation proxy feature", func(t *testing.T) {
 		// Update configuration to force the proxy to disabled mode
-		configMap := configMapForConfig(t, env, impersonator.Config{Mode: impersonator.ModeDisabled})
-		if env.HasCapability(library.HasExternalLoadBalancerProvider) {
+		configMap := impersonationProxyConfigMapForConfig(t, env, impersonator.Config{Mode: impersonator.ModeDisabled})
+		if clusterSupportsLoadBalancers {
 			t.Logf("creating configmap %s", configMap.Name)
 			_, err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, &configMap, metav1.CreateOptions{})
 			require.NoError(t, err)
@@ -788,7 +823,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.NoError(t, err)
 		}
 
-		if env.HasCapability(library.HasExternalLoadBalancerProvider) {
+		if clusterSupportsLoadBalancers {
 			// The load balancer should have been deleted when we disabled the impersonation proxy.
 			// Note that this can take kind of a long time on real cloud providers (e.g. ~22 seconds on EKS).
 			library.RequireEventuallyWithoutError(t, func() (bool, error) {
@@ -827,7 +862,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// At this point the impersonator should be stopped. The CredentialIssuer's strategies array should be updated to
 		// include an unsuccessful impersonation strategy saying that it was manually configured to be disabled.
-		requireDisabledByConfigurationStrategy(ctx, t, env, adminConciergeClient)
+		requireDisabledStrategy(ctx, t, env, adminConciergeClient)
 
 		if !env.HasCapability(library.ClusterSigningKeyIsAvailable) {
 			// This cluster does not support the cluster signing key strategy, so now that we've manually disabled the
@@ -962,7 +997,7 @@ func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *librar
 	return impersonationProxyURL, impersonationProxyCACertPEM
 }
 
-func requireDisabledByConfigurationStrategy(ctx context.Context, t *testing.T, env *library.TestEnv, adminConciergeClient versioned.Interface) {
+func requireDisabledStrategy(ctx context.Context, t *testing.T, env *library.TestEnv, adminConciergeClient versioned.Interface) {
 	t.Helper()
 
 	library.RequireEventuallyWithoutError(t, func() (bool, error) {
@@ -1039,7 +1074,7 @@ func kubeconfigProxyFunc(t *testing.T, squidProxyURL string) func(req *http.Requ
 	}
 }
 
-func configMapForConfig(t *testing.T, env *library.TestEnv, config impersonator.Config) corev1.ConfigMap {
+func impersonationProxyConfigMapForConfig(t *testing.T, env *library.TestEnv, config impersonator.Config) corev1.ConfigMap {
 	t.Helper()
 	configString, err := yaml.Marshal(config)
 	require.NoError(t, err)

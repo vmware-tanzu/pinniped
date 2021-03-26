@@ -42,10 +42,6 @@ import (
 func TestE2EFullIntegration(t *testing.T) {
 	env := library.IntegrationEnv(t)
 
-	// If anything in this test crashes, dump out the supervisor and proxy pod logs.
-	defer library.DumpLogs(t, env.SupervisorNamespace, "")
-	defer library.DumpLogs(t, "dex", "app=proxy")
-
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancelFunc()
 

@@ -1102,7 +1102,7 @@ func getImpersonationKubeconfig(t *testing.T, env *library.TestEnv, impersonatio
 		"--oidc-skip-browser",
 		"--static-token", env.TestUser.Token,
 		"--concierge-authenticator-name", authenticator.Name,
-		"--concierge-authenticator-type", authenticator.Kind,
+		"--concierge-authenticator-type", "webhook",
 		// Force the use of impersonation proxy strategy, but let it auto-discover the endpoint and CA.
 		"--concierge-mode", "ImpersonationProxy"}
 	t.Log("Running:", pinnipedExe, getKubeConfigCmd)

@@ -83,7 +83,7 @@ func (sb *syncBuffer) Write(b []byte) (int, error) {
 func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's complex.
 	env := library.IntegrationEnv(t)
 
-	impersonatorShouldHaveStartedAutomaticallyByDefault := !env.HasCapability(library.HasExternalLoadBalancerProvider)
+	impersonatorShouldHaveStartedAutomaticallyByDefault := !env.HasCapability(library.ClusterSigningKeyIsAvailable)
 	clusterSupportsLoadBalancers := env.HasCapability(library.HasExternalLoadBalancerProvider)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)

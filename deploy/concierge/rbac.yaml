@@ -32,7 +32,10 @@ rules:
     verbs: [ use ]
     resourceNames: [ nonroot ]
   - apiGroups: [ "" ]
-    resources: [ "users", "groups" ]
+    resources: [ "users", "groups", "serviceaccounts" ]
+    verbs: [ "impersonate" ]
+  - apiGroups: [ "authentication.k8s.io" ]
+    resources: [ "*" ]  #! What we really want is userextras/* but the RBAC authorizer only supports */subresource, not resource/*
     verbs: [ "impersonate" ]
   - apiGroups: [ "" ]
     resources: [ nodes ]

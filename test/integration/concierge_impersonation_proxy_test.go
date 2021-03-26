@@ -226,9 +226,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// Auto mode should have decided that the impersonator will be disabled. We need to manually enable it.
 		// However, the cluster does not support load balancers so we should enable it without a load balancer
 		// and use squid to make requests. (e.g. kind)
-		require.NotEmpty(t, env.Proxy,
-			"test cluster does not support load balancers but also doesn't have a squid proxy... "+
+		if env.Proxy == "" {
+			t.Skip("test cluster does not support load balancers but also doesn't have a squid proxy... " +
 				"this is not a supported configuration for test clusters")
+		}
 
 		// Check that no load balancer has been created by the impersonator's "auto" mode.
 		library.RequireNeverWithoutError(t, func() (bool, error) {

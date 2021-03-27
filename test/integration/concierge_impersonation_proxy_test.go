@@ -42,7 +42,7 @@ import (
 	conciergev1alpha "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
-	"go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
+	pinnipedconciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/concierge/impersonator"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/testutil"
@@ -102,8 +102,23 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	// The address of the ClusterIP service that points at the impersonation proxy's port (used when there is no load balancer).
 	proxyServiceEndpoint := fmt.Sprintf("%s-proxy.%s.svc.cluster.local", env.ConciergeAppName, env.ConciergeNamespace)
 
+	newImpersonationProxyClientWithCredentials := func(credentials *loginv1alpha1.ClusterCredential, impersonationProxyURL string, impersonationProxyCACertPEM []byte, doubleImpersonateUser string) *kubeclient.Client {
+		kubeconfig := impersonationProxyRestConfig(credentials, impersonationProxyURL, impersonationProxyCACertPEM, doubleImpersonateUser)
+		if !clusterSupportsLoadBalancers {
+			// Only if there is no possibility to send traffic through a load balancer, then send the traffic through the Squid proxy.
+			// Prefer to go through a load balancer because that's how the impersonator is intended to be used in the real world.
+			kubeconfig.Proxy = kubeconfigProxyFunc(t, env.Proxy)
+		}
+		return library.NewKubeclient(t, kubeconfig)
+	}
+
+	newAnonymousImpersonationProxyClient := func(impersonationProxyURL string, impersonationProxyCACertPEM []byte, doubleImpersonateUser string) *kubeclient.Client {
+		emptyCredentials := &loginv1alpha1.ClusterCredential{}
+		return newImpersonationProxyClientWithCredentials(emptyCredentials, impersonationProxyURL, impersonationProxyCACertPEM, doubleImpersonateUser)
+	}
+
 	var mostRecentTokenCredentialRequestResponse *loginv1alpha1.TokenCredentialRequest
-	refreshCredential := func() *loginv1alpha1.ClusterCredential {
+	refreshCredential := func(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte) *loginv1alpha1.ClusterCredential {
 		if mostRecentTokenCredentialRequestResponse == nil || credentialAlmostExpired(t, mostRecentTokenCredentialRequestResponse) {
 			var err error
 			// Make a TokenCredentialRequest. This can either return a cert signed by the Kube API server's CA (e.g. on kind)
@@ -112,8 +127,14 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			//
 			// However, we issue short-lived certs, so this cert will only be valid for a few minutes.
 			// Cache it until it is almost expired and then refresh it whenever it is close to expired.
-			mostRecentTokenCredentialRequestResponse, err = library.CreateTokenCredentialRequest(ctx, t, credentialRequestSpecWithWorkingCredentials)
-			require.NoError(t, err)
+			//
+			// Also, use an anonymous client which goes through the impersonation proxy to make the request because that's
+			// what would normally happen when a user is using a kubeconfig where the server is the impersonation proxy,
+			// so it more closely simulates the normal use case, and also because we want this to work on AKS clusters
+			// which do not allow anonymous requests.
+			client := newAnonymousImpersonationProxyClient(impersonationProxyURL, impersonationProxyCACertPEM, "").PinnipedConcierge
+			mostRecentTokenCredentialRequestResponse, err = createTokenCredentialRequest(credentialRequestSpecWithWorkingCredentials, client)
+			require.NoError(t, err, library.Sdump(err))
 
 			require.Nil(t, mostRecentTokenCredentialRequestResponse.Status.Message,
 				"expected no error message but got: %s", library.Sdump(mostRecentTokenCredentialRequestResponse.Status.Message))
@@ -134,25 +155,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		return library.NewKubeclient(t, kubeconfig).Kubernetes
 	}
 
-	newImpersonationProxyClientWithCredentials := func(credentials *loginv1alpha1.ClusterCredential, impersonationProxyURL string, impersonationProxyCACertPEM []byte, doubleImpersonateUser string) *kubeclient.Client {
-		kubeconfig := impersonationProxyRestConfig(credentials, impersonationProxyURL, impersonationProxyCACertPEM, doubleImpersonateUser)
-		if !clusterSupportsLoadBalancers {
-			// Only if there is no possibility to send traffic through a load balancer, then send the traffic through the Squid proxy.
-			// Prefer to go through a load balancer because that's how the impersonator is intended to be used in the real world.
-			kubeconfig.Proxy = kubeconfigProxyFunc(t, env.Proxy)
-		}
-		return library.NewKubeclient(t, kubeconfig)
-	}
-
-	newImpersonationProxyClient := func(impersonationProxyURL string, impersonationProxyCACertPEM []byte, doubleImpersonateUser string) *kubeclient.Client {
-		refreshedCredentials := refreshCredential().DeepCopy()
+	newImpersonationProxyClient := func(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte, doubleImpersonateUser string) *kubeclient.Client {
+		refreshedCredentials := refreshCredential(t, impersonationProxyURL, impersonationProxyCACertPEM).DeepCopy()
 		refreshedCredentials.Token = "not a valid token" // demonstrates that client certs take precedence over tokens by setting both on the requests
 		return newImpersonationProxyClientWithCredentials(refreshedCredentials, impersonationProxyURL, impersonationProxyCACertPEM, doubleImpersonateUser)
-	}
-
-	newAnonymousImpersonationProxyClient := func(impersonationProxyURL string, impersonationProxyCACertPEM []byte, doubleImpersonateUser string) *kubeclient.Client {
-		emptyCredentials := &loginv1alpha1.ClusterCredential{}
-		return newImpersonationProxyClientWithCredentials(emptyCredentials, impersonationProxyURL, impersonationProxyCACertPEM, doubleImpersonateUser)
 	}
 
 	oldConfigMap, err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Get(ctx, impersonationProxyConfigMapName(env), metav1.GetOptions{})
@@ -266,8 +272,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	// credentials before they expire. Create a closure to capture the arguments to newImpersonationProxyClient
 	// so we don't have to keep repeating them.
 	// This client performs TLS checks, so it also provides test coverage that the impersonation proxy server is generating TLS certs correctly.
-	impersonationProxyKubeClient := func() kubernetes.Interface {
-		return newImpersonationProxyClient(impersonationProxyURL, impersonationProxyCACertPEM, "").Kubernetes
+	impersonationProxyKubeClient := func(t *testing.T) kubernetes.Interface {
+		return newImpersonationProxyClient(t, impersonationProxyURL, impersonationProxyCACertPEM, "").Kubernetes
 	}
 
 	t.Run("positive tests", func(t *testing.T) {
@@ -300,13 +306,13 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// influencing RBAC checks correctly.
 		t.Run(
 			"access as user",
-			library.AccessAsUserTest(ctx, env.TestUser.ExpectedUsername, impersonationProxyKubeClient()),
+			library.AccessAsUserTest(ctx, env.TestUser.ExpectedUsername, impersonationProxyKubeClient(t)),
 		)
 		for _, group := range env.TestUser.ExpectedGroups {
 			group := group
 			t.Run(
 				"access as group "+group,
-				library.AccessAsGroupTest(ctx, group, impersonationProxyKubeClient()),
+				library.AccessAsGroupTest(ctx, group, impersonationProxyKubeClient(t)),
 			)
 		}
 
@@ -354,7 +360,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			// Create and start informer to exercise the "watch" verb for us.
 			informerFactory := k8sinformers.NewSharedInformerFactoryWithOptions(
-				impersonationProxyKubeClient(),
+				impersonationProxyKubeClient(t),
 				0,
 				k8sinformers.WithNamespace(namespaceName))
 			informer := informerFactory.Core().V1().ConfigMaps()
@@ -374,17 +380,17 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}
 
 			// Test "create" verb through the impersonation proxy.
-			_, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Create(ctx,
+			_, err := impersonationProxyKubeClient(t).CoreV1().ConfigMaps(namespaceName).Create(ctx,
 				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-1", Labels: configMapLabels}},
 				metav1.CreateOptions{},
 			)
 			require.NoError(t, err)
-			_, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Create(ctx,
+			_, err = impersonationProxyKubeClient(t).CoreV1().ConfigMaps(namespaceName).Create(ctx,
 				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-2", Labels: configMapLabels}},
 				metav1.CreateOptions{},
 			)
 			require.NoError(t, err)
-			_, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Create(ctx,
+			_, err = impersonationProxyKubeClient(t).CoreV1().ConfigMaps(namespaceName).Create(ctx,
 				&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap-3", Labels: configMapLabels}},
 				metav1.CreateOptions{},
 			)
@@ -400,11 +406,11 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}, 10*time.Second, 50*time.Millisecond)
 
 			// Test "get" verb through the impersonation proxy.
-			configMap3, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Get(ctx, "configmap-3", metav1.GetOptions{})
+			configMap3, err := impersonationProxyKubeClient(t).CoreV1().ConfigMaps(namespaceName).Get(ctx, "configmap-3", metav1.GetOptions{})
 			require.NoError(t, err)
 
 			// Test "list" verb through the impersonation proxy.
-			listResult, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).List(ctx, metav1.ListOptions{
+			listResult, err := impersonationProxyKubeClient(t).CoreV1().ConfigMaps(namespaceName).List(ctx, metav1.ListOptions{
 				LabelSelector: configMapLabels.String(),
 			})
 			require.NoError(t, err)
@@ -412,7 +418,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			// Test "update" verb through the impersonation proxy.
 			configMap3.Data = map[string]string{"foo": "bar"}
-			updateResult, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Update(ctx, configMap3, metav1.UpdateOptions{})
+			updateResult, err := impersonationProxyKubeClient(t).CoreV1().ConfigMaps(namespaceName).Update(ctx, configMap3, metav1.UpdateOptions{})
 			require.NoError(t, err)
 			require.Equal(t, "bar", updateResult.Data["foo"])
 
@@ -423,7 +429,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}, 10*time.Second, 50*time.Millisecond)
 
 			// Test "patch" verb through the impersonation proxy.
-			patchResult, err := impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Patch(ctx,
+			patchResult, err := impersonationProxyKubeClient(t).CoreV1().ConfigMaps(namespaceName).Patch(ctx,
 				"configmap-3",
 				types.MergePatchType,
 				[]byte(`{"data":{"baz":"42"}}`),
@@ -440,7 +446,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}, 10*time.Second, 50*time.Millisecond)
 
 			// Test "delete" verb through the impersonation proxy.
-			err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).Delete(ctx, "configmap-3", metav1.DeleteOptions{})
+			err = impersonationProxyKubeClient(t).CoreV1().ConfigMaps(namespaceName).Delete(ctx, "configmap-3", metav1.DeleteOptions{})
 			require.NoError(t, err)
 
 			// Make sure that the deleted ConfigMap shows up in the informer's cache.
@@ -451,7 +457,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}, 10*time.Second, 50*time.Millisecond)
 
 			// Test "deletecollection" verb through the impersonation proxy.
-			err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
+			err = impersonationProxyKubeClient(t).CoreV1().ConfigMaps(namespaceName).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
 			require.NoError(t, err)
 
 			// Make sure that the deleted ConfigMaps shows up in the informer's cache.
@@ -461,7 +467,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}, 10*time.Second, 50*time.Millisecond)
 
 			// There should be no ConfigMaps left.
-			listResult, err = impersonationProxyKubeClient().CoreV1().ConfigMaps(namespaceName).List(ctx, metav1.ListOptions{
+			listResult, err = impersonationProxyKubeClient(t).CoreV1().ConfigMaps(namespaceName).List(ctx, metav1.ListOptions{
 				LabelSelector: configMapLabels.String(),
 			})
 			require.NoError(t, err)
@@ -471,11 +477,11 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		t.Run("double impersonation as a regular user is blocked", func(t *testing.T) {
 			// Make a client which will send requests through the impersonation proxy and will also add
 			// impersonate headers to the request.
-			doubleImpersonationKubeClient := newImpersonationProxyClient(impersonationProxyURL, impersonationProxyCACertPEM, "other-user-to-impersonate").Kubernetes
+			doubleImpersonationKubeClient := newImpersonationProxyClient(t, impersonationProxyURL, impersonationProxyCACertPEM, "other-user-to-impersonate").Kubernetes
 
 			// Check that we can get some resource through the impersonation proxy without any impersonation headers on the request.
 			// We could use any resource for this, but we happen to know that this one should exist.
-			_, err := impersonationProxyKubeClient().CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
+			_, err := impersonationProxyKubeClient(t).CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
 			require.NoError(t, err)
 
 			// Now we'll see what happens when we add an impersonation header to the request. This should generate a
@@ -525,7 +531,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		t.Run("WhoAmIRequests and different kinds of authentication through the impersonation proxy", func(t *testing.T) {
 			// Test using the TokenCredentialRequest for authentication.
-			impersonationProxyPinnipedConciergeClient := newImpersonationProxyClient(
+			impersonationProxyPinnipedConciergeClient := newImpersonationProxyClient(t,
 				impersonationProxyURL, impersonationProxyCACertPEM, "",
 			).PinnipedConcierge
 			whoAmI, err := impersonationProxyPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
@@ -654,7 +660,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		t.Run("websocket client", func(t *testing.T) {
 			namespaceName := createTestNamespace(t, adminClient)
 
-			impersonationRestConfig := impersonationProxyRestConfig(refreshCredential(), impersonationProxyURL, impersonationProxyCACertPEM, "")
+			impersonationRestConfig := impersonationProxyRestConfig(
+				refreshCredential(t, impersonationProxyURL, impersonationProxyCACertPEM),
+				impersonationProxyURL, impersonationProxyCACertPEM, "",
+			)
 			tlsConfig, err := rest.TLSConfigFor(impersonationRestConfig)
 			require.NoError(t, err)
 
@@ -738,7 +747,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			})
 
 			// create rest client
-			restConfig := impersonationProxyRestConfig(refreshCredential(), impersonationProxyURL, impersonationProxyCACertPEM, "")
+			restConfig := impersonationProxyRestConfig(
+				refreshCredential(t, impersonationProxyURL, impersonationProxyCACertPEM),
+				impersonationProxyURL, impersonationProxyCACertPEM, "",
+			)
 
 			tlsConfig, err := rest.TLSConfigFor(restConfig)
 			require.NoError(t, err)
@@ -865,11 +877,13 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// include an unsuccessful impersonation strategy saying that it was manually configured to be disabled.
 		requireDisabledStrategy(ctx, t, env, adminConciergeClient)
 
-		if !env.HasCapability(library.ClusterSigningKeyIsAvailable) {
+		if !env.HasCapability(library.ClusterSigningKeyIsAvailable) && env.HasCapability(library.AnonymousAuthenticationSupported) {
 			// This cluster does not support the cluster signing key strategy, so now that we've manually disabled the
 			// impersonation strategy, we should be left with no working strategies.
 			// Given that there are no working strategies, a TokenCredentialRequest which would otherwise work should now
 			// fail, because there is no point handing out credentials that are not going to work for any strategy.
+			// Note that library.CreateTokenCredentialRequest makes an unauthenticated request, so we can't meaningfully
+			// perform this part of the test on a cluster which does not allow anonymous authentication.
 			tokenCredentialRequestResponse, err := library.CreateTokenCredentialRequest(ctx, t, credentialRequestSpecWithWorkingCredentials)
 			require.NoError(t, err)
 
@@ -953,7 +967,7 @@ func expectedWhoAmIRequestResponse(username string, groups []string) *identityv1
 	}
 }
 
-func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *library.TestEnv, adminConciergeClient versioned.Interface) (string, []byte) {
+func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *library.TestEnv, adminConciergeClient pinnipedconciergeclientset.Interface) (string, []byte) {
 	t.Helper()
 	var impersonationProxyURL string
 	var impersonationProxyCACertPEM []byte
@@ -998,7 +1012,7 @@ func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *librar
 	return impersonationProxyURL, impersonationProxyCACertPEM
 }
 
-func requireDisabledStrategy(ctx context.Context, t *testing.T, env *library.TestEnv, adminConciergeClient versioned.Interface) {
+func requireDisabledStrategy(ctx context.Context, t *testing.T, env *library.TestEnv, adminConciergeClient pinnipedconciergeclientset.Interface) {
 	t.Helper()
 
 	library.RequireEventuallyWithoutError(t, func() (bool, error) {
@@ -1229,4 +1243,15 @@ func requireClose(t *testing.T, c chan struct{}, timeout time.Duration) {
 	case <-timer.C:
 		require.FailNow(t, "failed to receive from channel within "+timeout.String())
 	}
+}
+
+func createTokenCredentialRequest(
+	spec loginv1alpha1.TokenCredentialRequestSpec,
+	client pinnipedconciergeclientset.Interface,
+) (*loginv1alpha1.TokenCredentialRequest, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	return client.LoginV1alpha1().TokenCredentialRequests().Create(ctx,
+		&loginv1alpha1.TokenCredentialRequest{Spec: spec}, metav1.CreateOptions{},
+	)
 }

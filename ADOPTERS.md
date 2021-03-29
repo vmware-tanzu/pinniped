@@ -17,6 +17,14 @@ Below is a list of solutions where Pinniped is being used as a component.
 
 Kubeapps uses Pinniped to [enable SSO authentication](https://github.com/kubeapps/kubeapps/blob/master/docs/user/using-an-OIDC-provider-with-pinniped.md) when running on clusters where SSO cannot be configured for the cluster API server.
 
+**[VMware Tanzu Kubernetes Grid (TKG)](https://tanzu.vmware.com/kubernetes-grid)**
+
+TKG uses Pinniped to provide a seamless SSO experience across management and workload clusters.
+
+**[VMware Tanzu Mission Control (TMC)](https://tanzu.vmware.com/mission-control)**
+
+TMC uses Pinniped to provide a uniform authentication experience across all attached clusters.
+
 ## Adding your organization to the list of adopters
 
 If you are using Pinniped and would like to be included in the list of Pinniped Adopters, add an SVG version of your logo that is less than 150 KB to

@@ -82,7 +82,7 @@ func assertNoRestartsDuringTest(t *testing.T, namespace, labelSelector string) {
 			}
 
 			// Expect the restart count to be the same as it was before the test.
-			if !assert.Equal(
+			assert.Equal(
 				t,
 				previousRestartCount,
 				currentRestartCount,
@@ -90,10 +90,7 @@ func assertNoRestartsDuringTest(t *testing.T, namespace, labelSelector string) {
 				key.String(),
 				currentRestartCount,
 				previousRestartCount,
-			) {
-				// Attempt to dump the logs from the previous container that crashed.
-				dumpContainerLogs(ctx, t, kubeClient, key.namespace, key.pod, key.container, true)
-			}
+			)
 		}
 	})
 }

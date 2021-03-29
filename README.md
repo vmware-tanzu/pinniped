@@ -47,7 +47,7 @@ Care to kick the tires? It's easy to [install and try Pinniped](https://pinniped
 
 ## Community meetings
 
-Pinniped is better because of our contributors and maintainers. It is because of you that we can bring great software to the community. Please join us during our online community meetings, occurring every first and third Thursday of the month at 9 AM PT / 12 PM PT. Use [this Zoom Link](https://vmware.zoom.us/j/93798188973?pwd=T3pIMWxReEQvcWljNm1admRoZTFSZz09) to attend and add any agenda items you wish to discuss to [the notes document](https://hackmd.io/rd_kVJhjQfOvfAWzK8A3tQ?view). Join our [Google Group](https://groups.google.com/u/1/g/project-pinniped) to receive invites to this meeting.
+Pinniped is better because of our contributors and maintainers. It is because of you that we can bring great software to the community. Please join us during our online community meetings, occurring every first and third Thursday of the month at 9 AM PT / 12 PM PT. Use [this Zoom Link](https://vmware.zoom.us/j/93798188973?pwd=T3pIMWxReEQvcWljNm1admRoZTFSZz09) to attend and add any agenda items you wish to discuss to [the notes document](https://hackmd.io/rd_kVJhjQfOvfAWzK8A3tQ?view). Join our [Google Group](https://groups.google.com/g/project-pinniped) to receive invites to this meeting.
 
 If the meeting day falls on a US holiday, please consider that occurrence of the meeting to be canceled.
 

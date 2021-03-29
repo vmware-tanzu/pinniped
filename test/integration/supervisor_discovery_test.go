@@ -601,18 +601,25 @@ func requireDelete(t *testing.T, client pinnipedclientset.Interface, ns, name st
 
 func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string, status v1alpha1.FederationDomainStatusCondition) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
 
 	var federationDomain *v1alpha1.FederationDomain
 	var err error
 	assert.Eventually(t, func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
 		federationDomain, err = client.ConfigV1alpha1().FederationDomains(ns).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
-			t.Logf("error trying to get FederationDomain: %s", err.Error())
+			t.Logf("error trying to get FederationDomain %s/%s: %v", ns, name, err)
+			return false
 		}
-		return err == nil && federationDomain.Status.Status == status
-	}, time.Minute, 200*time.Millisecond)
+
+		if federationDomain.Status.Status != status {
+			t.Logf("found FederationDomain %s/%s with status %s", ns, name, federationDomain.Status.Status)
+			return false
+		}
+		return true
+	}, 5*time.Minute, 200*time.Millisecond)
 	require.NoError(t, err)
 	require.Equalf(t, status, federationDomain.Status.Status, "unexpected status (message = '%s')", federationDomain.Status.Message)
 }

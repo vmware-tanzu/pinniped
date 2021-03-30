@@ -882,6 +882,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.Equal(corev1.ServiceTypeLoadBalancer, createdLoadBalancerService.Spec.Type)
 			r.Equal("app-name", createdLoadBalancerService.Spec.Selector["app"])
 			r.Equal(labels, createdLoadBalancerService.Labels)
+			r.Equal(map[string]string{"service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout": "4000"}, createdLoadBalancerService.Annotations)
 		}
 
 		var requireLoadBalancerWasDeleted = func(action coretesting.Action) {

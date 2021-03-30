@@ -441,6 +441,9 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.C
 			Name:      c.generatedLoadBalancerServiceName,
 			Namespace: c.namespace,
 			Labels:    c.labels,
+			Annotations: map[string]string{
+				"service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout": "4000", // AWS' default is to time out after 60 seconds idle. Prevent that.
+			},
 		},
 	}
 	plog.Info("creating load balancer for impersonation proxy",

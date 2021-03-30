@@ -55,6 +55,21 @@ func runTestKubectlCommand(t *testing.T, args ...string) (string, string) {
 	}
 	return stdOut.String(), stdErr.String()
 }
+
+func requireCleanKubectlStderr(t *testing.T, stderr string) {
+	// Every line must be empty or contain a known, innocuous warning.
+	for _, line := range strings.Split(stderr, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if strings.Contains(line, "Throttling request took") {
+			continue
+		}
+		require.Failf(t, "unexpected kubectl stderr", "kubectl produced unexpected stderr output:\n%s\n\n", stderr)
+		return
+	}
+}
+
 func TestGetPinnipedCategory(t *testing.T) {
 	env := library.IntegrationEnv(t)
 	dotSuffix := "." + env.APIGroupSuffix
@@ -62,7 +77,7 @@ func TestGetPinnipedCategory(t *testing.T) {
 	t.Run("category, no special params", func(t *testing.T) {
 		t.Parallel()
 		stdout, stderr := runTestKubectlCommand(t, "get", "pinniped", "-A")
-		require.Empty(t, stderr)
+		requireCleanKubectlStderr(t, stderr)
 		require.NotContains(t, stdout, "MethodNotAllowed")
 		require.Contains(t, stdout, dotSuffix)
 	})
@@ -101,7 +116,7 @@ func TestGetPinnipedCategory(t *testing.T) {
 		require.NotContains(t, stdout, "MethodNotAllowed")
 		require.Contains(t, stdout, `{"kind":"TokenCredentialRequestList","apiVersion":"login.concierge`+
 			dotSuffix+`/v1alpha1","metadata":{"resourceVersion":"0"},"items":[]}`)
-		require.Empty(t, stderr)
+		requireCleanKubectlStderr(t, stderr)
 	})
 
 	t.Run("raw request to see body, whoami", func(t *testing.T) {
@@ -110,6 +125,6 @@ func TestGetPinnipedCategory(t *testing.T) {
 		require.NotContains(t, stdout, "MethodNotAllowed")
 		require.Contains(t, stdout, `{"kind":"WhoAmIRequestList","apiVersion":"identity.concierge`+
 			dotSuffix+`/v1alpha1","metadata":{"resourceVersion":"0"},"items":[]}`)
-		require.Empty(t, stderr)
+		requireCleanKubectlStderr(t, stderr)
 	})
 }

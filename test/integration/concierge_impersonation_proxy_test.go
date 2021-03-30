@@ -133,8 +133,14 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// so it more closely simulates the normal use case, and also because we want this to work on AKS clusters
 			// which do not allow anonymous requests.
 			client := newAnonymousImpersonationProxyClient(impersonationProxyURL, impersonationProxyCACertPEM, "").PinnipedConcierge
-			mostRecentTokenCredentialRequestResponse, err = createTokenCredentialRequest(credentialRequestSpecWithWorkingCredentials, client)
-			require.NoError(t, err, library.Sdump(err))
+			require.Eventually(t, func() bool {
+				mostRecentTokenCredentialRequestResponse, err = createTokenCredentialRequest(credentialRequestSpecWithWorkingCredentials, client)
+				if err != nil {
+					t.Logf("failed to make TokenCredentialRequest: %s", library.Sdump(err))
+					return false
+				}
+				return true
+			}, 5*time.Minute, 5*time.Second)
 
 			require.Nil(t, mostRecentTokenCredentialRequestResponse.Status.Message,
 				"expected no error message but got: %s", library.Sdump(mostRecentTokenCredentialRequestResponse.Status.Message))

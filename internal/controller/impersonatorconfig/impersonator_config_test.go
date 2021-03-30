@@ -2207,8 +2207,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			it.Before(func() {
 				addNodeWithRoleToTracker("control-plane", kubeAPIClient)
 				addSecretToTrackers(newEmptySecret(tlsSecretName), kubeInformerClient)
-				configMapYAML := fmt.Sprintf("{mode: disabled}")
-				addImpersonatorConfigMapToTracker(configMapResourceName, configMapYAML, kubeInformerClient)
+				addImpersonatorConfigMapToTracker(configMapResourceName, "{mode: disabled}", kubeInformerClient)
 			})
 
 			it("does not pass the not found error through", func() {

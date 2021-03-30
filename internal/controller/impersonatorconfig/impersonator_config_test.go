@@ -2203,6 +2203,26 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			})
 		})
 
+		when("deleting the tls secret when informer and api are out of sync", func() {
+			it.Before(func() {
+				addNodeWithRoleToTracker("control-plane", kubeAPIClient)
+				addSecretToTrackers(newEmptySecret(tlsSecretName), kubeInformerClient)
+				configMapYAML := fmt.Sprintf("{mode: disabled}")
+				addImpersonatorConfigMapToTracker(configMapResourceName, configMapYAML, kubeInformerClient)
+			})
+
+			it("does not pass the not found error through", func() {
+				startInformersAndController()
+				r.NoError(runControllerSync())
+				requireTLSServerWasNeverStarted()
+				r.Len(kubeAPIClient.Actions(), 2)
+				requireNodesListed(kubeAPIClient.Actions()[0])
+				requireTLSSecretWasDeleted(kubeAPIClient.Actions()[1])
+				requireCredentialIssuer(newManuallyDisabledStrategy())
+				requireSigningCertProviderIsEmpty()
+			})
+		})
+
 		when("the PEM formatted data in the TLS Secret is not a valid cert", func() {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)

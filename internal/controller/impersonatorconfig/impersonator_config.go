@@ -781,6 +781,12 @@ func (c *impersonatorConfigController) ensureTLSSecretIsRemoved(ctx context.Cont
 		"secret", c.tlsSecretName,
 		"namespace", c.namespace)
 	err = c.k8sClient.CoreV1().Secrets(c.namespace).Delete(ctx, c.tlsSecretName, metav1.DeleteOptions{})
+	notFound := k8serrors.IsNotFound(err)
+	if notFound {
+		// its okay if we tried to delete and we got a not found error. This probably means
+		// another instance of the concierge got here first so there's nothing to delete.
+		return nil
+	}
 	if err != nil {
 		return err
 	}

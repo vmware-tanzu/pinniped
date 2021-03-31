@@ -57,7 +57,7 @@ kube::version::get_version_vars() {
       # KUBE_GIT_VERSION was not supplied
       # These values need to pass the validation in k8s.io/component-base/metrics:
       # https://github.com/kubernetes/component-base/blob/v0.20.5/metrics/version_parser.go#L28-L50
-      KUBE_GIT_VERSION='0.0.0'
+      KUBE_GIT_VERSION='v0.0.0'
       KUBE_GIT_MAJOR='0'
       KUBE_GIT_MINOR='0'
     fi

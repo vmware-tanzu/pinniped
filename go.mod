@@ -30,16 +30,15 @@ require (
 	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
-	golang.org/x/tools v0.0.0-20200825202427-b303f430e36d // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1
-	k8s.io/api v0.20.5
-	k8s.io/apimachinery v0.20.5
-	k8s.io/apiserver v0.20.5
-	k8s.io/client-go v0.20.5
-	k8s.io/component-base v0.20.5
+	k8s.io/api v0.0.0-20210329192759-4cbcd86ea749
+	k8s.io/apimachinery v0.21.0-alpha.0.0.20210329192153-640a6275d2b0
+	k8s.io/apiserver v0.0.0-20210330222258-23775f4efbdf
+	k8s.io/client-go v0.0.0-20210329194426-720ea497dc06
+	k8s.io/component-base v0.0.0-20210329195309-e1576f54c4ca
 	k8s.io/gengo v0.0.0-20201113003025-83324d819ded
 	k8s.io/klog/v2 v2.8.0
-	k8s.io/kube-aggregator v0.20.5
+	k8s.io/kube-aggregator v0.0.0-20210329201137-c9d5b747f33b
 	k8s.io/kube-openapi v0.0.0-20201113171705-d219536bb9fd
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
 	sigs.k8s.io/yaml v1.2.0

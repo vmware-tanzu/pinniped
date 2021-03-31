@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 
+# Copyright 2021 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+#
 # A script to perform the setup required to manually test using the impersonation proxy on a kind cluster.
 # Assumes that you installed the apps already using hack/prepare-for-integration-tests.sh.
+#
 
 set -euo pipefail
 

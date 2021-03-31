@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 
+# Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+#
 # This script can be used to prepare a kind cluster and deploy the app.
 # You can call this script again to redeploy the app.
 # It will also output instructions on how to run the integration.
+#
 
 set -euo pipefail
 

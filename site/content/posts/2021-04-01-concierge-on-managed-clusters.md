@@ -137,26 +137,15 @@ There are more strategies left to build:
 
 We invite your suggestions and contributions to make Pinniped work across all flavors of Kubernetes.
 
-## Join the Pinniped community
-
-Pinniped is better because of our contributors and maintainers.
-It's because of you that we can bring great software to the community.
-
-Please join us during our online community meetings, occurring every first and third Thursday of the month at 9AM PT / 12PM PT.
-Use [this Zoom link][zoom] to attend and add any agenda items you wish to discuss to [the notes document][meeting-notes].
-
-Join our [Google Group][google-group] to receive invites to this meeting.
+{{< community >}}
 
 [api-aggregation]: https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/apiserver-aggregation/]
 [csr-notafter]: https://github.com/kubernetes/kubernetes/pull/99494
-[google-group]:  https://go.pinniped.dev/community/group
 [hostpath]: https://kubernetes.io/docs/concepts/storage/volumes/#hostpath
 [impersonation]: https://kubernetes.io/docs/reference/access-authn-authz/authentication/#user-impersonation
 [kind]: https://kind.sigs.k8s.io/
 [kube-authn]: https://kubernetes.io/docs/reference/access-authn-authz/authentication/
-[meeting-notes]: https://go.pinniped.dev/community/agenda
 [kubeadm]: https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/
 [nodeselector]: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector
 [tcr]: https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#tokencredentialrequest
 [tolerations]: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
-[zoom]: https://go.pinniped.dev/community/zoom

@@ -58,12 +58,4 @@ From contributing code to uploading documentation to sharing how you’d like to
 
 As to where the name “pinniped” come from - Pinnipeds are marine mammals that have front and rear flippers, such as seals. A “seal” is also a mark of authenticity. And that’s what Pinniped hopes to be: a seal or mark of authenticity across and between Kubernetes clusters.
 
-### Join the Pinniped community
-
-- Follow us on Twitter at [@projectpinniped](https://twitter.com/projectpinniped)
-- Join our Kubernetes Slack channel so you can talk to project maintainers and other community members: [#pinniped](https://go.pinniped.dev/community/slack)
-- Join our [Google Group](https://go.pinniped.dev/community/group) to get updates on the project and invites to community meetings
-
-Join the [Pinniped Community Meetings](https://go.pinniped.dev/community), which are held every first and third Thursday at 9am PT via [Zoom](https://go.pinniped.dev/community/zoom), and read and comment on the [meeting agenda](https://go.pinniped.dev/community/agenda).
-
-- If you are ready to jump in and test, add code, or help with documentation, follow the instructions on our [Contributing to Pinniped](https://go.pinniped.dev/community) page for guidance.
+{{< community >}}

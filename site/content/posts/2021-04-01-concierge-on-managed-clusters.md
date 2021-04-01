@@ -126,14 +126,26 @@ It has some disadvantages, namely the overhead involved in proxying requests and
 ## Conclusion and future work
 
 Pinniped now supports a large majority of real-world Kubernetes clusters!
+Our automated test suite ensures that Pinniped is stable and functional across a wide range of Kubernetes versions and several providers including EKS, AKS, and GKE.
 
-There are more strategies left to build:
+This is a great start but there are more strategies left to build:
 
 - A strategy that loads the cluster signing certificate/key directly from a Secret (for example, as it appears in OpenShift).
 
 - A strategy that takes advantage of future CertificateSigningRequest API enhancements that support short-lived certificates (see [kubernetes/kubernetes#99494][csr-notafter]).
 
 - A strategy that issues non-certificate credentials, such as if a cluster has been statically configured to trust a JWT issuer.
+
+The current implementation also has a few missing features:
+
+- There is no support for "nested" impersonation.
+  This means you can't use the `--as` or `--as-group` flags in `kubectl` when you're connecting through the impersonation proxy.
+
+- It only supports certificate-based authentication.
+  You can't authenticate to the impersonation proxy directly with a ServiceAccount token, for example.
+
+- Depending on your cloud provider's LoadBalancer implementation, you may experience timeouts in long idle requests.
+  For example, a `kubectl logs` command for a quiet app may exit after as few as four minutes of silence.
 
 We invite your suggestions and contributions to make Pinniped work across all flavors of Kubernetes.
 

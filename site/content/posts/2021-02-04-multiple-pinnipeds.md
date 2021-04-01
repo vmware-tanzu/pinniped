@@ -113,14 +113,7 @@ This would require major changes and it would be challenging to support some fea
 
 As a team, we have no immediate plans for either of these ideas, but if you are interested please [reach out in GitHub][discussion].
 
-## Join the Pinniped Community!
-Pinniped is better because of our contributors and maintainers.
-It is because of you that we can bring great software to the community.
-
-Please join us during our online community meetings, occurring every first and third Thursday of the month at 9AM PT / 12PM PT.
-Use [this Zoom link][zoom] to attend and add any agenda items you wish to discuss to [the notes document][meeting-notes].
-
-Join our [Google Group][google-group] to receive invites to this meeting.
+{{< community >}}
 
 [api-aggregation]: https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/apiserver-aggregation/
 [apiserver-pkg]: https://pkg.go.dev/k8s.io/apiserver/pkg/server
@@ -128,12 +121,10 @@ Join our [Google Group][google-group] to receive invites to this meeting.
 [crd]: https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/
 [custom-scheme]: https://github.com/vmware-tanzu/pinniped/blob/main/internal/concierge/server/server.go#L182
 [discussion]: https://github.com/vmware-tanzu/pinniped/discussions/386
-[google-group]:  https://go.pinniped.dev/community/group
 [groupsuffix]: https://github.com/vmware-tanzu/pinniped/blob/main/internal/groupsuffix/groupsuffix.go
 [ingress-spec]: https://kubernetes.io/docs/reference/kubernetes-api/services-resources/ingress-v1/#IngressSpec
 [kubeclient-client]: https://github.com/vmware-tanzu/pinniped/blob/v0.5.0/internal/kubeclient/kubeclient.go#L22
 [kubeclient-middleware]: https://github.com/vmware-tanzu/pinniped/blob/v0.5.0/internal/kubeclient/middleware.go#L17-L19
-[meeting-notes]: https://go.pinniped.dev/community/agenda
 [ownerreferences]: https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/#owners-and-dependents
 [prepare-controllers]: https://github.com/vmware-tanzu/pinniped/blob/v0.5.0/internal/controllermanager/prepare_controllers.go#L116-L120
 [rest-config-wrap]: https://pkg.go.dev/k8s.io/client-go/rest#Config.Wrap
@@ -143,4 +134,3 @@ Join our [Google Group][google-group] to receive invites to this meeting.
 [ytt-crd-overlay]: https://github.com/vmware-tanzu/pinniped/blob/v0.5.0/deploy/concierge/z0_crd_overlay.yaml
 [ytt-deployment]: https://github.com/vmware-tanzu/pinniped/blob/v0.5.0/deploy/concierge/deployment.yaml#L195
 [ytt]: https://carvel.dev/ytt/
-[zoom]: https://go.pinniped.dev/community/zoom

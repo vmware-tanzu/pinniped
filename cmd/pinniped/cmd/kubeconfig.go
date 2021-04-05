@@ -86,6 +86,7 @@ type getKubeconfigParams struct {
 	staticTokenEnvName        string
 	oidc                      getKubeconfigOIDCParams
 	concierge                 getKubeconfigConciergeParams
+	generatedNameSuffix       string
 }
 
 func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
@@ -130,6 +131,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.BoolVar(&flags.skipValidate, "skip-validation", false, "Skip final validation of the kubeconfig (default: false)")
 	f.DurationVar(&flags.timeout, "timeout", 10*time.Minute, "Timeout for autodiscovery and validation")
 	f.StringVarP(&flags.outputPath, "output", "o", "", "Output file path (default: stdout)")
+	f.StringVar(&flags.generatedNameSuffix, "generated-name-suffix", "-pinniped", "Suffix to append to generated cluster, context, user kubeconfig entries")
 
 	mustMarkHidden(cmd, "oidc-debug-session-cache")
 
@@ -178,13 +180,21 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 	if err != nil {
 		return fmt.Errorf("could not load --kubeconfig: %w", err)
 	}
-	cluster, err := copyCurrentClusterFromExistingKubeConfig(currentKubeConfig, flags.kubeconfigContextOverride)
+	currentKubeconfigNames, err := getCurrentContext(currentKubeConfig, flags)
 	if err != nil {
 		return fmt.Errorf("could not load --kubeconfig/--kubeconfig-context: %w", err)
 	}
+	cluster := currentKubeConfig.Clusters[currentKubeconfigNames.ClusterName]
 	clientset, err := deps.getClientset(clientConfig, flags.concierge.apiGroupSuffix)
 	if err != nil {
 		return fmt.Errorf("could not configure Kubernetes client: %w", err)
+	}
+
+	// Generate the new context/cluster/user names by appending the --generated-name-suffix to the original values.
+	newKubeconfigNames := &kubeconfigNames{
+		ContextName: currentKubeconfigNames.ContextName + flags.generatedNameSuffix,
+		UserName:    currentKubeconfigNames.UserName + flags.generatedNameSuffix,
+		ClusterName: currentKubeconfigNames.ClusterName + flags.generatedNameSuffix,
 	}
 
 	if !flags.concierge.disabled {
@@ -236,7 +246,7 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 			execConfig.Args = append(execConfig.Args, "--token-env="+flags.staticTokenEnvName)
 		}
 
-		kubeconfig := newExecKubeconfig(cluster, &execConfig)
+		kubeconfig := newExecKubeconfig(cluster, &execConfig, newKubeconfigNames)
 		if err := validateKubeconfig(ctx, flags, kubeconfig, deps.log); err != nil {
 			return err
 		}
@@ -271,11 +281,31 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 	if flags.oidc.requestAudience != "" {
 		execConfig.Args = append(execConfig.Args, "--request-audience="+flags.oidc.requestAudience)
 	}
-	kubeconfig := newExecKubeconfig(cluster, &execConfig)
+	kubeconfig := newExecKubeconfig(cluster, &execConfig, newKubeconfigNames)
 	if err := validateKubeconfig(ctx, flags, kubeconfig, deps.log); err != nil {
 		return err
 	}
 	return writeConfigAsYAML(out, kubeconfig)
+}
+
+type kubeconfigNames struct{ ContextName, UserName, ClusterName string }
+
+func getCurrentContext(currentKubeConfig clientcmdapi.Config, flags getKubeconfigParams) (*kubeconfigNames, error) {
+	contextName := currentKubeConfig.CurrentContext
+	if flags.kubeconfigContextOverride != "" {
+		contextName = flags.kubeconfigContextOverride
+	}
+	ctx := currentKubeConfig.Contexts[contextName]
+	if ctx == nil {
+		return nil, fmt.Errorf("no such context %q", contextName)
+	}
+	if _, exists := currentKubeConfig.Clusters[ctx.Cluster]; !exists {
+		return nil, fmt.Errorf("no such cluster %q", ctx.Cluster)
+	}
+	if _, exists := currentKubeConfig.AuthInfos[ctx.AuthInfo]; !exists {
+		return nil, fmt.Errorf("no such user %q", ctx.AuthInfo)
+	}
+	return &kubeconfigNames{ContextName: contextName, UserName: ctx.AuthInfo, ClusterName: ctx.Cluster}, nil
 }
 
 func waitForCredentialIssuer(ctx context.Context, clientset conciergeclientset.Interface, flags getKubeconfigParams, deps kubeconfigDeps) (*configv1alpha1.CredentialIssuer, error) {
@@ -461,15 +491,14 @@ func getConciergeFrontend(credentialIssuer *configv1alpha1.CredentialIssuer, mod
 	return nil, fmt.Errorf("could not find successful Concierge strategy matching --concierge-mode=%s", mode.String())
 }
 
-func newExecKubeconfig(cluster *clientcmdapi.Cluster, execConfig *clientcmdapi.ExecConfig) clientcmdapi.Config {
-	const name = "pinniped"
+func newExecKubeconfig(cluster *clientcmdapi.Cluster, execConfig *clientcmdapi.ExecConfig, newNames *kubeconfigNames) clientcmdapi.Config {
 	return clientcmdapi.Config{
 		Kind:           "Config",
 		APIVersion:     clientcmdapi.SchemeGroupVersion.Version,
-		Clusters:       map[string]*clientcmdapi.Cluster{name: cluster},
-		AuthInfos:      map[string]*clientcmdapi.AuthInfo{name: {Exec: execConfig}},
-		Contexts:       map[string]*clientcmdapi.Context{name: {Cluster: name, AuthInfo: name}},
-		CurrentContext: name,
+		Clusters:       map[string]*clientcmdapi.Cluster{newNames.ClusterName: cluster},
+		AuthInfos:      map[string]*clientcmdapi.AuthInfo{newNames.UserName: {Exec: execConfig}},
+		Contexts:       map[string]*clientcmdapi.Context{newNames.ContextName: {Cluster: newNames.ClusterName, AuthInfo: newNames.UserName}},
+		CurrentContext: newNames.ContextName,
 	}
 }
 
@@ -558,18 +587,6 @@ func writeConfigAsYAML(out io.Writer, config clientcmdapi.Config) error {
 		return fmt.Errorf("could not write output: %w", err)
 	}
 	return nil
-}
-
-func copyCurrentClusterFromExistingKubeConfig(currentKubeConfig clientcmdapi.Config, currentContextNameOverride string) (*clientcmdapi.Cluster, error) {
-	contextName := currentKubeConfig.CurrentContext
-	if currentContextNameOverride != "" {
-		contextName = currentContextNameOverride
-	}
-	ctx := currentKubeConfig.Contexts[contextName]
-	if ctx == nil {
-		return nil, fmt.Errorf("no such context %q", contextName)
-	}
-	return currentKubeConfig.Clusters[ctx.Cluster], nil
 }
 
 func validateKubeconfig(ctx context.Context, flags getKubeconfigParams, kubeconfig clientcmdapi.Config, log logr.Logger) error {

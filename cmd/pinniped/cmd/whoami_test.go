@@ -53,7 +53,7 @@ func TestWhoami(t *testing.T) {
 			wantStdout: here.Doc(`
 				Current cluster info:
 
-				Name: kind-kind
+				Name: kind-cluster
 				URL: https://fake-server-url-value
 
 				Current user info:
@@ -68,7 +68,7 @@ func TestWhoami(t *testing.T) {
 			wantStdout: here.Doc(`
 				Current cluster info:
 
-				Name: kind-kind
+				Name: kind-cluster
 				URL: https://fake-server-url-value
 
 				Current user info:
@@ -84,7 +84,7 @@ func TestWhoami(t *testing.T) {
 			wantStdout: here.Doc(`
 				Current cluster info:
 
-				Name: kind-kind
+				Name: kind-cluster
 				URL: https://fake-server-url-value
 
 				Current user info:
@@ -100,7 +100,7 @@ func TestWhoami(t *testing.T) {
 			wantStdout: here.Doc(`
 				Current cluster info:
 
-				Name: kind-kind
+				Name: kind-cluster
 				URL: https://fake-server-url-value
 
 				Current user info:
@@ -209,12 +209,12 @@ func TestWhoami(t *testing.T) {
 			name: "different kubeconfig context, but same as current",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
-				"--kubeconfig-context", "kind-kind",
+				"--kubeconfig-context", "kind-context",
 			},
 			wantStdout: here.Doc(`
 				Current cluster info:
 
-				Name: kind-kind
+				Name: kind-cluster
 				URL: https://fake-server-url-value
 
 				Current user info:

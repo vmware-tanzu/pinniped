@@ -1,0 +1,229 @@
+#! Copyright 2021 the Pinniped contributors. All Rights Reserved.
+#! SPDX-License-Identifier: Apache-2.0
+
+#@ load("@ytt:data", "data")
+#@ load("@ytt:base64", "base64")
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ldap-ldif-files
+  namespace: tools
+type: Opaque
+stringData:
+  #@yaml/text-templated-strings
+  ldap.ldif: |
+    # ** CAUTION: Blank lines separate entries in the LDIF format! Do not remove them! ***
+    # Here's a good explaination of LDIF:
+    # https://www.digitalocean.com/community/tutorials/how-to-use-ldif-files-to-make-changes-to-an-openldap-system
+
+    # pinniped.dev (organization, root)
+    dn: dc=pinniped,dc=dev
+    objectClass: dcObject
+    objectClass: organization
+    dc: pinniped
+    o: example
+
+    # users, pinniped.dev (organization unit)
+    dn: ou=users,dc=pinniped,dc=dev
+    objectClass: organizationalUnit
+    ou: users
+
+    # groups, pinniped.dev (organization unit)
+    dn: ou=groups,dc=pinniped,dc=dev
+    objectClass: organizationalUnit
+    ou: groups
+
+    # beach-groups, groups, pinniped.dev (organization unit)
+    dn: ou=beach-groups,ou=groups,dc=pinniped,dc=dev
+    objectClass: organizationalUnit
+    ou: beach-groups
+
+    # pinny, users, pinniped.dev (user)
+    dn: cn=pinny,ou=users,dc=pinniped,dc=dev
+    objectClass: inetOrgPerson
+    objectClass: posixAccount
+    objectClass: shadowAccount
+    cn: pinny
+    sn: Seal
+    givenName: Pinny
+    mail: pinny.ldap@example.com
+    userPassword:: (@= base64.encode(data.values.pinny_ldap_password) @)
+    uid: pinny
+    uidNumber: 1000
+    gidNumber: 1000
+    homeDirectory: /home/pinny
+    loginShell: /bin/bash
+    gecos: pinny-the-seal
+
+    # wally, users, pinniped.dev (user without password)
+    dn: cn=wally,ou=users,dc=pinniped,dc=dev
+    objectClass: inetOrgPerson
+    objectClass: posixAccount
+    objectClass: shadowAccount
+    cn: wally
+    sn: Walrus
+    givenName: Wally
+    mail: wally.ldap@example.com
+    uid: wally
+    uidNumber: 1001
+    gidNumber: 1001
+    homeDirectory: /home/wally
+    loginShell: /bin/bash
+    gecos: wally-the-walrus
+
+    # olive, users, pinniped.dev (user without password)
+    dn: cn=olive,ou=users,dc=pinniped,dc=dev
+    objectClass: inetOrgPerson
+    objectClass: posixAccount
+    objectClass: shadowAccount
+    cn: olive
+    sn: Boston Terrier
+    givenName: Olive
+    mail: olive.ldap@example.com
+    uid: olive
+    uidNumber: 1002
+    gidNumber: 1002
+    homeDirectory: /home/olive
+    loginShell: /bin/bash
+    gecos: olive-the-dog
+
+    # ball-game-players, beach-groups, groups, pinniped.dev (group of users)
+    dn: cn=ball-game-players,ou=beach-groups,ou=groups,dc=pinniped,dc=dev
+    cn: ball-game-players
+    objectClass: groupOfNames
+    member: cn=pinny,ou=users,dc=pinniped,dc=dev
+    member: cn=olive,ou=users,dc=pinniped,dc=dev
+
+    # seals, groups, pinniped.dev (group of users)
+    dn: cn=seals,ou=groups,dc=pinniped,dc=dev
+    cn: seals
+    objectClass: groupOfNames
+    member: cn=pinny,ou=users,dc=pinniped,dc=dev
+
+    # walruses, groups, pinniped.dev (group of users)
+    dn: cn=walruses,ou=groups,dc=pinniped,dc=dev
+    cn: walruses
+    objectClass: groupOfNames
+    member: cn=wally,ou=users,dc=pinniped,dc=dev
+
+    # pinnipeds, users, pinniped.dev (group of groups)
+    dn: cn=pinnipeds,ou=groups,dc=pinniped,dc=dev
+    cn: pinnipeds
+    objectClass: groupOfNames
+    member: cn=seals,ou=groups,dc=pinniped,dc=dev
+    member: cn=walruses,ou=groups,dc=pinniped,dc=dev
+
+    # mammals, groups, pinniped.dev (group of both groups and users)
+    dn: cn=mammals,ou=groups,dc=pinniped,dc=dev
+    cn: mammals
+    objectClass: groupOfNames
+    member: cn=pinninpeds,ou=groups,dc=pinniped,dc=dev
+    member: cn=olive,ou=users,dc=pinniped,dc=dev
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ldap
+  namespace: tools
+  labels:
+    app: ldap
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ldap
+  template:
+    metadata:
+      labels:
+        app: ldap
+    spec:
+      containers:
+        - name: ldap
+          #! An issue was reported and will be fixed in bitnami/openldap soon.
+          image: ghcr.io/pinniped-ci-bot/bitnami-openldap-forked:2.4.58-debian-10-r15 #! our own fork of docker.io/bitnami/openldap
+          #! image: docker.io/bitnami/openldap
+          imagePullPolicy: Always
+          ports:
+            - name: ldap
+              containerPort: 1389
+            - name: ldaps
+              containerPort: 1636
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "64Mi"
+            limits:
+              cpu: "10m"
+              memory: "64Mi"
+          readinessProbe:
+            tcpSocket:
+              port: ldap
+            initialDelaySeconds: 25 #! typically takes about 30 seconds to start
+            timeoutSeconds: 120
+            periodSeconds: 5
+            failureThreshold: 6
+          env:
+            #! Example ldapsearch commands that can be run from within the container based on these env vars.
+            #! These will print the whole LDAP tree starting at our root.
+            #!  ldapsearch -x -H 'ldap://ldap.tools.svc.cluster.local' -D 'cn=admin,dc=pinniped,dc=dev' -w password -b 'dc=pinniped,dc=dev'
+            #!  LDAPTLS_CACERT=/var/certs/ca.pem ldapsearch -x -H 'ldaps://ldap.tools.svc.cluster.local' -D 'cn=admin,dc=pinniped,dc=dev' -w password -b 'dc=pinniped,dc=dev'
+            - name: BITNAMI_DEBUG
+              value: "true"
+            - name: LDAP_ADMIN_USERNAME
+              value: "admin"
+            - name: LDAP_ADMIN_PASSWORD
+              value: "password" #! ok to hardcode: the LDAP server will not be available from outside the cluster
+            - name: LDAP_ENABLE_TLS
+              value: "yes"
+            - name: LDAP_TLS_CERT_FILE
+              value: "/var/certs/ldap.pem"
+            - name: LDAP_TLS_KEY_FILE
+              value: "/var/certs/ldap-key.pem"
+            - name: LDAP_TLS_CA_FILE
+              value: "/var/certs/ca.pem"
+              #! This env var was added in our fork to reduce slapd memory consumption from ~700 MB to ~12 MB.
+            - name: LDAP_ULIMIT_MAX_FILES
+              value: "1024"
+              #! Note that the custom LDIF file is only read at pod start-up time.
+            - name: LDAP_CUSTOM_LDIF_DIR
+              value: "/var/ldifs"
+              #! Seems like LDAP_ROOT is still required when using LDAP_CUSTOM_LDIF_DIR because it effects the admin user.
+              #! Presumably this needs to match the root that we create in the LDIF file.
+            - name: LDAP_ROOT
+              value: "dc=pinniped,dc=dev"
+          volumeMounts:
+            - name: certs
+              mountPath: /var/certs
+              readOnly: true
+            - name: ldifs
+              mountPath: /var/ldifs
+              readOnly: true
+      volumes:
+        - name: certs
+          secret:
+            secretName: certs
+        - name: ldifs
+          secret:
+            secretName: ldap-ldif-files
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ldap
+  namespace: tools
+  labels:
+    app: ldap
+spec:
+  type: ClusterIP
+  selector:
+    app: ldap
+  ports:
+    - protocol: TCP
+      port: 389
+      targetPort: 1389
+      name: ldap
+    - protocol: TCP
+      port: 636
+      targetPort: 1636
+      name: ldaps

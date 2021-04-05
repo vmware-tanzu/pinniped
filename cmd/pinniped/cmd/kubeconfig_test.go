@@ -73,6 +73,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --concierge-endpoint string             API base for the Concierge endpoint
 				      --concierge-mode mode                   Concierge mode of operation (default TokenCredentialRequestAPI)
 				      --concierge-skip-wait                   Skip waiting for any pending Concierge strategies to become ready (default: false)
+				      --generated-name-suffix string          Suffix to append to generated cluster, context, user kubeconfig entries (default "-pinniped")
 				  -h, --help                                  help for kubeconfig
 				      --kubeconfig string                     Path to kubeconfig file
 				      --kubeconfig-context string             Kubeconfig context name (default: current active context)
@@ -133,7 +134,7 @@ func TestGetKubeconfig(t *testing.T) {
 			`),
 		},
 		{
-			name: "invalid kubeconfig context",
+			name: "invalid kubeconfig context, missing",
 			args: []string{
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 				"--kubeconfig-context", "invalid",
@@ -141,6 +142,28 @@ func TestGetKubeconfig(t *testing.T) {
 			wantError: true,
 			wantStderr: here.Doc(`
 				Error: could not load --kubeconfig/--kubeconfig-context: no such context "invalid"
+			`),
+		},
+		{
+			name: "invalid kubeconfig context, missing cluster",
+			args: []string{
+				"--kubeconfig", "./testdata/kubeconfig.yaml",
+				"--kubeconfig-context", "invalid-context-no-such-cluster",
+			},
+			wantError: true,
+			wantStderr: here.Doc(`
+				Error: could not load --kubeconfig/--kubeconfig-context: no such cluster "invalid-cluster"
+			`),
+		},
+		{
+			name: "invalid kubeconfig context, missing user",
+			args: []string{
+				"--kubeconfig", "./testdata/kubeconfig.yaml",
+				"--kubeconfig-context", "invalid-context-no-such-user",
+			},
+			wantError: true,
+			wantStderr: here.Doc(`
+				Error: could not load --kubeconfig/--kubeconfig-context: no such user "invalid-user"
 			`),
 		},
 		{
@@ -584,17 +607,17 @@ func TestGetKubeconfig(t *testing.T) {
         		- cluster:
         		    certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
         		    server: https://fake-server-url-value
-        		  name: pinniped
+        		  name: kind-cluster-pinniped
         		contexts:
         		- context:
-        		    cluster: pinniped
-        		    user: pinniped
-        		  name: pinniped
-        		current-context: pinniped
+        		    cluster: kind-cluster-pinniped
+        		    user: kind-user-pinniped
+        		  name: kind-context-pinniped
+        		current-context: kind-context-pinniped
         		kind: Config
         		preferences: {}
         		users:
-        		- name: pinniped
+        		- name: kind-user-pinniped
         		  user:
         		    exec:
         		      apiVersion: client.authentication.k8s.io/v1beta1
@@ -653,17 +676,17 @@ func TestGetKubeconfig(t *testing.T) {
         		- cluster:
         		    certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
         		    server: https://fake-server-url-value
-        		  name: pinniped
+        		  name: kind-cluster-pinniped
         		contexts:
         		- context:
-        		    cluster: pinniped
-        		    user: pinniped
-        		  name: pinniped
-        		current-context: pinniped
+        		    cluster: kind-cluster-pinniped
+        		    user: kind-user-pinniped
+        		  name: kind-context-pinniped
+        		current-context: kind-context-pinniped
         		kind: Config
         		preferences: {}
         		users:
-        		- name: pinniped
+        		- name: kind-user-pinniped
         		  user:
         		    exec:
         		      apiVersion: client.authentication.k8s.io/v1beta1
@@ -733,17 +756,17 @@ func TestGetKubeconfig(t *testing.T) {
         		- cluster:
         		    certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
         		    server: https://fake-server-url-value
-        		  name: pinniped
+        		  name: kind-cluster-pinniped
         		contexts:
         		- context:
-        		    cluster: pinniped
-        		    user: pinniped
-        		  name: pinniped
-        		current-context: pinniped
+        		    cluster: kind-cluster-pinniped
+        		    user: kind-user-pinniped
+        		  name: kind-context-pinniped
+        		current-context: kind-context-pinniped
         		kind: Config
         		preferences: {}
         		users:
-        		- name: pinniped
+        		- name: kind-user-pinniped
         		  user:
         		    exec:
         		      apiVersion: client.authentication.k8s.io/v1beta1
@@ -785,6 +808,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--oidc-debug-session-cache",
 				"--oidc-request-audience", "test-audience",
 				"--skip-validation",
+				"--generated-name-suffix", "-sso",
 			},
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{
@@ -815,17 +839,17 @@ func TestGetKubeconfig(t *testing.T) {
         		- cluster:
         		    certificate-authority-data: %s
         		    server: https://explicit-concierge-endpoint.example.com
-        		  name: pinniped
+        		  name: kind-cluster-sso
         		contexts:
         		- context:
-        		    cluster: pinniped
-        		    user: pinniped
-        		  name: pinniped
-        		current-context: pinniped
+        		    cluster: kind-cluster-sso
+        		    user: kind-user-sso
+        		  name: kind-context-sso
+        		current-context: kind-context-sso
         		kind: Config
         		preferences: {}
         		users:
-        		- name: pinniped
+        		- name: kind-user-sso
         		  user:
         		    exec:
         		      apiVersion: client.authentication.k8s.io/v1beta1
@@ -929,17 +953,17 @@ func TestGetKubeconfig(t *testing.T) {
         		- cluster:
         		    certificate-authority-data: %s
         		    server: https://impersonation-proxy-endpoint.test
-        		  name: pinniped
+        		  name: kind-cluster-pinniped
         		contexts:
         		- context:
-        		    cluster: pinniped
-        		    user: pinniped
-        		  name: pinniped
-        		current-context: pinniped
+        		    cluster: kind-cluster-pinniped
+        		    user: kind-user-pinniped
+        		  name: kind-context-pinniped
+        		current-context: kind-context-pinniped
         		kind: Config
         		preferences: {}
         		users:
-        		- name: pinniped
+        		- name: kind-user-pinniped
         		  user:
         		    exec:
         		      apiVersion: client.authentication.k8s.io/v1beta1
@@ -1035,17 +1059,17 @@ func TestGetKubeconfig(t *testing.T) {
         		- cluster:
         		    certificate-authority-data: dGVzdC1jb25jaWVyZ2UtY2E=
         		    server: https://impersonation-proxy-endpoint.test
-        		  name: pinniped
+        		  name: kind-cluster-pinniped
         		contexts:
         		- context:
-        		    cluster: pinniped
-        		    user: pinniped
-        		  name: pinniped
-        		current-context: pinniped
+        		    cluster: kind-cluster-pinniped
+        		    user: kind-user-pinniped
+        		  name: kind-context-pinniped
+        		current-context: kind-context-pinniped
         		kind: Config
         		preferences: {}
         		users:
-        		- name: pinniped
+        		- name: kind-user-pinniped
         		  user:
         		    exec:
         		      apiVersion: client.authentication.k8s.io/v1beta1

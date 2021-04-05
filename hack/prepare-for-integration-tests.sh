@@ -14,14 +14,6 @@ set -euo pipefail
 #
 # Helper functions
 #
-TILT_MODE=${TILT_MODE:-no}
-function tilt_mode() {
-  if [[ "$TILT_MODE" == "yes" ]]; then
-    return 0
-  fi
-  return 1
-}
-
 function log_note() {
   GREEN='\033[0;32m'
   NC='\033[0m'
@@ -143,93 +135,92 @@ if [ "$(kubectl version --client=true --short | cut -d '.' -f 2)" -lt 18 ]; then
   exit 1
 fi
 
-if ! tilt_mode; then
-  if [[ "$clean_kind" == "yes" ]]; then
-    log_note "Deleting running kind cluster to prepare from a clean slate..."
-    ./hack/kind-down.sh
+if [[ "$clean_kind" == "yes" ]]; then
+  log_note "Deleting running kind cluster to prepare from a clean slate..."
+  ./hack/kind-down.sh
+fi
+
+#
+# Setup kind and build the app
+#
+log_note "Checking for running kind cluster..."
+if ! kind get clusters | grep -q -e '^pinniped$'; then
+  log_note "Creating a kind cluster..."
+  # Our kind config exposes node port 31234 as 127.0.0.1:12345, 31243 as 127.0.0.1:12344, and 31235 as 127.0.0.1:12346
+  ./hack/kind-up.sh
+else
+  if ! kubectl cluster-info | grep -E '(master|control plane)' | grep -q 127.0.0.1; then
+    log_error "Seems like your kubeconfig is not targeting a local cluster."
+    log_error "Exiting to avoid accidentally running tests against a real cluster."
+    exit 1
   fi
+fi
 
-  #
-  # Setup kind and build the app
-  #
-  log_note "Checking for running kind cluster..."
-  if ! kind get clusters | grep -q -e '^pinniped$'; then
-    log_note "Creating a kind cluster..."
-    # Our kind config exposes node port 31234 as 127.0.0.1:12345, 31243 as 127.0.0.1:12344, and 31235 as 127.0.0.1:12346
-    ./hack/kind-up.sh
+registry="pinniped.local"
+repo="test/build"
+registry_repo="$registry/$repo"
+tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
+
+if [[ "$skip_build" == "yes" ]]; then
+  most_recent_tag=$(docker images "$registry/$repo" --format "{{.Tag}}" | head -1)
+  if [[ -n "$most_recent_tag" ]]; then
+    tag="$most_recent_tag"
+    do_build=no
   else
-    if ! kubectl cluster-info | grep -E '(master|control plane)' | grep -q 127.0.0.1; then
-      log_error "Seems like your kubeconfig is not targeting a local cluster."
-      log_error "Exiting to avoid accidentally running tests against a real cluster."
-      exit 1
-    fi
-  fi
-
-  registry="pinniped.local"
-  repo="test/build"
-  registry_repo="$registry/$repo"
-  tag=$(uuidgen) # always a new tag to force K8s to reload the image on redeploy
-
-  if [[ "$skip_build" == "yes" ]]; then
-    most_recent_tag=$(docker images "$registry/$repo" --format "{{.Tag}}" | head -1)
-    if [[ -n "$most_recent_tag" ]]; then
-      tag="$most_recent_tag"
-      do_build=no
-    else
-      # Oops, there was no previous build. Need to build anyway.
-      do_build=yes
-    fi
-  else
+    # Oops, there was no previous build. Need to build anyway.
     do_build=yes
   fi
-
-  registry_repo_tag="${registry_repo}:${tag}"
-
-  if [[ "$do_build" == "yes" ]]; then
-    # Rebuild the code
-    log_note "Docker building the app..."
-    docker build . --tag "$registry_repo_tag"
-  fi
-
-  # Load it into the cluster
-  log_note "Loading the app's container image into the kind cluster..."
-  kind load docker-image "$registry_repo_tag" --name pinniped
-
-  manifest=/tmp/manifest.yaml
-
-  #
-  # Deploy local-user-authenticator
-  #
-  pushd deploy/local-user-authenticator >/dev/null
-
-  log_note "Deploying the local-user-authenticator app to the cluster..."
-  ytt --file . \
-    --data-value "image_repo=$registry_repo" \
-    --data-value "image_tag=$tag" >"$manifest"
-
-  kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
-  kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
-
-  popd >/dev/null
-
-  #
-  # Deploy dex
-  #
-  dex_test_password="$(openssl rand -hex 16)"
-  pushd test/deploy/dex >/dev/null
-
-  log_note "Deploying Dex to the cluster..."
-  ytt --file . >"$manifest"
-  ytt --file . \
-    --data-value-yaml "supervisor_redirect_uris=[https://pinniped-supervisor-clusterip.supervisor.svc.cluster.local/some/path/callback]" \
-    --data-value "pinny_bcrypt_passwd_hash=$(htpasswd -nbBC 10 x "$dex_test_password" | sed -e "s/^x://")" \
-    >"$manifest"
-
-  kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
-  kapp deploy --yes --app dex --diff-changes --file "$manifest"
-
-  popd >/dev/null
+else
+  do_build=yes
 fi
+
+registry_repo_tag="${registry_repo}:${tag}"
+
+if [[ "$do_build" == "yes" ]]; then
+  # Rebuild the code
+  log_note "Docker building the app..."
+  docker build . --tag "$registry_repo_tag"
+fi
+
+# Load it into the cluster
+log_note "Loading the app's container image into the kind cluster..."
+kind load docker-image "$registry_repo_tag" --name pinniped
+
+manifest=/tmp/manifest.yaml
+
+#
+# Deploy local-user-authenticator
+#
+pushd deploy/local-user-authenticator >/dev/null
+
+log_note "Deploying the local-user-authenticator app to the cluster..."
+ytt --file . \
+  --data-value "image_repo=$registry_repo" \
+  --data-value "image_tag=$tag" >"$manifest"
+
+kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
+kapp deploy --yes --app local-user-authenticator --diff-changes --file "$manifest"
+
+popd >/dev/null
+
+#
+# Deploy Tools
+#
+dex_test_password="$(openssl rand -hex 16)"
+ldap_test_password="$(openssl rand -hex 16)"
+pushd test/deploy/tools >/dev/null
+
+log_note "Deploying Tools to the cluster..."
+ytt --file . \
+  --data-value-yaml "supervisor_redirect_uris=[https://pinniped-supervisor-clusterip.supervisor.svc.cluster.local/some/path/callback]" \
+  --data-value "pinny_ldap_password=$ldap_test_password" \
+  --data-value "pinny_bcrypt_passwd_hash=$(htpasswd -nbBC 10 x "$dex_test_password" | sed -e "s/^x://")" \
+  >"$manifest"
+
+kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
+kapp deploy --yes --app tools --diff-changes --file "$manifest"
+
+popd >/dev/null
 
 test_username="test-username"
 test_groups="test-group-0,test-group-1"
@@ -250,29 +241,27 @@ supervisor_app_name="pinniped-supervisor"
 supervisor_namespace="supervisor"
 supervisor_custom_labels="{mySupervisorCustomLabelName: mySupervisorCustomLabelValue}"
 
-if ! tilt_mode; then
-  pushd deploy/supervisor >/dev/null
+pushd deploy/supervisor >/dev/null
 
-  log_note "Deploying the Pinniped Supervisor app to the cluster..."
-  ytt --file . \
-    --data-value "app_name=$supervisor_app_name" \
-    --data-value "namespace=$supervisor_namespace" \
-    --data-value "api_group_suffix=$api_group_suffix" \
-    --data-value "image_repo=$registry_repo" \
-    --data-value "image_tag=$tag" \
-    --data-value "log_level=debug" \
-    --data-value-yaml "custom_labels=$supervisor_custom_labels" \
-    --data-value-yaml 'service_http_nodeport_port=80' \
-    --data-value-yaml 'service_http_nodeport_nodeport=31234' \
-    --data-value-yaml 'service_https_nodeport_port=443' \
-    --data-value-yaml 'service_https_nodeport_nodeport=31243' \
-    --data-value-yaml 'service_https_clusterip_port=443' \
-    >"$manifest"
+log_note "Deploying the Pinniped Supervisor app to the cluster..."
+ytt --file . \
+  --data-value "app_name=$supervisor_app_name" \
+  --data-value "namespace=$supervisor_namespace" \
+  --data-value "api_group_suffix=$api_group_suffix" \
+  --data-value "image_repo=$registry_repo" \
+  --data-value "image_tag=$tag" \
+  --data-value "log_level=debug" \
+  --data-value-yaml "custom_labels=$supervisor_custom_labels" \
+  --data-value-yaml 'service_http_nodeport_port=80' \
+  --data-value-yaml 'service_http_nodeport_nodeport=31234' \
+  --data-value-yaml 'service_https_nodeport_port=443' \
+  --data-value-yaml 'service_https_nodeport_nodeport=31243' \
+  --data-value-yaml 'service_https_clusterip_port=443' \
+  >"$manifest"
 
-  kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
+kapp deploy --yes --app "$supervisor_app_name" --diff-changes --file "$manifest"
 
-  popd >/dev/null
-fi
+popd >/dev/null
 
 #
 # Deploy the Pinniped Concierge
@@ -284,29 +273,27 @@ webhook_ca_bundle="$(kubectl get secret local-user-authenticator-tls-serving-cer
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"
 concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
 
-if ! tilt_mode; then
-  pushd deploy/concierge >/dev/null
+pushd deploy/concierge >/dev/null
 
-  log_note "Deploying the Pinniped Concierge app to the cluster..."
-  ytt --file . \
-    --data-value "app_name=$concierge_app_name" \
-    --data-value "namespace=$concierge_namespace" \
-    --data-value "api_group_suffix=$api_group_suffix" \
-    --data-value "log_level=debug" \
-    --data-value-yaml "custom_labels=$concierge_custom_labels" \
-    --data-value "image_repo=$registry_repo" \
-    --data-value "image_tag=$tag" \
-    --data-value "discovery_url=$discovery_url" >"$manifest"
+log_note "Deploying the Pinniped Concierge app to the cluster..."
+ytt --file . \
+  --data-value "app_name=$concierge_app_name" \
+  --data-value "namespace=$concierge_namespace" \
+  --data-value "api_group_suffix=$api_group_suffix" \
+  --data-value "log_level=debug" \
+  --data-value-yaml "custom_labels=$concierge_custom_labels" \
+  --data-value "image_repo=$registry_repo" \
+  --data-value "image_tag=$tag" \
+  --data-value "discovery_url=$discovery_url" >"$manifest"
 
-  kapp deploy --yes --app "$concierge_app_name" --diff-changes --file "$manifest"
+kapp deploy --yes --app "$concierge_app_name" --diff-changes --file "$manifest"
 
-  popd >/dev/null
-fi
+popd >/dev/null
 
 #
 # Download the test CA bundle that was generated in the Dex pod.
 #
-test_ca_bundle_pem="$(kubectl get secrets -n dex certs -o go-template='{{index .data "ca.pem" | base64decode}}')"
+test_ca_bundle_pem="$(kubectl get secrets -n tools certs -o go-template='{{index .data "ca.pem" | base64decode}}')"
 
 #
 # Create the environment file
@@ -330,13 +317,29 @@ export PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS='${supervisor_custom_labels}'
 export PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS="127.0.0.1:12345"
 export PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS="localhost:12344"
 export PINNIPED_TEST_PROXY=http://127.0.0.1:12346
-export PINNIPED_TEST_CLI_OIDC_ISSUER=https://dex.dex.svc.cluster.local/dex
+export PINNIPED_TEST_LDAP_LDAP_URL=ldap://ldap.tools.svc.cluster.local
+export PINNIPED_TEST_LDAP_LDAPS_URL=ldaps://ldap.tools.svc.cluster.local
+export PINNIPED_TEST_LDAP_LDAPS_CA_BUNDLE="${test_ca_bundle_pem}"
+export PINNIPED_TEST_LDAP_BIND_ACCOUNT_USERNAME="cn=admin,dc=pinniped,dc=dev"
+export PINNIPED_TEST_LDAP_BIND_ACCOUNT_PASSWORD=password
+export PINNIPED_TEST_LDAP_USERS_SEARCH_BASE="ou=users,dc=pinniped,dc=dev"
+export PINNIPED_TEST_LDAP_GROUPS_SEARCH_BASE="ou=groups,dc=pinniped,dc=dev"
+export PINNIPED_TEST_LDAP_USER_DN="cn=pinny,ou=users,dc=pinniped,dc=dev"
+export PINNIPED_TEST_LDAP_USER_CN="pinny"
+export PINNIPED_TEST_LDAP_USER_PASSWORD=${ldap_test_password}
+export PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_NAME="mail"
+export PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_VALUE="pinny.ldap@example.com"
+export PINNIPED_TEST_LDAP_EXPECTED_DIRECT_GROUPS_DN="cn=ball-game-players,ou=beach-groups,ou=groups,dc=pinniped,dc=dev;cn=seals,ou=groups,dc=pinniped,dc=dev"
+export PINNIPED_TEST_LDAP_EXPECTED_INDIRECT_GROUPS_DN="cn=pinnipeds,ou=groups,dc=pinniped,dc=dev;cn=mammals,ou=groups,dc=pinniped,dc=dev"
+export PINNIPED_TEST_LDAP_EXPECTED_DIRECT_GROUPS_CN="ball-game-players;seals"
+export PINNIPED_TEST_LDAP_EXPECTED_INDIRECT_GROUPS_CN="pinnipeds;mammals"
+export PINNIPED_TEST_CLI_OIDC_ISSUER=https://dex.tools.svc.cluster.local/dex
 export PINNIPED_TEST_CLI_OIDC_ISSUER_CA_BUNDLE="${test_ca_bundle_pem}"
 export PINNIPED_TEST_CLI_OIDC_CLIENT_ID=pinniped-cli
 export PINNIPED_TEST_CLI_OIDC_CALLBACK_URL=http://127.0.0.1:48095/callback
 export PINNIPED_TEST_CLI_OIDC_USERNAME=pinny@example.com
 export PINNIPED_TEST_CLI_OIDC_PASSWORD=${dex_test_password}
-export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER=https://dex.dex.svc.cluster.local/dex
+export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER=https://dex.tools.svc.cluster.local/dex
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER_CA_BUNDLE="${test_ca_bundle_pem}"
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ADDITIONAL_SCOPES=email
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME_CLAIM=email
@@ -369,11 +372,8 @@ log_note
 log_note 'Want to run integration tests in GoLand? Copy/paste this "Environment" value for GoLand run configurations:'
 log_note "    ${goland_vars}PINNIPED_TEST_CLUSTER_CAPABILITY_FILE=${kind_capabilities_file}"
 log_note
-
-if ! tilt_mode; then
-  log_note "You can rerun this script to redeploy local production code changes while you are working."
-  log_note
-  log_note "To delete the deployments, run:"
-  log_note "  kapp delete -a local-user-authenticator -y && kapp delete -a $concierge_app_name -y &&  kapp delete -a $supervisor_app_name -y"
-  log_note "When you're finished, use './hack/kind-down.sh' to tear down the cluster."
-fi
+log_note "You can rerun this script to redeploy local production code changes while you are working."
+log_note
+log_note "To delete the deployments, run:"
+log_note "  kapp delete -a local-user-authenticator -y && kapp delete -a $concierge_app_name -y &&  kapp delete -a $supervisor_app_name -y"
+log_note "When you're finished, use './hack/kind-down.sh' to tear down the cluster."

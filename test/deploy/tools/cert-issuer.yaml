@@ -1,11 +1,11 @@
-#! Copyright 2020 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: cert-issuer
-  namespace: dex
+  namespace: tools
   labels:
     app: cert-issuer
 ---
@@ -13,7 +13,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: cert-issuer
-  namespace: dex
+  namespace: tools
   labels:
     app: cert-issuer
 rules:
@@ -25,13 +25,13 @@ kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: cert-issuer
-  namespace: dex
+  namespace: tools
   labels:
     app: cert-issuer
 subjects:
   - kind: ServiceAccount
     name: cert-issuer
-    namespace: dex
+    namespace: tools
 roleRef:
   kind: Role
   name: cert-issuer
@@ -41,7 +41,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: cert-issuer
-  namespace: dex
+  namespace: tools
   labels:
     app: cert-issuer
 spec:
@@ -71,10 +71,20 @@ spec:
             -ca ca.pem -ca-key ca-key.pem \
             -config /tmp/cfssl-default.json \
             -profile www \
-            -cn "dex.dex.svc.cluster.local" \
-            -hostname "dex.dex.svc.cluster.local" \
+            -cn "dex.tools.svc.cluster.local" \
+            -hostname "dex.tools.svc.cluster.local" \
             /tmp/csr.json \
             | cfssljson -bare dex
+
+          echo "generating LDAP server certificate..."
+          cfssl gencert \
+            -ca ca.pem -ca-key ca-key.pem \
+            -config /tmp/cfssl-default.json \
+            -profile www \
+            -cn "ldap.tools.svc.cluster.local" \
+            -hostname "ldap.tools.svc.cluster.local" \
+            /tmp/csr.json \
+            | cfssljson -bare ldap
 
           chmod -R 777 /var/certs
 
@@ -90,8 +100,8 @@ spec:
         args:
         - -c
         - |
-          kubectl get secrets -n dex certs -o jsonpath='created: {.metadata.creationTimestamp}' || \
-            kubectl create secret generic certs --from-file=/var/certs
+          kubectl get secrets -n tools certs -o jsonpath='created: {.metadata.creationTimestamp}' || \
+            kubectl create secret generic -n tools certs --from-file=/var/certs
         volumeMounts:
         - name: certs
           mountPath: /var/certs

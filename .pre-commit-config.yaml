@@ -1,6 +1,6 @@
 # This is a configuration for https://pre-commit.com/.
 # On macOS, try `brew install pre-commit` and then run `pre-commit install`.
-exclude: '^(site|generated|hack/lib/tilt/tilt_modules)/'
+exclude: '^(site|generated)/'
 repos:
 - repo: git://github.com/pre-commit/pre-commit-hooks
   rev: v3.2.0

@@ -6,7 +6,7 @@
 #@ load("@ytt:yaml", "yaml")
 
 #@ def dexConfig():
-issuer: https://dex.dex.svc.cluster.local/dex
+issuer: https://dex.tools.svc.cluster.local/dex
 storage:
   type: sqlite3
   config:
@@ -38,17 +38,10 @@ staticPasswords:
 
 ---
 apiVersion: v1
-kind: Namespace
-metadata:
-  name: dex
-  labels:
-    name: dex
----
-apiVersion: v1
 kind: ConfigMap
 metadata:
   name: dex-config
-  namespace: dex
+  namespace: tools
   labels:
     app: dex
 data:
@@ -58,7 +51,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: dex
-  namespace: dex
+  namespace: tools
   labels:
     app: dex
 spec:
@@ -102,7 +95,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: dex
-  namespace: dex
+  namespace: tools
   labels:
     app: dex
 spec:

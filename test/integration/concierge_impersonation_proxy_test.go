@@ -357,7 +357,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 					t.Log("curlStdErr: " + curlStdErr.String())
 					t.Log("stdout: " + curlStdOut.String())
 				}
-				t.Log("time: ", time.Now())
+				t.Log("Running curl through the kubectl port-forward port for 70 seconds. Elapsed time:", time.Now().Sub(startTime))
 				time.Sleep(1 * time.Second)
 			}
 

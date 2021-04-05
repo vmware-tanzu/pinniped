@@ -5,7 +5,6 @@
 ./deploy
 ./Dockerfile
 ./generated/1.1*
-./hack/lib/tilt/
 ./internal/mocks
 ./LICENSE
 ./site/

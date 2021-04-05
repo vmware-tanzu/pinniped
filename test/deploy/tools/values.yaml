@@ -22,3 +22,6 @@ supervisor_redirect_uris: []
 
 #! The bcrypt-hashed password of the pinny test user account.
 pinny_bcrypt_passwd_hash:
+
+#! The plaintext password of the LDAP test account user.
+pinny_ldap_password:

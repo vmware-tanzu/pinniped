@@ -17,8 +17,5 @@
 # GoLand
 .idea
 
-# Intermediate files used by Tilt
-/hack/lib/tilt/build
-
 # MacOS Desktop Services Store
 .DS_Store

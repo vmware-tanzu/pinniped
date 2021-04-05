@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package browsertest provides integration test helpers for our browser-based tests.
@@ -126,8 +126,8 @@ func LoginToUpstream(t *testing.T, page *agouti.Page, upstream library.TestOIDCU
 		},
 		{
 			Name:                "Dex",
-			IssuerPattern:       regexp.MustCompile(`\Ahttps://dex\.dex\.svc\.cluster\.local/dex.*\z`),
-			LoginPagePattern:    regexp.MustCompile(`\Ahttps://dex\.dex\.svc\.cluster\.local/dex/auth/local.+\z`),
+			IssuerPattern:       regexp.MustCompile(`\Ahttps://dex\.tools\.svc\.cluster\.local/dex.*\z`),
+			LoginPagePattern:    regexp.MustCompile(`\Ahttps://dex\.tools\.svc\.cluster\.local/dex/auth/local.+\z`),
 			UsernameSelector:    "input#login",
 			PasswordSelector:    "input#password",
 			LoginButtonSelector: "button#submit-login",

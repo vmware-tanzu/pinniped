@@ -20,10 +20,12 @@ import (
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
+	"k8s.io/client-go/transport"
 	"k8s.io/klog/v2/klogr"
 
 	"go.pinniped.dev/internal/execcredcache"
 	"go.pinniped.dev/internal/groupsuffix"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/pkg/conciergeclient"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/filesession"
@@ -110,6 +112,8 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 }
 
 func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLoginFlags) error {
+	SetLogLevel()
+
 	// Initialize the session cache.
 	var sessionOptions []filesession.Option
 
@@ -153,6 +157,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 
 	// --skip-browser replaces the default "browser open" function with one that prints to stderr.
 	if flags.skipBrowser {
+		plog.Debug("skipping browser.")
 		opts = append(opts, oidcclient.WithBrowserOpen(func(url string) error {
 			cmd.PrintErr("Please log in: ", url, "\n")
 			return nil
@@ -166,7 +171,6 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		}
 		opts = append(opts, oidcclient.WithClient(client))
 	}
-
 	// Look up cached credentials based on a hash of all the CLI arguments and the cluster info.
 	cacheKey := struct {
 		Args        []string                   `json:"args"`
@@ -183,6 +187,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		}
 	}
 
+	plog.Debug("performing OIDC login", "issuer", flags.issuer, "client id", flags.clientID)
 	// Do the basic login to get an OIDC token.
 	token, err := deps.login(flags.issuer, flags.clientID, opts...)
 	if err != nil {
@@ -192,6 +197,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 
 	// If the concierge was configured, exchange the credential for a separate short-lived, cluster-specific credential.
 	if concierge != nil {
+		plog.Debug("exchanging token for cluster credential", "endpoint", flags.conciergeEndpoint, "authenticator type", flags.conciergeAuthenticatorType, "authenticator name", flags.conciergeAuthenticatorName)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
@@ -224,7 +230,7 @@ func makeClient(caBundlePaths []string, caBundleData []string) (*http.Client, er
 		}
 		pool.AppendCertsFromPEM(pem)
 	}
-	return &http.Client{
+	client := &http.Client{
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			TLSClientConfig: &tls.Config{
@@ -232,7 +238,10 @@ func makeClient(caBundlePaths []string, caBundleData []string) (*http.Client, er
 				MinVersion: tls.VersionTLS12,
 			},
 		},
-	}, nil
+	}
+
+	client.Transport = transport.DebugWrappers(client.Transport)
+	return client, nil
 }
 
 func tokenCredential(token *oidctypes.Token) *clientauthv1beta1.ExecCredential {
@@ -249,6 +258,12 @@ func tokenCredential(token *oidctypes.Token) *clientauthv1beta1.ExecCredential {
 		cred.Status.ExpirationTimestamp = &token.IDToken.Expiry
 	}
 	return &cred
+}
+
+func SetLogLevel() {
+	if os.Getenv("PINNIPED_DEBUG") == "true" {
+		_ = plog.ValidateAndSetLogLevelGlobally(plog.LevelDebug)
+	}
 }
 
 // mustGetConfigDir returns a directory that follows the XDG base directory convention:

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package filesession implements a simple YAML file-based login.sessionCache.
@@ -137,8 +137,14 @@ func (c *Cache) withCache(transact func(*sessionCache)) {
 		cache = emptySessionCache()
 	}
 
+	// Normalize the cache before modifying it, to remove any entries that have already expired.
+	cache = cache.normalized()
+
 	// Process/mutate the session using the provided function.
 	transact(cache)
+
+	// Normalize again to put everything into a known order.
+	cache = cache.normalized()
 
 	// Marshal the session back to YAML and save it to the file.
 	if err := cache.writeTo(c.path); err != nil {

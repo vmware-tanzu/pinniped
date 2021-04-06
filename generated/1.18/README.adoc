@@ -688,6 +688,62 @@ Condition status of a resource (mirrored from the metav1.Condition type added in
 |===
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityprovider"]
+==== LDAPIdentityProvider 
+
+LDAPIdentityProvider describes the configuration of an upstream Lightweight Directory Access Protocol (LDAP) identity provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderlist[$$LDAPIdentityProviderList$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]__ | Spec for configuring the identity provider.
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderstatus[$$LDAPIdentityProviderStatus$$]__ | Status of the identity provider.
+|===
+
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec"]
+==== LDAPIdentityProviderSpec 
+
+Spec for configuring an LDAP identity provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityprovider[$$LDAPIdentityProvider$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`host`* __string__ | Host is the hostname of this LDAP identity provider, i.e., where to connect. For example: ldap.example.com:636.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderstatus"]
+==== LDAPIdentityProviderStatus 
+
+Status of an LDAP identity provider.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityprovider[$$LDAPIdentityProvider$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`phase`* __LDAPIdentityProviderPhase__ | Phase summarizes the overall status of the LDAPIdentityProvider.
+|===
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-oidcauthorizationconfig"]
 ==== OIDCAuthorizationConfig 
 

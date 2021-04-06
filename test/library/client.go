@@ -377,7 +377,7 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 	upstreams := client.IDPV1alpha1().OIDCIdentityProviders(env.SupervisorNamespace)
 
 	created, err := upstreams.Create(ctx, &idpv1alpha1.OIDCIdentityProvider{
-		ObjectMeta: testObjectMeta(t, "upstream"),
+		ObjectMeta: testObjectMeta(t, "upstream-oidc-idp"),
 		Spec:       spec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
@@ -398,6 +398,41 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 		require.NoError(t, err)
 		return result.Status.Phase == expectedPhase
 	}, 60*time.Second, 1*time.Second, "expected the OIDCIdentityProvider to go into phase %s", expectedPhase)
+	return result
+}
+
+func CreateTestLDAPIdentityProvider(t *testing.T, spec idpv1alpha1.LDAPIdentityProviderSpec, expectedPhase idpv1alpha1.LDAPIdentityProviderPhase) *idpv1alpha1.LDAPIdentityProvider {
+	t.Helper()
+	env := IntegrationEnv(t)
+	client := NewSupervisorClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// Create the LDAPIdentityProvider using GenerateName to get a random name.
+	upstreams := client.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace)
+
+	created, err := upstreams.Create(ctx, &idpv1alpha1.LDAPIdentityProvider{
+		ObjectMeta: testObjectMeta(t, "upstream-ldap-idp"),
+		Spec:       spec,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Always clean this up after this point.
+	t.Cleanup(func() {
+		t.Logf("cleaning up test LDAPIdentityProvider %s/%s", created.Namespace, created.Name)
+		err := upstreams.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+	t.Logf("created test LDAPIdentityProvider %s", created.Name)
+
+	// Wait for the LDAPIdentityProvider to enter the expected phase (or time out).
+	var result *idpv1alpha1.LDAPIdentityProvider
+	require.Eventuallyf(t, func() bool {
+		var err error
+		result, err = upstreams.Get(ctx, created.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		return result.Status.Phase == expectedPhase
+	}, 60*time.Second, 1*time.Second, "expected the LDAPIdentityProvider to go into phase %s", expectedPhase)
 	return result
 }
 

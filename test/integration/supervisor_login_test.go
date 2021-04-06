@@ -17,12 +17,11 @@ import (
 	"testing"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
-
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
+	v1 "k8s.io/api/core/v1"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
@@ -37,6 +36,52 @@ import (
 )
 
 func TestSupervisorLogin(t *testing.T) {
+	tests := []struct {
+		name                 string
+		createIDP            func(t *testing.T)
+		requestAuthorization func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string)
+	}{
+		{
+			name: "oidc",
+			createIDP: func(t *testing.T) {
+				t.Helper()
+				env := library.IntegrationEnv(t)
+				library.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+					Issuer: env.SupervisorTestUpstream.Issuer,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
+					},
+					Client: idpv1alpha1.OIDCClient{
+						SecretName: library.CreateClientCredsSecret(t, env.SupervisorTestUpstream.ClientID, env.SupervisorTestUpstream.ClientSecret).Name,
+					},
+				}, idpv1alpha1.PhaseReady)
+			},
+			requestAuthorization: requestAuthorizationUsingOIDCIdentityProvider,
+		},
+		{
+			name: "ldap",
+			createIDP: func(t *testing.T) {
+				t.Helper()
+				library.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
+					Host: "something",
+				}, "") // TODO: this should be Ready!
+			},
+			requestAuthorization: requestAuthorizationUsingLDAPIdentityProvider,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			testSupervisorLogin(t, test.createIDP, test.requestAuthorization)
+		})
+	}
+}
+
+func testSupervisorLogin(
+	t *testing.T,
+	createIDP func(t *testing.T),
+	requestAuthorization func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string),
+) {
 	env := library.IntegrationEnv(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -119,16 +164,8 @@ func TestSupervisorLogin(t *testing.T) {
 	}, 30*time.Second, 200*time.Millisecond)
 	require.Equal(t, http.StatusOK, jwksRequestStatus)
 
-	// Create upstream OIDC provider and wait for it to become ready.
-	library.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
-		Issuer: env.SupervisorTestUpstream.Issuer,
-		TLS: &idpv1alpha1.TLSSpec{
-			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
-		},
-		Client: idpv1alpha1.OIDCClient{
-			SecretName: library.CreateClientCredsSecret(t, env.SupervisorTestUpstream.ClientID, env.SupervisorTestUpstream.ClientSecret).Name,
-		},
-	}, idpv1alpha1.PhaseReady)
+	// Create upstream IDP and wait for it to become ready.
+	createIDP(t)
 
 	// Perform OIDC discovery for our downstream.
 	var discovery *coreosoidc.Provider
@@ -172,18 +209,8 @@ func TestSupervisorLogin(t *testing.T) {
 	require.NoError(t, authorizeResp.Body.Close())
 	expectSecurityHeaders(t, authorizeResp)
 
-	// Open the web browser and navigate to the downstream authorize URL.
-	page := browsertest.Open(t)
-	t.Logf("opening browser to downstream authorize URL %s", library.MaskTokens(downstreamAuthorizeURL))
-	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
-
-	// Expect to be redirected to the upstream provider and log in.
-	browsertest.LoginToUpstream(t, page, env.SupervisorTestUpstream)
-
-	// Wait for the login to happen and us be redirected back to a localhost callback.
-	t.Logf("waiting for redirect to callback")
-	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(localCallbackServer.URL) + `\?.+\z`)
-	browsertest.WaitForURL(t, page, callbackURLPattern)
+	// Perform parameterized auth code acquisition.
+	requestAuthorization(t, downstreamAuthorizeURL, localCallbackServer.URL)
 
 	// Expect that our callback handler was invoked.
 	callback := localCallbackServer.waitForCallback(10 * time.Second)
@@ -267,6 +294,29 @@ func verifyTokenResponse(
 	testutil.RequireTimeInDelta(t, time.Now().UTC().Add(expectedAccessTokenLifetime), tokenResponse.Expiry, time.Second*30)
 
 	require.NotEmpty(t, tokenResponse.RefreshToken)
+}
+
+func requestAuthorizationUsingOIDCIdentityProvider(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string) {
+	t.Helper()
+	env := library.IntegrationEnv(t)
+
+	// Open the web browser and navigate to the downstream authorize URL.
+	page := browsertest.Open(t)
+	t.Logf("opening browser to downstream authorize URL %s", library.MaskTokens(downstreamAuthorizeURL))
+	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
+
+	// Expect to be redirected to the upstream provider and log in.
+	browsertest.LoginToUpstream(t, page, env.SupervisorTestUpstream)
+
+	// Wait for the login to happen and us be redirected back to a localhost callback.
+	t.Logf("waiting for redirect to callback")
+	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(downstreamCallbackURL) + `\?.+\z`)
+	browsertest.WaitForURL(t, page, callbackURLPattern)
+}
+
+func requestAuthorizationUsingLDAPIdentityProvider(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string) {
+	t.Helper()
+	t.Skip("implement me!")
 }
 
 func startLocalCallbackServer(t *testing.T) *localCallbackServer {

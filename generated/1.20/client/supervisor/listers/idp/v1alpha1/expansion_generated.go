@@ -5,6 +5,14 @@
 
 package v1alpha1
 
+// LDAPIdentityProviderListerExpansion allows custom methods to be added to
+// LDAPIdentityProviderLister.
+type LDAPIdentityProviderListerExpansion interface{}
+
+// LDAPIdentityProviderNamespaceListerExpansion allows custom methods to be added to
+// LDAPIdentityProviderNamespaceLister.
+type LDAPIdentityProviderNamespaceListerExpansion interface{}
+
 // OIDCIdentityProviderListerExpansion allows custom methods to be added to
 // OIDCIdentityProviderLister.
 type OIDCIdentityProviderListerExpansion interface{}

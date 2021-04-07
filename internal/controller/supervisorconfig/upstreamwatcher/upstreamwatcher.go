@@ -66,7 +66,7 @@ const (
 
 // IDPCache is a thread safe cache that holds a list of validated upstream OIDC IDP configurations.
 type IDPCache interface {
-	SetIDPList([]provider.UpstreamOIDCIdentityProviderI)
+	SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI)
 }
 
 // lruValidatorCache caches the *oidc.Provider associated with a particular issuer/TLS configuration.
@@ -159,7 +159,7 @@ func (c *controller) Sync(ctx controllerlib.Context) error {
 			validatedUpstreams = append(validatedUpstreams, provider.UpstreamOIDCIdentityProviderI(valid))
 		}
 	}
-	c.cache.SetIDPList(validatedUpstreams)
+	c.cache.SetOIDCIdentityProviders(validatedUpstreams)
 	if requeue {
 		return controllerlib.ErrSyntheticRequeue
 	}

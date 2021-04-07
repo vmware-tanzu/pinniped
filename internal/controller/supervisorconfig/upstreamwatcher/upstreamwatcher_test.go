@@ -76,7 +76,7 @@ func TestControllerFilterSecret(t *testing.T) {
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			testLog := testlogger.New(t)
 			cache := provider.NewDynamicUpstreamIDPProvider()
-			cache.SetIDPList([]provider.UpstreamOIDCIdentityProviderI{
+			cache.SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI{
 				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
 			})
 			secretInformer := kubeInformers.Core().V1().Secrets()
@@ -611,7 +611,7 @@ func TestController(t *testing.T) {
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			testLog := testlogger.New(t)
 			cache := provider.NewDynamicUpstreamIDPProvider()
-			cache.SetIDPList([]provider.UpstreamOIDCIdentityProviderI{
+			cache.SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI{
 				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
 			})
 
@@ -640,7 +640,7 @@ func TestController(t *testing.T) {
 			}
 			require.Equal(t, strings.Join(tt.wantLogs, "\n"), strings.Join(testLog.Lines(), "\n"))
 
-			actualIDPList := cache.GetIDPList()
+			actualIDPList := cache.GetOIDCIdentityProviders()
 			require.Equal(t, len(tt.wantResultingCache), len(actualIDPList))
 			for i := range actualIDPList {
 				actualIDP := actualIDPList[i].(*upstreamoidc.ProviderConfig)

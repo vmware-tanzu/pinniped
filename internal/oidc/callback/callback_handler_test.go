@@ -626,8 +626,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
 			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration)
 
-			idpListGetter := oidctestutil.NewIDPListGetter(&test.idp)
-			subject := NewHandler(idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec, happyUpstreamRedirectURI)
+			idpLister := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(&test.idp).Build()
+			subject := NewHandler(idpLister, oauthHelper, happyStateCodec, happyCookieCodec, happyUpstreamRedirectURI)
 			req := httptest.NewRequest(test.method, test.path, nil)
 			if test.csrfCookie != "" {
 				req.Header.Set("Cookie", test.csrfCookie)

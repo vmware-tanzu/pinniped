@@ -33,7 +33,7 @@ const (
 )
 
 func NewHandler(
-	idpListGetter oidc.IDPListGetter,
+	upstreamIDPs oidc.UpstreamOIDCIdentityProvidersLister,
 	oauthHelper fosite.OAuth2Provider,
 	stateDecoder, cookieDecoder oidc.Decoder,
 	redirectURI string,
@@ -44,7 +44,7 @@ func NewHandler(
 			return err
 		}
 
-		upstreamIDPConfig := findUpstreamIDPConfig(state.UpstreamName, idpListGetter)
+		upstreamIDPConfig := findUpstreamIDPConfig(state.UpstreamName, upstreamIDPs)
 		if upstreamIDPConfig == nil {
 			plog.Warning("upstream provider not found")
 			return httperr.New(http.StatusUnprocessableEntity, "upstream provider not found")
@@ -143,8 +143,8 @@ func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) 
 	return state, nil
 }
 
-func findUpstreamIDPConfig(upstreamName string, idpListGetter oidc.IDPListGetter) provider.UpstreamOIDCIdentityProviderI {
-	for _, p := range idpListGetter.GetIDPList() {
+func findUpstreamIDPConfig(upstreamName string, upstreamIDPs oidc.UpstreamOIDCIdentityProvidersLister) provider.UpstreamOIDCIdentityProviderI {
+	for _, p := range upstreamIDPs.GetOIDCIdentityProviders() {
 		if p.GetName() == upstreamName {
 			return p
 		}

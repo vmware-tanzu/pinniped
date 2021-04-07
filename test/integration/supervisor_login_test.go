@@ -388,7 +388,9 @@ func requestAuthorizationUsingLDAPIdentityProvider(t *testing.T, downstreamAutho
 	defer authResponse.Body.Close()
 	require.NoError(t, err)
 
-	t.Skip("The rest of this test will not work until we implement the corresponding production code.") // TODO remove this skip
+	// TODO remove this skip
+	_ = responseBody // suppress linter until we remove the below skip
+	t.Skip("The rest of this test will not work until we implement the corresponding production code.")
 
 	require.Equalf(t, http.StatusOK, authResponse.StatusCode, "response body was: %s", string(responseBody))
 }

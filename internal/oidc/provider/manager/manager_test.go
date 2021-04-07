@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package manager
@@ -221,7 +221,7 @@ func TestManager(t *testing.T) {
 
 			parsedUpstreamIDPAuthorizationURL, err := url.Parse(upstreamIDPAuthorizationURL)
 			r.NoError(err)
-			idpListGetter := oidctestutil.NewIDPListGetter(&oidctestutil.TestUpstreamOIDCIdentityProvider{
+			idpLister := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(&oidctestutil.TestUpstreamOIDCIdentityProvider{
 				Name:             "test-idp",
 				ClientID:         "test-client-id",
 				AuthorizationURL: *parsedUpstreamIDPAuthorizationURL,
@@ -238,7 +238,7 @@ func TestManager(t *testing.T) {
 						},
 					}, nil
 				},
-			})
+			}).Build()
 
 			kubeClient = fake.NewSimpleClientset()
 			secretsClient := kubeClient.CoreV1().Secrets("some-namespace")
@@ -254,7 +254,7 @@ func TestManager(t *testing.T) {
 			cache.SetStateEncoderHashKey(issuer2, []byte("some-state-encoder-hash-key-2"))
 			cache.SetStateEncoderBlockKey(issuer2, []byte("16-bytes-STATE02"))
 
-			subject = NewManager(nextHandler, dynamicJWKSProvider, idpListGetter, &cache, secretsClient)
+			subject = NewManager(nextHandler, dynamicJWKSProvider, idpLister, &cache, secretsClient)
 		})
 
 		when("given no providers via SetProviders()", func() {

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package auth provides a handler for the OIDC authorization endpoint.
@@ -27,7 +27,7 @@ import (
 
 func NewHandler(
 	downstreamIssuer string,
-	idpListGetter oidc.IDPListGetter,
+	idpLister oidc.UpstreamIdentityProvidersLister,
 	oauthHelper fosite.OAuth2Provider,
 	generateCSRF func() (csrftoken.CSRFToken, error),
 	generatePKCE func() (pkce.Code, error),
@@ -52,7 +52,7 @@ func NewHandler(
 			return nil
 		}
 
-		upstreamIDP, err := chooseUpstreamIDP(idpListGetter)
+		upstreamIDP, err := chooseUpstreamIDP(idpLister)
 		if err != nil {
 			plog.WarningErr("authorize upstream config", err)
 			return err
@@ -165,8 +165,8 @@ func readCSRFCookie(r *http.Request, codec oidc.Decoder) csrftoken.CSRFToken {
 	return csrfFromCookie
 }
 
-func chooseUpstreamIDP(idpListGetter oidc.IDPListGetter) (provider.UpstreamOIDCIdentityProviderI, error) {
-	allUpstreamIDPs := idpListGetter.GetIDPList()
+func chooseUpstreamIDP(idpLister oidc.UpstreamOIDCIdentityProvidersLister) (provider.UpstreamOIDCIdentityProviderI, error) {
+	allUpstreamIDPs := idpLister.GetOIDCIdentityProviders()
 	if len(allUpstreamIDPs) == 0 {
 		return nil, httperr.New(
 			http.StatusUnprocessableEntity,

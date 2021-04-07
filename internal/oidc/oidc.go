@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidc contains common OIDC functionality needed by Pinniped.
@@ -274,8 +274,17 @@ func FositeErrorForLog(err error) []interface{} {
 	return keysAndValues
 }
 
-type IDPListGetter interface {
-	GetIDPList() []provider.UpstreamOIDCIdentityProviderI
+type UpstreamOIDCIdentityProvidersLister interface {
+	GetOIDCIdentityProviders() []provider.UpstreamOIDCIdentityProviderI
+}
+
+type UpstreamLDAPIdentityProvidersLister interface {
+	GetLDAPIdentityProviders() []provider.UpstreamLDAPIdentityProviderI
+}
+
+type UpstreamIdentityProvidersLister interface {
+	UpstreamOIDCIdentityProvidersLister
+	UpstreamLDAPIdentityProvidersLister
 }
 
 func GrantScopeIfRequested(authorizeRequester fosite.AuthorizeRequester, scopeName string) {

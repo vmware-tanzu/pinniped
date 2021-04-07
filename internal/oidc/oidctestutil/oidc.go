@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidctestutil
@@ -112,14 +112,27 @@ func (u *TestUpstreamOIDCIdentityProvider) ValidateToken(_ context.Context, _ *o
 	panic("implement me")
 }
 
-func NewIDPListGetter(upstreamOIDCIdentityProviders ...*TestUpstreamOIDCIdentityProvider) provider.DynamicUpstreamIDPProvider {
+type UpstreamIDPListerBuilder struct {
+	upstreamOIDCIdentityProviders []*TestUpstreamOIDCIdentityProvider
+}
+
+func (b *UpstreamIDPListerBuilder) WithOIDC(upstreamOIDCIdentityProviders ...*TestUpstreamOIDCIdentityProvider) *UpstreamIDPListerBuilder {
+	b.upstreamOIDCIdentityProviders = append(b.upstreamOIDCIdentityProviders, upstreamOIDCIdentityProviders...)
+	return b
+}
+
+func (b *UpstreamIDPListerBuilder) Build() provider.DynamicUpstreamIDPProvider {
 	idpProvider := provider.NewDynamicUpstreamIDPProvider()
-	upstreams := make([]provider.UpstreamOIDCIdentityProviderI, len(upstreamOIDCIdentityProviders))
-	for i := range upstreamOIDCIdentityProviders {
-		upstreams[i] = provider.UpstreamOIDCIdentityProviderI(upstreamOIDCIdentityProviders[i])
+	upstreams := make([]provider.UpstreamOIDCIdentityProviderI, len(b.upstreamOIDCIdentityProviders))
+	for i := range b.upstreamOIDCIdentityProviders {
+		upstreams[i] = provider.UpstreamOIDCIdentityProviderI(b.upstreamOIDCIdentityProviders[i])
 	}
-	idpProvider.SetIDPList(upstreams)
+	idpProvider.SetOIDCIdentityProviders(upstreams)
 	return idpProvider
+}
+
+func NewUpstreamIDPListerBuilder() *UpstreamIDPListerBuilder {
+	return &UpstreamIDPListerBuilder{}
 }
 
 // Declare a separate type from the production code to ensure that the state param's contents was serialized

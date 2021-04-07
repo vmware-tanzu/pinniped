@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -36,43 +37,89 @@ import (
 )
 
 func TestSupervisorLogin(t *testing.T) {
+	env := library.IntegrationEnv(t)
+
 	tests := []struct {
-		name                 string
-		createIDP            func(t *testing.T)
-		requestAuthorization func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string)
+		name                                 string
+		createIDP                            func(t *testing.T)
+		requestAuthorization                 func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, httpClient *http.Client)
+		wantDownstreamIDTokenSubjectToMatch  string
+		wantDownstreamIDTokenUsernameToMatch string
 	}{
 		{
 			name: "oidc",
 			createIDP: func(t *testing.T) {
 				t.Helper()
-				env := library.IntegrationEnv(t)
 				library.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
-					Issuer: env.SupervisorTestUpstream.Issuer,
+					Issuer: env.SupervisorUpstreamOIDC.Issuer,
 					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
 					},
 					Client: idpv1alpha1.OIDCClient{
-						SecretName: library.CreateClientCredsSecret(t, env.SupervisorTestUpstream.ClientID, env.SupervisorTestUpstream.ClientSecret).Name,
+						SecretName: library.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 					},
 				}, idpv1alpha1.PhaseReady)
 			},
 			requestAuthorization: requestAuthorizationUsingOIDCIdentityProvider,
+			// the ID token Subject should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 		},
+		// TODO add more variations of this LDAP test to try using different user search filters and attributes
 		{
 			name: "ldap",
 			createIDP: func(t *testing.T) {
 				t.Helper()
+				secret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
+					map[string]string{
+						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
+						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
+					},
+				)
 				library.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
-					Host: "something",
-				}, "") // TODO: this should be Ready!
+					Host: env.SupervisorUpstreamLDAP.Host,
+					TLS: &idpv1alpha1.LDAPIdentityProviderTLSSpec{
+						CertificateAuthorityData: env.SupervisorUpstreamLDAP.CABundle,
+					},
+					Bind: idpv1alpha1.LDAPIdentityProviderBindSpec{
+						SecretName: secret.Name,
+					},
+					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearchSpec{
+						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
+						Filter: "",
+						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributesSpec{
+							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
+							UniqueID: env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
+						},
+					},
+				}, "") // TODO: this should be idpv1alpha1.LDAPPhaseReady once we have a controller
 			},
-			requestAuthorization: requestAuthorizationUsingLDAPIdentityProvider,
+			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingLDAPIdentityProvider(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword,           // password to present to server during login
+					httpClient,
+				)
+			},
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(
+				"ldaps://" + env.SupervisorUpstreamLDAP.Host + "?sub=" + env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue,
+			),
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue),
 		},
 	}
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			testSupervisorLogin(t, test.createIDP, test.requestAuthorization)
+			testSupervisorLogin(t,
+				test.createIDP,
+				test.requestAuthorization,
+				test.wantDownstreamIDTokenSubjectToMatch,
+				test.wantDownstreamIDTokenUsernameToMatch,
+			)
 		})
 	}
 }
@@ -80,7 +127,8 @@ func TestSupervisorLogin(t *testing.T) {
 func testSupervisorLogin(
 	t *testing.T,
 	createIDP func(t *testing.T),
-	requestAuthorization func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string),
+	requestAuthorization func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, httpClient *http.Client),
+	wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch string,
 ) {
 	env := library.IntegrationEnv(t)
 
@@ -88,7 +136,7 @@ func testSupervisorLogin(
 	defer cancel()
 
 	// Infer the downstream issuer URL from the callback associated with the upstream test client registration.
-	issuerURL, err := url.Parse(env.SupervisorTestUpstream.CallbackURL)
+	issuerURL, err := url.Parse(env.SupervisorUpstreamOIDC.CallbackURL)
 	require.NoError(t, err)
 	require.True(t, strings.HasSuffix(issuerURL.Path, "/callback"))
 	issuerURL.Path = strings.TrimSuffix(issuerURL.Path, "/callback")
@@ -201,7 +249,7 @@ func testSupervisorLogin(
 		pkceParam.Method(),
 	)
 
-	// Make the authorize request one "manually" so we can check its response headers.
+	// Make the authorize request once "manually" so we can check its response security headers.
 	authorizeRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthorizeURL, nil)
 	require.NoError(t, err)
 	authorizeResp, err := httpClient.Do(authorizeRequest)
@@ -210,7 +258,7 @@ func testSupervisorLogin(
 	expectSecurityHeaders(t, authorizeResp)
 
 	// Perform parameterized auth code acquisition.
-	requestAuthorization(t, downstreamAuthorizeURL, localCallbackServer.URL)
+	requestAuthorization(t, downstreamAuthorizeURL, localCallbackServer.URL, httpClient)
 
 	// Expect that our callback handler was invoked.
 	callback := localCallbackServer.waitForCallback(10 * time.Second)
@@ -225,7 +273,9 @@ func testSupervisorLogin(
 	require.NoError(t, err)
 
 	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "username", "groups"}
-	verifyTokenResponse(t, tokenResponse, discovery, downstreamOAuth2Config, env.SupervisorTestUpstream.Issuer, nonceParam, expectedIDTokenClaims)
+	verifyTokenResponse(t,
+		tokenResponse, discovery, downstreamOAuth2Config, nonceParam,
+		expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch)
 
 	// token exchange on the original token
 	doTokenExchange(t, &downstreamOAuth2Config, tokenResponse, httpClient, discovery)
@@ -236,7 +286,9 @@ func testSupervisorLogin(
 	require.NoError(t, err)
 
 	expectedIDTokenClaims = append(expectedIDTokenClaims, "at_hash")
-	verifyTokenResponse(t, refreshedTokenResponse, discovery, downstreamOAuth2Config, env.SupervisorTestUpstream.Issuer, "", expectedIDTokenClaims)
+	verifyTokenResponse(t,
+		refreshedTokenResponse, discovery, downstreamOAuth2Config, "",
+		expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch)
 
 	require.NotEqual(t, tokenResponse.AccessToken, refreshedTokenResponse.AccessToken)
 	require.NotEqual(t, tokenResponse.RefreshToken, refreshedTokenResponse.RefreshToken)
@@ -251,9 +303,9 @@ func verifyTokenResponse(
 	tokenResponse *oauth2.Token,
 	discovery *coreosoidc.Provider,
 	downstreamOAuth2Config oauth2.Config,
-	upstreamIssuerName string,
 	nonceParam nonce.Nonce,
 	expectedIDTokenClaims []string,
+	wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch string,
 ) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -265,14 +317,17 @@ func verifyTokenResponse(
 	idToken, err := verifier.Verify(ctx, rawIDToken)
 	require.NoError(t, err)
 
-	// Check the claims of the ID token.
-	expectedSubjectPrefix := upstreamIssuerName + "?sub="
-	require.True(t, strings.HasPrefix(idToken.Subject, expectedSubjectPrefix))
-	require.Greater(t, len(idToken.Subject), len(expectedSubjectPrefix),
-		"the ID token Subject should include the upstream user ID after the upstream issuer name")
+	// Check the sub claim of the ID token.
+	require.Regexp(t, wantDownstreamIDTokenSubjectToMatch, idToken.Subject)
+
+	// Check the nonce claim of the ID token.
 	require.NoError(t, nonceParam.Validate(idToken))
+
+	// Check the exp claim of the ID token.
 	expectedIDTokenLifetime := oidc.DefaultOIDCTimeoutsConfiguration().IDTokenLifespan
 	testutil.RequireTimeInDelta(t, time.Now().UTC().Add(expectedIDTokenLifetime), idToken.Expiry, time.Second*30)
+
+	// Check the full list of claim names of the ID token.
 	idTokenClaims := map[string]interface{}{}
 	err = idToken.Claims(&idTokenClaims)
 	require.NoError(t, err)
@@ -281,10 +336,9 @@ func verifyTokenResponse(
 		idTokenClaimNames = append(idTokenClaimNames, k)
 	}
 	require.ElementsMatch(t, expectedIDTokenClaims, idTokenClaimNames)
-	expectedUsernamePrefix := upstreamIssuerName + "?sub="
-	require.True(t, strings.HasPrefix(idTokenClaims["username"].(string), expectedUsernamePrefix))
-	require.Greater(t, len(idTokenClaims["username"].(string)), len(expectedUsernamePrefix),
-		"the ID token Username should include the upstream user ID after the upstream issuer name")
+
+	// Check username claim of the ID token.
+	require.Regexp(t, wantDownstreamIDTokenUsernameToMatch, idTokenClaims["username"].(string))
 
 	// Some light verification of the other tokens that were returned.
 	require.NotEmpty(t, tokenResponse.AccessToken)
@@ -296,7 +350,7 @@ func verifyTokenResponse(
 	require.NotEmpty(t, tokenResponse.RefreshToken)
 }
 
-func requestAuthorizationUsingOIDCIdentityProvider(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string) {
+func requestAuthorizationUsingOIDCIdentityProvider(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, _ *http.Client) {
 	t.Helper()
 	env := library.IntegrationEnv(t)
 
@@ -306,7 +360,7 @@ func requestAuthorizationUsingOIDCIdentityProvider(t *testing.T, downstreamAutho
 	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
 
 	// Expect to be redirected to the upstream provider and log in.
-	browsertest.LoginToUpstream(t, page, env.SupervisorTestUpstream)
+	browsertest.LoginToUpstream(t, page, env.SupervisorUpstreamOIDC)
 
 	// Wait for the login to happen and us be redirected back to a localhost callback.
 	t.Logf("waiting for redirect to callback")
@@ -314,9 +368,29 @@ func requestAuthorizationUsingOIDCIdentityProvider(t *testing.T, downstreamAutho
 	browsertest.WaitForURL(t, page, callbackURLPattern)
 }
 
-func requestAuthorizationUsingLDAPIdentityProvider(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string) {
+func requestAuthorizationUsingLDAPIdentityProvider(t *testing.T, downstreamAuthorizeURL, upstreamUsername, upstreamPassword string, httpClient *http.Client) {
 	t.Helper()
-	t.Skip("implement me!")
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Minute)
+	defer cancelFunc()
+
+	authRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthorizeURL, nil)
+	require.NoError(t, err)
+
+	// Set the custom username/password headers for the LDAP authorize request.
+	authRequest.Header.Set("X-Pinniped-Upstream-Username", upstreamUsername)
+	authRequest.Header.Set("X-Pinniped-Upstream-Password", upstreamPassword)
+
+	// The authorize request is supposed to redirect to this test's callback handler, which in turn is supposed to return 200 OK.
+	authResponse, err := httpClient.Do(authRequest)
+	require.NoError(t, err)
+	responseBody, err := ioutil.ReadAll(authResponse.Body)
+	defer authResponse.Body.Close()
+	require.NoError(t, err)
+
+	t.Skip("The rest of this test will not work until we implement the corresponding production code.") // TODO remove this skip
+
+	require.Equalf(t, http.StatusOK, authResponse.StatusCode, "response body was: %s", string(responseBody))
 }
 
 func startLocalCallbackServer(t *testing.T) *localCallbackServer {

@@ -140,9 +140,7 @@ spec:
     spec:
       containers:
         - name: ldap
-          #! An issue was reported and will be fixed in bitnami/openldap soon.
-          image: ghcr.io/pinniped-ci-bot/bitnami-openldap-forked:2.4.58-debian-10-r15 #! our own fork of docker.io/bitnami/openldap
-          #! image: docker.io/bitnami/openldap
+          image: docker.io/bitnami/openldap
           imagePullPolicy: Always
           ports:
             - name: ldap
@@ -182,9 +180,6 @@ spec:
               value: "/var/certs/ldap-key.pem"
             - name: LDAP_TLS_CA_FILE
               value: "/var/certs/ca.pem"
-              #! This env var was added in our fork to reduce slapd memory consumption from ~700 MB to ~12 MB.
-            - name: LDAP_ULIMIT_MAX_FILES
-              value: "1024"
               #! Note that the custom LDIF file is only read at pod start-up time.
             - name: LDAP_CUSTOM_LDIF_DIR
               value: "/var/ldifs"

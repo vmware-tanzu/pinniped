@@ -53,7 +53,7 @@ func TestE2EFullIntegration(t *testing.T) {
 	page := browsertest.Open(t)
 
 	// Infer the downstream issuer URL from the callback associated with the upstream test client registration.
-	issuerURL, err := url.Parse(env.SupervisorTestUpstream.CallbackURL)
+	issuerURL, err := url.Parse(env.SupervisorUpstreamOIDC.CallbackURL)
 	require.NoError(t, err)
 	require.True(t, strings.HasSuffix(issuerURL.Path, "/callback"))
 	issuerURL.Path = strings.TrimSuffix(issuerURL.Path, "/callback")
@@ -66,7 +66,7 @@ func TestE2EFullIntegration(t *testing.T) {
 
 	// Save that bundle plus the one that signs the upstream issuer, for test purposes.
 	testCABundlePath := filepath.Join(tempDir, "test-ca.pem")
-	testCABundlePEM := []byte(string(ca.Bundle()) + "\n" + env.SupervisorTestUpstream.CABundle)
+	testCABundlePEM := []byte(string(ca.Bundle()) + "\n" + env.SupervisorUpstreamOIDC.CABundle)
 	testCABundleBase64 := base64.StdEncoding.EncodeToString(testCABundlePEM)
 	require.NoError(t, ioutil.WriteFile(testCABundlePath, testCABundlePEM, 0600))
 
@@ -94,19 +94,19 @@ func TestE2EFullIntegration(t *testing.T) {
 
 	// Create upstream OIDC provider and wait for it to become ready.
 	library.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
-		Issuer: env.SupervisorTestUpstream.Issuer,
+		Issuer: env.SupervisorUpstreamOIDC.Issuer,
 		TLS: &idpv1alpha1.TLSSpec{
-			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
+			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
 		},
 		AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
-			AdditionalScopes: env.SupervisorTestUpstream.AdditionalScopes,
+			AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
 		},
 		Claims: idpv1alpha1.OIDCClaims{
-			Username: env.SupervisorTestUpstream.UsernameClaim,
-			Groups:   env.SupervisorTestUpstream.GroupsClaim,
+			Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+			Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
 		},
 		Client: idpv1alpha1.OIDCClient{
-			SecretName: library.CreateClientCredsSecret(t, env.SupervisorTestUpstream.ClientID, env.SupervisorTestUpstream.ClientSecret).Name,
+			SecretName: library.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 		},
 	}, idpv1alpha1.PhaseReady)
 
@@ -120,10 +120,10 @@ func TestE2EFullIntegration(t *testing.T) {
 
 	// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
 	library.CreateTestClusterRoleBinding(t,
-		rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.SupervisorTestUpstream.Username},
+		rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: env.SupervisorUpstreamOIDC.Username},
 		rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
 	)
-	library.WaitForUserToHaveAccess(t, env.SupervisorTestUpstream.Username, []string{}, &authorizationv1.ResourceAttributes{
+	library.WaitForUserToHaveAccess(t, env.SupervisorUpstreamOIDC.Username, []string{}, &authorizationv1.ResourceAttributes{
 		Verb:     "get",
 		Group:    "",
 		Version:  "v1",
@@ -240,7 +240,7 @@ func TestE2EFullIntegration(t *testing.T) {
 	require.NoError(t, page.Navigate(loginURL))
 
 	// Expect to be redirected to the upstream provider and log in.
-	browsertest.LoginToUpstream(t, page, env.SupervisorTestUpstream)
+	browsertest.LoginToUpstream(t, page, env.SupervisorUpstreamOIDC)
 
 	// Expect to be redirected to the localhost callback.
 	t.Logf("waiting for redirect to callback")
@@ -290,11 +290,11 @@ func TestE2EFullIntegration(t *testing.T) {
 	require.NotNil(t, token)
 
 	idTokenClaims := token.IDToken.Claims
-	require.Equal(t, env.SupervisorTestUpstream.Username, idTokenClaims[oidc.DownstreamUsernameClaim])
+	require.Equal(t, env.SupervisorUpstreamOIDC.Username, idTokenClaims[oidc.DownstreamUsernameClaim])
 
 	// The groups claim in the file ends up as an []interface{}, so adjust our expectation to match.
-	expectedGroups := make([]interface{}, 0, len(env.SupervisorTestUpstream.ExpectedGroups))
-	for _, g := range env.SupervisorTestUpstream.ExpectedGroups {
+	expectedGroups := make([]interface{}, 0, len(env.SupervisorUpstreamOIDC.ExpectedGroups))
+	for _, g := range env.SupervisorUpstreamOIDC.ExpectedGroups {
 		expectedGroups = append(expectedGroups, g)
 	}
 	require.Equal(t, expectedGroups, idTokenClaims[oidc.DownstreamGroupsClaim])
@@ -302,7 +302,7 @@ func TestE2EFullIntegration(t *testing.T) {
 	// confirm we are the right user according to Kube
 	expectedYAMLGroups := func() string {
 		var b strings.Builder
-		for _, g := range env.SupervisorTestUpstream.ExpectedGroups {
+		for _, g := range env.SupervisorUpstreamOIDC.ExpectedGroups {
 			b.WriteString("\n")
 			b.WriteString(`      - `)
 			b.WriteString(g)
@@ -328,7 +328,7 @@ status:
     user:
       groups:`+expectedYAMLGroups+`
       - system:authenticated
-      username: `+env.SupervisorTestUpstream.Username+`
+      username: `+env.SupervisorUpstreamOIDC.Username+`
 `,
 		string(kubectlOutput3))
 
@@ -339,7 +339,7 @@ status:
 		true,
 		pinnipedExe,
 		kubeconfigPath,
-		env.SupervisorTestUpstream.Username,
-		append(env.SupervisorTestUpstream.ExpectedGroups, "system:authenticated"),
+		env.SupervisorUpstreamOIDC.Username,
+		append(env.SupervisorUpstreamOIDC.ExpectedGroups, "system:authenticated"),
 	)
 }

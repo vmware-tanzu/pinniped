@@ -317,8 +317,7 @@ export PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS='${supervisor_custom_labels}'
 export PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS="127.0.0.1:12345"
 export PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS="localhost:12344"
 export PINNIPED_TEST_PROXY=http://127.0.0.1:12346
-export PINNIPED_TEST_LDAP_LDAP_URL=ldap://ldap.tools.svc.cluster.local
-export PINNIPED_TEST_LDAP_LDAPS_URL=ldaps://ldap.tools.svc.cluster.local
+export PINNIPED_TEST_LDAP_HOST=ldap.tools.svc.cluster.local
 export PINNIPED_TEST_LDAP_LDAPS_CA_BUNDLE="${test_ca_bundle_pem}"
 export PINNIPED_TEST_LDAP_BIND_ACCOUNT_USERNAME="cn=admin,dc=pinniped,dc=dev"
 export PINNIPED_TEST_LDAP_BIND_ACCOUNT_PASSWORD=password
@@ -327,6 +326,8 @@ export PINNIPED_TEST_LDAP_GROUPS_SEARCH_BASE="ou=groups,dc=pinniped,dc=dev"
 export PINNIPED_TEST_LDAP_USER_DN="cn=pinny,ou=users,dc=pinniped,dc=dev"
 export PINNIPED_TEST_LDAP_USER_CN="pinny"
 export PINNIPED_TEST_LDAP_USER_PASSWORD=${ldap_test_password}
+export PINNIPED_TEST_LDAP_USER_UNIQUE_ID_ATTRIBUTE_NAME="uidNumber"
+export PINNIPED_TEST_LDAP_USER_UNIQUE_ID_ATTRIBUTE_VALUE="1000"
 export PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_NAME="mail"
 export PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_VALUE="pinny.ldap@example.com"
 export PINNIPED_TEST_LDAP_EXPECTED_DIRECT_GROUPS_DN="cn=ball-game-players,ou=beach-groups,ou=groups,dc=pinniped,dc=dev;cn=seals,ou=groups,dc=pinniped,dc=dev"

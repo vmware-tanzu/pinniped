@@ -708,6 +708,23 @@ LDAPIdentityProvider describes the configuration of an upstream Lightweight Dire
 |===
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderbindspec"]
+==== LDAPIdentityProviderBindSpec 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`secretName`* __string__ | SecretName contains the name of a namespace-local Secret object that provides the username and password for an LDAP bind user. This account will be used to perform LDAP searches. The Secret should be of type "kubernetes.io/basic-auth" which includes "username" and "password" keys. The username value should be the full DN of your bind account, e.g. "cn=bind-account,ou=users,dc=example,dc=com".
+|===
+
+
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec"]
@@ -724,6 +741,9 @@ Spec for configuring an LDAP identity provider.
 |===
 | Field | Description
 | *`host`* __string__ | Host is the hostname of this LDAP identity provider, i.e., where to connect. For example: ldap.example.com:636.
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityprovidertlsspec[$$LDAPIdentityProviderTLSSpec$$]__ | TLS contains the connection settings for how to establish the connection to the Host.
+| *`bind`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderbindspec[$$LDAPIdentityProviderBindSpec$$]__ | Bind contains the configuration for how to provide access credentials during an initial bind to the LDAP server to be allowed to perform searches and binds to validate a user's credentials during a user's authentication attempt.
+| *`userSearch`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearchspec[$$LDAPIdentityProviderUserSearchSpec$$]__ | UserSearch contains the configuration for searching for a user by name in the LDAP provider.
 |===
 
 
@@ -741,6 +761,60 @@ Status of an LDAP identity provider.
 |===
 | Field | Description
 | *`phase`* __LDAPIdentityProviderPhase__ | Phase summarizes the overall status of the LDAPIdentityProvider.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityprovidertlsspec"]
+==== LDAPIdentityProviderTLSSpec 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`certificateAuthorityData`* __string__ | X.509 Certificate Authority (base64-encoded PEM bundle) to trust when connecting to the LDAP provider. If omitted, a default set of system roots will be trusted.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearchattributesspec"]
+==== LDAPIdentityProviderUserSearchAttributesSpec 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearchspec[$$LDAPIdentityProviderUserSearchSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`username`* __string__ | Username specifies the name of attribute in the LDAP entry which whose value shall become the username of the user after a successful authentication. This would typically be the same attribute name used in the user search filter. E.g. "mail" or "uid" or "userPrincipalName".
+| *`uniqueID`* __string__ | UniqueID specifies the name of the attribute in the LDAP entry which whose value shall be used to uniquely identify the user within this LDAP provider after a successful authentication. E.g. "uidNumber" or "objectGUID".
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearchspec"]
+==== LDAPIdentityProviderUserSearchSpec 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`base`* __string__ | Base is the DN that should be used as the search base when searching for users. E.g. "ou=users,dc=example,dc=com".
+| *`filter`* __string__ | Filter is the LDAP search filter which should be applied when searching for users. The pattern "{}" must occur in the filter and will be dynamically replaced by the username for which the search is being run. E.g. "mail={}" or "&(objectClass=person)(uid={})". For more information about LDAP filters, see https://ldap.com/ldap-filters. Optional. When not specified, the default will act as if the Filter were specified as the value from Attributes.Username appended by "={}".
+| *`attributes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearchattributesspec[$$LDAPIdentityProviderUserSearchAttributesSpec$$]__ | Attributes specifies how the user's information should be read from the LDAP entry which was found as the result of the user search.
 |===
 
 

@@ -190,9 +190,9 @@ func TestCLILoginOIDC(t *testing.T) {
 	require.NoError(t, err)
 	claims := map[string]interface{}{}
 	require.NoError(t, json.Unmarshal(jws.UnsafePayloadWithoutVerification(), &claims))
-	require.Equal(t, env.CLITestUpstream.Issuer, claims["iss"])
-	require.Equal(t, env.CLITestUpstream.ClientID, claims["aud"])
-	require.Equal(t, env.CLITestUpstream.Username, claims["email"])
+	require.Equal(t, env.CLIUpstreamOIDC.Issuer, claims["iss"])
+	require.Equal(t, env.CLIUpstreamOIDC.ClientID, claims["aud"])
+	require.Equal(t, env.CLIUpstreamOIDC.Username, claims["email"])
 	require.NotEmpty(t, claims["nonce"])
 
 	// Run the CLI again with the same session cache and login parameters.
@@ -211,10 +211,10 @@ func TestCLILoginOIDC(t *testing.T) {
 	t.Logf("overwriting cache to remove valid ID token")
 	cache := filesession.New(sessionCachePath)
 	cacheKey := oidcclient.SessionCacheKey{
-		Issuer:      env.CLITestUpstream.Issuer,
-		ClientID:    env.CLITestUpstream.ClientID,
+		Issuer:      env.CLIUpstreamOIDC.Issuer,
+		ClientID:    env.CLIUpstreamOIDC.ClientID,
 		Scopes:      []string{"email", "offline_access", "openid", "profile"},
-		RedirectURI: strings.ReplaceAll(env.CLITestUpstream.CallbackURL, "127.0.0.1", "localhost"),
+		RedirectURI: strings.ReplaceAll(env.CLIUpstreamOIDC.CallbackURL, "127.0.0.1", "localhost"),
 	}
 	cached := cache.GetToken(cacheKey)
 	require.NotNil(t, cached)
@@ -325,11 +325,11 @@ func runPinnipedLoginOIDC(
 	require.NoError(t, page.Navigate(loginURL))
 
 	// Expect to be redirected to the upstream provider and log in.
-	browsertest.LoginToUpstream(t, page, env.CLITestUpstream)
+	browsertest.LoginToUpstream(t, page, env.CLIUpstreamOIDC)
 
 	// Expect to be redirected to the localhost callback.
 	t.Logf("waiting for redirect to callback")
-	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(env.CLITestUpstream.CallbackURL) + `\?.+\z`)
+	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(env.CLIUpstreamOIDC.CallbackURL) + `\?.+\z`)
 	browsertest.WaitForURL(t, page, callbackURLPattern)
 
 	// Wait for the "pre" element that gets rendered for a `text/plain` page, and
@@ -375,11 +375,11 @@ func spawnTestGoroutine(t *testing.T, f func() error) {
 
 func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, sessionCachePath string) *exec.Cmd {
 	env := library.IntegrationEnv(t)
-	callbackURL, err := url.Parse(env.CLITestUpstream.CallbackURL)
+	callbackURL, err := url.Parse(env.CLIUpstreamOIDC.CallbackURL)
 	require.NoError(t, err)
 	cmd := exec.CommandContext(ctx, pinnipedExe, "login", "oidc",
-		"--issuer", env.CLITestUpstream.Issuer,
-		"--client-id", env.CLITestUpstream.ClientID,
+		"--issuer", env.CLIUpstreamOIDC.Issuer,
+		"--client-id", env.CLIUpstreamOIDC.ClientID,
 		"--scopes", "offline_access,openid,email,profile",
 		"--listen-port", callbackURL.Port(),
 		"--session-cache", sessionCachePath,
@@ -387,9 +387,9 @@ func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, ses
 	)
 
 	// If there is a custom CA bundle, pass it via --ca-bundle and a temporary file.
-	if env.CLITestUpstream.CABundle != "" {
+	if env.CLIUpstreamOIDC.CABundle != "" {
 		path := filepath.Join(testutil.TempDir(t), "test-ca.pem")
-		require.NoError(t, ioutil.WriteFile(path, []byte(env.CLITestUpstream.CABundle), 0600))
+		require.NoError(t, ioutil.WriteFile(path, []byte(env.CLIUpstreamOIDC.CABundle), 0600))
 		cmd.Args = append(cmd.Args, "--ca-bundle", path)
 	}
 

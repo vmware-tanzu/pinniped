@@ -208,6 +208,8 @@ func TestCLILoginOIDC(t *testing.T) {
 	require.NoErrorf(t, json.Unmarshal(cmd2Output, &credOutput2),
 		"command returned something other than an ExecCredential:\n%s", string(cmd2Output))
 	require.Equal(t, credOutput, credOutput2)
+	// the logs contain only the ExecCredential. There are 2 elements because the last one is "".
+	require.Len(t, strings.Split(string(cmd2Output), "\n"), 2)
 
 	// Overwrite the cache entry to remove the access and ID tokens.
 	t.Logf("overwriting cache to remove valid ID token")
@@ -237,18 +239,23 @@ func TestCLILoginOIDC(t *testing.T) {
 	require.NoErrorf(t, json.Unmarshal(cmd3Output, &credOutput3),
 		"command returned something other than an ExecCredential:\n%s", string(cmd2Output))
 	require.NotEqual(t, credOutput2.Status.Token, credOutput3.Status.Token)
+	// the logs contain only the ExecCredential. There are 2 elements because the last one is "".
+	require.Len(t, strings.Split(string(cmd3Output), "\n"), 2)
 
 	t.Logf("starting fourth CLI subprocess to test debug logging")
 	err = os.Setenv("PINNIPED_DEBUG", "true")
 	require.NoError(t, err)
 	command := oidcLoginCommand(ctx, t, pinnipedExe, sessionCachePath)
 	cmd4CombinedOutput, err := command.CombinedOutput()
-	require.NoError(t, err, string(cmd4CombinedOutput))
+	cmd4StringOutput := string(cmd4CombinedOutput)
+	require.NoError(t, err, cmd4StringOutput)
 
-	require.Contains(t, string(cmd4CombinedOutput), "Performing OIDC login")
-	require.Contains(t, string(cmd4CombinedOutput), "Found unexpired cached token")
-	require.Contains(t, string(cmd4CombinedOutput), "No concierge configured, skipping token credential exchange")
-	require.Contains(t, string(cmd4CombinedOutput), credOutput3.Status.Token)
+	// the logs contain only the 3 debug lines plus the ExecCredential. There are 5 elements because the last one is "".
+	require.Len(t, strings.Split(cmd4StringOutput, "\n"), 5)
+	require.Contains(t, cmd4StringOutput, "Performing OIDC login")
+	require.Contains(t, cmd4StringOutput, "Found unexpired cached token")
+	require.Contains(t, cmd4StringOutput, "No concierge configured, skipping token credential exchange")
+	require.Contains(t, cmd4StringOutput, credOutput3.Status.Token)
 }
 
 func runPinnipedLoginOIDC(

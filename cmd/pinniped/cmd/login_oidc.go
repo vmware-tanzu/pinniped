@@ -157,7 +157,6 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 
 	// --skip-browser replaces the default "browser open" function with one that prints to stderr.
 	if flags.skipBrowser {
-		plog.Debug("skipping browser.")
 		opts = append(opts, oidcclient.WithBrowserOpen(func(url string) error {
 			cmd.PrintErr("Please log in: ", url, "\n")
 			return nil
@@ -187,7 +186,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		}
 	}
 
-	plog.Debug("performing OIDC login", "issuer", flags.issuer, "client id", flags.clientID)
+	plog.Debug("Pinniped: Performing OIDC login", "issuer", flags.issuer, "client id", flags.clientID)
 	// Do the basic login to get an OIDC token.
 	token, err := deps.login(flags.issuer, flags.clientID, opts...)
 	if err != nil {
@@ -197,7 +196,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 
 	// If the concierge was configured, exchange the credential for a separate short-lived, cluster-specific credential.
 	if concierge != nil {
-		plog.Debug("exchanging token for cluster credential", "endpoint", flags.conciergeEndpoint, "authenticator type", flags.conciergeAuthenticatorType, "authenticator name", flags.conciergeAuthenticatorName)
+		plog.Debug("Pinniped: Exchanging token for cluster credential", "endpoint", flags.conciergeEndpoint, "authenticator type", flags.conciergeAuthenticatorType, "authenticator name", flags.conciergeAuthenticatorName)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
@@ -205,6 +204,8 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		if err != nil {
 			return fmt.Errorf("could not complete Concierge credential exchange: %w", err)
 		}
+	} else {
+		plog.Debug("Pinniped: No concierge configured, skipping token credential exchange")
 	}
 
 	// If there was a credential cache, save the resulting credential for future use.

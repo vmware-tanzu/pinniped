@@ -237,6 +237,18 @@ func TestCLILoginOIDC(t *testing.T) {
 	require.NoErrorf(t, json.Unmarshal(cmd3Output, &credOutput3),
 		"command returned something other than an ExecCredential:\n%s", string(cmd2Output))
 	require.NotEqual(t, credOutput2.Status.Token, credOutput3.Status.Token)
+
+	t.Logf("starting fourth CLI subprocess to test debug logging")
+	err = os.Setenv("PINNIPED_DEBUG", "true")
+	require.NoError(t, err)
+	command := oidcLoginCommand(ctx, t, pinnipedExe, sessionCachePath)
+	cmd4CombinedOutput, err := command.CombinedOutput()
+	require.NoError(t, err, string(cmd4CombinedOutput))
+
+	require.Contains(t, string(cmd4CombinedOutput), "Performing OIDC login")
+	require.Contains(t, string(cmd4CombinedOutput), "Found unexpired cached token")
+	require.Contains(t, string(cmd4CombinedOutput), "No concierge configured, skipping token credential exchange")
+	require.Contains(t, string(cmd4CombinedOutput), credOutput3.Status.Token)
 }
 
 func runPinnipedLoginOIDC(
@@ -271,6 +283,7 @@ func runPinnipedLoginOIDC(
 	// Start a background goroutine to read stderr from the CLI and parse out the login URL.
 	loginURLChan := make(chan string)
 	spawnTestGoroutine(t, func() (err error) {
+		t.Helper()
 		defer func() {
 			closeErr := stderr.Close()
 			if closeErr == nil || errors.Is(closeErr, os.ErrClosed) {
@@ -282,16 +295,18 @@ func runPinnipedLoginOIDC(
 		}()
 
 		reader := bufio.NewReader(library.NewLoggerReader(t, "stderr", stderr))
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("could not read login URL line from stderr: %w", err)
-		}
+
+		scanner := bufio.NewScanner(reader)
 		const prompt = "Please log in: "
-		if !strings.HasPrefix(line, prompt) {
-			return fmt.Errorf("expected %q to have prefix %q", line, prompt)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.HasPrefix(line, prompt) {
+				loginURLChan <- strings.TrimPrefix(line, prompt)
+				return nil
+			}
 		}
-		loginURLChan <- strings.TrimPrefix(line, prompt)
-		return readAndExpectEmpty(reader)
+
+		return fmt.Errorf("expected stderr to contain %s", prompt)
 	})
 
 	// Start a background goroutine to read stdout from the CLI and parse out an ExecCredential.

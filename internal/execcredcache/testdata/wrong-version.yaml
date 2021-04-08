@@ -1,0 +1,3 @@
+apiVersion: config.supervisor.pinniped.dev/v2alpha6
+kind: NotACredentialCache
+credentials: []

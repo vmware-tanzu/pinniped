@@ -256,6 +256,8 @@ func TestCLILoginOIDC(t *testing.T) {
 	require.Contains(t, cmd4StringOutput, "Found unexpired cached token")
 	require.Contains(t, cmd4StringOutput, "No concierge configured, skipping token credential exchange")
 	require.Contains(t, cmd4StringOutput, credOutput3.Status.Token)
+	err = os.Unsetenv("PINNIPED_DEBUG")
+	require.NoError(t, err)
 }
 
 func runPinnipedLoginOIDC(

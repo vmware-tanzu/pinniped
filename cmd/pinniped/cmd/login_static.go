@@ -84,7 +84,10 @@ func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
 }
 
 func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams) error {
-	SetLogLevel()
+	err := SetLogLevel()
+	if err != nil {
+		plog.WarningErr("Received error while setting log level", err)
+	}
 
 	if flags.staticToken == "" && flags.staticTokenEnvName == "" {
 		return fmt.Errorf("one of --token or --token-env must be set")

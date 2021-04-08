@@ -112,7 +112,10 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 }
 
 func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLoginFlags) error {
-	SetLogLevel()
+	err := SetLogLevel()
+	if err != nil {
+		plog.WarningErr("Received error while setting log level", err)
+	}
 
 	// Initialize the session cache.
 	var sessionOptions []filesession.Option
@@ -261,10 +264,14 @@ func tokenCredential(token *oidctypes.Token) *clientauthv1beta1.ExecCredential {
 	return &cred
 }
 
-func SetLogLevel() {
+func SetLogLevel() error {
 	if os.Getenv("PINNIPED_DEBUG") == "true" {
-		_ = plog.ValidateAndSetLogLevelGlobally(plog.LevelDebug)
+		err := plog.ValidateAndSetLogLevelGlobally(plog.LevelDebug)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // mustGetConfigDir returns a directory that follows the XDG base directory convention:

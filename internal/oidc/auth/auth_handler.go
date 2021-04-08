@@ -28,7 +28,8 @@ import (
 func NewHandler(
 	downstreamIssuer string,
 	idpLister oidc.UpstreamIdentityProvidersLister,
-	oauthHelper fosite.OAuth2Provider,
+	oauthHelperWithNullStorage fosite.OAuth2Provider,
+	oauthHelperWithRealStorage fosite.OAuth2Provider,
 	generateCSRF func() (csrftoken.CSRFToken, error),
 	generatePKCE func() (pkce.Code, error),
 	generateNonce func() (nonce.Nonce, error),
@@ -45,10 +46,10 @@ func NewHandler(
 
 		csrfFromCookie := readCSRFCookie(r, cookieCodec)
 
-		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), r)
+		authorizeRequester, err := oauthHelperWithNullStorage.NewAuthorizeRequest(r.Context(), r)
 		if err != nil {
 			plog.Info("authorize request error", oidc.FositeErrorForLog(err)...)
-			oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+			oauthHelperWithNullStorage.WriteAuthorizeError(w, authorizeRequester, err)
 			return nil
 		}
 
@@ -68,7 +69,7 @@ func NewHandler(
 		oidc.GrantScopeIfRequested(authorizeRequester, "pinniped:request-audience")
 
 		now := time.Now()
-		_, err = oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &openid.DefaultSession{
+		_, err = oauthHelperWithNullStorage.NewAuthorizeResponse(r.Context(), authorizeRequester, &openid.DefaultSession{
 			Claims: &jwt.IDTokenClaims{
 				// Temporary claim values to allow `NewAuthorizeResponse` to perform other OIDC validations.
 				Subject:     "none",
@@ -78,7 +79,7 @@ func NewHandler(
 		})
 		if err != nil {
 			plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
-			oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+			oauthHelperWithNullStorage.WriteAuthorizeError(w, authorizeRequester, err)
 			return nil
 		}
 

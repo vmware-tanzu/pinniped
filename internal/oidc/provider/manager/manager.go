@@ -110,6 +110,7 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 			issuer,
 			m.upstreamIDPs,
 			oauthHelperWithNullStorage,
+			oauthHelperWithKubeStorage,
 			csrftoken.Generate,
 			pkce.Generate,
 			nonce.Generate,

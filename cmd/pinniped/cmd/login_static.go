@@ -117,13 +117,15 @@ func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams
 	}
 	cred := tokenCredential(&oidctypes.Token{IDToken: &oidctypes.IDToken{Token: token}})
 
-	// Look up cached credentials based on a hash of all the CLI arguments and the current token value.
+	// Look up cached credentials based on a hash of all the CLI arguments, the current token value, and the cluster info.
 	cacheKey := struct {
-		Args  []string `json:"args"`
-		Token string   `json:"token"`
+		Args        []string                   `json:"args"`
+		Token       string                     `json:"token"`
+		ClusterInfo *clientauthv1beta1.Cluster `json:"cluster"`
 	}{
-		Args:  os.Args[1:],
-		Token: token,
+		Args:        os.Args[1:],
+		Token:       token,
+		ClusterInfo: loadClusterInfo(),
 	}
 	var credCache *execcredcache.Cache
 	if flags.credentialCachePath != "" {

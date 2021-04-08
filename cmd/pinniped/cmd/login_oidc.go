@@ -167,11 +167,13 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		opts = append(opts, oidcclient.WithClient(client))
 	}
 
-	// Look up cached credentials based on a hash of all the CLI arguments.
+	// Look up cached credentials based on a hash of all the CLI arguments and the cluster info.
 	cacheKey := struct {
-		Args []string `json:"args"`
+		Args        []string                   `json:"args"`
+		ClusterInfo *clientauthv1beta1.Cluster `json:"cluster"`
 	}{
-		Args: os.Args[1:],
+		Args:        os.Args[1:],
+		ClusterInfo: loadClusterInfo(),
 	}
 	var credCache *execcredcache.Cache
 	if flags.credentialCachePath != "" {

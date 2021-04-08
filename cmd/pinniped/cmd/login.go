@@ -5,6 +5,8 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
+	"k8s.io/client-go/tools/auth/exec"
 )
 
 //nolint: gochecknoglobals
@@ -19,4 +21,16 @@ var loginCmd = &cobra.Command{
 //nolint: gochecknoinits
 func init() {
 	rootCmd.AddCommand(loginCmd)
+}
+
+func loadClusterInfo() *clientauthv1beta1.Cluster {
+	obj, _, err := exec.LoadExecCredentialFromEnv()
+	if err != nil {
+		return nil
+	}
+	cred, ok := obj.(*clientauthv1beta1.ExecCredential)
+	if !ok {
+		return nil
+	}
+	return cred.Spec.Cluster
 }

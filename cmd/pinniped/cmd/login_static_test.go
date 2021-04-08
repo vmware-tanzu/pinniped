@@ -57,7 +57,7 @@ func TestLoginStaticCommand(t *testing.T) {
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt')
 				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the Concierge
 				      --concierge-endpoint string             API base for the Concierge endpoint
-				      --credential-cache string               Cluster-specific credentials cache path ("" disables the cache) (default "` + cfgDir + `/credentials.yaml")
+				      --credential-cache string               Path to cluster-specific credentials cache ("" disables the cache) (default "` + cfgDir + `/credentials.yaml")
 				      --enable-concierge                      Use the Concierge to login
 				  -h, --help                                  help for static
 				      --token string                          Static token to present during login

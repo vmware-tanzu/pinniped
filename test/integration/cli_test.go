@@ -49,11 +49,13 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 	// Build pinniped CLI.
 	pinnipedExe := library.PinnipedCLIPath(t)
 
+	credCacheDir := testutil.TempDir(t)
 	stdout, stderr := runPinnipedCLI(t, nil, pinnipedExe, "get", "kubeconfig",
 		"--static-token", env.TestUser.Token,
 		"--concierge-api-group-suffix", env.APIGroupSuffix,
 		"--concierge-authenticator-type", "webhook",
 		"--concierge-authenticator-name", authenticator.Name,
+		"--credential-cache", credCacheDir+"/credentials.yaml",
 	)
 	assert.Contains(t, stderr, "discovered CredentialIssuer")
 	assert.Contains(t, stderr, "discovered Concierge endpoint")
@@ -383,6 +385,7 @@ func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, ses
 		"--scopes", "offline_access,openid,email,profile",
 		"--listen-port", callbackURL.Port(),
 		"--session-cache", sessionCachePath,
+		"--credential-cache", testutil.TempDir(t)+"/credentials.yaml",
 		"--skip-browser",
 	)
 

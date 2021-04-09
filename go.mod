@@ -7,6 +7,7 @@ require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/coreos/go-oidc/v3 v3.0.0
 	github.com/davecgh/go-spew v1.1.1
+	github.com/go-ldap/ldap/v3 v3.3.0
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/stdr v0.4.0
 	github.com/go-openapi/spec v0.20.3

@@ -10,7 +10,7 @@ install procedure across all types and origins of Kubernetes clusters,
 declarative configuration via Kubernetes APIs, enterprise-grade integrations
 with IDPs, and distribution-specific integration strategies.
 
-### Example use cases
+### Example use cases TEST
 
 * Your team uses a large enterprise IDP, and has many clusters that they
   manage. Pinniped provides:

@@ -233,7 +233,7 @@ func startControllers(
 			singletonWorker,
 		).
 		WithController(
-			upstreamwatcher.New(
+			upstreamwatcher.NewOIDCUpstreamWatcherController(
 				dynamicUpstreamIDPProvider,
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),

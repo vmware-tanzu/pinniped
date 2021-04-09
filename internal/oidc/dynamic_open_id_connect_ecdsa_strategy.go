@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidc
@@ -8,14 +8,13 @@ import (
 	"crypto/ecdsa"
 	"reflect"
 
-	"go.pinniped.dev/internal/constable"
-	"go.pinniped.dev/internal/plog"
-
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 	"github.com/ory/fosite/handler/openid"
 
+	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/oidc/jwks"
+	"go.pinniped.dev/internal/plog"
 )
 
 // dynamicOpenIDConnectECDSAStrategy is an openid.OpenIDConnectTokenStrategy that can dynamically

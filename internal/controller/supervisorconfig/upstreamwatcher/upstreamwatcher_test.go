@@ -24,9 +24,9 @@ import (
 	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/oidc/oidctestutil"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/testutil/oidctestutil"
 	"go.pinniped.dev/internal/testutil/testlogger"
 	"go.pinniped.dev/internal/upstreamoidc"
 )

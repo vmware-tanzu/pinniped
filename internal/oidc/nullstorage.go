@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidc
@@ -10,11 +10,14 @@ import (
 	"github.com/ory/fosite"
 
 	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/fositestoragei"
 )
 
 const errNullStorageNotImplemented = constable.Error("NullStorage does not implement this method. It should not have been called.")
 
 type NullStorage struct{}
+
+var _ fositestoragei.AllFositeStorage = &NullStorage{}
 
 func (NullStorage) RevokeRefreshToken(_ context.Context, _ string) error {
 	return errNullStorageNotImplemented

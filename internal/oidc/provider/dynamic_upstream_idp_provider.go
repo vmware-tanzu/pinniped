@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/oauth2"
 
-	"go.pinniped.dev/internal/ldap"
+	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -59,7 +59,7 @@ type UpstreamLDAPIdentityProviderI interface {
 	GetURL() string
 
 	// A method for performing user authentication against the upstream LDAP provider.
-	ldap.UserAuthenticator
+	authenticators.UserAuthenticator
 }
 
 type DynamicUpstreamIDPProvider interface {

@@ -1,8 +1,8 @@
 // Copyright 2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package ldap contains common LDAP functionality needed by Pinniped.
-package ldap
+// Package authenticators contains authenticator interfaces.
+package authenticators
 
 import (
 	"context"

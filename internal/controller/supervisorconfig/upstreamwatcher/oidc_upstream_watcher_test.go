@@ -31,7 +31,7 @@ import (
 	"go.pinniped.dev/internal/upstreamoidc"
 )
 
-func TestControllerFilterSecret(t *testing.T) {
+func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -101,7 +101,7 @@ func TestControllerFilterSecret(t *testing.T) {
 	}
 }
 
-func TestController(t *testing.T) {
+func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 	t.Parallel()
 	now := metav1.NewTime(time.Now().UTC())
 	earlier := metav1.NewTime(now.Add(-1 * time.Hour).UTC())

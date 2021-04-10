@@ -241,6 +241,17 @@ func startControllers(
 				klogr.New(),
 				controllerlib.WithInformer,
 			),
+			singletonWorker).
+		WithController(
+			upstreamwatcher.NewLDAPUpstreamWatcherController(
+				dynamicUpstreamIDPProvider,
+				// nil means to use a real production dialer when creating objects to add to the dynamicUpstreamIDPProvider cache.
+				nil,
+				pinnipedClient,
+				pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders(),
+				secretInformer,
+				controllerlib.WithInformer,
+			),
 			singletonWorker)
 
 	kubeInformers.Start(ctx.Done())

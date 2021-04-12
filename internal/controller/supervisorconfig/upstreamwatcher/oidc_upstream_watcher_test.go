@@ -655,8 +655,8 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			actualUpstreams, err := fakePinnipedClient.IDPV1alpha1().OIDCIdentityProviders(testNamespace).List(ctx, metav1.ListOptions{})
 			require.NoError(t, err)
 
-			// Preprocess the set of upstreams a bit so that they're easier to assert against.
-			require.ElementsMatch(t, tt.wantResultingUpstreams, normalizeUpstreams(actualUpstreams.Items, now))
+			// Assert on the expected Status of the upstreams. Preprocess the upstreams a bit so that they're easier to assert against.
+			require.ElementsMatch(t, tt.wantResultingUpstreams, normalizeOIDCUpstreams(actualUpstreams.Items, now))
 
 			// Running the sync() a second time should be idempotent except for logs, and should return the same error.
 			// This also helps exercise code paths where the OIDC provider discovery hits cache.
@@ -669,7 +669,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 	}
 }
 
-func normalizeUpstreams(upstreams []v1alpha1.OIDCIdentityProvider, now metav1.Time) []v1alpha1.OIDCIdentityProvider {
+func normalizeOIDCUpstreams(upstreams []v1alpha1.OIDCIdentityProvider, now metav1.Time) []v1alpha1.OIDCIdentityProvider {
 	result := make([]v1alpha1.OIDCIdentityProvider, 0, len(upstreams))
 	for _, u := range upstreams {
 		normalized := u.DeepCopy()

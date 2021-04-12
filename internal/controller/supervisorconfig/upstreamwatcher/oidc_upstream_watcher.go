@@ -338,23 +338,12 @@ func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *v1al
 	log := c.log.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 
+	hadErrorCondition := mergeConditions(conditions, upstream.Generation, &updated.Status.Conditions, log)
+
 	updated.Status.Phase = v1alpha1.PhaseReady
-
-	for i := range conditions {
-		cond := conditions[i].DeepCopy()
-		cond.LastTransitionTime = metav1.Now()
-		cond.ObservedGeneration = upstream.Generation
-		if c.mergeCondition(&updated.Status.Conditions, cond) {
-			log.Info("updated condition", "type", cond.Type, "status", cond.Status, "reason", cond.Reason, "message", cond.Message)
-		}
-		if cond.Status == v1alpha1.ConditionFalse {
-			updated.Status.Phase = v1alpha1.PhaseError
-		}
+	if hadErrorCondition {
+		updated.Status.Phase = v1alpha1.PhaseError
 	}
-
-	sort.SliceStable(updated.Status.Conditions, func(i, j int) bool {
-		return updated.Status.Conditions[i].Type < updated.Status.Conditions[j].Type
-	})
 
 	if equality.Semantic.DeepEqual(upstream, updated) {
 		return
@@ -369,9 +358,29 @@ func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *v1al
 	}
 }
 
+// mergeConditions merges conditions into conditionsToUpdate. If returns true if it merged any error conditions.
+func mergeConditions(conditions []*v1alpha1.Condition, observedGeneration int64, conditionsToUpdate *[]v1alpha1.Condition, log logr.Logger) bool {
+	hadErrorCondition := false
+	for i := range conditions {
+		cond := conditions[i].DeepCopy()
+		cond.LastTransitionTime = metav1.Now()
+		cond.ObservedGeneration = observedGeneration
+		if mergeCondition(conditionsToUpdate, cond) {
+			log.Info("updated condition", "type", cond.Type, "status", cond.Status, "reason", cond.Reason, "message", cond.Message)
+		}
+		if cond.Status == v1alpha1.ConditionFalse {
+			hadErrorCondition = true
+		}
+	}
+	sort.SliceStable(*conditionsToUpdate, func(i, j int) bool {
+		return (*conditionsToUpdate)[i].Type < (*conditionsToUpdate)[j].Type
+	})
+	return hadErrorCondition
+}
+
 // mergeCondition merges a new v1alpha1.Condition into a slice of existing conditions. It returns true
 // if the condition has meaningfully changed.
-func (*oidcWatcherController) mergeCondition(existing *[]v1alpha1.Condition, new *v1alpha1.Condition) bool {
+func mergeCondition(existing *[]v1alpha1.Condition, new *v1alpha1.Condition) bool {
 	// Find any existing condition with a matching type.
 	var old *v1alpha1.Condition
 	for i := range *existing {

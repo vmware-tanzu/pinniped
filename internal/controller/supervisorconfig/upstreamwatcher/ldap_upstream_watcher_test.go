@@ -5,7 +5,9 @@ package upstreamwatcher
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -138,11 +140,12 @@ func (d *comparableDialer) Dial(ctx context.Context, hostAndPort string) (upstre
 
 func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 	t.Parallel()
+	now := metav1.NewTime(time.Now().UTC())
 
 	const (
 		testNamespace        = "test-namespace"
 		testName             = "test-name"
-		testSecretName       = "test-client-secret"
+		testSecretName       = "test-bind-secret"
 		testBindUsername     = "test-bind-username"
 		testBindPassword     = "test-bind-password"
 		testHost             = "ldap.example.com:123"
@@ -163,6 +166,38 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 	}
 
+	validUpstream := &v1alpha1.LDAPIdentityProvider{
+		ObjectMeta: metav1.ObjectMeta{Name: testName, Namespace: testNamespace, Generation: 1234},
+		Spec: v1alpha1.LDAPIdentityProviderSpec{
+			Host: testHost,
+			TLS:  &v1alpha1.LDAPIdentityProviderTLSSpec{CertificateAuthorityData: testCABundle},
+			Bind: v1alpha1.LDAPIdentityProviderBindSpec{SecretName: testSecretName},
+			UserSearch: v1alpha1.LDAPIdentityProviderUserSearchSpec{
+				Base:   testUserSearchBase,
+				Filter: testUserSearchFilter,
+				Attributes: v1alpha1.LDAPIdentityProviderUserSearchAttributesSpec{
+					Username: testUsernameAttrName,
+					UniqueID: testUIDAttrName,
+				},
+			},
+		},
+	}
+
+	providerForValidUpstream := &upstreamldap.Provider{
+		Name:         testName,
+		Host:         testHost,
+		CABundle:     []byte(testCABundle),
+		BindUsername: testBindUsername,
+		BindPassword: testBindPassword,
+		UserSearch: &upstreamldap.UserSearch{
+			Base:              testUserSearchBase,
+			Filter:            testUserSearchFilter,
+			UsernameAttribute: testUsernameAttrName,
+			UIDAttribute:      testUIDAttrName,
+		},
+		Dialer: successfulDialer, // the dialer passed to the controller's constructor should have been passed through
+	}
+
 	tests := []struct {
 		name                   string
 		inputUpstreams         []runtime.Object
@@ -176,50 +211,108 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			name: "no LDAPIdentityProvider upstreams clears the cache",
 		},
 		{
-			name:       "one valid upstream updates the cache to include only that upstream",
-			ldapDialer: successfulDialer,
-			inputUpstreams: []runtime.Object{&v1alpha1.LDAPIdentityProvider{
-				ObjectMeta: metav1.ObjectMeta{Name: testName, Namespace: testNamespace, Generation: 1234},
-				Spec: v1alpha1.LDAPIdentityProviderSpec{
-					Host: testHost,
-					TLS:  &v1alpha1.LDAPIdentityProviderTLSSpec{CertificateAuthorityData: testCABundle},
-					Bind: v1alpha1.LDAPIdentityProviderBindSpec{SecretName: testSecretName},
-					UserSearch: v1alpha1.LDAPIdentityProviderUserSearchSpec{
-						Base:   testUserSearchBase,
-						Filter: testUserSearchFilter,
-						Attributes: v1alpha1.LDAPIdentityProviderUserSearchAttributesSpec{
-							Username: testUsernameAttrName,
-							UniqueID: testUIDAttrName,
-						},
-					},
-				},
-			}},
+			name:           "one valid upstream updates the cache to include only that upstream",
+			ldapDialer:     successfulDialer,
+			inputUpstreams: []runtime.Object{validUpstream},
 			inputSecrets: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: testSecretName, Namespace: testNamespace},
 				Type:       corev1.SecretTypeBasicAuth,
 				Data:       testValidSecretData,
 			}},
-			wantResultingCache: []*upstreamldap.Provider{
-				{
-					Name:         testName,
-					Host:         testHost,
-					CABundle:     []byte(testCABundle),
-					BindUsername: testBindUsername,
-					BindPassword: testBindPassword,
-					UserSearch: &upstreamldap.UserSearch{
-						Base:              testUserSearchBase,
-						Filter:            testUserSearchFilter,
-						UsernameAttribute: testUsernameAttrName,
-						UIDAttribute:      testUIDAttrName,
-					},
-					Dialer: successfulDialer, // the dialer passed to the controller's constructor should have been passed through
-				},
-			},
+			wantResultingCache: []*upstreamldap.Provider{providerForValidUpstream},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
 				Status: v1alpha1.LDAPIdentityProviderStatus{
 					Phase: "Ready",
-					// TODO Conditions
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:               "BindSecretValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded bind secret",
+							ObservedGeneration: 1234,
+						},
+					},
+				},
+			}},
+		},
+		{
+			name:               "missing secret",
+			ldapDialer:         successfulDialer,
+			inputUpstreams:     []runtime.Object{validUpstream},
+			inputSecrets:       []runtime.Object{},
+			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
+			wantResultingCache: []*upstreamldap.Provider{},
+			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.LDAPIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:               "BindSecretValid",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "SecretNotFound",
+							Message:            fmt.Sprintf(`secret "%s" not found`, testSecretName),
+							ObservedGeneration: 1234,
+						},
+					},
+				},
+			}},
+		},
+		{
+			name:           "secret has wrong type",
+			ldapDialer:     successfulDialer,
+			inputUpstreams: []runtime.Object{validUpstream},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: testSecretName, Namespace: testNamespace},
+				Type:       "some-other-type",
+				Data:       testValidSecretData,
+			}},
+			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
+			wantResultingCache: []*upstreamldap.Provider{},
+			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.LDAPIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:               "BindSecretValid",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "SecretWrongType",
+							Message:            fmt.Sprintf(`referenced Secret "%s" has wrong type "some-other-type" (should be "kubernetes.io/basic-auth")`, testSecretName),
+							ObservedGeneration: 1234,
+						},
+					},
+				},
+			}},
+		},
+		{
+			name:           "secret is missing key",
+			ldapDialer:     successfulDialer,
+			inputUpstreams: []runtime.Object{validUpstream},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: testSecretName, Namespace: testNamespace},
+				Type:       corev1.SecretTypeBasicAuth,
+			}},
+			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
+			wantResultingCache: []*upstreamldap.Provider{},
+			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.LDAPIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:               "BindSecretValid",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "SecretMissingKeys",
+							Message:            fmt.Sprintf(`referenced Secret "%s" is missing required keys ["username" "password"]`, testSecretName),
+							ObservedGeneration: 1234,
+						},
+					},
 				},
 			}},
 		},
@@ -271,9 +364,13 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			actualUpstreams, err := fakePinnipedClient.IDPV1alpha1().LDAPIdentityProviders(testNamespace).List(ctx, metav1.ListOptions{})
 			require.NoError(t, err)
 
-			// TODO maybe use something like the normalizeUpstreams() helper to make assertions about what was updated
-			_ = actualUpstreams
-			// require.ElementsMatch(t, tt.wantResultingUpstreams, actualUpstreams.Items)
+			// Assert on the expected Status of the upstreams. Preprocess the upstreams a bit so that they're easier to assert against.
+			normalizedActualUpstreams := normalizeLDAPUpstreams(actualUpstreams.Items, now)
+			require.Equal(t, len(tt.wantResultingUpstreams), len(normalizedActualUpstreams))
+			for i := range tt.wantResultingUpstreams {
+				// Require each separately to get a nice diff when the test fails.
+				require.Equal(t, tt.wantResultingUpstreams[i], normalizedActualUpstreams[i])
+			}
 
 			// Running the sync() a second time should be idempotent, and should return the same error.
 			if err := controllerlib.TestSync(t, controller, syncCtx); tt.wantErr != "" {
@@ -283,4 +380,25 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			}
 		})
 	}
+}
+
+func normalizeLDAPUpstreams(upstreams []v1alpha1.LDAPIdentityProvider, now metav1.Time) []v1alpha1.LDAPIdentityProvider {
+	result := make([]v1alpha1.LDAPIdentityProvider, 0, len(upstreams))
+	for _, u := range upstreams {
+		normalized := u.DeepCopy()
+
+		// We're only interested in comparing the status, so zero out the spec.
+		normalized.Spec = v1alpha1.LDAPIdentityProviderSpec{}
+
+		// Round down the LastTransitionTime values to `now` if they were just updated. This makes
+		// it much easier to encode assertions about the expected timestamps.
+		for i := range normalized.Status.Conditions {
+			if time.Since(normalized.Status.Conditions[i].LastTransitionTime.Time) < 5*time.Second {
+				normalized.Status.Conditions[i].LastTransitionTime = now
+			}
+		}
+		result = append(result, *normalized)
+	}
+
+	return result
 }

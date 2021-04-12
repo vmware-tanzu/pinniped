@@ -669,10 +669,11 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped supervisor identity pro
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-condition"]
 ==== Condition 
 
-Condition status of a resource (mirrored from the metav1.Condition type added in Kubernetes 1.19). In a future API version we can switch to using the upstream type. See https://github.com/kubernetes/apimachinery/blob/v0.19.0/pkg/apis/meta/v1/types.go#L1353-L1413.
+
 
 .Appears In:
 ****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-ldapidentityproviderstatus[$$LDAPIdentityProviderStatus$$]
 - xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-oidcidentityproviderstatus[$$OIDCIdentityProviderStatus$$]
 ****
 
@@ -686,6 +687,18 @@ Condition status of a resource (mirrored from the metav1.Condition type added in
 | *`reason`* __string__ | reason contains a programmatic identifier indicating the reason for the condition's last transition. Producers of specific condition types may define expected values and meanings for this field, and whether the values are considered a guaranteed API. The value should be a CamelCase string. This field may not be empty.
 | *`message`* __string__ | message is a human readable message indicating details about the transition. This may be an empty string.
 |===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-conditionstatus"]
+==== ConditionStatus (string) 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-condition[$$Condition$$]
+****
+
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-ldapidentityprovider"]
@@ -761,6 +774,7 @@ Status of an LDAP identity provider.
 |===
 | Field | Description
 | *`phase`* __LDAPIdentityProviderPhase__ | Phase summarizes the overall status of the LDAPIdentityProvider.
+| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-condition[$$Condition$$] array__ | Represents the observations of an identity provider's current state.
 |===
 
 
@@ -927,7 +941,7 @@ Status of an OIDC identity provider.
 |===
 | Field | Description
 | *`phase`* __OIDCIdentityProviderPhase__ | Phase summarizes the overall status of the OIDCIdentityProvider.
-| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-condition[$$Condition$$]__ | Represents the observations of an identity provider's current state.
+| *`conditions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-supervisor-idp-v1alpha1-condition[$$Condition$$] array__ | Represents the observations of an identity provider's current state.
 |===
 
 

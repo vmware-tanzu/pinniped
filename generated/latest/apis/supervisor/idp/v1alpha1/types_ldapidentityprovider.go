@@ -26,6 +26,13 @@ type LDAPIdentityProviderStatus struct {
 	// +kubebuilder:default=Pending
 	// +kubebuilder:validation:Enum=Pending;Ready;Error
 	Phase LDAPIdentityProviderPhase `json:"phase,omitempty"`
+
+	// Represents the observations of an identity provider's current state.
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+	Conditions []Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 type LDAPIdentityProviderTLSSpec struct {

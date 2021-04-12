@@ -4,11 +4,15 @@
 package upstreamwatcher
 
 import (
+	"context"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
+	"k8s.io/klog/v2/klogr"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
@@ -22,6 +26,9 @@ import (
 const (
 	ldapControllerName        = "ldap-upstream-observer"
 	ldapBindAccountSecretType = corev1.SecretTypeBasicAuth
+
+	// Constants related to conditions.
+	typeBindSecretValid = "BindSecretValid"
 )
 
 // UpstreamLDAPIdentityProviderICache is a thread safe cache that holds a list of validated upstream LDAP IDP configurations.
@@ -78,7 +85,7 @@ func (c *ldapWatcherController) Sync(ctx controllerlib.Context) error {
 	requeue := false
 	validatedUpstreams := make([]provider.UpstreamLDAPIdentityProviderI, 0, len(actualUpstreams))
 	for _, upstream := range actualUpstreams {
-		valid := c.validateUpstream(upstream)
+		valid := c.validateUpstream(ctx.Context, upstream)
 		if valid == nil {
 			requeue = true
 		} else {
@@ -92,7 +99,7 @@ func (c *ldapWatcherController) Sync(ctx controllerlib.Context) error {
 	return nil
 }
 
-func (c *ldapWatcherController) validateUpstream(upstream *v1alpha1.LDAPIdentityProvider) provider.UpstreamLDAPIdentityProviderI {
+func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider) provider.UpstreamLDAPIdentityProviderI {
 	spec := upstream.Spec
 	result := &upstreamldap.Provider{
 		Name:     upstream.Name,
@@ -106,7 +113,13 @@ func (c *ldapWatcherController) validateUpstream(upstream *v1alpha1.LDAPIdentity
 		},
 		Dialer: c.ldapDialer,
 	}
-	_ = c.validateSecret(upstream, result)
+	conditions := []*v1alpha1.Condition{
+		c.validateSecret(upstream, result),
+	}
+	hadErrorCondition := c.updateStatus(ctx, upstream, conditions)
+	if hadErrorCondition {
+		return nil
+	}
 	return result
 }
 
@@ -115,22 +128,64 @@ func (c ldapWatcherController) validateSecret(upstream *v1alpha1.LDAPIdentityPro
 
 	secret, err := c.secretInformer.Lister().Secrets(upstream.Namespace).Get(secretName)
 	if err != nil {
-		// TODO
-		return nil
+		return &v1alpha1.Condition{
+			Type:    typeBindSecretValid,
+			Status:  v1alpha1.ConditionFalse,
+			Reason:  reasonNotFound,
+			Message: err.Error(),
+		}
 	}
 
 	if secret.Type != corev1.SecretTypeBasicAuth {
-		// TODO
-		return nil
+		return &v1alpha1.Condition{
+			Type:    typeBindSecretValid,
+			Status:  v1alpha1.ConditionFalse,
+			Reason:  reasonWrongType,
+			Message: fmt.Sprintf("referenced Secret %q has wrong type %q (should be %q)", secretName, secret.Type, corev1.SecretTypeBasicAuth),
+		}
 	}
 
 	result.BindUsername = string(secret.Data[corev1.BasicAuthUsernameKey])
 	result.BindPassword = string(secret.Data[corev1.BasicAuthPasswordKey])
 	if len(result.BindUsername) == 0 || len(result.BindPassword) == 0 {
-		// TODO
-		return nil
+		return &v1alpha1.Condition{
+			Type:    typeBindSecretValid,
+			Status:  v1alpha1.ConditionFalse,
+			Reason:  reasonMissingKeys,
+			Message: fmt.Sprintf("referenced Secret %q is missing required keys %q", secretName, []string{corev1.BasicAuthUsernameKey, corev1.BasicAuthPasswordKey}),
+		}
 	}
 
-	var cond *v1alpha1.Condition // satisfy linter
-	return cond
+	return &v1alpha1.Condition{
+		Type:    typeBindSecretValid,
+		Status:  v1alpha1.ConditionTrue,
+		Reason:  reasonSuccess,
+		Message: "loaded bind secret",
+	}
+}
+
+func (c *ldapWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider, conditions []*v1alpha1.Condition) bool {
+	log := klogr.New().WithValues("namespace", upstream.Namespace, "name", upstream.Name)
+	updated := upstream.DeepCopy()
+
+	hadErrorCondition := mergeConditions(conditions, upstream.Generation, &updated.Status.Conditions, log)
+
+	updated.Status.Phase = v1alpha1.LDAPPhaseReady
+	if hadErrorCondition {
+		updated.Status.Phase = v1alpha1.LDAPPhaseError
+	}
+
+	if equality.Semantic.DeepEqual(upstream, updated) {
+		return hadErrorCondition
+	}
+
+	_, err := c.client.
+		IDPV1alpha1().
+		LDAPIdentityProviders(upstream.Namespace).
+		UpdateStatus(ctx, updated, metav1.UpdateOptions{})
+	if err != nil {
+		log.Error(err, "failed to update status")
+	}
+
+	return hadErrorCondition
 }

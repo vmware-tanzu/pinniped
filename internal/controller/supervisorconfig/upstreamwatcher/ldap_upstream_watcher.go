@@ -31,7 +31,7 @@ type UpstreamLDAPIdentityProviderICache interface {
 
 type ldapWatcherController struct {
 	cache                        UpstreamLDAPIdentityProviderICache
-	ldapDialFunc                 upstreamldap.LDAPDialerFunc
+	ldapDialer                   upstreamldap.LDAPDialer
 	client                       pinnipedclientset.Interface
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer
 	secretInformer               corev1informers.SecretInformer
@@ -40,7 +40,7 @@ type ldapWatcherController struct {
 // NewLDAPUpstreamWatcherController instantiates a new controllerlib.Controller which will populate the provided UpstreamLDAPIdentityProviderICache.
 func NewLDAPUpstreamWatcherController(
 	idpCache UpstreamLDAPIdentityProviderICache,
-	ldapDialFunc upstreamldap.LDAPDialerFunc,
+	ldapDialer upstreamldap.LDAPDialer,
 	client pinnipedclientset.Interface,
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer,
 	secretInformer corev1informers.SecretInformer,
@@ -48,7 +48,7 @@ func NewLDAPUpstreamWatcherController(
 ) controllerlib.Controller {
 	c := ldapWatcherController{
 		cache:                        idpCache,
-		ldapDialFunc:                 ldapDialFunc,
+		ldapDialer:                   ldapDialer,
 		client:                       client,
 		ldapIdentityProviderInformer: ldapIdentityProviderInformer,
 		secretInformer:               secretInformer,
@@ -93,5 +93,44 @@ func (c *ldapWatcherController) Sync(ctx controllerlib.Context) error {
 }
 
 func (c *ldapWatcherController) validateUpstream(upstream *v1alpha1.LDAPIdentityProvider) provider.UpstreamLDAPIdentityProviderI {
-	return &upstreamldap.Provider{Name: upstream.Name, Dial: c.ldapDialFunc}
+	spec := upstream.Spec
+	result := &upstreamldap.Provider{
+		Name:     upstream.Name,
+		Host:     spec.Host,
+		CABundle: []byte(spec.TLS.CertificateAuthorityData),
+		UserSearch: &upstreamldap.UserSearch{
+			Base:              spec.UserSearch.Base,
+			Filter:            spec.UserSearch.Filter,
+			UsernameAttribute: spec.UserSearch.Attributes.Username,
+			UIDAttribute:      spec.UserSearch.Attributes.UniqueID,
+		},
+		Dialer: c.ldapDialer,
+	}
+	_ = c.validateSecret(upstream, result)
+	return result
+}
+
+func (c ldapWatcherController) validateSecret(upstream *v1alpha1.LDAPIdentityProvider, result *upstreamldap.Provider) *v1alpha1.Condition {
+	secretName := upstream.Spec.Bind.SecretName
+
+	secret, err := c.secretInformer.Lister().Secrets(upstream.Namespace).Get(secretName)
+	if err != nil {
+		// TODO
+		return nil
+	}
+
+	if secret.Type != corev1.SecretTypeBasicAuth {
+		// TODO
+		return nil
+	}
+
+	result.BindUsername = string(secret.Data[corev1.BasicAuthUsernameKey])
+	result.BindPassword = string(secret.Data[corev1.BasicAuthPasswordKey])
+	if len(result.BindUsername) == 0 || len(result.BindPassword) == 0 {
+		// TODO
+		return nil
+	}
+
+	var cond *v1alpha1.Condition // satisfy linter
+	return cond
 }

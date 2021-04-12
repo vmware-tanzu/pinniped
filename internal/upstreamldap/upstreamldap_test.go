@@ -94,11 +94,11 @@ func TestAuthenticateUser(t *testing.T) {
 			conn.EXPECT().Close().Times(1)
 
 			dialWasAttempted := false
-			test.provider.Dial = func(ctx context.Context, hostAndPort string) (Conn, error) {
+			test.provider.Dialer = LDAPDialerFunc(func(ctx context.Context, hostAndPort string) (Conn, error) {
 				dialWasAttempted = true
 				require.Equal(t, test.provider.Host, hostAndPort)
 				return conn, nil
-			}
+			})
 
 			authResponse, authenticated, err := test.provider.AuthenticateUser(context.Background(), upstreamUsername, upstreamPassword)
 			require.True(t, dialWasAttempted, "AuthenticateUser was supposed to try to dial, but didn't")
@@ -181,7 +181,7 @@ func TestRealTLSDialing(t *testing.T) {
 			provider := &Provider{
 				Host:     test.host,
 				CABundle: test.caBundle,
-				Dial:     nil, // this test is for the default (production) dialer
+				Dialer:   nil, // this test is for the default (production) dialer
 			}
 			conn, err := provider.dial(test.context)
 			if conn != nil {
@@ -198,7 +198,7 @@ func TestRealTLSDialing(t *testing.T) {
 				// Can't test its methods here because we are not dialed to a real LDAP server.
 				require.IsType(t, &ldap.Conn{}, conn)
 
-				// Indirectly checking that the Dial method constructed the ldap.Conn with isTLS set to true,
+				// Indirectly checking that the Dialer method constructed the ldap.Conn with isTLS set to true,
 				// since this is always the correct behavior unless/until we want to support StartTLS.
 				err := conn.(*ldap.Conn).StartTLS(&tls.Config{})
 				require.EqualError(t, err, `LDAP Result Code 200 "Network Error": ldap: already encrypted`)

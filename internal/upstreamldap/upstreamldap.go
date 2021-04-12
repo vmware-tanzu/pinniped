@@ -12,7 +12,7 @@ import (
 	"net"
 	"strings"
 
-	ldap "github.com/go-ldap/ldap/v3"
+	"github.com/go-ldap/ldap/v3"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 )
 
@@ -32,8 +32,17 @@ type Conn interface {
 // Our Conn type is subset of the ldap.Client interface, which is implemented by ldap.Conn.
 var _ Conn = &ldap.Conn{}
 
-// LDAPDialerFunc is a factory of Conn, and the resulting Conn can then be used to interact with an upstream LDAP IDP.
+// LDAPDialer is a factory of Conn, and the resulting Conn can then be used to interact with an upstream LDAP IDP.
+type LDAPDialer interface {
+	Dial(ctx context.Context, hostAndPort string) (Conn, error)
+}
+
+// LDAPDialerFunc makes it easy to use a func as an LDAPDialer.
 type LDAPDialerFunc func(ctx context.Context, hostAndPort string) (Conn, error)
+
+func (f LDAPDialerFunc) Dial(ctx context.Context, hostAndPort string) (Conn, error) {
+	return f(ctx, hostAndPort)
+}
 
 // Provider includes all of the settings for connection and searching for users and groups in
 // the upstream LDAP IDP. It also provides methods for testing the connection and performing logins.
@@ -57,8 +66,8 @@ type Provider struct {
 	// UserSearch contains information about how to search for users in the upstream LDAP IDP.
 	UserSearch *UserSearch
 
-	// Dial exists to enable testing. When nil, will use a default appropriate for production use.
-	Dial LDAPDialerFunc
+	// Dialer exists to enable testing. When nil, will use a default appropriate for production use.
+	Dialer LDAPDialer
 }
 
 // UserSearch contains information about how to search for users in the upstream LDAP IDP.
@@ -83,13 +92,13 @@ func (p *Provider) dial(ctx context.Context) (Conn, error) {
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
-	if p.Dial != nil {
-		return p.Dial(ctx, hostAndPort)
+	if p.Dialer != nil {
+		return p.Dialer.Dial(ctx, hostAndPort)
 	}
 	return p.dialTLS(ctx, hostAndPort)
 }
 
-// dialTLS is the default implementation of the Dial func, used when Dial is nil.
+// dialTLS is the default implementation of the Dialer, used when Dialer is nil.
 // Unfortunately, the go-ldap library does not seem to support dialing with a context.Context,
 // so we implement it ourselves, heavily inspired by ldap.DialURL.
 func (p *Provider) dialTLS(ctx context.Context, hostAndPort string) (Conn, error) {

@@ -127,42 +127,69 @@ func TestLDAPUpstreamWatcherControllerFilterLDAPIdentityProviders(t *testing.T) 
 	}
 }
 
+// Wrap the func into a struct so the test can do deep equal assertions on instances of upstreamldap.Provider.
+type comparableDialer struct {
+	f upstreamldap.LDAPDialerFunc
+}
+
+func (d *comparableDialer) Dial(ctx context.Context, hostAndPort string) (upstreamldap.Conn, error) {
+	return d.f(ctx, hostAndPort)
+}
+
 func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 	t.Parallel()
 
+	const (
+		testNamespace        = "test-namespace"
+		testName             = "test-name"
+		testSecretName       = "test-client-secret"
+		testBindUsername     = "test-bind-username"
+		testBindPassword     = "test-bind-password"
+		testHost             = "ldap.example.com:123"
+		testCABundle         = "test-ca-bundle"
+		testUserSearchBase   = "test-user-search-base"
+		testUserSearchFilter = "test-user-search-filter"
+		testUsernameAttrName = "test-username-attr"
+		testUIDAttrName      = "test-uid-attr"
+	)
 	var (
-		testNamespace       = "test-namespace"
-		testName            = "test-name"
-		testSecretName      = "test-client-secret"
-		testBindUsername    = "test-bind-username"
-		testBindPassword    = "test-bind-password"
 		testValidSecretData = map[string][]byte{"username": []byte(testBindUsername), "password": []byte(testBindPassword)}
 	)
+
+	successfulDialer := &comparableDialer{
+		f: func(ctx context.Context, hostAndPort string) (upstreamldap.Conn, error) {
+			// TODO return a fake implementation of upstreamldap.Conn, or return an error for testing errors
+			return nil, nil
+		},
+	}
+
 	tests := []struct {
 		name                   string
 		inputUpstreams         []runtime.Object
 		inputSecrets           []runtime.Object
+		ldapDialer             upstreamldap.LDAPDialer
 		wantErr                string
-		wantResultingCache     []provider.UpstreamLDAPIdentityProviderI
+		wantResultingCache     []*upstreamldap.Provider
 		wantResultingUpstreams []v1alpha1.LDAPIdentityProvider
 	}{
 		{
 			name: "no LDAPIdentityProvider upstreams clears the cache",
 		},
 		{
-			name: "one valid upstream updates the cache to include only that upstream",
+			name:       "one valid upstream updates the cache to include only that upstream",
+			ldapDialer: successfulDialer,
 			inputUpstreams: []runtime.Object{&v1alpha1.LDAPIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Name: testName, Namespace: testNamespace, Generation: 1234},
 				Spec: v1alpha1.LDAPIdentityProviderSpec{
-					Host: "TODO",                                                                  // TODO
-					TLS:  &v1alpha1.LDAPIdentityProviderTLSSpec{CertificateAuthorityData: "TODO"}, // TODO
+					Host: testHost,
+					TLS:  &v1alpha1.LDAPIdentityProviderTLSSpec{CertificateAuthorityData: testCABundle},
 					Bind: v1alpha1.LDAPIdentityProviderBindSpec{SecretName: testSecretName},
 					UserSearch: v1alpha1.LDAPIdentityProviderUserSearchSpec{
-						Base:   "TODO", // TODO
-						Filter: "TODO", // TODO
+						Base:   testUserSearchBase,
+						Filter: testUserSearchFilter,
 						Attributes: v1alpha1.LDAPIdentityProviderUserSearchAttributesSpec{
-							Username: "TODO", // TODO
-							UniqueID: "TODO", // TODO
+							Username: testUsernameAttrName,
+							UniqueID: testUIDAttrName,
 						},
 					},
 				},
@@ -172,10 +199,20 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				Type:       corev1.SecretTypeBasicAuth,
 				Data:       testValidSecretData,
 			}},
-			wantResultingCache: []provider.UpstreamLDAPIdentityProviderI{
-				&upstreamldap.Provider{
-					Name: testName,
-					// TODO test more stuff
+			wantResultingCache: []*upstreamldap.Provider{
+				{
+					Name:         testName,
+					Host:         testHost,
+					CABundle:     []byte(testCABundle),
+					BindUsername: testBindUsername,
+					BindPassword: testBindPassword,
+					UserSearch: &upstreamldap.UserSearch{
+						Base:              testUserSearchBase,
+						Filter:            testUserSearchFilter,
+						UsernameAttribute: testUsernameAttrName,
+						UIDAttribute:      testUIDAttrName,
+					},
+					Dialer: successfulDialer, // the dialer passed to the controller's constructor should have been passed through
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
@@ -202,10 +239,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 
 			controller := NewLDAPUpstreamWatcherController(
 				cache,
-				func(ctx context.Context, hostAndPort string) (upstreamldap.Conn, error) {
-					// TODO return a fake implementation of upstreamldap.Conn, or return an error for testing errors
-					return nil, nil
-				},
+				successfulDialer,
 				fakePinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders(),
 				kubeInformers.Core().V1().Secrets(),
@@ -231,8 +265,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			require.Equal(t, len(tt.wantResultingCache), len(actualIDPList))
 			for i := range actualIDPList {
 				actualIDP := actualIDPList[i].(*upstreamldap.Provider)
-				require.Equal(t, tt.wantResultingCache[i].GetName(), actualIDP.GetName())
-				// TODO more assertions
+				require.Equal(t, tt.wantResultingCache[i], actualIDP)
 			}
 
 			actualUpstreams, err := fakePinnipedClient.IDPV1alpha1().LDAPIdentityProviders(testNamespace).List(ctx, metav1.ListOptions{})

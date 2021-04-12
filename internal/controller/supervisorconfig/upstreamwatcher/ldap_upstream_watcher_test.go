@@ -6,6 +6,7 @@ package upstreamwatcher
 import (
 	"context"
 	"fmt"
+	"sort"
 	"testing"
 	"time"
 
@@ -182,6 +183,11 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			},
 		},
 	}
+	modifiedCopyOfValidUpstream := func(editFunc func(*v1alpha1.LDAPIdentityProvider)) *v1alpha1.LDAPIdentityProvider {
+		deepCopy := validUpstream.DeepCopy()
+		editFunc(deepCopy)
+		return deepCopy
+	}
 
 	providerForValidUpstream := &upstreamldap.Provider{
 		Name:         testName,
@@ -316,6 +322,56 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				},
 			}},
 		},
+		{
+			name:       "one valid upstream and one invalid upstream updates the cache to include only the valid upstream",
+			ldapDialer: successfulDialer,
+			inputUpstreams: []runtime.Object{validUpstream, modifiedCopyOfValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+				upstream.Name = "other-upstream"
+				upstream.Generation = 42
+				upstream.Spec.Bind.SecretName = "non-existent-secret"
+			})},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: testSecretName, Namespace: testNamespace},
+				Type:       corev1.SecretTypeBasicAuth,
+				Data:       testValidSecretData,
+			}},
+			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
+			wantResultingCache: []*upstreamldap.Provider{providerForValidUpstream},
+			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "other-upstream", Generation: 42},
+					Status: v1alpha1.LDAPIdentityProviderStatus{
+						Phase: "Error",
+						Conditions: []v1alpha1.Condition{
+							{
+								Type:               "BindSecretValid",
+								Status:             "False",
+								LastTransitionTime: now,
+								Reason:             "SecretNotFound",
+								Message:            fmt.Sprintf(`secret "%s" not found`, "non-existent-secret"),
+								ObservedGeneration: 42,
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+					Status: v1alpha1.LDAPIdentityProviderStatus{
+						Phase: "Ready",
+						Conditions: []v1alpha1.Condition{
+							{
+								Type:               "BindSecretValid",
+								Status:             "True",
+								LastTransitionTime: now,
+								Reason:             "Success",
+								Message:            "loaded bind secret",
+								ObservedGeneration: 1234,
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -399,6 +455,10 @@ func normalizeLDAPUpstreams(upstreams []v1alpha1.LDAPIdentityProvider, now metav
 		}
 		result = append(result, *normalized)
 	}
+
+	sort.SliceStable(result, func(i, j int) bool {
+		return result[i].Name < result[j].Name
+	})
 
 	return result
 }

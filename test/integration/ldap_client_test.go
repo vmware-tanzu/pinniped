@@ -24,6 +24,8 @@ import (
 	"go.pinniped.dev/internal/upstreamldap"
 )
 
+// Unlike most other integration tests, you can run this test with no special setup, as long as you have Docker.
+// It does not depend on Kubernetes.
 func TestLDAPSearch(t *testing.T) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	t.Cleanup(func() {
@@ -57,12 +59,13 @@ func TestLDAPSearch(t *testing.T) {
 	wallyPassword := "password456" // from the LDIF file below
 
 	tests := []struct {
-		name             string
-		username         string
-		password         string
-		provider         *upstreamldap.Provider
-		wantError        string
-		wantAuthResponse *authenticator.Response
+		name                string
+		username            string
+		password            string
+		provider            *upstreamldap.Provider
+		wantError           string
+		wantAuthResponse    *authenticator.Response
+		wantUnauthenticated bool
 	}{
 		{
 			name:     "happy path",
@@ -193,18 +196,18 @@ func TestLDAPSearch(t *testing.T) {
 			wantError: `error binding as "cn=admin,dc=pinniped,dc=dev" before user search: LDAP Result Code 49 "Invalid Credentials": `,
 		},
 		{
-			name:      "when the end user password is wrong",
-			username:  "pinny",
-			password:  "wrong-pinny-password",
-			provider:  provider(nil),
-			wantError: `error binding for user "pinny" using provided password against DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 49 "Invalid Credentials": `,
+			name:                "when the end user password is wrong",
+			username:            "pinny",
+			password:            "wrong-pinny-password",
+			provider:            provider(nil),
+			wantUnauthenticated: true,
 		},
 		{
-			name:      "when the end user username is wrong",
-			username:  "wrong-username",
-			password:  pinnyPassword,
-			provider:  provider(nil),
-			wantError: `searching for user "wrong-username" resulted in 0 search results, but expected 1 result`,
+			name:                "when the end user username is wrong",
+			username:            "wrong-username",
+			password:            pinnyPassword,
+			provider:            provider(nil),
+			wantUnauthenticated: true,
 		},
 		{
 			name:      "when the user search filter does not compile",
@@ -329,18 +332,18 @@ func TestLDAPSearch(t *testing.T) {
 			wantError: `error searching for user "pinny": LDAP Result Code 32 "No Such Object": `,
 		},
 		{
-			name:      "when the search base causes no search results",
-			username:  "pinny",
-			password:  pinnyPassword,
-			provider:  provider(func(p *upstreamldap.Provider) { p.UserSearch.Base = "ou=groups,dc=pinniped,dc=dev" }),
-			wantError: `searching for user "pinny" resulted in 0 search results, but expected 1 result`,
+			name:                "when the search base causes no search results",
+			username:            "pinny",
+			password:            pinnyPassword,
+			provider:            provider(func(p *upstreamldap.Provider) { p.UserSearch.Base = "ou=groups,dc=pinniped,dc=dev" }),
+			wantUnauthenticated: true,
 		},
 		{
-			name:      "when there is no username specified",
-			username:  "",
-			password:  pinnyPassword,
-			provider:  provider(nil),
-			wantError: `searching for user "" resulted in 0 search results, but expected 1 result`,
+			name:                "when there is no username specified",
+			username:            "",
+			password:            pinnyPassword,
+			provider:            provider(nil),
+			wantUnauthenticated: true,
 		},
 		{
 			name:      "when there is no password specified",
@@ -350,11 +353,11 @@ func TestLDAPSearch(t *testing.T) {
 			wantError: `error binding for user "pinny" using provided password against DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 206 "Empty password not allowed by the client": ldap: empty password not allowed by the client`,
 		},
 		{
-			name:      "when the user has no password in their entry",
-			username:  "olive",
-			password:  "anything",
-			provider:  provider(nil),
-			wantError: `error binding for user "olive" using provided password against DN "cn=olive,ou=users,dc=pinniped,dc=dev": LDAP Result Code 49 "Invalid Credentials": `,
+			name:                "when the user has no password in their entry",
+			username:            "olive",
+			password:            "anything",
+			provider:            provider(nil),
+			wantUnauthenticated: true,
 		},
 	}
 
@@ -363,11 +366,16 @@ func TestLDAPSearch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			authResponse, authenticated, err := tt.provider.AuthenticateUser(ctx, tt.username, tt.password)
 
-			if tt.wantError != "" {
+			switch {
+			case tt.wantError != "":
 				require.EqualError(t, err, tt.wantError)
 				require.False(t, authenticated)
 				require.Nil(t, authResponse)
-			} else {
+			case tt.wantUnauthenticated:
+				require.NoError(t, err)
+				require.False(t, authenticated)
+				require.Nil(t, authResponse)
+			default:
 				require.NoError(t, err)
 				require.True(t, authenticated)
 				require.Equal(t, tt.wantAuthResponse, authResponse)
@@ -486,7 +494,7 @@ func writeToNewTempFile(t *testing.T, dir string, filename string, contents []by
 
 	filePath := path.Join(dir, filename)
 
-	err := ioutil.WriteFile(filePath, contents, 0644)
+	err := ioutil.WriteFile(filePath, contents, 0600)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -497,7 +505,7 @@ func writeToNewTempFile(t *testing.T, dir string, filename string, contents []by
 
 var testLDIF = `
 # ** CAUTION: Blank lines separate entries in the LDIF format! Do not remove them! ***
-# Here's a good explaination of LDIF:
+# Here's a good explanation of LDIF:
 # https://www.digitalocean.com/community/tutorials/how-to-use-ldif-files-to-make-changes-to-an-openldap-system
 
 # pinniped.dev (organization, root)

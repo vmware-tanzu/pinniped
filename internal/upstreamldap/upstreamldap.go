@@ -15,12 +15,15 @@ import (
 	"github.com/go-ldap/ldap/v3"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
+
+	"go.pinniped.dev/internal/plog"
 )
 
 const (
 	ldapsScheme                                 = "ldaps"
 	distinguishedNameAttributeName              = "dn"
 	userSearchFilterInterpolationLocationMarker = "{}"
+	invalidCredentialsErrorPrefix               = `LDAP Result Code 49 "Invalid Credentials":`
 )
 
 // Conn abstracts the upstream LDAP communication protocol (mostly for testing).
@@ -185,6 +188,11 @@ func (p *Provider) AuthenticateUser(ctx context.Context, username, password stri
 		return nil, false, fmt.Errorf(`must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`)
 	}
 
+	if len(username) == 0 {
+		// Empty passwords are already handled by go-ldap.
+		return nil, false, nil
+	}
+
 	conn, err := p.dial(ctx)
 	if err != nil {
 		return nil, false, fmt.Errorf(`error dialing host "%s": %w`, p.Host, err)
@@ -199,6 +207,10 @@ func (p *Provider) AuthenticateUser(ctx context.Context, username, password stri
 	mappedUsername, mappedUID, err := p.searchAndBindUser(conn, username, password)
 	if err != nil {
 		return nil, false, err
+	}
+	if len(mappedUsername) == 0 || len(mappedUID) == 0 {
+		// Couldn't find the username or couldn't bind using the password.
+		return nil, false, nil
 	}
 
 	response := &authenticator.Response{
@@ -216,7 +228,12 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, password string
 	if err != nil {
 		return "", "", fmt.Errorf(`error searching for user "%s": %w`, username, err)
 	}
-	if len(searchResult.Entries) != 1 {
+	if len(searchResult.Entries) == 0 {
+		plog.Debug("error finding user: user not found (if this username is valid, please check the user search configuration)",
+			"upstreamName", p.GetName(), "username", username)
+		return "", "", nil
+	}
+	if len(searchResult.Entries) > 1 {
 		return "", "", fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
 			username, len(searchResult.Entries),
 		)
@@ -236,9 +253,14 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, password string
 		return "", "", err
 	}
 
-	// Take care that any other LDAP commands after this bind will be run as this user instead of as the configured BindUsername!
+	// Caution: Note that any other LDAP commands after this bind will be run as this user instead of as the configured BindUsername!
 	err = conn.Bind(userEntry.DN, password)
 	if err != nil {
+		plog.DebugErr("error binding for user (if this is not the expected dn for this username, please check the user search configuration)",
+			err, "upstreamName", p.GetName(), "username", username, "dn", userEntry.DN)
+		if strings.HasPrefix(err.Error(), invalidCredentialsErrorPrefix) {
+			return "", "", nil
+		}
 		return "", "", fmt.Errorf(`error binding for user "%s" using provided password against DN "%s": %w`, username, userEntry.DN, err)
 	}
 

@@ -14,7 +14,7 @@ stringData:
   #@yaml/text-templated-strings
   ldap.ldif: |
     # ** CAUTION: Blank lines separate entries in the LDIF format! Do not remove them! ***
-    # Here's a good explaination of LDIF:
+    # Here's a good explanation of LDIF:
     # https://www.digitalocean.com/community/tutorials/how-to-use-ldif-files-to-make-changes-to-an-openldap-system
 
     # pinniped.dev (organization, root)

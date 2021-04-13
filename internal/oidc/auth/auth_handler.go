@@ -95,10 +95,11 @@ func handleAuthRequestForLDAPUpstream(
 
 	authenticateResponse, authenticated, err := ldapUpstream.AuthenticateUser(r.Context(), username, password)
 	if err != nil {
-		plog.WarningErr("unexpected error during upstream authentication", err, "upstreamName", ldapUpstream.GetName())
+		plog.WarningErr("unexpected error during upstream LDAP authentication", err, "upstreamName", ldapUpstream.GetName())
 		return httperr.New(http.StatusBadGateway, "unexpected error during upstream authentication")
 	}
 	if !authenticated {
+		plog.Debug("failed upstream LDAP authentication", "upstreamName", ldapUpstream.GetName())
 		// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
 		err = errors.WithStack(fosite.ErrAccessDenied.WithHintf("Username/password not accepted by LDAP provider."))
 		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)

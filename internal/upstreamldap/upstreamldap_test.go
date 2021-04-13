@@ -80,15 +80,16 @@ func TestAuthenticateUser(t *testing.T) {
 	}
 
 	tests := []struct {
-		name             string
-		username         string
-		password         string
-		provider         *Provider
-		setupMocks       func(conn *mockldapconn.MockConn)
-		dialError        error
-		wantError        string
-		wantToSkipDial   bool
-		wantAuthResponse *authenticator.Response
+		name                string
+		username            string
+		password            string
+		provider            *Provider
+		setupMocks          func(conn *mockldapconn.MockConn)
+		dialError           error
+		wantError           string
+		wantToSkipDial      bool
+		wantAuthResponse    *authenticator.Response
+		wantUnauthenticated bool
 	}{
 		{
 			name:     "happy path",
@@ -282,6 +283,8 @@ func TestAuthenticateUser(t *testing.T) {
 		},
 		{
 			name:      "when dial fails",
+			username:  testUpstreamUsername,
+			password:  testUpstreamPassword,
 			provider:  provider(nil),
 			dialError: errors.New("some dial error"),
 			wantError: fmt.Sprintf(`error dialing host "%s": some dial error`, testHost),
@@ -299,6 +302,8 @@ func TestAuthenticateUser(t *testing.T) {
 		},
 		{
 			name:     "when binding as the bind user returns an error",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
 			provider: provider(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Return(errors.New("some bind error")).Times(1)
@@ -330,7 +335,7 @@ func TestAuthenticateUser(t *testing.T) {
 				}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(`searching for user "%s" resulted in 0 search results, but expected 1 result`, testUpstreamUsername),
+			wantUnauthenticated: true,
 		},
 		{
 			name:     "when searching for the user returns multiple results",
@@ -524,6 +529,37 @@ func TestAuthenticateUser(t *testing.T) {
 			},
 			wantError: fmt.Sprintf(`error binding for user "%s" using provided password against DN "%s": some bind error`, testUpstreamUsername, testSearchResultDNValue),
 		},
+		{
+			name:     "when binding as the found user returns a specific invalid credentials error",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testSearchResultUsernameAttributeValue}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testSearchResultUIDAttributeValue}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Return(errors.New(`LDAP Result Code 49 "Invalid Credentials": some bind error`)).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantUnauthenticated: true,
+		},
+		{
+			name:                "when no username is specified",
+			username:            "",
+			password:            testUpstreamPassword,
+			provider:            provider(nil),
+			wantToSkipDial:      true,
+			wantUnauthenticated: true,
+		},
 	}
 
 	for _, test := range tests {
@@ -551,11 +587,16 @@ func TestAuthenticateUser(t *testing.T) {
 
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 
-			if tt.wantError != "" {
+			switch {
+			case tt.wantError != "":
 				require.EqualError(t, err, tt.wantError)
 				require.False(t, authenticated)
 				require.Nil(t, authResponse)
-			} else {
+			case tt.wantUnauthenticated:
+				require.NoError(t, err)
+				require.False(t, authenticated)
+				require.Nil(t, authResponse)
+			default:
 				require.NoError(t, err)
 				require.True(t, authenticated)
 				require.Equal(t, tt.wantAuthResponse, authResponse)

@@ -14,10 +14,13 @@ import (
 
 	"github.com/go-ldap/ldap/v3"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
+	"k8s.io/apiserver/pkg/authentication/user"
 )
 
 const (
-	ldapsScheme = "ldaps"
+	ldapsScheme                                 = "ldaps"
+	distinguishedNameAttributeName              = "dn"
+	userSearchFilterInterpolationLocationMarker = "{}"
 )
 
 // Conn abstracts the upstream LDAP communication protocol (mostly for testing).
@@ -158,25 +161,152 @@ func (p *Provider) GetURL() string {
 	return fmt.Sprintf("%s://%s", ldapsScheme, p.Host)
 }
 
-// TestConnection provides a method for testing the connection and bind settings by dialing and binding.
-func (p *Provider) TestConnection(ctx context.Context) error {
+// TestConnection provides a method for testing the connection and bind settings. It performs a dial and bind
+// and returns any errors that we encountered.
+func (p *Provider) TestConnection(ctx context.Context) (*authenticator.Response, error) {
 	_, _ = p.dial(ctx)
-	// TODO bind using the bind credentials
-	// TODO close
-	// TODO return any dial or bind errors
-	return nil
+	// TODO implement me
+	return nil, nil
+}
+
+// TestAuthenticateUser provides a method for testing all of the Provider settings in a kind of dry run of
+// authentication. It runs the same logic as AuthenticateUser except it does not bind as that user, so it does not test
+// their password. It returns the same authenticator.Response values and the same errors that a real call to
+// AuthenticateUser with the correct password would return.
+func (p *Provider) TestAuthenticateUser(ctx context.Context, testUsername string) (*authenticator.Response, error) {
+	// TODO implement me
+	return nil, nil
 }
 
 // Authenticate a user and return their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
 func (p *Provider) AuthenticateUser(ctx context.Context, username, password string) (*authenticator.Response, bool, error) {
-	_, _ = p.dial(ctx)
-	// TODO bind
-	// TODO user search
-	// TODO user bind
-	// TODO map username and uid attributes
-	// TODO group search
-	// TODO map group attributes
-	// TODO close
-	// TODO return any errors that were encountered along the way
-	return nil, false, nil
+	conn, err := p.dial(ctx)
+	if err != nil {
+		return nil, false, fmt.Errorf(`error dialing host "%s": %w`, p.Host, err)
+	}
+	defer conn.Close()
+
+	err = conn.Bind(p.BindUsername, p.BindPassword)
+	if err != nil {
+		// TODO test this
+		return nil, false, fmt.Errorf(`error binding as "%s" before user search: %w`, p.BindUsername, err)
+	}
+
+	mappedUsername, mappedUID, err := p.searchAndBindUser(conn, username, password)
+	if err != nil {
+		return nil, false, err
+	}
+
+	response := &authenticator.Response{
+		User: &user.DefaultInfo{
+			Name:   mappedUsername,
+			UID:    mappedUID,
+			Groups: []string{}, // Support for group search coming soon.
+		},
+	}
+	return response, true, nil
+}
+
+func (p *Provider) searchAndBindUser(conn Conn, username string, password string) (string, string, error) {
+	searchResult, err := conn.Search(p.userSearchRequest(username))
+	if err != nil {
+		// TODO test this
+		return "", "", fmt.Errorf(`error searching for user "%s": %w`, username, err)
+	}
+	if len(searchResult.Entries) != 1 {
+		// TODO test this
+		return "", "", fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
+			username, len(searchResult.Entries),
+		)
+	}
+	userEntry := searchResult.Entries[0]
+	if len(userEntry.DN) == 0 {
+		// TODO test this
+		return "", "", fmt.Errorf(`searching for user "%s" resulted in search result without DN`, username)
+	}
+
+	mappedUsername, err := p.getSearchResultAttributeValue(p.UserSearch.UsernameAttribute, userEntry, username)
+	if err != nil {
+		// TODO test this
+		return "", "", err
+	}
+
+	mappedUID, err := p.getSearchResultAttributeValue(p.UserSearch.UIDAttribute, userEntry, username)
+	if err != nil {
+		// TODO test this
+		return "", "", err
+	}
+
+	// Take care that any other LDAP commands after this bind will be run as this user instead of as the configured BindUsername!
+	err = conn.Bind(userEntry.DN, password)
+	if err != nil {
+		// TODO test this
+		return "", "", fmt.Errorf(`error binding for user "%s" using provided password against DN "%s": %w`, username, userEntry.DN, err)
+	}
+
+	return mappedUsername, mappedUID, nil
+}
+
+func (p *Provider) userSearchRequest(username string) *ldap.SearchRequest {
+	// See https://ldap.com/the-ldap-search-operation for general documentation of LDAP search options.
+	return &ldap.SearchRequest{
+		BaseDN:       p.UserSearch.Base,
+		Scope:        ldap.ScopeWholeSubtree,
+		DerefAliases: ldap.DerefAlways, // TODO what's the best value here?
+		SizeLimit:    2,
+		TimeLimit:    90,
+		TypesOnly:    false,
+		Filter:       p.userSearchFilter(username),
+		Attributes:   p.userSearchRequestedAttributes(),
+		Controls:     nil, // this could be used to enable paging, but we're already limiting the result max size
+	}
+}
+
+func (p *Provider) userSearchRequestedAttributes() []string {
+	attributes := []string{}
+	if p.UserSearch.UsernameAttribute != distinguishedNameAttributeName {
+		attributes = append(attributes, p.UserSearch.UsernameAttribute)
+	}
+	if p.UserSearch.UIDAttribute != distinguishedNameAttributeName {
+		attributes = append(attributes, p.UserSearch.UIDAttribute)
+	}
+	return attributes
+}
+
+func (p *Provider) userSearchFilter(username string) string {
+	safeUsername := p.escapeUsernameForSearchFilter(username)
+	if len(p.UserSearch.Filter) == 0 {
+		return fmt.Sprintf("%s=%s", p.UserSearch.UsernameAttribute, safeUsername)
+	}
+	return strings.ReplaceAll(p.UserSearch.Filter, userSearchFilterInterpolationLocationMarker, safeUsername)
+}
+
+func (p *Provider) escapeUsernameForSearchFilter(username string) string {
+	// The username is end-user input, so it should be escaped before being included in a search to prevent query injection.
+	return ldap.EscapeFilter(username)
+}
+
+func (p *Provider) getSearchResultAttributeValue(attributeName string, fromUserEntry *ldap.Entry, username string) (string, error) {
+	if attributeName == distinguishedNameAttributeName {
+		return fromUserEntry.DN, nil
+	}
+
+	attributeValues := fromUserEntry.GetAttributeValues(attributeName)
+
+	if len(attributeValues) != 1 {
+		// TODO test this
+		return "", fmt.Errorf(`found %d values for attribute "%s" while searching for user "%s", but expected 1 result`,
+			len(attributeValues), attributeName, username,
+		)
+	}
+
+	attributeValue := attributeValues[0]
+	if len(attributeValue) == 0 {
+		// TODO test this
+		return "", fmt.Errorf(`found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`,
+			attributeName, username,
+		)
+	}
+
+	return attributeValue, nil
 }

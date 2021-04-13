@@ -6,6 +6,7 @@ package upstreamldap
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -22,92 +23,274 @@ import (
 	"go.pinniped.dev/internal/testutil"
 )
 
+const (
+	testHost                               = "ldap.example.com:8443"
+	testBindUsername                       = "some-bind-username"
+	testBindPassword                       = "some-bind-password"
+	testUpstreamUsername                   = "some-upstream-username"
+	testUpstreamPassword                   = "some-upstream-password"
+	testUserSearchBase                     = "some-upstream-base-dn"
+	testUserSearchFilter                   = "some-filter={}-and-more-filter={}"
+	testUserSearchUsernameAttribute        = "some-upstream-username-attribute"
+	testUserSearchUIDAttribute             = "some-upstream-uid-attribute"
+	testSearchResultDNValue                = "some-upstream-user-dn"
+	testSearchResultUsernameAttributeValue = "some-upstream-username-value"
+	testSearchResultUIDAttributeValue      = "some-upstream-uid-value"
+)
+
 var (
-	upstreamUsername = "some-upstream-username"
-	upstreamPassword = "some-upstream-password"
-	upstreamGroups   = []string{"some-upstream-group-0", "some-upstream-group-1"}
-	upstreamUID      = "some-upstream-uid"
+	testUserSearchFilterInterpolated = fmt.Sprintf("some-filter=%s-and-more-filter=%s", testUpstreamUsername, testUpstreamUsername)
 )
 
 func TestAuthenticateUser(t *testing.T) {
-	// Please the linter...
-	_ = upstreamGroups
-	_ = upstreamUID
-	t.Skip("TODO: make me pass!")
+	provider := func(editFunc func(p *Provider)) *Provider {
+		provider := &Provider{
+			Host:         testHost,
+			BindUsername: testBindUsername,
+			BindPassword: testBindPassword,
+			UserSearch: &UserSearch{
+				Base:              testUserSearchBase,
+				Filter:            testUserSearchFilter,
+				UsernameAttribute: testUserSearchUsernameAttribute,
+				UIDAttribute:      testUserSearchUIDAttribute,
+			},
+		}
+		if editFunc != nil {
+			editFunc(provider)
+		}
+		return provider
+	}
+
+	expectedSearch := func(editFunc func(r *ldap.SearchRequest)) *ldap.SearchRequest {
+		request := &ldap.SearchRequest{
+			BaseDN:       testUserSearchBase,
+			Scope:        ldap.ScopeWholeSubtree,
+			DerefAliases: ldap.DerefAlways,
+			SizeLimit:    2,
+			TimeLimit:    90,
+			TypesOnly:    false,
+			Filter:       testUserSearchFilterInterpolated,
+			Attributes:   []string{testUserSearchUsernameAttribute, testUserSearchUIDAttribute},
+			Controls:     nil,
+		}
+		if editFunc != nil {
+			editFunc(request)
+		}
+		return request
+	}
 
 	tests := []struct {
-		name                string
-		provider            *Provider
-		wantError           string
-		wantUnauthenticated bool
-		wantAuthResponse    *authenticator.Response
+		name             string
+		username         string
+		password         string
+		provider         *Provider
+		setupMocks       func(conn *mockldapconn.MockConn)
+		dialError        error
+		wantError        string
+		wantAuthResponse *authenticator.Response
 	}{
 		{
-			name: "happy path",
-			provider: &Provider{
-				Host:         "ldap.example.com:8443",
-				BindUsername: upstreamUsername,
-				BindPassword: upstreamPassword,
-				UserSearch: &UserSearch{
-					Base:              "some-upstream-base-dn",
-					Filter:            "some-filter",
-					UsernameAttribute: "some-upstream-username-attribute",
-					UIDAttribute:      "some-upstream-uid-attribute",
-				},
+			name:     "happy path",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testSearchResultUsernameAttributeValue}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testSearchResultUIDAttributeValue}),
+							},
+						},
+					},
+					Referrals: []string{},       // note that we are not following referrals at this time
+					Controls:  []ldap.Control{}, // TODO are there any response controls that we need to be able to handle?
+				}, nil).Times(1)
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
 			},
 			wantAuthResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
-					Name:   upstreamUsername,
-					Groups: upstreamGroups,
-					UID:    upstreamUID,
+					Name:   testSearchResultUsernameAttributeValue,
+					Groups: []string{}, // We don't support group search yet. Coming soon!
+					UID:    testSearchResultUIDAttributeValue,
 				},
 			},
 		},
+		{
+			name:     "when the UsernameAttribute is dn",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(func(p *Provider) {
+				p.UserSearch.UsernameAttribute = "dn"
+			}),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(func(r *ldap.SearchRequest) {
+					r.Attributes = []string{testUserSearchUIDAttribute}
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testSearchResultUIDAttributeValue}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{
+					Name:   testSearchResultDNValue,
+					Groups: []string{}, // We don't support group search yet. Coming soon!
+					UID:    testSearchResultUIDAttributeValue,
+				},
+			},
+		},
+		{
+			name:     "when the UIDAttribute is dn",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(func(p *Provider) {
+				p.UserSearch.UIDAttribute = "dn"
+			}),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(func(r *ldap.SearchRequest) {
+					r.Attributes = []string{testUserSearchUsernameAttribute}
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testSearchResultUsernameAttributeValue}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{
+					Name:   testSearchResultUsernameAttributeValue,
+					Groups: []string{}, // We don't support group search yet. Coming soon!
+					UID:    testSearchResultDNValue,
+				},
+			},
+		},
+		{
+			name:     "when Filter is blank it derives a search filter from the UsernameAttribute",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(func(p *Provider) {
+				p.UserSearch.Filter = ""
+			}),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(func(r *ldap.SearchRequest) {
+					r.Filter = testUserSearchUsernameAttribute + "=" + testUpstreamUsername
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testSearchResultUsernameAttributeValue}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testSearchResultUIDAttributeValue}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{
+					Name:   testSearchResultUsernameAttributeValue,
+					Groups: []string{}, // We don't support group search yet. Coming soon!
+					UID:    testSearchResultUIDAttributeValue,
+				},
+			},
+		},
+		{
+			name:     "when the username has special LDAP search filter characters then they must be properly escaped in the search filter",
+			username: `a&b|c(d)e\f*g`,
+			password: testUpstreamPassword,
+			provider: provider(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(func(r *ldap.SearchRequest) {
+					r.Filter = fmt.Sprintf("some-filter=%s-and-more-filter=%s", `a&b|c\28d\29e\5cf\2ag`, `a&b|c\28d\29e\5cf\2ag`)
+				})).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testSearchResultUsernameAttributeValue}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testSearchResultUIDAttributeValue}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{
+					Name:   testSearchResultUsernameAttributeValue,
+					Groups: []string{}, // We don't support group search yet. Coming soon!
+					UID:    testSearchResultUIDAttributeValue,
+				},
+			},
+		},
+		// TODO are LDAP attribute names case sensitive? do we need any special handling for case?
+		{
+			name:      "when dial fails",
+			provider:  provider(nil),
+			dialError: errors.New("some dial error"),
+			wantError: fmt.Sprintf(`error dialing host "%s": some dial error`, testHost),
+		},
 	}
+
 	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
+
 			conn := mockldapconn.NewMockConn(ctrl)
-			conn.EXPECT().Bind(test.provider.BindUsername, test.provider.BindPassword).Times(1)
-			conn.EXPECT().Search(&ldap.SearchRequest{
-				BaseDN:       test.provider.UserSearch.Base,
-				Scope:        99, // TODO: what should this be?
-				DerefAliases: 99, // TODO: what should this be?
-				SizeLimit:    99,
-				TimeLimit:    99,   // TODO: what should this be?
-				TypesOnly:    true, // TODO: what should this be?
-				Filter:       test.provider.UserSearch.Filter,
-				Attributes:   []string{},       // TODO: what should this be?
-				Controls:     []ldap.Control{}, // TODO: what should this be?
-			}).Return(&ldap.SearchResult{
-				Entries: []*ldap.Entry{
-					{
-						DN:         "",                       // TODO: what should this be?
-						Attributes: []*ldap.EntryAttribute{}, // TODO: what should this be?
-					},
-				},
-				Referrals: []string{},       // TODO: what should this be?
-				Controls:  []ldap.Control{}, // TODO: what should this be?
-			}, nil).Times(1)
-			conn.EXPECT().Close().Times(1)
+			if tt.setupMocks != nil {
+				tt.setupMocks(conn)
+			}
 
 			dialWasAttempted := false
-			test.provider.Dialer = LDAPDialerFunc(func(ctx context.Context, hostAndPort string) (Conn, error) {
+			tt.provider.Dialer = LDAPDialerFunc(func(ctx context.Context, hostAndPort string) (Conn, error) {
 				dialWasAttempted = true
-				require.Equal(t, test.provider.Host, hostAndPort)
+				require.Equal(t, tt.provider.Host, hostAndPort)
+				if tt.dialError != nil {
+					return nil, tt.dialError
+				}
 				return conn, nil
 			})
 
-			authResponse, authenticated, err := test.provider.AuthenticateUser(context.Background(), upstreamUsername, upstreamPassword)
+			authResponse, authenticated, err := tt.provider.AuthenticateUser(context.Background(), tt.username, tt.password)
+
 			require.True(t, dialWasAttempted, "AuthenticateUser was supposed to try to dial, but didn't")
-			if test.wantError != "" {
-				require.EqualError(t, err, test.wantError)
-				return
+
+			if tt.wantError != "" {
+				require.EqualError(t, err, tt.wantError)
+				require.False(t, authenticated)
+				require.Nil(t, authResponse)
+			} else {
+				require.NoError(t, err)
+				require.True(t, authenticated)
+				require.Equal(t, tt.wantAuthResponse, authResponse)
 			}
-			require.Equal(t, !test.wantUnauthenticated, authenticated)
-			require.Equal(t, test.wantAuthResponse, authResponse)
 		})
 	}
 }

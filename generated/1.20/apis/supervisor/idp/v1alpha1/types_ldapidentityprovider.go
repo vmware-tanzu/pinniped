@@ -54,12 +54,18 @@ type LDAPIdentityProviderBindSpec struct {
 type LDAPIdentityProviderUserSearchAttributesSpec struct {
 	// Username specifies the name of attribute in the LDAP entry which whose value shall become the username
 	// of the user after a successful authentication. This would typically be the same attribute name used in
-	// the user search filter. E.g. "mail" or "uid" or "userPrincipalName".
+	// the user search filter, although it can be different. E.g. "mail" or "uid" or "userPrincipalName".
+	// The value of this field is case-sensitive and must match the case of the attribute name returned by the LDAP
+	// server in the user's entry. Distinguished names can be used by specifying lower-case "dn". When this field
+	// is set to "dn" then the LDAPIdentityProviderUserSearchSpec's Filter field cannot be blank, since the default
+	// value of "dn={}" would not work.
 	// +kubebuilder:validation:MinLength=1
 	Username string `json:"username,omitempty"`
 
 	// UniqueID specifies the name of the attribute in the LDAP entry which whose value shall be used to uniquely
 	// identify the user within this LDAP provider after a successful authentication. E.g. "uidNumber" or "objectGUID".
+	// The value of this field is case-sensitive and must match the case of the attribute name returned by the LDAP
+	// server in the user's entry. Distinguished names can be used by specifying lower-case "dn".
 	// +kubebuilder:validation:MinLength=1
 	UniqueID string `json:"uniqueID,omitempty"`
 }
@@ -72,8 +78,10 @@ type LDAPIdentityProviderUserSearchSpec struct {
 	// Filter is the LDAP search filter which should be applied when searching for users. The pattern "{}" must occur
 	// in the filter and will be dynamically replaced by the username for which the search is being run. E.g. "mail={}"
 	// or "&(objectClass=person)(uid={})". For more information about LDAP filters, see https://ldap.com/ldap-filters.
+	// Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}" cannot be used.
 	// Optional. When not specified, the default will act as if the Filter were specified as the value from
-	// Attributes.Username appended by "={}".
+	// Attributes.Username appended by "={}". When the Attributes.Username is set to "dn" then the Filter must be
+	// explicitly specified, since the default value of "dn={}" would not work.
 	// +optional
 	Filter string `json:"filter,omitempty"`
 

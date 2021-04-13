@@ -180,6 +180,11 @@ func (p *Provider) TestAuthenticateUser(ctx context.Context, testUsername string
 
 // Authenticate a user and return their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
 func (p *Provider) AuthenticateUser(ctx context.Context, username, password string) (*authenticator.Response, bool, error) {
+	if p.UserSearch.UsernameAttribute == distinguishedNameAttributeName && len(p.UserSearch.Filter) == 0 {
+		// LDAP search filters do not allow searching by DN.
+		return nil, false, fmt.Errorf(`must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`)
+	}
+
 	conn, err := p.dial(ctx)
 	if err != nil {
 		return nil, false, fmt.Errorf(`error dialing host "%s": %w`, p.Host, err)
@@ -269,9 +274,13 @@ func (p *Provider) userSearchRequestedAttributes() []string {
 func (p *Provider) userSearchFilter(username string) string {
 	safeUsername := p.escapeUsernameForSearchFilter(username)
 	if len(p.UserSearch.Filter) == 0 {
-		return fmt.Sprintf("%s=%s", p.UserSearch.UsernameAttribute, safeUsername)
+		return fmt.Sprintf("(%s=%s)", p.UserSearch.UsernameAttribute, safeUsername)
 	}
-	return strings.ReplaceAll(p.UserSearch.Filter, userSearchFilterInterpolationLocationMarker, safeUsername)
+	filter := strings.ReplaceAll(p.UserSearch.Filter, userSearchFilterInterpolationLocationMarker, safeUsername)
+	if strings.HasPrefix(filter, "(") && strings.HasSuffix(filter, ")") {
+		return filter
+	}
+	return "(" + filter + ")"
 }
 
 func (p *Provider) escapeUsernameForSearchFilter(username string) string {

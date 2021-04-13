@@ -97,15 +97,26 @@ spec:
                         description: UniqueID specifies the name of the attribute
                           in the LDAP entry which whose value shall be used to uniquely
                           identify the user within this LDAP provider after a successful
-                          authentication. E.g. "uidNumber" or "objectGUID".
+                          authentication. E.g. "uidNumber" or "objectGUID". The value
+                          of this field is case-sensitive and must match the case
+                          of the attribute name returned by the LDAP server in the
+                          user's entry. Distinguished names can be used by specifying
+                          lower-case "dn".
                         minLength: 1
                         type: string
                       username:
                         description: Username specifies the name of attribute in the
                           LDAP entry which whose value shall become the username of
                           the user after a successful authentication. This would typically
-                          be the same attribute name used in the user search filter.
-                          E.g. "mail" or "uid" or "userPrincipalName".
+                          be the same attribute name used in the user search filter,
+                          although it can be different. E.g. "mail" or "uid" or "userPrincipalName".
+                          The value of this field is case-sensitive and must match
+                          the case of the attribute name returned by the LDAP server
+                          in the user's entry. Distinguished names can be used by
+                          specifying lower-case "dn". When this field is set to "dn"
+                          then the LDAPIdentityProviderUserSearchSpec's Filter field
+                          cannot be blank, since the default value of "dn={}" would
+                          not work.
                         minLength: 1
                         type: string
                     type: object
@@ -120,9 +131,12 @@ spec:
                       in the filter and will be dynamically replaced by the username
                       for which the search is being run. E.g. "mail={}" or "&(objectClass=person)(uid={})".
                       For more information about LDAP filters, see https://ldap.com/ldap-filters.
-                      Optional. When not specified, the default will act as if the
-                      Filter were specified as the value from Attributes.Username
-                      appended by "={}".
+                      Note that the dn (distinguished name) is not an attribute of
+                      an entry, so "dn={}" cannot be used. Optional. When not specified,
+                      the default will act as if the Filter were specified as the
+                      value from Attributes.Username appended by "={}". When the Attributes.Username
+                      is set to "dn" then the Filter must be explicitly specified,
+                      since the default value of "dn={}" would not work.
                     type: string
                 type: object
             required:

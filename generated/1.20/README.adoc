@@ -808,8 +808,8 @@ Status of an LDAP identity provider.
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`username`* __string__ | Username specifies the name of attribute in the LDAP entry which whose value shall become the username of the user after a successful authentication. This would typically be the same attribute name used in the user search filter. E.g. "mail" or "uid" or "userPrincipalName".
-| *`uniqueID`* __string__ | UniqueID specifies the name of the attribute in the LDAP entry which whose value shall be used to uniquely identify the user within this LDAP provider after a successful authentication. E.g. "uidNumber" or "objectGUID".
+| *`username`* __string__ | Username specifies the name of attribute in the LDAP entry which whose value shall become the username of the user after a successful authentication. This would typically be the same attribute name used in the user search filter, although it can be different. E.g. "mail" or "uid" or "userPrincipalName". The value of this field is case-sensitive and must match the case of the attribute name returned by the LDAP server in the user's entry. Distinguished names can be used by specifying lower-case "dn". When this field is set to "dn" then the LDAPIdentityProviderUserSearchSpec's Filter field cannot be blank, since the default value of "dn={}" would not work.
+| *`uniqueID`* __string__ | UniqueID specifies the name of the attribute in the LDAP entry which whose value shall be used to uniquely identify the user within this LDAP provider after a successful authentication. E.g. "uidNumber" or "objectGUID". The value of this field is case-sensitive and must match the case of the attribute name returned by the LDAP server in the user's entry. Distinguished names can be used by specifying lower-case "dn".
 |===
 
 
@@ -827,7 +827,7 @@ Status of an LDAP identity provider.
 |===
 | Field | Description
 | *`base`* __string__ | Base is the DN that should be used as the search base when searching for users. E.g. "ou=users,dc=example,dc=com".
-| *`filter`* __string__ | Filter is the LDAP search filter which should be applied when searching for users. The pattern "{}" must occur in the filter and will be dynamically replaced by the username for which the search is being run. E.g. "mail={}" or "&(objectClass=person)(uid={})". For more information about LDAP filters, see https://ldap.com/ldap-filters. Optional. When not specified, the default will act as if the Filter were specified as the value from Attributes.Username appended by "={}".
+| *`filter`* __string__ | Filter is the LDAP search filter which should be applied when searching for users. The pattern "{}" must occur in the filter and will be dynamically replaced by the username for which the search is being run. E.g. "mail={}" or "&(objectClass=person)(uid={})". For more information about LDAP filters, see https://ldap.com/ldap-filters. Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}" cannot be used. Optional. When not specified, the default will act as if the Filter were specified as the value from Attributes.Username appended by "={}". When the Attributes.Username is set to "dn" then the Filter must be explicitly specified, since the default value of "dn={}" would not work.
 | *`attributes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-20-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearchattributesspec[$$LDAPIdentityProviderUserSearchAttributesSpec$$]__ | Attributes specifies how the user's information should be read from the LDAP entry which was found as the result of the user search.
 |===
 

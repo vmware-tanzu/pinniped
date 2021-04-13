@@ -25,7 +25,7 @@ import (
 
 const (
 	testHost                               = "ldap.example.com:8443"
-	testBindUsername                       = "some-bind-username"
+	testBindUsername                       = "cn=some-bind-username,dc=pinniped,dc=dev"
 	testBindPassword                       = "some-bind-password"
 	testUpstreamUsername                   = "some-upstream-username"
 	testUpstreamPassword                   = "some-upstream-password"
@@ -39,7 +39,7 @@ const (
 )
 
 var (
-	testUserSearchFilterInterpolated = fmt.Sprintf("some-filter=%s-and-more-filter=%s", testUpstreamUsername, testUpstreamUsername)
+	testUserSearchFilterInterpolated = fmt.Sprintf("(some-filter=%s-and-more-filter=%s)", testUpstreamUsername, testUpstreamUsername)
 )
 
 func TestAuthenticateUser(t *testing.T) {
@@ -87,6 +87,7 @@ func TestAuthenticateUser(t *testing.T) {
 		setupMocks       func(conn *mockldapconn.MockConn)
 		dialError        error
 		wantError        string
+		wantToSkipDial   bool
 		wantAuthResponse *authenticator.Response
 	}{
 		{
@@ -115,13 +116,44 @@ func TestAuthenticateUser(t *testing.T) {
 			wantAuthResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
 					Name:   testSearchResultUsernameAttributeValue,
-					Groups: []string{}, // We don't support group search yet. Coming soon!
 					UID:    testSearchResultUIDAttributeValue,
+					Groups: []string{},
 				},
 			},
 		},
 		{
-			name:     "when the UsernameAttribute is dn",
+			name:     "when the user search filter is already wrapped by parenthesis then it is not wrapped again",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(func(p *Provider) {
+				p.UserSearch.Filter = "(" + testUserSearchFilter + ")"
+			}),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testSearchResultUsernameAttributeValue}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testSearchResultUIDAttributeValue}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{
+					Name:   testSearchResultUsernameAttributeValue,
+					UID:    testSearchResultUIDAttributeValue,
+					Groups: []string{},
+				},
+			},
+		},
+		{
+			name:     "when the UsernameAttribute is dn and there is a user search filter provided",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
 			provider: provider(func(p *Provider) {
@@ -147,8 +179,8 @@ func TestAuthenticateUser(t *testing.T) {
 			wantAuthResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
 					Name:   testSearchResultDNValue,
-					Groups: []string{}, // We don't support group search yet. Coming soon!
 					UID:    testSearchResultUIDAttributeValue,
+					Groups: []string{},
 				},
 			},
 		},
@@ -179,8 +211,8 @@ func TestAuthenticateUser(t *testing.T) {
 			wantAuthResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
 					Name:   testSearchResultUsernameAttributeValue,
-					Groups: []string{}, // We don't support group search yet. Coming soon!
 					UID:    testSearchResultDNValue,
+					Groups: []string{},
 				},
 			},
 		},
@@ -194,7 +226,7 @@ func TestAuthenticateUser(t *testing.T) {
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(func(r *ldap.SearchRequest) {
-					r.Filter = testUserSearchUsernameAttribute + "=" + testUpstreamUsername
+					r.Filter = "(" + testUserSearchUsernameAttribute + "=" + testUpstreamUsername + ")"
 				})).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{
 						{
@@ -212,8 +244,8 @@ func TestAuthenticateUser(t *testing.T) {
 			wantAuthResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
 					Name:   testSearchResultUsernameAttributeValue,
-					Groups: []string{}, // We don't support group search yet. Coming soon!
 					UID:    testSearchResultUIDAttributeValue,
+					Groups: []string{},
 				},
 			},
 		},
@@ -225,7 +257,7 @@ func TestAuthenticateUser(t *testing.T) {
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(func(r *ldap.SearchRequest) {
-					r.Filter = fmt.Sprintf("some-filter=%s-and-more-filter=%s", `a&b|c\28d\29e\5cf\2ag`, `a&b|c\28d\29e\5cf\2ag`)
+					r.Filter = fmt.Sprintf("(some-filter=%s-and-more-filter=%s)", `a&b|c\28d\29e\5cf\2ag`, `a&b|c\28d\29e\5cf\2ag`)
 				})).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{
 						{
@@ -243,17 +275,27 @@ func TestAuthenticateUser(t *testing.T) {
 			wantAuthResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
 					Name:   testSearchResultUsernameAttributeValue,
-					Groups: []string{}, // We don't support group search yet. Coming soon!
 					UID:    testSearchResultUIDAttributeValue,
+					Groups: []string{},
 				},
 			},
 		},
-		// TODO are LDAP attribute names case sensitive? do we need any special handling for case?
 		{
 			name:      "when dial fails",
 			provider:  provider(nil),
 			dialError: errors.New("some dial error"),
 			wantError: fmt.Sprintf(`error dialing host "%s": some dial error`, testHost),
+		},
+		{
+			name:     "when the UsernameAttribute is dn and there is not a user search filter provided",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(func(p *Provider) {
+				p.UserSearch.UsernameAttribute = "dn"
+				p.UserSearch.Filter = ""
+			}),
+			wantToSkipDial: true,
+			wantError:      `must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`,
 		},
 		{
 			name:     "when binding as the bind user returns an error",
@@ -507,7 +549,7 @@ func TestAuthenticateUser(t *testing.T) {
 
 			authResponse, authenticated, err := tt.provider.AuthenticateUser(context.Background(), tt.username, tt.password)
 
-			require.True(t, dialWasAttempted, "AuthenticateUser was supposed to try to dial, but didn't")
+			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 
 			if tt.wantError != "" {
 				require.EqualError(t, err, tt.wantError)

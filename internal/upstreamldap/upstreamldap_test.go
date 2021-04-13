@@ -255,6 +255,233 @@ func TestAuthenticateUser(t *testing.T) {
 			dialError: errors.New("some dial error"),
 			wantError: fmt.Sprintf(`error dialing host "%s": some dial error`, testHost),
 		},
+		{
+			name:     "when binding as the bind user returns an error",
+			provider: provider(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Return(errors.New("some bind error")).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: fmt.Sprintf(`error binding as "%s" before user search: some bind error`, testBindUsername),
+		},
+		{
+			name:     "when searching for the user returns an error",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(nil)).Return(nil, errors.New("some search error")).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: fmt.Sprintf(`error searching for user "%s": some search error`, testUpstreamUsername),
+		},
+		{
+			name:     "when searching for the user returns no results",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: fmt.Sprintf(`searching for user "%s" resulted in 0 search results, but expected 1 result`, testUpstreamUsername),
+		},
+		{
+			name:     "when searching for the user returns multiple results",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{DN: testSearchResultDNValue},
+						{DN: "some-other-dn"},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: fmt.Sprintf(`searching for user "%s" resulted in 2 search results, but expected 1 result`, testUpstreamUsername),
+		},
+		{
+			name:     "when searching for the user returns a user without a DN",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{DN: ""},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: fmt.Sprintf(`searching for user "%s" resulted in search result without DN`, testUpstreamUsername),
+		},
+		{
+			name:     "when searching for the user returns a user without an expected username attribute",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testSearchResultUIDAttributeValue}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: fmt.Sprintf(`found 0 values for attribute "%s" while searching for user "%s", but expected 1 result`, testUserSearchUsernameAttribute, testUpstreamUsername),
+		},
+		{
+			name:     "when searching for the user returns a user with too many values for the expected username attribute",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{
+									testSearchResultUsernameAttributeValue,
+									"unexpected-additional-value",
+								}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testSearchResultUIDAttributeValue}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: fmt.Sprintf(`found 2 values for attribute "%s" while searching for user "%s", but expected 1 result`, testUserSearchUsernameAttribute, testUpstreamUsername),
+		},
+		{
+			name:     "when searching for the user returns a user with an empty value for the expected username attribute",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{""}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testSearchResultUIDAttributeValue}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: fmt.Sprintf(`found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`, testUserSearchUsernameAttribute, testUpstreamUsername),
+		},
+		{
+			name:     "when searching for the user returns a user without an expected UID attribute",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testSearchResultUsernameAttributeValue}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: fmt.Sprintf(`found 0 values for attribute "%s" while searching for user "%s", but expected 1 result`, testUserSearchUIDAttribute, testUpstreamUsername),
+		},
+		{
+			name:     "when searching for the user returns a user with too many values for the expected UID attribute",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testSearchResultUsernameAttributeValue}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{
+									testSearchResultUIDAttributeValue,
+									"unexpected-additional-value",
+								}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: fmt.Sprintf(`found 2 values for attribute "%s" while searching for user "%s", but expected 1 result`, testUserSearchUIDAttribute, testUpstreamUsername),
+		},
+		{
+			name:     "when searching for the user returns a user with an empty value for the expected UID attribute",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testSearchResultUsernameAttributeValue}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{""}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: fmt.Sprintf(`found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`, testUserSearchUIDAttribute, testUpstreamUsername),
+		},
+		{
+			name:     "when binding as the found user returns an error",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			provider: provider(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: testSearchResultDNValue,
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute(testUserSearchUsernameAttribute, []string{testSearchResultUsernameAttributeValue}),
+								ldap.NewEntryAttribute(testUserSearchUIDAttribute, []string{testSearchResultUIDAttributeValue}),
+							},
+						},
+					},
+				}, nil).Times(1)
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Return(errors.New("some bind error")).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: fmt.Sprintf(`error binding for user "%s" using provided password against DN "%s": some bind error`, testUpstreamUsername, testSearchResultDNValue),
+		},
 	}
 
 	for _, test := range tests {

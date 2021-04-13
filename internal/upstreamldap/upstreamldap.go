@@ -188,7 +188,6 @@ func (p *Provider) AuthenticateUser(ctx context.Context, username, password stri
 
 	err = conn.Bind(p.BindUsername, p.BindPassword)
 	if err != nil {
-		// TODO test this
 		return nil, false, fmt.Errorf(`error binding as "%s" before user search: %w`, p.BindUsername, err)
 	}
 
@@ -210,37 +209,31 @@ func (p *Provider) AuthenticateUser(ctx context.Context, username, password stri
 func (p *Provider) searchAndBindUser(conn Conn, username string, password string) (string, string, error) {
 	searchResult, err := conn.Search(p.userSearchRequest(username))
 	if err != nil {
-		// TODO test this
 		return "", "", fmt.Errorf(`error searching for user "%s": %w`, username, err)
 	}
 	if len(searchResult.Entries) != 1 {
-		// TODO test this
 		return "", "", fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
 			username, len(searchResult.Entries),
 		)
 	}
 	userEntry := searchResult.Entries[0]
 	if len(userEntry.DN) == 0 {
-		// TODO test this
 		return "", "", fmt.Errorf(`searching for user "%s" resulted in search result without DN`, username)
 	}
 
 	mappedUsername, err := p.getSearchResultAttributeValue(p.UserSearch.UsernameAttribute, userEntry, username)
 	if err != nil {
-		// TODO test this
 		return "", "", err
 	}
 
 	mappedUID, err := p.getSearchResultAttributeValue(p.UserSearch.UIDAttribute, userEntry, username)
 	if err != nil {
-		// TODO test this
 		return "", "", err
 	}
 
 	// Take care that any other LDAP commands after this bind will be run as this user instead of as the configured BindUsername!
 	err = conn.Bind(userEntry.DN, password)
 	if err != nil {
-		// TODO test this
 		return "", "", fmt.Errorf(`error binding for user "%s" using provided password against DN "%s": %w`, username, userEntry.DN, err)
 	}
 
@@ -294,7 +287,6 @@ func (p *Provider) getSearchResultAttributeValue(attributeName string, fromUserE
 	attributeValues := fromUserEntry.GetAttributeValues(attributeName)
 
 	if len(attributeValues) != 1 {
-		// TODO test this
 		return "", fmt.Errorf(`found %d values for attribute "%s" while searching for user "%s", but expected 1 result`,
 			len(attributeValues), attributeName, username,
 		)
@@ -302,7 +294,6 @@ func (p *Provider) getSearchResultAttributeValue(attributeName string, fromUserE
 
 	attributeValue := attributeValues[0]
 	if len(attributeValue) == 0 {
-		// TODO test this
 		return "", fmt.Errorf(`found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`,
 			attributeName, username,
 		)

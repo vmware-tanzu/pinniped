@@ -5,6 +5,7 @@ package upstreamwatcher
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"sort"
 	"testing"
@@ -20,6 +21,7 @@ import (
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/testutil"
@@ -150,15 +152,18 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		testBindUsername     = "test-bind-username"
 		testBindPassword     = "test-bind-password"
 		testHost             = "ldap.example.com:123"
-		testCABundle         = "test-ca-bundle"
 		testUserSearchBase   = "test-user-search-base"
 		testUserSearchFilter = "test-user-search-filter"
 		testUsernameAttrName = "test-username-attr"
 		testUIDAttrName      = "test-uid-attr"
 	)
-	var (
-		testValidSecretData = map[string][]byte{"username": []byte(testBindUsername), "password": []byte(testBindPassword)}
-	)
+
+	testValidSecretData := map[string][]byte{"username": []byte(testBindUsername), "password": []byte(testBindPassword)}
+
+	testCA, err := certauthority.New("test CA", time.Minute)
+	require.NoError(t, err)
+	testCABundle := testCA.Bundle()
+	testCABundleBase64Encoded := base64.StdEncoding.EncodeToString(testCABundle)
 
 	successfulDialer := &comparableDialer{
 		f: func(ctx context.Context, hostAndPort string) (upstreamldap.Conn, error) {
@@ -171,7 +176,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: testName, Namespace: testNamespace, Generation: 1234},
 		Spec: v1alpha1.LDAPIdentityProviderSpec{
 			Host: testHost,
-			TLS:  &v1alpha1.LDAPIdentityProviderTLSSpec{CertificateAuthorityData: testCABundle},
+			TLS:  &v1alpha1.LDAPIdentityProviderTLSSpec{CertificateAuthorityData: testCABundleBase64Encoded},
 			Bind: v1alpha1.LDAPIdentityProviderBindSpec{SecretName: testSecretName},
 			UserSearch: v1alpha1.LDAPIdentityProviderUserSearchSpec{
 				Base:   testUserSearchBase,
@@ -192,7 +197,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 	providerForValidUpstream := &upstreamldap.Provider{
 		Name:         testName,
 		Host:         testHost,
-		CABundle:     []byte(testCABundle),
+		CABundle:     testCABundle,
 		BindUsername: testBindUsername,
 		BindPassword: testBindPassword,
 		UserSearch: &upstreamldap.UserSearch{
@@ -239,6 +244,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Message:            "loaded bind secret",
 							ObservedGeneration: 1234,
 						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded TLS configuration",
+							ObservedGeneration: 1234,
+						},
 					},
 				},
 			}},
@@ -261,6 +274,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							LastTransitionTime: now,
 							Reason:             "SecretNotFound",
 							Message:            fmt.Sprintf(`secret "%s" not found`, testSecretName),
+							ObservedGeneration: 1234,
+						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded TLS configuration",
 							ObservedGeneration: 1234,
 						},
 					},
@@ -291,6 +312,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Message:            fmt.Sprintf(`referenced Secret "%s" has wrong type "some-other-type" (should be "kubernetes.io/basic-auth")`, testSecretName),
 							ObservedGeneration: 1234,
 						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded TLS configuration",
+							ObservedGeneration: 1234,
+						},
 					},
 				},
 			}},
@@ -316,6 +345,194 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							LastTransitionTime: now,
 							Reason:             "SecretMissingKeys",
 							Message:            fmt.Sprintf(`referenced Secret "%s" is missing required keys ["username" "password"]`, testSecretName),
+							ObservedGeneration: 1234,
+						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded TLS configuration",
+							ObservedGeneration: 1234,
+						},
+					},
+				},
+			}},
+		},
+		{
+			name:       "CertificateAuthorityData is not base64 encoded",
+			ldapDialer: successfulDialer,
+			inputUpstreams: []runtime.Object{modifiedCopyOfValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+				upstream.Spec.TLS.CertificateAuthorityData = "this-is-not-base64-encoded"
+			})},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: testSecretName, Namespace: testNamespace},
+				Type:       corev1.SecretTypeBasicAuth,
+				Data:       testValidSecretData,
+			}},
+			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
+			wantResultingCache: []*upstreamldap.Provider{},
+			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.LDAPIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:               "BindSecretValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded bind secret",
+							ObservedGeneration: 1234,
+						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "InvalidTLSConfig",
+							Message:            "certificateAuthorityData is invalid: illegal base64 data at input byte 4",
+							ObservedGeneration: 1234,
+						},
+					},
+				},
+			}},
+		},
+		{
+			name:       "CertificateAuthorityData is not valid pem data",
+			ldapDialer: successfulDialer,
+			inputUpstreams: []runtime.Object{modifiedCopyOfValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+				upstream.Spec.TLS.CertificateAuthorityData = base64.StdEncoding.EncodeToString([]byte("this is not pem data"))
+			})},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: testSecretName, Namespace: testNamespace},
+				Type:       corev1.SecretTypeBasicAuth,
+				Data:       testValidSecretData,
+			}},
+			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
+			wantResultingCache: []*upstreamldap.Provider{},
+			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.LDAPIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:               "BindSecretValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded bind secret",
+							ObservedGeneration: 1234,
+						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "InvalidTLSConfig",
+							Message:            "certificateAuthorityData is invalid: no certificates found",
+							ObservedGeneration: 1234,
+						},
+					},
+				},
+			}},
+		},
+		{
+			name:       "nil TLS configuration",
+			ldapDialer: successfulDialer,
+			inputUpstreams: []runtime.Object{modifiedCopyOfValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+				upstream.Spec.TLS = nil
+			})},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: testSecretName, Namespace: testNamespace},
+				Type:       corev1.SecretTypeBasicAuth,
+				Data:       testValidSecretData,
+			}},
+			wantResultingCache: []*upstreamldap.Provider{
+				{
+					Name:         testName,
+					Host:         testHost,
+					CABundle:     nil,
+					BindUsername: testBindUsername,
+					BindPassword: testBindPassword,
+					UserSearch: &upstreamldap.UserSearch{
+						Base:              testUserSearchBase,
+						Filter:            testUserSearchFilter,
+						UsernameAttribute: testUsernameAttrName,
+						UIDAttribute:      testUIDAttrName,
+					},
+					Dialer: successfulDialer, // the dialer passed to the controller's constructor should have been passed through
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.LDAPIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:               "BindSecretValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded bind secret",
+							ObservedGeneration: 1234,
+						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "no TLS configuration provided",
+							ObservedGeneration: 1234,
+						},
+					},
+				},
+			}},
+		},
+		{
+			name:       "non-nil TLS configuration with empty CertificateAuthorityData",
+			ldapDialer: successfulDialer,
+			inputUpstreams: []runtime.Object{modifiedCopyOfValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+				upstream.Spec.TLS.CertificateAuthorityData = ""
+			})},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: testSecretName, Namespace: testNamespace},
+				Type:       corev1.SecretTypeBasicAuth,
+				Data:       testValidSecretData,
+			}},
+			wantResultingCache: []*upstreamldap.Provider{
+				{
+					Name:         testName,
+					Host:         testHost,
+					CABundle:     nil,
+					BindUsername: testBindUsername,
+					BindPassword: testBindPassword,
+					UserSearch: &upstreamldap.UserSearch{
+						Base:              testUserSearchBase,
+						Filter:            testUserSearchFilter,
+						UsernameAttribute: testUsernameAttrName,
+						UIDAttribute:      testUIDAttrName,
+					},
+					Dialer: successfulDialer, // the dialer passed to the controller's constructor should have been passed through
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.LDAPIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:               "BindSecretValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded bind secret",
+							ObservedGeneration: 1234,
+						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded TLS configuration",
 							ObservedGeneration: 1234,
 						},
 					},
@@ -351,6 +568,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 								Message:            fmt.Sprintf(`secret "%s" not found`, "non-existent-secret"),
 								ObservedGeneration: 42,
 							},
+							{
+								Type:               "TLSConfigurationValid",
+								Status:             "True",
+								LastTransitionTime: now,
+								Reason:             "Success",
+								Message:            "loaded TLS configuration",
+								ObservedGeneration: 42,
+							},
 						},
 					},
 				},
@@ -365,6 +590,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 								LastTransitionTime: now,
 								Reason:             "Success",
 								Message:            "loaded bind secret",
+								ObservedGeneration: 1234,
+							},
+							{
+								Type:               "TLSConfigurationValid",
+								Status:             "True",
+								LastTransitionTime: now,
+								Reason:             "Success",
+								Message:            "loaded TLS configuration",
 								ObservedGeneration: 1234,
 							},
 						},

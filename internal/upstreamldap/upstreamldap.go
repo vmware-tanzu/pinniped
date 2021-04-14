@@ -60,7 +60,7 @@ type Provider struct {
 	// the default LDAP port will be used.
 	Host string
 
-	// PEM-encoded CA cert bundle to trust when connecting to the LDAP server.
+	// PEM-encoded CA cert bundle to trust when connecting to the LDAP server. Can be nil.
 	CABundle []byte
 
 	// BindUsername is the username to use when performing a bind with the upstream LDAP IDP.

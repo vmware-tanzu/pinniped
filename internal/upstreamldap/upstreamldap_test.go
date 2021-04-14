@@ -45,7 +45,9 @@ var (
 func TestAuthenticateUser(t *testing.T) {
 	provider := func(editFunc func(p *Provider)) *Provider {
 		provider := &Provider{
+			Name:         "some-provider-name",
 			Host:         testHost,
+			CABundle:     nil, // this field is only used by the production dialer, which is replaced by a mock for this test
 			BindUsername: testBindUsername,
 			BindPassword: testBindPassword,
 			UserSearch: &UserSearch{

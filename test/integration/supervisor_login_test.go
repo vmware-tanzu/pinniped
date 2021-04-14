@@ -80,7 +80,7 @@ func TestSupervisorLogin(t *testing.T) {
 				library.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
 					Host: env.SupervisorUpstreamLDAP.Host,
 					TLS: &idpv1alpha1.LDAPIdentityProviderTLSSpec{
-						CertificateAuthorityData: env.SupervisorUpstreamLDAP.CABundle,
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
 					},
 					Bind: idpv1alpha1.LDAPIdentityProviderBindSpec{
 						SecretName: secret.Name,
@@ -93,7 +93,7 @@ func TestSupervisorLogin(t *testing.T) {
 							UniqueID: env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
 						},
 					},
-				}, "") // TODO: this should be idpv1alpha1.LDAPPhaseReady once we have a controller
+				}, idpv1alpha1.LDAPPhaseReady)
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingLDAPIdentityProvider(t,
@@ -152,6 +152,10 @@ func testSupervisorLogin(
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{RootCAs: ca.Pool()},
 			Proxy: func(req *http.Request) (*url.URL, error) {
+				if strings.HasPrefix(req.URL.Host, "127.0.0.1") {
+					// don't proxy requests to localhost to avoid proxying calls to our local callback listener
+					return nil, nil
+				}
 				if env.Proxy == "" {
 					t.Logf("passing request for %s with no proxy", req.URL)
 					return nil, nil
@@ -249,14 +253,6 @@ func testSupervisorLogin(
 		pkceParam.Method(),
 	)
 
-	// Make the authorize request once "manually" so we can check its response security headers.
-	authorizeRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthorizeURL, nil)
-	require.NoError(t, err)
-	authorizeResp, err := httpClient.Do(authorizeRequest)
-	require.NoError(t, err)
-	require.NoError(t, authorizeResp.Body.Close())
-	expectSecurityHeaders(t, authorizeResp)
-
 	// Perform parameterized auth code acquisition.
 	requestAuthorization(t, downstreamAuthorizeURL, localCallbackServer.URL, httpClient)
 
@@ -350,9 +346,20 @@ func verifyTokenResponse(
 	require.NotEmpty(t, tokenResponse.RefreshToken)
 }
 
-func requestAuthorizationUsingOIDCIdentityProvider(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, _ *http.Client) {
+func requestAuthorizationUsingOIDCIdentityProvider(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, httpClient *http.Client) {
 	t.Helper()
 	env := library.IntegrationEnv(t)
+
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Minute)
+	defer cancelFunc()
+
+	// Make the authorize request once "manually" so we can check its response security headers.
+	authorizeRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthorizeURL, nil)
+	require.NoError(t, err)
+	authorizeResp, err := httpClient.Do(authorizeRequest)
+	require.NoError(t, err)
+	require.NoError(t, authorizeResp.Body.Close())
+	expectSecurityHeaders(t, authorizeResp, false)
 
 	// Open the web browser and navigate to the downstream authorize URL.
 	page := browsertest.Open(t)
@@ -381,18 +388,29 @@ func requestAuthorizationUsingLDAPIdentityProvider(t *testing.T, downstreamAutho
 	authRequest.Header.Set("X-Pinniped-Upstream-Username", upstreamUsername)
 	authRequest.Header.Set("X-Pinniped-Upstream-Password", upstreamPassword)
 
-	// The authorize request is supposed to redirect to this test's callback handler, which in turn is supposed to return 200 OK.
 	authResponse, err := httpClient.Do(authRequest)
 	require.NoError(t, err)
 	responseBody, err := ioutil.ReadAll(authResponse.Body)
 	defer authResponse.Body.Close()
 	require.NoError(t, err)
+	expectSecurityHeaders(t, authResponse, true)
 
-	// TODO remove this skip
-	_ = responseBody // suppress linter until we remove the below skip
-	t.Skip("The rest of this test will not work until we implement the corresponding production code.")
+	// A successful authorize request results in a redirect to our localhost callback listener with an authcode param.
+	require.Equalf(t, http.StatusFound, authResponse.StatusCode, "response body was: %s", string(responseBody))
+	redirectLocation := authResponse.Header.Get("Location")
+	require.Contains(t, redirectLocation, "127.0.0.1")
+	require.Contains(t, redirectLocation, "/callback")
+	require.Contains(t, redirectLocation, "code=")
 
-	require.Equalf(t, http.StatusOK, authResponse.StatusCode, "response body was: %s", string(responseBody))
+	// Follow the redirect.
+	callbackRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, redirectLocation, nil)
+	require.NoError(t, err)
+
+	// Our localhost callback listener should have returned 200 OK.
+	callbackResponse, err := httpClient.Do(callbackRequest)
+	require.NoError(t, err)
+	defer callbackResponse.Body.Close()
+	require.Equal(t, http.StatusOK, callbackResponse.StatusCode)
 }
 
 func startLocalCallbackServer(t *testing.T) *localCallbackServer {
@@ -462,7 +480,7 @@ func doTokenExchange(t *testing.T, config *oauth2.Config, tokenResponse *oauth2.
 	t.Logf("exchanged token claims:\n%s", string(indentedClaims))
 }
 
-func expectSecurityHeaders(t *testing.T, response *http.Response) {
+func expectSecurityHeaders(t *testing.T, response *http.Response, expectFositeToOverrideSome bool) {
 	h := response.Header
 	assert.Equal(t, "default-src 'none'; frame-ancestors 'none'", h.Get("Content-Security-Policy"))
 	assert.Equal(t, "DENY", h.Get("X-Frame-Options"))
@@ -470,7 +488,11 @@ func expectSecurityHeaders(t *testing.T, response *http.Response) {
 	assert.Equal(t, "nosniff", h.Get("X-Content-Type-Options"))
 	assert.Equal(t, "no-referrer", h.Get("Referrer-Policy"))
 	assert.Equal(t, "off", h.Get("X-DNS-Prefetch-Control"))
-	assert.Equal(t, "no-cache,no-store,max-age=0,must-revalidate", h.Get("Cache-Control"))
+	if expectFositeToOverrideSome {
+		assert.Equal(t, "no-store", h.Get("Cache-Control"))
+	} else {
+		assert.Equal(t, "no-cache,no-store,max-age=0,must-revalidate", h.Get("Cache-Control"))
+	}
 	assert.Equal(t, "no-cache", h.Get("Pragma"))
 	assert.Equal(t, "0", h.Get("Expires"))
 }

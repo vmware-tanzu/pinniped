@@ -9,6 +9,8 @@ list, [follow these directions](#adding-your-organization-to-the-list-of-adopter
 
 <a href="https://kubeapps.com/" border="0" target="_blank"><img alt="kubeapps" src="site/themes/pinniped/static/img/kubeapps.svg" height="50"></a>
 
+<a href="https://www.ok.dk/" border="0" target="_blank"><img alt="ok-amba" src="site/themes/pinniped/static/img/ok-amba.svg" height="50"></a>
+
 ## Solutions built with Pinniped
 
 Below is a list of solutions where Pinniped is being used as a component.

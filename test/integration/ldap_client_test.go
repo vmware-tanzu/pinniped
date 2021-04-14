@@ -22,11 +22,14 @@ import (
 
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/upstreamldap"
+	"go.pinniped.dev/test/library"
 )
 
-// Unlike most other integration tests, you can run this test with no special setup, as long as you have Docker.
-// It does not depend on Kubernetes.
 func TestLDAPSearch(t *testing.T) {
+	// Unlike most other integration tests, you can run this test with no special setup, as long
+	// as you have Docker. It does not depend on Kubernetes.
+	library.SkipUnlessIntegration(t)
+
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	t.Cleanup(func() {
 		cancelFunc() // this will send SIGKILL to the docker process, just in case
@@ -157,11 +160,11 @@ func TestLDAPSearch(t *testing.T) {
 		},
 		{
 			name:     "when the UsernameAttribute is sn",
-			username: "seAl", // note that this is not case-sensitive! sn=Seal
+			username: "seAl", // note that this is not case-sensitive! sn=Seal. The server decides which fields are compared case-sensitive.
 			password: pinnyPassword,
 			provider: provider(func(p *upstreamldap.Provider) { p.UserSearch.UsernameAttribute = "sn" }),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "Seal", UID: "1000", Groups: []string{}}, // note that the final answer is case-sensitive
+				User: &user.DefaultInfo{Name: "Seal", UID: "1000", Groups: []string{}}, // note that the final answer has case preserved from the entry
 			},
 		},
 		{
@@ -199,6 +202,13 @@ func TestLDAPSearch(t *testing.T) {
 			name:                "when the end user password is wrong",
 			username:            "pinny",
 			password:            "wrong-pinny-password",
+			provider:            provider(nil),
+			wantUnauthenticated: true,
+		},
+		{
+			name:                "when the end user password has the wrong case (passwords are compared as case-sensitive)",
+			username:            "pinny",
+			password:            strings.ToUpper(pinnyPassword),
 			provider:            provider(nil),
 			wantUnauthenticated: true,
 		},

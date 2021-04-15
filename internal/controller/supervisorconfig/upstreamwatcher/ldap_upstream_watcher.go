@@ -129,7 +129,11 @@ func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *
 
 	// No point in trying to connect to the server if the config was already determined to be invalid.
 	if secretValidCondition.Status == v1alpha1.ConditionTrue && tlsValidCondition.Status == v1alpha1.ConditionTrue {
-		conditions = append(conditions, c.validateFinishedConfig(ctx, config))
+		finishedConfigCondition := c.validateFinishedConfig(ctx, upstream, config)
+		// nil when there is no need to update this condition.
+		if finishedConfigCondition != nil {
+			conditions = append(conditions, finishedConfigCondition)
+		}
 	}
 
 	hadErrorCondition := c.updateStatus(ctx, upstream, conditions)
@@ -164,10 +168,14 @@ func (c *ldapWatcherController) validateTLSConfig(upstream *v1alpha1.LDAPIdentit
 	return c.validTLSCondition(loadedTLSConfigurationMessage)
 }
 
-func (c *ldapWatcherController) validateFinishedConfig(ctx context.Context, config *upstreamldap.ProviderConfig) *v1alpha1.Condition {
+func (c *ldapWatcherController) validateFinishedConfig(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider, config *upstreamldap.ProviderConfig) *v1alpha1.Condition {
 	ldapProvider := upstreamldap.New(*config)
 
-	testConnectionTimeout, cancelFunc := context.WithTimeout(ctx, 60*time.Second)
+	if alreadyValidatedFinishedConfigForThisSpecGeneration(upstream) {
+		return nil
+	}
+
+	testConnectionTimeout, cancelFunc := context.WithTimeout(ctx, 90*time.Second)
 	defer cancelFunc()
 
 	err := ldapProvider.TestConnection(testConnectionTimeout)
@@ -186,6 +194,16 @@ func (c *ldapWatcherController) validateFinishedConfig(ctx context.Context, conf
 		Reason:  reasonSuccess,
 		Message: fmt.Sprintf(`successfully able to connect to "%s" and bind as user "%s"`, config.Host, config.BindUsername),
 	}
+}
+
+func alreadyValidatedFinishedConfigForThisSpecGeneration(upstream *v1alpha1.LDAPIdentityProvider) bool {
+	currentGeneration := upstream.Generation
+	for _, c := range upstream.Status.Conditions {
+		if c.Type == typeLDAPConnectionValid && c.Status == v1alpha1.ConditionTrue && c.ObservedGeneration == currentGeneration {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *ldapWatcherController) validTLSCondition(message string) *v1alpha1.Condition {

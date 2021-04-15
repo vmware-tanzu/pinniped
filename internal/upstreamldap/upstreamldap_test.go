@@ -608,6 +608,101 @@ func TestAuthenticateUser(t *testing.T) {
 	}
 }
 
+func TestTestConnection(t *testing.T) {
+	providerConfig := func(editFunc func(p *ProviderConfig)) *ProviderConfig {
+		config := &ProviderConfig{
+			Name:         "some-provider-name",
+			Host:         testHost,
+			CABundle:     nil, // this field is only used by the production dialer, which is replaced by a mock for this test
+			BindUsername: testBindUsername,
+			BindPassword: testBindPassword,
+			UserSearch:   UserSearchConfig{}, // not used by TestConnection
+		}
+		if editFunc != nil {
+			editFunc(config)
+		}
+		return config
+	}
+
+	tests := []struct {
+		name           string
+		providerConfig *ProviderConfig
+		setupMocks     func(conn *mockldapconn.MockConn)
+		dialError      error
+		wantError      string
+		wantToSkipDial bool
+	}{
+		{
+			name:           "happy path",
+			providerConfig: providerConfig(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+		},
+		{
+			name:           "when dial fails",
+			providerConfig: providerConfig(nil),
+			dialError:      errors.New("some dial error"),
+			wantError:      fmt.Sprintf(`error dialing host "%s": some dial error`, testHost),
+		},
+		{
+			name:           "when binding as the bind user returns an error",
+			providerConfig: providerConfig(nil),
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Return(errors.New("some bind error")).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: fmt.Sprintf(`error binding as "%s": some bind error`, testBindUsername),
+		},
+		{
+			name: "when the config is invalid",
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				// This particular combination of options is not allowed.
+				p.UserSearch.UsernameAttribute = "dn"
+				p.UserSearch.Filter = ""
+			}),
+			wantToSkipDial: true,
+			wantError:      `must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`,
+		},
+	}
+
+	for _, test := range tests {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
+
+			conn := mockldapconn.NewMockConn(ctrl)
+			if tt.setupMocks != nil {
+				tt.setupMocks(conn)
+			}
+
+			dialWasAttempted := false
+			tt.providerConfig.Dialer = LDAPDialerFunc(func(ctx context.Context, hostAndPort string) (Conn, error) {
+				dialWasAttempted = true
+				require.Equal(t, tt.providerConfig.Host, hostAndPort)
+				if tt.dialError != nil {
+					return nil, tt.dialError
+				}
+				return conn, nil
+			})
+
+			provider := New(*tt.providerConfig)
+			err := provider.TestConnection(context.Background())
+
+			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
+
+			switch {
+			case tt.wantError != "":
+				require.EqualError(t, err, tt.wantError)
+			default:
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestGetConfig(t *testing.T) {
 	c := ProviderConfig{
 		Name:         "original-provider-name",

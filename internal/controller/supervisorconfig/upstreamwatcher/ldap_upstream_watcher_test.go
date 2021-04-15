@@ -6,11 +6,13 @@ package upstreamwatcher
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"sort"
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,6 +25,7 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/mocks/mockldapconn"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/upstreamldap"
@@ -165,13 +168,6 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 	testCABundle := testCA.Bundle()
 	testCABundleBase64Encoded := base64.StdEncoding.EncodeToString(testCABundle)
 
-	successfulDialer := &comparableDialer{
-		f: func(ctx context.Context, hostAndPort string) (upstreamldap.Conn, error) {
-			// TODO return a fake implementation of upstreamldap.Conn, or return an error for testing errors
-			return nil, nil
-		},
-	}
-
 	validUpstream := &v1alpha1.LDAPIdentityProvider{
 		ObjectMeta: metav1.ObjectMeta{Name: testName, Namespace: testNamespace, Generation: 1234},
 		Spec: v1alpha1.LDAPIdentityProviderSpec{
@@ -206,30 +202,35 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			UsernameAttribute: testUsernameAttrName,
 			UIDAttribute:      testUIDAttrName,
 		},
-		Dialer: successfulDialer, // the dialer passed to the controller's constructor should have been passed through
 	}
 
 	tests := []struct {
 		name                   string
 		inputUpstreams         []runtime.Object
 		inputSecrets           []runtime.Object
-		ldapDialer             upstreamldap.LDAPDialer
+		setupMocks             func(conn *mockldapconn.MockConn)
+		dialError              error
 		wantErr                string
 		wantResultingCache     []*upstreamldap.ProviderConfig
 		wantResultingUpstreams []v1alpha1.LDAPIdentityProvider
 	}{
 		{
-			name: "no LDAPIdentityProvider upstreams clears the cache",
+			name:               "no LDAPIdentityProvider upstreams clears the cache",
+			wantResultingCache: []*upstreamldap.ProviderConfig{},
 		},
 		{
 			name:           "one valid upstream updates the cache to include only that upstream",
-			ldapDialer:     successfulDialer,
 			inputUpstreams: []runtime.Object{validUpstream},
 			inputSecrets: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: testSecretName, Namespace: testNamespace},
 				Type:       corev1.SecretTypeBasicAuth,
 				Data:       testValidSecretData,
 			}},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstream},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
@@ -242,6 +243,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							LastTransitionTime: now,
 							Reason:             "Success",
 							Message:            "loaded bind secret",
+							ObservedGeneration: 1234,
+						},
+						{
+							Type:               "LDAPConnectionValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            fmt.Sprintf(`successfully able to connect to "%s" and bind as user "%s"`, testHost, testBindUsername),
 							ObservedGeneration: 1234,
 						},
 						{
@@ -258,7 +267,6 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name:               "missing secret",
-			ldapDialer:         successfulDialer,
 			inputUpstreams:     []runtime.Object{validUpstream},
 			inputSecrets:       []runtime.Object{},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
@@ -290,7 +298,6 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name:           "secret has wrong type",
-			ldapDialer:     successfulDialer,
 			inputUpstreams: []runtime.Object{validUpstream},
 			inputSecrets: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: testSecretName, Namespace: testNamespace},
@@ -326,7 +333,6 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name:           "secret is missing key",
-			ldapDialer:     successfulDialer,
 			inputUpstreams: []runtime.Object{validUpstream},
 			inputSecrets: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: testSecretName, Namespace: testNamespace},
@@ -360,8 +366,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 		},
 		{
-			name:       "CertificateAuthorityData is not base64 encoded",
-			ldapDialer: successfulDialer,
+			name: "CertificateAuthorityData is not base64 encoded",
 			inputUpstreams: []runtime.Object{modifiedCopyOfValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
 				upstream.Spec.TLS.CertificateAuthorityData = "this-is-not-base64-encoded"
 			})},
@@ -398,8 +403,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 		},
 		{
-			name:       "CertificateAuthorityData is not valid pem data",
-			ldapDialer: successfulDialer,
+			name: "CertificateAuthorityData is not valid pem data",
 			inputUpstreams: []runtime.Object{modifiedCopyOfValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
 				upstream.Spec.TLS.CertificateAuthorityData = base64.StdEncoding.EncodeToString([]byte("this is not pem data"))
 			})},
@@ -436,8 +440,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 		},
 		{
-			name:       "nil TLS configuration",
-			ldapDialer: successfulDialer,
+			name: "nil TLS configuration is valid",
 			inputUpstreams: []runtime.Object{modifiedCopyOfValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
 				upstream.Spec.TLS = nil
 			})},
@@ -446,6 +449,11 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				Type:       corev1.SecretTypeBasicAuth,
 				Data:       testValidSecretData,
 			}},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:         testName,
@@ -459,7 +467,6 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 						UsernameAttribute: testUsernameAttrName,
 						UIDAttribute:      testUIDAttrName,
 					},
-					Dialer: successfulDialer, // the dialer passed to the controller's constructor should have been passed through
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
@@ -473,6 +480,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							LastTransitionTime: now,
 							Reason:             "Success",
 							Message:            "loaded bind secret",
+							ObservedGeneration: 1234,
+						},
+						{
+							Type:               "LDAPConnectionValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            fmt.Sprintf(`successfully able to connect to "%s" and bind as user "%s"`, testHost, testBindUsername),
 							ObservedGeneration: 1234,
 						},
 						{
@@ -488,8 +503,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 		},
 		{
-			name:       "non-nil TLS configuration with empty CertificateAuthorityData",
-			ldapDialer: successfulDialer,
+			name: "non-nil TLS configuration with empty CertificateAuthorityData is valid",
 			inputUpstreams: []runtime.Object{modifiedCopyOfValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
 				upstream.Spec.TLS.CertificateAuthorityData = ""
 			})},
@@ -498,6 +512,11 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				Type:       corev1.SecretTypeBasicAuth,
 				Data:       testValidSecretData,
 			}},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:         testName,
@@ -511,7 +530,6 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 						UsernameAttribute: testUsernameAttrName,
 						UIDAttribute:      testUIDAttrName,
 					},
-					Dialer: successfulDialer, // the dialer passed to the controller's constructor should have been passed through
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
@@ -528,6 +546,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							ObservedGeneration: 1234,
 						},
 						{
+							Type:               "LDAPConnectionValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            fmt.Sprintf(`successfully able to connect to "%s" and bind as user "%s"`, testHost, testBindUsername),
+							ObservedGeneration: 1234,
+						},
+						{
 							Type:               "TLSConfigurationValid",
 							Status:             "True",
 							LastTransitionTime: now,
@@ -540,8 +566,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 		},
 		{
-			name:       "one valid upstream and one invalid upstream updates the cache to include only the valid upstream",
-			ldapDialer: successfulDialer,
+			name: "one valid upstream and one invalid upstream updates the cache to include only the valid upstream",
 			inputUpstreams: []runtime.Object{validUpstream, modifiedCopyOfValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
 				upstream.Name = "other-upstream"
 				upstream.Generation = 42
@@ -552,6 +577,11 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				Type:       corev1.SecretTypeBasicAuth,
 				Data:       testValidSecretData,
 			}},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind for the one valid upstream configuration.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstream},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{
@@ -593,6 +623,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 								ObservedGeneration: 1234,
 							},
 							{
+								Type:               "LDAPConnectionValid",
+								Status:             "True",
+								LastTransitionTime: now,
+								Reason:             "Success",
+								Message:            fmt.Sprintf(`successfully able to connect to "%s" and bind as user "%s"`, testHost, testBindUsername),
+								ObservedGeneration: 1234,
+							},
+							{
 								Type:               "TLSConfigurationValid",
 								Status:             "True",
 								LastTransitionTime: now,
@@ -605,11 +643,62 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:           "when testing the connection to the LDAP server fails then the upstream is not added to the cache",
+			inputUpstreams: []runtime.Object{validUpstream},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: testSecretName, Namespace: testNamespace},
+				Type:       corev1.SecretTypeBasicAuth,
+				Data:       testValidSecretData,
+			}},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1).Return(errors.New("some bind error"))
+				conn.EXPECT().Close().Times(1)
+			},
+			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
+			wantResultingCache: []*upstreamldap.ProviderConfig{},
+			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.LDAPIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:               "BindSecretValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded bind secret",
+							ObservedGeneration: 1234,
+						},
+						{
+							Type:               "LDAPConnectionValid",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "LDAPConnectionError",
+							Message: fmt.Sprintf(
+								`could not successfully connect to "%s" and bind as user "%s: error binding as "%s": some bind error`,
+								testHost, testBindUsername, testBindUsername),
+							ObservedGeneration: 1234,
+						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded TLS configuration",
+							ObservedGeneration: 1234,
+						},
+					},
+				},
+			}},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			fakePinnipedClient := pinnipedfake.NewSimpleClientset(tt.inputUpstreams...)
 			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
 			fakeKubeClient := fake.NewSimpleClientset(tt.inputSecrets...)
@@ -619,9 +708,24 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				upstreamldap.New(upstreamldap.ProviderConfig{Name: "initial-entry"}),
 			})
 
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
+
+			conn := mockldapconn.NewMockConn(ctrl)
+			if tt.setupMocks != nil {
+				tt.setupMocks(conn)
+			}
+
+			dialer := &comparableDialer{f: upstreamldap.LDAPDialerFunc(func(ctx context.Context, _ string) (upstreamldap.Conn, error) {
+				if tt.dialError != nil {
+					return nil, tt.dialError
+				}
+				return conn, nil
+			})}
+
 			controller := NewLDAPUpstreamWatcherController(
 				cache,
-				successfulDialer,
+				dialer,
 				fakePinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders(),
 				kubeInformers.Core().V1().Secrets(),
@@ -647,7 +751,11 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			require.Equal(t, len(tt.wantResultingCache), len(actualIDPList))
 			for i := range actualIDPList {
 				actualIDP := actualIDPList[i].(*upstreamldap.Provider)
-				require.Equal(t, *tt.wantResultingCache[i], actualIDP.GetConfig())
+				copyOfExpectedValue := *tt.wantResultingCache[i] // copy before edit to avoid race because these tests are run in parallel
+				// The dialer that was passed in to the controller's constructor should always have been
+				// passed through to the provider.
+				copyOfExpectedValue.Dialer = dialer
+				require.Equal(t, copyOfExpectedValue, actualIDP.GetConfig())
 			}
 
 			actualUpstreams, err := fakePinnipedClient.IDPV1alpha1().LDAPIdentityProviders(testNamespace).List(ctx, metav1.ListOptions{})
@@ -659,13 +767,6 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			for i := range tt.wantResultingUpstreams {
 				// Require each separately to get a nice diff when the test fails.
 				require.Equal(t, tt.wantResultingUpstreams[i], normalizedActualUpstreams[i])
-			}
-
-			// Running the sync() a second time should be idempotent, and should return the same error.
-			if err := controllerlib.TestSync(t, controller, syncCtx); tt.wantErr != "" {
-				require.EqualError(t, err, tt.wantErr)
-			} else {
-				require.NoError(t, err)
 			}
 		})
 	}

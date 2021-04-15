@@ -182,10 +182,24 @@ func (p *Provider) GetURL() string {
 
 // TestConnection provides a method for testing the connection and bind settings. It performs a dial and bind
 // and returns any errors that we encountered.
-func (p *Provider) TestConnection(ctx context.Context) (*authenticator.Response, error) {
-	_, _ = p.dial(ctx)
-	// TODO implement me
-	return nil, nil
+func (p *Provider) TestConnection(ctx context.Context) error {
+	err := p.validateConfig()
+	if err != nil {
+		return err
+	}
+
+	conn, err := p.dial(ctx)
+	if err != nil {
+		return fmt.Errorf(`error dialing host "%s": %w`, p.c.Host, err)
+	}
+	defer conn.Close()
+
+	err = conn.Bind(p.c.BindUsername, p.c.BindPassword)
+	if err != nil {
+		return fmt.Errorf(`error binding as "%s": %w`, p.c.BindUsername, err)
+	}
+
+	return nil
 }
 
 // TestAuthenticateUser provides a method for testing all of the Provider settings in a kind of dry run of
@@ -199,9 +213,9 @@ func (p *Provider) TestAuthenticateUser(ctx context.Context, testUsername string
 
 // Authenticate a user and return their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
 func (p *Provider) AuthenticateUser(ctx context.Context, username, password string) (*authenticator.Response, bool, error) {
-	if p.c.UserSearch.UsernameAttribute == distinguishedNameAttributeName && len(p.c.UserSearch.Filter) == 0 {
-		// LDAP search filters do not allow searching by DN.
-		return nil, false, fmt.Errorf(`must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`)
+	err := p.validateConfig()
+	if err != nil {
+		return nil, false, err
 	}
 
 	if len(username) == 0 {
@@ -237,6 +251,14 @@ func (p *Provider) AuthenticateUser(ctx context.Context, username, password stri
 		},
 	}
 	return response, true, nil
+}
+
+func (p *Provider) validateConfig() error {
+	if p.c.UserSearch.UsernameAttribute == distinguishedNameAttributeName && len(p.c.UserSearch.Filter) == 0 {
+		// LDAP search filters do not allow searching by DN, so we would have no reasonable default for Filter.
+		return fmt.Errorf(`must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`)
+	}
+	return nil
 }
 
 func (p *Provider) searchAndBindUser(conn Conn, username string, password string) (string, string, error) {

@@ -107,10 +107,10 @@ func (c *ldapWatcherController) Sync(ctx controllerlib.Context) error {
 func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider) provider.UpstreamLDAPIdentityProviderI {
 	spec := upstream.Spec
 
-	result := &upstreamldap.Provider{
+	config := &upstreamldap.ProviderConfig{
 		Name: upstream.Name,
 		Host: spec.Host,
-		UserSearch: &upstreamldap.UserSearch{
+		UserSearch: upstreamldap.UserSearchConfig{
 			Base:              spec.UserSearch.Base,
 			Filter:            spec.UserSearch.Filter,
 			UsernameAttribute: spec.UserSearch.Attributes.Username,
@@ -119,17 +119,17 @@ func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *
 		Dialer: c.ldapDialer,
 	}
 	conditions := []*v1alpha1.Condition{
-		c.validateSecret(upstream, result),
-		c.validateTLSConfig(upstream, result),
+		c.validateSecret(upstream, config),
+		c.validateTLSConfig(upstream, config),
 	}
 	hadErrorCondition := c.updateStatus(ctx, upstream, conditions)
 	if hadErrorCondition {
 		return nil
 	}
-	return result
+	return upstreamldap.New(*config)
 }
 
-func (c *ldapWatcherController) validateTLSConfig(upstream *v1alpha1.LDAPIdentityProvider, result *upstreamldap.Provider) *v1alpha1.Condition {
+func (c *ldapWatcherController) validateTLSConfig(upstream *v1alpha1.LDAPIdentityProvider, result *upstreamldap.ProviderConfig) *v1alpha1.Condition {
 	tlsSpec := upstream.Spec.TLS
 	if tlsSpec == nil {
 		return c.validTLSCondition(noTLSConfigurationMessage)
@@ -171,7 +171,7 @@ func (c *ldapWatcherController) invalidTLSCondition(message string) *v1alpha1.Co
 	}
 }
 
-func (c *ldapWatcherController) validateSecret(upstream *v1alpha1.LDAPIdentityProvider, result *upstreamldap.Provider) *v1alpha1.Condition {
+func (c *ldapWatcherController) validateSecret(upstream *v1alpha1.LDAPIdentityProvider, result *upstreamldap.ProviderConfig) *v1alpha1.Condition {
 	secretName := upstream.Spec.Bind.SecretName
 
 	secret, err := c.secretInformer.Lister().Secrets(upstream.Namespace).Get(secretName)

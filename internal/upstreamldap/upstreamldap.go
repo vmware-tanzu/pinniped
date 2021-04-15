@@ -50,9 +50,10 @@ func (f LDAPDialerFunc) Dial(ctx context.Context, hostAndPort string) (Conn, err
 	return f(ctx, hostAndPort)
 }
 
-// Provider includes all of the settings for connection and searching for users and groups in
+// ProviderConfig includes all of the settings for connection and searching for users and groups in
 // the upstream LDAP IDP. It also provides methods for testing the connection and performing logins.
-type Provider struct {
+// The nested structs are not pointer fields to enable deep copy on function params and return values.
+type ProviderConfig struct {
 	// Name is the unique name of this upstream LDAP IDP.
 	Name string
 
@@ -70,14 +71,14 @@ type Provider struct {
 	BindPassword string
 
 	// UserSearch contains information about how to search for users in the upstream LDAP IDP.
-	UserSearch *UserSearch
+	UserSearch UserSearchConfig
 
 	// Dialer exists to enable testing. When nil, will use a default appropriate for production use.
 	Dialer LDAPDialer
 }
 
-// UserSearch contains information about how to search for users in the upstream LDAP IDP.
-type UserSearch struct {
+// UserSearchConfig contains information about how to search for users in the upstream LDAP IDP.
+type UserSearchConfig struct {
 	// Base is the base DN to use for the user search in the upstream LDAP IDP.
 	Base string
 
@@ -93,13 +94,28 @@ type UserSearch struct {
 	UIDAttribute string
 }
 
+type Provider struct {
+	c ProviderConfig
+}
+
+// Create a Provider. The config is not a pointer to ensure that a copy of the config is created,
+// making the resulting Provider use an effectively read-only configuration.
+func New(config ProviderConfig) *Provider {
+	return &Provider{c: config}
+}
+
+// A reader for the config. Returns a copy of the config to keep the underlying config read-only.
+func (p *Provider) GetConfig() ProviderConfig {
+	return p.c
+}
+
 func (p *Provider) dial(ctx context.Context) (Conn, error) {
-	hostAndPort, err := hostAndPortWithDefaultPort(p.Host, ldap.DefaultLdapsPort)
+	hostAndPort, err := hostAndPortWithDefaultPort(p.c.Host, ldap.DefaultLdapsPort)
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
-	if p.Dialer != nil {
-		return p.Dialer.Dial(ctx, hostAndPort)
+	if p.c.Dialer != nil {
+		return p.c.Dialer.Dial(ctx, hostAndPort)
 	}
 	return p.dialTLS(ctx, hostAndPort)
 }
@@ -109,8 +125,8 @@ func (p *Provider) dial(ctx context.Context) (Conn, error) {
 // so we implement it ourselves, heavily inspired by ldap.DialURL.
 func (p *Provider) dialTLS(ctx context.Context, hostAndPort string) (Conn, error) {
 	rootCAs := x509.NewCertPool()
-	if p.CABundle != nil {
-		if !rootCAs.AppendCertsFromPEM(p.CABundle) {
+	if p.c.CABundle != nil {
+		if !rootCAs.AppendCertsFromPEM(p.c.CABundle) {
 			return nil, ldap.NewError(ldap.ErrorNetwork, fmt.Errorf("could not parse CA bundle"))
 		}
 	}
@@ -154,14 +170,14 @@ func hostAndPortWithDefaultPort(hostAndPort string, defaultPort string) (string,
 
 // A name for this upstream provider.
 func (p *Provider) GetName() string {
-	return p.Name
+	return p.c.Name
 }
 
 // Return a URL which uniquely identifies this LDAP provider, e.g. "ldaps://host.example.com:1234".
 // This URL is not used for connecting to the provider, but rather is used for creating a globally unique user
 // identifier by being combined with the user's UID, since user UIDs are only unique within one provider.
 func (p *Provider) GetURL() string {
-	return fmt.Sprintf("%s://%s", ldapsScheme, p.Host)
+	return fmt.Sprintf("%s://%s", ldapsScheme, p.c.Host)
 }
 
 // TestConnection provides a method for testing the connection and bind settings. It performs a dial and bind
@@ -183,7 +199,7 @@ func (p *Provider) TestAuthenticateUser(ctx context.Context, testUsername string
 
 // Authenticate a user and return their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
 func (p *Provider) AuthenticateUser(ctx context.Context, username, password string) (*authenticator.Response, bool, error) {
-	if p.UserSearch.UsernameAttribute == distinguishedNameAttributeName && len(p.UserSearch.Filter) == 0 {
+	if p.c.UserSearch.UsernameAttribute == distinguishedNameAttributeName && len(p.c.UserSearch.Filter) == 0 {
 		// LDAP search filters do not allow searching by DN.
 		return nil, false, fmt.Errorf(`must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`)
 	}
@@ -195,13 +211,13 @@ func (p *Provider) AuthenticateUser(ctx context.Context, username, password stri
 
 	conn, err := p.dial(ctx)
 	if err != nil {
-		return nil, false, fmt.Errorf(`error dialing host "%s": %w`, p.Host, err)
+		return nil, false, fmt.Errorf(`error dialing host "%s": %w`, p.c.Host, err)
 	}
 	defer conn.Close()
 
-	err = conn.Bind(p.BindUsername, p.BindPassword)
+	err = conn.Bind(p.c.BindUsername, p.c.BindPassword)
 	if err != nil {
-		return nil, false, fmt.Errorf(`error binding as "%s" before user search: %w`, p.BindUsername, err)
+		return nil, false, fmt.Errorf(`error binding as "%s" before user search: %w`, p.c.BindUsername, err)
 	}
 
 	mappedUsername, mappedUID, err := p.searchAndBindUser(conn, username, password)
@@ -243,12 +259,12 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, password string
 		return "", "", fmt.Errorf(`searching for user "%s" resulted in search result without DN`, username)
 	}
 
-	mappedUsername, err := p.getSearchResultAttributeValue(p.UserSearch.UsernameAttribute, userEntry, username)
+	mappedUsername, err := p.getSearchResultAttributeValue(p.c.UserSearch.UsernameAttribute, userEntry, username)
 	if err != nil {
 		return "", "", err
 	}
 
-	mappedUID, err := p.getSearchResultAttributeValue(p.UserSearch.UIDAttribute, userEntry, username)
+	mappedUID, err := p.getSearchResultAttributeValue(p.c.UserSearch.UIDAttribute, userEntry, username)
 	if err != nil {
 		return "", "", err
 	}
@@ -270,7 +286,7 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, password string
 func (p *Provider) userSearchRequest(username string) *ldap.SearchRequest {
 	// See https://ldap.com/the-ldap-search-operation for general documentation of LDAP search options.
 	return &ldap.SearchRequest{
-		BaseDN:       p.UserSearch.Base,
+		BaseDN:       p.c.UserSearch.Base,
 		Scope:        ldap.ScopeWholeSubtree,
 		DerefAliases: ldap.DerefAlways, // TODO what's the best value here?
 		SizeLimit:    2,
@@ -284,21 +300,21 @@ func (p *Provider) userSearchRequest(username string) *ldap.SearchRequest {
 
 func (p *Provider) userSearchRequestedAttributes() []string {
 	attributes := []string{}
-	if p.UserSearch.UsernameAttribute != distinguishedNameAttributeName {
-		attributes = append(attributes, p.UserSearch.UsernameAttribute)
+	if p.c.UserSearch.UsernameAttribute != distinguishedNameAttributeName {
+		attributes = append(attributes, p.c.UserSearch.UsernameAttribute)
 	}
-	if p.UserSearch.UIDAttribute != distinguishedNameAttributeName {
-		attributes = append(attributes, p.UserSearch.UIDAttribute)
+	if p.c.UserSearch.UIDAttribute != distinguishedNameAttributeName {
+		attributes = append(attributes, p.c.UserSearch.UIDAttribute)
 	}
 	return attributes
 }
 
 func (p *Provider) userSearchFilter(username string) string {
 	safeUsername := p.escapeUsernameForSearchFilter(username)
-	if len(p.UserSearch.Filter) == 0 {
-		return fmt.Sprintf("(%s=%s)", p.UserSearch.UsernameAttribute, safeUsername)
+	if len(p.c.UserSearch.Filter) == 0 {
+		return fmt.Sprintf("(%s=%s)", p.c.UserSearch.UsernameAttribute, safeUsername)
 	}
-	filter := strings.ReplaceAll(p.UserSearch.Filter, userSearchFilterInterpolationLocationMarker, safeUsername)
+	filter := strings.ReplaceAll(p.c.UserSearch.Filter, userSearchFilterInterpolationLocationMarker, safeUsername)
 	if strings.HasPrefix(filter, "(") && strings.HasSuffix(filter, ")") {
 		return filter
 	}

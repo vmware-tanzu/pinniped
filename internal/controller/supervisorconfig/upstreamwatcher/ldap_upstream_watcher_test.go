@@ -194,13 +194,13 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		return deepCopy
 	}
 
-	providerForValidUpstream := &upstreamldap.Provider{
+	providerConfigForValidUpstream := &upstreamldap.ProviderConfig{
 		Name:         testName,
 		Host:         testHost,
 		CABundle:     testCABundle,
 		BindUsername: testBindUsername,
 		BindPassword: testBindPassword,
-		UserSearch: &upstreamldap.UserSearch{
+		UserSearch: upstreamldap.UserSearchConfig{
 			Base:              testUserSearchBase,
 			Filter:            testUserSearchFilter,
 			UsernameAttribute: testUsernameAttrName,
@@ -215,7 +215,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		inputSecrets           []runtime.Object
 		ldapDialer             upstreamldap.LDAPDialer
 		wantErr                string
-		wantResultingCache     []*upstreamldap.Provider
+		wantResultingCache     []*upstreamldap.ProviderConfig
 		wantResultingUpstreams []v1alpha1.LDAPIdentityProvider
 	}{
 		{
@@ -230,7 +230,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				Type:       corev1.SecretTypeBasicAuth,
 				Data:       testValidSecretData,
 			}},
-			wantResultingCache: []*upstreamldap.Provider{providerForValidUpstream},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstream},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
 				Status: v1alpha1.LDAPIdentityProviderStatus{
@@ -262,7 +262,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			inputUpstreams:     []runtime.Object{validUpstream},
 			inputSecrets:       []runtime.Object{},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
-			wantResultingCache: []*upstreamldap.Provider{},
+			wantResultingCache: []*upstreamldap.ProviderConfig{},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
 				Status: v1alpha1.LDAPIdentityProviderStatus{
@@ -298,7 +298,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				Data:       testValidSecretData,
 			}},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
-			wantResultingCache: []*upstreamldap.Provider{},
+			wantResultingCache: []*upstreamldap.ProviderConfig{},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
 				Status: v1alpha1.LDAPIdentityProviderStatus{
@@ -333,7 +333,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				Type:       corev1.SecretTypeBasicAuth,
 			}},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
-			wantResultingCache: []*upstreamldap.Provider{},
+			wantResultingCache: []*upstreamldap.ProviderConfig{},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
 				Status: v1alpha1.LDAPIdentityProviderStatus{
@@ -371,7 +371,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				Data:       testValidSecretData,
 			}},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
-			wantResultingCache: []*upstreamldap.Provider{},
+			wantResultingCache: []*upstreamldap.ProviderConfig{},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
 				Status: v1alpha1.LDAPIdentityProviderStatus{
@@ -409,7 +409,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				Data:       testValidSecretData,
 			}},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
-			wantResultingCache: []*upstreamldap.Provider{},
+			wantResultingCache: []*upstreamldap.ProviderConfig{},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
 				Status: v1alpha1.LDAPIdentityProviderStatus{
@@ -446,14 +446,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				Type:       corev1.SecretTypeBasicAuth,
 				Data:       testValidSecretData,
 			}},
-			wantResultingCache: []*upstreamldap.Provider{
+			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:         testName,
 					Host:         testHost,
 					CABundle:     nil,
 					BindUsername: testBindUsername,
 					BindPassword: testBindPassword,
-					UserSearch: &upstreamldap.UserSearch{
+					UserSearch: upstreamldap.UserSearchConfig{
 						Base:              testUserSearchBase,
 						Filter:            testUserSearchFilter,
 						UsernameAttribute: testUsernameAttrName,
@@ -498,14 +498,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				Type:       corev1.SecretTypeBasicAuth,
 				Data:       testValidSecretData,
 			}},
-			wantResultingCache: []*upstreamldap.Provider{
+			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
 					Name:         testName,
 					Host:         testHost,
 					CABundle:     nil,
 					BindUsername: testBindUsername,
 					BindPassword: testBindPassword,
-					UserSearch: &upstreamldap.UserSearch{
+					UserSearch: upstreamldap.UserSearchConfig{
 						Base:              testUserSearchBase,
 						Filter:            testUserSearchFilter,
 						UsernameAttribute: testUsernameAttrName,
@@ -553,7 +553,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				Data:       testValidSecretData,
 			}},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
-			wantResultingCache: []*upstreamldap.Provider{providerForValidUpstream},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstream},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "other-upstream", Generation: 42},
@@ -616,7 +616,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			cache := provider.NewDynamicUpstreamIDPProvider()
 			cache.SetLDAPIdentityProviders([]provider.UpstreamLDAPIdentityProviderI{
-				&upstreamldap.Provider{Name: "initial-entry"},
+				upstreamldap.New(upstreamldap.ProviderConfig{Name: "initial-entry"}),
 			})
 
 			controller := NewLDAPUpstreamWatcherController(
@@ -647,7 +647,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			require.Equal(t, len(tt.wantResultingCache), len(actualIDPList))
 			for i := range actualIDPList {
 				actualIDP := actualIDPList[i].(*upstreamldap.Provider)
-				require.Equal(t, tt.wantResultingCache[i], actualIDP)
+				require.Equal(t, *tt.wantResultingCache[i], actualIDP.GetConfig())
 			}
 
 			actualUpstreams, err := fakePinnipedClient.IDPV1alpha1().LDAPIdentityProviders(testNamespace).List(ctx, metav1.ListOptions{})

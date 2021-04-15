@@ -43,14 +43,14 @@ var (
 )
 
 func TestAuthenticateUser(t *testing.T) {
-	provider := func(editFunc func(p *Provider)) *Provider {
-		provider := &Provider{
+	providerConfig := func(editFunc func(p *ProviderConfig)) *ProviderConfig {
+		config := &ProviderConfig{
 			Name:         "some-provider-name",
 			Host:         testHost,
 			CABundle:     nil, // this field is only used by the production dialer, which is replaced by a mock for this test
 			BindUsername: testBindUsername,
 			BindPassword: testBindPassword,
-			UserSearch: &UserSearch{
+			UserSearch: UserSearchConfig{
 				Base:              testUserSearchBase,
 				Filter:            testUserSearchFilter,
 				UsernameAttribute: testUserSearchUsernameAttribute,
@@ -58,9 +58,9 @@ func TestAuthenticateUser(t *testing.T) {
 			},
 		}
 		if editFunc != nil {
-			editFunc(provider)
+			editFunc(config)
 		}
-		return provider
+		return config
 	}
 
 	expectedSearch := func(editFunc func(r *ldap.SearchRequest)) *ldap.SearchRequest {
@@ -85,7 +85,7 @@ func TestAuthenticateUser(t *testing.T) {
 		name                string
 		username            string
 		password            string
-		provider            *Provider
+		providerConfig      *ProviderConfig
 		setupMocks          func(conn *mockldapconn.MockConn)
 		dialError           error
 		wantError           string
@@ -94,10 +94,10 @@ func TestAuthenticateUser(t *testing.T) {
 		wantUnauthenticated bool
 	}{
 		{
-			name:     "happy path",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			provider: provider(nil),
+			name:           "happy path",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
@@ -128,7 +128,7 @@ func TestAuthenticateUser(t *testing.T) {
 			name:     "when the user search filter is already wrapped by parenthesis then it is not wrapped again",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			provider: provider(func(p *Provider) {
+			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.UserSearch.Filter = "(" + testUserSearchFilter + ")"
 			}),
 			setupMocks: func(conn *mockldapconn.MockConn) {
@@ -159,7 +159,7 @@ func TestAuthenticateUser(t *testing.T) {
 			name:     "when the UsernameAttribute is dn and there is a user search filter provided",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			provider: provider(func(p *Provider) {
+			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.UserSearch.UsernameAttribute = "dn"
 			}),
 			setupMocks: func(conn *mockldapconn.MockConn) {
@@ -191,7 +191,7 @@ func TestAuthenticateUser(t *testing.T) {
 			name:     "when the UIDAttribute is dn",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			provider: provider(func(p *Provider) {
+			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.UserSearch.UIDAttribute = "dn"
 			}),
 			setupMocks: func(conn *mockldapconn.MockConn) {
@@ -223,7 +223,7 @@ func TestAuthenticateUser(t *testing.T) {
 			name:     "when Filter is blank it derives a search filter from the UsernameAttribute",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			provider: provider(func(p *Provider) {
+			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.UserSearch.Filter = ""
 			}),
 			setupMocks: func(conn *mockldapconn.MockConn) {
@@ -253,10 +253,10 @@ func TestAuthenticateUser(t *testing.T) {
 			},
 		},
 		{
-			name:     "when the username has special LDAP search filter characters then they must be properly escaped in the search filter",
-			username: `a&b|c(d)e\f*g`,
-			password: testUpstreamPassword,
-			provider: provider(nil),
+			name:           "when the username has special LDAP search filter characters then they must be properly escaped in the search filter",
+			username:       `a&b|c(d)e\f*g`,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(func(r *ldap.SearchRequest) {
@@ -284,18 +284,18 @@ func TestAuthenticateUser(t *testing.T) {
 			},
 		},
 		{
-			name:      "when dial fails",
-			username:  testUpstreamUsername,
-			password:  testUpstreamPassword,
-			provider:  provider(nil),
-			dialError: errors.New("some dial error"),
-			wantError: fmt.Sprintf(`error dialing host "%s": some dial error`, testHost),
+			name:           "when dial fails",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
+			dialError:      errors.New("some dial error"),
+			wantError:      fmt.Sprintf(`error dialing host "%s": some dial error`, testHost),
 		},
 		{
 			name:     "when the UsernameAttribute is dn and there is not a user search filter provided",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			provider: provider(func(p *Provider) {
+			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.UserSearch.UsernameAttribute = "dn"
 				p.UserSearch.Filter = ""
 			}),
@@ -303,10 +303,10 @@ func TestAuthenticateUser(t *testing.T) {
 			wantError:      `must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`,
 		},
 		{
-			name:     "when binding as the bind user returns an error",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			provider: provider(nil),
+			name:           "when binding as the bind user returns an error",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Return(errors.New("some bind error")).Times(1)
 				conn.EXPECT().Close().Times(1)
@@ -314,10 +314,10 @@ func TestAuthenticateUser(t *testing.T) {
 			wantError: fmt.Sprintf(`error binding as "%s" before user search: some bind error`, testBindUsername),
 		},
 		{
-			name:     "when searching for the user returns an error",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			provider: provider(nil),
+			name:           "when searching for the user returns an error",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(nil, errors.New("some search error")).Times(1)
@@ -326,10 +326,10 @@ func TestAuthenticateUser(t *testing.T) {
 			wantError: fmt.Sprintf(`error searching for user "%s": some search error`, testUpstreamUsername),
 		},
 		{
-			name:     "when searching for the user returns no results",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			provider: provider(nil),
+			name:           "when searching for the user returns no results",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
@@ -340,10 +340,10 @@ func TestAuthenticateUser(t *testing.T) {
 			wantUnauthenticated: true,
 		},
 		{
-			name:     "when searching for the user returns multiple results",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			provider: provider(nil),
+			name:           "when searching for the user returns multiple results",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
@@ -357,10 +357,10 @@ func TestAuthenticateUser(t *testing.T) {
 			wantError: fmt.Sprintf(`searching for user "%s" resulted in 2 search results, but expected 1 result`, testUpstreamUsername),
 		},
 		{
-			name:     "when searching for the user returns a user without a DN",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			provider: provider(nil),
+			name:           "when searching for the user returns a user without a DN",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
@@ -373,10 +373,10 @@ func TestAuthenticateUser(t *testing.T) {
 			wantError: fmt.Sprintf(`searching for user "%s" resulted in search result without DN`, testUpstreamUsername),
 		},
 		{
-			name:     "when searching for the user returns a user without an expected username attribute",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			provider: provider(nil),
+			name:           "when searching for the user returns a user without an expected username attribute",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
@@ -394,10 +394,10 @@ func TestAuthenticateUser(t *testing.T) {
 			wantError: fmt.Sprintf(`found 0 values for attribute "%s" while searching for user "%s", but expected 1 result`, testUserSearchUsernameAttribute, testUpstreamUsername),
 		},
 		{
-			name:     "when searching for the user returns a user with too many values for the expected username attribute",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			provider: provider(nil),
+			name:           "when searching for the user returns a user with too many values for the expected username attribute",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
@@ -419,10 +419,10 @@ func TestAuthenticateUser(t *testing.T) {
 			wantError: fmt.Sprintf(`found 2 values for attribute "%s" while searching for user "%s", but expected 1 result`, testUserSearchUsernameAttribute, testUpstreamUsername),
 		},
 		{
-			name:     "when searching for the user returns a user with an empty value for the expected username attribute",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			provider: provider(nil),
+			name:           "when searching for the user returns a user with an empty value for the expected username attribute",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
@@ -441,10 +441,10 @@ func TestAuthenticateUser(t *testing.T) {
 			wantError: fmt.Sprintf(`found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`, testUserSearchUsernameAttribute, testUpstreamUsername),
 		},
 		{
-			name:     "when searching for the user returns a user without an expected UID attribute",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			provider: provider(nil),
+			name:           "when searching for the user returns a user without an expected UID attribute",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
@@ -462,10 +462,10 @@ func TestAuthenticateUser(t *testing.T) {
 			wantError: fmt.Sprintf(`found 0 values for attribute "%s" while searching for user "%s", but expected 1 result`, testUserSearchUIDAttribute, testUpstreamUsername),
 		},
 		{
-			name:     "when searching for the user returns a user with too many values for the expected UID attribute",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			provider: provider(nil),
+			name:           "when searching for the user returns a user with too many values for the expected UID attribute",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
@@ -487,10 +487,10 @@ func TestAuthenticateUser(t *testing.T) {
 			wantError: fmt.Sprintf(`found 2 values for attribute "%s" while searching for user "%s", but expected 1 result`, testUserSearchUIDAttribute, testUpstreamUsername),
 		},
 		{
-			name:     "when searching for the user returns a user with an empty value for the expected UID attribute",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			provider: provider(nil),
+			name:           "when searching for the user returns a user with an empty value for the expected UID attribute",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
@@ -509,10 +509,10 @@ func TestAuthenticateUser(t *testing.T) {
 			wantError: fmt.Sprintf(`found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`, testUserSearchUIDAttribute, testUpstreamUsername),
 		},
 		{
-			name:     "when binding as the found user returns an error",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			provider: provider(nil),
+			name:           "when binding as the found user returns an error",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
@@ -532,10 +532,10 @@ func TestAuthenticateUser(t *testing.T) {
 			wantError: fmt.Sprintf(`error binding for user "%s" using provided password against DN "%s": some bind error`, testUpstreamUsername, testSearchResultDNValue),
 		},
 		{
-			name:     "when binding as the found user returns a specific invalid credentials error",
-			username: testUpstreamUsername,
-			password: testUpstreamPassword,
-			provider: provider(nil),
+			name:           "when binding as the found user returns a specific invalid credentials error",
+			username:       testUpstreamUsername,
+			password:       testUpstreamPassword,
+			providerConfig: providerConfig(nil),
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
@@ -558,7 +558,7 @@ func TestAuthenticateUser(t *testing.T) {
 			name:                "when no username is specified",
 			username:            "",
 			password:            testUpstreamPassword,
-			provider:            provider(nil),
+			providerConfig:      providerConfig(nil),
 			wantToSkipDial:      true,
 			wantUnauthenticated: true,
 		},
@@ -576,16 +576,17 @@ func TestAuthenticateUser(t *testing.T) {
 			}
 
 			dialWasAttempted := false
-			tt.provider.Dialer = LDAPDialerFunc(func(ctx context.Context, hostAndPort string) (Conn, error) {
+			tt.providerConfig.Dialer = LDAPDialerFunc(func(ctx context.Context, hostAndPort string) (Conn, error) {
 				dialWasAttempted = true
-				require.Equal(t, tt.provider.Host, hostAndPort)
+				require.Equal(t, tt.providerConfig.Host, hostAndPort)
 				if tt.dialError != nil {
 					return nil, tt.dialError
 				}
 				return conn, nil
 			})
 
-			authResponse, authenticated, err := tt.provider.AuthenticateUser(context.Background(), tt.username, tt.password)
+			provider := New(*tt.providerConfig)
+			authResponse, authenticated, err := provider.AuthenticateUser(context.Background(), tt.username, tt.password)
 
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 
@@ -607,9 +608,37 @@ func TestAuthenticateUser(t *testing.T) {
 	}
 }
 
+func TestGetConfig(t *testing.T) {
+	c := ProviderConfig{
+		Name:         "original-provider-name",
+		Host:         testHost,
+		CABundle:     []byte("some-ca-bundle"),
+		BindUsername: testBindUsername,
+		BindPassword: testBindPassword,
+		UserSearch: UserSearchConfig{
+			Base:              testUserSearchBase,
+			Filter:            testUserSearchFilter,
+			UsernameAttribute: testUserSearchUsernameAttribute,
+			UIDAttribute:      testUserSearchUIDAttribute,
+		},
+	}
+	p := New(c)
+	require.Equal(t, c, p.c)
+	require.Equal(t, c, p.GetConfig())
+
+	// The original config can be changed without impacting the provider, since the provider made a copy of the config.
+	c.Name = "changed-name"
+	require.Equal(t, "original-provider-name", p.c.Name)
+
+	// The return value of GetConfig can be modified without impacting the provider, since it is a copy of the config.
+	returnedConfig := p.GetConfig()
+	returnedConfig.Name = "changed-name"
+	require.Equal(t, "original-provider-name", p.c.Name)
+}
+
 func TestGetURL(t *testing.T) {
-	require.Equal(t, "ldaps://ldap.example.com:1234", (&Provider{Host: "ldap.example.com:1234"}).GetURL())
-	require.Equal(t, "ldaps://ldap.example.com", (&Provider{Host: "ldap.example.com"}).GetURL())
+	require.Equal(t, "ldaps://ldap.example.com:1234", New(ProviderConfig{Host: "ldap.example.com:1234"}).GetURL())
+	require.Equal(t, "ldaps://ldap.example.com", New(ProviderConfig{Host: "ldap.example.com"}).GetURL())
 }
 
 // Testing of host parsing, TLS negotiation, and CA bundle, etc. for the production code's dialer.
@@ -673,11 +702,11 @@ func TestRealTLSDialing(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			provider := &Provider{
+			provider := New(ProviderConfig{
 				Host:     test.host,
 				CABundle: test.caBundle,
 				Dialer:   nil, // this test is for the default (production) dialer
-			}
+			})
 			conn, err := provider.dial(test.context)
 			if conn != nil {
 				defer conn.Close()

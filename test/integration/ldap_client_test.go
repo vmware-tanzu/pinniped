@@ -7,11 +7,9 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
-	"path"
 	"strings"
 	"testing"
 	"time"
@@ -20,29 +18,36 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 
-	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/upstreamldap"
 	"go.pinniped.dev/test/library"
 )
 
 func TestLDAPSearch(t *testing.T) {
-	// Unlike most other integration tests, you can run this test with no special setup, as long
-	// as you have Docker. It does not depend on Kubernetes.
-	library.SkipUnlessIntegration(t)
+	env := library.IntegrationEnv(t)
+
+	// Note that these tests depend on the values hard-coded in the LDIF file in test/deploy/tools/ldap.yaml.
+	// It requires the test LDAP server from the tools deployment.
+	if len(env.ToolsNamespace) == 0 {
+		t.Skip("Skipping test because it requires the test LDAP server in the tools namespace.")
+	}
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	t.Cleanup(func() {
-		cancelFunc() // this will send SIGKILL to the docker process, just in case
+		cancelFunc() // this will send SIGKILL to the subprocess, just in case
 	})
 
-	port := localhostPort(t)
-	caBundle := dockerRunLDAPServer(ctx, t, port)
+	hostPorts := findRecentlyUnusedLocalhostPorts(t, 2)
+	ldapHostPort := hostPorts[0]
+	unusedHostPort := hostPorts[1]
+
+	// Expose the the test LDAP server's TLS port on the localhost.
+	startKubectlPortForward(ctx, t, ldapHostPort, "ldaps", "ldap", env.ToolsNamespace)
 
 	provider := func(editFunc func(p *upstreamldap.Provider)) *upstreamldap.Provider {
 		provider := &upstreamldap.Provider{
 			Name:         "test-ldap-provider",
-			Host:         "127.0.0.1:" + port,
-			CABundle:     caBundle,
+			Host:         "127.0.0.1:" + ldapHostPort,
+			CABundle:     []byte(env.SupervisorUpstreamLDAP.CABundle),
 			BindUsername: "cn=admin,dc=pinniped,dc=dev",
 			BindPassword: "password",
 			UserSearch: &upstreamldap.UserSearch{
@@ -58,8 +63,7 @@ func TestLDAPSearch(t *testing.T) {
 		return provider
 	}
 
-	pinnyPassword := "password123" // from the LDIF file below
-	wallyPassword := "password456" // from the LDIF file below
+	pinnyPassword := env.SupervisorUpstreamLDAP.TestUserPassword
 
 	tests := []struct {
 		name                string
@@ -77,15 +81,6 @@ func TestLDAPSearch(t *testing.T) {
 			provider: provider(nil),
 			wantAuthResponse: &authenticator.Response{
 				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
-			},
-		},
-		{
-			name:     "happy path as a different user",
-			username: "wally",
-			password: wallyPassword,
-			provider: provider(nil),
-			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "wally", UID: "1001", Groups: []string{}},
 			},
 		},
 		{
@@ -239,8 +234,8 @@ func TestLDAPSearch(t *testing.T) {
 			name:      "when the server is unreachable",
 			username:  "pinny",
 			password:  pinnyPassword,
-			provider:  provider(func(p *upstreamldap.Provider) { p.Host = "127.0.0.1:27534" }), // hopefully this port is not in use on the host running tests
-			wantError: `error dialing host "127.0.0.1:27534": LDAP Result Code 200 "Network Error": dial tcp 127.0.0.1:27534: connect: connection refused`,
+			provider:  provider(func(p *upstreamldap.Provider) { p.Host = "127.0.0.1:" + unusedHostPort }),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": dial tcp 127.0.0.1:%s: connect: connection refused`, unusedHostPort, unusedHostPort),
 		},
 		{
 			name:      "when the server is not parsable",
@@ -254,33 +249,33 @@ func TestLDAPSearch(t *testing.T) {
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  provider(func(p *upstreamldap.Provider) { p.CABundle = []byte("invalid-pem") }),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": could not parse CA bundle`, port),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": could not parse CA bundle`, ldapHostPort),
 		},
 		{
 			name:      "when the CA bundle does not cause the host to be trusted",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  provider(func(p *upstreamldap.Provider) { p.CABundle = nil }),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": x509: certificate signed by unknown authority`, port),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": x509: certificate signed by unknown authority`, ldapHostPort),
 		},
 		{
 			name:      "when the UsernameAttribute attribute has multiple values in the entry",
 			username:  "wally.ldap@example.com",
-			password:  wallyPassword,
+			password:  "unused-because-error-is-before-bind",
 			provider:  provider(func(p *upstreamldap.Provider) { p.UserSearch.UsernameAttribute = "mail" }),
 			wantError: `found 2 values for attribute "mail" while searching for user "wally.ldap@example.com", but expected 1 result`,
 		},
 		{
 			name:      "when the UIDAttribute attribute has multiple values in the entry",
 			username:  "wally",
-			password:  wallyPassword,
+			password:  "unused-because-error-is-before-bind",
 			provider:  provider(func(p *upstreamldap.Provider) { p.UserSearch.UIDAttribute = "mail" }),
 			wantError: `found 2 values for attribute "mail" while searching for user "wally", but expected 1 result`,
 		},
 		{
 			name:     "when the UsernameAttribute attribute is not found in the entry",
 			username: "wally",
-			password: wallyPassword,
+			password: "unused-because-error-is-before-bind",
 			provider: provider(func(p *upstreamldap.Provider) {
 				p.UserSearch.Filter = "cn={}"
 				p.UserSearch.UsernameAttribute = "attr-does-not-exist"
@@ -290,7 +285,7 @@ func TestLDAPSearch(t *testing.T) {
 		{
 			name:      "when the UIDAttribute attribute is not found in the entry",
 			username:  "wally",
-			password:  wallyPassword,
+			password:  "unused-because-error-is-before-bind",
 			provider:  provider(func(p *upstreamldap.Provider) { p.UserSearch.UIDAttribute = "attr-does-not-exist" }),
 			wantError: `found 0 values for attribute "attr-does-not-exist" while searching for user "wally", but expected 1 result`,
 		},
@@ -379,81 +374,73 @@ func TestLDAPSearch(t *testing.T) {
 			switch {
 			case tt.wantError != "":
 				require.EqualError(t, err, tt.wantError)
-				require.False(t, authenticated)
+				require.False(t, authenticated, "expected the user not to be authenticated, but they were")
 				require.Nil(t, authResponse)
 			case tt.wantUnauthenticated:
 				require.NoError(t, err)
-				require.False(t, authenticated)
+				require.False(t, authenticated, "expected the user not to be authenticated, but they were")
 				require.Nil(t, authResponse)
 			default:
 				require.NoError(t, err)
-				require.True(t, authenticated)
+				require.True(t, authenticated, "expected the user to be authenticated, but they were not")
 				require.Equal(t, tt.wantAuthResponse, authResponse)
 			}
 		})
 	}
 }
 
-func localhostPort(t *testing.T) string {
+func startKubectlPortForward(ctx context.Context, t *testing.T, hostPort, remotePort, serviceName, namespace string) {
 	t.Helper()
-
-	unusedPortGrabbingListener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-
-	recentlyClaimedHostAndPort := unusedPortGrabbingListener.Addr().String()
-	require.NoError(t, unusedPortGrabbingListener.Close())
-
-	splitHostAndPort := strings.Split(recentlyClaimedHostAndPort, ":")
-	require.Len(t, splitHostAndPort, 2)
-
-	return splitHostAndPort[1]
+	startLongRunningCommandAndWaitForInitialOutput(ctx, t,
+		"kubectl",
+		[]string{
+			"port-forward",
+			fmt.Sprintf("service/%s", serviceName),
+			fmt.Sprintf("%s:%s", hostPort, remotePort),
+			"-n", namespace,
+		},
+		"Forwarding from ",
+		"stdout",
+	)
 }
 
-func dockerRunLDAPServer(ctx context.Context, t *testing.T, hostPort string) []byte {
+func findRecentlyUnusedLocalhostPorts(t *testing.T, howManyPorts int) []string {
 	t.Helper()
 
-	_, err := exec.LookPath("docker")
-	require.NoError(t, err)
-
-	ca, err := certauthority.New("Test LDAP CA", time.Hour*24)
-	require.NoError(t, err)
-
-	certPEM, keyPEM, err := ca.IssueServerCertPEM(nil, []net.IP{net.ParseIP("127.0.0.1")}, time.Hour*24)
-	require.NoError(t, err)
-
-	tempDir, err := ioutil.TempDir("", "pinniped-test-*")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		err := os.Remove(tempDir)
+	listeners := []net.Listener{}
+	for i := 0; i < howManyPorts; i++ {
+		unusedPortGrabbingListener, err := net.Listen("tcp", "127.0.0.1:0")
 		require.NoError(t, err)
-	})
-
-	writeToNewTempFile(t, tempDir, "cert.pem", certPEM)
-	writeToNewTempFile(t, tempDir, "key.pem", keyPEM)
-	writeToNewTempFile(t, tempDir, "ca.pem", ca.Bundle())
-	writeToNewTempFile(t, tempDir, "test.ldif", []byte(testLDIF))
-
-	dockerArgs := []string{
-		"run",
-		"-e", "BITNAMI_DEBUG=true",
-		"-e", "LDAP_ADMIN_USERNAME=admin",
-		"-e", "LDAP_ADMIN_PASSWORD=password",
-		"-e", "LDAP_ENABLE_TLS=yes",
-		"-e", "LDAP_TLS_CERT_FILE=/inputs/cert.pem",
-		"-e", "LDAP_TLS_KEY_FILE=/inputs/key.pem",
-		"-e", "LDAP_TLS_CA_FILE=/inputs/ca.pem",
-		"-e", "LDAP_CUSTOM_LDIF_DIR=/inputs",
-		"-e", "LDAP_ROOT=dc=pinniped,dc=dev",
-		"-v", tempDir + ":/inputs",
-		"-p", hostPort + ":1636",
-		"-m", "64m",
-		"--rm", // automatically delete the container when finished
-		"docker.io/bitnami/openldap",
+		listeners = append(listeners, unusedPortGrabbingListener)
 	}
 
-	t.Log("Starting:", "docker", strings.Join(dockerArgs, " "))
+	ports := make([]string, len(listeners))
+	for i, listener := range listeners {
+		splitHostAndPort := strings.Split(listener.Addr().String(), ":")
+		require.Len(t, splitHostAndPort, 2)
+		ports[i] = splitHostAndPort[1]
+	}
 
-	cmd := exec.CommandContext(ctx, "docker", dockerArgs...)
+	for _, listener := range listeners {
+		require.NoError(t, listener.Close())
+	}
+
+	return ports
+}
+
+func startLongRunningCommandAndWaitForInitialOutput(
+	ctx context.Context,
+	t *testing.T,
+	command string,
+	args []string,
+	waitForOutputToContain string,
+	waitForOutputOnFd string, // can be either "stdout" or "stderr"
+) {
+	t.Helper()
+
+	t.Logf("Starting: %s %s", command, strings.Join(args, " "))
+
+	cmd := exec.CommandContext(ctx, command, args...)
 
 	var stdoutBuf, stderrBuf syncBuffer
 	cmd.Stdout = &stdoutBuf
@@ -461,14 +448,25 @@ func dockerRunLDAPServer(ctx context.Context, t *testing.T, hostPort string) []b
 	cmd.Stdout = io.MultiWriter(os.Stdout, &stdoutBuf)
 	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
 
-	err = cmd.Start()
+	var watchOn *syncBuffer
+	switch waitForOutputOnFd {
+	case "stdout":
+		watchOn = &stdoutBuf
+	case "stderr":
+		watchOn = &stderrBuf
+	default:
+		t.Fatalf("oops bad argument")
+	}
+
+	err := cmd.Start()
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		// docker requires an interrupt signal to end the container.
-		// This t.Cleanup is registered after the one that cancels the context, so this one will happen first.
+		// If the cancellation of ctx was already scheduled in a t.Cleanup, then this
+		// t.Cleanup is registered after the one, so this one will happen first.
+		// Cancelling ctx will send SIGKILL, which will act as a backup in case
+		// the process ignored this SIGINT.
 		err := cmd.Process.Signal(os.Interrupt)
 		require.NoError(t, err)
-		time.Sleep(time.Second) // give a moment before we move on, because we'll send SIGKILL in a later t.Cleanup
 	})
 
 	earlyTerminationCh := make(chan bool, 1)
@@ -479,9 +477,8 @@ func dockerRunLDAPServer(ctx context.Context, t *testing.T, hostPort string) []b
 
 	terminatedEarly := false
 	require.Eventually(t, func() bool {
-		t.Log("Waiting for slapd to start...")
-		// This substring is contained in the last line of output before the server starts.
-		if strings.Contains(stderrBuf.String(), " slapd starting\n") {
+		t.Logf(`Waiting for %s to emit output: "%s"`, command, waitForOutputToContain)
+		if strings.Contains(watchOn.String(), waitForOutputToContain) {
 			return true
 		}
 		select {
@@ -491,136 +488,9 @@ func dockerRunLDAPServer(ctx context.Context, t *testing.T, hostPort string) []b
 		default: // ignore when this non-blocking read found no message
 		}
 		return false
-	}, 2*time.Minute, time.Second)
+	}, 1*time.Minute, 1*time.Second)
 
-	require.Falsef(t, terminatedEarly, "docker command ended sooner than expected")
+	require.Falsef(t, terminatedEarly, "subcommand ended sooner than expected")
 
-	t.Log("Detected LDAP server has started successfully")
-	return ca.Bundle()
+	t.Logf("Detected that %s has started successfully", command)
 }
-
-func writeToNewTempFile(t *testing.T, dir string, filename string, contents []byte) {
-	t.Helper()
-
-	filePath := path.Join(dir, filename)
-
-	err := ioutil.WriteFile(filePath, contents, 0600)
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		err := os.Remove(filePath)
-		require.NoError(t, err)
-	})
-}
-
-var testLDIF = `
-# ** CAUTION: Blank lines separate entries in the LDIF format! Do not remove them! ***
-# Here's a good explanation of LDIF:
-# https://www.digitalocean.com/community/tutorials/how-to-use-ldif-files-to-make-changes-to-an-openldap-system
-
-# pinniped.dev (organization, root)
-dn: dc=pinniped,dc=dev
-objectClass: dcObject
-objectClass: organization
-dc: pinniped
-o: example
-
-# users, pinniped.dev (organization unit)
-dn: ou=users,dc=pinniped,dc=dev
-objectClass: organizationalUnit
-ou: users
-
-# groups, pinniped.dev (organization unit)
-dn: ou=groups,dc=pinniped,dc=dev
-objectClass: organizationalUnit
-ou: groups
-
-# beach-groups, groups, pinniped.dev (organization unit)
-dn: ou=beach-groups,ou=groups,dc=pinniped,dc=dev
-objectClass: organizationalUnit
-ou: beach-groups
-
-# pinny, users, pinniped.dev (user)
-dn: cn=pinny,ou=users,dc=pinniped,dc=dev
-objectClass: inetOrgPerson
-objectClass: posixAccount
-objectClass: shadowAccount
-cn: pinny
-sn: Seal
-givenName: Pinny
-mail: pinny.ldap@example.com
-userPassword: password123
-uid: pinny
-uidNumber: 1000
-gidNumber: 1000
-homeDirectory: /home/pinny
-loginShell: /bin/bash
-gecos: pinny-the-seal
-
-# wally, users, pinniped.dev
-dn: cn=wally,ou=users,dc=pinniped,dc=dev
-objectClass: inetOrgPerson
-objectClass: posixAccount
-objectClass: shadowAccount
-cn: wally
-sn: Walrus
-givenName: Wally
-mail: wally.ldap@example.com
-mail: wally.alternate@example.com
-userPassword: password456
-uid: wally
-uidNumber: 1001
-gidNumber: 1001
-homeDirectory: /home/wally
-loginShell: /bin/bash
-gecos: wally-the-walrus
-
-# olive, users, pinniped.dev (user without password)
-dn: cn=olive,ou=users,dc=pinniped,dc=dev
-objectClass: inetOrgPerson
-objectClass: posixAccount
-objectClass: shadowAccount
-cn: olive
-sn: Boston Terrier
-givenName: Olive
-mail: olive.ldap@example.com
-uid: olive
-uidNumber: 1002
-gidNumber: 1002
-homeDirectory: /home/olive
-loginShell: /bin/bash
-gecos: olive-the-dog
-
-# ball-game-players, beach-groups, groups, pinniped.dev (group of users)
-dn: cn=ball-game-players,ou=beach-groups,ou=groups,dc=pinniped,dc=dev
-cn: ball-game-players
-objectClass: groupOfNames
-member: cn=pinny,ou=users,dc=pinniped,dc=dev
-member: cn=olive,ou=users,dc=pinniped,dc=dev
-
-# seals, groups, pinniped.dev (group of users)
-dn: cn=seals,ou=groups,dc=pinniped,dc=dev
-cn: seals
-objectClass: groupOfNames
-member: cn=pinny,ou=users,dc=pinniped,dc=dev
-
-# walruses, groups, pinniped.dev (group of users)
-dn: cn=walruses,ou=groups,dc=pinniped,dc=dev
-cn: walruses
-objectClass: groupOfNames
-member: cn=wally,ou=users,dc=pinniped,dc=dev
-
-# pinnipeds, users, pinniped.dev (group of groups)
-dn: cn=pinnipeds,ou=groups,dc=pinniped,dc=dev
-cn: pinnipeds
-objectClass: groupOfNames
-member: cn=seals,ou=groups,dc=pinniped,dc=dev
-member: cn=walruses,ou=groups,dc=pinniped,dc=dev
-
-# mammals, groups, pinniped.dev (group of both groups and users)
-dn: cn=mammals,ou=groups,dc=pinniped,dc=dev
-cn: mammals
-objectClass: groupOfNames
-member: cn=pinninpeds,ou=groups,dc=pinniped,dc=dev
-member: cn=olive,ou=users,dc=pinniped,dc=dev
-`

@@ -64,6 +64,7 @@ stringData:
     sn: Walrus
     givenName: Wally
     mail: wally.ldap@example.com
+    mail: wally.alternate@example.com
     uid: wally
     uidNumber: 1001
     gidNumber: 1001

@@ -76,20 +76,31 @@ spec:
             /tmp/csr.json \
             | cfssljson -bare dex
 
+          # Cheat and add 127.0.0.1 as an IP SAN so we can use the ldaps port through port forwarding.
           echo "generating LDAP server certificate..."
           cfssl gencert \
             -ca ca.pem -ca-key ca-key.pem \
             -config /tmp/cfssl-default.json \
             -profile www \
             -cn "ldap.tools.svc.cluster.local" \
-            -hostname "ldap.tools.svc.cluster.local" \
+            -hostname "ldap.tools.svc.cluster.local,127.0.0.1" \
             /tmp/csr.json \
             | cfssljson -bare ldap
 
           chmod -R 777 /var/certs
 
+          echo
           echo "generated certificates:"
           ls -l /var/certs
+          echo
+          echo "CA cert..."
+          cat ca.pem | openssl x509 -text
+          echo
+          echo "Dex cert..."
+          cat dex.pem | openssl x509 -text
+          echo
+          echo "LDAP cert..."
+          cat ldap.pem | openssl x509 -text
         volumeMounts:
         - name: certs
           mountPath: /var/certs
@@ -100,8 +111,8 @@ spec:
         args:
         - -c
         - |
-          kubectl get secrets -n tools certs -o jsonpath='created: {.metadata.creationTimestamp}' || \
-            kubectl create secret generic -n tools certs --from-file=/var/certs
+          kubectl create secret generic -n tools certs --from-file=/var/certs \
+            --dry-run=client --output yaml | kubectl apply -f -
         volumeMounts:
         - name: certs
           mountPath: /var/certs

@@ -49,6 +49,7 @@ help=no
 skip_build=no
 clean_kind=no
 api_group_suffix="pinniped.dev" # same default as in the values.yaml ytt file
+skip_chromedriver_check=no
 
 while (("$#")); do
   case "$1" in
@@ -72,6 +73,10 @@ while (("$#")); do
       exit 1
     fi
     api_group_suffix=$1
+    shift
+    ;;
+  --live-dangerously)
+    skip_chromedriver_check=yes
     shift
     ;;
   -*)
@@ -115,18 +120,21 @@ check_dependency chromedriver "Please install chromedriver. e.g. 'brew install c
 
 # Check that Chrome and chromedriver versions match. If chromedriver falls a couple versions behind
 # then usually tests start to fail with strange error messages.
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  chrome_version=$(/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version | cut -d ' ' -f3 | cut -d '.' -f1)
-else
-  chrome_version=$(google-chrome --version | cut -d ' ' -f3 | cut -d '.' -f1)
-fi
-chromedriver_version=$(chromedriver --version | cut -d ' ' -f2 | cut -d '.' -f1)
-if [[ "$chrome_version" != "$chromedriver_version" ]]; then
-  log_error "It appears that you are using Chrome $chrome_version with chromedriver $chromedriver_version."
-  log_error "Please use the same version of chromedriver as Chrome."
-  log_error "If you are using the latest version of Chrome, then you can upgrade"
-  log_error "to the latest chromedriver, e.g. 'brew upgrade chromedriver' on MacOS."
-  exit 1
+if [[ "$skip_chromedriver_check" == "no" ]]; then
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    chrome_version=$(/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version | cut -d ' ' -f3 | cut -d '.' -f1)
+  else
+    chrome_version=$(google-chrome --version | cut -d ' ' -f3 | cut -d '.' -f1)
+  fi
+  chromedriver_version=$(chromedriver --version | cut -d ' ' -f2 | cut -d '.' -f1)
+  if [[ "$chrome_version" != "$chromedriver_version" ]]; then
+    log_error "It appears that you are using Chrome $chrome_version with chromedriver $chromedriver_version."
+    log_error "Please use the same version of chromedriver as Chrome."
+    log_error "If you are using the latest version of Chrome, then you can upgrade"
+    log_error "to the latest chromedriver, e.g. 'brew upgrade chromedriver' on MacOS."
+    log_error "Feeling lucky? Add --live-dangerously to skip this check."
+    exit 1
+  fi
 fi
 
 # Require kubectl >= 1.18.x

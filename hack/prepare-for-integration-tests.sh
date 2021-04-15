@@ -293,7 +293,7 @@ popd >/dev/null
 #
 # Download the test CA bundle that was generated in the Dex pod.
 #
-test_ca_bundle_pem="$(kubectl get secrets -n tools certs -o go-template='{{index .data "ca.pem" | base64decode}}')"
+test_ca_bundle_pem="$(kubectl get secrets -n tools certs -o go-template='{{index .data "ca.pem" | base64decode}}' | base64)"
 
 #
 # Create the environment file.
@@ -323,7 +323,7 @@ export PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS="127.0.0.1:12345"
 export PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS="localhost:12344"
 export PINNIPED_TEST_PROXY=http://127.0.0.1:12346
 export PINNIPED_TEST_LDAP_HOST=ldap.tools.svc.cluster.local
-export PINNIPED_TEST_LDAP_LDAPS_CA_BUNDLE=$(echo "${test_ca_bundle_pem}" | base64 )
+export PINNIPED_TEST_LDAP_LDAPS_CA_BUNDLE="${test_ca_bundle_pem}"
 export PINNIPED_TEST_LDAP_BIND_ACCOUNT_USERNAME="cn=admin,dc=pinniped,dc=dev"
 export PINNIPED_TEST_LDAP_BIND_ACCOUNT_PASSWORD=password
 export PINNIPED_TEST_LDAP_USERS_SEARCH_BASE="ou=users,dc=pinniped,dc=dev"
@@ -340,13 +340,13 @@ export PINNIPED_TEST_LDAP_EXPECTED_INDIRECT_GROUPS_DN="cn=pinnipeds,ou=groups,dc
 export PINNIPED_TEST_LDAP_EXPECTED_DIRECT_GROUPS_CN="ball-game-players;seals"
 export PINNIPED_TEST_LDAP_EXPECTED_INDIRECT_GROUPS_CN="pinnipeds;mammals"
 export PINNIPED_TEST_CLI_OIDC_ISSUER=https://dex.tools.svc.cluster.local/dex
-export PINNIPED_TEST_CLI_OIDC_ISSUER_CA_BUNDLE=$(echo "${test_ca_bundle_pem}" | base64 )
+export PINNIPED_TEST_CLI_OIDC_ISSUER_CA_BUNDLE="${test_ca_bundle_pem}"
 export PINNIPED_TEST_CLI_OIDC_CLIENT_ID=pinniped-cli
 export PINNIPED_TEST_CLI_OIDC_CALLBACK_URL=http://127.0.0.1:48095/callback
 export PINNIPED_TEST_CLI_OIDC_USERNAME=pinny@example.com
 export PINNIPED_TEST_CLI_OIDC_PASSWORD=${dex_test_password}
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER=https://dex.tools.svc.cluster.local/dex
-export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER_CA_BUNDLE=$(echo "${test_ca_bundle_pem}" | base64 )
+export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER_CA_BUNDLE="${test_ca_bundle_pem}"
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ADDITIONAL_SCOPES=email
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME_CLAIM=email
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_GROUPS_CLAIM=groups

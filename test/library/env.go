@@ -4,6 +4,7 @@
 package library
 
 import (
+	"encoding/base64"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -28,6 +29,7 @@ const (
 type TestEnv struct {
 	t *testing.T
 
+	ToolsNamespace                 string                               `json:"toolsNamespace"`
 	ConciergeNamespace             string                               `json:"conciergeNamespace"`
 	SupervisorNamespace            string                               `json:"supervisorNamespace"`
 	ConciergeAppName               string                               `json:"conciergeAppName"`
@@ -122,6 +124,16 @@ func needEnv(t *testing.T, key string) string {
 	return value
 }
 
+func base64Decoded(t *testing.T, s string) string {
+	t.Helper()
+	if len(s) == 0 {
+		return s
+	}
+	bytes, err := base64.StdEncoding.DecodeString(s)
+	require.NoError(t, err)
+	return string(bytes)
+}
+
 func wantEnv(key, dephault string) string {
 	value, ok := os.LookupEnv(key)
 	if !ok {
@@ -143,6 +155,8 @@ func filterEmpty(ss []string) []string {
 func loadEnvVars(t *testing.T, result *TestEnv) {
 	t.Helper()
 
+	result.ToolsNamespace = os.Getenv("PINNIPED_TEST_TOOLS_NAMESPACE")
+
 	result.ConciergeNamespace = needEnv(t, "PINNIPED_TEST_CONCIERGE_NAMESPACE")
 	result.ConciergeAppName = needEnv(t, "PINNIPED_TEST_CONCIERGE_APP_NAME")
 	result.TestUser.ExpectedUsername = needEnv(t, "PINNIPED_TEST_USER_USERNAME")
@@ -155,7 +169,6 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 
 	result.SupervisorHTTPAddress = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS")
 	result.SupervisorHTTPSIngressAddress = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_ADDRESS")
-	result.SupervisorHTTPSIngressCABundle = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_CA_BUNDLE") // optional
 	require.NotEmptyf(t,
 		result.SupervisorHTTPAddress+result.SupervisorHTTPSIngressAddress,
 		"must specify either PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS or PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_ADDRESS env var (or both) for integration tests",
@@ -164,6 +177,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 	require.NotRegexp(t, "^[0-9]", result.SupervisorHTTPSAddress,
 		"PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS must be a hostname with an optional port and cannot be an IP address",
 	)
+	result.SupervisorHTTPSIngressCABundle = base64Decoded(t, os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_CA_BUNDLE"))
 
 	conciergeCustomLabelsYAML := needEnv(t, "PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS")
 	var conciergeCustomLabels map[string]string
@@ -177,12 +191,13 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 	require.NoErrorf(t, err, "PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS must be a YAML map of string to string")
 	result.SupervisorCustomLabels = supervisorCustomLabels
 	require.NotEmpty(t, result.SupervisorCustomLabels, "PINNIPED_TEST_SUPERVISOR_CUSTOM_LABELS cannot be empty")
+
 	result.Proxy = os.Getenv("PINNIPED_TEST_PROXY")
 	result.APIGroupSuffix = wantEnv("PINNIPED_TEST_API_GROUP_SUFFIX", "pinniped.dev")
 
 	result.CLITestUpstream = TestOIDCUpstream{
 		Issuer:      needEnv(t, "PINNIPED_TEST_CLI_OIDC_ISSUER"),
-		CABundle:    os.Getenv("PINNIPED_TEST_CLI_OIDC_ISSUER_CA_BUNDLE"),
+		CABundle:    base64Decoded(t, os.Getenv("PINNIPED_TEST_CLI_OIDC_ISSUER_CA_BUNDLE")),
 		ClientID:    needEnv(t, "PINNIPED_TEST_CLI_OIDC_CLIENT_ID"),
 		CallbackURL: needEnv(t, "PINNIPED_TEST_CLI_OIDC_CALLBACK_URL"),
 		Username:    needEnv(t, "PINNIPED_TEST_CLI_OIDC_USERNAME"),
@@ -191,7 +206,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 
 	result.SupervisorTestUpstream = TestOIDCUpstream{
 		Issuer:           needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER"),
-		CABundle:         os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER_CA_BUNDLE"),
+		CABundle:         base64Decoded(t, os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER_CA_BUNDLE")),
 		AdditionalScopes: strings.Fields(os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ADDITIONAL_SCOPES")),
 		UsernameClaim:    os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME_CLAIM"),
 		GroupsClaim:      os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_GROUPS_CLAIM"),

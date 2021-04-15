@@ -22,6 +22,7 @@ import (
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 	"k8s.io/klog/v2/klogr"
 
+	"go.pinniped.dev/internal/execcredcache"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/pkg/conciergeclient"
 	"go.pinniped.dev/pkg/oidcclient"
@@ -65,6 +66,7 @@ type oidcLoginFlags struct {
 	conciergeEndpoint          string
 	conciergeCABundle          string
 	conciergeAPIGroupSuffix    string
+	credentialCachePath        string
 }
 
 func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
@@ -95,6 +97,7 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeEndpoint, "concierge-endpoint", "", "API base for the Concierge endpoint")
 	cmd.Flags().StringVar(&flags.conciergeCABundle, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the Concierge")
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
+	cmd.Flags().StringVar(&flags.credentialCachePath, "credential-cache", filepath.Join(mustGetConfigDir(), "credentials.yaml"), "Path to cluster-specific credentials cache (\"\" disables the cache)")
 
 	mustMarkHidden(cmd, "debug-session-cache")
 	mustMarkRequired(cmd, "issuer")
@@ -164,6 +167,22 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		opts = append(opts, oidcclient.WithClient(client))
 	}
 
+	// Look up cached credentials based on a hash of all the CLI arguments and the cluster info.
+	cacheKey := struct {
+		Args        []string                   `json:"args"`
+		ClusterInfo *clientauthv1beta1.Cluster `json:"cluster"`
+	}{
+		Args:        os.Args[1:],
+		ClusterInfo: loadClusterInfo(),
+	}
+	var credCache *execcredcache.Cache
+	if flags.credentialCachePath != "" {
+		credCache = execcredcache.New(flags.credentialCachePath)
+		if cred := credCache.Get(cacheKey); cred != nil {
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(cred)
+		}
+	}
+
 	// Do the basic login to get an OIDC token.
 	token, err := deps.login(flags.issuer, flags.clientID, opts...)
 	if err != nil {
@@ -180,6 +199,11 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		if err != nil {
 			return fmt.Errorf("could not complete Concierge credential exchange: %w", err)
 		}
+	}
+
+	// If there was a credential cache, save the resulting credential for future use.
+	if credCache != nil {
+		credCache.Put(cacheKey, cred)
 	}
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(cred)
 }

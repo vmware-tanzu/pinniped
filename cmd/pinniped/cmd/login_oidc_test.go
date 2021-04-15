@@ -64,6 +64,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				      --concierge-authenticator-type string   Concierge authenticator type (e.g., 'webhook', 'jwt')
 				      --concierge-ca-bundle-data string       CA bundle to use when connecting to the Concierge
 				      --concierge-endpoint string             API base for the Concierge endpoint
+				      --credential-cache string               Path to cluster-specific credentials cache ("" disables the cache) (default "` + cfgDir + `/credentials.yaml")
 				      --enable-concierge                      Use the Concierge to login
 				  -h, --help                                  help for oidc
 				      --issuer string                         OpenID Connect issuer URL
@@ -189,6 +190,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--concierge-endpoint", "https://127.0.0.1:1234/",
 				"--concierge-ca-bundle-data", base64.StdEncoding.EncodeToString(testCA.Bundle()),
 				"--concierge-api-group-suffix", "some.suffix.com",
+				"--credential-cache", testutil.TempDir(t) + "/credentials.yaml",
 			},
 			wantOptionsCount: 7,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"exchanged-token"}}` + "\n",

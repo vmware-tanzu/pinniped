@@ -296,13 +296,18 @@ popd >/dev/null
 test_ca_bundle_pem="$(kubectl get secrets -n tools certs -o go-template='{{index .data "ca.pem" | base64decode}}')"
 
 #
-# Create the environment file
+# Create the environment file.
+#
+# Note that all values should not contains newlines, except for PINNIPED_TEST_CLUSTER_CAPABILITY_YAML,
+# so that the environment can also be used in tools like GoLand. Therefore, multi-line values,
+# such as PEM-formatted certificates, should be base64 encoded.
 #
 kind_capabilities_file="$pinniped_path/test/cluster_capabilities/kind.yaml"
 pinniped_cluster_capability_file_content=$(cat "$kind_capabilities_file")
 
 cat <<EOF >/tmp/integration-test-env
 # The following env vars should be set before running 'go test -v -count 1 -timeout 0 ./test/integration'
+export PINNIPED_TEST_TOOLS_NAMESPACE="tools"
 export PINNIPED_TEST_CONCIERGE_NAMESPACE=${concierge_namespace}
 export PINNIPED_TEST_CONCIERGE_APP_NAME=${concierge_app_name}
 export PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS='${concierge_custom_labels}'
@@ -318,7 +323,7 @@ export PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS="127.0.0.1:12345"
 export PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS="localhost:12344"
 export PINNIPED_TEST_PROXY=http://127.0.0.1:12346
 export PINNIPED_TEST_LDAP_HOST=ldap.tools.svc.cluster.local
-export PINNIPED_TEST_LDAP_LDAPS_CA_BUNDLE="${test_ca_bundle_pem}"
+export PINNIPED_TEST_LDAP_LDAPS_CA_BUNDLE=$(echo "${test_ca_bundle_pem}" | base64 )
 export PINNIPED_TEST_LDAP_BIND_ACCOUNT_USERNAME="cn=admin,dc=pinniped,dc=dev"
 export PINNIPED_TEST_LDAP_BIND_ACCOUNT_PASSWORD=password
 export PINNIPED_TEST_LDAP_USERS_SEARCH_BASE="ou=users,dc=pinniped,dc=dev"
@@ -335,13 +340,13 @@ export PINNIPED_TEST_LDAP_EXPECTED_INDIRECT_GROUPS_DN="cn=pinnipeds,ou=groups,dc
 export PINNIPED_TEST_LDAP_EXPECTED_DIRECT_GROUPS_CN="ball-game-players;seals"
 export PINNIPED_TEST_LDAP_EXPECTED_INDIRECT_GROUPS_CN="pinnipeds;mammals"
 export PINNIPED_TEST_CLI_OIDC_ISSUER=https://dex.tools.svc.cluster.local/dex
-export PINNIPED_TEST_CLI_OIDC_ISSUER_CA_BUNDLE="${test_ca_bundle_pem}"
+export PINNIPED_TEST_CLI_OIDC_ISSUER_CA_BUNDLE=$(echo "${test_ca_bundle_pem}" | base64 )
 export PINNIPED_TEST_CLI_OIDC_CLIENT_ID=pinniped-cli
 export PINNIPED_TEST_CLI_OIDC_CALLBACK_URL=http://127.0.0.1:48095/callback
 export PINNIPED_TEST_CLI_OIDC_USERNAME=pinny@example.com
 export PINNIPED_TEST_CLI_OIDC_PASSWORD=${dex_test_password}
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER=https://dex.tools.svc.cluster.local/dex
-export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER_CA_BUNDLE="${test_ca_bundle_pem}"
+export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER_CA_BUNDLE=$(echo "${test_ca_bundle_pem}" | base64 )
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ADDITIONAL_SCOPES=email
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME_CLAIM=email
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_GROUPS_CLAIM=groups
@@ -361,17 +366,15 @@ export PINNIPED_TEST_CLUSTER_CAPABILITY_YAML
 EOF
 
 #
-# Print instructions for next steps
+# Print instructions for next steps.
 #
-goland_vars=$(grep -v '^#' /tmp/integration-test-env | grep -E '^export .+=' | sed 's/export //g' | tr '\n' ';')
-
 log_note
 log_note "🚀 Ready to run integration tests! For example..."
 log_note "    cd $pinniped_path"
 log_note '    source /tmp/integration-test-env && go test -v -race -count 1 -timeout 0 ./test/integration'
 log_note
-log_note 'Want to run integration tests in GoLand? Copy/paste this "Environment" value for GoLand run configurations:'
-log_note "    ${goland_vars}PINNIPED_TEST_CLUSTER_CAPABILITY_FILE=${kind_capabilities_file}"
+log_note "Using GoLand? Paste the result of this command into GoLand's run configuration \"Environment\"."
+log_note "    hack/integration-test-env-goland.sh | pbcopy"
 log_note
 log_note "You can rerun this script to redeploy local production code changes while you are working."
 log_note

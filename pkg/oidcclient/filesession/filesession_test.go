@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package filesession
@@ -112,6 +112,41 @@ func TestGetToken(t *testing.T) {
 						},
 						RefreshToken: &oidctypes.RefreshToken{
 							Token: "test-refresh-token",
+						},
+					},
+				})
+				require.NoError(t, validCache.writeTo(tmp))
+			},
+			key: oidcclient.SessionCacheKey{
+				Issuer:      "test-issuer",
+				ClientID:    "test-client-id",
+				Scopes:      []string{"email", "offline_access", "openid", "profile"},
+				RedirectURI: "http://localhost:0/callback",
+			},
+			wantErrors: []string{},
+		},
+		{
+			name: "valid file but expired cache hit",
+			makeTestFile: func(t *testing.T, tmp string) {
+				validCache := emptySessionCache()
+				validCache.insert(sessionEntry{
+					Key: oidcclient.SessionCacheKey{
+						Issuer:      "test-issuer",
+						ClientID:    "test-client-id",
+						Scopes:      []string{"email", "offline_access", "openid", "profile"},
+						RedirectURI: "http://localhost:0/callback",
+					},
+					CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
+					LastUsedTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
+					Tokens: oidctypes.Token{
+						AccessToken: &oidctypes.AccessToken{
+							Token:  "test-access-token",
+							Type:   "Bearer",
+							Expiry: metav1.NewTime(now.Add(-1 * time.Hour)),
+						},
+						IDToken: &oidctypes.IDToken{
+							Token:  "test-id-token",
+							Expiry: metav1.NewTime(now.Add(-1 * time.Hour)),
 						},
 					},
 				})
@@ -261,6 +296,33 @@ func TestPutToken(t *testing.T) {
 						},
 					},
 				})
+
+				// Insert another entry that hasn't been used for over 90 days.
+				validCache.insert(sessionEntry{
+					Key: oidcclient.SessionCacheKey{
+						Issuer:      "test-issuer-2",
+						ClientID:    "test-client-id-2",
+						Scopes:      []string{"email", "offline_access", "openid", "profile"},
+						RedirectURI: "http://localhost:0/callback",
+					},
+					CreationTimestamp: metav1.NewTime(now.Add(-95 * 24 * time.Hour)),
+					LastUsedTimestamp: metav1.NewTime(now.Add(-91 * 24 * time.Hour)),
+					Tokens: oidctypes.Token{
+						AccessToken: &oidctypes.AccessToken{
+							Token:  "old-access-token2",
+							Type:   "Bearer",
+							Expiry: metav1.NewTime(now.Add(-1 * time.Hour)),
+						},
+						IDToken: &oidctypes.IDToken{
+							Token:  "old-id-token2",
+							Expiry: metav1.NewTime(now.Add(-1 * time.Hour)),
+						},
+						RefreshToken: &oidctypes.RefreshToken{
+							Token: "old-refresh-token2",
+						},
+					},
+				})
+
 				require.NoError(t, os.MkdirAll(filepath.Dir(tmp), 0700))
 				require.NoError(t, validCache.writeTo(tmp))
 			},

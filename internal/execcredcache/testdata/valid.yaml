@@ -1,0 +1,9 @@
+apiVersion: config.supervisor.pinniped.dev/v1alpha1
+kind: CredentialCache
+credentials:
+  - key: "test-key"
+    creationTimestamp: "2020-10-20T18:42:07Z"
+    lastUsedTimestamp: "2020-10-20T18:45:31Z"
+    credential:
+      expirationTimestamp: "2020-10-20T19:46:30Z"
+      token: "test-token"

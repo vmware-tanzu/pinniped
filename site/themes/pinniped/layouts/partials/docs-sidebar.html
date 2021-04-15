@@ -1,4 +1,12 @@
 <div class="side-nav">
+    <form class="d-flex align-items-center">
+        <span class="algolia-autocomplete" style="position: relative; display: inline-block; direction: ltr;">
+          <input type="search" class="form-control docsearch-input" id="search-input" placeholder="Search..."
+                 aria-label="Search for..." autocomplete="off" spellcheck="false" role="combobox"
+                 aria-autocomplete="list" aria-expanded="false" aria-owns="algolia-autocomplete-listbox-0"
+                 dir="auto" style="position: relative; vertical-align: top;">
+        </span>
+</form>
     <ul>
         {{- $currentPage := . }}
         {{- range .Site.Menus.docs }}

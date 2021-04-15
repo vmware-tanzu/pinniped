@@ -27,20 +27,20 @@ require (
 	github.com/spf13/cobra v1.1.3
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/crypto v0.0.0-20201217014255-9d1352758620
+	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
 	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	gopkg.in/square/go-jose.v2 v2.5.1
-	k8s.io/api v0.0.0-20210329192759-4cbcd86ea749
-	k8s.io/apimachinery v0.21.0-alpha.0.0.20210329192153-640a6275d2b0
-	k8s.io/apiserver v0.0.0-20210330222258-23775f4efbdf
-	k8s.io/client-go v0.0.0-20210329194426-720ea497dc06
-	k8s.io/component-base v0.0.0-20210329195309-e1576f54c4ca
-	k8s.io/gengo v0.0.0-20201113003025-83324d819ded
+	k8s.io/api v0.21.0
+	k8s.io/apimachinery v0.21.0
+	k8s.io/apiserver v0.21.0
+	k8s.io/client-go v0.21.0
+	k8s.io/component-base v0.21.0
+	k8s.io/gengo v0.0.0-20201214224949-b6c5ce23f027
 	k8s.io/klog/v2 v2.8.0
-	k8s.io/kube-aggregator v0.0.0-20210329201137-c9d5b747f33b
-	k8s.io/kube-openapi v0.0.0-20201113171705-d219536bb9fd
+	k8s.io/kube-aggregator v0.21.0
+	k8s.io/kube-openapi v0.0.0-20210305001622-591a79e4bda7
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
 	sigs.k8s.io/yaml v1.2.0
 )

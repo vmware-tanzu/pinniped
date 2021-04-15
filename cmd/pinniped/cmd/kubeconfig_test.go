@@ -73,6 +73,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --concierge-endpoint string             API base for the Concierge endpoint
 				      --concierge-mode mode                   Concierge mode of operation (default TokenCredentialRequestAPI)
 				      --concierge-skip-wait                   Skip waiting for any pending Concierge strategies to become ready (default: false)
+				      --credential-cache string               Path to cluster-specific credentials cache
 				      --generated-name-suffix string          Suffix to append to generated cluster, context, user kubeconfig entries (default "-pinniped")
 				  -h, --help                                  help for kubeconfig
 				      --kubeconfig string                     Path to kubeconfig file
@@ -642,6 +643,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--kubeconfig", "./testdata/kubeconfig.yaml",
 				"--static-token-env", "TEST_TOKEN",
 				"--skip-validation",
+				"--credential-cache", "",
 			},
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{
@@ -699,6 +701,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-type=webhook
         		      - --concierge-endpoint=https://fake-server-url-value
         		      - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+        		      - --credential-cache=
         		      - --token-env=TEST_TOKEN
         		      command: '.../path/to/pinniped'
         		      env: []
@@ -809,6 +812,7 @@ func TestGetKubeconfig(t *testing.T) {
 				"--oidc-request-audience", "test-audience",
 				"--skip-validation",
 				"--generated-name-suffix", "-sso",
+				"--credential-cache", "/path/to/cache/dir/credentials.yaml",
 			},
 			conciergeObjects: []runtime.Object{
 				&configv1alpha1.CredentialIssuer{
@@ -862,6 +866,7 @@ func TestGetKubeconfig(t *testing.T) {
         		      - --concierge-authenticator-type=webhook
         		      - --concierge-endpoint=https://explicit-concierge-endpoint.example.com
         		      - --concierge-ca-bundle-data=%s
+        		      - --credential-cache=/path/to/cache/dir/credentials.yaml
         		      - --issuer=https://example.com/issuer
         		      - --client-id=pinniped-cli
         		      - --scopes=offline_access,openid,pinniped:request-audience

@@ -87,6 +87,8 @@ type getKubeconfigParams struct {
 	oidc                      getKubeconfigOIDCParams
 	concierge                 getKubeconfigConciergeParams
 	generatedNameSuffix       string
+	credentialCachePath       string
+	credentialCachePathSet    bool
 }
 
 func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
@@ -132,7 +134,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.DurationVar(&flags.timeout, "timeout", 10*time.Minute, "Timeout for autodiscovery and validation")
 	f.StringVarP(&flags.outputPath, "output", "o", "", "Output file path (default: stdout)")
 	f.StringVar(&flags.generatedNameSuffix, "generated-name-suffix", "-pinniped", "Suffix to append to generated cluster, context, user kubeconfig entries")
-
+	f.StringVar(&flags.credentialCachePath, "credential-cache", "", "Path to cluster-specific credentials cache")
 	mustMarkHidden(cmd, "oidc-debug-session-cache")
 
 	mustMarkDeprecated(cmd, "concierge-namespace", "not needed anymore")
@@ -147,6 +149,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 			defer func() { _ = out.Close() }()
 			cmd.SetOut(out)
 		}
+		flags.credentialCachePathSet = cmd.Flags().Changed("credential-cache")
 		return runGetKubeconfig(cmd.Context(), cmd.OutOrStdout(), deps, flags)
 	}
 	return cmd
@@ -231,6 +234,11 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 		// Point kubectl at the concierge endpoint.
 		cluster.Server = flags.concierge.endpoint
 		cluster.CertificateAuthorityData = flags.concierge.caBundle
+	}
+
+	// If --credential-cache is set, pass it through.
+	if flags.credentialCachePathSet {
+		execConfig.Args = append(execConfig.Args, "--credential-cache="+flags.credentialCachePath)
 	}
 
 	// If one of the --static-* flags was passed, output a config that runs `pinniped login static`.

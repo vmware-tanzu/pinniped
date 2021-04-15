@@ -37,7 +37,8 @@ HUGO_ENABLEGITINFO = "true"
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'self'; img-src *"
+    # disabled to support docsearch until https://github.com/algolia/instantsearch.js/issues/2868 is fixed.
+    # Content-Security-Policy = "default-src 'self'; img-src *"
     X-Content-Type-Options = "nosniff"
     X-Frame-Options = "DENY"
     X-XSS-Protection = "1; mode=block"

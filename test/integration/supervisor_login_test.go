@@ -157,12 +157,12 @@ func testSupervisorLogin(
 					return nil, nil
 				}
 				if env.Proxy == "" {
-					t.Logf("passing request for %s with no proxy", req.URL)
+					t.Logf("passing request for %s with no proxy", library.RedactURLParams(req.URL))
 					return nil, nil
 				}
 				proxyURL, err := url.Parse(env.Proxy)
 				require.NoError(t, err)
-				t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
+				t.Logf("passing request for %s through proxy %s", library.RedactURLParams(req.URL), proxyURL.String())
 				return proxyURL, nil
 			},
 		},

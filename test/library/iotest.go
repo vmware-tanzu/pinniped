@@ -6,6 +6,7 @@ package library
 import (
 	"fmt"
 	"io"
+	"net/url"
 	"regexp"
 	"strings"
 	"testing"
@@ -49,4 +50,16 @@ func MaskTokens(in string) string {
 		}
 		return fmt.Sprintf("[...%d bytes...]", len(t))
 	})
+}
+
+// Remove any potentially sensitive query param and fragment values for test logging.
+func RedactURLParams(fullURL *url.URL) string {
+	copyOfURL, _ := url.Parse(fullURL.String())
+	if len(copyOfURL.RawQuery) > 0 {
+		copyOfURL.RawQuery = "redacted"
+	}
+	if len(copyOfURL.Fragment) > 0 {
+		copyOfURL.Fragment = "redacted"
+	}
+	return copyOfURL.String()
 }

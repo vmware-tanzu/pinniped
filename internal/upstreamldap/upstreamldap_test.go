@@ -42,7 +42,7 @@ var (
 	testUserSearchFilterInterpolated = fmt.Sprintf("(some-filter=%s-and-more-filter=%s)", testUpstreamUsername, testUpstreamUsername)
 )
 
-func TestAuthenticateUser(t *testing.T) {
+func TestEndUserAuthentication(t *testing.T) {
 	providerConfig := func(editFunc func(p *ProviderConfig)) *ProviderConfig {
 		config := &ProviderConfig{
 			Name:         "some-provider-name",
@@ -82,23 +82,25 @@ func TestAuthenticateUser(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                string
-		username            string
-		password            string
-		providerConfig      *ProviderConfig
-		setupMocks          func(conn *mockldapconn.MockConn)
-		dialError           error
-		wantError           string
-		wantToSkipDial      bool
-		wantAuthResponse    *authenticator.Response
-		wantUnauthenticated bool
+		name                       string
+		username                   string
+		password                   string
+		providerConfig             *ProviderConfig
+		searchMocks                func(conn *mockldapconn.MockConn)
+		bindEndUserMocks           func(conn *mockldapconn.MockConn)
+		dialError                  error
+		wantError                  string
+		wantToSkipDial             bool
+		wantAuthResponse           *authenticator.Response
+		wantUnauthenticated        bool
+		skipDryRunAuthenticateUser bool // tests about when the end user bind fails don't make sense for DryRunAuthenticateUser()
 	}{
 		{
 			name:           "happy path",
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{
@@ -113,8 +115,10 @@ func TestAuthenticateUser(t *testing.T) {
 					Referrals: []string{},       // note that we are not following referrals at this time
 					Controls:  []ldap.Control{}, // TODO are there any response controls that we need to be able to handle?
 				}, nil).Times(1)
-				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
 				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
 			},
 			wantAuthResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
@@ -131,7 +135,7 @@ func TestAuthenticateUser(t *testing.T) {
 			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.UserSearch.Filter = "(" + testUserSearchFilter + ")"
 			}),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{
@@ -144,8 +148,10 @@ func TestAuthenticateUser(t *testing.T) {
 						},
 					},
 				}, nil).Times(1)
-				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
 				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
 			},
 			wantAuthResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
@@ -162,7 +168,7 @@ func TestAuthenticateUser(t *testing.T) {
 			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.UserSearch.UsernameAttribute = "dn"
 			}),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(func(r *ldap.SearchRequest) {
 					r.Attributes = []string{testUserSearchUIDAttribute}
@@ -176,8 +182,10 @@ func TestAuthenticateUser(t *testing.T) {
 						},
 					},
 				}, nil).Times(1)
-				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
 				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
 			},
 			wantAuthResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
@@ -194,7 +202,7 @@ func TestAuthenticateUser(t *testing.T) {
 			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.UserSearch.UIDAttribute = "dn"
 			}),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(func(r *ldap.SearchRequest) {
 					r.Attributes = []string{testUserSearchUsernameAttribute}
@@ -208,8 +216,10 @@ func TestAuthenticateUser(t *testing.T) {
 						},
 					},
 				}, nil).Times(1)
-				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
 				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
 			},
 			wantAuthResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
@@ -226,7 +236,7 @@ func TestAuthenticateUser(t *testing.T) {
 			providerConfig: providerConfig(func(p *ProviderConfig) {
 				p.UserSearch.Filter = ""
 			}),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(func(r *ldap.SearchRequest) {
 					r.Filter = "(" + testUserSearchUsernameAttribute + "=" + testUpstreamUsername + ")"
@@ -241,8 +251,10 @@ func TestAuthenticateUser(t *testing.T) {
 						},
 					},
 				}, nil).Times(1)
-				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
 				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
 			},
 			wantAuthResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
@@ -257,7 +269,7 @@ func TestAuthenticateUser(t *testing.T) {
 			username:       `a&b|c(d)e\f*g`,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(func(r *ldap.SearchRequest) {
 					r.Filter = fmt.Sprintf("(some-filter=%s-and-more-filter=%s)", `a&b|c\28d\29e\5cf\2ag`, `a&b|c\28d\29e\5cf\2ag`)
@@ -272,8 +284,10 @@ func TestAuthenticateUser(t *testing.T) {
 						},
 					},
 				}, nil).Times(1)
-				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
 				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Times(1)
 			},
 			wantAuthResponse: &authenticator.Response{
 				User: &user.DefaultInfo{
@@ -307,7 +321,7 @@ func TestAuthenticateUser(t *testing.T) {
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Return(errors.New("some bind error")).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
@@ -318,7 +332,7 @@ func TestAuthenticateUser(t *testing.T) {
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(nil, errors.New("some search error")).Times(1)
 				conn.EXPECT().Close().Times(1)
@@ -330,7 +344,7 @@ func TestAuthenticateUser(t *testing.T) {
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{},
@@ -344,7 +358,7 @@ func TestAuthenticateUser(t *testing.T) {
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{
@@ -361,7 +375,7 @@ func TestAuthenticateUser(t *testing.T) {
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{
@@ -377,7 +391,7 @@ func TestAuthenticateUser(t *testing.T) {
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{
@@ -398,7 +412,7 @@ func TestAuthenticateUser(t *testing.T) {
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{
@@ -423,7 +437,7 @@ func TestAuthenticateUser(t *testing.T) {
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{
@@ -445,7 +459,7 @@ func TestAuthenticateUser(t *testing.T) {
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{
@@ -466,7 +480,7 @@ func TestAuthenticateUser(t *testing.T) {
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{
@@ -491,7 +505,7 @@ func TestAuthenticateUser(t *testing.T) {
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{
@@ -513,7 +527,7 @@ func TestAuthenticateUser(t *testing.T) {
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{
@@ -526,17 +540,20 @@ func TestAuthenticateUser(t *testing.T) {
 						},
 					},
 				}, nil).Times(1)
-				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Return(errors.New("some bind error")).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(`error binding for user "%s" using provided password against DN "%s": some bind error`, testUpstreamUsername, testSearchResultDNValue),
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Return(errors.New("some bind error")).Times(1)
+			},
+			skipDryRunAuthenticateUser: true,
+			wantError:                  fmt.Sprintf(`error binding for user "%s" using provided password against DN "%s": some bind error`, testUpstreamUsername, testSearchResultDNValue),
 		},
 		{
 			name:           "when binding as the found user returns a specific invalid credentials error",
 			username:       testUpstreamUsername,
 			password:       testUpstreamPassword,
 			providerConfig: providerConfig(nil),
-			setupMocks: func(conn *mockldapconn.MockConn) {
+			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Search(expectedSearch(nil)).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{
@@ -549,10 +566,13 @@ func TestAuthenticateUser(t *testing.T) {
 						},
 					},
 				}, nil).Times(1)
-				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Return(errors.New(`LDAP Result Code 49 "Invalid Credentials": some bind error`)).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantUnauthenticated: true,
+			wantUnauthenticated:        true,
+			skipDryRunAuthenticateUser: true,
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Return(errors.New(`LDAP Result Code 49 "Invalid Credentials": some bind error`)).Times(1)
+			},
 		},
 		{
 			name:                "when no username is specified",
@@ -571,8 +591,11 @@ func TestAuthenticateUser(t *testing.T) {
 			t.Cleanup(ctrl.Finish)
 
 			conn := mockldapconn.NewMockConn(ctrl)
-			if tt.setupMocks != nil {
-				tt.setupMocks(conn)
+			if tt.searchMocks != nil {
+				tt.searchMocks(conn)
+			}
+			if tt.bindEndUserMocks != nil {
+				tt.bindEndUserMocks(conn)
 			}
 
 			dialWasAttempted := false
@@ -586,10 +609,41 @@ func TestAuthenticateUser(t *testing.T) {
 			})
 
 			provider := New(*tt.providerConfig)
+
 			authResponse, authenticated, err := provider.AuthenticateUser(context.Background(), tt.username, tt.password)
-
 			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
+			switch {
+			case tt.wantError != "":
+				require.EqualError(t, err, tt.wantError)
+				require.False(t, authenticated)
+				require.Nil(t, authResponse)
+			case tt.wantUnauthenticated:
+				require.NoError(t, err)
+				require.False(t, authenticated)
+				require.Nil(t, authResponse)
+			default:
+				require.NoError(t, err)
+				require.True(t, authenticated)
+				require.Equal(t, tt.wantAuthResponse, authResponse)
+			}
 
+			// DryRunAuthenticateUser() should have the same behavior as AuthenticateUser() except that it does not bind
+			// as the end user to confirm their password. Since it should behave the same, all of the same test cases
+			// apply, except for those which are specifically testing what happens when the end user bind fails.
+			if tt.skipDryRunAuthenticateUser {
+				return // move on to the next test
+			}
+
+			// Reset some variables to get ready to call DryRunAuthenticateUser().
+			dialWasAttempted = false
+			conn = mockldapconn.NewMockConn(ctrl)
+			if tt.searchMocks != nil {
+				tt.searchMocks(conn)
+			}
+			// Skip tt.bindEndUserMocks since DryRunAuthenticateUser() never binds as the end user.
+
+			authResponse, authenticated, err = provider.DryRunAuthenticateUser(context.Background(), tt.username)
+			require.Equal(t, !tt.wantToSkipDial, dialWasAttempted)
 			switch {
 			case tt.wantError != "":
 				require.EqualError(t, err, tt.wantError)

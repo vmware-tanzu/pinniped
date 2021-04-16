@@ -202,17 +202,27 @@ func (p *Provider) TestConnection(ctx context.Context) error {
 	return nil
 }
 
-// TestAuthenticateUser provides a method for testing all of the Provider settings in a kind of dry run of
-// authentication. It runs the same logic as AuthenticateUser except it does not bind as that user, so it does not test
-// their password. It returns the same authenticator.Response values and the same errors that a real call to
+// DryRunAuthenticateUser provides a method for testing all of the Provider settings in a kind of dry run of
+// authentication for a given end user's username. It runs the same logic as AuthenticateUser except it does
+// not bind as that user, so it does not test their password. It returns the same values that a real call to
 // AuthenticateUser with the correct password would return.
-func (p *Provider) TestAuthenticateUser(ctx context.Context, testUsername string) (*authenticator.Response, error) {
-	// TODO implement me
-	return nil, nil
+func (p *Provider) DryRunAuthenticateUser(ctx context.Context, username string) (*authenticator.Response, bool, error) {
+	endUserBindFunc := func(conn Conn, foundUserDN string) error {
+		// Act as if the end user bind always succeeds.
+		return nil
+	}
+	return p.authenticateUserImpl(ctx, username, endUserBindFunc)
 }
 
-// Authenticate a user and return their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
+// Authenticate an end user and return their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
 func (p *Provider) AuthenticateUser(ctx context.Context, username, password string) (*authenticator.Response, bool, error) {
+	endUserBindFunc := func(conn Conn, foundUserDN string) error {
+		return conn.Bind(foundUserDN, password)
+	}
+	return p.authenticateUserImpl(ctx, username, endUserBindFunc)
+}
+
+func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bindFunc func(conn Conn, foundUserDN string) error) (*authenticator.Response, bool, error) {
 	err := p.validateConfig()
 	if err != nil {
 		return nil, false, err
@@ -234,7 +244,7 @@ func (p *Provider) AuthenticateUser(ctx context.Context, username, password stri
 		return nil, false, fmt.Errorf(`error binding as "%s" before user search: %w`, p.c.BindUsername, err)
 	}
 
-	mappedUsername, mappedUID, err := p.searchAndBindUser(conn, username, password)
+	mappedUsername, mappedUID, err := p.searchAndBindUser(conn, username, bindFunc)
 	if err != nil {
 		return nil, false, err
 	}
@@ -261,7 +271,7 @@ func (p *Provider) validateConfig() error {
 	return nil
 }
 
-func (p *Provider) searchAndBindUser(conn Conn, username string, password string) (string, string, error) {
+func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(conn Conn, foundUserDN string) error) (string, string, error) {
 	searchResult, err := conn.Search(p.userSearchRequest(username))
 	if err != nil {
 		return "", "", fmt.Errorf(`error searching for user "%s": %w`, username, err)
@@ -292,7 +302,7 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, password string
 	}
 
 	// Caution: Note that any other LDAP commands after this bind will be run as this user instead of as the configured BindUsername!
-	err = conn.Bind(userEntry.DN, password)
+	err = bindFunc(conn, userEntry.DN)
 	if err != nil {
 		plog.DebugErr("error binding for user (if this is not the expected dn for this username, please check the user search configuration)",
 			err, "upstreamName", p.GetName(), "username", username, "dn", userEntry.DN)
@@ -344,7 +354,7 @@ func (p *Provider) userSearchFilter(username string) string {
 }
 
 func (p *Provider) escapeUsernameForSearchFilter(username string) string {
-	// The username is end-user input, so it should be escaped before being included in a search to prevent query injection.
+	// The username is end user input, so it should be escaped before being included in a search to prevent query injection.
 	return ldap.EscapeFilter(username)
 }
 

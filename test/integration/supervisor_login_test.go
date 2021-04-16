@@ -66,9 +66,8 @@ func TestSupervisorLogin(t *testing.T) {
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 		},
-		// TODO add more variations of this LDAP test to try using different user search filters and attributes
 		{
-			name: "ldap",
+			name: "ldap with email as username and with dry run",
 			createIDP: func(t *testing.T) {
 				t.Helper()
 				secret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
@@ -77,7 +76,7 @@ func TestSupervisorLogin(t *testing.T) {
 						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
 					},
 				)
-				library.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
+				ldapIDP := library.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
 					Host: env.SupervisorUpstreamLDAP.Host,
 					TLS: &idpv1alpha1.LDAPIdentityProviderTLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
@@ -93,7 +92,15 @@ func TestSupervisorLogin(t *testing.T) {
 							UniqueID: env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
 						},
 					},
+					DryRunAuthenticationUsername: env.SupervisorUpstreamLDAP.TestUserMailAttributeValue,
 				}, idpv1alpha1.LDAPPhaseReady)
+				expectedMsg := fmt.Sprintf(
+					`successful authentication dry run for end user "%s": selected username "%s" and UID "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, env.SupervisorUpstreamLDAP.TestUserMailAttributeValue,
+					env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue,
+					secret.Name, secret.ResourceVersion,
+				)
+				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingLDAPIdentityProvider(t,
@@ -110,6 +117,56 @@ func TestSupervisorLogin(t *testing.T) {
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue),
 		},
+		{
+			name: "ldap with CN as username and without dry run", // try another variation of configuration options
+			createIDP: func(t *testing.T) {
+				t.Helper()
+				secret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
+					map[string]string{
+						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
+						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
+					},
+				)
+				ldapIDP := library.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
+					Host: env.SupervisorUpstreamLDAP.Host,
+					TLS: &idpv1alpha1.LDAPIdentityProviderTLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
+					},
+					Bind: idpv1alpha1.LDAPIdentityProviderBindSpec{
+						SecretName: secret.Name,
+					},
+					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearchSpec{
+						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
+						Filter: "cn={}", // try using a non-default search filter
+						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributesSpec{
+							Username: "dn", // try using the user's DN as the downstream username
+							UniqueID: env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
+						},
+					},
+					DryRunAuthenticationUsername: "", // try without dry run
+				}, idpv1alpha1.LDAPPhaseReady)
+				expectedMsg := fmt.Sprintf(
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
+					secret.Name, secret.ResourceVersion,
+				)
+				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
+			},
+			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingLDAPIdentityProvider(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamLDAP.TestUserCN,       // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword, // password to present to server during login
+					httpClient,
+				)
+			},
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(
+				"ldaps://" + env.SupervisorUpstreamLDAP.Host + "?sub=" + env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue,
+			),
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserDN),
+		},
 	}
 	for _, test := range tests {
 		test := test
@@ -122,6 +179,31 @@ func TestSupervisorLogin(t *testing.T) {
 			)
 		})
 	}
+}
+
+func requireSuccessfulLDAPIdentityProviderConditions(t *testing.T, ldapIDP *idpv1alpha1.LDAPIdentityProvider, expectedLDAPConnectionValidMessage string) {
+	require.Len(t, ldapIDP.Status.Conditions, 3)
+
+	conditionsSummary := [][]string{}
+	for _, condition := range ldapIDP.Status.Conditions {
+		conditionsSummary = append(conditionsSummary, []string{condition.Type, string(condition.Status), condition.Reason})
+		t.Logf("Saw LDAPIdentityProvider Status.Condition Type=%s Status=%s Reason=%s Message=%s",
+			condition.Type, string(condition.Status), condition.Reason, condition.Message)
+		switch condition.Type {
+		case "BindSecretValid":
+			require.Equal(t, "loaded bind secret", condition.Message)
+		case "TLSConfigurationValid":
+			require.Equal(t, "loaded TLS configuration", condition.Message)
+		case "LDAPConnectionValid":
+			require.Equal(t, expectedLDAPConnectionValidMessage, condition.Message)
+		}
+	}
+
+	require.ElementsMatch(t, [][]string{
+		{"BindSecretValid", "True", "Success"},
+		{"TLSConfigurationValid", "True", "Success"},
+		{"LDAPConnectionValid", "True", "Success"},
+	}, conditionsSummary)
 }
 
 func testSupervisorLogin(

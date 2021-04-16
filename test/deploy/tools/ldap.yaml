@@ -2,6 +2,122 @@
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
+#@ load("@ytt:sha256", "sha256")
+#@ load("@ytt:yaml", "yaml")
+
+#@ def ldapLIDIF():
+#@yaml/text-templated-strings
+ldap.ldif: |
+  # ** CAUTION: Blank lines separate entries in the LDIF format! Do not remove them! ***
+  # Here's a good explanation of LDIF:
+  # https://www.digitalocean.com/community/tutorials/how-to-use-ldif-files-to-make-changes-to-an-openldap-system
+
+  # pinniped.dev (organization, root)
+  dn: dc=pinniped,dc=dev
+  objectClass: dcObject
+  objectClass: organization
+  dc: pinniped
+  o: example
+
+  # users, pinniped.dev (organization unit)
+  dn: ou=users,dc=pinniped,dc=dev
+  objectClass: organizationalUnit
+  ou: users
+
+  # groups, pinniped.dev (organization unit)
+  dn: ou=groups,dc=pinniped,dc=dev
+  objectClass: organizationalUnit
+  ou: groups
+
+  # beach-groups, groups, pinniped.dev (organization unit)
+  dn: ou=beach-groups,ou=groups,dc=pinniped,dc=dev
+  objectClass: organizationalUnit
+  ou: beach-groups
+
+  # pinny, users, pinniped.dev (user)
+  dn: cn=pinny,ou=users,dc=pinniped,dc=dev
+  objectClass: inetOrgPerson
+  objectClass: posixAccount
+  objectClass: shadowAccount
+  cn: pinny
+  sn: Seal
+  givenName: Pinny
+  mail: pinny.ldap@example.com
+  userPassword: (@= data.values.pinny_ldap_password @)
+  uid: pinny
+  uidNumber: 1000
+  gidNumber: 1000
+  homeDirectory: /home/pinny
+  loginShell: /bin/bash
+  gecos: pinny-the-seal
+
+  # wally, users, pinniped.dev (user without password)
+  dn: cn=wally,ou=users,dc=pinniped,dc=dev
+  objectClass: inetOrgPerson
+  objectClass: posixAccount
+  objectClass: shadowAccount
+  cn: wally
+  sn: Walrus
+  givenName: Wally
+  mail: wally.ldap@example.com
+  mail: wally.alternate@example.com
+  uid: wally
+  uidNumber: 1001
+  gidNumber: 1001
+  homeDirectory: /home/wally
+  loginShell: /bin/bash
+  gecos: wally-the-walrus
+
+  # olive, users, pinniped.dev (user without password)
+  dn: cn=olive,ou=users,dc=pinniped,dc=dev
+  objectClass: inetOrgPerson
+  objectClass: posixAccount
+  objectClass: shadowAccount
+  cn: olive
+  sn: Boston Terrier
+  givenName: Olive
+  mail: olive.ldap@example.com
+  uid: olive
+  uidNumber: 1002
+  gidNumber: 1002
+  homeDirectory: /home/olive
+  loginShell: /bin/bash
+  gecos: olive-the-dog
+
+  # ball-game-players, beach-groups, groups, pinniped.dev (group of users)
+  dn: cn=ball-game-players,ou=beach-groups,ou=groups,dc=pinniped,dc=dev
+  cn: ball-game-players
+  objectClass: groupOfNames
+  member: cn=pinny,ou=users,dc=pinniped,dc=dev
+  member: cn=olive,ou=users,dc=pinniped,dc=dev
+
+  # seals, groups, pinniped.dev (group of users)
+  dn: cn=seals,ou=groups,dc=pinniped,dc=dev
+  cn: seals
+  objectClass: groupOfNames
+  member: cn=pinny,ou=users,dc=pinniped,dc=dev
+
+  # walruses, groups, pinniped.dev (group of users)
+  dn: cn=walruses,ou=groups,dc=pinniped,dc=dev
+  cn: walruses
+  objectClass: groupOfNames
+  member: cn=wally,ou=users,dc=pinniped,dc=dev
+
+  # pinnipeds, users, pinniped.dev (group of groups)
+  dn: cn=pinnipeds,ou=groups,dc=pinniped,dc=dev
+  cn: pinnipeds
+  objectClass: groupOfNames
+  member: cn=seals,ou=groups,dc=pinniped,dc=dev
+  member: cn=walruses,ou=groups,dc=pinniped,dc=dev
+
+  # mammals, groups, pinniped.dev (group of both groups and users)
+  dn: cn=mammals,ou=groups,dc=pinniped,dc=dev
+  cn: mammals
+  objectClass: groupOfNames
+  member: cn=pinninpeds,ou=groups,dc=pinniped,dc=dev
+  member: cn=olive,ou=users,dc=pinniped,dc=dev
+#@ end
+
 ---
 apiVersion: v1
 kind: Secret
@@ -9,117 +125,7 @@ metadata:
   name: ldap-ldif-files
   namespace: tools
 type: Opaque
-stringData:
-  #@yaml/text-templated-strings
-  ldap.ldif: |
-    # ** CAUTION: Blank lines separate entries in the LDIF format! Do not remove them! ***
-    # Here's a good explanation of LDIF:
-    # https://www.digitalocean.com/community/tutorials/how-to-use-ldif-files-to-make-changes-to-an-openldap-system
-
-    # pinniped.dev (organization, root)
-    dn: dc=pinniped,dc=dev
-    objectClass: dcObject
-    objectClass: organization
-    dc: pinniped
-    o: example
-
-    # users, pinniped.dev (organization unit)
-    dn: ou=users,dc=pinniped,dc=dev
-    objectClass: organizationalUnit
-    ou: users
-
-    # groups, pinniped.dev (organization unit)
-    dn: ou=groups,dc=pinniped,dc=dev
-    objectClass: organizationalUnit
-    ou: groups
-
-    # beach-groups, groups, pinniped.dev (organization unit)
-    dn: ou=beach-groups,ou=groups,dc=pinniped,dc=dev
-    objectClass: organizationalUnit
-    ou: beach-groups
-
-    # pinny, users, pinniped.dev (user)
-    dn: cn=pinny,ou=users,dc=pinniped,dc=dev
-    objectClass: inetOrgPerson
-    objectClass: posixAccount
-    objectClass: shadowAccount
-    cn: pinny
-    sn: Seal
-    givenName: Pinny
-    mail: pinny.ldap@example.com
-    userPassword: (@= data.values.pinny_ldap_password @)
-    uid: pinny
-    uidNumber: 1000
-    gidNumber: 1000
-    homeDirectory: /home/pinny
-    loginShell: /bin/bash
-    gecos: pinny-the-seal
-
-    # wally, users, pinniped.dev (user without password)
-    dn: cn=wally,ou=users,dc=pinniped,dc=dev
-    objectClass: inetOrgPerson
-    objectClass: posixAccount
-    objectClass: shadowAccount
-    cn: wally
-    sn: Walrus
-    givenName: Wally
-    mail: wally.ldap@example.com
-    mail: wally.alternate@example.com
-    uid: wally
-    uidNumber: 1001
-    gidNumber: 1001
-    homeDirectory: /home/wally
-    loginShell: /bin/bash
-    gecos: wally-the-walrus
-
-    # olive, users, pinniped.dev (user without password)
-    dn: cn=olive,ou=users,dc=pinniped,dc=dev
-    objectClass: inetOrgPerson
-    objectClass: posixAccount
-    objectClass: shadowAccount
-    cn: olive
-    sn: Boston Terrier
-    givenName: Olive
-    mail: olive.ldap@example.com
-    uid: olive
-    uidNumber: 1002
-    gidNumber: 1002
-    homeDirectory: /home/olive
-    loginShell: /bin/bash
-    gecos: olive-the-dog
-
-    # ball-game-players, beach-groups, groups, pinniped.dev (group of users)
-    dn: cn=ball-game-players,ou=beach-groups,ou=groups,dc=pinniped,dc=dev
-    cn: ball-game-players
-    objectClass: groupOfNames
-    member: cn=pinny,ou=users,dc=pinniped,dc=dev
-    member: cn=olive,ou=users,dc=pinniped,dc=dev
-
-    # seals, groups, pinniped.dev (group of users)
-    dn: cn=seals,ou=groups,dc=pinniped,dc=dev
-    cn: seals
-    objectClass: groupOfNames
-    member: cn=pinny,ou=users,dc=pinniped,dc=dev
-
-    # walruses, groups, pinniped.dev (group of users)
-    dn: cn=walruses,ou=groups,dc=pinniped,dc=dev
-    cn: walruses
-    objectClass: groupOfNames
-    member: cn=wally,ou=users,dc=pinniped,dc=dev
-
-    # pinnipeds, users, pinniped.dev (group of groups)
-    dn: cn=pinnipeds,ou=groups,dc=pinniped,dc=dev
-    cn: pinnipeds
-    objectClass: groupOfNames
-    member: cn=seals,ou=groups,dc=pinniped,dc=dev
-    member: cn=walruses,ou=groups,dc=pinniped,dc=dev
-
-    # mammals, groups, pinniped.dev (group of both groups and users)
-    dn: cn=mammals,ou=groups,dc=pinniped,dc=dev
-    cn: mammals
-    objectClass: groupOfNames
-    member: cn=pinninpeds,ou=groups,dc=pinniped,dc=dev
-    member: cn=olive,ou=users,dc=pinniped,dc=dev
+stringData: #@ ldapLIDIF()
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -137,6 +143,9 @@ spec:
     metadata:
       labels:
         app: ldap
+      annotations:
+        #! Cause the pod to get recreated whenever the LDIF file changes.
+        ldifConfigHash: #@ sha256.sum(yaml.encode(ldapLIDIF()))
     spec:
       containers:
         - name: ldap

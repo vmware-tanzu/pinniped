@@ -12,6 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/klog/v2"
+
+	"go.pinniped.dev/internal/testutil/testlogger"
+
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
@@ -41,6 +45,7 @@ func TestLoginStaticCommand(t *testing.T) {
 		wantStdout       string
 		wantStderr       string
 		wantOptionsCount int
+		wantLogs         []string
 	}{
 		{
 			name: "help flag passed",
@@ -126,10 +131,12 @@ func TestLoginStaticCommand(t *testing.T) {
 				"--concierge-authenticator-name", "test-authenticator",
 			},
 			conciergeErr: fmt.Errorf("some concierge error"),
+			env:          map[string]string{"PINNIPED_DEBUG": "true"},
 			wantError:    true,
 			wantStderr: here.Doc(`
 				Error: could not complete Concierge credential exchange: some concierge error
 			`),
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped login: exchanging static token for cluster credential\"  \"authenticator name\"=\"test-authenticator\" \"authenticator type\"=\"webhook\" \"endpoint\"=\"https://127.0.0.1/\""},
 		},
 		{
 			name: "invalid API group suffix",
@@ -157,6 +164,8 @@ func TestLoginStaticCommand(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			testLogger := testlogger.New(t)
+			klog.SetLogger(testLogger)
 			cmd := staticLoginCommand(staticLoginDeps{
 				lookupEnv: func(s string) (string, bool) {
 					v, ok := tt.env[s]
@@ -192,6 +201,8 @@ func TestLoginStaticCommand(t *testing.T) {
 			}
 			require.Equal(t, tt.wantStdout, stdout.String(), "unexpected stdout")
 			require.Equal(t, tt.wantStderr, stderr.String(), "unexpected stderr")
+
+			require.Equal(t, tt.wantLogs, testLogger.Lines())
 		})
 	}
 }

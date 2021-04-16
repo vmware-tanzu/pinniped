@@ -9,7 +9,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -44,7 +43,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 		args             []string
 		loginErr         error
 		conciergeErr     error
-		envVars          map[string]string
+		env              map[string]string
 		wantError        bool
 		wantStdout       string
 		wantStderr       string
@@ -175,7 +174,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--client-id", "test-client-id",
 				"--issuer", "test-issuer",
 			},
-			envVars:          map[string]string{"PINNIPED_DEBUG": "true"},
+			env:              map[string]string{"PINNIPED_DEBUG": "true"},
 			wantOptionsCount: 3,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 			wantLogs: []string{
@@ -202,7 +201,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--concierge-api-group-suffix", "some.suffix.com",
 				"--credential-cache", testutil.TempDir(t) + "/credentials.yaml",
 			},
-			envVars:          map[string]string{"PINNIPED_DEBUG": "true"},
+			env:              map[string]string{"PINNIPED_DEBUG": "true"},
 			wantOptionsCount: 7,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"exchanged-token"}}` + "\n",
 			wantLogs: []string{
@@ -214,21 +213,16 @@ func TestLoginOIDCCommand(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			for k, v := range tt.envVars {
-				kk := k
-				err := os.Setenv(kk, v)
-				require.NoError(t, err)
-				t.Cleanup(func() {
-					t.Log("cleaning up " + kk)
-					err = os.Unsetenv(kk)
-				})
-			}
 			testLogger := testlogger.New(t)
 			klog.SetLogger(testLogger)
 			var (
 				gotOptions []oidcclient.Option
 			)
 			cmd := oidcLoginCommand(oidcLoginCommandDeps{
+				lookupEnv: func(s string) (string, bool) {
+					v, ok := tt.env[s]
+					return v, ok
+				},
 				login: func(issuer string, clientID string, opts ...oidcclient.Option) (*oidctypes.Token, error) {
 					require.Equal(t, "test-issuer", issuer)
 					require.Equal(t, "test-client-id", clientID)

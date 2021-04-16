@@ -84,7 +84,7 @@ func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
 }
 
 func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams) error {
-	pLogger, err := SetLogLevel()
+	pLogger, err := SetLogLevel(deps.lookupEnv)
 	if err != nil {
 		plog.WarningErr("Received error while setting log level", err)
 	}

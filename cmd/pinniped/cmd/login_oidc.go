@@ -38,13 +38,15 @@ func init() {
 }
 
 type oidcLoginCommandDeps struct {
+	lookupEnv     func(string) (string, bool)
 	login         func(string, string, ...oidcclient.Option) (*oidctypes.Token, error)
 	exchangeToken func(context.Context, *conciergeclient.Client, string) (*clientauthv1beta1.ExecCredential, error)
 }
 
 func oidcLoginCommandRealDeps() oidcLoginCommandDeps {
 	return oidcLoginCommandDeps{
-		login: oidcclient.Login,
+		lookupEnv: os.LookupEnv,
+		login:     oidcclient.Login,
 		exchangeToken: func(ctx context.Context, client *conciergeclient.Client, token string) (*clientauthv1beta1.ExecCredential, error) {
 			return client.ExchangeToken(ctx, token)
 		},
@@ -112,7 +114,7 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 }
 
 func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLoginFlags) error {
-	pLogger, err := SetLogLevel()
+	pLogger, err := SetLogLevel(deps.lookupEnv)
 	if err != nil {
 		plog.WarningErr("Received error while setting log level", err)
 	}
@@ -264,8 +266,9 @@ func tokenCredential(token *oidctypes.Token) *clientauthv1beta1.ExecCredential {
 	return &cred
 }
 
-func SetLogLevel() (*plog.PLogger, error) {
-	if os.Getenv("PINNIPED_DEBUG") == "true" {
+func SetLogLevel(lookupEnv func(string) (string, bool)) (*plog.PLogger, error) {
+	debug, _ := lookupEnv("PINNIPED_DEBUG")
+	if debug == "true" {
 		err := plog.ValidateAndSetLogLevelGlobally(plog.LevelDebug)
 		if err != nil {
 			return nil, err

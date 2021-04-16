@@ -112,7 +112,7 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 }
 
 func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLoginFlags) error {
-	err := SetLogLevel()
+	pLogger, err := SetLogLevel()
 	if err != nil {
 		plog.WarningErr("Received error while setting log level", err)
 	}
@@ -189,7 +189,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		}
 	}
 
-	plog.Debug("Pinniped: Performing OIDC login", "issuer", flags.issuer, "client id", flags.clientID)
+	pLogger.Debug("Performing OIDC login", "issuer", flags.issuer, "client id", flags.clientID)
 	// Do the basic login to get an OIDC token.
 	token, err := deps.login(flags.issuer, flags.clientID, opts...)
 	if err != nil {
@@ -199,7 +199,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 
 	// If the concierge was configured, exchange the credential for a separate short-lived, cluster-specific credential.
 	if concierge != nil {
-		plog.Debug("Pinniped: Exchanging token for cluster credential", "endpoint", flags.conciergeEndpoint, "authenticator type", flags.conciergeAuthenticatorType, "authenticator name", flags.conciergeAuthenticatorName)
+		pLogger.Debug("Exchanging token for cluster credential", "endpoint", flags.conciergeEndpoint, "authenticator type", flags.conciergeAuthenticatorType, "authenticator name", flags.conciergeAuthenticatorName)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
@@ -208,7 +208,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 			return fmt.Errorf("could not complete Concierge credential exchange: %w", err)
 		}
 	} else {
-		plog.Debug("Pinniped: No concierge configured, skipping token credential exchange")
+		pLogger.Debug("No concierge configured, skipping token credential exchange")
 	}
 
 	// If there was a credential cache, save the resulting credential for future use.
@@ -264,14 +264,15 @@ func tokenCredential(token *oidctypes.Token) *clientauthv1beta1.ExecCredential {
 	return &cred
 }
 
-func SetLogLevel() error {
+func SetLogLevel() (*plog.PLogger, error) {
 	if os.Getenv("PINNIPED_DEBUG") == "true" {
 		err := plog.ValidateAndSetLogLevelGlobally(plog.LevelDebug)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	logger := plog.New("Pinniped login: ")
+	return &logger, nil
 }
 
 // mustGetConfigDir returns a directory that follows the XDG base directory convention:

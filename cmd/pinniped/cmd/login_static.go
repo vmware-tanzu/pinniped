@@ -84,7 +84,7 @@ func staticLoginCommand(deps staticLoginDeps) *cobra.Command {
 }
 
 func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams) error {
-	err := SetLogLevel()
+	pLogger, err := SetLogLevel()
 	if err != nil {
 		plog.WarningErr("Received error while setting log level", err)
 	}
@@ -143,7 +143,7 @@ func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams
 
 	// If the concierge was configured, exchange the credential for a separate short-lived, cluster-specific credential.
 	if concierge != nil {
-		plog.Debug("exchanging static token for cluster credential", "endpoint", flags.conciergeEndpoint, "authenticator type", flags.conciergeAuthenticatorType, "authenticator name", flags.conciergeAuthenticatorName)
+		pLogger.Debug("exchanging static token for cluster credential", "endpoint", flags.conciergeEndpoint, "authenticator type", flags.conciergeAuthenticatorType, "authenticator name", flags.conciergeAuthenticatorName)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
@@ -152,7 +152,7 @@ func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams
 		if err != nil {
 			return fmt.Errorf("could not complete Concierge credential exchange: %w", err)
 		}
-		plog.Debug("exchanged static token for cluster credential")
+		pLogger.Debug("exchanged static token for cluster credential")
 	}
 
 	// If there was a credential cache, save the resulting credential for future use. We only save to the cache if

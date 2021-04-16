@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -16,10 +17,12 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
+	"k8s.io/klog/v2"
 
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/testutil/testlogger"
 	"go.pinniped.dev/pkg/conciergeclient"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -41,10 +44,12 @@ func TestLoginOIDCCommand(t *testing.T) {
 		args             []string
 		loginErr         error
 		conciergeErr     error
+		envVars          map[string]string
 		wantError        bool
 		wantStdout       string
 		wantStderr       string
 		wantOptionsCount int
+		wantLogs         []string
 	}{
 		{
 			name: "help flag passed",
@@ -170,8 +175,13 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--client-id", "test-client-id",
 				"--issuer", "test-issuer",
 			},
+			envVars:          map[string]string{"PINNIPED_DEBUG": "true"},
 			wantOptionsCount: 3,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
+			wantLogs: []string{
+				"\"level\"=0 \"msg\"=\"Pinniped login: Performing OIDC login\"  \"client id\"=\"test-client-id\" \"issuer\"=\"test-issuer\"",
+				"\"level\"=0 \"msg\"=\"Pinniped login: No concierge configured, skipping token credential exchange\"",
+			},
 		},
 		{
 			name: "success with all options",
@@ -192,13 +202,29 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--concierge-api-group-suffix", "some.suffix.com",
 				"--credential-cache", testutil.TempDir(t) + "/credentials.yaml",
 			},
+			envVars:          map[string]string{"PINNIPED_DEBUG": "true"},
 			wantOptionsCount: 7,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"exchanged-token"}}` + "\n",
+			wantLogs: []string{
+				"\"level\"=0 \"msg\"=\"Pinniped login: Performing OIDC login\"  \"client id\"=\"test-client-id\" \"issuer\"=\"test-issuer\"",
+				"\"level\"=0 \"msg\"=\"Pinniped login: Exchanging token for cluster credential\"  \"authenticator name\"=\"test-authenticator\" \"authenticator type\"=\"webhook\" \"endpoint\"=\"https://127.0.0.1:1234/\"",
+			},
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			for k, v := range tt.envVars {
+				kk := k
+				err := os.Setenv(kk, v)
+				require.NoError(t, err)
+				t.Cleanup(func() {
+					t.Log("cleaning up " + kk)
+					err = os.Unsetenv(kk)
+				})
+			}
+			testLogger := testlogger.New(t)
+			klog.SetLogger(testLogger)
 			var (
 				gotOptions []oidcclient.Option
 			)
@@ -248,6 +274,8 @@ func TestLoginOIDCCommand(t *testing.T) {
 			require.Equal(t, tt.wantStdout, stdout.String(), "unexpected stdout")
 			require.Equal(t, tt.wantStderr, stderr.String(), "unexpected stderr")
 			require.Len(t, gotOptions, tt.wantOptionsCount)
+
+			require.Equal(t, tt.wantLogs, testLogger.Lines())
 		})
 	}
 }

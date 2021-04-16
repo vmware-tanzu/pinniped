@@ -19,11 +19,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/mocks/mockupstreamoidcidentityprovider"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/testutil/testlogger"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -205,6 +208,7 @@ func TestLogin(t *testing.T) {
 		clientID  string
 		wantErr   string
 		wantToken *oidctypes.Token
+		wantLogs  []string
 	}{
 		{
 			name: "option error",
@@ -269,7 +273,8 @@ func TestLogin(t *testing.T) {
 					return WithSessionCache(cache)(h)
 				}
 			},
-			wantErr: `could not perform OIDC discovery for "test-issuer": Get "test-issuer/.well-known/openid-configuration": unsupported protocol scheme ""`,
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"test-issuer\""},
+			wantErr:  `could not perform OIDC discovery for "test-issuer": Get "test-issuer/.well-known/openid-configuration": unsupported protocol scheme ""`,
 		},
 		{
 			name:     "session cache hit with valid token",
@@ -290,6 +295,7 @@ func TestLogin(t *testing.T) {
 					return WithSessionCache(cache)(h)
 				}
 			},
+			wantLogs:  []string{"\"level\"=0 \"msg\"=\"Pinniped: Found unexpired cached token\""},
 			wantToken: &testToken,
 		},
 		{
@@ -297,8 +303,9 @@ func TestLogin(t *testing.T) {
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error { return nil }
 			},
-			issuer:  errorServer.URL,
-			wantErr: fmt.Sprintf("could not perform OIDC discovery for %q: 500 Internal Server Error: some discovery error\n", errorServer.URL),
+			issuer:   errorServer.URL,
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + errorServer.URL + "\""},
+			wantErr:  fmt.Sprintf("could not perform OIDC discovery for %q: 500 Internal Server Error: some discovery error\n", errorServer.URL),
 		},
 		{
 			name:     "session cache hit with refreshable token",
@@ -337,6 +344,8 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\"",
+				"\"level\"=0 \"msg\"=\"refreshing cached token\""},
 			wantToken: &testToken,
 		},
 		{
@@ -369,6 +378,8 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\"",
+				"\"level\"=0 \"msg\"=\"refreshing cached token\""},
 			wantErr: "some validation error",
 		},
 		{
@@ -395,6 +406,8 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\"",
+				"\"level\"=0 \"msg\"=\"refreshing cached token\""},
 			// Expect this to fall through to the authorization code flow, so it fails here.
 			wantErr: "could not open callback listener: listen tcp: address invalid-listen-address: missing port in address",
 		},
@@ -406,8 +419,9 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
-			issuer:  successServer.URL,
-			wantErr: "could not open callback listener: listen tcp: address invalid-listen-address: missing port in address",
+			issuer:   successServer.URL,
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantErr:  "could not open callback listener: listen tcp: address invalid-listen-address: missing port in address",
 		},
 		{
 			name: "browser open failure",
@@ -416,8 +430,9 @@ func TestLogin(t *testing.T) {
 					return fmt.Errorf("some browser open error")
 				})
 			},
-			issuer:  successServer.URL,
-			wantErr: "could not open browser: some browser open error",
+			issuer:   successServer.URL,
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantErr:  "could not open browser: some browser open error",
 		},
 		{
 			name: "timeout waiting for callback",
@@ -433,8 +448,9 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
-			issuer:  successServer.URL,
-			wantErr: "timed out waiting for token callback: context canceled",
+			issuer:   successServer.URL,
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantErr:  "timed out waiting for token callback: context canceled",
 		},
 		{
 			name: "callback returns error",
@@ -449,8 +465,9 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
-			issuer:  successServer.URL,
-			wantErr: "error handling callback: some callback error",
+			issuer:   successServer.URL,
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
+			wantErr:  "error handling callback: some callback error",
 		},
 		{
 			name:     "callback returns success",
@@ -510,6 +527,7 @@ func TestLogin(t *testing.T) {
 				}
 			},
 			issuer:    successServer.URL,
+			wantLogs:  []string{"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
 			wantToken: &testToken,
 		},
 		{
@@ -533,6 +551,9 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Found unexpired cached token\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requested audience\"=\"cluster-1234\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + errorServer.URL + "\""},
 			wantErr: fmt.Sprintf("failed to exchange token: could not perform OIDC discovery for %q: 500 Internal Server Error: some discovery error\n", errorServer.URL),
 		},
 		{
@@ -556,6 +577,9 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Found unexpired cached token\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requested audience\"=\"cluster-1234\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + brokenTokenURLServer.URL + "\""},
 			wantErr: `failed to exchange token: could not build RFC8693 request: parse "%": invalid URL escape "%"`,
 		},
 		{
@@ -579,6 +603,9 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Found unexpired cached token\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requested audience\"=\"test-audience-produce-invalid-http-response\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
 			wantErr: fmt.Sprintf(`failed to exchange token: Post "%s/token": failed to parse Location header "%%": parse "%%": invalid URL escape "%%"`, successServer.URL),
 		},
 		{
@@ -602,6 +629,9 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Found unexpired cached token\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requested audience\"=\"test-audience-produce-http-400\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
 			wantErr: `failed to exchange token: unexpected HTTP response status 400`,
 		},
 		{
@@ -625,6 +655,9 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Found unexpired cached token\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requested audience\"=\"test-audience-produce-invalid-content-type\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
 			wantErr: `failed to exchange token: failed to decode content-type header: mime: invalid media parameter`,
 		},
 		{
@@ -648,6 +681,9 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Found unexpired cached token\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requested audience\"=\"test-audience-produce-wrong-content-type\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
 			wantErr: `failed to exchange token: unexpected HTTP response content type "invalid"`,
 		},
 		{
@@ -671,6 +707,9 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Found unexpired cached token\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requested audience\"=\"test-audience-produce-invalid-json\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
 			wantErr: `failed to exchange token: failed to decode response: unexpected EOF`,
 		},
 		{
@@ -694,6 +733,9 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Found unexpired cached token\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requested audience\"=\"test-audience-produce-invalid-tokentype\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
 			wantErr: `failed to exchange token: got unexpected token_type "invalid"`,
 		},
 		{
@@ -717,6 +759,9 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Found unexpired cached token\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requested audience\"=\"test-audience-produce-invalid-issuedtokentype\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
 			wantErr: `failed to exchange token: got unexpected issued_token_type "invalid"`,
 		},
 		{
@@ -740,6 +785,9 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Found unexpired cached token\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requested audience\"=\"test-audience-produce-invalid-jwt\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
 			wantErr: `failed to exchange token: received invalid JWT: oidc: malformed jwt: square/go-jose: compact JWS format must have three parts`,
 		},
 		{
@@ -769,6 +817,9 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
+			wantLogs: []string{"\"level\"=0 \"msg\"=\"Pinniped: Found unexpired cached token\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requested audience\"=\"test-audience\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
 			wantToken: &testExchangedToken,
 		},
 		{
@@ -816,18 +867,29 @@ func TestLogin(t *testing.T) {
 					return nil
 				}
 			},
+			wantLogs: []string{
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\"",
+				"\"level\"=0 \"msg\"=\"refreshing cached token\"",
+				"\"level\"=0 \"msg\"=\"Pinniped: Performing RFC8693 token exchange\"  \"requested audience\"=\"test-audience\"",
+			},
 			wantToken: &testExchangedToken,
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			err := plog.ValidateAndSetLogLevelGlobally(plog.LevelDebug)
+			require.NoError(t, err)
+			testLogger := testlogger.New(t)
+			klog.SetLogger(testLogger)
+
 			tok, err := Login(tt.issuer, tt.clientID,
 				WithContext(context.Background()),
 				WithListenPort(0),
 				WithScopes([]string{"test-scope"}),
 				tt.opt(t),
 			)
+			require.Equal(t, tt.wantLogs, testLogger.Lines())
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				require.Nil(t, tok)

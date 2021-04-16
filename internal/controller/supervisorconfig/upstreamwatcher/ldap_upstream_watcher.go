@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
+	"regexp"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -29,6 +30,7 @@ import (
 const (
 	ldapControllerName        = "ldap-upstream-observer"
 	ldapBindAccountSecretType = corev1.SecretTypeBasicAuth
+	testLDAPConnectionTimeout = 90 * time.Second
 
 	// Constants related to conditions.
 	typeBindSecretValid           = "BindSecretValid"
@@ -37,6 +39,10 @@ const (
 	reasonLDAPConnectionError     = "LDAPConnectionError"
 	noTLSConfigurationMessage     = "no TLS configuration provided"
 	loadedTLSConfigurationMessage = "loaded TLS configuration"
+)
+
+var (
+	secretVersionParser = regexp.MustCompile(` \[validated with Secret ".+" at version "(.+)"]`)
 )
 
 // UpstreamLDAPIdentityProviderICache is a thread safe cache that holds a list of validated upstream LDAP IDP configurations.
@@ -123,13 +129,13 @@ func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *
 	}
 
 	conditions := []*v1alpha1.Condition{}
-	secretValidCondition := c.validateSecret(upstream, config)
+	secretValidCondition, currentSecretVersion := c.validateSecret(upstream, config)
 	tlsValidCondition := c.validateTLSConfig(upstream, config)
 	conditions = append(conditions, secretValidCondition, tlsValidCondition)
 
 	// No point in trying to connect to the server if the config was already determined to be invalid.
 	if secretValidCondition.Status == v1alpha1.ConditionTrue && tlsValidCondition.Status == v1alpha1.ConditionTrue {
-		finishedConfigCondition := c.validateFinishedConfig(ctx, upstream, config)
+		finishedConfigCondition := c.validateFinishedConfig(ctx, upstream, config, currentSecretVersion)
 		// nil when there is no need to update this condition.
 		if finishedConfigCondition != nil {
 			conditions = append(conditions, finishedConfigCondition)
@@ -168,39 +174,50 @@ func (c *ldapWatcherController) validateTLSConfig(upstream *v1alpha1.LDAPIdentit
 	return c.validTLSCondition(loadedTLSConfigurationMessage)
 }
 
-func (c *ldapWatcherController) validateFinishedConfig(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider, config *upstreamldap.ProviderConfig) *v1alpha1.Condition {
+func (c *ldapWatcherController) validateFinishedConfig(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider, config *upstreamldap.ProviderConfig, currentSecretVersion string) *v1alpha1.Condition {
 	ldapProvider := upstreamldap.New(*config)
 
-	if alreadyValidatedFinishedConfigForThisSpecGeneration(upstream) {
+	if hasPreviousSuccessfulConditionForCurrentSpecGenerationAndSecretVersion(upstream, currentSecretVersion) {
 		return nil
 	}
 
-	testConnectionTimeout, cancelFunc := context.WithTimeout(ctx, 90*time.Second)
+	testConnectionTimeout, cancelFunc := context.WithTimeout(ctx, testLDAPConnectionTimeout)
 	defer cancelFunc()
 
 	err := ldapProvider.TestConnection(testConnectionTimeout)
 	if err != nil {
 		return &v1alpha1.Condition{
-			Type:    typeLDAPConnectionValid,
-			Status:  v1alpha1.ConditionFalse,
-			Reason:  reasonLDAPConnectionError,
-			Message: fmt.Sprintf(`could not successfully connect to "%s" and bind as user "%s: %s`, config.Host, config.BindUsername, err.Error()),
+			Type:   typeLDAPConnectionValid,
+			Status: v1alpha1.ConditionFalse,
+			Reason: reasonLDAPConnectionError,
+			Message: fmt.Sprintf(`could not successfully connect to "%s" and bind as user "%s": %s`,
+				config.Host, config.BindUsername, err.Error()),
 		}
 	}
 
 	return &v1alpha1.Condition{
-		Type:    typeLDAPConnectionValid,
-		Status:  v1alpha1.ConditionTrue,
-		Reason:  reasonSuccess,
-		Message: fmt.Sprintf(`successfully able to connect to "%s" and bind as user "%s"`, config.Host, config.BindUsername),
+		Type:   typeLDAPConnectionValid,
+		Status: v1alpha1.ConditionTrue,
+		Reason: reasonSuccess,
+		Message: fmt.Sprintf(`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+			config.Host, config.BindUsername, upstream.Spec.Bind.SecretName, currentSecretVersion),
 	}
 }
 
-func alreadyValidatedFinishedConfigForThisSpecGeneration(upstream *v1alpha1.LDAPIdentityProvider) bool {
+func hasPreviousSuccessfulConditionForCurrentSpecGenerationAndSecretVersion(upstream *v1alpha1.LDAPIdentityProvider, currentSecretVersion string) bool {
 	currentGeneration := upstream.Generation
 	for _, c := range upstream.Status.Conditions {
 		if c.Type == typeLDAPConnectionValid && c.Status == v1alpha1.ConditionTrue && c.ObservedGeneration == currentGeneration {
-			return true
+			// Found a previously successful condition for the current spec generation.
+			// Now figure out which version of the bind Secret was used during that previous validation.
+			matches := secretVersionParser.FindStringSubmatch(c.Message)
+			if len(matches) != 2 {
+				continue
+			}
+			validatedSecretVersion := matches[1]
+			if validatedSecretVersion == currentSecretVersion {
+				return true
+			}
 		}
 	}
 	return false
@@ -224,7 +241,7 @@ func (c *ldapWatcherController) invalidTLSCondition(message string) *v1alpha1.Co
 	}
 }
 
-func (c *ldapWatcherController) validateSecret(upstream *v1alpha1.LDAPIdentityProvider, config *upstreamldap.ProviderConfig) *v1alpha1.Condition {
+func (c *ldapWatcherController) validateSecret(upstream *v1alpha1.LDAPIdentityProvider, config *upstreamldap.ProviderConfig) (*v1alpha1.Condition, string) {
 	secretName := upstream.Spec.Bind.SecretName
 
 	secret, err := c.secretInformer.Lister().Secrets(upstream.Namespace).Get(secretName)
@@ -234,27 +251,29 @@ func (c *ldapWatcherController) validateSecret(upstream *v1alpha1.LDAPIdentityPr
 			Status:  v1alpha1.ConditionFalse,
 			Reason:  reasonNotFound,
 			Message: err.Error(),
-		}
+		}, ""
 	}
 
 	if secret.Type != corev1.SecretTypeBasicAuth {
 		return &v1alpha1.Condition{
-			Type:    typeBindSecretValid,
-			Status:  v1alpha1.ConditionFalse,
-			Reason:  reasonWrongType,
-			Message: fmt.Sprintf("referenced Secret %q has wrong type %q (should be %q)", secretName, secret.Type, corev1.SecretTypeBasicAuth),
-		}
+			Type:   typeBindSecretValid,
+			Status: v1alpha1.ConditionFalse,
+			Reason: reasonWrongType,
+			Message: fmt.Sprintf("referenced Secret %q has wrong type %q (should be %q)",
+				secretName, secret.Type, corev1.SecretTypeBasicAuth),
+		}, secret.ResourceVersion
 	}
 
 	config.BindUsername = string(secret.Data[corev1.BasicAuthUsernameKey])
 	config.BindPassword = string(secret.Data[corev1.BasicAuthPasswordKey])
 	if len(config.BindUsername) == 0 || len(config.BindPassword) == 0 {
 		return &v1alpha1.Condition{
-			Type:    typeBindSecretValid,
-			Status:  v1alpha1.ConditionFalse,
-			Reason:  reasonMissingKeys,
-			Message: fmt.Sprintf("referenced Secret %q is missing required keys %q", secretName, []string{corev1.BasicAuthUsernameKey, corev1.BasicAuthPasswordKey}),
-		}
+			Type:   typeBindSecretValid,
+			Status: v1alpha1.ConditionFalse,
+			Reason: reasonMissingKeys,
+			Message: fmt.Sprintf("referenced Secret %q is missing required keys %q",
+				secretName, []string{corev1.BasicAuthUsernameKey, corev1.BasicAuthPasswordKey}),
+		}, secret.ResourceVersion
 	}
 
 	return &v1alpha1.Condition{
@@ -262,7 +281,7 @@ func (c *ldapWatcherController) validateSecret(upstream *v1alpha1.LDAPIdentityPr
 		Status:  v1alpha1.ConditionTrue,
 		Reason:  reasonSuccess,
 		Message: "loaded bind secret",
-	}
+	}, secret.ResourceVersion
 }
 
 func (c *ldapWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider, conditions []*v1alpha1.Condition) bool {

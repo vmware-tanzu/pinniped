@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidcclient implements a CLI OIDC login flow.
@@ -53,6 +53,10 @@ type handlerState struct {
 	clientID string
 	scopes   []string
 	cache    SessionCache
+
+	upstreamIdentityProviderName string
+	upstreamIdentityProviderType string
+	ldapUpstreamIdentityProvider bool
 
 	requestedAudience string
 
@@ -163,6 +167,30 @@ func WithClient(httpClient *http.Client) Option {
 func WithRequestAudience(audience string) Option {
 	return func(h *handlerState) error {
 		h.requestedAudience = audience
+		return nil
+	}
+}
+
+// WithLDAPUpstreamIdentityProvider causes the login flow to use CLI prompts for username and password and causes the
+// call to the Issuer's authorize endpoint to be made directly (no web browser) with the username and password on custom
+// HTTP headers. This is only intended to be used when the issuer is a Pinniped Supervisor and the upstream identity
+// provider is an LDAP provider. It should never be used with non-Supervisor issuers because it will send the user's
+// password as a custom header, which would be ignored but could potentially get logged somewhere by the issuer.
+func WithLDAPUpstreamIdentityProvider() Option {
+	return func(h *handlerState) error {
+		h.ldapUpstreamIdentityProvider = true
+		return nil
+	}
+}
+
+// WithUpstreamIdentityProvider causes the specified name and type to be sent as custom query parameters to the
+// issuer's authorize endpoint. This is only intended to be used when the issuer is a Pinniped Supervisor, in which
+// case it provides a mechanism to choose among several upstream identity providers.
+// Other issuers will ignore these custom query parameters.
+func WithUpstreamIdentityProvider(upstreamName, upstreamType string) Option {
+	return func(h *handlerState) error {
+		h.upstreamIdentityProviderName = upstreamName
+		h.upstreamIdentityProviderType = upstreamType
 		return nil
 	}
 }
@@ -281,6 +309,63 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 		}
 	}
 
+	// Prepare the common options for the authorization URL. We don't have the redirect URL yet though.
+	authorizeOptions := []oauth2.AuthCodeOption{
+		oauth2.AccessTypeOffline,
+		h.nonce.Param(),
+		h.pkce.Challenge(),
+		h.pkce.Method(),
+	}
+	if h.upstreamIdentityProviderName != "" {
+		authorizeOptions = append(authorizeOptions, oauth2.SetAuthURLParam("upstream_name", h.upstreamIdentityProviderName))
+		authorizeOptions = append(authorizeOptions, oauth2.SetAuthURLParam("upstream_type", h.upstreamIdentityProviderType))
+	}
+
+	// Choose the appropriate authorization and authcode exchange strategy.
+	var authFunc = h.webBrowserBasedAuth
+	if h.ldapUpstreamIdentityProvider {
+		authFunc = h.cliBasedAuth
+	}
+
+	// Perform the authorize request and authcode exchange to get back OIDC tokens.
+	token, err := authFunc(&authorizeOptions)
+
+	// If we got tokens, put them in the cache.
+	if err == nil {
+		h.cache.PutToken(cacheKey, token)
+	}
+
+	return token, err
+}
+
+// Make a direct call to the authorize endpoint and parse the authcode from the response.
+// Exchange the authcode for tokens. Return the tokens or an error.
+func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (*oidctypes.Token, error) {
+	// Make a callback URL even though we won't be listening on this port, because providing a redirect URL is
+	// required for OIDC authorize endpoints, and it must match the allowed redirect URL of the OIDC client
+	// registered on the server.
+	h.oauth2Config.RedirectURL = (&url.URL{
+		Scheme: "http",
+		Host:   h.listenAddr,
+		Path:   h.callbackPath,
+	}).String()
+
+	// Now that we have a redirect URL, we can build the authorize URL.
+	_ = h.oauth2Config.AuthCodeURL(h.state.String(), *authorizeOptions...)
+
+	// TODO prompt for username and password
+	// TODO request the authorizeURL directly using h.httpClient, with the custom username and password headers
+	// TODO error if the response is not a 302
+	// TODO error if the response Location does not include a code param (in this case it could have an error message query param to show)
+	// TODO check the response Location state param to see if it matches, similar to how it is done in handleAuthCodeCallback()
+	// TODO exchange the authcode, similar to how it is done in handleAuthCodeCallback()
+	// TODO return the token or any error encountered along the way
+	return nil, nil
+}
+
+// Open a web browser, or ask the user to open a web browser, to visit the authorize endpoint.
+// Create a localhost callback listener which exchanges the authcode for tokens. Return the tokens or an error.
+func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (*oidctypes.Token, error) {
 	// Open a TCP listener and update the OAuth2 redirect_uri to match (in case we are using an ephemeral port number).
 	listener, err := net.Listen("tcp", h.listenAddr)
 	if err != nil {
@@ -292,18 +377,14 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 		Path:   h.callbackPath,
 	}).String()
 
+	// Now that we have a redirect URL with the listener port, we can build the authorize URL.
+	authorizeURL := h.oauth2Config.AuthCodeURL(h.state.String(), *authorizeOptions...)
+
 	// Start a callback server in a background goroutine.
 	shutdown := h.serve(listener)
 	defer shutdown()
 
 	// Open the authorize URL in the users browser.
-	authorizeURL := h.oauth2Config.AuthCodeURL(
-		h.state.String(),
-		oauth2.AccessTypeOffline,
-		h.nonce.Param(),
-		h.pkce.Challenge(),
-		h.pkce.Method(),
-	)
 	if err := h.openURL(authorizeURL); err != nil {
 		return nil, fmt.Errorf("could not open browser: %w", err)
 	}
@@ -316,7 +397,6 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 		if callback.err != nil {
 			return nil, fmt.Errorf("error handling callback: %w", callback.err)
 		}
-		h.cache.PutToken(cacheKey, callback.token)
 		return callback.token, nil
 	}
 }
@@ -447,6 +527,8 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 
 	// Check for error response parameters.
 	if errorParam := params.Get("error"); errorParam != "" {
+		// TODO This should also show the value of the optional "error_description" param if it exists.
+		//  See https://openid.net/specs/openid-connect-core-1_0.html#AuthError
 		return httperr.Newf(http.StatusBadRequest, "login failed with code %q", errorParam)
 	}
 

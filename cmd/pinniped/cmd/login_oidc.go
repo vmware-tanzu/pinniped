@@ -50,23 +50,25 @@ func oidcLoginCommandRealDeps() oidcLoginCommandDeps {
 }
 
 type oidcLoginFlags struct {
-	issuer                     string
-	clientID                   string
-	listenPort                 uint16
-	scopes                     []string
-	skipBrowser                bool
-	sessionCachePath           string
-	caBundlePaths              []string
-	caBundleData               []string
-	debugSessionCache          bool
-	requestAudience            string
-	conciergeEnabled           bool
-	conciergeAuthenticatorType string
-	conciergeAuthenticatorName string
-	conciergeEndpoint          string
-	conciergeCABundle          string
-	conciergeAPIGroupSuffix    string
-	credentialCachePath        string
+	issuer                       string
+	clientID                     string
+	listenPort                   uint16
+	scopes                       []string
+	skipBrowser                  bool
+	sessionCachePath             string
+	caBundlePaths                []string
+	caBundleData                 []string
+	debugSessionCache            bool
+	requestAudience              string
+	conciergeEnabled             bool
+	conciergeAuthenticatorType   string
+	conciergeAuthenticatorName   string
+	conciergeEndpoint            string
+	conciergeCABundle            string
+	conciergeAPIGroupSuffix      string
+	credentialCachePath          string
+	upstreamIdentityProviderName string
+	upstreamIdentityProviderType string
 }
 
 func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
@@ -98,6 +100,8 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeCABundle, "concierge-ca-bundle-data", "", "CA bundle to use when connecting to the Concierge")
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
 	cmd.Flags().StringVar(&flags.credentialCachePath, "credential-cache", filepath.Join(mustGetConfigDir(), "credentials.yaml"), "Path to cluster-specific credentials cache (\"\" disables the cache)")
+	cmd.Flags().StringVar(&flags.upstreamIdentityProviderName, "upstream-identity-provider-name", "", "The name of the upstream identity provider used during login with a Supervisor")
+	cmd.Flags().StringVar(&flags.upstreamIdentityProviderType, "upstream-identity-provider-type", "oidc", "The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap')")
 
 	mustMarkHidden(cmd, "debug-session-cache")
 	mustMarkRequired(cmd, "issuer")
@@ -135,6 +139,23 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 
 	if flags.requestAudience != "" {
 		opts = append(opts, oidcclient.WithRequestAudience(flags.requestAudience))
+	}
+
+	if flags.upstreamIdentityProviderName != "" {
+		opts = append(opts, oidcclient.WithUpstreamIdentityProvider(
+			flags.upstreamIdentityProviderName, flags.upstreamIdentityProviderType))
+	}
+
+	switch flags.upstreamIdentityProviderType {
+	case "oidc":
+		// this is the default, so don't need to do anything
+	case "ldap":
+		opts = append(opts, oidcclient.WithLDAPUpstreamIdentityProvider())
+	default:
+		// Surprisingly cobra does not support this kind of flag validation. See https://github.com/spf13/pflag/issues/236
+		return fmt.Errorf(
+			"--upstream-identity-provider-type value not recognized: %s (supported values: oidc, ldap)",
+			flags.upstreamIdentityProviderType)
 	}
 
 	var concierge *conciergeclient.Client

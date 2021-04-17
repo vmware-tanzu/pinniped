@@ -33,18 +33,18 @@ The following table includes the current roadmap for Pinniped. If you have any q
 
 
 
-Last Updated: March 2021
+Last Updated: April 2021
 Theme|Description|Timeline|
 |--|--|--|
-|Impersonation Proxy|Adds support for more types of clusters (managed services)|Mar 2021|
-|LDAP Support|Extends upstream IDP protocols|Apr 2021|
-|Device Code Flow|Add support for OAuth 2.0 Device Authorization Grant in the Pinniped CLI and Supervisor|Apr 2021|
+|LDAP Support|Extends upstream IDP protocols|May 2021|
 |Improved Documentation|Reorganizing and improving Pinniped docs; new how-to guides and tutorials|May 2021|
-|CLI Improvements|Improving CLI UX for setting up Supervisor IDPs|May 2021|
 |Multiple IDPs|Support for multiple upstream IDPs to be configured simultaneously|Jun 2021|
+|Wider Concierge cluster support|Support for more cluster types in the Concierge|Jul 2021|
 |Improving Security Posture|Offer the best security posture for Kubernetes cluster authentication|Exploring/Ongoing|
 |Improve our CI/CD systems|Upgrade tests; make Kind more efficient and reliable for CI ; Windows tests; performance tests; scale tests; soak tests|Exploring/Ongoing|
+|CLI Improvements|Improving CLI UX for setting up Supervisor IDPs|Exploring/Ongoing|
 |Telemetry|Adding some useful phone home metrics as well as some vanity metrics|Exploring/Ongoing|
 |Observability|Expose Pinniped metrics through Prometheus Integration|Exploring/Ongoing|
+|Device Code Flow|Add support for OAuth 2.0 Device Authorization Grant in the Pinniped CLI and Supervisor|Exploring/Ongoing|
 
    

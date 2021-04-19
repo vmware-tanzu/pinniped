@@ -4,11 +4,14 @@
 package impersonator
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -21,6 +24,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/httpstream"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/sets"
+	auditinternal "k8s.io/apiserver/pkg/apis/audit"
+	"k8s.io/apiserver/pkg/audit/policy"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/filterlatency"
@@ -31,6 +36,7 @@ import (
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/apiserver/pkg/server/filters"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	auditfake "k8s.io/apiserver/plugin/pkg/audit/fake"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 
@@ -100,7 +106,6 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		if err != nil {
 			return nil, err
 		}
-		recommendedOptions.Authentication.ClientCert.ClientCA = "---irrelevant-but-needs-to-be-non-empty---" // drop when we pick up https://github.com/kubernetes/kubernetes/pull/100055
 		recommendedOptions.Authentication.ClientCert.CAContentProvider = dynamiccertificates.NewUnionCAContentProvider(
 			impersonationProxySignerCA, kubeClientCA,
 		)
@@ -163,35 +168,55 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 			}))
 			handler = filterlatency.TrackStarted(handler, "impersonationproxy")
 
+			handler = filterlatency.TrackCompleted(handler)
+			handler = deleteKnownImpersonationHeaders(handler)
+			handler = filterlatency.TrackStarted(handler, "deleteimpersonationheaders")
+
 			// The standard Kube handler chain (authn, authz, impersonation, audit, etc).
 			// See the genericapiserver.DefaultBuildHandlerChain func for details.
 			handler = defaultBuildHandlerChainFunc(handler, c)
 
 			// Always set security headers so browsers do the right thing.
+			handler = filterlatency.TrackCompleted(handler)
 			handler = securityheader.Wrap(handler)
+			handler = filterlatency.TrackStarted(handler, "securityheaders")
 
 			return handler
 		}
 
-		// Overwrite the delegating authorizer with one that only cares about impersonation.
-		// Empty string is disallowed because request info has had bugs in the past where it would leave it empty.
-		disallowedVerbs := sets.NewString("", "impersonate")
-		noImpersonationAuthorizer := &comparableAuthorizer{
-			AuthorizerFunc: func(a authorizer.Attributes) (authorizer.Decision, string, error) {
-				// Supporting impersonation is not hard, it would just require a bunch of testing
-				// and configuring the audit layer (to preserve the caller) which we can do later.
-				// We would also want to delete the incoming impersonation headers
-				// instead of overwriting the delegating authorizer, we would
-				// actually use it to make the impersonation authorization checks.
-				if disallowedVerbs.Has(a.GetVerb()) {
-					return authorizer.DecisionDeny, "impersonation is not allowed or invalid verb", nil
-				}
+		// wire up a fake audit backend at the metadata level so we can preserve the original user during nested impersonation
+		// TODO: wire up the real std out logging audit backend based on plog log level
+		serverConfig.AuditPolicyChecker = policy.FakeChecker(auditinternal.LevelMetadata, nil)
+		serverConfig.AuditBackend = &auditfake.Backend{}
 
-				return authorizer.DecisionAllow, "deferring authorization to kube API server", nil
+		delegatingAuthorizer := serverConfig.Authorization.Authorizer
+		nestedImpersonationAuthorizer := &comparableAuthorizer{
+			authorizerFunc: func(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error) {
+				switch a.GetVerb() {
+				case "":
+					// Empty string is disallowed because request info has had bugs in the past where it would leave it empty.
+					return authorizer.DecisionDeny, "invalid verb", nil
+				case "create",
+					"update",
+					"delete",
+					"deletecollection",
+					"get",
+					"list",
+					"watch",
+					"patch",
+					"proxy":
+					// we know these verbs are from the request info parsing which is safe to delegate to KAS
+					return authorizer.DecisionAllow, "deferring standard verb authorization to kube API server", nil
+				default:
+					// assume everything else is internal SAR checks that we need to run against the requesting user
+					// because when KAS does the check, it may run the check against our service account and not the
+					// requesting user.  This also handles the impersonate verb to allow for nested impersonation.
+					return delegatingAuthorizer.Authorize(ctx, a)
+				}
 			},
 		}
 		// Set our custom authorizer before calling Compete(), which will use it.
-		serverConfig.Authorization.Authorizer = noImpersonationAuthorizer
+		serverConfig.Authorization.Authorizer = nestedImpersonationAuthorizer
 
 		impersonationProxyServer, err := serverConfig.Complete().New("impersonation-proxy", genericapiserver.NewEmptyDelegate())
 		if err != nil {
@@ -201,7 +226,7 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		preparedRun := impersonationProxyServer.PrepareRun()
 
 		// Sanity check. Make sure that our custom authorizer is still in place and did not get changed or wrapped.
-		if preparedRun.Authorizer != noImpersonationAuthorizer {
+		if preparedRun.Authorizer != nestedImpersonationAuthorizer {
 			return nil, constable.Error("invalid mutation of impersonation authorizer detected")
 		}
 
@@ -225,9 +250,44 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 	return result, nil
 }
 
+func deleteKnownImpersonationHeaders(delegate http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// remove known impersonation headers while avoiding mutation of input request
+		// unknown future impersonation headers will still get caught by our later checks
+		if ensureNoImpersonationHeaders(r) != nil {
+			r = r.Clone(r.Context())
+
+			impersonationHeaders := []string{
+				transport.ImpersonateUserHeader,
+				transport.ImpersonateGroupHeader,
+			}
+
+			for k := range r.Header {
+				if !strings.HasPrefix(k, transport.ImpersonateUserExtraHeaderPrefix) {
+					continue
+				}
+				impersonationHeaders = append(impersonationHeaders, k)
+			}
+
+			for _, header := range impersonationHeaders {
+				r.Header.Del(header) // delay mutation until the end when we are done iterating over the map
+			}
+		}
+
+		delegate.ServeHTTP(w, r)
+	})
+}
+
 // No-op wrapping around AuthorizerFunc to allow for comparisons.
 type comparableAuthorizer struct {
-	authorizer.AuthorizerFunc
+	authorizerFunc
+}
+
+// TODO: delete when we pick up https://github.com/kubernetes/kubernetes/pull/100963
+type authorizerFunc func(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error)
+
+func (f authorizerFunc) Authorize(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error) {
+	return f(ctx, a)
 }
 
 func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapiserver.Config) http.Handler, error) {
@@ -258,7 +318,7 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 			}
 
 			if err := ensureNoImpersonationHeaders(r); err != nil {
-				plog.Error("noImpersonationAuthorizer logic did not prevent nested impersonation but it is always supposed to do so",
+				plog.Error("unknown impersonation header seen",
 					err,
 					"url", r.URL.String(),
 					"method", r.Method,
@@ -277,6 +337,16 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 				return
 			}
 
+			ae := request.AuditEventFrom(r.Context())
+			if ae == nil {
+				plog.Warning("aggregated API server logic did not set audit event but it is always supposed to do so",
+					"url", r.URL.String(),
+					"method", r.Method,
+				)
+				newInternalErrResponse(w, r, c.Serializer, "invalid audit event")
+				return
+			}
+
 			// KAS only supports upgrades via http/1.1 to websockets/SPDY (upgrades never use http/2.0)
 			// Thus we default to using http/2.0 when the request is not an upgrade, otherwise we use http/1.1
 			baseRT := http2RoundTripper
@@ -285,7 +355,7 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 				baseRT = http1RoundTripper
 			}
 
-			rt, err := getTransportForUser(userInfo, baseRT)
+			rt, err := getTransportForUser(userInfo, baseRT, ae)
 			if err != nil {
 				plog.WarningErr("rejecting request as we cannot act as the current user", err,
 					"url", r.URL.String(),
@@ -332,6 +402,9 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 
 func ensureNoImpersonationHeaders(r *http.Request) error {
 	for key := range r.Header {
+		// even though we have unit tests that try to cover this case, it is hard to tell if Go does
+		// client side canonicalization on encode, server side canonicalization on decode, or both
+		key := http.CanonicalHeaderKey(key)
 		if strings.HasPrefix(key, "Impersonate") {
 			return fmt.Errorf("%q header already exists", key)
 		}
@@ -340,12 +413,17 @@ func ensureNoImpersonationHeaders(r *http.Request) error {
 	return nil
 }
 
-func getTransportForUser(userInfo user.Info, delegate http.RoundTripper) (http.RoundTripper, error) {
+func getTransportForUser(userInfo user.Info, delegate http.RoundTripper, ae *auditinternal.Event) (http.RoundTripper, error) {
 	if len(userInfo.GetUID()) == 0 {
+		extra, err := buildExtra(userInfo.GetExtra(), ae)
+		if err != nil {
+			return nil, err
+		}
+
 		impersonateConfig := transport.ImpersonationConfig{
 			UserName: userInfo.GetName(),
 			Groups:   userInfo.GetGroups(),
-			Extra:    userInfo.GetExtra(),
+			Extra:    extra,
 		}
 		// transport.NewImpersonatingRoundTripper clones the request before setting headers
 		// thus it will not accidentally mutate the input request (see http.Handler docs)
@@ -364,6 +442,44 @@ func getTransportForUser(userInfo user.Info, delegate http.RoundTripper) (http.R
 	// 8. the above would be safe even if in the future Kube started supporting UIDs asserted by client certs
 	return nil, constable.Error("unexpected uid")
 }
+
+func buildExtra(extra map[string][]string, ae *auditinternal.Event) (map[string][]string, error) {
+	const reservedImpersonationProxySuffix = ".impersonation-proxy.concierge.pinniped.dev"
+
+	// always validate that the extra is something we support irregardless of nested impersonation
+	for k := range extra {
+		if !extraKeyRegexp.MatchString(k) {
+			return nil, fmt.Errorf("disallowed extra key seen: %s", k)
+		}
+
+		if strings.HasSuffix(k, reservedImpersonationProxySuffix) {
+			return nil, fmt.Errorf("disallowed extra key with reserved prefix seen: %s", k)
+		}
+	}
+
+	if ae.ImpersonatedUser == nil {
+		return extra, nil // just return the given extra since nested impersonation is not being used
+	}
+
+	// avoid mutating input map, preallocate new map to store original user info
+	out := make(map[string][]string, len(extra)+1)
+
+	for k, v := range extra {
+		out[k] = v // shallow copy of slice since we are not going to mutate it
+	}
+
+	origUserInfoJSON, err := json.Marshal(ae.User)
+	if err != nil {
+		return nil, err
+	}
+
+	out["original-user-info"+reservedImpersonationProxySuffix] = []string{string(origUserInfoJSON)}
+
+	return out, nil
+}
+
+// extraKeyRegexp is a very conservative regex to handle impersonation's extra key fidelity limitations such as casing and escaping.
+var extraKeyRegexp = regexp.MustCompile(`^[a-z0-9/\-._]+$`)
 
 func newInternalErrResponse(w http.ResponseWriter, r *http.Request, s runtime.NegotiatedSerializer, msg string) {
 	newStatusErrResponse(w, r, s, apierrors.NewInternalError(constable.Error(msg)))

@@ -65,7 +65,10 @@ func requireCleanKubectlStderr(t *testing.T, stderr string) {
 		if strings.Contains(line, "Throttling request took") {
 			continue
 		}
-		require.Failf(t, "unexpected kubectl stderr", "kubectl produced unexpected stderr output:\n%s\n\n", stderr)
+		if strings.Contains(line, "due to client-side throttling, not priority and fairness") {
+			continue
+		}
+		require.Failf(t, "unexpected kubectl stderr", "kubectl produced unexpected stderr:\n%s\n\n", stderr)
 		return
 	}
 }

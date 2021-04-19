@@ -187,6 +187,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	if flags.credentialCachePath != "" {
 		credCache = execcredcache.New(flags.credentialCachePath)
 		if cred := credCache.Get(cacheKey); cred != nil {
+			pLogger.Debug("using cached cluster credential.")
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(cred)
 		}
 	}
@@ -209,12 +210,14 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		if err != nil {
 			return fmt.Errorf("could not complete Concierge credential exchange: %w", err)
 		}
+		pLogger.Debug("Exchanged token for cluster credential")
 	} else {
 		pLogger.Debug("No concierge configured, skipping token credential exchange")
 	}
 
 	// If there was a credential cache, save the resulting credential for future use.
 	if credCache != nil {
+		pLogger.Debug("caching cluster credential for future use.")
 		credCache.Put(cacheKey, cred)
 	}
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(cred)

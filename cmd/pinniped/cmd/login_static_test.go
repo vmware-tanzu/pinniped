@@ -158,6 +158,7 @@ func TestLoginStaticCommand(t *testing.T) {
 			args: []string{
 				"--token", "test-token",
 			},
+			env:        map[string]string{"PINNIPED_DEBUG": "true"},
 			wantStdout: `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"test-token"}}` + "\n",
 		},
 	}

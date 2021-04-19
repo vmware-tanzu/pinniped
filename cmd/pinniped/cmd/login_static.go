@@ -137,6 +137,7 @@ func runStaticLogin(out io.Writer, deps staticLoginDeps, flags staticLoginParams
 	if flags.credentialCachePath != "" {
 		credCache = execcredcache.New(flags.credentialCachePath)
 		if cred := credCache.Get(cacheKey); cred != nil {
+			pLogger.Debug("using cached cluster credential.")
 			return json.NewEncoder(out).Encode(cred)
 		}
 	}

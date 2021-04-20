@@ -5,13 +5,16 @@
 package oidcclient
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -19,6 +22,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/pkg/browser"
 	"golang.org/x/oauth2"
+	"golang.org/x/term"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -44,6 +48,16 @@ const (
 	// overallTimeout is the overall time that a login is allowed to take. This includes several user interactions, so
 	// we set this to be relatively long.
 	overallTimeout = 90 * time.Minute
+
+	supervisorAuthorizeUpstreamNameParam      = "upstream_name"
+	supervisorAuthorizeUpstreamTypeParam      = "upstream_type"
+	supervisorAuthorizeUpstreamUsernameHeader = "X-Pinniped-Upstream-Username"
+	supervisorAuthorizeUpstreamPasswordHeader = "X-Pinniped-Upstream-Password" // nolint:gosec // this is not a credential
+
+	defaultLDAPUsernamePrompt = "Username: "
+	defaultLDAPPasswordPrompt = "Password: "
+
+	httpLocationHeaderName = "Location"
 )
 
 type handlerState struct {
@@ -80,6 +94,8 @@ type handlerState struct {
 	openURL         func(string) error
 	getProvider     func(*oauth2.Config, *oidc.Provider, *http.Client) provider.UpstreamOIDCIdentityProviderI
 	validateIDToken func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error)
+	promptForValue  func(promptLabel string) (string, error)
+	promptForSecret func(promptLabel string) (string, error)
 
 	callbacks chan callbackResult
 }
@@ -103,7 +119,7 @@ func WithContext(ctx context.Context) Option {
 
 // WithListenPort specifies a TCP listen port on localhost, which will be used for the redirect_uri and to handle the
 // authorization code callback. By default, a random high port will be chosen which requires the authorization server
-// to support wildcard port numbers as described by https://tools.ietf.org/html/rfc8252:
+// to support wildcard port numbers as described by https://tools.ietf.org/html/rfc8252#section-7.3:
 //
 // The authorization server MUST allow any port to be specified at the
 // time of the request for loopback IP redirect URIs, to accommodate
@@ -223,6 +239,8 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		validateIDToken: func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error) {
 			return provider.Verifier(&oidc.Config{ClientID: audience}).Verify(ctx, token)
 		},
+		promptForValue:  promptForValue,
+		promptForSecret: promptForSecret,
 	}
 	for _, opt := range opts {
 		if err := opt(&h); err != nil {
@@ -317,8 +335,8 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 		h.pkce.Method(),
 	}
 	if h.upstreamIdentityProviderName != "" {
-		authorizeOptions = append(authorizeOptions, oauth2.SetAuthURLParam("upstream_name", h.upstreamIdentityProviderName))
-		authorizeOptions = append(authorizeOptions, oauth2.SetAuthURLParam("upstream_type", h.upstreamIdentityProviderType))
+		authorizeOptions = append(authorizeOptions, oauth2.SetAuthURLParam(supervisorAuthorizeUpstreamNameParam, h.upstreamIdentityProviderName))
+		authorizeOptions = append(authorizeOptions, oauth2.SetAuthURLParam(supervisorAuthorizeUpstreamTypeParam, h.upstreamIdentityProviderType))
 	}
 
 	// Choose the appropriate authorization and authcode exchange strategy.
@@ -341,26 +359,103 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 // Make a direct call to the authorize endpoint and parse the authcode from the response.
 // Exchange the authcode for tokens. Return the tokens or an error.
 func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (*oidctypes.Token, error) {
+	// Ask the user for their username and password.
+	username, err := h.promptForValue(defaultLDAPUsernamePrompt)
+	if err != nil {
+		return nil, fmt.Errorf("error prompting for username: %w", err)
+	}
+	password, err := h.promptForSecret(defaultLDAPPasswordPrompt)
+	if err != nil {
+		return nil, fmt.Errorf("error prompting for password: %w", err)
+	}
+
 	// Make a callback URL even though we won't be listening on this port, because providing a redirect URL is
 	// required for OIDC authorize endpoints, and it must match the allowed redirect URL of the OIDC client
-	// registered on the server.
+	// registered on the server. The Supervisor oauth client does not have "localhost" in the allowed redirect
+	// URI list, so use 127.0.0.1.
+	localhostAddr := strings.ReplaceAll(h.listenAddr, "localhost", "127.0.0.1")
 	h.oauth2Config.RedirectURL = (&url.URL{
 		Scheme: "http",
-		Host:   h.listenAddr,
+		Host:   localhostAddr,
 		Path:   h.callbackPath,
 	}).String()
 
 	// Now that we have a redirect URL, we can build the authorize URL.
-	_ = h.oauth2Config.AuthCodeURL(h.state.String(), *authorizeOptions...)
+	authorizeURL := h.oauth2Config.AuthCodeURL(h.state.String(), *authorizeOptions...)
 
-	// TODO prompt for username and password
-	// TODO request the authorizeURL directly using h.httpClient, with the custom username and password headers
-	// TODO error if the response is not a 302
-	// TODO error if the response Location does not include a code param (in this case it could have an error message query param to show)
-	// TODO check the response Location state param to see if it matches, similar to how it is done in handleAuthCodeCallback()
-	// TODO exchange the authcode, similar to how it is done in handleAuthCodeCallback()
-	// TODO return the token or any error encountered along the way
-	return nil, nil
+	// Don't follow redirects automatically because we want to handle redirects here.
+	h.httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	// Send an authorize request.
+	authCtx, authorizeCtxCancelFunc := context.WithTimeout(context.Background(), httpRequestTimeout)
+	defer authorizeCtxCancelFunc()
+	authReq, err := http.NewRequestWithContext(authCtx, http.MethodGet, authorizeURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("could not build authorize request: %w", err)
+	}
+	authReq.Header.Set(supervisorAuthorizeUpstreamUsernameHeader, username)
+	authReq.Header.Set(supervisorAuthorizeUpstreamPasswordHeader, password)
+	authRes, err := h.httpClient.Do(authReq)
+	if err != nil {
+		return nil, fmt.Errorf("authorization response error: %w", err)
+	}
+	err = authRes.Body.Close() // don't need the response body
+	if err != nil {
+		return nil, fmt.Errorf("could not close authorize response body: %w", err)
+	}
+
+	// A successful authorization always results in a 302.
+	if authRes.StatusCode != http.StatusFound {
+		return nil, fmt.Errorf(
+			"error getting authorization: expected to be redirected, but response status was %s", authRes.Status)
+	}
+	rawLocation := authRes.Header.Get(httpLocationHeaderName)
+	location, err := url.Parse(rawLocation)
+	if err != nil {
+		// This shouldn't be possible in practice because httpClient.Do() already parses the Location header.
+		return nil, fmt.Errorf("error getting authorization: could not parse redirect location: %w", err)
+	}
+
+	// Check that the redirect was to the expected location.
+	if location.Scheme != "http" || location.Host != localhostAddr || location.Path != h.callbackPath {
+		return nil, fmt.Errorf("error getting authorization: redirected to the wrong location: %s", rawLocation)
+	}
+
+	// Get the auth code or return the error from the server.
+	authCode := location.Query().Get("code")
+	if authCode == "" {
+		requiredErrorCode := location.Query().Get("error")
+		optionalErrorDescription := location.Query().Get("error_description")
+		if optionalErrorDescription == "" {
+			return nil, fmt.Errorf("login failed with code %q", requiredErrorCode)
+		}
+		return nil, fmt.Errorf("login failed with code %q: %s", requiredErrorCode, optionalErrorDescription)
+	}
+
+	// Validate OAuth2 state and fail if it's incorrect (to block CSRF).
+	if err := h.state.Validate(location.Query().Get("state")); err != nil {
+		return nil, fmt.Errorf("missing or invalid state parameter in authorization response: %s", rawLocation)
+	}
+
+	// Exchange the authorization code for access, ID, and refresh tokens and perform required
+	// validations on the returned ID token.
+	tokenCtx, tokenCtxCancelFunc := context.WithTimeout(context.Background(), httpRequestTimeout)
+	defer tokenCtxCancelFunc()
+	token, err := h.getProvider(h.oauth2Config, h.provider, h.httpClient).
+		ExchangeAuthcodeAndValidateTokens(
+			tokenCtx,
+			authCode,
+			h.pkce,
+			h.nonce,
+			h.oauth2Config.RedirectURL,
+		)
+	if err != nil {
+		return nil, fmt.Errorf("error during authorization code exchange: %w", err)
+	}
+
+	return token, nil
 }
 
 // Open a web browser, or ask the user to open a web browser, to visit the authorize endpoint.
@@ -399,6 +494,41 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 		}
 		return callback.token, nil
 	}
+}
+
+func promptForValue(promptLabel string) (string, error) {
+	if !term.IsTerminal(0) {
+		return "", errors.New("stdin is not connected to a terminal")
+	}
+	_, err := fmt.Fprint(os.Stderr, promptLabel)
+	if err != nil {
+		return "", fmt.Errorf("could not print prompt to stderr: %w", err)
+	}
+	text, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	text = strings.ReplaceAll(text, "\n", "")
+	return text, nil
+}
+
+func promptForSecret(promptLabel string) (string, error) {
+	if !term.IsTerminal(0) {
+		return "", errors.New("stdin is not connected to a terminal")
+	}
+	_, err := fmt.Fprint(os.Stderr, promptLabel)
+	if err != nil {
+		return "", fmt.Errorf("could not print prompt to stderr: %w", err)
+	}
+	password, err := term.ReadPassword(0)
+	if err != nil {
+		return "", fmt.Errorf("could not read password: %w", err)
+	}
+	// term.ReadPassword swallows the newline that was typed by the user, so to
+	// avoid the next line of output from happening on same line as the password
+	// prompt, we need to print a newline.
+	_, err = fmt.Fprint(os.Stderr, "\n")
+	if err != nil {
+		return "", fmt.Errorf("could not print newline to stderr: %w", err)
+	}
+	return string(password), err
 }
 
 func (h *handlerState) initOIDCDiscovery() error {

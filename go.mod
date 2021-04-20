@@ -31,6 +31,7 @@ require (
 	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
+	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d
 	gopkg.in/square/go-jose.v2 v2.5.1
 	k8s.io/api v0.21.0
 	k8s.io/apimachinery v0.21.0

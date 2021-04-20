@@ -89,6 +89,7 @@ func handleAuthRequestForLDAPUpstream(
 	if username == "" || password == "" {
 		// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
 		err := errors.WithStack(fosite.ErrAccessDenied.WithHintf("Missing or blank username or password."))
+		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
 		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
 		return nil
 	}
@@ -102,6 +103,7 @@ func handleAuthRequestForLDAPUpstream(
 		plog.Debug("failed upstream LDAP authentication", "upstreamName", ldapUpstream.GetName())
 		// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
 		err = errors.WithStack(fosite.ErrAccessDenied.WithHintf("Username/password not accepted by LDAP provider."))
+		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
 		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
 		return nil
 	}

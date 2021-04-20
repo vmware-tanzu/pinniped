@@ -20,6 +20,34 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+use_oidc_upstream=no
+use_ldap_upstream=no
+while (("$#")); do
+  case "$1" in
+  --ldap)
+    use_ldap_upstream=yes
+    shift
+    ;;
+  --oidc)
+    use_oidc_upstream=yes
+    shift
+    ;;
+  -*)
+    log_error "Unsupported flag $1" >&2
+    exit 1
+    ;;
+  *)
+    log_error "Unsupported positional arg $1" >&2
+    exit 1
+    ;;
+  esac
+done
+
+if [[ "$use_oidc_upstream" == "no" && "$use_ldap_upstream" == "no" ]]; then
+  echo "Error: Please use --oidc or --ldap to specify which type of upstream identity provider(s) you would like"
+  exit 1
+fi
+
 # Read the env vars output by hack/prepare-for-integration-tests.sh
 source /tmp/integration-test-env
 
@@ -73,8 +101,9 @@ sleep 5
 echo "Fetching FederationDomain discovery info..."
 https_proxy="$PINNIPED_TEST_PROXY" curl -fLsS --cacert "$root_ca_crt_path" "$issuer/.well-known/openid-configuration" | jq .
 
-# Make an OIDCIdentityProvider which uses Dex to provide identity.
-cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
+if [[ "$use_oidc_upstream" == "yes" ]]; then
+  # Make an OIDCIdentityProvider which uses Dex to provide identity.
+  cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
 apiVersion: idp.supervisor.pinniped.dev/v1alpha1
 kind: OIDCIdentityProvider
 metadata:
@@ -92,8 +121,8 @@ spec:
     secretName: my-oidc-provider-client-secret
 EOF
 
-# Make a Secret for the above OIDCIdentityProvider to describe the OIDC client configured in Dex.
-cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
+  # Make a Secret for the above OIDCIdentityProvider to describe the OIDC client configured in Dex.
+  cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
 apiVersion: v1
 kind: Secret
 metadata:
@@ -104,10 +133,51 @@ stringData:
 type: "secrets.pinniped.dev/oidc-client"
 EOF
 
-# Grant the test user some RBAC permissions so we can play with kubectl as that user.
-kubectl create clusterrolebinding test-user-can-view --clusterrole view \
-  --user "$PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME" \
-  --dry-run=client --output yaml | kubectl apply -f -
+  # Grant the test user some RBAC permissions so we can play with kubectl as that user.
+  kubectl create clusterrolebinding oidc-test-user-can-view --clusterrole view \
+    --user "$PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME" \
+    --dry-run=client --output yaml | kubectl apply -f -
+fi
+
+if [[ "$use_ldap_upstream" == "yes" ]]; then
+  # Make an LDAPIdentityProvider which uses OpenLDAP to provide identity.
+  cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
+apiVersion: idp.supervisor.pinniped.dev/v1alpha1
+kind: LDAPIdentityProvider
+metadata:
+  name: my-ldap-provider
+spec:
+  host: "$PINNIPED_TEST_LDAP_HOST"
+  tls:
+    certificateAuthorityData: "$PINNIPED_TEST_LDAP_LDAPS_CA_BUNDLE"
+  bind:
+    secretName: my-ldap-service-account
+  userSearch:
+    base: "$PINNIPED_TEST_LDAP_USERS_SEARCH_BASE"
+    filter: "cn={}"
+    attributes:
+      uniqueID: "$PINNIPED_TEST_LDAP_USER_UNIQUE_ID_ATTRIBUTE_NAME"
+      username: "$PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_NAME"
+  dryRunAuthenticationUsername: "$PINNIPED_TEST_LDAP_USER_CN"
+EOF
+
+  # Make a Secret for the above LDAPIdentityProvider to describe the bind account.
+  cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-ldap-service-account
+stringData:
+  username: "$PINNIPED_TEST_LDAP_BIND_ACCOUNT_USERNAME"
+  password: "$PINNIPED_TEST_LDAP_BIND_ACCOUNT_PASSWORD"
+type: "kubernetes.io/basic-auth"
+EOF
+
+  # Grant the test user some RBAC permissions so we can play with kubectl as that user.
+  kubectl create clusterrolebinding ldap-test-user-can-view --clusterrole view \
+    --user "$PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_VALUE" \
+    --dry-run=client --output yaml | kubectl apply -f -
+fi
 
 # Make a JWTAuthenticator which respects JWTs from the Supervisor's issuer.
 # The issuer URL must be accessible from within the cluster for OIDC discovery.
@@ -134,17 +204,30 @@ go build ./cmd/pinniped
 ./pinniped get kubeconfig --oidc-skip-browser >kubeconfig
 
 # Clear the local CLI cache to ensure that the kubectl command below will need to perform a fresh login.
-rm -f "$HOME"/.config/pinniped/sessions.yaml
+rm -f "$HOME/.config/pinniped/sessions.yaml"
+rm -f "$HOME/.config/pinniped/credentials.yaml"
 
 echo
 echo "Ready! 🚀"
-echo "To be able to access the login URL shown below, start Chrome like this:"
-echo "    open -a \"Google Chrome\" --args --proxy-server=\"$PINNIPED_TEST_PROXY\""
-echo "Then use these credentials at the Dex login page:"
-echo "    Username: $PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME"
-echo "    Password: $PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD"
 
-# Perform a login using the kubectl plugin. This should print the URL to be followed for the Dex login page.
+if [[ "$use_oidc_upstream" == "yes" ]]; then
+  echo
+  echo "To be able to access the login URL shown below, start Chrome like this:"
+  echo "    open -a \"Google Chrome\" --args --proxy-server=\"$PINNIPED_TEST_PROXY\""
+  echo "Then use these credentials at the Dex login page:"
+  echo "    Username: $PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME"
+  echo "    Password: $PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD"
+fi
+
+if [[ "$use_ldap_upstream" == "yes" ]]; then
+  echo
+  echo "When prompted for username and password by the CLI, use these values:"
+  echo "    Username: $PINNIPED_TEST_LDAP_USER_CN"
+  echo "    Password: $PINNIPED_TEST_LDAP_USER_PASSWORD"
+fi
+
+# Perform a login using the kubectl plugin. This should print the URL to be followed for the Dex login page
+# if using an OIDC upstream, or should prompt on the CLI for username/password if using an LDAP upstream.
 echo
 echo "Running: https_proxy=\"$PINNIPED_TEST_PROXY\" no_proxy=\"127.0.0.1\" kubectl --kubeconfig ./kubeconfig get pods -A"
 https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" kubectl --kubeconfig ./kubeconfig get pods -A

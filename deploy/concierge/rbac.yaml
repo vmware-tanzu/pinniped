@@ -90,6 +90,10 @@ rules:
   - apiGroups: [ "" ]
     resources: [ pods/exec ]
     verbs: [ create ]
+  #! We need to be able to delete pods in our namespace so we can clean up legacy kube-cert-agent pods.
+  - apiGroups: [ "" ]
+    resources: [ pods ]
+    verbs: [ delete ]
   #! We need to be able to create and update deployments in our namespace so we can manage the kube-cert-agent Deployment.
   - apiGroups: [ apps ]
     resources: [ deployments ]

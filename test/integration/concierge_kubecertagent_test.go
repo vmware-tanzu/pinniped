@@ -9,8 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/utils/pointer"
 
 	conciergev1alpha "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	"go.pinniped.dev/test/library"
@@ -87,4 +91,58 @@ func findSuccessfulStrategy(credentialIssuer *conciergev1alpha.CredentialIssuer,
 		return &strategy
 	}
 	return nil
+}
+
+func TestLegacyPodCleaner(t *testing.T) {
+	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	kubeClient := library.NewKubernetesClientset(t)
+
+	// Pick the same labels that the legacy code would have used to run the kube-cert-agent pod.
+	legacyAgentLabels := map[string]string{}
+	for k, v := range env.ConciergeCustomLabels {
+		legacyAgentLabels[k] = v
+	}
+	legacyAgentLabels["app"] = env.ConciergeAppName
+	legacyAgentLabels["kube-cert-agent.pinniped.dev"] = "true"
+	legacyAgentLabels["pinniped.dev/test"] = ""
+
+	// Deploy a fake legacy agent pod using those labels.
+	pod, err := kubeClient.CoreV1().Pods(env.ConciergeNamespace).Create(ctx, &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "test-legacy-kube-cert-agent-",
+			Labels:       legacyAgentLabels,
+			Annotations:  map[string]string{"pinniped.dev/testName": t.Name()},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{
+				Name:    "sleeper",
+				Image:   "debian:10.9-slim",
+				Command: []string{"/bin/sleep", "infinity"},
+			}},
+		},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err, "failed to create fake legacy agent pod")
+	t.Logf("deployed fake legacy agent pod %s/%s with labels %s", pod.Namespace, pod.Name, labels.SelectorFromSet(legacyAgentLabels).String())
+
+	// No matter what happens, clean up the agent pod at the end of the test (normally it will already have been deleted).
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+		defer cancel()
+		err := kubeClient.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{GracePeriodSeconds: pointer.Int64Ptr(0)})
+		if !k8serrors.IsNotFound(err) {
+			require.NoError(t, err, "failed to clean up fake legacy agent pod")
+		}
+	})
+
+	// Expect the legacy-pod-cleaner controller to delete the pod.
+	library.RequireEventuallyWithoutError(t, func() (bool, error) {
+		_, err := kubeClient.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+		if k8serrors.IsNotFound(err) {
+			t.Logf("fake legacy agent pod %s/%s was deleted as expected", pod.Namespace, pod.Name)
+			return true, nil
+		}
+		return false, err
+	}, 60*time.Second, 1*time.Second)
 }

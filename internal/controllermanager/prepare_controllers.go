@@ -207,6 +207,17 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			),
 			singletonWorker,
 		).
+		// The kube-cert-agent legacy pod cleaner controller is responsible for cleaning up pods that were deployed by
+		// versions of Pinniped prior to v0.7.0. If we stop supporting upgrades from v0.7.0, we can safely remove this.
+		WithController(
+			kubecertagent.NewLegacyPodCleanerController(
+				agentConfig,
+				client,
+				informers.installationNamespaceK8s.Core().V1().Pods(),
+				klogr.New(),
+			),
+			singletonWorker,
+		).
 		// The cache filler/cleaner controllers are responsible for keep an in-memory representation of active
 		// authenticators up to date.
 		WithController(

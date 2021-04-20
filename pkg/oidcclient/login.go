@@ -423,20 +423,21 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 		return nil, fmt.Errorf("error getting authorization: redirected to the wrong location: %s", rawLocation)
 	}
 
+	// Validate OAuth2 state and fail if it's incorrect (to block CSRF).
+	if err := h.state.Validate(location.Query().Get("state")); err != nil {
+		return nil, fmt.Errorf("missing or invalid state parameter in authorization response: %s", rawLocation)
+	}
+
 	// Get the auth code or return the error from the server.
 	authCode := location.Query().Get("code")
 	if authCode == "" {
+		// Check for error response parameters. See https://openid.net/specs/openid-connect-core-1_0.html#AuthError.
 		requiredErrorCode := location.Query().Get("error")
 		optionalErrorDescription := location.Query().Get("error_description")
 		if optionalErrorDescription == "" {
 			return nil, fmt.Errorf("login failed with code %q", requiredErrorCode)
 		}
 		return nil, fmt.Errorf("login failed with code %q: %s", requiredErrorCode, optionalErrorDescription)
-	}
-
-	// Validate OAuth2 state and fail if it's incorrect (to block CSRF).
-	if err := h.state.Validate(location.Query().Get("state")); err != nil {
-		return nil, fmt.Errorf("missing or invalid state parameter in authorization response: %s", rawLocation)
 	}
 
 	// Exchange the authorization code for access, ID, and refresh tokens and perform required
@@ -655,10 +656,11 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 		return httperr.New(http.StatusForbidden, "missing or invalid state parameter")
 	}
 
-	// Check for error response parameters.
+	// Check for error response parameters. See https://openid.net/specs/openid-connect-core-1_0.html#AuthError.
 	if errorParam := params.Get("error"); errorParam != "" {
-		// TODO This should also show the value of the optional "error_description" param if it exists.
-		//  See https://openid.net/specs/openid-connect-core-1_0.html#AuthError
+		if errorDescParam := params.Get("error_description"); errorDescParam != "" {
+			return httperr.Newf(http.StatusBadRequest, "login failed with code %q: %s", errorParam, errorDescParam)
+		}
 		return httperr.Newf(http.StatusBadRequest, "login failed with code %q", errorParam)
 	}
 

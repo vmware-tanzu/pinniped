@@ -724,7 +724,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 					return defaultLDAPTestOpts(t, h, &http.Response{
 						StatusCode: http.StatusFound,
 						Header: http.Header{"Location": []string{
-							"http://127.0.0.1:0/callback?error=access_denied&error_description=optional-error-description",
+							"http://127.0.0.1:0/callback?error=access_denied&error_description=optional-error-description&state=test-state",
 						}},
 					}, nil)
 				}
@@ -756,7 +756,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 					return defaultLDAPTestOpts(t, h, &http.Response{
 						StatusCode: http.StatusFound,
 						Header: http.Header{"Location": []string{
-							"http://127.0.0.1:0/callback?error=access_denied",
+							"http://127.0.0.1:0/callback?error=access_denied&state=test-state",
 						}},
 					}, nil)
 				}
@@ -1277,6 +1277,12 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			name:           "error code from provider",
 			query:          "state=test-state&error=some_error",
 			wantErr:        `login failed with code "some_error"`,
+			wantHTTPStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "error code with a description from provider",
+			query:          "state=test-state&error=some_error&error_description=optional%20error%20description",
+			wantErr:        `login failed with code "some_error": optional error description`,
 			wantHTTPStatus: http.StatusBadRequest,
 		},
 		{

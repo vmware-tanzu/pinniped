@@ -180,6 +180,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantLogs: []string{
 				"\"level\"=0 \"msg\"=\"Pinniped login: Performing OIDC login\"  \"client id\"=\"test-client-id\" \"issuer\"=\"test-issuer\"",
 				"\"level\"=0 \"msg\"=\"Pinniped login: No concierge configured, skipping token credential exchange\"",
+				"\"level\"=0 \"msg\"=\"Pinniped login: caching cluster credential for future use.\"",
 			},
 		},
 		{
@@ -207,6 +208,8 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantLogs: []string{
 				"\"level\"=0 \"msg\"=\"Pinniped login: Performing OIDC login\"  \"client id\"=\"test-client-id\" \"issuer\"=\"test-issuer\"",
 				"\"level\"=0 \"msg\"=\"Pinniped login: Exchanging token for cluster credential\"  \"authenticator name\"=\"test-authenticator\" \"authenticator type\"=\"webhook\" \"endpoint\"=\"https://127.0.0.1:1234/\"",
+				"\"level\"=0 \"msg\"=\"Pinniped login: Successfully exchanged token for cluster credential.\"",
+				"\"level\"=0 \"msg\"=\"Pinniped login: caching cluster credential for future use.\"",
 			},
 		},
 	}

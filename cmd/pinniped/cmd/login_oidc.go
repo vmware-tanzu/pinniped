@@ -210,7 +210,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		if err != nil {
 			return fmt.Errorf("could not complete Concierge credential exchange: %w", err)
 		}
-		pLogger.Debug("Exchanged token for cluster credential")
+		pLogger.Debug("Successfully exchanged token for cluster credential.")
 	} else {
 		pLogger.Debug("No concierge configured, skipping token credential exchange")
 	}

@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubecertagent
@@ -12,6 +12,7 @@ import (
 	"github.com/sclevine/spec/report"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kubeinformers "k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
@@ -122,6 +123,7 @@ func TestDeleterControllerSync(t *testing.T) {
 			controllerManagerPod, agentPod = exampleControllerManagerAndAgentPods(
 				kubeSystemNamespace, agentPodNamespace, "ignored for this test", "ignored for this test",
 			)
+			agentPod.Status.Phase = corev1.PodRunning
 
 			podsGVR = schema.GroupVersionResource{
 				Group:    corev1.SchemeGroupVersion.Group,
@@ -484,6 +486,66 @@ func TestDeleterControllerSync(t *testing.T) {
 			})
 
 			when("there is no matching controller manager pod", func() {
+				it("deletes the agent pod", func() {
+					startInformersAndController()
+					err := controllerlib.TestSync(t, subject, *syncContext)
+
+					r.NoError(err)
+					requireAgentPodWasDeleted()
+				})
+			})
+		})
+
+		when("there is an unhealthy agent pod", func() {
+			it.Before(func() {
+				// The matching controller-manager pod exists.
+				r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
+				r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
+
+			})
+
+			when("in a Failed state", func() {
+				it.Before(func() {
+					// The pod is in a "Failed" state, even though it otherwise matches.
+					agentPod.Status.Phase = corev1.PodFailed
+					r.NoError(agentInformerClient.Tracker().Add(agentPod))
+					r.NoError(kubeAPIClient.Tracker().Add(agentPod))
+				})
+
+				it("deletes the agent pod", func() {
+					startInformersAndController()
+					err := controllerlib.TestSync(t, subject, *syncContext)
+
+					r.NoError(err)
+					requireAgentPodWasDeleted()
+				})
+			})
+
+			when("in an Unknown state but recent", func() {
+				it.Before(func() {
+					agentPod.Status.Phase = corev1.PodUnknown
+					agentPod.CreationTimestamp = metav1.Now()
+					r.NoError(agentInformerClient.Tracker().Add(agentPod))
+					r.NoError(kubeAPIClient.Tracker().Add(agentPod))
+				})
+
+				it("does nothing", func() {
+					startInformersAndController()
+					err := controllerlib.TestSync(t, subject, *syncContext)
+
+					r.NoError(err)
+					r.Empty(kubeAPIClient.Actions())
+				})
+			})
+
+			when("in an Unknown state and older", func() {
+				it.Before(func() {
+					agentPod.Status.Phase = corev1.PodUnknown
+					agentPod.CreationTimestamp = metav1.NewTime(time.Now().Add(-1 * time.Hour))
+					r.NoError(agentInformerClient.Tracker().Add(agentPod))
+					r.NoError(kubeAPIClient.Tracker().Add(agentPod))
+				})
+
 				it("deletes the agent pod", func() {
 					startInformersAndController()
 					err := controllerlib.TestSync(t, subject, *syncContext)

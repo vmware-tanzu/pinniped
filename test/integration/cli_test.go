@@ -250,11 +250,12 @@ func TestCLILoginOIDC(t *testing.T) {
 	cmd4StringOutput := string(cmd4CombinedOutput)
 	require.NoError(t, err, cmd4StringOutput)
 
-	// the logs contain only the 3 debug lines plus the ExecCredential. There are 5 elements because the last one is "".
-	require.Len(t, strings.Split(cmd4StringOutput, "\n"), 5)
+	// the logs contain only the 4 debug lines plus the ExecCredential. There are 6 elements because the last one is "".
+	require.Len(t, strings.Split(cmd4StringOutput, "\n"), 6)
 	require.Contains(t, cmd4StringOutput, "Performing OIDC login")
 	require.Contains(t, cmd4StringOutput, "Found unexpired cached token")
 	require.Contains(t, cmd4StringOutput, "No concierge configured, skipping token credential exchange")
+	require.Contains(t, cmd4StringOutput, "caching cluster credential for future use.")
 	require.Contains(t, cmd4StringOutput, credOutput3.Status.Token)
 	err = os.Unsetenv("PINNIPED_DEBUG")
 	require.NoError(t, err)

@@ -129,7 +129,7 @@ func (c *AgentPodConfig) newAgentPod(controllerManagerPod *corev1.Pod) *corev1.P
 					Name:            "sleeper",
 					Image:           c.ContainerImage,
 					ImagePullPolicy: corev1.PullIfNotPresent,
-					Command:         []string{"/bin/sleep", "infinity"},
+					Command:         []string{"/bin/sh", "-c", "/bin/sleep infinity"},
 					VolumeMounts:    controllerManagerPod.Spec.Containers[0].VolumeMounts,
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{

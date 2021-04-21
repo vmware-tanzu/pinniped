@@ -25,7 +25,7 @@ RUN mkdir out \
 
 # Use a runtime image based on Debian slim
 FROM debian:10.9-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates procps && rm -rf /var/lib/apt/lists/*
 
 # Copy the binaries from the build-env stage
 COPY --from=build-env /work/out/pinniped-concierge /usr/local/bin/pinniped-concierge

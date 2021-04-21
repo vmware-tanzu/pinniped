@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubecertagent
@@ -101,7 +101,7 @@ func exampleControllerManagerAndAgentPods(
 					Image:           "some-agent-image",
 					ImagePullPolicy: corev1.PullIfNotPresent,
 					VolumeMounts:    controllerManagerPod.Spec.Containers[0].VolumeMounts,
-					Command:         []string{"/bin/sleep", "infinity"},
+					Command:         []string{"/bin/sh", "-c", "/bin/sleep infinity"},
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
 							corev1.ResourceMemory: resource.MustParse("16Mi"),

@@ -501,7 +501,6 @@ func TestDeleterControllerSync(t *testing.T) {
 				// The matching controller-manager pod exists.
 				r.NoError(kubeSystemInformerClient.Tracker().Add(controllerManagerPod))
 				r.NoError(kubeAPIClient.Tracker().Add(controllerManagerPod))
-
 			})
 
 			when("in a Failed state", func() {

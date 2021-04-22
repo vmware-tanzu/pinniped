@@ -90,7 +90,6 @@ func (c *deleterController) Sync(ctx controllerlib.Context) error {
 
 func inTerminalState(pod *corev1.Pod) bool {
 	switch pod.Status.Phase {
-
 	// Running and Pending are non-terminal states. We should not delete pods in these states.
 	case corev1.PodRunning, corev1.PodPending:
 		return false

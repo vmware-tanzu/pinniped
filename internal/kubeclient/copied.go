@@ -6,7 +6,6 @@ package kubeclient
 import (
 	"bytes"
 	"encoding/hex"
-	"fmt"
 	"net/url"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -32,39 +31,17 @@ func defaultServerUrlFor(config *restclient.Config) (*url.URL, string, error) {
 	return restclient.DefaultServerURL(host, config.APIPath, schema.GroupVersion{}, defaultTLS)
 }
 
-// truncateBody was copied from k8s.io/client-go/rest/request.go
-// ...except i changed klog invocations to analogous plog invocations
-//
-// truncateBody decides if the body should be truncated, based on the glog Verbosity.
-func truncateBody(body string) string {
-	max := 0
-	switch {
-	case plog.Enabled(plog.LevelAll):
-		return body
-	case plog.Enabled(plog.LevelTrace):
-		max = 10240
-	case plog.Enabled(plog.LevelDebug):
-		max = 1024
-	}
-
-	if len(body) <= max {
-		return body
-	}
-
-	return body[:max] + fmt.Sprintf(" [truncated %d chars]", len(body)-max)
-}
-
 // glogBody logs a body output that could be either JSON or protobuf. It explicitly guards against
 // allocating a new string for the body output unless necessary. Uses a simple heuristic to determine
 // whether the body is printable.
 func glogBody(prefix string, body []byte) {
-	if plog.Enabled(plog.LevelDebug) {
+	if plog.Enabled(plog.LevelAll) {
 		if bytes.IndexFunc(body, func(r rune) bool {
 			return r < 0x0a
 		}) != -1 {
-			plog.Debug(prefix, "body", truncateBody(hex.Dump(body)))
+			plog.Debug(prefix, "body", hex.Dump(body))
 		} else {
-			plog.Debug(prefix, "body", truncateBody(string(body)))
+			plog.Debug(prefix, "body", string(body))
 		}
 	}
 }

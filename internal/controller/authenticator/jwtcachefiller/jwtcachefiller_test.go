@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"gopkg.in/square/go-jose.v2/jwt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 
@@ -345,15 +347,6 @@ func TestController(t *testing.T) {
 				return // end of test unless we wanted to run tests on the resulting authenticator from the cache
 			}
 
-			// The implementation of AuthenticateToken() that we use waits 10 seconds after creation to
-			// perform OIDC discovery. Therefore, the JWTAuthenticator is not functional for the first 10
-			// seconds. We sleep for 13 seconds in this unit test to give a little bit of cushion to that 10
-			// second delay.
-			//
-			// We should get rid of this 10 second delay. See
-			// https://github.com/vmware-tanzu/pinniped/issues/260.
-			time.Sleep(time.Second * 13)
-
 			// We expected the cache to have an entry, so pull that entry from the cache and test it.
 			expectedCacheKey := authncache.Key{
 				APIGroup: auth1alpha1.GroupName,
@@ -428,7 +421,17 @@ func TestController(t *testing.T) {
 						tt.wantUsernameClaim,
 						username,
 					)
-					rsp, authenticated, err := cachedAuthenticator.AuthenticateToken(context.Background(), jwt)
+
+					// Loop for a while here to allow the underlying OIDC authenticator to initialize itself asynchronously.
+					var (
+						rsp           *authenticator.Response
+						authenticated bool
+						err           error
+					)
+					_ = wait.PollImmediate(10*time.Millisecond, 5*time.Second, func() (bool, error) {
+						rsp, authenticated, err = cachedAuthenticator.AuthenticateToken(context.Background(), jwt)
+						return !isNotInitialized(err), nil
+					})
 					if test.wantErrorRegexp != "" {
 						require.Error(t, err)
 						require.Regexp(t, test.wantErrorRegexp, err.Error())
@@ -441,6 +444,12 @@ func TestController(t *testing.T) {
 			}
 		})
 	}
+}
+
+// isNotInitialized checks if the error is the internally-defined "oidc: authenticator not initialized" error from
+// the underlying OIDC authenticator, which is initialized asynchronously.
+func isNotInitialized(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "authenticator not initialized")
 }
 
 func testTableForAuthenticateTokenTests(

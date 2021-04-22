@@ -194,8 +194,7 @@ spec:
 EOF
 
 echo "Waiting for JWTAuthenticator to initialize..."
-# Our integration tests wait 10 seconds, so use that same value here.
-sleep 10
+sleep 5
 
 # Compile the CLI.
 go build ./cmd/pinniped

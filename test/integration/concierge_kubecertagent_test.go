@@ -39,7 +39,7 @@ func TestKubeCertAgent(t *testing.T) {
 
 	// Make sure the agent pods are running and healthy before the tests begin.
 	t.Logf("waiting for agent pods to become running before tests")
-	waitForAllAgentsRunning(t, kubeClient, env, ctx)
+	waitForAllAgentsRunning(ctx, t, kubeClient, env)
 
 	// Get the current number of kube-cert-agent pods.
 	//
@@ -119,7 +119,7 @@ func TestKubeCertAgent(t *testing.T) {
 
 		// Make sure the pods all become healthy.
 		t.Logf("waiting for agent pods to become running")
-		waitForAllAgentsRunning(t, kubeClient, env, ctx)
+		waitForAllAgentsRunning(ctx, t, kubeClient, env)
 	})
 
 	t.Run("reconcile on delete", func(t *testing.T) {
@@ -140,7 +140,7 @@ func TestKubeCertAgent(t *testing.T) {
 
 		// Make sure the pods all become healthy.
 		t.Logf("waiting for agent pods to become running")
-		waitForAllAgentsRunning(t, kubeClient, env, ctx)
+		waitForAllAgentsRunning(ctx, t, kubeClient, env)
 	})
 
 	t.Run("reconcile on unhealthy", func(t *testing.T) {
@@ -194,12 +194,11 @@ func TestKubeCertAgent(t *testing.T) {
 
 		// Make sure the pods all become healthy.
 		t.Logf("waiting for agent pods to become running")
-		waitForAllAgentsRunning(t, kubeClient, env, ctx)
+		waitForAllAgentsRunning(ctx, t, kubeClient, env)
 	})
-
 }
 
-func waitForAllAgentsRunning(t *testing.T, kubeClient kubernetes.Interface, env *library.TestEnv, ctx context.Context) {
+func waitForAllAgentsRunning(ctx context.Context, t *testing.T, kubeClient kubernetes.Interface, env *library.TestEnv) {
 	library.RequireEventuallyWithoutError(t, func() (bool, error) {
 		pods, err := kubeClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{
 			LabelSelector: kubeCertAgentLabelSelector,

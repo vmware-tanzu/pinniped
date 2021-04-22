@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -167,7 +168,15 @@ func TestKubeCertAgent(t *testing.T) {
 		require.NoError(t, err)
 		t.Logf("execing into agent pod %s/%s to run '/usr/bin/killall sleep'", podToDisrupt.Namespace, podToDisrupt.Name)
 		var stdout, stderr bytes.Buffer
-		require.NoError(t, executor.Stream(remotecommand.StreamOptions{Stdout: &stdout, Stderr: &stderr}))
+		err = executor.Stream(remotecommand.StreamOptions{Stdout: &stdout, Stderr: &stderr})
+
+		// Some container runtimes (e.g., in CI) exit fast enough that our killall process also gets a SIGKILL.
+		if err != nil && strings.Contains(err.Error(), "command terminated with exit code 137") {
+			t.Logf("ignoring SIGKILL error: %s", err.Error())
+			err = nil
+		}
+
+		require.NoError(t, err)
 		t.Logf("'/usr/bin/killall sleep' finished (stdout: %q, stderr: %q)", stdout.String(), stderr.String())
 
 		// Wait for that pod to be disappear (since it will have failed).

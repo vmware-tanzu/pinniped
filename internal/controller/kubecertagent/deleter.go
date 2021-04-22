@@ -1,11 +1,13 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubecertagent
 
 import (
 	"fmt"
+	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -70,7 +72,7 @@ func (c *deleterController) Sync(ctx controllerlib.Context) error {
 		if err != nil {
 			return err
 		}
-		if controllerManagerPod == nil ||
+		if controllerManagerPod == nil || inTerminalState(agentPod) ||
 			!isAgentPodUpToDate(agentPod, c.agentPodConfig.newAgentPod(controllerManagerPod)) {
 			plog.Debug("deleting agent pod", "pod", klog.KObj(agentPod))
 			err := c.k8sClient.
@@ -84,4 +86,25 @@ func (c *deleterController) Sync(ctx controllerlib.Context) error {
 	}
 
 	return nil
+}
+
+func inTerminalState(pod *corev1.Pod) bool {
+	switch pod.Status.Phase {
+
+	// Running and Pending are non-terminal states. We should not delete pods in these states.
+	case corev1.PodRunning, corev1.PodPending:
+		return false
+
+	// Succeeded and Failed are terminal states. If a pod has entered one of these states, we want to delete it so
+	// it can be recreated by the other controllers.
+	case corev1.PodSucceeded, corev1.PodFailed:
+		return true
+
+	// In other cases, we want to delete the pod but more carefully. We only consider the pod "terminal" if it is in
+	// this state more than 5 minutes after creation.
+	case corev1.PodUnknown:
+		fallthrough
+	default:
+		return time.Since(pod.CreationTimestamp.Time) > 5*time.Minute
+	}
 }

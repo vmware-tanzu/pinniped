@@ -236,7 +236,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 
 	result.SupervisorUpstreamLDAP = TestLDAPUpstream{
 		Host:                           needEnv(t, "PINNIPED_TEST_LDAP_HOST"),
-		CABundle:                       base64Decoded(t, needEnv(t, "PINNIPED_TEST_LDAP_LDAPS_CA_BUNDLE")),
+		CABundle:                       base64Decoded(t, os.Getenv("PINNIPED_TEST_LDAP_LDAPS_CA_BUNDLE")),
 		BindUsername:                   needEnv(t, "PINNIPED_TEST_LDAP_BIND_ACCOUNT_USERNAME"),
 		BindPassword:                   needEnv(t, "PINNIPED_TEST_LDAP_BIND_ACCOUNT_PASSWORD"),
 		UserSearchBase:                 needEnv(t, "PINNIPED_TEST_LDAP_USERS_SEARCH_BASE"),

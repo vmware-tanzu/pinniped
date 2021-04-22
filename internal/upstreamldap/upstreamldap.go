@@ -124,8 +124,9 @@ func (p *Provider) dial(ctx context.Context) (Conn, error) {
 // Unfortunately, the go-ldap library does not seem to support dialing with a context.Context,
 // so we implement it ourselves, heavily inspired by ldap.DialURL.
 func (p *Provider) dialTLS(ctx context.Context, hostAndPort string) (Conn, error) {
-	rootCAs := x509.NewCertPool()
+	var rootCAs *x509.CertPool
 	if p.c.CABundle != nil {
+		rootCAs = x509.NewCertPool()
 		if !rootCAs.AppendCertsFromPEM(p.c.CABundle) {
 			return nil, ldap.NewError(ldap.ErrorNetwork, fmt.Errorf("could not parse CA bundle"))
 		}

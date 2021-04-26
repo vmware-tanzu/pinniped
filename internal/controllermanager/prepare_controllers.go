@@ -119,16 +119,14 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 	// Create informers. Don't forget to make sure they get started in the function returned below.
 	informers := createInformers(c.ServerInstallationInfo.Namespace, client.Kubernetes, client.PinnipedConcierge)
 
-	// Configuration for the kubecertagent controllers created below.
-	agentPodConfig := &kubecertagent.AgentPodConfig{
+	agentConfig := kubecertagent.AgentConfig{
 		Namespace:                 c.ServerInstallationInfo.Namespace,
 		ContainerImage:            *c.KubeCertAgentConfig.Image,
-		PodNamePrefix:             *c.KubeCertAgentConfig.NamePrefix,
+		NamePrefix:                *c.KubeCertAgentConfig.NamePrefix,
 		ContainerImagePullSecrets: c.KubeCertAgentConfig.ImagePullSecrets,
-		AdditionalLabels:          c.Labels,
-	}
-	credentialIssuerLocationConfig := &kubecertagent.CredentialIssuerLocationConfig{
-		Name: c.NamesConfig.CredentialIssuer,
+		Labels:                    c.Labels,
+		CredentialIssuerName:      c.NamesConfig.CredentialIssuer,
+		DiscoveryURLOverride:      c.DiscoveryURLOverride,
 	}
 
 	// Create controller manager.
@@ -195,64 +193,31 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 			),
 			singletonWorker,
 		).
-
-		// Kube cert agent controllers are responsible for finding the cluster's signing keys and keeping them
+		// The kube-cert-agent controller is responsible for finding the cluster's signing keys and keeping them
 		// up to date in memory, as well as reporting status on this cluster integration strategy.
 		WithController(
-			kubecertagent.NewCreaterController(
-				agentPodConfig,
-				credentialIssuerLocationConfig,
-				c.Labels,
-				clock.RealClock{},
-				client.Kubernetes,
-				client.PinnipedConcierge,
+			kubecertagent.NewAgentController(
+				agentConfig,
+				client,
 				informers.kubeSystemNamespaceK8s.Core().V1().Pods(),
-				informers.installationNamespaceK8s.Core().V1().Pods(),
-				controllerlib.WithInformer,
-				controllerlib.WithInitialEvent,
-			),
-			singletonWorker,
-		).
-		WithController(
-			kubecertagent.NewAnnotaterController(
-				agentPodConfig,
-				credentialIssuerLocationConfig,
-				c.Labels,
-				clock.RealClock{},
-				client.Kubernetes,
-				client.PinnipedConcierge,
-				informers.kubeSystemNamespaceK8s.Core().V1().Pods(),
-				informers.installationNamespaceK8s.Core().V1().Pods(),
-				controllerlib.WithInformer,
-			),
-			singletonWorker,
-		).
-		WithController(
-			kubecertagent.NewExecerController(
-				credentialIssuerLocationConfig,
-				c.Labels,
-				c.DiscoveryURLOverride,
-				c.DynamicSigningCertProvider,
-				kubecertagent.NewPodCommandExecutor(client.JSONConfig, client.Kubernetes),
-				client.PinnipedConcierge,
-				clock.RealClock{},
+				informers.installationNamespaceK8s.Apps().V1().Deployments(),
 				informers.installationNamespaceK8s.Core().V1().Pods(),
 				informers.kubePublicNamespaceK8s.Core().V1().ConfigMaps(),
-				controllerlib.WithInformer,
+				c.DynamicSigningCertProvider,
 			),
 			singletonWorker,
 		).
+		// The kube-cert-agent legacy pod cleaner controller is responsible for cleaning up pods that were deployed by
+		// versions of Pinniped prior to v0.7.0. If we stop supporting upgrades from v0.7.0, we can safely remove this.
 		WithController(
-			kubecertagent.NewDeleterController(
-				agentPodConfig,
-				client.Kubernetes,
-				informers.kubeSystemNamespaceK8s.Core().V1().Pods(),
+			kubecertagent.NewLegacyPodCleanerController(
+				agentConfig,
+				client,
 				informers.installationNamespaceK8s.Core().V1().Pods(),
-				controllerlib.WithInformer,
+				klogr.New(),
 			),
 			singletonWorker,
 		).
-
 		// The cache filler/cleaner controllers are responsible for keep an in-memory representation of active
 		// authenticators up to date.
 		WithController(

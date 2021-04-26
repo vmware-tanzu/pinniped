@@ -47,7 +47,7 @@ rules:
   - apiGroups:
       - #@ pinnipedDevAPIGroupWithPrefix("config.concierge")
     resources: [ credentialissuers/status ]
-    verbs: [get, patch, update]
+    verbs: [ get, patch, update ]
   - apiGroups:
       - #@ pinnipedDevAPIGroupWithPrefix("authentication.concierge")
     resources: [ jwtauthenticators, webhookauthenticators ]
@@ -82,16 +82,25 @@ rules:
   - apiGroups: [ "" ]
     resources: [ secrets ]
     verbs: [ create, get, list, patch, update, watch, delete ]
-  #! We need to be able to CRUD pods in our namespace so we can reconcile the kube-cert-agent pods.
+  #! We need to be able to watch pods in our namespace so we can find the kube-cert-agent pods.
   - apiGroups: [ "" ]
     resources: [ pods ]
-    verbs: [ create, get, list, patch, update, watch, delete ]
+    verbs: [ get, list, watch ]
   #! We need to be able to exec into pods in our namespace so we can grab the API server's private key
   - apiGroups: [ "" ]
     resources: [ pods/exec ]
     verbs: [ create ]
+  #! We need to be able to delete pods in our namespace so we can clean up legacy kube-cert-agent pods.
+  - apiGroups: [ "" ]
+    resources: [ pods ]
+    verbs: [ delete ]
+  #! We need to be able to create and update deployments in our namespace so we can manage the kube-cert-agent Deployment.
   - apiGroups: [ apps ]
-    resources: [ replicasets,deployments ]
+    resources: [ deployments ]
+    verbs: [ create, get, list, patch, update, watch ]
+  #! We need to be able to get replicasets so we can form the correct owner references on our generated objects.
+  - apiGroups: [ apps ]
+    resources: [ replicasets ]
     verbs: [ get ]
   - apiGroups: [ "" ]
     resources: [ configmaps ]

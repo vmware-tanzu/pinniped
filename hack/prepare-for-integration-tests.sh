@@ -187,7 +187,8 @@ registry_repo_tag="${registry_repo}:${tag}"
 if [[ "$do_build" == "yes" ]]; then
   # Rebuild the code
   log_note "Docker building the app..."
-  docker build . --tag "$registry_repo_tag"
+  # DOCKER_BUILDKIT=1 is optional on MacOS but required on linux.
+  DOCKER_BUILDKIT=1 docker build . --tag "$registry_repo_tag"
 fi
 
 # Load it into the cluster
@@ -300,8 +301,9 @@ popd >/dev/null
 
 #
 # Download the test CA bundle that was generated in the Dex pod.
+# Note that this returns a base64 encoded value.
 #
-test_ca_bundle_pem="$(kubectl get secrets -n tools certs -o go-template='{{index .data "ca.pem" | base64decode}}' | base64)"
+test_ca_bundle_pem="$(kubectl get secrets -n tools certs -o go-template='{{index .data "ca.pem"}}')"
 
 #
 # Create the environment file.

@@ -30,6 +30,7 @@ func NewPodCommandExecutor(kubeConfig *restclient.Config, kubeClient kubernetes.
 }
 
 func (s *kubeClientPodCommandExecutor) Exec(podNamespace string, podName string, commandAndArgs ...string) (string, error) {
+	// TODO: see if we can add a timeout or make this cancelable somehow
 	request := s.kubeClient.
 		CoreV1().
 		RESTClient().

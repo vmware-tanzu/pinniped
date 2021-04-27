@@ -151,11 +151,6 @@ func TestE2EFullIntegration(t *testing.T) {
 	kubeconfigPath := filepath.Join(tempDir, "kubeconfig.yaml")
 	require.NoError(t, ioutil.WriteFile(kubeconfigPath, []byte(kubeconfigYAML), 0600))
 
-	// Wait 10 seconds for the JWTAuthenticator to become initialized.
-	// TODO: remove this sleep once we have fixed the initialization problem.
-	t.Log("sleeping 10s to wait for JWTAuthenticator to become initialized")
-	time.Sleep(10 * time.Second)
-
 	// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 	start := time.Now()
 	kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)

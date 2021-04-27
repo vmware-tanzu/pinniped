@@ -245,8 +245,6 @@ func startControllers(
 		WithController(
 			upstreamwatcher.NewLDAPUpstreamWatcherController(
 				dynamicUpstreamIDPProvider,
-				// nil means to use a real production dialer when creating objects to add to the dynamicUpstreamIDPProvider cache.
-				nil,
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders(),
 				secretInformer,

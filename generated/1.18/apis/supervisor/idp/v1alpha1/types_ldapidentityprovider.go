@@ -35,42 +35,36 @@ type LDAPIdentityProviderStatus struct {
 	Conditions []Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
-type LDAPIdentityProviderTLSSpec struct {
-	// X.509 Certificate Authority (base64-encoded PEM bundle) to trust when connecting to the LDAP provider.
-	// If omitted, a default set of system roots will be trusted.
-	// +optional
-	CertificateAuthorityData string `json:"certificateAuthorityData,omitempty"`
-}
-
-type LDAPIdentityProviderBindSpec struct {
+type LDAPIdentityProviderBind struct {
 	// SecretName contains the name of a namespace-local Secret object that provides the username and
 	// password for an LDAP bind user. This account will be used to perform LDAP searches. The Secret should be
 	// of type "kubernetes.io/basic-auth" which includes "username" and "password" keys. The username value
 	// should be the full DN of your bind account, e.g. "cn=bind-account,ou=users,dc=example,dc=com".
+	// The password must be non-empty.
 	// +kubebuilder:validation:MinLength=1
 	SecretName string `json:"secretName"`
 }
 
-type LDAPIdentityProviderUserSearchAttributesSpec struct {
+type LDAPIdentityProviderUserSearchAttributes struct {
 	// Username specifies the name of attribute in the LDAP entry which whose value shall become the username
 	// of the user after a successful authentication. This would typically be the same attribute name used in
 	// the user search filter, although it can be different. E.g. "mail" or "uid" or "userPrincipalName".
 	// The value of this field is case-sensitive and must match the case of the attribute name returned by the LDAP
 	// server in the user's entry. Distinguished names can be used by specifying lower-case "dn". When this field
-	// is set to "dn" then the LDAPIdentityProviderUserSearchSpec's Filter field cannot be blank, since the default
+	// is set to "dn" then the LDAPIdentityProviderUserSearch's Filter field cannot be blank, since the default
 	// value of "dn={}" would not work.
 	// +kubebuilder:validation:MinLength=1
 	Username string `json:"username,omitempty"`
 
-	// UniqueID specifies the name of the attribute in the LDAP entry which whose value shall be used to uniquely
+	// UID specifies the name of the attribute in the LDAP entry which whose value shall be used to uniquely
 	// identify the user within this LDAP provider after a successful authentication. E.g. "uidNumber" or "objectGUID".
 	// The value of this field is case-sensitive and must match the case of the attribute name returned by the LDAP
 	// server in the user's entry. Distinguished names can be used by specifying lower-case "dn".
 	// +kubebuilder:validation:MinLength=1
-	UniqueID string `json:"uniqueID,omitempty"`
+	UID string `json:"uid,omitempty"`
 }
 
-type LDAPIdentityProviderUserSearchSpec struct {
+type LDAPIdentityProviderUserSearch struct {
 	// Base is the DN that should be used as the search base when searching for users. E.g. "ou=users,dc=example,dc=com".
 	// +kubebuilder:validation:MinLength=1
 	Base string `json:"base,omitempty"`
@@ -88,7 +82,7 @@ type LDAPIdentityProviderUserSearchSpec struct {
 	// Attributes specifies how the user's information should be read from the LDAP entry which was found as
 	// the result of the user search.
 	// +optional
-	Attributes LDAPIdentityProviderUserSearchAttributesSpec `json:"attributes,omitempty"`
+	Attributes LDAPIdentityProviderUserSearchAttributes `json:"attributes,omitempty"`
 }
 
 // Spec for configuring an LDAP identity provider.
@@ -98,14 +92,14 @@ type LDAPIdentityProviderSpec struct {
 	Host string `json:"host"`
 
 	// TLS contains the connection settings for how to establish the connection to the Host.
-	TLS *LDAPIdentityProviderTLSSpec `json:"tls,omitempty"`
+	TLS *TLSSpec `json:"tls,omitempty"`
 
 	// Bind contains the configuration for how to provide access credentials during an initial bind to the LDAP server
 	// to be allowed to perform searches and binds to validate a user's credentials during a user's authentication attempt.
-	Bind LDAPIdentityProviderBindSpec `json:"bind,omitempty"`
+	Bind LDAPIdentityProviderBind `json:"bind,omitempty"`
 
 	// UserSearch contains the configuration for searching for a user by name in the LDAP provider.
-	UserSearch LDAPIdentityProviderUserSearchSpec `json:"userSearch,omitempty"`
+	UserSearch LDAPIdentityProviderUserSearch `json:"userSearch,omitempty"`
 
 	// DryRunAuthenticationUsername influences how the LDAPIdentityProvider's configuration is validated.
 	// When DryRunAuthenticationUsername is blank, the LDAPIdentityProvider will be validated by opening a connection

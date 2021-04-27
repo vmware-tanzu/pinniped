@@ -78,18 +78,18 @@ func TestSupervisorLogin(t *testing.T) {
 				)
 				ldapIDP := library.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
 					Host: env.SupervisorUpstreamLDAP.Host,
-					TLS: &idpv1alpha1.LDAPIdentityProviderTLSSpec{
+					TLS: &idpv1alpha1.TLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
 					},
-					Bind: idpv1alpha1.LDAPIdentityProviderBindSpec{
+					Bind: idpv1alpha1.LDAPIdentityProviderBind{
 						SecretName: secret.Name,
 					},
-					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearchSpec{
+					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
 						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
 						Filter: "",
-						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributesSpec{
+						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
 							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
-							UniqueID: env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
+							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
 						},
 					},
 					DryRunAuthenticationUsername: env.SupervisorUpstreamLDAP.TestUserMailAttributeValue,
@@ -129,18 +129,18 @@ func TestSupervisorLogin(t *testing.T) {
 				)
 				ldapIDP := library.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
 					Host: env.SupervisorUpstreamLDAP.Host,
-					TLS: &idpv1alpha1.LDAPIdentityProviderTLSSpec{
+					TLS: &idpv1alpha1.TLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
 					},
-					Bind: idpv1alpha1.LDAPIdentityProviderBindSpec{
+					Bind: idpv1alpha1.LDAPIdentityProviderBind{
 						SecretName: secret.Name,
 					},
-					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearchSpec{
+					UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
 						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
 						Filter: "cn={}", // try using a non-default search filter
-						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributesSpec{
+						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
 							Username: "dn", // try using the user's DN as the downstream username
-							UniqueID: env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
+							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
 						},
 					},
 					DryRunAuthenticationUsername: "", // try without dry run
@@ -467,8 +467,8 @@ func requestAuthorizationUsingLDAPIdentityProvider(t *testing.T, downstreamAutho
 	require.NoError(t, err)
 
 	// Set the custom username/password headers for the LDAP authorize request.
-	authRequest.Header.Set("X-Pinniped-Upstream-Username", upstreamUsername)
-	authRequest.Header.Set("X-Pinniped-Upstream-Password", upstreamPassword)
+	authRequest.Header.Set("X-Pinniped-Idp-Username", upstreamUsername)
+	authRequest.Header.Set("X-Pinniped-Idp-Password", upstreamPassword)
 
 	authResponse, err := httpClient.Do(authRequest)
 	require.NoError(t, err)

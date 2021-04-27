@@ -49,10 +49,10 @@ const (
 	// we set this to be relatively long.
 	overallTimeout = 90 * time.Minute
 
-	supervisorAuthorizeUpstreamNameParam      = "upstream_name"
-	supervisorAuthorizeUpstreamTypeParam      = "upstream_type"
-	supervisorAuthorizeUpstreamUsernameHeader = "X-Pinniped-Upstream-Username"
-	supervisorAuthorizeUpstreamPasswordHeader = "X-Pinniped-Upstream-Password" // nolint:gosec // this is not a credential
+	supervisorAuthorizeUpstreamNameParam      = "pinniped_idp_name"
+	supervisorAuthorizeUpstreamTypeParam      = "pinniped_idp_type"
+	supervisorAuthorizeUpstreamUsernameHeader = "X-Pinniped-Idp-Username"
+	supervisorAuthorizeUpstreamPasswordHeader = "X-Pinniped-Idp-Password" // nolint:gosec // this is not a credential
 
 	defaultLDAPUsernamePrompt = "Username: "
 	defaultLDAPPasswordPrompt = "Password: "
@@ -401,10 +401,7 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 	if err != nil {
 		return nil, fmt.Errorf("authorization response error: %w", err)
 	}
-	err = authRes.Body.Close() // don't need the response body
-	if err != nil {
-		return nil, fmt.Errorf("could not close authorize response body: %w", err)
-	}
+	_ = authRes.Body.Close() // don't need the response body, and okay if it fails to close
 
 	// A successful authorization always results in a 302.
 	if authRes.StatusCode != http.StatusFound {
@@ -498,20 +495,23 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 }
 
 func promptForValue(promptLabel string) (string, error) {
-	if !term.IsTerminal(0) {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return "", errors.New("stdin is not connected to a terminal")
 	}
 	_, err := fmt.Fprint(os.Stderr, promptLabel)
 	if err != nil {
 		return "", fmt.Errorf("could not print prompt to stderr: %w", err)
 	}
-	text, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-	text = strings.ReplaceAll(text, "\n", "")
+	text, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("could read input from stdin: %w", err)
+	}
+	text = strings.TrimSpace(text)
 	return text, nil
 }
 
 func promptForSecret(promptLabel string) (string, error) {
-	if !term.IsTerminal(0) {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return "", errors.New("stdin is not connected to a terminal")
 	}
 	_, err := fmt.Fprint(os.Stderr, promptLabel)

@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -23,7 +24,6 @@ const (
 	ldapsScheme                                 = "ldaps"
 	distinguishedNameAttributeName              = "dn"
 	userSearchFilterInterpolationLocationMarker = "{}"
-	invalidCredentialsErrorPrefix               = `LDAP Result Code 49 "Invalid Credentials":`
 )
 
 // Conn abstracts the upstream LDAP communication protocol (mostly for testing).
@@ -45,6 +45,8 @@ type LDAPDialer interface {
 
 // LDAPDialerFunc makes it easy to use a func as an LDAPDialer.
 type LDAPDialerFunc func(ctx context.Context, hostAndPort string) (Conn, error)
+
+var _ LDAPDialer = LDAPDialerFunc(func(ctx context.Context, hostAndPort string) (Conn, error) { return nil, nil })
 
 func (f LDAPDialerFunc) Dial(ctx context.Context, hostAndPort string) (Conn, error) {
 	return f(ctx, hostAndPort)
@@ -307,7 +309,8 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 	if err != nil {
 		plog.DebugErr("error binding for user (if this is not the expected dn for this username, please check the user search configuration)",
 			err, "upstreamName", p.GetName(), "username", username, "dn", userEntry.DN)
-		if strings.HasPrefix(err.Error(), invalidCredentialsErrorPrefix) {
+		ldapErr := &ldap.Error{}
+		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultInvalidCredentials {
 			return "", "", nil
 		}
 		return "", "", fmt.Errorf(`error binding for user "%s" using provided password against DN "%s": %w`, username, userEntry.DN, err)
@@ -321,7 +324,7 @@ func (p *Provider) userSearchRequest(username string) *ldap.SearchRequest {
 	return &ldap.SearchRequest{
 		BaseDN:       p.c.UserSearch.Base,
 		Scope:        ldap.ScopeWholeSubtree,
-		DerefAliases: ldap.DerefAlways, // TODO what's the best value here?
+		DerefAliases: ldap.NeverDerefAliases,
 		SizeLimit:    2,
 		TimeLimit:    90,
 		TypesOnly:    false,

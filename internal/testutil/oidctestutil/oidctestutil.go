@@ -39,7 +39,7 @@ import (
 
 // Test helpers for the OIDC package.
 
-// ExchangeAuthcodeAndValidateTokenArgs is a POGO (plain old go object?) used to spy on calls to
+// ExchangeAuthcodeAndValidateTokenArgs is used to spy on calls to
 // TestUpstreamOIDCIdentityProvider.ExchangeAuthcodeAndValidateTokensFunc().
 type ExchangeAuthcodeAndValidateTokenArgs struct {
 	Ctx                  context.Context

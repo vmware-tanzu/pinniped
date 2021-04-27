@@ -62,6 +62,17 @@ type ldapWatcherController struct {
 // NewLDAPUpstreamWatcherController instantiates a new controllerlib.Controller which will populate the provided UpstreamLDAPIdentityProviderICache.
 func NewLDAPUpstreamWatcherController(
 	idpCache UpstreamLDAPIdentityProviderICache,
+	client pinnipedclientset.Interface,
+	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer,
+	secretInformer corev1informers.SecretInformer,
+	withInformer pinnipedcontroller.WithInformerOptionFunc,
+) controllerlib.Controller {
+	// nil means to use a real production dialer when creating objects to add to the dynamicUpstreamIDPProvider cache.
+	return newInternal(idpCache, nil, client, ldapIdentityProviderInformer, secretInformer, withInformer)
+}
+
+func newInternal(
+	idpCache UpstreamLDAPIdentityProviderICache,
 	ldapDialer upstreamldap.LDAPDialer,
 	client pinnipedclientset.Interface,
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer,
@@ -124,7 +135,7 @@ func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *
 			Base:              spec.UserSearch.Base,
 			Filter:            spec.UserSearch.Filter,
 			UsernameAttribute: spec.UserSearch.Attributes.Username,
-			UIDAttribute:      spec.UserSearch.Attributes.UniqueID,
+			UIDAttribute:      spec.UserSearch.Attributes.UID,
 		},
 		Dialer: c.ldapDialer,
 	}

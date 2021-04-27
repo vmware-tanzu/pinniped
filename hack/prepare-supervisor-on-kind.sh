@@ -156,7 +156,7 @@ spec:
     base: "$PINNIPED_TEST_LDAP_USERS_SEARCH_BASE"
     filter: "cn={}"
     attributes:
-      uniqueID: "$PINNIPED_TEST_LDAP_USER_UNIQUE_ID_ATTRIBUTE_NAME"
+      uid: "$PINNIPED_TEST_LDAP_USER_UNIQUE_ID_ATTRIBUTE_NAME"
       username: "$PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_NAME"
   dryRunAuthenticationUsername: "$PINNIPED_TEST_LDAP_USER_CN"
 EOF

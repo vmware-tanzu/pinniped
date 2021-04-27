@@ -1119,10 +1119,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			req.Header.Set("Cookie", test.csrfCookie)
 		}
 		if test.customUsernameHeader != nil {
-			req.Header.Set("X-Pinniped-Upstream-Username", *test.customUsernameHeader)
+			req.Header.Set("X-Pinniped-Idp-Username", *test.customUsernameHeader)
 		}
 		if test.customPasswordHeader != nil {
-			req.Header.Set("X-Pinniped-Upstream-Password", *test.customPasswordHeader)
+			req.Header.Set("X-Pinniped-Idp-Password", *test.customPasswordHeader)
 		}
 		rsp := httptest.NewRecorder()
 		subject.ServeHTTP(rsp, req)

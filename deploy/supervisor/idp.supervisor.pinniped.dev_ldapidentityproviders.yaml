@@ -64,6 +64,7 @@ spec:
                       The Secret should be of type "kubernetes.io/basic-auth" which
                       includes "username" and "password" keys. The username value
                       should be the full DN of your bind account, e.g. "cn=bind-account,ou=users,dc=example,dc=com".
+                      The password must be non-empty.
                     minLength: 1
                     type: string
                 required:
@@ -111,9 +112,8 @@ spec:
                   the connection to the Host.
                 properties:
                   certificateAuthorityData:
-                    description: X.509 Certificate Authority (base64-encoded PEM bundle)
-                      to trust when connecting to the LDAP provider. If omitted, a
-                      default set of system roots will be trusted.
+                    description: X.509 Certificate Authority (base64-encoded PEM bundle).
+                      If omitted, a default set of system roots will be trusted.
                     type: string
                 type: object
               userSearch:
@@ -125,15 +125,14 @@ spec:
                       be read from the LDAP entry which was found as the result of
                       the user search.
                     properties:
-                      uniqueID:
-                        description: UniqueID specifies the name of the attribute
-                          in the LDAP entry which whose value shall be used to uniquely
-                          identify the user within this LDAP provider after a successful
-                          authentication. E.g. "uidNumber" or "objectGUID". The value
-                          of this field is case-sensitive and must match the case
-                          of the attribute name returned by the LDAP server in the
-                          user's entry. Distinguished names can be used by specifying
-                          lower-case "dn".
+                      uid:
+                        description: UID specifies the name of the attribute in the
+                          LDAP entry which whose value shall be used to uniquely identify
+                          the user within this LDAP provider after a successful authentication.
+                          E.g. "uidNumber" or "objectGUID". The value of this field
+                          is case-sensitive and must match the case of the attribute
+                          name returned by the LDAP server in the user's entry. Distinguished
+                          names can be used by specifying lower-case "dn".
                         minLength: 1
                         type: string
                       username:
@@ -146,9 +145,8 @@ spec:
                           the case of the attribute name returned by the LDAP server
                           in the user's entry. Distinguished names can be used by
                           specifying lower-case "dn". When this field is set to "dn"
-                          then the LDAPIdentityProviderUserSearchSpec's Filter field
-                          cannot be blank, since the default value of "dn={}" would
-                          not work.
+                          then the LDAPIdentityProviderUserSearch's Filter field cannot
+                          be blank, since the default value of "dn={}" would not work.
                         minLength: 1
                         type: string
                     type: object

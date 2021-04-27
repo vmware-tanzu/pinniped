@@ -327,6 +327,8 @@ status:
 `,
 		string(kubectlOutput3))
 
+	expectedGroupsPlusUnauthenticated := append([]string{}, env.SupervisorUpstreamOIDC.ExpectedGroups...)
+	expectedGroupsPlusUnauthenticated = append(expectedGroupsPlusUnauthenticated, "system:authenticated")
 	// Validate that `pinniped whoami` returns the correct identity.
 	assertWhoami(
 		ctx,
@@ -335,6 +337,6 @@ status:
 		pinnipedExe,
 		kubeconfigPath,
 		env.SupervisorUpstreamOIDC.Username,
-		append(env.SupervisorUpstreamOIDC.ExpectedGroups, "system:authenticated"),
+		expectedGroupsPlusUnauthenticated,
 	)
 }

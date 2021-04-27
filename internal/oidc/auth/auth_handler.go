@@ -27,8 +27,8 @@ import (
 )
 
 const (
-	CustomUsernameHeaderName = "X-Pinniped-Upstream-Username"
-	CustomPasswordHeaderName = "X-Pinniped-Upstream-Password" //nolint:gosec // this is not a credential
+	CustomUsernameHeaderName = "X-Pinniped-Idp-Username"
+	CustomPasswordHeaderName = "X-Pinniped-Idp-Password" //nolint:gosec // this is not a credential
 )
 
 func NewHandler(

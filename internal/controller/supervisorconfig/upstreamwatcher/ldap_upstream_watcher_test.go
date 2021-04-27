@@ -80,7 +80,7 @@ func TestLDAPUpstreamWatcherControllerFilterSecrets(t *testing.T) {
 			secretInformer := kubeInformers.Core().V1().Secrets()
 			withInformer := testutil.NewObservableWithInformerOption()
 
-			NewLDAPUpstreamWatcherController(nil, nil, nil, ldapIDPInformer, secretInformer, withInformer.WithInformer)
+			NewLDAPUpstreamWatcherController(nil, nil, ldapIDPInformer, secretInformer, withInformer.WithInformer)
 
 			unrelated := corev1.Secret{}
 			filter := withInformer.GetFilterForInformer(secretInformer)
@@ -125,7 +125,7 @@ func TestLDAPUpstreamWatcherControllerFilterLDAPIdentityProviders(t *testing.T) 
 			secretInformer := kubeInformers.Core().V1().Secrets()
 			withInformer := testutil.NewObservableWithInformerOption()
 
-			NewLDAPUpstreamWatcherController(nil, nil, nil, ldapIDPInformer, secretInformer, withInformer.WithInformer)
+			NewLDAPUpstreamWatcherController(nil, nil, ldapIDPInformer, secretInformer, withInformer.WithInformer)
 
 			unrelated := corev1.Secret{}
 			filter := withInformer.GetFilterForInformer(ldapIDPInformer)
@@ -174,14 +174,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: testName, Namespace: testNamespace, Generation: 1234},
 		Spec: v1alpha1.LDAPIdentityProviderSpec{
 			Host: testHost,
-			TLS:  &v1alpha1.LDAPIdentityProviderTLSSpec{CertificateAuthorityData: testCABundleBase64Encoded},
-			Bind: v1alpha1.LDAPIdentityProviderBindSpec{SecretName: testSecretName},
-			UserSearch: v1alpha1.LDAPIdentityProviderUserSearchSpec{
+			TLS:  &v1alpha1.TLSSpec{CertificateAuthorityData: testCABundleBase64Encoded},
+			Bind: v1alpha1.LDAPIdentityProviderBind{SecretName: testSecretName},
+			UserSearch: v1alpha1.LDAPIdentityProviderUserSearch{
 				Base:   testUserSearchBase,
 				Filter: testUserSearchFilter,
-				Attributes: v1alpha1.LDAPIdentityProviderUserSearchAttributesSpec{
+				Attributes: v1alpha1.LDAPIdentityProviderUserSearchAttributes{
 					Username: testUsernameAttrName,
-					UniqueID: testUIDAttrName,
+					UID:      testUIDAttrName,
 				},
 			},
 		},
@@ -815,7 +815,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				return conn, nil
 			})}
 
-			controller := NewLDAPUpstreamWatcherController(
+			controller := newInternal(
 				cache,
 				dialer,
 				fakePinnipedClient,

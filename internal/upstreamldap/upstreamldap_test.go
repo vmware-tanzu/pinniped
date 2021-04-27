@@ -67,7 +67,7 @@ func TestEndUserAuthentication(t *testing.T) {
 		request := &ldap.SearchRequest{
 			BaseDN:       testUserSearchBase,
 			Scope:        ldap.ScopeWholeSubtree,
-			DerefAliases: ldap.DerefAlways,
+			DerefAliases: ldap.NeverDerefAliases,
 			SizeLimit:    2,
 			TimeLimit:    90,
 			TypesOnly:    false,
@@ -571,7 +571,11 @@ func TestEndUserAuthentication(t *testing.T) {
 			wantUnauthenticated:        true,
 			skipDryRunAuthenticateUser: true,
 			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
-				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Return(errors.New(`LDAP Result Code 49 "Invalid Credentials": some bind error`)).Times(1)
+				err := &ldap.Error{
+					Err:        errors.New("some bind error"),
+					ResultCode: ldap.LDAPResultInvalidCredentials,
+				}
+				conn.EXPECT().Bind(testSearchResultDNValue, testUpstreamPassword).Return(err).Times(1)
 			},
 		},
 		{

@@ -606,8 +606,8 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 							"state":                 []string{"test-state"},
 							"access_type":           []string{"offline"},
 							"client_id":             []string{"test-client-id"},
-							"upstream_name":         []string{"some-upstream-name"},
-							"upstream_type":         []string{"oidc"},
+							"pinniped_idp_name":     []string{"some-upstream-name"},
+							"pinniped_idp_type":     []string{"oidc"},
 						}, actualParams)
 
 						parsedActualURL.RawQuery = ""
@@ -691,7 +691,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 				}
 			},
 			issuer:  successServer.URL,
-			wantErr: `could not build authorize request: parse "%?access_type=offline&client_id=test-client-id&code_challenge=VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g&code_challenge_method=S256&nonce=test-nonce&redirect_uri=http%3A%2F%2F127.0.0.1%3A0%2Fcallback&response_type=code&scope=test-scope&state=test-state&upstream_name=some-upstream-name&upstream_type=ldap": invalid URL escape "%"`,
+			wantErr: `could not build authorize request: parse "%?access_type=offline&client_id=test-client-id&code_challenge=VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g&code_challenge_method=S256&nonce=test-nonce&pinniped_idp_name=some-upstream-name&pinniped_idp_type=ldap&redirect_uri=http%3A%2F%2F127.0.0.1%3A0%2Fcallback&response_type=code&scope=test-scope&state=test-state": invalid URL escape "%"`,
 		},
 		{
 			name:     "ldap login when there is an error calling the authorization endpoint",
@@ -703,7 +703,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			},
 			issuer: successServer.URL,
 			wantErr: `authorization response error: Get "http://` + successServer.Listener.Addr().String() +
-				`/authorize?access_type=offline&client_id=test-client-id&code_challenge=VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g&code_challenge_method=S256&nonce=test-nonce&redirect_uri=http%3A%2F%2F127.0.0.1%3A0%2Fcallback&response_type=code&scope=test-scope&state=test-state&upstream_name=some-upstream-name&upstream_type=ldap": some error fetching authorize endpoint`,
+				`/authorize?access_type=offline&client_id=test-client-id&code_challenge=VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g&code_challenge_method=S256&nonce=test-nonce&pinniped_idp_name=some-upstream-name&pinniped_idp_type=ldap&redirect_uri=http%3A%2F%2F127.0.0.1%3A0%2Fcallback&response_type=code&scope=test-scope&state=test-state": some error fetching authorize endpoint`,
 		},
 		{
 			name:     "ldap login when the OIDC provider authorization endpoint returns something other than a 302 redirect",
@@ -863,8 +863,8 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 								return defaultDiscoveryResponse(req)
 							case "http://" + successServer.Listener.Addr().String() + "/authorize":
 								authorizeRequestWasMade = true
-								require.Equal(t, "some-upstream-username", req.Header.Get("X-Pinniped-Upstream-Username"))
-								require.Equal(t, "some-upstream-password", req.Header.Get("X-Pinniped-Upstream-Password"))
+								require.Equal(t, "some-upstream-username", req.Header.Get("X-Pinniped-Idp-Username"))
+								require.Equal(t, "some-upstream-password", req.Header.Get("X-Pinniped-Idp-Password"))
 								require.Equal(t, url.Values{
 									// This is the PKCE challenge which is calculated as base64(sha256("test-pkce")). For example:
 									// $ echo -n test-pkce | shasum -a 256 | cut -d" " -f1 | xxd -r -p | base64 | cut -d"=" -f1
@@ -878,8 +878,8 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 									"access_type":           []string{"offline"},
 									"client_id":             []string{"test-client-id"},
 									"redirect_uri":          []string{"http://127.0.0.1:0/callback"},
-									"upstream_name":         []string{"some-upstream-name"},
-									"upstream_type":         []string{"ldap"},
+									"pinniped_idp_name":     []string{"some-upstream-name"},
+									"pinniped_idp_type":     []string{"ldap"},
 								}, req.URL.Query())
 								return &http.Response{
 									StatusCode: http.StatusFound,

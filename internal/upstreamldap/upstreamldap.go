@@ -46,7 +46,7 @@ type LDAPDialer interface {
 // LDAPDialerFunc makes it easy to use a func as an LDAPDialer.
 type LDAPDialerFunc func(ctx context.Context, hostAndPort string) (Conn, error)
 
-var _ LDAPDialer = LDAPDialerFunc(func(ctx context.Context, hostAndPort string) (Conn, error) { return nil, nil })
+var _ LDAPDialer = LDAPDialerFunc(nil)
 
 func (f LDAPDialerFunc) Dial(ctx context.Context, hostAndPort string) (Conn, error) {
 	return f(ctx, hostAndPort)

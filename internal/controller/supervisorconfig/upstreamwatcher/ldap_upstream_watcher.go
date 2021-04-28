@@ -33,13 +33,12 @@ const (
 	testLDAPConnectionTimeout = 90 * time.Second
 
 	// Constants related to conditions.
-	typeBindSecretValid             = "BindSecretValid"
-	typeTLSConfigurationValid       = "TLSConfigurationValid"
-	typeLDAPConnectionValid         = "LDAPConnectionValid"
-	reasonLDAPConnectionError       = "LDAPConnectionError"
-	reasonAuthenticationDryRunError = "AuthenticationDryRunError"
-	noTLSConfigurationMessage       = "no TLS configuration provided"
-	loadedTLSConfigurationMessage   = "loaded TLS configuration"
+	typeBindSecretValid           = "BindSecretValid"
+	typeTLSConfigurationValid     = "TLSConfigurationValid"
+	typeLDAPConnectionValid       = "LDAPConnectionValid"
+	reasonLDAPConnectionError     = "LDAPConnectionError"
+	noTLSConfigurationMessage     = "no TLS configuration provided"
+	loadedTLSConfigurationMessage = "loaded TLS configuration"
 )
 
 var (
@@ -196,10 +195,6 @@ func (c *ldapWatcherController) validateFinishedConfig(ctx context.Context, upst
 	testConnectionTimeout, cancelFunc := context.WithTimeout(ctx, testLDAPConnectionTimeout)
 	defer cancelFunc()
 
-	if len(upstream.Spec.DryRunAuthenticationUsername) > 0 {
-		return c.dryRunAuthentication(testConnectionTimeout, upstream, ldapProvider, currentSecretVersion)
-	}
-
 	return c.testConnection(testConnectionTimeout, upstream, config, ldapProvider, currentSecretVersion)
 }
 
@@ -227,47 +222,6 @@ func (c *ldapWatcherController) testConnection(
 		Reason: reasonSuccess,
 		Message: fmt.Sprintf(`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 			config.Host, config.BindUsername, upstream.Spec.Bind.SecretName, currentSecretVersion),
-	}
-}
-
-func (c *ldapWatcherController) dryRunAuthentication(
-	ctx context.Context,
-	upstream *v1alpha1.LDAPIdentityProvider,
-	ldapProvider *upstreamldap.Provider,
-	currentSecretVersion string,
-) *v1alpha1.Condition {
-	authResponse, authenticated, err := ldapProvider.DryRunAuthenticateUser(ctx, upstream.Spec.DryRunAuthenticationUsername)
-	if err != nil {
-		return &v1alpha1.Condition{
-			Type:   typeLDAPConnectionValid,
-			Status: v1alpha1.ConditionFalse,
-			Reason: reasonAuthenticationDryRunError,
-			Message: fmt.Sprintf(`failed authentication dry run for end user "%s": %s`,
-				upstream.Spec.DryRunAuthenticationUsername, err.Error()),
-		}
-	}
-
-	if !authenticated {
-		// Since we aren't doing a real auth with a password that could be wrong, the only reason we should get
-		// an unauthenticated response without an error is when the username was wrong.
-		return &v1alpha1.Condition{
-			Type:   typeLDAPConnectionValid,
-			Status: v1alpha1.ConditionFalse,
-			Reason: reasonAuthenticationDryRunError,
-			Message: fmt.Sprintf(`failed authentication dry run for end user "%s": user not found`,
-				upstream.Spec.DryRunAuthenticationUsername),
-		}
-	}
-
-	return &v1alpha1.Condition{
-		Type:   typeLDAPConnectionValid,
-		Status: v1alpha1.ConditionTrue,
-		Reason: reasonSuccess,
-		Message: fmt.Sprintf(
-			`successful authentication dry run for end user "%s": selected username "%s" and UID "%s" [validated with Secret "%s" at version "%s"]`,
-			upstream.Spec.DryRunAuthenticationUsername,
-			authResponse.User.GetName(), authResponse.User.GetUID(),
-			upstream.Spec.Bind.SecretName, currentSecretVersion),
 	}
 }
 

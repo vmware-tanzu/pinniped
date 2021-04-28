@@ -12,8 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-ldap/ldap/v3"
-
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -664,123 +662,6 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				Status: v1alpha1.LDAPIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
-				},
-			}},
-		},
-		{
-			name: "when DryRunAuthenticationUsername is specified and a successful dry run authentication is performed",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
-				upstream.Spec.DryRunAuthenticationUsername = "endUserUsername"
-			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
-			setupMocks: func(conn *mockldapconn.MockConn) {
-				// Should perform a full auth dry run.
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Search(gomock.Any()).Return(&ldap.SearchResult{
-					Entries: []*ldap.Entry{
-						{
-							DN: "testFoundUserDN",
-							Attributes: []*ldap.EntryAttribute{
-								ldap.NewEntryAttribute(testUsernameAttrName, []string{"testDownstreamUsername"}),
-								ldap.NewEntryAttribute(testUIDAttrName, []string{"testDownstreamUID"}),
-							},
-						},
-					},
-				}, nil).Times(1)
-				conn.EXPECT().Close().Times(1)
-			},
-			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstream},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
-					Phase: "Ready",
-					Conditions: []v1alpha1.Condition{
-						bindSecretValidTrueCondition(1234),
-						{
-							Type:               "LDAPConnectionValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message: fmt.Sprintf(
-								`successful authentication dry run for end user "%s": selected username "%s" and UID "%s" [validated with Secret "%s" at version "%s"]`,
-								"endUserUsername", "testDownstreamUsername", "testDownstreamUID", testSecretName, "4242"),
-							ObservedGeneration: 1234,
-						},
-						tlsConfigurationValidLoadedTrueCondition(1234),
-					},
-				},
-			}},
-		},
-		{
-			name: "when DryRunAuthenticationUsername is specified and the dry run authentication returns an error",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
-				upstream.Spec.DryRunAuthenticationUsername = "endUserUsername"
-			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
-			setupMocks: func(conn *mockldapconn.MockConn) {
-				// Failure during a full auth dry run.
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Search(gomock.Any()).Return(nil, errors.New("some dry run error")).Times(1)
-				conn.EXPECT().Close().Times(1)
-			},
-			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
-			wantResultingCache: []*upstreamldap.ProviderConfig{},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
-					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
-						bindSecretValidTrueCondition(1234),
-						{
-							Type:               "LDAPConnectionValid",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "AuthenticationDryRunError",
-							Message: fmt.Sprintf(
-								`failed authentication dry run for end user "%s": error searching for user "%s": some dry run error`,
-								"endUserUsername", "endUserUsername"),
-							ObservedGeneration: 1234,
-						},
-						tlsConfigurationValidLoadedTrueCondition(1234),
-					},
-				},
-			}},
-		},
-		{
-			name: "when DryRunAuthenticationUsername is specified and the dry run authentication returns unauthenticated without an error",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
-				upstream.Spec.DryRunAuthenticationUsername = "endUserUsername"
-			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
-			setupMocks: func(conn *mockldapconn.MockConn) {
-				// Failure during full auth dry run which will cause it to return unauthenticated instead of error.
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Search(gomock.Any()).Return(&ldap.SearchResult{
-					// No search results means the user did not enter a valid username, which is unauthenticated instead of error.
-					Entries: []*ldap.Entry{},
-				}, nil).Times(1)
-				conn.EXPECT().Close().Times(1)
-			},
-			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
-			wantResultingCache: []*upstreamldap.ProviderConfig{},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
-					Phase: "Error",
-					Conditions: []v1alpha1.Condition{
-						bindSecretValidTrueCondition(1234),
-						{
-							Type:               "LDAPConnectionValid",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "AuthenticationDryRunError",
-							Message: fmt.Sprintf(
-								`failed authentication dry run for end user "%s": user not found`,
-								"endUserUsername"),
-							ObservedGeneration: 1234,
-						},
-						tlsConfigurationValidLoadedTrueCondition(1234),
-					},
 				},
 			}},
 		},

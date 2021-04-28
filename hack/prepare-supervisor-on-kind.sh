@@ -158,7 +158,6 @@ spec:
     attributes:
       uid: "$PINNIPED_TEST_LDAP_USER_UNIQUE_ID_ATTRIBUTE_NAME"
       username: "$PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_NAME"
-  dryRunAuthenticationUsername: "$PINNIPED_TEST_LDAP_USER_CN"
 EOF
 
   # Make a Secret for the above LDAPIdentityProvider to describe the bind account.

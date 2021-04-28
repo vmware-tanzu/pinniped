@@ -100,28 +100,6 @@ type LDAPIdentityProviderSpec struct {
 
 	// UserSearch contains the configuration for searching for a user by name in the LDAP provider.
 	UserSearch LDAPIdentityProviderUserSearch `json:"userSearch,omitempty"`
-
-	// DryRunAuthenticationUsername influences how the LDAPIdentityProvider's configuration is validated.
-	// When DryRunAuthenticationUsername is blank, the LDAPIdentityProvider will be validated by opening a connection
-	// to the LDAP server using the Host and TLS settings and also will bind using the Bind settings. The success
-	// or failure of the connect and bind will be reflected in the LDAPIdentityProvider's status conditions array.
-	// When DryRunAuthenticationUsername is not blank, the LDAPIdentityProvider will be validated by opening a
-	// connection to the LDAP server and performing a full dry run of authenticating as the end user with the username
-	// specified by DryRunAuthenticationUsername. The dry run will act as if the correct password were specified for
-	// that end user during the authentication. This will test all of the configuration options of the
-	// LDAPIdentityProvider. The success or failure of the authentication dry run will be reflected in the
-	// LDAPIdentityProvider's status conditions array, along with details of what username, UID, and group memberships
-	// were selected for the specified user. If the dry run fails, then that user would not be able to authenticate
-	// in a real authentication situation either, so the LDAPIdentityProvider's Status.Phase will be set to "Error".
-	// Therefore, the specified DryRunAuthenticationUsername must be a valid username of a real user who should be able
-	// to authenticate given all of the LDAPIdentityProvider's configuration. For example, if the UserSearch
-	// configuration were set up such that an end user should log in using their email address as their username, then
-	// the DryRunAuthenticationUsername should be the actual email address of a valid user who will be found in the LDAP
-	// server by the UserSearch criteria. Once you have used DryRunAuthenticationUsername to validate your
-	// LDAPIdentityProvider's configuration, you might choose to remove the DryRunAuthenticationUsername configuration
-	// if you are concerned that the user's LDAP account could change in the future, e.g. if the account could become
-	// disabled in the future.
-	DryRunAuthenticationUsername string `json:"dryRunAuthenticationUsername,omitempty"`
 }
 
 // LDAPIdentityProvider describes the configuration of an upstream Lightweight Directory Access

@@ -67,7 +67,7 @@ func TestSupervisorLogin(t *testing.T) {
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 		},
 		{
-			name: "ldap with email as username and with dry run",
+			name: "ldap with email as username",
 			createIDP: func(t *testing.T) {
 				t.Helper()
 				secret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
@@ -92,12 +92,10 @@ func TestSupervisorLogin(t *testing.T) {
 							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
 						},
 					},
-					DryRunAuthenticationUsername: env.SupervisorUpstreamLDAP.TestUserMailAttributeValue,
 				}, idpv1alpha1.LDAPPhaseReady)
 				expectedMsg := fmt.Sprintf(
-					`successful authentication dry run for end user "%s": selected username "%s" and UID "%s" [validated with Secret "%s" at version "%s"]`,
-					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, env.SupervisorUpstreamLDAP.TestUserMailAttributeValue,
-					env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue,
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
 					secret.Name, secret.ResourceVersion,
 				)
 				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
@@ -118,7 +116,7 @@ func TestSupervisorLogin(t *testing.T) {
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue),
 		},
 		{
-			name: "ldap with CN as username and without dry run", // try another variation of configuration options
+			name: "ldap with CN as username ", // try another variation of configuration options
 			createIDP: func(t *testing.T) {
 				t.Helper()
 				secret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
@@ -143,7 +141,6 @@ func TestSupervisorLogin(t *testing.T) {
 							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
 						},
 					},
-					DryRunAuthenticationUsername: "", // try without dry run
 				}, idpv1alpha1.LDAPPhaseReady)
 				expectedMsg := fmt.Sprintf(
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,

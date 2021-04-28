@@ -145,7 +145,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--issuer", "test-issuer",
 			},
 			loginErr:         fmt.Errorf("some login error"),
-			wantOptionsCount: 3,
+			wantOptionsCount: 4,
 			wantError:        true,
 			wantStderr: here.Doc(`
 				Error: could not complete Pinniped login: some login error
@@ -162,7 +162,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--concierge-endpoint", "https://127.0.0.1:1234/",
 			},
 			conciergeErr:     fmt.Errorf("some concierge error"),
-			wantOptionsCount: 3,
+			wantOptionsCount: 4,
 			wantError:        true,
 			wantStderr: here.Doc(`
 				Error: could not complete Concierge credential exchange: some concierge error
@@ -175,7 +175,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--issuer", "test-issuer",
 			},
 			env:              map[string]string{"PINNIPED_DEBUG": "true"},
-			wantOptionsCount: 3,
+			wantOptionsCount: 4,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 			wantLogs: []string{
 				"\"level\"=0 \"msg\"=\"Pinniped login: Performing OIDC login\"  \"client id\"=\"test-client-id\" \"issuer\"=\"test-issuer\"",
@@ -203,7 +203,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--credential-cache", testutil.TempDir(t) + "/credentials.yaml",
 			},
 			env:              map[string]string{"PINNIPED_DEBUG": "true"},
-			wantOptionsCount: 7,
+			wantOptionsCount: 8,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"exchanged-token"}}` + "\n",
 			wantLogs: []string{
 				"\"level\"=0 \"msg\"=\"Pinniped login: Performing OIDC login\"  \"client id\"=\"test-client-id\" \"issuer\"=\"test-issuer\"",

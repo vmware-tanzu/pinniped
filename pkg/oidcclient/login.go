@@ -50,6 +50,7 @@ const (
 type handlerState struct {
 	// Basic parameters.
 	ctx      context.Context
+	logger   plog.PLogger
 	issuer   string
 	clientID string
 	scopes   []string
@@ -94,6 +95,15 @@ type Option func(*handlerState) error
 func WithContext(ctx context.Context) Option {
 	return func(h *handlerState) error {
 		h.ctx = ctx
+		return nil
+	}
+}
+
+// WithLogger specifies a PLogger to use with the login.
+// If not specified this will default to a new logger.
+func WithLogger(logger plog.PLogger) Option {
+	return func(h *handlerState) error {
+		h.logger = logger
 		return nil
 	}
 }
@@ -261,7 +271,7 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 	// If the ID token is still valid for a bit, return it immediately and skip the rest of the flow.
 	cached := h.cache.GetToken(cacheKey)
 	if cached != nil && cached.IDToken != nil && time.Until(cached.IDToken.Expiry.Time) > minIDTokenValidity {
-		plog.Debug("Pinniped: Found unexpired cached token")
+		h.logger.Debug("Found unexpired cached token.")
 		return cached, nil
 	}
 
@@ -329,7 +339,7 @@ func (h *handlerState) initOIDCDiscovery() error {
 		return nil
 	}
 
-	plog.Debug("Pinniped: Performing OIDC discovery", "issuer", h.issuer)
+	h.logger.Debug("Performing OIDC discovery", "issuer", h.issuer)
 	var err error
 	h.provider, err = oidc.NewProvider(h.ctx, h.issuer)
 	if err != nil {
@@ -346,7 +356,7 @@ func (h *handlerState) initOIDCDiscovery() error {
 }
 
 func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidctypes.Token, error) {
-	plog.Debug("Pinniped: Performing RFC8693 token exchange", "requested audience", h.requestedAudience)
+	h.logger.Debug("Performing RFC8693 token exchange", "requestedAudience", h.requestedAudience)
 	// Perform OIDC discovery. This may have already been performed if there was not a cached base token.
 	if err := h.initOIDCDiscovery(); err != nil {
 		return nil, err
@@ -417,7 +427,7 @@ func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidcty
 }
 
 func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *oidctypes.RefreshToken) (*oidctypes.Token, error) {
-	plog.Debug("refreshing cached token")
+	h.logger.Debug("Refreshing cached token.")
 	refreshSource := h.oauth2Config.TokenSource(ctx, &oauth2.Token{RefreshToken: refreshToken.Token})
 
 	refreshed, err := refreshSource.Token()

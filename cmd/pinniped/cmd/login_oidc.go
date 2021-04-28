@@ -134,6 +134,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	// Initialize the login handler.
 	opts := []oidcclient.Option{
 		oidcclient.WithContext(cmd.Context()),
+		oidcclient.WithLogger(*pLogger),
 		oidcclient.WithScopes(flags.scopes),
 		oidcclient.WithSessionCache(sessionCache),
 	}

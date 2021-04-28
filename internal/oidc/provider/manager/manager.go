@@ -102,7 +102,7 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 			wrapGetter(incomingProvider.Issuer(), m.secretCache.GetStateEncoderBlockKey),
 		)
 
-		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuer)
+		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuer, m.upstreamIDPs)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.JWKSEndpointPath)] = jwks.NewHandler(issuer, m.dynamicJWKSProvider)
 

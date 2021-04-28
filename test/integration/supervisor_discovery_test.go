@@ -483,7 +483,8 @@ func requireWellKnownEndpointIsWorking(t *testing.T, supervisorScheme, superviso
       "response_types_supported": ["code"],
       "claims_supported": ["groups"],
       "subject_types_supported": ["public"],
-      "id_token_signing_alg_values_supported": ["ES256"]
+      "id_token_signing_alg_values_supported": ["ES256"],
+	  "pinniped_idps": []
     }`)
 	expectedJSON := fmt.Sprintf(expectedResultTemplate, issuerName, issuerName, issuerName, issuerName)
 

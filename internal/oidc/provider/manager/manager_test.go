@@ -52,6 +52,8 @@ func TestManager(t *testing.T) {
 			issuer2DifferentCaseHostname = "https://exAmPlE.Com/some/path/more/deeply/nested/path"
 			issuer2KeyID                 = "issuer2-key"
 			upstreamIDPAuthorizationURL  = "https://test-upstream.com/auth"
+			upstreamIDPName              = "test-idp"
+			upstreamIDPType              = "oidc"
 			downstreamClientID           = "pinniped-cli"
 			downstreamRedirectURL        = "http://127.0.0.1:12345/callback"
 
@@ -68,7 +70,7 @@ func TestManager(t *testing.T) {
 			return req
 		}
 
-		requireDiscoveryRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedIssuerInResponse string) {
+		requireDiscoveryRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedIssuer, expectedIDPName, expectedIDPType string) {
 			recorder := httptest.NewRecorder()
 
 			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.WellKnownEndpointPath+requestURLSuffix))
@@ -82,7 +84,10 @@ func TestManager(t *testing.T) {
 			parsedDiscoveryResult := discovery.Metadata{}
 			err = json.Unmarshal(responseBody, &parsedDiscoveryResult)
 			r.NoError(err)
-			r.Equal(expectedIssuerInResponse, parsedDiscoveryResult.Issuer)
+			r.Equal(expectedIssuer, parsedDiscoveryResult.Issuer)
+			r.Len(parsedDiscoveryResult.IDPs, 1)
+			r.Equal(expectedIDPName, parsedDiscoveryResult.IDPs[0].Name)
+			r.Equal(expectedIDPType, parsedDiscoveryResult.IDPs[0].Type)
 		}
 
 		requireAuthorizationRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedRedirectLocationPrefix string) (string, string) {
@@ -222,7 +227,7 @@ func TestManager(t *testing.T) {
 			parsedUpstreamIDPAuthorizationURL, err := url.Parse(upstreamIDPAuthorizationURL)
 			r.NoError(err)
 			idpLister := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(&oidctestutil.TestUpstreamOIDCIdentityProvider{
-				Name:             "test-idp",
+				Name:             upstreamIDPName,
 				ClientID:         "test-client-id",
 				AuthorizationURL: *parsedUpstreamIDPAuthorizationURL,
 				Scopes:           []string{"test-scope"},
@@ -284,14 +289,14 @@ func TestManager(t *testing.T) {
 		}
 
 		requireRoutesMatchingRequestsToAppropriateProvider := func() {
-			requireDiscoveryRequestToBeHandled(issuer1, "", issuer1)
-			requireDiscoveryRequestToBeHandled(issuer2, "", issuer2)
-			requireDiscoveryRequestToBeHandled(issuer2, "?some=query", issuer2)
+			requireDiscoveryRequestToBeHandled(issuer1, "", issuer1, upstreamIDPName, upstreamIDPType)
+			requireDiscoveryRequestToBeHandled(issuer2, "", issuer2, upstreamIDPName, upstreamIDPType)
+			requireDiscoveryRequestToBeHandled(issuer2, "?some=query", issuer2, upstreamIDPName, upstreamIDPType)
 
 			// Hostnames are case-insensitive, so test that we can handle that.
-			requireDiscoveryRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1)
-			requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2)
-			requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2)
+			requireDiscoveryRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1, upstreamIDPName, upstreamIDPType)
+			requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2, upstreamIDPName, upstreamIDPType)
+			requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2, upstreamIDPName, upstreamIDPType)
 
 			issuer1JWKS := requireJWKSRequestToBeHandled(issuer1, "", issuer1KeyID)
 			issuer2JWKS := requireJWKSRequestToBeHandled(issuer2, "", issuer2KeyID)

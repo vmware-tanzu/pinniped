@@ -135,6 +135,15 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 		require.EqualError(t, err, "invalid TLS configuration: illegal base64 data at input byte 7")
 	})
 
+	t.Run("invalid pem data", func(t *testing.T) {
+		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
+			Endpoint: "https://example.com",
+			TLS:      &auth1alpha1.TLSSpec{CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte("bad data"))},
+		}, ioutil.TempFile, clientcmd.WriteToFile)
+		require.Nil(t, res)
+		require.EqualError(t, err, "invalid TLS configuration: certificateAuthorityData is not valid PEM")
+	})
+
 	t.Run("valid config with no TLS spec", func(t *testing.T) {
 		res, err := newWebhookAuthenticator(&auth1alpha1.WebhookAuthenticatorSpec{
 			Endpoint: "https://example.com",

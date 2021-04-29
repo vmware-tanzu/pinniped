@@ -16,6 +16,7 @@ import (
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/valuelesscontext"
 )
 
 // ErrNoSuchAuthenticator is returned by Cache.AuthenticateTokenCredentialRequest() when the requested authenticator is not configured.
@@ -101,7 +102,7 @@ func (c *Cache) AuthenticateTokenCredentialRequest(ctx context.Context, req *log
 
 	// The incoming context could have an audience. Since we do not want to handle audiences right now, do not pass it
 	// through directly to the authentication webhook.
-	ctx = valuelessContext{ctx}
+	ctx = valuelesscontext.New(ctx)
 
 	// Call the selected authenticator.
 	resp, authenticated, err := val.AuthenticateToken(ctx, req.Spec.Token)
@@ -119,7 +120,3 @@ func (c *Cache) AuthenticateTokenCredentialRequest(ctx context.Context, req *log
 	}
 	return respUser, nil
 }
-
-type valuelessContext struct{ context.Context }
-
-func (valuelessContext) Value(interface{}) interface{} { return nil }

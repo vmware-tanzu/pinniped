@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	authenticationv1 "k8s.io/api/authentication/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,6 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	auditinternal "k8s.io/apiserver/pkg/apis/audit"
 	"k8s.io/apiserver/pkg/audit/policy"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
+	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/filterlatency"
@@ -45,6 +49,7 @@ import (
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/valuelesscontext"
 )
 
 // FactoryFunc is a function which can create an impersonator server.
@@ -176,6 +181,11 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 			// See the genericapiserver.DefaultBuildHandlerChain func for details.
 			handler = defaultBuildHandlerChainFunc(handler, c)
 
+			// we need to grab the bearer token before WithAuthentication deletes it.
+			handler = filterlatency.TrackCompleted(handler)
+			handler = withBearerTokenPreservation(handler)
+			handler = filterlatency.TrackStarted(handler, "bearertokenpreservation")
+
 			// Always set security headers so browsers do the right thing.
 			handler = filterlatency.TrackCompleted(handler)
 			handler = securityheader.Wrap(handler)
@@ -188,6 +198,9 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		// TODO: wire up the real std out logging audit backend based on plog log level
 		serverConfig.AuditPolicyChecker = policy.FakeChecker(auditinternal.LevelMetadata, nil)
 		serverConfig.AuditBackend = &auditfake.Backend{}
+
+		// if we ever start unioning a TCR bearer token authenticator with serverConfig.Authenticator
+		// then we will need to update the related assumption in tokenPassthroughRoundTripper
 
 		delegatingAuthorizer := serverConfig.Authorization.Authorizer
 		nestedImpersonationAuthorizer := &comparableAuthorizer{
@@ -290,6 +303,35 @@ func (f authorizerFunc) Authorize(ctx context.Context, a authorizer.Attributes) 
 	return f(ctx, a)
 }
 
+func withBearerTokenPreservation(delegate http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// this looks a bit hacky but lets us avoid writing any logic for parsing out the bearer token
+		var reqToken string
+		_, _, _ = bearertoken.New(authenticator.TokenFunc(func(_ context.Context, token string) (*authenticator.Response, bool, error) {
+			reqToken = token
+			return nil, false, nil
+		})).AuthenticateRequest(r)
+
+		// smuggle the token through the context.  this does mean that we need to avoid logging the context.
+		if len(reqToken) != 0 {
+			ctx := context.WithValue(r.Context(), tokenKey, reqToken)
+			r = r.WithContext(ctx)
+		}
+
+		delegate.ServeHTTP(w, r)
+	})
+}
+
+func tokenFrom(ctx context.Context) string {
+	token, _ := ctx.Value(tokenKey).(string)
+	return token
+}
+
+// contextKey type is unexported to prevent collisions.
+type contextKey int
+
+const tokenKey contextKey = iota
+
 func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapiserver.Config) http.Handler, error) {
 	serverURL, err := url.Parse(restConfig.Host)
 	if err != nil {
@@ -300,10 +342,18 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 	if err != nil {
 		return nil, fmt.Errorf("could not get http/1.1 round tripper: %w", err)
 	}
+	http1RoundTripperAnonymous, err := getTransportForProtocol(rest.AnonymousClientConfig(restConfig), "http/1.1")
+	if err != nil {
+		return nil, fmt.Errorf("could not get http/1.1 anonymous round tripper: %w", err)
+	}
 
 	http2RoundTripper, err := getTransportForProtocol(restConfig, "h2")
 	if err != nil {
 		return nil, fmt.Errorf("could not get http/2.0 round tripper: %w", err)
+	}
+	http2RoundTripperAnonymous, err := getTransportForProtocol(rest.AnonymousClientConfig(restConfig), "h2")
+	if err != nil {
+		return nil, fmt.Errorf("could not get http/2.0 anonymous round tripper: %w", err)
 	}
 
 	return func(c *genericapiserver.Config) http.Handler {
@@ -347,15 +397,18 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 				return
 			}
 
+			// grab the request's bearer token if present.  this is optional and does not fail the request if missing.
+			token := tokenFrom(r.Context())
+
 			// KAS only supports upgrades via http/1.1 to websockets/SPDY (upgrades never use http/2.0)
 			// Thus we default to using http/2.0 when the request is not an upgrade, otherwise we use http/1.1
-			baseRT := http2RoundTripper
+			baseRT, baseRTAnonymous := http2RoundTripper, http2RoundTripperAnonymous
 			isUpgradeRequest := httpstream.IsUpgradeRequest(r)
 			if isUpgradeRequest {
-				baseRT = http1RoundTripper
+				baseRT, baseRTAnonymous = http1RoundTripper, http1RoundTripperAnonymous
 			}
 
-			rt, err := getTransportForUser(userInfo, baseRT, ae)
+			rt, err := getTransportForUser(r.Context(), userInfo, baseRT, baseRTAnonymous, ae, token, c.Authentication.Authenticator)
 			if err != nil {
 				plog.WarningErr("rejecting request as we cannot act as the current user", err,
 					"url", r.URL.String(),
@@ -413,34 +466,117 @@ func ensureNoImpersonationHeaders(r *http.Request) error {
 	return nil
 }
 
-func getTransportForUser(userInfo user.Info, delegate http.RoundTripper, ae *auditinternal.Event) (http.RoundTripper, error) {
-	if len(userInfo.GetUID()) == 0 {
-		extra, err := buildExtra(userInfo.GetExtra(), ae)
-		if err != nil {
-			return nil, err
-		}
-
-		impersonateConfig := transport.ImpersonationConfig{
-			UserName: userInfo.GetName(),
-			Groups:   userInfo.GetGroups(),
-			Extra:    extra,
-		}
-		// transport.NewImpersonatingRoundTripper clones the request before setting headers
-		// thus it will not accidentally mutate the input request (see http.Handler docs)
-		return transport.NewImpersonatingRoundTripper(impersonateConfig, delegate), nil
+func getTransportForUser(ctx context.Context, userInfo user.Info, delegate, delegateAnonymous http.RoundTripper, ae *auditinternal.Event, token string, authenticator authenticator.Request) (http.RoundTripper, error) {
+	if canImpersonateFully(userInfo) {
+		return standardImpersonationRoundTripper(userInfo, ae, delegate)
 	}
 
-	// 0. in the case of a request that is not attempting to do nested impersonation
-	// 1. if we make the assumption that the TCR API does not issue tokens (or pass the TCR API bearer token
-	//    authenticator into this func - we need to know the authentication cred is something KAS would honor)
-	// 2. then if preserve the incoming authorization header into the request's context
-	// 3. we could reauthenticate it here (it would be a free cache hit)
-	// 4. confirm that it matches the passed in user info (i.e. it was actually the cred used to authenticate and not a client cert)
-	// 5. then we could issue a reverse proxy request using an anonymous rest config and the bearer token
-	// 6. thus instead of impersonating the user, we would just be passing their request through
-	// 7. this would preserve the UID info and thus allow us to safely support all token based auth
-	// 8. the above would be safe even if in the future Kube started supporting UIDs asserted by client certs
-	return nil, constable.Error("unexpected uid")
+	return tokenPassthroughRoundTripper(ctx, delegateAnonymous, ae, token, authenticator)
+}
+
+func canImpersonateFully(userInfo user.Info) bool {
+	// nolint: gosimple  // this structure is on purpose because we plan to expand this function
+	if len(userInfo.GetUID()) == 0 {
+		return true
+	}
+
+	// once kube supports UID impersonation, add logic to detect if the KAS is
+	// new enough to have this functionality and return true in that case as well
+	return false
+}
+
+func standardImpersonationRoundTripper(userInfo user.Info, ae *auditinternal.Event, delegate http.RoundTripper) (http.RoundTripper, error) {
+	extra, err := buildExtra(userInfo.GetExtra(), ae)
+	if err != nil {
+		return nil, err
+	}
+
+	impersonateConfig := transport.ImpersonationConfig{
+		UserName: userInfo.GetName(),
+		Groups:   userInfo.GetGroups(),
+		Extra:    extra,
+	}
+	// transport.NewImpersonatingRoundTripper clones the request before setting headers
+	// thus it will not accidentally mutate the input request (see http.Handler docs)
+	return transport.NewImpersonatingRoundTripper(impersonateConfig, delegate), nil
+}
+
+func tokenPassthroughRoundTripper(ctx context.Context, delegateAnonymous http.RoundTripper, ae *auditinternal.Event, token string, authenticator authenticator.Request) (http.RoundTripper, error) {
+	// all code below assumes KAS does not support UID impersonation because that case is handled in the standard path
+
+	// it also assumes that the TCR API does not issue tokens - if this assumption changes, we will need
+	// some way to distinguish a token that is only valid against this impersonation proxy and not against KAS.
+	// this code will fail closed because said TCR token would not work against KAS and the request would fail.
+
+	// if we get here we know the final user info had a UID
+	// if the original user is also performing a nested impersonation, it means that said nested
+	// impersonation is trying to impersonate a UID since final user info == ae.ImpersonatedUser
+	// we know this KAS does not support UID impersonation so this request must be rejected
+	if ae.ImpersonatedUser != nil {
+		return nil, constable.Error("unable to impersonate uid")
+	}
+
+	// see what KAS thinks this token translates into
+	// this is important because certs have precedence over tokens and we want
+	// to make sure that we do not get confused and pass along the wrong token
+	tokenUser, err := tokenReview(ctx, token, authenticator)
+	if err != nil {
+		return nil, err
+	}
+
+	// we want to compare the result of the token authentication with the original user that made the request
+	// if the user who made the request and the token do not match, we cannot go any further at this point
+	if !apiequality.Semantic.DeepEqual(ae.User, tokenUser) {
+		// this info leak seems fine for trace level logs
+		plog.Trace("failed to passthrough token due to user mismatch",
+			"original-username", ae.User.Username,
+			"original-uid", ae.User.UID,
+			"token-username", tokenUser.Username,
+			"token-uid", tokenUser.UID,
+		)
+		return nil, constable.Error("token authenticated as a different user")
+	}
+
+	// now we know that if we send this token to KAS, it will authenticate correctly
+	return transport.NewBearerAuthRoundTripper(token, delegateAnonymous), nil
+}
+
+func tokenReview(ctx context.Context, token string, authenticator authenticator.Request) (authenticationv1.UserInfo, error) {
+	if len(token) == 0 {
+		return authenticationv1.UserInfo{}, constable.Error("no token on request")
+	}
+
+	// create a header that contains nothing but the token
+	// an astute observer may ask "but what about the token's audience?"
+	// in this case, we want to leave audiences unset per the token review docs:
+	// > If no audiences are provided, the audience will default to the audience of the Kubernetes apiserver.
+	// i.e. we want to make sure that the given token is valid against KAS
+	fakeReq := &http.Request{Header: http.Header{}}
+	fakeReq.Header.Set("Authorization", "Bearer "+token)
+
+	// propagate cancellation of parent context (without any values such as audience)
+	fakeReq = fakeReq.WithContext(valuelesscontext.New(ctx))
+
+	// this will almost always be a free call that hits our 10 second cache TTL
+	resp, ok, err := authenticator.AuthenticateRequest(fakeReq)
+	if err != nil {
+		return authenticationv1.UserInfo{}, err
+	}
+	if !ok {
+		return authenticationv1.UserInfo{}, constable.Error("token failed to authenticate")
+	}
+
+	tokenUser := authenticationv1.UserInfo{
+		Username: resp.User.GetName(),
+		UID:      resp.User.GetUID(),
+		Groups:   resp.User.GetGroups(),
+		Extra:    make(map[string]authenticationv1.ExtraValue, len(resp.User.GetExtra())),
+	}
+	for k, v := range resp.User.GetExtra() {
+		tokenUser.Extra[k] = v
+	}
+
+	return tokenUser, nil
 }
 
 func buildExtra(extra map[string][]string, ae *auditinternal.Event) (map[string][]string, error) {

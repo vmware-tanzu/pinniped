@@ -5,7 +5,9 @@
 package authenticator
 
 import (
+	"crypto/x509"
 	"encoding/base64"
+	"fmt"
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 )
@@ -22,8 +24,18 @@ type Closer interface {
 // nil CA bundle will be returned. If the provided spec contains a CA bundle that is not properly
 // encoded, an error will be returned.
 func CABundle(spec *auth1alpha1.TLSSpec) ([]byte, error) {
-	if spec == nil {
+	if spec == nil || len(spec.CertificateAuthorityData) == 0 {
 		return nil, nil
 	}
-	return base64.StdEncoding.DecodeString(spec.CertificateAuthorityData)
+
+	pem, err := base64.StdEncoding.DecodeString(spec.CertificateAuthorityData)
+	if err != nil {
+		return nil, err
+	}
+
+	if ok := x509.NewCertPool().AppendCertsFromPEM(pem); !ok {
+		return nil, fmt.Errorf("certificateAuthorityData is not valid PEM")
+	}
+
+	return pem, nil
 }

@@ -180,19 +180,6 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 		return fmt.Errorf("invalid API group suffix: %w", err)
 	}
 
-	execConfig := clientcmdapi.ExecConfig{
-		APIVersion: clientauthenticationv1beta1.SchemeGroupVersion.String(),
-		Args:       []string{},
-		Env:        []clientcmdapi.ExecEnvVar{},
-	}
-
-	var err error
-	execConfig.Command, err = deps.getPathToSelf()
-	if err != nil {
-		return fmt.Errorf("could not determine the Pinniped executable path: %w", err)
-	}
-	execConfig.ProvideClusterInfo = true
-
 	clientConfig := newClientConfig(flags.kubeconfigPath, flags.kubeconfigContextOverride)
 	currentKubeConfig, err := clientConfig.RawConfig()
 	if err != nil {
@@ -236,15 +223,6 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 		if err := discoverAuthenticatorParams(authenticator, &flags, deps.log); err != nil {
 			return err
 		}
-		// Append the flags to configure the Concierge credential exchange at runtime.
-		execConfig.Args = append(execConfig.Args,
-			"--enable-concierge",
-			"--concierge-api-group-suffix="+flags.concierge.apiGroupSuffix,
-			"--concierge-authenticator-name="+flags.concierge.authenticatorName,
-			"--concierge-authenticator-type="+flags.concierge.authenticatorType,
-			"--concierge-endpoint="+flags.concierge.endpoint,
-			"--concierge-ca-bundle-data="+base64.StdEncoding.EncodeToString(flags.concierge.caBundle),
-		)
 
 		// Point kubectl at the concierge endpoint.
 		cluster.Server = flags.concierge.endpoint
@@ -258,6 +236,45 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 		}
 	}
 
+	execConfig, err := newExecConfig(deps, flags)
+	if err != nil {
+		return err
+	}
+
+	kubeconfig := newExecKubeconfig(cluster, execConfig, newKubeconfigNames)
+	if err := validateKubeconfig(ctx, flags, kubeconfig, deps.log); err != nil {
+		return err
+	}
+
+	return writeConfigAsYAML(out, kubeconfig)
+}
+
+func newExecConfig(deps kubeconfigDeps, flags getKubeconfigParams) (*clientcmdapi.ExecConfig, error) {
+	execConfig := &clientcmdapi.ExecConfig{
+		APIVersion:         clientauthenticationv1beta1.SchemeGroupVersion.String(),
+		Args:               []string{},
+		Env:                []clientcmdapi.ExecEnvVar{},
+		ProvideClusterInfo: true,
+	}
+
+	var err error
+	execConfig.Command, err = deps.getPathToSelf()
+	if err != nil {
+		return nil, fmt.Errorf("could not determine the Pinniped executable path: %w", err)
+	}
+
+	if !flags.concierge.disabled {
+		// Append the flags to configure the Concierge credential exchange at runtime.
+		execConfig.Args = append(execConfig.Args,
+			"--enable-concierge",
+			"--concierge-api-group-suffix="+flags.concierge.apiGroupSuffix,
+			"--concierge-authenticator-name="+flags.concierge.authenticatorName,
+			"--concierge-authenticator-type="+flags.concierge.authenticatorType,
+			"--concierge-endpoint="+flags.concierge.endpoint,
+			"--concierge-ca-bundle-data="+base64.StdEncoding.EncodeToString(flags.concierge.caBundle),
+		)
+	}
+
 	// If --credential-cache is set, pass it through.
 	if flags.credentialCachePathSet {
 		execConfig.Args = append(execConfig.Args, "--credential-cache="+flags.credentialCachePath)
@@ -266,7 +283,7 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 	// If one of the --static-* flags was passed, output a config that runs `pinniped login static`.
 	if flags.staticToken != "" || flags.staticTokenEnvName != "" {
 		if flags.staticToken != "" && flags.staticTokenEnvName != "" {
-			return fmt.Errorf("only one of --static-token and --static-token-env can be specified")
+			return nil, fmt.Errorf("only one of --static-token and --static-token-env can be specified")
 		}
 		execConfig.Args = append([]string{"login", "static"}, execConfig.Args...)
 		if flags.staticToken != "" {
@@ -275,18 +292,13 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 		if flags.staticTokenEnvName != "" {
 			execConfig.Args = append(execConfig.Args, "--token-env="+flags.staticTokenEnvName)
 		}
-
-		kubeconfig := newExecKubeconfig(cluster, &execConfig, newKubeconfigNames)
-		if err := validateKubeconfig(ctx, flags, kubeconfig, deps.log); err != nil {
-			return err
-		}
-		return writeConfigAsYAML(out, kubeconfig)
+		return execConfig, nil
 	}
 
 	// Otherwise continue to parse the OIDC-related flags and output a config that runs `pinniped login oidc`.
 	execConfig.Args = append([]string{"login", "oidc"}, execConfig.Args...)
 	if flags.oidc.issuer == "" {
-		return fmt.Errorf("could not autodiscover --oidc-issuer and none was provided")
+		return nil, fmt.Errorf("could not autodiscover --oidc-issuer and none was provided")
 	}
 	execConfig.Args = append(execConfig.Args,
 		"--issuer="+flags.oidc.issuer,
@@ -317,11 +329,8 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 	if flags.oidc.upstreamIDPType != "" {
 		execConfig.Args = append(execConfig.Args, "--upstream-identity-provider-type="+flags.oidc.upstreamIDPType)
 	}
-	kubeconfig := newExecKubeconfig(cluster, &execConfig, newKubeconfigNames)
-	if err := validateKubeconfig(ctx, flags, kubeconfig, deps.log); err != nil {
-		return err
-	}
-	return writeConfigAsYAML(out, kubeconfig)
+
+	return execConfig, nil
 }
 
 type kubeconfigNames struct{ ContextName, UserName, ClusterName string }

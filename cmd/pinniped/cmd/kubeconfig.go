@@ -8,8 +8,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -62,6 +64,8 @@ type getKubeconfigOIDCParams struct {
 	debugSessionCache bool
 	caBundle          caBundleFlag
 	requestAudience   string
+	upstreamIDPName   string
+	upstreamIDPType   string
 }
 
 type getKubeconfigConciergeParams struct {
@@ -89,6 +93,15 @@ type getKubeconfigParams struct {
 	generatedNameSuffix       string
 	credentialCachePath       string
 	credentialCachePathSet    bool
+}
+
+type supervisorDiscoveryResponse struct {
+	PinnipedIDPs []pinnipedIDPResponse `json:"pinniped_idps"`
+}
+
+type pinnipedIDPResponse struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
 }
 
 func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
@@ -128,6 +141,8 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.Var(&flags.oidc.caBundle, "oidc-ca-bundle", "Path to TLS certificate authority bundle (PEM format, optional, can be repeated)")
 	f.BoolVar(&flags.oidc.debugSessionCache, "oidc-debug-session-cache", false, "Print debug logs related to the OpenID Connect session cache")
 	f.StringVar(&flags.oidc.requestAudience, "oidc-request-audience", "", "Request a token with an alternate audience using RFC8693 token exchange")
+	f.StringVar(&flags.oidc.upstreamIDPName, "upstream-identity-provider-name", "", "The name of the upstream identity provider used during login with a Supervisor")
+	f.StringVar(&flags.oidc.upstreamIDPType, "upstream-identity-provider-type", "", "The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap')")
 	f.StringVar(&flags.kubeconfigPath, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to kubeconfig file")
 	f.StringVar(&flags.kubeconfigContextOverride, "kubeconfig-context", "", "Kubeconfig context name (default: current active context)")
 	f.BoolVar(&flags.skipValidate, "skip-validation", false, "Skip final validation of the kubeconfig (default: false)")
@@ -236,6 +251,13 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 		cluster.CertificateAuthorityData = flags.concierge.caBundle
 	}
 
+	// If there is an issuer, and if both upstream flags are not already set, then try to discover Supervisor upstream IDP.
+	if len(flags.oidc.issuer) > 0 && (flags.oidc.upstreamIDPType == "" || flags.oidc.upstreamIDPName == "") {
+		if err := discoverSupervisorUpstreamIDP(ctx, &flags); err != nil {
+			return err
+		}
+	}
+
 	// If --credential-cache is set, pass it through.
 	if flags.credentialCachePathSet {
 		execConfig.Args = append(execConfig.Args, "--credential-cache="+flags.credentialCachePath)
@@ -288,6 +310,12 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 	}
 	if flags.oidc.requestAudience != "" {
 		execConfig.Args = append(execConfig.Args, "--request-audience="+flags.oidc.requestAudience)
+	}
+	if flags.oidc.upstreamIDPName != "" {
+		execConfig.Args = append(execConfig.Args, "--upstream-identity-provider-name="+flags.oidc.upstreamIDPName)
+	}
+	if flags.oidc.upstreamIDPType != "" {
+		execConfig.Args = append(execConfig.Args, "--upstream-identity-provider-type="+flags.oidc.upstreamIDPType)
 	}
 	kubeconfig := newExecKubeconfig(cluster, &execConfig, newKubeconfigNames)
 	if err := validateKubeconfig(ctx, flags, kubeconfig, deps.log); err != nil {
@@ -687,4 +715,55 @@ func hasPendingStrategy(credentialIssuer *configv1alpha1.CredentialIssuer) bool 
 		}
 	}
 	return false
+}
+
+func discoverSupervisorUpstreamIDP(ctx context.Context, flags *getKubeconfigParams) error {
+	issuerDiscoveryURL := flags.oidc.issuer + "/.well-known/openid-configuration"
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, issuerDiscoveryURL, nil)
+	if err != nil {
+		return fmt.Errorf("while forming request to issuer URL: %w", err)
+	}
+
+	transport := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
+	httpClient := http.Client{Transport: transport}
+	if flags.oidc.caBundle != nil {
+		rootCAs := x509.NewCertPool()
+		ok := rootCAs.AppendCertsFromPEM(flags.oidc.caBundle)
+		if !ok {
+			return fmt.Errorf("unable to fetch discovery data from issuer: could not parse CA bundle")
+		}
+		transport.TLSClientConfig.RootCAs = rootCAs
+	}
+
+	response, err := httpClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("unable to fetch discovery data from issuer: %w", err)
+	}
+	defer func() {
+		_ = response.Body.Close()
+	}()
+	if response.StatusCode == http.StatusNotFound {
+		// 404 Not Found is not an error because OIDC discovery is an optional part of the OIDC spec.
+		return nil
+	}
+	if response.StatusCode != http.StatusOK {
+		// Other types of error responses aside from 404 are not expected.
+		return fmt.Errorf("unable to fetch discovery data from issuer: unexpected http response status: %s", response.Status)
+	}
+
+	rawBody, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return fmt.Errorf("unable to fetch discovery data from issuer: could not read response body: %w", err)
+	}
+	var body supervisorDiscoveryResponse
+	err = json.Unmarshal(rawBody, &body)
+	if err != nil {
+		return fmt.Errorf("unable to fetch discovery data from issuer: could not parse response JSON: %w", err)
+	}
+
+	if len(body.PinnipedIDPs) > 0 {
+		flags.oidc.upstreamIDPName = body.PinnipedIDPs[0].Name
+		flags.oidc.upstreamIDPType = body.PinnipedIDPs[0].Type
+	}
+	return nil
 }

@@ -733,7 +733,10 @@ func discoverSupervisorUpstreamIDP(ctx context.Context, flags *getKubeconfigPara
 		return fmt.Errorf("while forming request to issuer URL: %w", err)
 	}
 
-	transport := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+		Proxy:           http.ProxyFromEnvironment,
+	}
 	httpClient := http.Client{Transport: transport}
 	if flags.oidc.caBundle != nil {
 		rootCAs := x509.NewCertPool()
@@ -770,9 +773,67 @@ func discoverSupervisorUpstreamIDP(ctx context.Context, flags *getKubeconfigPara
 		return fmt.Errorf("unable to fetch discovery data from issuer: could not parse response JSON: %w", err)
 	}
 
-	if len(body.PinnipedIDPs) > 0 {
+	if len(body.PinnipedIDPs) == 1 {
 		flags.oidc.upstreamIDPName = body.PinnipedIDPs[0].Name
 		flags.oidc.upstreamIDPType = body.PinnipedIDPs[0].Type
+	} else if len(body.PinnipedIDPs) > 1 {
+		idpName, idpType, err := selectUpstreamIDP(body.PinnipedIDPs, flags.oidc.upstreamIDPName, flags.oidc.upstreamIDPType)
+		if err != nil {
+			return err
+		}
+		flags.oidc.upstreamIDPName = idpName
+		flags.oidc.upstreamIDPType = idpType
 	}
 	return nil
+}
+
+func selectUpstreamIDP(pinnipedIDPs []pinnipedIDPResponse, idpName, idpType string) (string, string, error) {
+	pinnipedIDPsString, _ := json.Marshal(pinnipedIDPs)
+	switch {
+	case idpType != "":
+		discoveredName := ""
+		for _, idp := range pinnipedIDPs {
+			if idp.Type == idpType {
+				if discoveredName != "" {
+					return "", "", fmt.Errorf(
+						"multiple Supervisor upstream identity providers of type \"%s\" were found,"+
+							" so the --upstream-identity-provider-name flag must be specified. "+
+							"Found these upstreams: %s",
+						idpType, pinnipedIDPsString)
+				}
+				discoveredName = idp.Name
+			}
+		}
+		if discoveredName == "" {
+			return "", "", fmt.Errorf(
+				"no Supervisor upstream identity providers of type \"%s\" were found."+
+					" Found these upstreams: %s", idpType, pinnipedIDPsString)
+		}
+		return discoveredName, idpType, nil
+	case idpName != "":
+		discoveredType := ""
+		for _, idp := range pinnipedIDPs {
+			if idp.Name == idpName {
+				if discoveredType != "" {
+					return "", "", fmt.Errorf(
+						"multiple Supervisor upstream identity providers with name \"%s\" were found,"+
+							" so the --upstream-identity-provider-type flag must be specified. Found these upstreams: %s",
+						idpName, pinnipedIDPsString)
+				}
+				discoveredType = idp.Type
+			}
+		}
+		if discoveredType == "" {
+			return "", "", fmt.Errorf(
+				"no Supervisor upstream identity providers with name \"%s\" were found."+
+					" Found these upstreams: %s", idpName, pinnipedIDPsString)
+		}
+		return idpName, discoveredType, nil
+	default:
+		return "", "", fmt.Errorf(
+			"multiple Supervisor upstream identity providers were found,"+
+				" so the --upstream-identity-provider-name/--upstream-identity-provider-type flags must be specified."+
+				" Found these upstreams: %s",
+			pinnipedIDPsString)
+	}
 }

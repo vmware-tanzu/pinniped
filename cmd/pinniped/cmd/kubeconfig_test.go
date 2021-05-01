@@ -722,6 +722,46 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 		},
 		{
+			name: "when discovery document contains multiple pinniped_idps and no name or type flags are given",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticator(issuerCABundle, issuerURL),
+				}
+			},
+			discoveryStatusCode: http.StatusOK,
+			discoveryResponse: here.Docf(`{
+				"pinniped_idps": [
+					{"name": "some-ldap-idp", "type": "ldap"},
+					{"name": "some-oidc-idp", "type": "oidc"}
+				]
+			}`),
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
+					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
+					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
+					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
+					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
+					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+				}
+			},
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) string {
+				return `Error: multiple Supervisor upstream identity providers were found, ` +
+					`so the --upstream-identity-provider-name/--upstream-identity-provider-type flags must be specified. ` +
+					`Found these upstreams: [{"name":"some-ldap-idp","type":"ldap"},{"name":"some-oidc-idp","type":"oidc"}]` + "\n"
+			},
+		},
+		{
 			name: "when discovery document is not valid JSON",
 			args: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
@@ -826,6 +866,111 @@ func TestGetKubeconfig(t *testing.T) {
 			wantError: true,
 			wantStderr: func(issuerCABundle string, issuerURL string) string {
 				return `Error: while forming request to issuer URL: parse "https%://bad-issuer-url/.well-known/openid-configuration": first path segment in URL cannot contain colon` + "\n"
+			},
+		},
+		{
+			name: "supervisor upstream IDP discovery fails to resolve ambiguity when type is specified but name is not",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--no-concierge",
+					"--oidc-issuer", issuerURL,
+					"--oidc-ca-bundle", f.Name(),
+					"--upstream-identity-provider-type", "ldap",
+				}
+			},
+			discoveryResponse: here.Docf(`{
+				"pinniped_idps": [
+					{"name": "some-ldap-idp", "type": "ldap"},
+					{"name": "some-other-ldap-idp", "type": "ldap"},
+					{"name": "some-oidc-idp", "type": "oidc"},
+					{"name": "some-other-oidc-idp", "type": "oidc"}
+				]
+			}`),
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) string {
+				return `Error: multiple Supervisor upstream identity providers of type "ldap" were found,` +
+					` so the --upstream-identity-provider-name flag must be specified.` +
+					` Found these upstreams: [{"name":"some-ldap-idp","type":"ldap"},{"name":"some-other-ldap-idp","type":"ldap"},{"name":"some-oidc-idp","type":"oidc"},{"name":"some-other-oidc-idp","type":"oidc"}]` + "\n"
+			},
+		},
+		{
+			name: "supervisor upstream IDP discovery fails to resolve ambiguity when name is specified but type is not",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--no-concierge",
+					"--oidc-issuer", issuerURL,
+					"--oidc-ca-bundle", f.Name(),
+					"--upstream-identity-provider-name", "my-idp",
+				}
+			},
+			discoveryResponse: here.Docf(`{
+				"pinniped_idps": [
+					{"name": "my-idp", "type": "ldap"},
+					{"name": "my-idp", "type": "oidc"},
+					{"name": "some-other-oidc-idp", "type": "oidc"}
+				]
+			}`),
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) string {
+				return `Error: multiple Supervisor upstream identity providers with name "my-idp" were found,` +
+					` so the --upstream-identity-provider-type flag must be specified.` +
+					` Found these upstreams: [{"name":"my-idp","type":"ldap"},{"name":"my-idp","type":"oidc"},{"name":"some-other-oidc-idp","type":"oidc"}]` + "\n"
+			},
+		},
+		{
+			name: "supervisor upstream IDP discovery fails to find any matching idps when type is specified but name is not",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--no-concierge",
+					"--oidc-issuer", issuerURL,
+					"--oidc-ca-bundle", f.Name(),
+					"--upstream-identity-provider-type", "ldap",
+				}
+			},
+			discoveryResponse: here.Docf(`{
+				"pinniped_idps": [
+					{"name": "some-oidc-idp", "type": "oidc"},
+					{"name": "some-other-oidc-idp", "type": "oidc"}
+				]
+			}`),
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) string {
+				return `Error: no Supervisor upstream identity providers of type "ldap" were found.` +
+					` Found these upstreams: [{"name":"some-oidc-idp","type":"oidc"},{"name":"some-other-oidc-idp","type":"oidc"}]` + "\n"
+			},
+		},
+		{
+			name: "supervisor upstream IDP discovery fails to find any matching idps when name is specified but type is not",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--no-concierge",
+					"--oidc-issuer", issuerURL,
+					"--oidc-ca-bundle", f.Name(),
+					"--upstream-identity-provider-name", "my-nonexistent-idp",
+				}
+			},
+			discoveryResponse: here.Docf(`{
+				"pinniped_idps": [
+					{"name": "some-oidc-idp", "type": "oidc"},
+					{"name": "some-other-oidc-idp", "type": "oidc"}
+				]
+			}`),
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) string {
+				return `Error: no Supervisor upstream identity providers with name "my-nonexistent-idp" were found.` +
+					` Found these upstreams: [{"name":"some-oidc-idp","type":"oidc"},{"name":"some-other-oidc-idp","type":"oidc"}]` + "\n"
 			},
 		},
 		{
@@ -1811,15 +1956,126 @@ func TestGetKubeconfig(t *testing.T) {
 					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
 			},
 		},
+		{
+			name: "supervisor upstream IDP discovery resolves ambiguity when type is specified but name is not",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--no-concierge",
+					"--oidc-issuer", issuerURL,
+					"--oidc-ca-bundle", f.Name(),
+					"--upstream-identity-provider-type", "ldap",
+				}
+			},
+			discoveryResponse: here.Docf(`{
+				"pinniped_idps": [
+					{"name": "some-ldap-idp", "type": "ldap"},
+					{"name": "some-oidc-idp", "type": "oidc"},
+					{"name": "some-other-oidc-idp", "type": "oidc"}
+				]
+			}`),
+			wantStdout: func(issuerCABundle string, issuerURL string) string {
+				return here.Docf(`
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - oidc
+						  - --issuer=%s
+						  - --client-id=pinniped-cli
+						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --ca-bundle-data=%s
+						  - --upstream-identity-provider-name=some-ldap-idp
+						  - --upstream-identity-provider-type=ldap
+						  command: '.../path/to/pinniped'
+						  env: []
+						  provideClusterInfo: true
+					`,
+					issuerURL,
+					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
+			},
+		},
+		{
+			name: "supervisor upstream IDP discovery resolves ambiguity when name is specified but type is not",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				f := testutil.WriteStringToTempFile(t, "testca-*.pem", issuerCABundle)
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+					"--no-concierge",
+					"--oidc-issuer", issuerURL,
+					"--oidc-ca-bundle", f.Name(),
+					"--upstream-identity-provider-name", "some-ldap-idp",
+				}
+			},
+			discoveryResponse: here.Docf(`{
+				"pinniped_idps": [
+					{"name": "some-ldap-idp", "type": "ldap"},
+					{"name": "some-oidc-idp", "type": "oidc"},
+					{"name": "some-other-oidc-idp", "type": "oidc"}
+				]
+			}`),
+			wantStdout: func(issuerCABundle string, issuerURL string) string {
+				return here.Docf(`
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - oidc
+						  - --issuer=%s
+						  - --client-id=pinniped-cli
+						  - --scopes=offline_access,openid,pinniped:request-audience
+						  - --ca-bundle-data=%s
+						  - --upstream-identity-provider-name=some-ldap-idp
+						  - --upstream-identity-provider-type=ldap
+						  command: '.../path/to/pinniped'
+						  env: []
+						  provideClusterInfo: true
+					`,
+					issuerURL,
+					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			// TODO multiple idps should error
-			// TODO partial discovery: specify issuer, don't specify idp type or name
-			// TODO if only idp type or only idp name is specified, not both, still do discovery and do some fancy checking or something
-			// TODO logging the values we discover?
-
 			issuerCABundle, issuerEndpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/.well-known/openid-configuration" {
 					jsonResponseBody := tt.discoveryResponse

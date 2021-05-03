@@ -64,6 +64,9 @@ type AgentConfig struct {
 	// NamePrefix will be prefixed to all agent pod names.
 	NamePrefix string
 
+	// ServiceAccountName is the service account under which to run the agent pods.
+	ServiceAccountName string
+
 	// ContainerImagePullSecrets is a list of names of Kubernetes Secret objects that will be used as
 	// ImagePullSecrets on the kube-cert-agent pods.
 	ContainerImagePullSecrets []string
@@ -472,6 +475,7 @@ func (c *agentController) newAgentDeployment(controllerManagerPod *corev1.Pod) *
 					RestartPolicy:                corev1.RestartPolicyAlways,
 					NodeSelector:                 controllerManagerPod.Spec.NodeSelector,
 					AutomountServiceAccountToken: pointer.BoolPtr(false),
+					ServiceAccountName:           c.cfg.ServiceAccountName,
 					NodeName:                     controllerManagerPod.Spec.NodeName,
 					Tolerations:                  controllerManagerPod.Spec.Tolerations,
 					// We need to run the agent pod as root since the file permissions

@@ -43,7 +43,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
 				  impersonationSignerSecret: impersonationSignerSecret-value
 				  impersonationSignerSecret: impersonationSignerSecret-value
-				  serviceAccount: serviceAccount-value
+				  agentServiceAccount: agentServiceAccount-value
 				labels:
 				  myLabelKey1: myLabelValue1
 				  myLabelKey2: myLabelValue2
@@ -73,7 +73,7 @@ func TestFromPath(t *testing.T) {
 					ImpersonationTLSCertificateSecret: "impersonationTLSCertificateSecret-value",
 					ImpersonationCACertificateSecret:  "impersonationCACertificateSecret-value",
 					ImpersonationSignerSecret:         "impersonationSignerSecret-value",
-					ServiceAccount:                    "serviceAccount-value",
+					AgentServiceAccount:               "agentServiceAccount-value",
 				},
 				Labels: map[string]string{
 					"myLabelKey1": "myLabelValue1",
@@ -100,7 +100,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
 				  impersonationSignerSecret: impersonationSignerSecret-value
-				  serviceAccount: serviceAccount-value
+				  agentServiceAccount: agentServiceAccount-value
 			`),
 			wantConfig: &Config{
 				DiscoveryInfo: DiscoveryInfoSpec{
@@ -122,7 +122,7 @@ func TestFromPath(t *testing.T) {
 					ImpersonationTLSCertificateSecret: "impersonationTLSCertificateSecret-value",
 					ImpersonationCACertificateSecret:  "impersonationCACertificateSecret-value",
 					ImpersonationSignerSecret:         "impersonationSignerSecret-value",
-					ServiceAccount:                    "serviceAccount-value",
+					AgentServiceAccount:               "agentServiceAccount-value",
 				},
 				Labels: map[string]string{},
 				KubeCertAgentConfig: KubeCertAgentSpec{
@@ -137,7 +137,7 @@ func TestFromPath(t *testing.T) {
 			wantError: "validate names: missing required names: servingCertificateSecret, credentialIssuer, " +
 				"apiService, impersonationConfigMap, impersonationLoadBalancerService, " +
 				"impersonationTLSCertificateSecret, impersonationCACertificateSecret, " +
-				"impersonationSignerSecret, serviceAccount",
+				"impersonationSignerSecret, agentServiceAccount",
 		},
 		{
 			name: "Missing apiService name",
@@ -151,7 +151,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
 				  impersonationSignerSecret: impersonationSignerSecret-value
-				  serviceAccount: serviceAccount-value
+				  agentServiceAccount: agentServiceAccount-value
 			`),
 			wantError: "validate names: missing required names: apiService",
 		},
@@ -167,7 +167,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
 				  impersonationSignerSecret: impersonationSignerSecret-value
-				  serviceAccount: serviceAccount-value
+				  agentServiceAccount: agentServiceAccount-value
 			`),
 			wantError: "validate names: missing required names: credentialIssuer",
 		},
@@ -183,7 +183,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
 				  impersonationSignerSecret: impersonationSignerSecret-value
-				  serviceAccount: serviceAccount-value
+				  agentServiceAccount: agentServiceAccount-value
 			`),
 			wantError: "validate names: missing required names: servingCertificateSecret",
 		},
@@ -199,7 +199,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
 				  impersonationSignerSecret: impersonationSignerSecret-value
-				  serviceAccount: serviceAccount-value
+				  agentServiceAccount: agentServiceAccount-value
 			`),
 			wantError: "validate names: missing required names: impersonationConfigMap",
 		},
@@ -215,7 +215,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
 				  impersonationSignerSecret: impersonationSignerSecret-value
-				  serviceAccount: serviceAccount-value
+				  agentServiceAccount: agentServiceAccount-value
 			`),
 			wantError: "validate names: missing required names: impersonationLoadBalancerService",
 		},
@@ -231,7 +231,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
 				  impersonationSignerSecret: impersonationSignerSecret-value
-				  serviceAccount: serviceAccount-value
+				  agentServiceAccount: agentServiceAccount-value
 			`),
 			wantError: "validate names: missing required names: impersonationTLSCertificateSecret",
 		},
@@ -247,7 +247,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationSignerSecret: impersonationSignerSecret-value
-				  serviceAccount: serviceAccount-value
+				  agentServiceAccount: agentServiceAccount-value
 			`),
 			wantError: "validate names: missing required names: impersonationCACertificateSecret",
 		},
@@ -263,7 +263,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
-				  serviceAccount: serviceAccount-value
+				  agentServiceAccount: agentServiceAccount-value
 			`),
 			wantError: "validate names: missing required names: impersonationSignerSecret",
 		},
@@ -277,7 +277,7 @@ func TestFromPath(t *testing.T) {
 				  apiService: pinniped-api
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationSignerSecret: impersonationSignerSecret-value
-				  serviceAccount: serviceAccount-value
+				  agentServiceAccount: agentServiceAccount-value
 			`),
 			wantError: "validate names: missing required names: impersonationConfigMap, " +
 				"impersonationTLSCertificateSecret, impersonationCACertificateSecret",

@@ -122,8 +122,8 @@ func validateNames(names *NamesConfigSpec) error {
 	if names.ImpersonationSignerSecret == "" {
 		missingNames = append(missingNames, "impersonationSignerSecret")
 	}
-	if names.ServiceAccount == "" {
-		missingNames = append(missingNames, "serviceAccount")
+	if names.AgentServiceAccount == "" {
+		missingNames = append(missingNames, "agentServiceAccount")
 	}
 	if len(missingNames) > 0 {
 		return constable.Error("missing required names: " + strings.Join(missingNames, ", "))

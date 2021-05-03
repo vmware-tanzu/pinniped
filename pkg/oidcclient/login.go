@@ -196,6 +196,7 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		cache:        &nopCache{},
 		callbackPath: "/callback",
 		ctx:          context.Background(),
+		logger:       logr.Discard(), // discard logs unless a logger is specified
 		callbacks:    make(chan callbackResult),
 		httpClient:   http.DefaultClient,
 

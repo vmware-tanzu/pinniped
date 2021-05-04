@@ -127,10 +127,9 @@ spec:
   issuer: https://gitlab.your-company.example.com.
 
   # Specify the CA bundle for the GitLab server as base64-encoded PEM
-  # data. This will only be needed for self-managed GitLab. For example,
-  # the output of `cat my-ca-bundle.pem | base64`.
+  # data. For example, the output of `cat my-ca-bundle.pem | base64`.
   # 
-  # This configuration is only necessary if your instance uses a custom CA.
+  # This is only necessary if your instance uses a custom CA.
   tls:
     certificateAuthorityData: "<gitlab-ca-bundle>"
 # [...]

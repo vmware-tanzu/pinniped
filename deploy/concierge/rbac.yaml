@@ -24,9 +24,6 @@ rules:
   - apiGroups: [ flowcontrol.apiserver.k8s.io ]
     resources: [ flowschemas, prioritylevelconfigurations ]
     verbs: [ get, list, watch ]
-  - apiGroups: [ policy ]
-    resources: [ podsecuritypolicies ]
-    verbs: [ use ]
   - apiGroups: [ security.openshift.io ]
     resources: [ securitycontextconstraints ]
     verbs: [ use ]
@@ -65,6 +62,34 @@ subjects:
 roleRef:
   kind: ClusterRole
   name: #@ defaultResourceNameWithSuffix("aggregated-api-server")
+  apiGroup: rbac.authorization.k8s.io
+
+#! Give permission to the kube-cert-agent Pod to run privileged.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: #@ defaultResourceNameWithSuffix("kube-cert-agent")
+  namespace: #@ namespace()
+  labels: #@ labels()
+rules:
+  - apiGroups: [ policy ]
+    resources: [ podsecuritypolicies ]
+    verbs: [ use ]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: #@ defaultResourceNameWithSuffix("kube-cert-agent")
+  namespace: #@ namespace()
+  labels: #@ labels()
+subjects:
+  - kind: ServiceAccount
+    name: #@ defaultResourceNameWithSuffix("kube-cert-agent")
+    namespace: #@ namespace()
+roleRef:
+  kind: Role
+  name: #@ defaultResourceNameWithSuffix("kube-cert-agent")
   apiGroup: rbac.authorization.k8s.io
 
 #! Give permission to various objects within the app's own namespace

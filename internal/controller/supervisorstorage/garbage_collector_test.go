@@ -66,6 +66,10 @@ func TestGarbageCollectorControllerInformerFilters(t *testing.T) {
 					r.True(subject.Update(secretWithAnnotation, otherSecret))
 					r.True(subject.Update(otherSecret, secretWithAnnotation))
 				})
+
+				it("returns the same singleton key", func() {
+					r.Equal(controllerlib.Key{}, subject.Parent(secretWithAnnotation))
+				})
 			})
 
 			when("any Secret with the required annotation is deleted", func() {
@@ -136,9 +140,10 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				Context: cancelContext,
 				Name:    subject.Name(),
 				Key: controllerlib.Key{
-					Namespace: "",
-					Name:      "",
+					Namespace: "foo",
+					Name:      "bar",
 				},
+				Queue: &testQueue{t: t},
 			}
 
 			// Must start informers before calling TestRunSynchronously()
@@ -262,16 +267,23 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				// Run sync once with the current time set to frozenTime.
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 				require.Empty(t, kubeClient.Actions())
+				r.False(syncContext.Queue.(*testQueue).called)
 
 				// Run sync again when not enough time has passed since the most recent run, so no delete
 				// operations should happen even though there is a expired secret now.
 				fakeClock.Step(29 * time.Second)
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
 				require.Empty(t, kubeClient.Actions())
+				r.True(syncContext.Queue.(*testQueue).called)
+				r.Equal(controllerlib.Key{Namespace: "foo", Name: "bar"}, syncContext.Queue.(*testQueue).key) // assert key is passed through
+				r.Equal(time.Second, syncContext.Queue.(*testQueue).duration)                                 // assert that we get the exact requeue time
+
+				syncContext.Queue = &testQueue{t: t} // reset the queue for the next sync
 
 				// Step to the exact threshold and run Sync again. Now we are past the rate limiting period.
-				fakeClock.Step(1*time.Second + 1*time.Millisecond)
+				fakeClock.Step(time.Second)
 				r.NoError(controllerlib.TestSync(t, subject, *syncContext))
+				r.False(syncContext.Queue.(*testQueue).called)
 
 				// It should have deleted the expired secret.
 				r.ElementsMatch(
@@ -380,4 +392,24 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			})
 		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))
+}
+
+type testQueue struct {
+	t *testing.T
+
+	called   bool
+	key      controllerlib.Key
+	duration time.Duration
+
+	controllerlib.Queue // panic if any other methods called
+}
+
+func (q *testQueue) AddAfter(key controllerlib.Key, duration time.Duration) {
+	q.t.Helper()
+
+	require.False(q.t, q.called, "AddAfter should only be called once")
+
+	q.called = true
+	q.key = key
+	q.duration = duration
 }

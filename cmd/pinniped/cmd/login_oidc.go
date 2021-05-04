@@ -20,10 +20,12 @@ import (
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
+	"k8s.io/client-go/transport"
 	"k8s.io/klog/v2/klogr"
 
 	"go.pinniped.dev/internal/execcredcache"
 	"go.pinniped.dev/internal/groupsuffix"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/pkg/conciergeclient"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/filesession"
@@ -36,13 +38,15 @@ func init() {
 }
 
 type oidcLoginCommandDeps struct {
+	lookupEnv     func(string) (string, bool)
 	login         func(string, string, ...oidcclient.Option) (*oidctypes.Token, error)
 	exchangeToken func(context.Context, *conciergeclient.Client, string) (*clientauthv1beta1.ExecCredential, error)
 }
 
 func oidcLoginCommandRealDeps() oidcLoginCommandDeps {
 	return oidcLoginCommandDeps{
-		login: oidcclient.Login,
+		lookupEnv: os.LookupEnv,
+		login:     oidcclient.Login,
 		exchangeToken: func(ctx context.Context, client *conciergeclient.Client, token string) (*clientauthv1beta1.ExecCredential, error) {
 			return client.ExchangeToken(ctx, token)
 		},
@@ -110,6 +114,11 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 }
 
 func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLoginFlags) error {
+	pLogger, err := SetLogLevel(deps.lookupEnv)
+	if err != nil {
+		plog.WarningErr("Received error while setting log level", err)
+	}
+
 	// Initialize the session cache.
 	var sessionOptions []filesession.Option
 
@@ -125,6 +134,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	// Initialize the login handler.
 	opts := []oidcclient.Option{
 		oidcclient.WithContext(cmd.Context()),
+		oidcclient.WithLogger(klogr.New()),
 		oidcclient.WithScopes(flags.scopes),
 		oidcclient.WithSessionCache(sessionCache),
 	}
@@ -166,7 +176,6 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		}
 		opts = append(opts, oidcclient.WithClient(client))
 	}
-
 	// Look up cached credentials based on a hash of all the CLI arguments and the cluster info.
 	cacheKey := struct {
 		Args        []string                   `json:"args"`
@@ -179,10 +188,12 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	if flags.credentialCachePath != "" {
 		credCache = execcredcache.New(flags.credentialCachePath)
 		if cred := credCache.Get(cacheKey); cred != nil {
+			pLogger.Debug("using cached cluster credential.")
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(cred)
 		}
 	}
 
+	pLogger.Debug("Performing OIDC login", "issuer", flags.issuer, "client id", flags.clientID)
 	// Do the basic login to get an OIDC token.
 	token, err := deps.login(flags.issuer, flags.clientID, opts...)
 	if err != nil {
@@ -192,6 +203,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 
 	// If the concierge was configured, exchange the credential for a separate short-lived, cluster-specific credential.
 	if concierge != nil {
+		pLogger.Debug("Exchanging token for cluster credential", "endpoint", flags.conciergeEndpoint, "authenticator type", flags.conciergeAuthenticatorType, "authenticator name", flags.conciergeAuthenticatorName)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
@@ -199,10 +211,14 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		if err != nil {
 			return fmt.Errorf("could not complete Concierge credential exchange: %w", err)
 		}
+		pLogger.Debug("Successfully exchanged token for cluster credential.")
+	} else {
+		pLogger.Debug("No concierge configured, skipping token credential exchange")
 	}
 
 	// If there was a credential cache, save the resulting credential for future use.
 	if credCache != nil {
+		pLogger.Debug("caching cluster credential for future use.")
 		credCache.Put(cacheKey, cred)
 	}
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(cred)
@@ -224,7 +240,7 @@ func makeClient(caBundlePaths []string, caBundleData []string) (*http.Client, er
 		}
 		pool.AppendCertsFromPEM(pem)
 	}
-	return &http.Client{
+	client := &http.Client{
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			TLSClientConfig: &tls.Config{
@@ -232,7 +248,10 @@ func makeClient(caBundlePaths []string, caBundleData []string) (*http.Client, er
 				MinVersion: tls.VersionTLS12,
 			},
 		},
-	}, nil
+	}
+
+	client.Transport = transport.DebugWrappers(client.Transport)
+	return client, nil
 }
 
 func tokenCredential(token *oidctypes.Token) *clientauthv1beta1.ExecCredential {
@@ -249,6 +268,18 @@ func tokenCredential(token *oidctypes.Token) *clientauthv1beta1.ExecCredential {
 		cred.Status.ExpirationTimestamp = &token.IDToken.Expiry
 	}
 	return &cred
+}
+
+func SetLogLevel(lookupEnv func(string) (string, bool)) (*plog.PLogger, error) {
+	debug, _ := lookupEnv("PINNIPED_DEBUG")
+	if debug == "true" {
+		err := plog.ValidateAndSetLogLevelGlobally(plog.LevelDebug)
+		if err != nil {
+			return nil, err
+		}
+	}
+	logger := plog.New("Pinniped login: ")
+	return &logger, nil
 }
 
 // mustGetConfigDir returns a directory that follows the XDG base directory convention:

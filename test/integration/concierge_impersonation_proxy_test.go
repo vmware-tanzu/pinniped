@@ -1705,17 +1705,18 @@ func getCredForConfig(t *testing.T, config *rest.Config) *loginv1alpha1.ClusterC
 	if tlsConfig != nil && tlsConfig.GetClientCertificate != nil {
 		cert, err := tlsConfig.GetClientCertificate(nil)
 		require.NoError(t, err)
-		require.Len(t, cert.Certificate, 1)
+		if len(cert.Certificate) > 0 {
+			require.Len(t, cert.Certificate, 1)
+			publicKey := pem.EncodeToMemory(&pem.Block{
+				Type:  "CERTIFICATE",
+				Bytes: cert.Certificate[0],
+			})
+			out.ClientCertificateData = string(publicKey)
 
-		publicKey := pem.EncodeToMemory(&pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: cert.Certificate[0],
-		})
-		out.ClientCertificateData = string(publicKey)
-
-		privateKey, err := keyutil.MarshalPrivateKeyToPEM(cert.PrivateKey)
-		require.NoError(t, err)
-		out.ClientKeyData = string(privateKey)
+			privateKey, err := keyutil.MarshalPrivateKeyToPEM(cert.PrivateKey)
+			require.NoError(t, err)
+			out.ClientKeyData = string(privateKey)
+		}
 	}
 
 	if *out == (loginv1alpha1.ClusterCredential{}) {

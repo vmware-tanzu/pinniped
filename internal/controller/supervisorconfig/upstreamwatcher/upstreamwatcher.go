@@ -269,11 +269,17 @@ func (c *controller) validateIssuer(ctx context.Context, upstream *v1alpha1.OIDC
 
 		discoveredProvider, err = oidc.NewProvider(oidc.ClientContext(ctx, httpClient), upstream.Spec.Issuer)
 		if err != nil {
+			const klogLevelTrace = 6
+			c.log.V(klogLevelTrace).WithValues(
+				"namespace", upstream.Namespace,
+				"name", upstream.Name,
+				"issuer", upstream.Spec.Issuer,
+			).Error(err, "failed to perform OIDC discovery")
 			return &v1alpha1.Condition{
 				Type:    typeOIDCDiscoverySucceeded,
 				Status:  v1alpha1.ConditionFalse,
 				Reason:  reasonUnreachable,
-				Message: fmt.Sprintf("failed to perform OIDC discovery against %q", upstream.Spec.Issuer),
+				Message: fmt.Sprintf("failed to perform OIDC discovery against %q:\n%s", upstream.Spec.Issuer, truncateErr(err)),
 			}
 		}
 
@@ -418,4 +424,15 @@ func computeScopes(additionalScopes []string) []string {
 	}
 	sort.Strings(scopes)
 	return scopes
+}
+
+func truncateErr(err error) string {
+	const max = 100
+	msg := err.Error()
+
+	if len(msg) <= max {
+		return msg
+	}
+
+	return msg[:max] + fmt.Sprintf(" [truncated %d chars]", len(msg)-max)
 }

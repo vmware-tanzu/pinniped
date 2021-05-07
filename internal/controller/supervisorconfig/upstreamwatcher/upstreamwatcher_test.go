@@ -370,7 +370,7 @@ func TestController(t *testing.T) {
 			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Spec: v1alpha1.OIDCIdentityProviderSpec{
-					Issuer:              "invalid-url",
+					Issuer:              "invalid-url-that-is-really-really-long",
 					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
 					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: testAdditionalScopes},
 				},
@@ -382,9 +382,10 @@ func TestController(t *testing.T) {
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
+				`upstream-observer "msg"="failed to perform OIDC discovery" "error"="Get \"invalid-url-that-is-really-really-long/.well-known/openid-configuration\": unsupported protocol scheme \"\"" "issuer"="invalid-url-that-is-really-really-long" "name"="test-name" "namespace"="test-namespace"`,
 				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"invalid-url\"" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"invalid-url\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
+				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"invalid-url-that-is-really-really-long\":\nGet \"invalid-url-that-is-really-really-long/.well-known/openid-configuration\": unsupported protocol  [truncated 9 chars]" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
+				`upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"invalid-url-that-is-really-really-long\":\nGet \"invalid-url-that-is-really-really-long/.well-known/openid-configuration\": unsupported protocol  [truncated 9 chars]" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -404,7 +405,8 @@ func TestController(t *testing.T) {
 							Status:             "False",
 							LastTransitionTime: now,
 							Reason:             "Unreachable",
-							Message:            `failed to perform OIDC discovery against "invalid-url"`,
+							Message: `failed to perform OIDC discovery against "invalid-url-that-is-really-really-long":
+Get "invalid-url-that-is-really-really-long/.well-known/openid-configuration": unsupported protocol  [truncated 9 chars]`,
 						},
 					},
 				},

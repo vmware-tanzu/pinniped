@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -279,7 +280,7 @@ func (c *controller) validateIssuer(ctx context.Context, upstream *v1alpha1.OIDC
 				Type:    typeOIDCDiscoverySucceeded,
 				Status:  v1alpha1.ConditionFalse,
 				Reason:  reasonUnreachable,
-				Message: fmt.Sprintf("failed to perform OIDC discovery against %q:\n%s", upstream.Spec.Issuer, truncateErr(err)),
+				Message: fmt.Sprintf("failed to perform OIDC discovery against %q:\n%s", upstream.Spec.Issuer, truncateNonOIDCErr(err)),
 			}
 		}
 
@@ -426,11 +427,11 @@ func computeScopes(additionalScopes []string) []string {
 	return scopes
 }
 
-func truncateErr(err error) string {
+func truncateNonOIDCErr(err error) string {
 	const max = 100
 	msg := err.Error()
 
-	if len(msg) <= max {
+	if len(msg) <= max || strings.HasPrefix(msg, "oidc:") {
 		return msg
 	}
 

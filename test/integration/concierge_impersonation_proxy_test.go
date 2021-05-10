@@ -615,21 +615,26 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 			require.NoError(t, err)
 
-			expectedExtra := make(map[string]authenticationv1.ExtraValue, len(whoAmIAdmin.Status.KubernetesUserInfo.User.Extra))
-			for k, v := range whoAmIAdmin.Status.KubernetesUserInfo.User.Extra {
+			// The WhoAmI API is lossy:
+			// - It drops UID
+			// - It lowercases all extra keys
+			// the admin user on EKS has both a UID set and an extra key with uppercase characters
+			// Thus we fallback to the CSR API to grab the UID and Extra to handle this scenario
+			uid, extra := getUIDAndExtraViaCSR(ctx, t, whoAmIAdmin.Status.KubernetesUserInfo.User.UID,
+				newImpersonationProxyClientWithCredentials(t,
+					clusterAdminCredentials, impersonationProxyURL, impersonationProxyCACertPEM, nil).
+					Kubernetes,
+			)
+
+			expectedExtra := make(map[string]authenticationv1.ExtraValue, len(extra))
+			for k, v := range extra {
 				expectedExtra[k] = authenticationv1.ExtraValue(v)
 			}
 			expectedOriginalUserInfo := authenticationv1.UserInfo{
 				Username: whoAmIAdmin.Status.KubernetesUserInfo.User.Username,
-				// The WhoAmI API is lossy so this will fail when the admin user actually does have a UID
-				// Thus we fallback to the CSR API to grab the UID
-				UID: getUIDViaCSR(ctx, t, whoAmIAdmin.Status.KubernetesUserInfo.User.UID,
-					newImpersonationProxyClientWithCredentials(t,
-						clusterAdminCredentials, impersonationProxyURL, impersonationProxyCACertPEM, nil).
-						Kubernetes,
-				),
-				Groups: whoAmIAdmin.Status.KubernetesUserInfo.User.Groups,
-				Extra:  expectedExtra,
+				UID:      uid,
+				Groups:   whoAmIAdmin.Status.KubernetesUserInfo.User.Groups,
+				Extra:    expectedExtra,
 			}
 			expectedOriginalUserInfoJSON, err := json.Marshal(expectedOriginalUserInfo)
 			require.NoError(t, err)
@@ -1731,12 +1736,8 @@ func getCredForConfig(t *testing.T, config *rest.Config) *loginv1alpha1.ClusterC
 	return out
 }
 
-func getUIDViaCSR(ctx context.Context, t *testing.T, uid string, client kubernetes.Interface) string {
+func getUIDAndExtraViaCSR(ctx context.Context, t *testing.T, uid string, client kubernetes.Interface) (string, map[string]certificatesv1beta1.ExtraValue) {
 	t.Helper()
-
-	if len(uid) != 0 {
-		return uid // in the future this may not be empty on some clusters
-	}
 
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
@@ -1763,5 +1764,10 @@ func getUIDViaCSR(ctx context.Context, t *testing.T, uid string, client kubernet
 	err = client.CertificatesV1beta1().CertificateSigningRequests().Delete(ctx, csrName, metav1.DeleteOptions{})
 	require.NoError(t, err)
 
-	return csReq.Spec.UID
+	outUID := uid // in the future this may not be empty on some clusters
+	if len(outUID) == 0 {
+		outUID = csReq.Spec.UID
+	}
+
+	return outUID, csReq.Spec.Extra
 }

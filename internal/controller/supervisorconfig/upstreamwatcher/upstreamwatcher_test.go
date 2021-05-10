@@ -602,6 +602,151 @@ Get "invalid-url-that-is-really-really-long/.well-known/openid-configuration": u
 				},
 			}},
 		},
+		{
+			name: "existing valid upstream with trailing slash",
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
+					Issuer:              testIssuerURL + "/ends-with-slash/",
+					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
+					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
+					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: testAdditionalScopes},
+					Claims:              v1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
+				},
+				Status: v1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []v1alpha1.Condition{
+						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
+					},
+				},
+			}},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
+				Type:       "secrets.pinniped.dev/oidc-client",
+				Data:       testValidSecretData,
+			}},
+			wantLogs: []string{
+				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
+			},
+			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{
+				&oidctestutil.TestUpstreamOIDCIdentityProvider{
+					Name:             testName,
+					ClientID:         testClientID,
+					AuthorizationURL: *testIssuerAuthorizeURL,
+					Scopes:           testExpectedScopes,
+					UsernameClaim:    testUsernameClaim,
+					GroupsClaim:      testGroupsClaim,
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []v1alpha1.Condition{
+						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
+					},
+				},
+			}},
+		},
+		{
+			name: "issuer is invalid URL, missing trailing slash",
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
+					Issuer:              testIssuerURL + "/ends-with-slash",
+					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
+					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
+					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: testAdditionalScopes},
+				},
+			}},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
+				Type:       "secrets.pinniped.dev/oidc-client",
+				Data:       testValidSecretData,
+			}},
+			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
+			wantLogs: []string{
+				`upstream-observer "msg"="failed to perform OIDC discovery" "error"="oidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\"" "issuer"="` + testIssuerURL + `/ends-with-slash" "name"="test-name" "namespace"="test-namespace"`,
+				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/ends-with-slash\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\"" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
+				`upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/ends-with-slash\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
+			},
+			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
+				Status: v1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:               "ClientCredentialsValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded client credentials",
+						},
+						{
+							Type:               "OIDCDiscoverySucceeded",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "Unreachable",
+							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/ends-with-slash":
+oidc: issuer did not match the issuer returned by provider, expected "` + testIssuerURL + `/ends-with-slash" got "` + testIssuerURL + `/ends-with-slash/"`,
+						},
+					},
+				},
+			}},
+		},
+		{
+			name: "issuer is invalid URL, extra trailing slash",
+			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
+				Spec: v1alpha1.OIDCIdentityProviderSpec{
+					Issuer:              testIssuerURL + "/",
+					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
+					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
+					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: testAdditionalScopes},
+				},
+			}},
+			inputSecrets: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
+				Type:       "secrets.pinniped.dev/oidc-client",
+				Data:       testValidSecretData,
+			}},
+			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
+			wantLogs: []string{
+				`upstream-observer "msg"="failed to perform OIDC discovery" "error"="oidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\"" "issuer"="` + testIssuerURL + `/" "name"="test-name" "namespace"="test-namespace"`,
+				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\"" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
+				`upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
+			},
+			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
+			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
+				Status: v1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:               "ClientCredentialsValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "loaded client credentials",
+						},
+						{
+							Type:               "OIDCDiscoverySucceeded",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "Unreachable",
+							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/":
+oidc: issuer did not match the issuer returned by provider, expected "` + testIssuerURL + `/" got "` + testIssuerURL + `"`,
+						},
+					},
+				},
+			}},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -729,6 +874,26 @@ func newTestIssuer(t *testing.T) (string, string) {
 			AuthURL: "http://example.com/authorize",
 		})
 	})
+
+	// handle the four issuer with trailing slash configs
+
+	// valid case in= out=
+	// handled above at the root of testURL
+
+	// valid case in=/ out=/
+	mux.HandleFunc("/ends-with-slash/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		_ = json.NewEncoder(w).Encode(&providerJSON{
+			Issuer:  testURL + "/ends-with-slash/",
+			AuthURL: "https://example.com/authorize",
+		})
+	})
+
+	// invalid case in= out=/
+	// can be tested using /ends-with-slash/ endpoint
+
+	// invalid case in=/ out=
+	// can be tested using root endpoint
 
 	return caBundlePEM, testURL
 }

@@ -43,6 +43,38 @@ Get "https://127.0.0.1:444444/issuer/.well-known/openid-configuration": dial tcp
 		})
 	})
 
+	t.Run("invalid issuer with trailing slash", func(t *testing.T) {
+		t.Parallel()
+		spec := v1alpha1.OIDCIdentityProviderSpec{
+			Issuer: env.SupervisorTestUpstream.Issuer + "/",
+			TLS: &v1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
+			},
+			AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{
+				AdditionalScopes: []string{"email", "profile"},
+			},
+			Client: v1alpha1.OIDCClient{
+				SecretName: library.CreateClientCredsSecret(t, "test-client-id", "test-client-secret").Name,
+			},
+		}
+		upstream := library.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseError)
+		expectUpstreamConditions(t, upstream, []v1alpha1.Condition{
+			{
+				Type:    "ClientCredentialsValid",
+				Status:  v1alpha1.ConditionTrue,
+				Reason:  "Success",
+				Message: "loaded client credentials",
+			},
+			{
+				Type:   "OIDCDiscoverySucceeded",
+				Status: v1alpha1.ConditionFalse,
+				Reason: "Unreachable",
+				Message: `failed to perform OIDC discovery against "` + env.SupervisorTestUpstream.Issuer + `/":
+oidc: issuer did not match the issuer returned by provider, expected "` + env.SupervisorTestUpstream.Issuer + `/" got "` + env.SupervisorTestUpstream.Issuer + `"`,
+			},
+		})
+	})
+
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
 		spec := v1alpha1.OIDCIdentityProviderSpec{

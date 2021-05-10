@@ -327,8 +327,8 @@ status:
 `,
 		string(kubectlOutput3))
 
-	expectedGroupsPlusUnauthenticated := append([]string{}, env.SupervisorUpstreamOIDC.ExpectedGroups...)
-	expectedGroupsPlusUnauthenticated = append(expectedGroupsPlusUnauthenticated, "system:authenticated")
+	expectedGroupsPlusAuthenticated := append([]string{}, env.SupervisorUpstreamOIDC.ExpectedGroups...)
+	expectedGroupsPlusAuthenticated = append(expectedGroupsPlusAuthenticated, "system:authenticated")
 	// Validate that `pinniped whoami` returns the correct identity.
 	assertWhoami(
 		ctx,

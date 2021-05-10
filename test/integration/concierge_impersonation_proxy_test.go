@@ -622,7 +622,12 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			expectedOriginalUserInfo := authenticationv1.UserInfo{
 				Username: whoAmIAdmin.Status.KubernetesUserInfo.User.Username,
 				// The WhoAmI API is lossy so this will fail when the admin user actually does have a UID
-				UID:    whoAmIAdmin.Status.KubernetesUserInfo.User.UID,
+				// Thus we fallback to the CSR API to grab the UID
+				UID: getUIDViaCSR(ctx, t, whoAmIAdmin.Status.KubernetesUserInfo.User.UID,
+					newImpersonationProxyClientWithCredentials(t,
+						clusterAdminCredentials, impersonationProxyURL, impersonationProxyCACertPEM, nil).
+						Kubernetes,
+				),
 				Groups: whoAmIAdmin.Status.KubernetesUserInfo.User.Groups,
 				Extra:  expectedExtra,
 			}
@@ -1724,4 +1729,39 @@ func getCredForConfig(t *testing.T, config *rest.Config) *loginv1alpha1.ClusterC
 	}
 
 	return out
+}
+
+func getUIDViaCSR(ctx context.Context, t *testing.T, uid string, client kubernetes.Interface) string {
+	t.Helper()
+
+	if len(uid) != 0 {
+		return uid // in the future this may not be empty on some clusters
+	}
+
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	csrPEM, err := cert.MakeCSR(privateKey, &pkix.Name{
+		CommonName:   "panda-man",
+		Organization: []string{"living-the-dream", "need-more-sleep"},
+	}, nil, nil)
+	require.NoError(t, err)
+
+	csrName, _, err := csr.RequestCertificate(
+		client,
+		csrPEM,
+		"",
+		certificatesv1.KubeAPIServerClientSignerName,
+		[]certificatesv1.KeyUsage{certificatesv1.UsageClientAuth},
+		privateKey,
+	)
+	require.NoError(t, err)
+
+	csReq, err := client.CertificatesV1beta1().CertificateSigningRequests().Get(ctx, csrName, metav1.GetOptions{})
+	require.NoError(t, err)
+
+	err = client.CertificatesV1beta1().CertificateSigningRequests().Delete(ctx, csrName, metav1.DeleteOptions{})
+	require.NoError(t, err)
+
+	return csReq.Spec.UID
 }

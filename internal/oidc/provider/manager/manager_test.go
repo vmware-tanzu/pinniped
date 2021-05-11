@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -70,7 +71,7 @@ func TestManager(t *testing.T) {
 			return req
 		}
 
-		requireDiscoveryRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedIssuer, expectedIDPName, expectedIDPType string) {
+		requireDiscoveryRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedIssuer string) {
 			recorder := httptest.NewRecorder()
 
 			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.WellKnownEndpointPath+requestURLSuffix))
@@ -85,9 +86,24 @@ func TestManager(t *testing.T) {
 			err = json.Unmarshal(responseBody, &parsedDiscoveryResult)
 			r.NoError(err)
 			r.Equal(expectedIssuer, parsedDiscoveryResult.Issuer)
-			r.Len(parsedDiscoveryResult.IDPs, 1)
-			r.Equal(expectedIDPName, parsedDiscoveryResult.IDPs[0].Name)
-			r.Equal(expectedIDPType, parsedDiscoveryResult.IDPs[0].Type)
+			r.Equal(parsedDiscoveryResult.PinnipedIDPsEndpoint, expectedIssuer+oidc.PinnipedIDPsPath)
+		}
+
+		requirePinnipedIDPsDiscoveryRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedIDPName, expectedIDPType string) {
+			recorder := httptest.NewRecorder()
+
+			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.PinnipedIDPsPath+requestURLSuffix))
+
+			r.False(fallbackHandlerWasCalled)
+
+			// Minimal check to ensure that the right IDP discovery endpoint was called
+			r.Equal(http.StatusOK, recorder.Code)
+			responseBody, err := ioutil.ReadAll(recorder.Body)
+			r.NoError(err)
+			r.Equal(
+				fmt.Sprintf(`{"pinniped_identity_providers":[{"name":"%s","type":"%s"}]}`+"\n", expectedIDPName, expectedIDPType),
+				string(responseBody),
+			)
 		}
 
 		requireAuthorizationRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedRedirectLocationPrefix string) (string, string) {
@@ -289,14 +305,23 @@ func TestManager(t *testing.T) {
 		}
 
 		requireRoutesMatchingRequestsToAppropriateProvider := func() {
-			requireDiscoveryRequestToBeHandled(issuer1, "", issuer1, upstreamIDPName, upstreamIDPType)
-			requireDiscoveryRequestToBeHandled(issuer2, "", issuer2, upstreamIDPName, upstreamIDPType)
-			requireDiscoveryRequestToBeHandled(issuer2, "?some=query", issuer2, upstreamIDPName, upstreamIDPType)
+			requireDiscoveryRequestToBeHandled(issuer1, "", issuer1)
+			requireDiscoveryRequestToBeHandled(issuer2, "", issuer2)
+			requireDiscoveryRequestToBeHandled(issuer2, "?some=query", issuer2)
 
 			// Hostnames are case-insensitive, so test that we can handle that.
-			requireDiscoveryRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1, upstreamIDPName, upstreamIDPType)
-			requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2, upstreamIDPName, upstreamIDPType)
-			requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2, upstreamIDPName, upstreamIDPType)
+			requireDiscoveryRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1)
+			requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2)
+			requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2)
+
+			requirePinnipedIDPsDiscoveryRequestToBeHandled(issuer1, "", upstreamIDPName, upstreamIDPType)
+			requirePinnipedIDPsDiscoveryRequestToBeHandled(issuer2, "", upstreamIDPName, upstreamIDPType)
+			requirePinnipedIDPsDiscoveryRequestToBeHandled(issuer2, "?some=query", upstreamIDPName, upstreamIDPType)
+
+			// Hostnames are case-insensitive, so test that we can handle that.
+			requirePinnipedIDPsDiscoveryRequestToBeHandled(issuer1DifferentCaseHostname, "", upstreamIDPName, upstreamIDPType)
+			requirePinnipedIDPsDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "", upstreamIDPName, upstreamIDPType)
+			requirePinnipedIDPsDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", upstreamIDPName, upstreamIDPType)
 
 			issuer1JWKS := requireJWKSRequestToBeHandled(issuer1, "", issuer1KeyID)
 			issuer2JWKS := requireJWKSRequestToBeHandled(issuer2, "", issuer2KeyID)

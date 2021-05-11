@@ -95,8 +95,12 @@ type getKubeconfigParams struct {
 	credentialCachePathSet    bool
 }
 
-type supervisorDiscoveryResponse struct {
-	PinnipedIDPs []pinnipedIDPResponse `json:"pinniped_idps"`
+type supervisorOIDCDiscoveryResponse struct {
+	PinnipedIDPsEndpoint string `json:"pinniped_identity_providers_endpoint"`
+}
+
+type supervisorIDPsDiscoveryResponse struct {
+	PinnipedIDPs []pinnipedIDPResponse `json:"pinniped_identity_providers"`
 }
 
 type pinnipedIDPResponse struct {
@@ -727,57 +731,38 @@ func hasPendingStrategy(credentialIssuer *configv1alpha1.CredentialIssuer) bool 
 }
 
 func discoverSupervisorUpstreamIDP(ctx context.Context, flags *getKubeconfigParams) error {
-	issuerDiscoveryURL := flags.oidc.issuer + "/.well-known/openid-configuration"
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, issuerDiscoveryURL, nil)
-	if err != nil {
-		return fmt.Errorf("while forming request to issuer URL: %w", err)
-	}
-
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 		Proxy:           http.ProxyFromEnvironment,
 	}
-	httpClient := http.Client{Transport: transport}
+	httpClient := &http.Client{Transport: transport}
 	if flags.oidc.caBundle != nil {
 		rootCAs := x509.NewCertPool()
 		ok := rootCAs.AppendCertsFromPEM(flags.oidc.caBundle)
 		if !ok {
-			return fmt.Errorf("unable to fetch discovery data from issuer: could not parse CA bundle")
+			return fmt.Errorf("unable to fetch OIDC discovery data from issuer: could not parse CA bundle")
 		}
 		transport.TLSClientConfig.RootCAs = rootCAs
 	}
 
-	response, err := httpClient.Do(request)
+	pinnipedIDPsEndpoint, err := discoverIDPsDiscoveryEndpointURL(ctx, flags.oidc.issuer, httpClient)
 	if err != nil {
-		return fmt.Errorf("unable to fetch discovery data from issuer: %w", err)
+		return err
 	}
-	defer func() {
-		_ = response.Body.Close()
-	}()
-	if response.StatusCode == http.StatusNotFound {
-		// 404 Not Found is not an error because OIDC discovery is an optional part of the OIDC spec.
+	if pinnipedIDPsEndpoint == "" {
+		// The issuer is not advertising itself as a Pinniped Supervisor which supports upstream IDP discovery.
 		return nil
 	}
-	if response.StatusCode != http.StatusOK {
-		// Other types of error responses aside from 404 are not expected.
-		return fmt.Errorf("unable to fetch discovery data from issuer: unexpected http response status: %s", response.Status)
-	}
 
-	rawBody, err := ioutil.ReadAll(response.Body)
+	upstreamIDPs, err := discoverAllAvailableSupervisorUpstreamIDPs(ctx, pinnipedIDPsEndpoint, httpClient)
 	if err != nil {
-		return fmt.Errorf("unable to fetch discovery data from issuer: could not read response body: %w", err)
+		return err
 	}
-	var body supervisorDiscoveryResponse
-	err = json.Unmarshal(rawBody, &body)
-	if err != nil {
-		return fmt.Errorf("unable to fetch discovery data from issuer: could not parse response JSON: %w", err)
-	}
-
-	if len(body.PinnipedIDPs) == 1 {
-		flags.oidc.upstreamIDPName = body.PinnipedIDPs[0].Name
-		flags.oidc.upstreamIDPType = body.PinnipedIDPs[0].Type
-	} else if len(body.PinnipedIDPs) > 1 {
-		idpName, idpType, err := selectUpstreamIDP(body.PinnipedIDPs, flags.oidc.upstreamIDPName, flags.oidc.upstreamIDPType)
+	if len(upstreamIDPs) == 1 {
+		flags.oidc.upstreamIDPName = upstreamIDPs[0].Name
+		flags.oidc.upstreamIDPType = upstreamIDPs[0].Type
+	} else if len(upstreamIDPs) > 1 {
+		idpName, idpType, err := selectUpstreamIDP(upstreamIDPs, flags.oidc.upstreamIDPName, flags.oidc.upstreamIDPType)
 		if err != nil {
 			return err
 		}
@@ -785,6 +770,74 @@ func discoverSupervisorUpstreamIDP(ctx context.Context, flags *getKubeconfigPara
 		flags.oidc.upstreamIDPType = idpType
 	}
 	return nil
+}
+
+func discoverIDPsDiscoveryEndpointURL(ctx context.Context, issuer string, httpClient *http.Client) (string, error) {
+	issuerDiscoveryURL := issuer + "/.well-known/openid-configuration"
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, issuerDiscoveryURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("while forming request to issuer URL: %w", err)
+	}
+
+	response, err := httpClient.Do(request)
+	if err != nil {
+		return "", fmt.Errorf("unable to fetch OIDC discovery data from issuer: %w", err)
+	}
+	defer func() {
+		_ = response.Body.Close()
+	}()
+	if response.StatusCode == http.StatusNotFound {
+		// 404 Not Found is not an error because OIDC discovery is an optional part of the OIDC spec.
+		return "", nil
+	}
+	if response.StatusCode != http.StatusOK {
+		// Other types of error responses aside from 404 are not expected.
+		return "", fmt.Errorf("unable to fetch OIDC discovery data from issuer: unexpected http response status: %s", response.Status)
+	}
+
+	rawBody, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return "", fmt.Errorf("unable to fetch OIDC discovery data from issuer: could not read response body: %w", err)
+	}
+
+	var body supervisorOIDCDiscoveryResponse
+	err = json.Unmarshal(rawBody, &body)
+	if err != nil {
+		return "", fmt.Errorf("unable to fetch OIDC discovery data from issuer: could not parse response JSON: %w", err)
+	}
+
+	return body.PinnipedIDPsEndpoint, nil
+}
+
+func discoverAllAvailableSupervisorUpstreamIDPs(ctx context.Context, pinnipedIDPsEndpoint string, httpClient *http.Client) ([]pinnipedIDPResponse, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, pinnipedIDPsEndpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("while forming request to IDP discovery URL: %w", err)
+	}
+
+	response, err := httpClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch IDP discovery data from issuer: %w", err)
+	}
+	defer func() {
+		_ = response.Body.Close()
+	}()
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unable to fetch IDP discovery data from issuer: unexpected http response status: %s", response.Status)
+	}
+
+	rawBody, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch IDP discovery data from issuer: could not read response body: %w", err)
+	}
+
+	var body supervisorIDPsDiscoveryResponse
+	err = json.Unmarshal(rawBody, &body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch IDP discovery data from issuer: could not parse response JSON: %w", err)
+	}
+
+	return body.PinnipedIDPs, nil
 }
 
 func selectUpstreamIDP(pinnipedIDPs []pinnipedIDPResponse, idpName, idpType string) (string, string, error) {

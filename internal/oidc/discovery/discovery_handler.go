@@ -8,14 +8,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
-	"sort"
 
 	"go.pinniped.dev/internal/oidc"
-)
-
-const (
-	idpDiscoveryTypeLDAP = "ldap"
-	idpDiscoveryTypeOIDC = "oidc"
 )
 
 // Metadata holds all fields (that we care about) from the OpenID Provider Metadata section in the
@@ -46,7 +40,7 @@ type Metadata struct {
 
 	// vvv Custom vvv
 
-	IDPs []IdentityProviderMetadata `json:"pinniped_idps"`
+	PinnipedIDPsEndpoint string `json:"pinniped_identity_providers_endpoint"`
 
 	// ^^^ Custom ^^^
 }
@@ -57,14 +51,31 @@ type IdentityProviderMetadata struct {
 }
 
 // NewHandler returns an http.Handler that serves an OIDC discovery endpoint.
-func NewHandler(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvidersLister) http.Handler {
+func NewHandler(issuerURL string) http.Handler {
+	oidcConfig := Metadata{
+		Issuer:                            issuerURL,
+		AuthorizationEndpoint:             issuerURL + oidc.AuthorizationEndpointPath,
+		TokenEndpoint:                     issuerURL + oidc.TokenEndpointPath,
+		JWKSURI:                           issuerURL + oidc.JWKSEndpointPath,
+		PinnipedIDPsEndpoint:              issuerURL + oidc.PinnipedIDPsPath,
+		ResponseTypesSupported:            []string{"code"},
+		SubjectTypesSupported:             []string{"public"},
+		IDTokenSigningAlgValuesSupported:  []string{"ES256"},
+		TokenEndpointAuthMethodsSupported: []string{"client_secret_basic"},
+		ScopesSupported:                   []string{"openid", "offline"},
+		ClaimsSupported:                   []string{"groups"},
+	}
+
+	var b bytes.Buffer
+	encodeErr := json.NewEncoder(&b).Encode(&oidcConfig)
+	encodedMetadata := b.Bytes()
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, `Method not allowed (try GET)`, http.StatusMethodNotAllowed)
 			return
 		}
 
-		encodedMetadata, encodeErr := metadata(issuerURL, upstreamIDPs)
 		if encodeErr != nil {
 			http.Error(w, encodeErr.Error(), http.StatusInternalServerError)
 			return
@@ -76,39 +87,4 @@ func NewHandler(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvidersLis
 			return
 		}
 	})
-}
-
-func metadata(issuerURL string, upstreamIDPs oidc.UpstreamIdentityProvidersLister) ([]byte, error) {
-	oidcConfig := Metadata{
-		Issuer:                            issuerURL,
-		AuthorizationEndpoint:             issuerURL + oidc.AuthorizationEndpointPath,
-		TokenEndpoint:                     issuerURL + oidc.TokenEndpointPath,
-		JWKSURI:                           issuerURL + oidc.JWKSEndpointPath,
-		ResponseTypesSupported:            []string{"code"},
-		SubjectTypesSupported:             []string{"public"},
-		IDTokenSigningAlgValuesSupported:  []string{"ES256"},
-		TokenEndpointAuthMethodsSupported: []string{"client_secret_basic"},
-		ScopesSupported:                   []string{"openid", "offline"},
-		ClaimsSupported:                   []string{"groups"},
-		IDPs:                              []IdentityProviderMetadata{},
-	}
-
-	// The cache of IDPs could change at any time, so always recalculate the list.
-	for _, provider := range upstreamIDPs.GetLDAPIdentityProviders() {
-		oidcConfig.IDPs = append(oidcConfig.IDPs, IdentityProviderMetadata{Name: provider.GetName(), Type: idpDiscoveryTypeLDAP})
-	}
-	for _, provider := range upstreamIDPs.GetOIDCIdentityProviders() {
-		oidcConfig.IDPs = append(oidcConfig.IDPs, IdentityProviderMetadata{Name: provider.GetName(), Type: idpDiscoveryTypeOIDC})
-	}
-
-	// Nobody like an API that changes the results unnecessarily. :)
-	sort.SliceStable(oidcConfig.IDPs, func(i, j int) bool {
-		return oidcConfig.IDPs[i].Name < oidcConfig.IDPs[j].Name
-	})
-
-	var b bytes.Buffer
-	encodeErr := json.NewEncoder(&b).Encode(&oidcConfig)
-	encodedMetadata := b.Bytes()
-
-	return encodedMetadata, encodeErr
 }

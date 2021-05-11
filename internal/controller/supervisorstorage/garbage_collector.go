@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorstorage
@@ -59,7 +59,7 @@ func GarbageCollectorController(
 					return isSecretWithGCAnnotation(oldObj) || isSecretWithGCAnnotation(newObj)
 				},
 				DeleteFunc: func(obj metav1.Object) bool { return false }, // ignore all deletes
-				ParentFunc: nil,
+				ParentFunc: pinnipedcontroller.SingletonQueue(),
 			},
 			controllerlib.InformerOption{},
 		),
@@ -67,16 +67,20 @@ func GarbageCollectorController(
 }
 
 func (c *garbageCollectorController) Sync(ctx controllerlib.Context) error {
+	// make sure we have a consistent, static meaning for the current time during the sync loop
+	frozenClock := clock.NewFakeClock(c.clock.Now())
+
 	// The Sync method is triggered upon any change to any Secret, which would make this
 	// controller too chatty, so it rate limits itself to a more reasonable interval.
 	// Note that even during a period when no secrets are changing, it will still run
 	// at the informer's full-resync interval (as long as there are some secrets).
-	if c.clock.Now().Sub(c.timeOfMostRecentSweep) < minimumRepeatInterval {
+	if since := frozenClock.Since(c.timeOfMostRecentSweep); since < minimumRepeatInterval {
+		ctx.Queue.AddAfter(ctx.Key, minimumRepeatInterval-since)
 		return nil
 	}
 
 	plog.Info("starting storage garbage collection sweep")
-	c.timeOfMostRecentSweep = c.clock.Now()
+	c.timeOfMostRecentSweep = frozenClock.Now()
 
 	listOfSecrets, err := c.secretInformer.Lister().List(labels.Everything())
 	if err != nil {
@@ -97,7 +101,7 @@ func (c *garbageCollectorController) Sync(ctx controllerlib.Context) error {
 			continue
 		}
 
-		if garbageCollectAfterTime.Before(c.clock.Now()) {
+		if garbageCollectAfterTime.Before(frozenClock.Now()) {
 			err = c.kubeClient.CoreV1().Secrets(secret.Namespace).Delete(ctx.Context, secret.Name, metav1.DeleteOptions{})
 			if err != nil {
 				plog.WarningErr("failed to garbage collect resource", err, logKV(secret))

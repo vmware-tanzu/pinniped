@@ -208,6 +208,8 @@ func TestCLILoginOIDC(t *testing.T) {
 	require.NoErrorf(t, json.Unmarshal(cmd2Output, &credOutput2),
 		"command returned something other than an ExecCredential:\n%s", string(cmd2Output))
 	require.Equal(t, credOutput, credOutput2)
+	// the logs contain only the ExecCredential. There are 2 elements because the last one is "".
+	require.Len(t, strings.Split(string(cmd2Output), "\n"), 2)
 
 	// Overwrite the cache entry to remove the access and ID tokens.
 	t.Logf("overwriting cache to remove valid ID token")
@@ -237,6 +239,26 @@ func TestCLILoginOIDC(t *testing.T) {
 	require.NoErrorf(t, json.Unmarshal(cmd3Output, &credOutput3),
 		"command returned something other than an ExecCredential:\n%s", string(cmd2Output))
 	require.NotEqual(t, credOutput2.Status.Token, credOutput3.Status.Token)
+	// the logs contain only the ExecCredential. There are 2 elements because the last one is "".
+	require.Len(t, strings.Split(string(cmd3Output), "\n"), 2)
+
+	t.Logf("starting fourth CLI subprocess to test debug logging")
+	err = os.Setenv("PINNIPED_DEBUG", "true")
+	require.NoError(t, err)
+	command := oidcLoginCommand(ctx, t, pinnipedExe, sessionCachePath)
+	cmd4CombinedOutput, err := command.CombinedOutput()
+	cmd4StringOutput := string(cmd4CombinedOutput)
+	require.NoError(t, err, cmd4StringOutput)
+
+	// the logs contain only the 4 debug lines plus the ExecCredential. There are 6 elements because the last one is "".
+	require.Len(t, strings.Split(cmd4StringOutput, "\n"), 6)
+	require.Contains(t, cmd4StringOutput, "Performing OIDC login")
+	require.Contains(t, cmd4StringOutput, "Found unexpired cached token")
+	require.Contains(t, cmd4StringOutput, "No concierge configured, skipping token credential exchange")
+	require.Contains(t, cmd4StringOutput, "caching cluster credential for future use.")
+	require.Contains(t, cmd4StringOutput, credOutput3.Status.Token)
+	err = os.Unsetenv("PINNIPED_DEBUG")
+	require.NoError(t, err)
 }
 
 func runPinnipedLoginOIDC(
@@ -271,6 +293,7 @@ func runPinnipedLoginOIDC(
 	// Start a background goroutine to read stderr from the CLI and parse out the login URL.
 	loginURLChan := make(chan string)
 	spawnTestGoroutine(t, func() (err error) {
+		t.Helper()
 		defer func() {
 			closeErr := stderr.Close()
 			if closeErr == nil || errors.Is(closeErr, os.ErrClosed) {
@@ -282,16 +305,18 @@ func runPinnipedLoginOIDC(
 		}()
 
 		reader := bufio.NewReader(library.NewLoggerReader(t, "stderr", stderr))
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("could not read login URL line from stderr: %w", err)
-		}
+
+		scanner := bufio.NewScanner(reader)
 		const prompt = "Please log in: "
-		if !strings.HasPrefix(line, prompt) {
-			return fmt.Errorf("expected %q to have prefix %q", line, prompt)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.HasPrefix(line, prompt) {
+				loginURLChan <- strings.TrimPrefix(line, prompt)
+				return nil
+			}
 		}
-		loginURLChan <- strings.TrimPrefix(line, prompt)
-		return readAndExpectEmpty(reader)
+
+		return fmt.Errorf("expected stderr to contain %s", prompt)
 	})
 
 	// Start a background goroutine to read stdout from the CLI and parse out an ExecCredential.

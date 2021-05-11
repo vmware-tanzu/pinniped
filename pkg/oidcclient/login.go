@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/go-logr/logr"
 	"github.com/pkg/browser"
 	"golang.org/x/oauth2"
 	"golang.org/x/term"
@@ -58,11 +59,14 @@ const (
 	defaultLDAPPasswordPrompt = "Password: "
 
 	httpLocationHeaderName = "Location"
+
+	debugLogLevel = 4
 )
 
 type handlerState struct {
 	// Basic parameters.
 	ctx      context.Context
+	logger   logr.Logger
 	issuer   string
 	clientID string
 	scopes   []string
@@ -113,6 +117,15 @@ type Option func(*handlerState) error
 func WithContext(ctx context.Context) Option {
 	return func(h *handlerState) error {
 		h.ctx = ctx
+		return nil
+	}
+}
+
+// WithLogger specifies a PLogger to use with the login.
+// If not specified this will default to a new logger.
+func WithLogger(logger logr.Logger) Option {
+	return func(h *handlerState) error {
+		h.logger = logger
 		return nil
 	}
 }
@@ -227,6 +240,7 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		cache:        &nopCache{},
 		callbackPath: "/callback",
 		ctx:          context.Background(),
+		logger:       logr.Discard(), // discard logs unless a logger is specified
 		callbacks:    make(chan callbackResult),
 		httpClient:   http.DefaultClient,
 
@@ -306,6 +320,7 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 	// If the ID token is still valid for a bit, return it immediately and skip the rest of the flow.
 	cached := h.cache.GetToken(cacheKey)
 	if cached != nil && cached.IDToken != nil && time.Until(cached.IDToken.Expiry.Time) > minIDTokenValidity {
+		h.logger.V(debugLogLevel).Info("Pinniped: Found unexpired cached token.")
 		return cached, nil
 	}
 
@@ -538,6 +553,7 @@ func (h *handlerState) initOIDCDiscovery() error {
 		return nil
 	}
 
+	h.logger.V(debugLogLevel).Info("Pinniped: Performing OIDC discovery", "issuer", h.issuer)
 	var err error
 	h.provider, err = oidc.NewProvider(h.ctx, h.issuer)
 	if err != nil {
@@ -554,6 +570,7 @@ func (h *handlerState) initOIDCDiscovery() error {
 }
 
 func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidctypes.Token, error) {
+	h.logger.V(debugLogLevel).Info("Pinniped: Performing RFC8693 token exchange", "requestedAudience", h.requestedAudience)
 	// Perform OIDC discovery. This may have already been performed if there was not a cached base token.
 	if err := h.initOIDCDiscovery(); err != nil {
 		return nil, err
@@ -624,6 +641,7 @@ func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidcty
 }
 
 func (h *handlerState) handleRefresh(ctx context.Context, refreshToken *oidctypes.RefreshToken) (*oidctypes.Token, error) {
+	h.logger.V(debugLogLevel).Info("Pinniped: Refreshing cached token.")
 	refreshSource := h.oauth2Config.TokenSource(ctx, &oauth2.Token{RefreshToken: refreshToken.Token})
 
 	refreshed, err := refreshSource.Token()

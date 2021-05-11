@@ -48,10 +48,15 @@ func TestStorageGarbageCollection(t *testing.T) {
 	// in the same namespace just to get the controller to respond faster.
 	// This is just a performance optimization to make this test pass faster because otherwise
 	// this test has to wait ~3 minutes for the controller's next full-resync.
-	stopCh := make(chan bool, 1) // It is important that this channel be buffered.
-	go updateSecretEveryTwoSeconds(t, stopCh, secrets, secretNotYetExpired)
+	stopCh := make(chan struct{})
+	errCh := make(chan error)
+	go updateSecretEveryTwoSeconds(stopCh, errCh, secrets, secretNotYetExpired)
 	t.Cleanup(func() {
-		stopCh <- true
+		close(stopCh)
+
+		if updateErr := <-errCh; updateErr != nil {
+			panic(updateErr)
+		}
 	})
 
 	// Wait long enough for the next periodic sweep of the GC controller for the secrets to be deleted, which
@@ -69,9 +74,14 @@ func TestStorageGarbageCollection(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func updateSecretEveryTwoSeconds(t *testing.T, stopCh chan bool, secrets corev1client.SecretInterface, secret *v1.Secret) {
+func updateSecretEveryTwoSeconds(stopCh chan struct{}, errCh chan error, secrets corev1client.SecretInterface, secret *v1.Secret) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
+
+	var updateErr error
+	defer func() {
+		errCh <- updateErr
+	}()
 
 	i := 0
 	for {
@@ -87,9 +97,25 @@ func updateSecretEveryTwoSeconds(t *testing.T, stopCh chan bool, secrets corev1c
 
 		i++
 		secret.Data["foo"] = []byte(fmt.Sprintf("bar-%d", i))
-		var updateErr error
 		secret, updateErr = secrets.Update(ctx, secret, metav1.UpdateOptions{})
-		require.NoError(t, updateErr)
+
+		switch {
+		case updateErr == nil:
+			// continue to next update
+
+		case k8serrors.IsConflict(updateErr), k8serrors.IsNotFound(updateErr):
+			select {
+			case _, ok := <-stopCh:
+				if !ok { // stopCh is closed meaning that test is already finished so these errors are expected
+					updateErr = nil
+				}
+			default:
+			}
+
+			return // even if the error is expected, we must stop
+		default:
+			return // unexpected error
+		}
 	}
 }
 

@@ -16,10 +16,12 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
+	"k8s.io/klog/v2"
 
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/testutil/testlogger"
 	"go.pinniped.dev/pkg/conciergeclient"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
@@ -41,10 +43,12 @@ func TestLoginOIDCCommand(t *testing.T) {
 		args             []string
 		loginErr         error
 		conciergeErr     error
+		env              map[string]string
 		wantError        bool
 		wantStdout       string
 		wantStderr       string
 		wantOptionsCount int
+		wantLogs         []string
 	}{
 		{
 			name: "help flag passed",
@@ -155,7 +159,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--upstream-identity-provider-type", "oidc",
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
 			},
-			wantOptionsCount: 3,
+			wantOptionsCount: 4,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 		},
 		{
@@ -166,7 +170,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--upstream-identity-provider-type", "ldap",
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
 			},
-			wantOptionsCount: 4,
+			wantOptionsCount: 5,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 		},
 		{
@@ -177,7 +181,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
 			},
 			loginErr:         fmt.Errorf("some login error"),
-			wantOptionsCount: 3,
+			wantOptionsCount: 4,
 			wantError:        true,
 			wantStderr: here.Doc(`
 				Error: could not complete Pinniped login: some login error
@@ -195,7 +199,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
 			},
 			conciergeErr:     fmt.Errorf("some concierge error"),
-			wantOptionsCount: 3,
+			wantOptionsCount: 4,
 			wantError:        true,
 			wantStderr: here.Doc(`
 				Error: could not complete Concierge credential exchange: some concierge error
@@ -208,8 +212,13 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--issuer", "test-issuer",
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
 			},
-			wantOptionsCount: 3,
+			env:              map[string]string{"PINNIPED_DEBUG": "true"},
+			wantOptionsCount: 4,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
+			wantLogs: []string{
+				"\"level\"=0 \"msg\"=\"Pinniped login: Performing OIDC login\"  \"client id\"=\"test-client-id\" \"issuer\"=\"test-issuer\"",
+				"\"level\"=0 \"msg\"=\"Pinniped login: No concierge configured, skipping token credential exchange\"",
+			},
 		},
 		{
 			name: "success with all options",
@@ -232,17 +241,30 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--upstream-identity-provider-name", "some-upstream-name",
 				"--upstream-identity-provider-type", "ldap",
 			},
-			wantOptionsCount: 9,
+			env:              map[string]string{"PINNIPED_DEBUG": "true"},
+			wantOptionsCount: 10,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"exchanged-token"}}` + "\n",
+			wantLogs: []string{
+				"\"level\"=0 \"msg\"=\"Pinniped login: Performing OIDC login\"  \"client id\"=\"test-client-id\" \"issuer\"=\"test-issuer\"",
+				"\"level\"=0 \"msg\"=\"Pinniped login: Exchanging token for cluster credential\"  \"authenticator name\"=\"test-authenticator\" \"authenticator type\"=\"webhook\" \"endpoint\"=\"https://127.0.0.1:1234/\"",
+				"\"level\"=0 \"msg\"=\"Pinniped login: Successfully exchanged token for cluster credential.\"",
+				"\"level\"=0 \"msg\"=\"Pinniped login: caching cluster credential for future use.\"",
+			},
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			testLogger := testlogger.New(t)
+			klog.SetLogger(testLogger)
 			var (
 				gotOptions []oidcclient.Option
 			)
 			cmd := oidcLoginCommand(oidcLoginCommandDeps{
+				lookupEnv: func(s string) (string, bool) {
+					v, ok := tt.env[s]
+					return v, ok
+				},
 				login: func(issuer string, clientID string, opts ...oidcclient.Option) (*oidctypes.Token, error) {
 					require.Equal(t, "test-issuer", issuer)
 					require.Equal(t, "test-client-id", clientID)
@@ -288,6 +310,8 @@ func TestLoginOIDCCommand(t *testing.T) {
 			require.Equal(t, tt.wantStdout, stdout.String(), "unexpected stdout")
 			require.Equal(t, tt.wantStderr, stderr.String(), "unexpected stderr")
 			require.Len(t, gotOptions, tt.wantOptionsCount)
+
+			require.Equal(t, tt.wantLogs, testLogger.Lines())
 		})
 	}
 }

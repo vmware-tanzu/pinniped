@@ -29,6 +29,8 @@ pinniped get kubeconfig [flags]
       --concierge-endpoint string             API base for the Concierge endpoint
       --concierge-mode mode                   Concierge mode of operation (default TokenCredentialRequestAPI)
       --concierge-skip-wait                   Skip waiting for any pending Concierge strategies to become ready (default: false)
+      --credential-cache string               Path to cluster-specific credentials cache
+      --generated-name-suffix string          Suffix to append to generated cluster, context, user kubeconfig entries (default "-pinniped")
   -h, --help                                  help for kubeconfig
       --kubeconfig string                     Path to kubeconfig file
       --kubeconfig-context string             Kubeconfig context name (default: current active context)

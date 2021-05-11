@@ -164,13 +164,8 @@ type TimeoutsConfiguration struct {
 	OIDCSessionStorageLifetime time.Duration
 
 	// AccessTokenSessionStorageLifetime is the length of time after which an access token's session data is allowed
-	// to be garbage collected from storage.  These must exist in storage for as long as the refresh token is valid.
-	// Therefore, this can be just slightly longer than the AccessTokenLifespan. Access tokens are handed back to
-	// the token endpoint for the token exchange use case. During a token exchange, if the access token is expired
-	// and still exists in storage, then the endpoint will be able to give a slightly more specific error message,
-	// rather than a more generic error that is returned when the token does not exist. If this is desirable, then
-	// the AccessTokenSessionStorageLifetime can be made to be significantly larger than AccessTokenLifespan, at the
-	// cost of slower cleanup.
+	// to be garbage collected from storage.  These must exist in storage for as long as the refresh token is valid
+	// or else the refresh flow will not work properly. So this must be longer than RefreshTokenLifespan.
 	AccessTokenSessionStorageLifetime time.Duration
 
 	// RefreshTokenSessionStorageLifetime is the length of time after which a refresh token's session data is allowed
@@ -186,7 +181,7 @@ type TimeoutsConfiguration struct {
 
 // Get the defaults for the Supervisor server.
 func DefaultOIDCTimeoutsConfiguration() TimeoutsConfiguration {
-	accessTokenLifespan := 15 * time.Minute
+	accessTokenLifespan := 2 * time.Minute
 	authorizationCodeLifespan := 10 * time.Minute
 	refreshTokenLifespan := 9 * time.Hour
 
@@ -199,7 +194,7 @@ func DefaultOIDCTimeoutsConfiguration() TimeoutsConfiguration {
 		AuthorizationCodeSessionStorageLifetime: authorizationCodeLifespan + refreshTokenLifespan,
 		PKCESessionStorageLifetime:              authorizationCodeLifespan + (1 * time.Minute),
 		OIDCSessionStorageLifetime:              authorizationCodeLifespan + (1 * time.Minute),
-		AccessTokenSessionStorageLifetime:       accessTokenLifespan + (1 * time.Minute),
+		AccessTokenSessionStorageLifetime:       refreshTokenLifespan + accessTokenLifespan,
 		RefreshTokenSessionStorageLifetime:      refreshTokenLifespan + accessTokenLifespan,
 	}
 }

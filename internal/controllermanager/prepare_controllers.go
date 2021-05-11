@@ -121,6 +121,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 
 	agentConfig := kubecertagent.AgentConfig{
 		Namespace:                 c.ServerInstallationInfo.Namespace,
+		ServiceAccountName:        c.NamesConfig.AgentServiceAccount,
 		ContainerImage:            *c.KubeCertAgentConfig.Image,
 		NamePrefix:                *c.KubeCertAgentConfig.NamePrefix,
 		ContainerImagePullSecrets: c.KubeCertAgentConfig.ImagePullSecrets,

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -269,11 +270,17 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 
 		discoveredProvider, err = oidc.NewProvider(oidc.ClientContext(ctx, httpClient), upstream.Spec.Issuer)
 		if err != nil {
+			const klogLevelTrace = 6
+			c.log.V(klogLevelTrace).WithValues(
+				"namespace", upstream.Namespace,
+				"name", upstream.Name,
+				"issuer", upstream.Spec.Issuer,
+			).Error(err, "failed to perform OIDC discovery")
 			return &v1alpha1.Condition{
 				Type:    typeOIDCDiscoverySucceeded,
 				Status:  v1alpha1.ConditionFalse,
 				Reason:  reasonUnreachable,
-				Message: fmt.Sprintf("failed to perform OIDC discovery against %q", upstream.Spec.Issuer),
+				Message: fmt.Sprintf("failed to perform OIDC discovery against %q:\n%s", upstream.Spec.Issuer, truncateNonOIDCErr(err)),
 			}
 		}
 
@@ -427,4 +434,15 @@ func (*oidcWatcherController) computeScopes(additionalScopes []string) []string 
 	}
 	sort.Strings(scopes)
 	return scopes
+}
+
+func truncateNonOIDCErr(err error) string {
+	const max = 100
+	msg := err.Error()
+
+	if len(msg) <= max || strings.HasPrefix(msg, "oidc:") {
+		return msg
+	}
+
+	return msg[:max] + fmt.Sprintf(" [truncated %d chars]", len(msg)-max)
 }

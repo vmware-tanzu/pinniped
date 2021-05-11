@@ -35,6 +35,13 @@ only shares this information with the audit stack).  To keep things simple,
 we use the fake audit backend at the Metadata level for all requests.  This
 guarantees that we always have an audit event on every request.
 
+One final wrinkle is that impersonation cannot impersonate UIDs (yet).  This is
+problematic because service account tokens always assert a UID.  To handle this
+case without losing authentication information, when we see an identity with a
+UID that was asserted via a bearer token, we simply pass the request through
+with the original bearer token and no impersonation headers set (as if the user
+had made the request directly against the Kubernetes API server).
+
 For all normal requests, we only use http/2.0 when proxying to the API server.
 For upgrade requests, we only use http/1.1 since these always go from http/1.1
 to either websockets or SPDY.

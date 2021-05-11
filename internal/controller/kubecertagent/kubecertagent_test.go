@@ -123,6 +123,7 @@ func TestAgentController(t *testing.T) {
 					}},
 					RestartPolicy:                 corev1.RestartPolicyAlways,
 					TerminationGracePeriodSeconds: pointer.Int64Ptr(0),
+					ServiceAccountName:            "test-service-account-name",
 					AutomountServiceAccountToken:  pointer.BoolPtr(false),
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsUser:  pointer.Int64Ptr(0),
@@ -672,6 +673,7 @@ func TestAgentController(t *testing.T) {
 				AgentConfig{
 					Namespace:                 "concierge",
 					ContainerImage:            "pinniped-server-image",
+					ServiceAccountName:        "test-service-account-name",
 					NamePrefix:                "pinniped-concierge-kube-cert-agent-",
 					ContainerImagePullSecrets: []string{"pinniped-image-pull-secret"},
 					CredentialIssuerName:      "pinniped-concierge-config",

@@ -34,10 +34,43 @@ func TestSupervisorUpstreamOIDCDiscovery(t *testing.T) {
 				Message: `secret "does-not-exist" not found`,
 			},
 			{
-				Type:    "OIDCDiscoverySucceeded",
-				Status:  v1alpha1.ConditionFalse,
-				Reason:  "Unreachable",
-				Message: `failed to perform OIDC discovery against "https://127.0.0.1:444444/issuer"`,
+				Type:   "OIDCDiscoverySucceeded",
+				Status: v1alpha1.ConditionFalse,
+				Reason: "Unreachable",
+				Message: `failed to perform OIDC discovery against "https://127.0.0.1:444444/issuer":
+Get "https://127.0.0.1:444444/issuer/.well-known/openid-configuration": dial tcp: address 444444: in [truncated 10 chars]`,
+			},
+		})
+	})
+
+	t.Run("invalid issuer with trailing slash", func(t *testing.T) {
+		t.Parallel()
+		spec := v1alpha1.OIDCIdentityProviderSpec{
+			Issuer: env.SupervisorUpstreamOIDC.Issuer + "/",
+			TLS: &v1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+			},
+			AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{
+				AdditionalScopes: []string{"email", "profile"},
+			},
+			Client: v1alpha1.OIDCClient{
+				SecretName: library.CreateClientCredsSecret(t, "test-client-id", "test-client-secret").Name,
+			},
+		}
+		upstream := library.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseError)
+		expectUpstreamConditions(t, upstream, []v1alpha1.Condition{
+			{
+				Type:    "ClientCredentialsValid",
+				Status:  v1alpha1.ConditionTrue,
+				Reason:  "Success",
+				Message: "loaded client credentials",
+			},
+			{
+				Type:   "OIDCDiscoverySucceeded",
+				Status: v1alpha1.ConditionFalse,
+				Reason: "Unreachable",
+				Message: `failed to perform OIDC discovery against "` + env.SupervisorUpstreamOIDC.Issuer + `/":
+oidc: issuer did not match the issuer returned by provider, expected "` + env.SupervisorUpstreamOIDC.Issuer + `/" got "` + env.SupervisorUpstreamOIDC.Issuer + `"`,
 			},
 		})
 	})

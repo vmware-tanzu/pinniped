@@ -61,8 +61,8 @@ const (
 	hmacSecret = "this needs to be at least 32 characters to meet entropy requirements"
 
 	authCodeExpirationSeconds    = 10 * 60 // Current, we set our auth code expiration to 10 minutes
-	accessTokenExpirationSeconds = 15 * 60 // Currently, we set our access token expiration to 15 minutes
-	idTokenExpirationSeconds     = 15 * 60 // Currently, we set our ID token expiration to 15 minutes
+	accessTokenExpirationSeconds = 2 * 60  // Currently, we set our access token expiration to 2 minutes
+	idTokenExpirationSeconds     = 2 * 60  // Currently, we set our ID token expiration to 2 minutes
 
 	timeComparisonFudgeSeconds = 15
 )

@@ -6,7 +6,11 @@ package integration
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
@@ -28,6 +32,8 @@ import (
 	"golang.org/x/net/http2"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
+	certificatesv1 "k8s.io/api/certificates/v1"
+	certificatesv1beta1 "k8s.io/api/certificates/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -42,6 +48,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
+	"k8s.io/client-go/util/cert"
+	"k8s.io/client-go/util/certificate/csr"
 	"k8s.io/client-go/util/keyutil"
 	"sigs.k8s.io/yaml"
 
@@ -607,16 +615,26 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 			require.NoError(t, err)
 
-			expectedExtra := make(map[string]authenticationv1.ExtraValue, len(whoAmIAdmin.Status.KubernetesUserInfo.User.Extra))
-			for k, v := range whoAmIAdmin.Status.KubernetesUserInfo.User.Extra {
+			// The WhoAmI API is lossy:
+			// - It drops UID
+			// - It lowercases all extra keys
+			// the admin user on EKS has both a UID set and an extra key with uppercase characters
+			// Thus we fallback to the CSR API to grab the UID and Extra to handle this scenario
+			uid, extra := getUIDAndExtraViaCSR(ctx, t, whoAmIAdmin.Status.KubernetesUserInfo.User.UID,
+				newImpersonationProxyClientWithCredentials(t,
+					clusterAdminCredentials, impersonationProxyURL, impersonationProxyCACertPEM, nil).
+					Kubernetes,
+			)
+
+			expectedExtra := make(map[string]authenticationv1.ExtraValue, len(extra))
+			for k, v := range extra {
 				expectedExtra[k] = authenticationv1.ExtraValue(v)
 			}
 			expectedOriginalUserInfo := authenticationv1.UserInfo{
 				Username: whoAmIAdmin.Status.KubernetesUserInfo.User.Username,
-				// The WhoAmI API is lossy so this will fail when the admin user actually does have a UID
-				UID:    whoAmIAdmin.Status.KubernetesUserInfo.User.UID,
-				Groups: whoAmIAdmin.Status.KubernetesUserInfo.User.Groups,
-				Extra:  expectedExtra,
+				UID:      uid,
+				Groups:   whoAmIAdmin.Status.KubernetesUserInfo.User.Groups,
+				Extra:    expectedExtra,
 			}
 			expectedOriginalUserInfoJSON, err := json.Marshal(expectedOriginalUserInfo)
 			require.NoError(t, err)
@@ -780,32 +798,148 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				whoAmI,
 			)
 
-			// Test using a service account token. Authenticating as Service Accounts through the impersonation
-			// proxy is not supported, so it should fail.
+			// Test using a service account token.
 			namespaceName := createTestNamespace(t, adminClient)
-			_, saToken, _ := createServiceAccountToken(ctx, t, adminClient, namespaceName)
+			saName, saToken, _ := createServiceAccountToken(ctx, t, adminClient, namespaceName)
 			impersonationProxyServiceAccountPinnipedConciergeClient := newImpersonationProxyClientWithCredentials(t,
 				&loginv1alpha1.ClusterCredential{Token: saToken},
 				impersonationProxyURL, impersonationProxyCACertPEM, nil).PinnipedConcierge
-			_, err = impersonationProxyServiceAccountPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
+			whoAmI, err = impersonationProxyServiceAccountPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-			require.EqualError(t, err, "Internal error occurred: unimplemented functionality - unable to act as current user")
-			require.True(t, k8serrors.IsInternalError(err), err)
-			require.Equal(t, &k8serrors.StatusError{
-				ErrStatus: metav1.Status{
-					Status: metav1.StatusFailure,
-					Code:   http.StatusInternalServerError,
-					Reason: metav1.StatusReasonInternalError,
-					Details: &metav1.StatusDetails{
-						Causes: []metav1.StatusCause{
-							{
-								Message: "unimplemented functionality - unable to act as current user",
-							},
+			require.NoError(t, err)
+			require.Equal(t,
+				expectedWhoAmIRequestResponse(
+					serviceaccount.MakeUsername(namespaceName, saName),
+					[]string{"system:serviceaccounts", "system:serviceaccounts:" + namespaceName, "system:authenticated"},
+					nil,
+				),
+				whoAmI,
+			)
+		})
+
+		t.Run("WhoAmIRequests and SA token request", func(t *testing.T) {
+			namespaceName := createTestNamespace(t, adminClient)
+			kubeClient := adminClient.CoreV1()
+			saName, _, saUID := createServiceAccountToken(ctx, t, adminClient, namespaceName)
+
+			_, tokenRequestProbeErr := kubeClient.ServiceAccounts(namespaceName).CreateToken(ctx, saName, &authenticationv1.TokenRequest{}, metav1.CreateOptions{})
+			if k8serrors.IsNotFound(tokenRequestProbeErr) && tokenRequestProbeErr.Error() == "the server could not find the requested resource" {
+				return // stop test early since the token request API is not enabled on this cluster - other errors are caught below
+			}
+
+			pod, err := kubeClient.Pods(namespaceName).Create(ctx, &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-impersonation-proxy-",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "ignored-but-required",
+							Image: "does-not-matter",
 						},
 					},
-					Message: "Internal error occurred: unimplemented functionality - unable to act as current user",
+					ServiceAccountName: saName,
 				},
-			}, err)
+			}, metav1.CreateOptions{})
+			require.NoError(t, err)
+
+			tokenRequestBadAudience, err := kubeClient.ServiceAccounts(namespaceName).CreateToken(ctx, saName, &authenticationv1.TokenRequest{
+				Spec: authenticationv1.TokenRequestSpec{
+					Audiences: []string{"should-fail-because-wrong-audience"}, // anything that is not an API server audience
+					BoundObjectRef: &authenticationv1.BoundObjectReference{
+						Kind:       "Pod",
+						APIVersion: "",
+						Name:       pod.Name,
+						UID:        pod.UID,
+					},
+				},
+			}, metav1.CreateOptions{})
+			require.NoError(t, err)
+
+			impersonationProxySABadAudPinnipedConciergeClient := newImpersonationProxyClientWithCredentials(t,
+				&loginv1alpha1.ClusterCredential{Token: tokenRequestBadAudience.Status.Token},
+				impersonationProxyURL, impersonationProxyCACertPEM, nil).PinnipedConcierge
+
+			_, badAudErr := impersonationProxySABadAudPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
+				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
+			require.True(t, k8serrors.IsUnauthorized(badAudErr), library.Sdump(badAudErr))
+
+			tokenRequest, err := kubeClient.ServiceAccounts(namespaceName).CreateToken(ctx, saName, &authenticationv1.TokenRequest{
+				Spec: authenticationv1.TokenRequestSpec{
+					Audiences: []string{},
+					BoundObjectRef: &authenticationv1.BoundObjectReference{
+						Kind:       "Pod",
+						APIVersion: "",
+						Name:       pod.Name,
+						UID:        pod.UID,
+					},
+				},
+			}, metav1.CreateOptions{})
+			require.NoError(t, err)
+
+			impersonationProxySAClient := newImpersonationProxyClientWithCredentials(t,
+				&loginv1alpha1.ClusterCredential{Token: tokenRequest.Status.Token},
+				impersonationProxyURL, impersonationProxyCACertPEM, nil)
+
+			whoAmITokenReq, err := impersonationProxySAClient.PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
+				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
+			require.NoError(t, err)
+
+			// new service account tokens include the pod info in the extra fields
+			require.Equal(t,
+				expectedWhoAmIRequestResponse(
+					serviceaccount.MakeUsername(namespaceName, saName),
+					[]string{"system:serviceaccounts", "system:serviceaccounts:" + namespaceName, "system:authenticated"},
+					map[string]identityv1alpha1.ExtraValue{
+						"authentication.kubernetes.io/pod-name": {pod.Name},
+						"authentication.kubernetes.io/pod-uid":  {string(pod.UID)},
+					},
+				),
+				whoAmITokenReq,
+			)
+
+			// allow the test SA to create CSRs
+			library.CreateTestClusterRoleBinding(t,
+				rbacv1.Subject{Kind: rbacv1.ServiceAccountKind, Name: saName, Namespace: namespaceName},
+				rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "system:node-bootstrapper"},
+			)
+			library.WaitForUserToHaveAccess(t, serviceaccount.MakeUsername(namespaceName, saName), []string{}, &authorizationv1.ResourceAttributes{
+				Verb: "create", Group: certificatesv1.GroupName, Version: "*", Resource: "certificatesigningrequests",
+			})
+
+			privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+			require.NoError(t, err)
+
+			csrPEM, err := cert.MakeCSR(privateKey, &pkix.Name{
+				CommonName:   "panda-man",
+				Organization: []string{"living-the-dream", "need-more-sleep"},
+			}, nil, nil)
+			require.NoError(t, err)
+
+			csrName, _, err := csr.RequestCertificate(
+				impersonationProxySAClient.Kubernetes,
+				csrPEM,
+				"",
+				certificatesv1.KubeAPIServerClientSignerName,
+				[]certificatesv1.KeyUsage{certificatesv1.UsageClientAuth},
+				privateKey,
+			)
+			require.NoError(t, err)
+
+			saCSR, err := impersonationProxySAClient.Kubernetes.CertificatesV1beta1().CertificateSigningRequests().Get(ctx, csrName, metav1.GetOptions{})
+			require.NoError(t, err)
+
+			err = adminClient.CertificatesV1beta1().CertificateSigningRequests().Delete(ctx, csrName, metav1.DeleteOptions{})
+			require.NoError(t, err)
+
+			// make sure the user info that the CSR captured matches the SA, including the UID
+			require.Equal(t, serviceaccount.MakeUsername(namespaceName, saName), saCSR.Spec.Username)
+			require.Equal(t, string(saUID), saCSR.Spec.UID)
+			require.Equal(t, []string{"system:serviceaccounts", "system:serviceaccounts:" + namespaceName, "system:authenticated"}, saCSR.Spec.Groups)
+			require.Equal(t, map[string]certificatesv1beta1.ExtraValue{
+				"authentication.kubernetes.io/pod-name": {pod.Name},
+				"authentication.kubernetes.io/pod-uid":  {string(pod.UID)},
+			}, saCSR.Spec.Extra)
 		})
 
 		t.Run("kubectl as a client", func(t *testing.T) {
@@ -1581,17 +1715,18 @@ func getCredForConfig(t *testing.T, config *rest.Config) *loginv1alpha1.ClusterC
 	if tlsConfig != nil && tlsConfig.GetClientCertificate != nil {
 		cert, err := tlsConfig.GetClientCertificate(nil)
 		require.NoError(t, err)
-		require.Len(t, cert.Certificate, 1)
+		if len(cert.Certificate) > 0 {
+			require.Len(t, cert.Certificate, 1)
+			publicKey := pem.EncodeToMemory(&pem.Block{
+				Type:  "CERTIFICATE",
+				Bytes: cert.Certificate[0],
+			})
+			out.ClientCertificateData = string(publicKey)
 
-		publicKey := pem.EncodeToMemory(&pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: cert.Certificate[0],
-		})
-		out.ClientCertificateData = string(publicKey)
-
-		privateKey, err := keyutil.MarshalPrivateKeyToPEM(cert.PrivateKey)
-		require.NoError(t, err)
-		out.ClientKeyData = string(privateKey)
+			privateKey, err := keyutil.MarshalPrivateKeyToPEM(cert.PrivateKey)
+			require.NoError(t, err)
+			out.ClientKeyData = string(privateKey)
+		}
 	}
 
 	if *out == (loginv1alpha1.ClusterCredential{}) {
@@ -1599,4 +1734,40 @@ func getCredForConfig(t *testing.T, config *rest.Config) *loginv1alpha1.ClusterC
 	}
 
 	return out
+}
+
+func getUIDAndExtraViaCSR(ctx context.Context, t *testing.T, uid string, client kubernetes.Interface) (string, map[string]certificatesv1beta1.ExtraValue) {
+	t.Helper()
+
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	csrPEM, err := cert.MakeCSR(privateKey, &pkix.Name{
+		CommonName:   "panda-man",
+		Organization: []string{"living-the-dream", "need-more-sleep"},
+	}, nil, nil)
+	require.NoError(t, err)
+
+	csrName, _, err := csr.RequestCertificate(
+		client,
+		csrPEM,
+		"",
+		certificatesv1.KubeAPIServerClientSignerName,
+		[]certificatesv1.KeyUsage{certificatesv1.UsageClientAuth},
+		privateKey,
+	)
+	require.NoError(t, err)
+
+	csReq, err := client.CertificatesV1beta1().CertificateSigningRequests().Get(ctx, csrName, metav1.GetOptions{})
+	require.NoError(t, err)
+
+	err = client.CertificatesV1beta1().CertificateSigningRequests().Delete(ctx, csrName, metav1.DeleteOptions{})
+	require.NoError(t, err)
+
+	outUID := uid // in the future this may not be empty on some clusters
+	if len(outUID) == 0 {
+		outUID = csReq.Spec.UID
+	}
+
+	return outUID, csReq.Spec.Extra
 }

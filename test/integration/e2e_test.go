@@ -337,6 +337,6 @@ status:
 		pinnipedExe,
 		kubeconfigPath,
 		env.SupervisorUpstreamOIDC.Username,
-		expectedGroupsPlusUnauthenticated,
+		expectedGroupsPlusAuthenticated,
 	)
 }

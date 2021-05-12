@@ -404,7 +404,7 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 	}
 
 	// Send an authorize request.
-	authCtx, authorizeCtxCancelFunc := context.WithTimeout(context.Background(), httpRequestTimeout)
+	authCtx, authorizeCtxCancelFunc := context.WithTimeout(h.ctx, httpRequestTimeout)
 	defer authorizeCtxCancelFunc()
 	authReq, err := http.NewRequestWithContext(authCtx, http.MethodGet, authorizeURL, nil)
 	if err != nil {
@@ -454,7 +454,7 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 
 	// Exchange the authorization code for access, ID, and refresh tokens and perform required
 	// validations on the returned ID token.
-	tokenCtx, tokenCtxCancelFunc := context.WithTimeout(context.Background(), httpRequestTimeout)
+	tokenCtx, tokenCtxCancelFunc := context.WithTimeout(h.ctx, httpRequestTimeout)
 	defer tokenCtxCancelFunc()
 	token, err := h.getProvider(h.oauth2Config, h.provider, h.httpClient).
 		ExchangeAuthcodeAndValidateTokens(

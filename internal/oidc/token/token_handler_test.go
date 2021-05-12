@@ -577,7 +577,7 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 			require.JSONEq(t, fositeReusedAuthCodeErrorBody, reusedAuthcodeResponse.Body.String())
 
 			// This was previously invalidated by the first request, so it remains invalidated
-			requireInvalidAuthCodeStorage(t, authCode, oauthStore)
+			requireInvalidAuthCodeStorage(t, authCode, oauthStore, secrets)
 			// Has now invalidated the access token that was previously handed out by the first request
 			requireInvalidAccessTokenStorage(t, parsedResponseBody, oauthStore)
 			// This was previously invalidated by the first request, so it remains invalidated
@@ -1202,7 +1202,7 @@ func requireTokenEndpointBehavior(
 		wantIDToken := contains(test.wantSuccessBodyFields, "id_token")
 		wantRefreshToken := contains(test.wantSuccessBodyFields, "refresh_token")
 
-		requireInvalidAuthCodeStorage(t, authCode, oauthStore)
+		requireInvalidAuthCodeStorage(t, authCode, oauthStore, secrets)
 		requireValidAccessTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, secrets)
 		requireInvalidPKCEStorage(t, authCode, oauthStore)
 		requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes)
@@ -1438,12 +1438,15 @@ func requireInvalidAuthCodeStorage(
 	t *testing.T,
 	code string,
 	storage oauth2.CoreStorage,
+	secrets v1.SecretInterface,
 ) {
 	t.Helper()
 
 	// Make sure we have invalidated this auth code.
 	_, err := storage.GetAuthorizeCodeSession(context.Background(), getFositeDataSignature(t, code), nil)
 	require.True(t, errors.Is(err, fosite.ErrInvalidatedAuthorizeCode))
+	// make sure that its still around in storage so if someone tries to use it again we invalidate everything
+	requireGarbageCollectTimeInDelta(t, code, "authcode", secrets, time.Now().Add(9*time.Hour).Add(10*time.Minute), 30*time.Second)
 }
 
 func requireValidRefreshTokenStorage(

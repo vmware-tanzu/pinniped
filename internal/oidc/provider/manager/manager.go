@@ -16,6 +16,7 @@ import (
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/discovery"
 	"go.pinniped.dev/internal/oidc/dynamiccodec"
+	"go.pinniped.dev/internal/oidc/idpdiscovery"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/token"
@@ -105,6 +106,8 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 		m.providerHandlers[(issuerHostWithPath + oidc.WellKnownEndpointPath)] = discovery.NewHandler(issuer)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.JWKSEndpointPath)] = jwks.NewHandler(issuer, m.dynamicJWKSProvider)
+
+		m.providerHandlers[(issuerHostWithPath + oidc.PinnipedIDPsPath)] = idpdiscovery.NewHandler(m.upstreamIDPs)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.AuthorizationEndpointPath)] = auth.NewHandler(
 			issuer,

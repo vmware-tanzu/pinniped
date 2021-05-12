@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package discovery provides a handler for the OIDC discovery endpoint.
@@ -37,6 +37,17 @@ type Metadata struct {
 	ClaimsSupported                   []string `json:"claims_supported"`
 
 	// ^^^ Optional ^^^
+
+	// vvv Custom vvv
+
+	PinnipedIDPsEndpoint string `json:"pinniped_identity_providers_endpoint"`
+
+	// ^^^ Custom ^^^
+}
+
+type IdentityProviderMetadata struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
 }
 
 // NewHandler returns an http.Handler that serves an OIDC discovery endpoint.
@@ -46,6 +57,7 @@ func NewHandler(issuerURL string) http.Handler {
 		AuthorizationEndpoint:             issuerURL + oidc.AuthorizationEndpointPath,
 		TokenEndpoint:                     issuerURL + oidc.TokenEndpointPath,
 		JWKSURI:                           issuerURL + oidc.JWKSEndpointPath,
+		PinnipedIDPsEndpoint:              issuerURL + oidc.PinnipedIDPsPath,
 		ResponseTypesSupported:            []string{"code"},
 		SubjectTypesSupported:             []string{"public"},
 		IDTokenSigningAlgValuesSupported:  []string{"ES256"},

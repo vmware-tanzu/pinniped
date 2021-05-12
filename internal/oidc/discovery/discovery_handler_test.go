@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package discovery
@@ -39,6 +39,7 @@ func TestDiscovery(t *testing.T) {
 				AuthorizationEndpoint:             "https://some-issuer.com/some/path/oauth2/authorize",
 				TokenEndpoint:                     "https://some-issuer.com/some/path/oauth2/token",
 				JWKSURI:                           "https://some-issuer.com/some/path/jwks.json",
+				PinnipedIDPsEndpoint:              "https://some-issuer.com/some/path/pinniped_identity_providers",
 				ResponseTypesSupported:            []string{"code"},
 				SubjectTypesSupported:             []string{"public"},
 				IDTokenSigningAlgValuesSupported:  []string{"ES256"},

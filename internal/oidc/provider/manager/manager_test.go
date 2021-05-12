@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -52,6 +53,8 @@ func TestManager(t *testing.T) {
 			issuer2DifferentCaseHostname = "https://exAmPlE.Com/some/path/more/deeply/nested/path"
 			issuer2KeyID                 = "issuer2-key"
 			upstreamIDPAuthorizationURL  = "https://test-upstream.com/auth"
+			upstreamIDPName              = "test-idp"
+			upstreamIDPType              = "oidc"
 			downstreamClientID           = "pinniped-cli"
 			downstreamRedirectURL        = "http://127.0.0.1:12345/callback"
 
@@ -68,7 +71,7 @@ func TestManager(t *testing.T) {
 			return req
 		}
 
-		requireDiscoveryRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedIssuerInResponse string) {
+		requireDiscoveryRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedIssuer string) {
 			recorder := httptest.NewRecorder()
 
 			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.WellKnownEndpointPath+requestURLSuffix))
@@ -82,7 +85,25 @@ func TestManager(t *testing.T) {
 			parsedDiscoveryResult := discovery.Metadata{}
 			err = json.Unmarshal(responseBody, &parsedDiscoveryResult)
 			r.NoError(err)
-			r.Equal(expectedIssuerInResponse, parsedDiscoveryResult.Issuer)
+			r.Equal(expectedIssuer, parsedDiscoveryResult.Issuer)
+			r.Equal(parsedDiscoveryResult.PinnipedIDPsEndpoint, expectedIssuer+oidc.PinnipedIDPsPath)
+		}
+
+		requirePinnipedIDPsDiscoveryRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedIDPName, expectedIDPType string) {
+			recorder := httptest.NewRecorder()
+
+			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.PinnipedIDPsPath+requestURLSuffix))
+
+			r.False(fallbackHandlerWasCalled)
+
+			// Minimal check to ensure that the right IDP discovery endpoint was called
+			r.Equal(http.StatusOK, recorder.Code)
+			responseBody, err := ioutil.ReadAll(recorder.Body)
+			r.NoError(err)
+			r.Equal(
+				fmt.Sprintf(`{"pinniped_identity_providers":[{"name":"%s","type":"%s"}]}`+"\n", expectedIDPName, expectedIDPType),
+				string(responseBody),
+			)
 		}
 
 		requireAuthorizationRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedRedirectLocationPrefix string) (string, string) {
@@ -222,7 +243,7 @@ func TestManager(t *testing.T) {
 			parsedUpstreamIDPAuthorizationURL, err := url.Parse(upstreamIDPAuthorizationURL)
 			r.NoError(err)
 			idpLister := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(&oidctestutil.TestUpstreamOIDCIdentityProvider{
-				Name:             "test-idp",
+				Name:             upstreamIDPName,
 				ClientID:         "test-client-id",
 				AuthorizationURL: *parsedUpstreamIDPAuthorizationURL,
 				Scopes:           []string{"test-scope"},
@@ -292,6 +313,15 @@ func TestManager(t *testing.T) {
 			requireDiscoveryRequestToBeHandled(issuer1DifferentCaseHostname, "", issuer1)
 			requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "", issuer2)
 			requireDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", issuer2)
+
+			requirePinnipedIDPsDiscoveryRequestToBeHandled(issuer1, "", upstreamIDPName, upstreamIDPType)
+			requirePinnipedIDPsDiscoveryRequestToBeHandled(issuer2, "", upstreamIDPName, upstreamIDPType)
+			requirePinnipedIDPsDiscoveryRequestToBeHandled(issuer2, "?some=query", upstreamIDPName, upstreamIDPType)
+
+			// Hostnames are case-insensitive, so test that we can handle that.
+			requirePinnipedIDPsDiscoveryRequestToBeHandled(issuer1DifferentCaseHostname, "", upstreamIDPName, upstreamIDPType)
+			requirePinnipedIDPsDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "", upstreamIDPName, upstreamIDPType)
+			requirePinnipedIDPsDiscoveryRequestToBeHandled(issuer2DifferentCaseHostname, "?some=query", upstreamIDPName, upstreamIDPType)
 
 			issuer1JWKS := requireJWKSRequestToBeHandled(issuer1, "", issuer1KeyID)
 			issuer2JWKS := requireJWKSRequestToBeHandled(issuer2, "", issuer2KeyID)

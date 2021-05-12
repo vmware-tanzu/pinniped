@@ -12,6 +12,9 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
+
+	"k8s.io/utils/trace"
 
 	"github.com/go-ldap/ldap/v3"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
@@ -226,33 +229,42 @@ func (p *Provider) AuthenticateUser(ctx context.Context, username, password stri
 }
 
 func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bindFunc func(conn Conn, foundUserDN string) error) (*authenticator.Response, bool, error) {
+	t := trace.FromContext(ctx).Nest("slow ldap authenticate user attempt", trace.Field{Key: "providerName", Value: p.GetName()})
+	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
+
 	err := p.validateConfig()
 	if err != nil {
+		p.traceAuthFailure(t, err)
 		return nil, false, err
 	}
 
 	if len(username) == 0 {
 		// Empty passwords are already handled by go-ldap.
+		p.traceAuthFailure(t, fmt.Errorf("empty username"))
 		return nil, false, nil
 	}
 
 	conn, err := p.dial(ctx)
 	if err != nil {
+		p.traceAuthFailure(t, err)
 		return nil, false, fmt.Errorf(`error dialing host "%s": %w`, p.c.Host, err)
 	}
 	defer conn.Close()
 
 	err = conn.Bind(p.c.BindUsername, p.c.BindPassword)
 	if err != nil {
+		p.traceAuthFailure(t, err)
 		return nil, false, fmt.Errorf(`error binding as "%s" before user search: %w`, p.c.BindUsername, err)
 	}
 
 	mappedUsername, mappedUID, err := p.searchAndBindUser(conn, username, bindFunc)
 	if err != nil {
+		p.traceAuthFailure(t, err)
 		return nil, false, err
 	}
 	if len(mappedUsername) == 0 || len(mappedUID) == 0 {
 		// Couldn't find the username or couldn't bind using the password.
+		p.traceAuthFailure(t, fmt.Errorf("bad username or password"))
 		return nil, false, nil
 	}
 
@@ -263,6 +275,7 @@ func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bi
 			Groups: []string{}, // Support for group search coming soon.
 		},
 	}
+	p.traceAuthSuccess(t)
 	return response, true, nil
 }
 
@@ -383,4 +396,17 @@ func (p *Provider) getSearchResultAttributeValue(attributeName string, fromUserE
 	}
 
 	return attributeValue, nil
+}
+
+func (p *Provider) traceAuthFailure(t *trace.Trace, err error) {
+	t.Step("authentication failed",
+		trace.Field{Key: "authenticated", Value: false},
+		trace.Field{Key: "reason", Value: err.Error()},
+	)
+}
+
+func (p *Provider) traceAuthSuccess(t *trace.Trace) {
+	t.Step("authentication succeeded",
+		trace.Field{Key: "authenticated", Value: true},
+	)
 }

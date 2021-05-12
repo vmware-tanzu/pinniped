@@ -170,7 +170,7 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 	result := upstreamoidc.ProviderConfig{
 		Name: upstream.Name,
 		Config: &oauth2.Config{
-			Scopes: c.computeScopes(upstream.Spec.AuthorizationConfig.AdditionalScopes),
+			Scopes: computeScopes(upstream.Spec.AuthorizationConfig.AdditionalScopes),
 		},
 		UsernameClaim: upstream.Spec.Claims.Username,
 		GroupsClaim:   upstream.Spec.Claims.Groups,
@@ -254,7 +254,7 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 
 	// If the provider does not exist in the cache, do a fresh discovery lookup and save to the cache.
 	if discoveredProvider == nil {
-		tlsConfig, err := c.getTLSConfig(upstream)
+		tlsConfig, err := getTLSConfig(upstream)
 		if err != nil {
 			return &v1alpha1.Condition{
 				Type:    typeOIDCDiscoverySucceeded,
@@ -316,28 +316,6 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 	}
 }
 
-func (*oidcWatcherController) getTLSConfig(upstream *v1alpha1.OIDCIdentityProvider) (*tls.Config, error) {
-	result := tls.Config{
-		MinVersion: tls.VersionTLS12,
-	}
-
-	if upstream.Spec.TLS == nil || upstream.Spec.TLS.CertificateAuthorityData == "" {
-		return &result, nil
-	}
-
-	bundle, err := base64.StdEncoding.DecodeString(upstream.Spec.TLS.CertificateAuthorityData)
-	if err != nil {
-		return nil, fmt.Errorf("spec.certificateAuthorityData is invalid: %w", err)
-	}
-
-	result.RootCAs = x509.NewCertPool()
-	if !result.RootCAs.AppendCertsFromPEM(bundle) {
-		return nil, fmt.Errorf("spec.certificateAuthorityData is invalid: %w", upstreamwatchers.ErrNoCertificates)
-	}
-
-	return &result, nil
-}
-
 func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.OIDCIdentityProvider, conditions []*v1alpha1.Condition) {
 	log := c.log.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
@@ -362,7 +340,29 @@ func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *v1al
 	}
 }
 
-func (*oidcWatcherController) computeScopes(additionalScopes []string) []string {
+func getTLSConfig(upstream *v1alpha1.OIDCIdentityProvider) (*tls.Config, error) {
+	result := tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
+
+	if upstream.Spec.TLS == nil || upstream.Spec.TLS.CertificateAuthorityData == "" {
+		return &result, nil
+	}
+
+	bundle, err := base64.StdEncoding.DecodeString(upstream.Spec.TLS.CertificateAuthorityData)
+	if err != nil {
+		return nil, fmt.Errorf("spec.certificateAuthorityData is invalid: %w", err)
+	}
+
+	result.RootCAs = x509.NewCertPool()
+	if !result.RootCAs.AppendCertsFromPEM(bundle) {
+		return nil, fmt.Errorf("spec.certificateAuthorityData is invalid: %w", upstreamwatchers.ErrNoCertificates)
+	}
+
+	return &result, nil
+}
+
+func computeScopes(additionalScopes []string) []string {
 	// First compute the unique set of scopes, including "openid" (de-duplicate).
 	set := make(map[string]bool, len(additionalScopes)+1)
 	set["openid"] = true

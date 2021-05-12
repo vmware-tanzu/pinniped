@@ -199,7 +199,7 @@ sleep 5
 go build ./cmd/pinniped
 
 # Use the CLI to get the kubeconfig. Tell it that you don't want the browser to automatically open for logins.
-./pinniped get kubeconfig --oidc-skip-browser >kubeconfig
+https_proxy="$PINNIPED_TEST_PROXY" no_proxy="127.0.0.1" ./pinniped get kubeconfig --oidc-skip-browser >kubeconfig
 
 # Clear the local CLI cache to ensure that the kubectl command below will need to perform a fresh login.
 rm -f "$HOME/.config/pinniped/sessions.yaml"

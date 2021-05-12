@@ -1,7 +1,7 @@
 // Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package upstreamwatcher
+package ldapupstreamwatcher
 
 import (
 	"context"
@@ -78,7 +78,7 @@ func TestLDAPUpstreamWatcherControllerFilterSecrets(t *testing.T) {
 			secretInformer := kubeInformers.Core().V1().Secrets()
 			withInformer := testutil.NewObservableWithInformerOption()
 
-			NewLDAPUpstreamWatcherController(nil, nil, ldapIDPInformer, secretInformer, withInformer.WithInformer)
+			New(nil, nil, ldapIDPInformer, secretInformer, withInformer.WithInformer)
 
 			unrelated := corev1.Secret{}
 			filter := withInformer.GetFilterForInformer(secretInformer)
@@ -123,7 +123,7 @@ func TestLDAPUpstreamWatcherControllerFilterLDAPIdentityProviders(t *testing.T) 
 			secretInformer := kubeInformers.Core().V1().Secrets()
 			withInformer := testutil.NewObservableWithInformerOption()
 
-			NewLDAPUpstreamWatcherController(nil, nil, ldapIDPInformer, secretInformer, withInformer.WithInformer)
+			New(nil, nil, ldapIDPInformer, secretInformer, withInformer.WithInformer)
 
 			unrelated := corev1.Secret{}
 			filter := withInformer.GetFilterForInformer(ldapIDPInformer)

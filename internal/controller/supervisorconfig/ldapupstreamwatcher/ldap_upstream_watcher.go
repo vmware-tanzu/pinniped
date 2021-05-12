@@ -1,7 +1,8 @@
 // Copyright 2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package upstreamwatcher
+// Package ldapupstreamwatcher implements a controller which watches LDAPIdentityProviders.
+package ldapupstreamwatcher
 
 import (
 	"context"
@@ -22,6 +23,8 @@ import (
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	idpinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/idp/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	"go.pinniped.dev/internal/controller/conditionsutil"
+	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/upstreamldap"
@@ -58,8 +61,8 @@ type ldapWatcherController struct {
 	secretInformer               corev1informers.SecretInformer
 }
 
-// NewLDAPUpstreamWatcherController instantiates a new controllerlib.Controller which will populate the provided UpstreamLDAPIdentityProviderICache.
-func NewLDAPUpstreamWatcherController(
+// New instantiates a new controllerlib.Controller which will populate the provided UpstreamLDAPIdentityProviderICache.
+func New(
 	idpCache UpstreamLDAPIdentityProviderICache,
 	client pinnipedclientset.Interface,
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer,
@@ -178,7 +181,7 @@ func (c *ldapWatcherController) validateTLSConfig(upstream *v1alpha1.LDAPIdentit
 	ca := x509.NewCertPool()
 	ok := ca.AppendCertsFromPEM(bundle)
 	if !ok {
-		return c.invalidTLSCondition(fmt.Sprintf("certificateAuthorityData is invalid: %s", errNoCertificates))
+		return c.invalidTLSCondition(fmt.Sprintf("certificateAuthorityData is invalid: %s", upstreamwatchers.ErrNoCertificates))
 	}
 
 	config.CABundle = bundle
@@ -219,7 +222,7 @@ func (c *ldapWatcherController) testConnection(
 	return &v1alpha1.Condition{
 		Type:   typeLDAPConnectionValid,
 		Status: v1alpha1.ConditionTrue,
-		Reason: reasonSuccess,
+		Reason: upstreamwatchers.ReasonSuccess,
 		Message: fmt.Sprintf(`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 			config.Host, config.BindUsername, upstream.Spec.Bind.SecretName, currentSecretVersion),
 	}
@@ -248,7 +251,7 @@ func (c *ldapWatcherController) validTLSCondition(message string) *v1alpha1.Cond
 	return &v1alpha1.Condition{
 		Type:    typeTLSConfigurationValid,
 		Status:  v1alpha1.ConditionTrue,
-		Reason:  reasonSuccess,
+		Reason:  upstreamwatchers.ReasonSuccess,
 		Message: message,
 	}
 }
@@ -257,7 +260,7 @@ func (c *ldapWatcherController) invalidTLSCondition(message string) *v1alpha1.Co
 	return &v1alpha1.Condition{
 		Type:    typeTLSConfigurationValid,
 		Status:  v1alpha1.ConditionFalse,
-		Reason:  reasonInvalidTLSConfig,
+		Reason:  upstreamwatchers.ReasonInvalidTLSConfig,
 		Message: message,
 	}
 }
@@ -270,7 +273,7 @@ func (c *ldapWatcherController) validateSecret(upstream *v1alpha1.LDAPIdentityPr
 		return &v1alpha1.Condition{
 			Type:    typeBindSecretValid,
 			Status:  v1alpha1.ConditionFalse,
-			Reason:  reasonNotFound,
+			Reason:  upstreamwatchers.ReasonNotFound,
 			Message: err.Error(),
 		}, ""
 	}
@@ -279,7 +282,7 @@ func (c *ldapWatcherController) validateSecret(upstream *v1alpha1.LDAPIdentityPr
 		return &v1alpha1.Condition{
 			Type:   typeBindSecretValid,
 			Status: v1alpha1.ConditionFalse,
-			Reason: reasonWrongType,
+			Reason: upstreamwatchers.ReasonWrongType,
 			Message: fmt.Sprintf("referenced Secret %q has wrong type %q (should be %q)",
 				secretName, secret.Type, corev1.SecretTypeBasicAuth),
 		}, secret.ResourceVersion
@@ -291,7 +294,7 @@ func (c *ldapWatcherController) validateSecret(upstream *v1alpha1.LDAPIdentityPr
 		return &v1alpha1.Condition{
 			Type:   typeBindSecretValid,
 			Status: v1alpha1.ConditionFalse,
-			Reason: reasonMissingKeys,
+			Reason: upstreamwatchers.ReasonMissingKeys,
 			Message: fmt.Sprintf("referenced Secret %q is missing required keys %q",
 				secretName, []string{corev1.BasicAuthUsernameKey, corev1.BasicAuthPasswordKey}),
 		}, secret.ResourceVersion
@@ -300,7 +303,7 @@ func (c *ldapWatcherController) validateSecret(upstream *v1alpha1.LDAPIdentityPr
 	return &v1alpha1.Condition{
 		Type:    typeBindSecretValid,
 		Status:  v1alpha1.ConditionTrue,
-		Reason:  reasonSuccess,
+		Reason:  upstreamwatchers.ReasonSuccess,
 		Message: "loaded bind secret",
 	}, secret.ResourceVersion
 }
@@ -309,7 +312,7 @@ func (c *ldapWatcherController) updateStatus(ctx context.Context, upstream *v1al
 	log := klogr.New().WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 
-	hadErrorCondition := mergeConditions(conditions, upstream.Generation, &updated.Status.Conditions, log)
+	hadErrorCondition := conditionsutil.Merge(conditions, upstream.Generation, &updated.Status.Conditions, log)
 
 	updated.Status.Phase = v1alpha1.LDAPPhaseReady
 	if hadErrorCondition {

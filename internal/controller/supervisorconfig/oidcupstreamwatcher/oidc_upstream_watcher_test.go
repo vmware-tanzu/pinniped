@@ -1,7 +1,7 @@
 // Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package upstreamwatcher
+package oidcupstreamwatcher
 
 import (
 	"context"
@@ -82,7 +82,7 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			secretInformer := kubeInformers.Core().V1().Secrets()
 			withInformer := testutil.NewObservableWithInformerOption()
 
-			NewOIDCUpstreamWatcherController(
+			New(
 				cache,
 				nil,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
@@ -762,7 +762,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
 			})
 
-			controller := NewOIDCUpstreamWatcherController(
+			controller := New(
 				cache,
 				fakePinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),

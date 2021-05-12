@@ -359,7 +359,7 @@ func TestE2EFullIntegration(t *testing.T) {
 	})
 }
 
-func readFromFileUntilStringIsSeen(t *testing.T, f *os.File, until string) string {
+func readFromFileUntilStringIsSeen(t *testing.T, f *os.File, until string) {
 	readFromFile := ""
 
 	library.RequireEventuallyWithoutError(t, func() (bool, error) {
@@ -373,8 +373,6 @@ func readFromFileUntilStringIsSeen(t *testing.T, f *os.File, until string) strin
 		}
 		return false, nil // keep waiting and reading
 	}, 1*time.Minute, 1*time.Second)
-
-	return readFromFile
 }
 
 func readAvailableOutput(t *testing.T, r io.Reader) (string, bool) {
@@ -383,9 +381,8 @@ func readAvailableOutput(t *testing.T, r io.Reader) (string, bool) {
 	if err != nil {
 		if err == io.EOF {
 			return string(buf[:n]), true
-		} else {
-			require.NoError(t, err)
 		}
+		require.NoError(t, err)
 	}
 	return string(buf[:n]), false
 }

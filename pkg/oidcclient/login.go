@@ -52,8 +52,8 @@ const (
 
 	supervisorAuthorizeUpstreamNameParam      = "pinniped_idp_name"
 	supervisorAuthorizeUpstreamTypeParam      = "pinniped_idp_type"
-	supervisorAuthorizeUpstreamUsernameHeader = "X-Pinniped-Idp-Username"
-	supervisorAuthorizeUpstreamPasswordHeader = "X-Pinniped-Idp-Password" // nolint:gosec // this is not a credential
+	supervisorAuthorizeUpstreamUsernameHeader = "Pinniped-Username"
+	supervisorAuthorizeUpstreamPasswordHeader = "Pinniped-Password" // nolint:gosec // this is not a credential
 
 	defaultLDAPUsernamePrompt = "Username: "
 	defaultLDAPPasswordPrompt = "Password: "

@@ -464,8 +464,8 @@ func requestAuthorizationUsingLDAPIdentityProvider(t *testing.T, downstreamAutho
 	require.NoError(t, err)
 
 	// Set the custom username/password headers for the LDAP authorize request.
-	authRequest.Header.Set("X-Pinniped-Idp-Username", upstreamUsername)
-	authRequest.Header.Set("X-Pinniped-Idp-Password", upstreamPassword)
+	authRequest.Header.Set("Pinniped-Username", upstreamUsername)
+	authRequest.Header.Set("Pinniped-Password", upstreamPassword)
 
 	authResponse, err := httpClient.Do(authRequest)
 	require.NoError(t, err)

@@ -893,8 +893,8 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 								return defaultDiscoveryResponse(req)
 							case "http://" + successServer.Listener.Addr().String() + "/authorize":
 								authorizeRequestWasMade = true
-								require.Equal(t, "some-upstream-username", req.Header.Get("X-Pinniped-Idp-Username"))
-								require.Equal(t, "some-upstream-password", req.Header.Get("X-Pinniped-Idp-Password"))
+								require.Equal(t, "some-upstream-username", req.Header.Get("Pinniped-Username"))
+								require.Equal(t, "some-upstream-password", req.Header.Get("Pinniped-Password"))
 								require.Equal(t, url.Values{
 									// This is the PKCE challenge which is calculated as base64(sha256("test-pkce")). For example:
 									// $ echo -n test-pkce | shasum -a 256 | cut -d" " -f1 | xxd -r -p | base64 | cut -d"=" -f1

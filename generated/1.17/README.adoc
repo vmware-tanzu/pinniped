@@ -220,7 +220,7 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped concierge configuration
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuer"]
 ==== CredentialIssuer 
 
-Describes the configuration status of a Pinniped credential issuer.
+CredentialIssuer describes the configuration and status of the Pinniped Concierge credential issuer.
 
 .Appears In:
 ****
@@ -278,7 +278,7 @@ Describes the configuration status of a Pinniped credential issuer.
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-17-apis-concierge-config-v1alpha1-credentialissuerstatus"]
 ==== CredentialIssuerStatus 
 
-Status of a credential issuer.
+CredentialIssuerStatus describes the status of the Concierge.
 
 .Appears In:
 ****

@@ -5,15 +5,19 @@ package v1alpha1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+// StrategyType enumerates a type of "strategy" used to implement credential access on a cluster.
 // +kubebuilder:validation:Enum=KubeClusterSigningCertificate;ImpersonationProxy
 type StrategyType string
 
+// FrontendType enumerates a type of "frontend" used to provide access to users of a cluster.
 // +kubebuilder:validation:Enum=TokenCredentialRequestAPI;ImpersonationProxy
 type FrontendType string
 
+// StrategyStatus enumerates whether a strategy is working on a cluster.
 // +kubebuilder:validation:Enum=Success;Error
 type StrategyStatus string
 
+// StrategyReason enumerates the detailed reason why a strategy is in a particular status.
 // +kubebuilder:validation:Enum=Listening;Pending;Disabled;ErrorDuringSetup;CouldNotFetchKey;CouldNotGetClusterInfo;FetchedKey
 type StrategyReason string
 
@@ -36,7 +40,7 @@ const (
 	FetchedKeyStrategyReason             = StrategyReason("FetchedKey")
 )
 
-// Status of a credential issuer.
+// CredentialIssuerStatus describes the status of the Concierge.
 type CredentialIssuerStatus struct {
 	// List of integration strategies that were attempted by Pinniped.
 	Strategies []CredentialIssuerStrategy `json:"strategies"`
@@ -47,7 +51,8 @@ type CredentialIssuerStatus struct {
 	KubeConfigInfo *CredentialIssuerKubeConfigInfo `json:"kubeConfigInfo,omitempty"`
 }
 
-// Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
+// CredentialIssuerKubeConfigInfo provides the information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
+// This type is deprecated and will be removed in a future version.
 type CredentialIssuerKubeConfigInfo struct {
 	// The K8s API server URL.
 	// +kubebuilder:validation:MinLength=1
@@ -59,7 +64,7 @@ type CredentialIssuerKubeConfigInfo struct {
 	CertificateAuthorityData string `json:"certificateAuthorityData"`
 }
 
-// Status of an integration strategy that was attempted by Pinniped.
+// CredentialIssuerStrategy describes the status of an integration strategy that was attempted by Pinniped.
 type CredentialIssuerStrategy struct {
 	// Type of integration attempted.
 	Type StrategyType `json:"type"`
@@ -81,6 +86,7 @@ type CredentialIssuerStrategy struct {
 	Frontend *CredentialIssuerFrontend `json:"frontend,omitempty"`
 }
 
+// CredentialIssuerFrontend describes how to connect using a particular integration strategy.
 type CredentialIssuerFrontend struct {
 	// Type describes which frontend mechanism clients can use with a strategy.
 	Type FrontendType `json:"type"`
@@ -118,7 +124,7 @@ type ImpersonationProxyInfo struct {
 	CertificateAuthorityData string `json:"certificateAuthorityData"`
 }
 
-// Describes the configuration status of a Pinniped credential issuer.
+// CredentialIssuer describes the configuration and status of the Pinniped Concierge credential issuer.
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -133,7 +139,7 @@ type CredentialIssuer struct {
 	Status CredentialIssuerStatus `json:"status"`
 }
 
-// List of CredentialIssuer objects.
+// CredentialIssuerList is a list of CredentialIssuer objects.
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type CredentialIssuerList struct {
 	metav1.TypeMeta `json:",inline"`

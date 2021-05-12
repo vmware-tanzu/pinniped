@@ -60,8 +60,8 @@ func TestFromPath(t *testing.T) {
 				},
 				APIConfig: APIConfigSpec{
 					ServingCertificateConfig: ServingCertificateConfigSpec{
-						DurationSeconds:    int64Ptr(3600),
-						RenewBeforeSeconds: int64Ptr(2400),
+						DurationSeconds:    pointer.Int64Ptr(3600),
+						RenewBeforeSeconds: pointer.Int64Ptr(2400),
 					},
 				},
 				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
@@ -110,8 +110,8 @@ func TestFromPath(t *testing.T) {
 				APIGroupSuffix: pointer.StringPtr("pinniped.dev"),
 				APIConfig: APIConfigSpec{
 					ServingCertificateConfig: ServingCertificateConfigSpec{
-						DurationSeconds:    int64Ptr(60 * 60 * 24 * 365),    // about a year
-						RenewBeforeSeconds: int64Ptr(60 * 60 * 24 * 30 * 9), // about 9 months
+						DurationSeconds:    pointer.Int64Ptr(60 * 60 * 24 * 365),    // about a year
+						RenewBeforeSeconds: pointer.Int64Ptr(60 * 60 * 24 * 30 * 9), // about 9 months
 					},
 				},
 				NamesConfig: NamesConfigSpec{

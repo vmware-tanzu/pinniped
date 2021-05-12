@@ -21,6 +21,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/utils/pointer"
 
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
@@ -377,8 +378,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idpLister:                         oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider).Build(),
 			method:                            http.MethodGet,
 			path:                              happyGetRequestPath,
-			customUsernameHeader:              stringPtr(happyLDAPUsername),
-			customPasswordHeader:              stringPtr(happyLDAPPassword),
+			customUsernameHeader:              pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader:              pointer.StringPtr(happyLDAPPassword),
 			wantStatus:                        http.StatusFound,
 			wantContentType:                   htmlContentType,
 			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
@@ -436,8 +437,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path:                              "/some/path",
 			contentType:                       "application/x-www-form-urlencoded",
 			body:                              encodeQuery(happyGetRequestQueryMap),
-			customUsernameHeader:              stringPtr(happyLDAPUsername),
-			customPasswordHeader:              stringPtr(happyLDAPPassword),
+			customUsernameHeader:              pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader:              pointer.StringPtr(happyLDAPPassword),
 			wantStatus:                        http.StatusFound,
 			wantContentType:                   htmlContentType,
 			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
@@ -518,8 +519,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path: modifiedHappyGetRequestPath(map[string]string{
 				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
 			}),
-			customUsernameHeader:              stringPtr(happyLDAPUsername),
-			customPasswordHeader:              stringPtr(happyLDAPPassword),
+			customUsernameHeader:              pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader:              pointer.StringPtr(happyLDAPPassword),
 			wantStatus:                        http.StatusFound,
 			wantContentType:                   htmlContentType,
 			wantRedirectLocationRegexp:        downstreamRedirectURIWithDifferentPort + `\?code=([^&]+)&scope=openid&state=` + happyState,
@@ -558,8 +559,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idpLister:            oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&erroringUpstreamLDAPIdentityProvider).Build(),
 			method:               http.MethodGet,
 			path:                 happyGetRequestPath,
-			customUsernameHeader: stringPtr(happyLDAPUsername),
-			customPasswordHeader: stringPtr(happyLDAPPassword),
+			customUsernameHeader: pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader: pointer.StringPtr(happyLDAPPassword),
 			wantStatus:           http.StatusBadGateway,
 			wantContentType:      htmlContentType,
 			wantBodyString:       "Bad Gateway: unexpected error during upstream authentication\n",
@@ -569,8 +570,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idpLister:            oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider).Build(),
 			method:               http.MethodGet,
 			path:                 happyGetRequestPath,
-			customUsernameHeader: stringPtr(happyLDAPUsername),
-			customPasswordHeader: stringPtr("wrong-password"),
+			customUsernameHeader: pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader: pointer.StringPtr("wrong-password"),
 			wantStatus:           http.StatusFound,
 			wantContentType:      "application/json; charset=utf-8",
 			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithBadUsernamePasswordHintErrorQuery),
@@ -581,8 +582,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idpLister:            oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider).Build(),
 			method:               http.MethodGet,
 			path:                 happyGetRequestPath,
-			customUsernameHeader: stringPtr("wrong-username"),
-			customPasswordHeader: stringPtr(happyLDAPPassword),
+			customUsernameHeader: pointer.StringPtr("wrong-username"),
+			customPasswordHeader: pointer.StringPtr(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
 			wantContentType:      "application/json; charset=utf-8",
 			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithBadUsernamePasswordHintErrorQuery),
@@ -594,7 +595,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:               http.MethodGet,
 			path:                 happyGetRequestPath,
 			customUsernameHeader: nil, // do not send header
-			customPasswordHeader: stringPtr(happyLDAPPassword),
+			customPasswordHeader: pointer.StringPtr(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
 			wantContentType:      "application/json; charset=utf-8",
 			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithMissingUsernamePasswordHintErrorQuery),
@@ -605,7 +606,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idpLister:            oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider).Build(),
 			method:               http.MethodGet,
 			path:                 happyGetRequestPath,
-			customUsernameHeader: stringPtr(happyLDAPUsername),
+			customUsernameHeader: pointer.StringPtr(happyLDAPUsername),
 			customPasswordHeader: nil, // do not send header
 			wantStatus:           http.StatusFound,
 			wantContentType:      "application/json; charset=utf-8",
@@ -635,8 +636,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path: modifiedHappyGetRequestPath(map[string]string{
 				"redirect_uri": "http://127.0.0.1/does-not-match-what-is-configured-for-pinniped-cli-client",
 			}),
-			customUsernameHeader: stringPtr(happyLDAPUsername),
-			customPasswordHeader: stringPtr(happyLDAPPassword),
+			customUsernameHeader: pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader: pointer.StringPtr(happyLDAPPassword),
 			wantStatus:           http.StatusBadRequest,
 			wantContentType:      "application/json; charset=utf-8",
 			wantBodyJSON:         fositeInvalidRedirectURIErrorBody,
@@ -709,8 +710,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idpLister:            oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider).Build(),
 			method:               http.MethodGet,
 			path:                 modifiedHappyGetRequestPath(map[string]string{"scope": "openid tuna"}),
-			customUsernameHeader: stringPtr(happyLDAPUsername),
-			customPasswordHeader: stringPtr(happyLDAPPassword),
+			customUsernameHeader: pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader: pointer.StringPtr(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
 			wantContentType:      "application/json; charset=utf-8",
 			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeInvalidScopeErrorQuery),
@@ -784,8 +785,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idpLister:                    oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider).Build(),
 			method:                       http.MethodGet,
 			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge": ""}),
-			customUsernameHeader:         stringPtr(happyLDAPUsername),
-			customPasswordHeader:         stringPtr(happyLDAPPassword),
+			customUsernameHeader:         pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader:         pointer.StringPtr(happyLDAPPassword),
 			wantStatus:                   http.StatusFound,
 			wantContentType:              "application/json; charset=utf-8",
 			wantLocationHeader:           urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeErrorQuery),
@@ -812,8 +813,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idpLister:                    oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider).Build(),
 			method:                       http.MethodGet,
 			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
-			customUsernameHeader:         stringPtr(happyLDAPUsername),
-			customPasswordHeader:         stringPtr(happyLDAPPassword),
+			customUsernameHeader:         pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader:         pointer.StringPtr(happyLDAPPassword),
 			wantStatus:                   http.StatusFound,
 			wantContentType:              "application/json; charset=utf-8",
 			wantLocationHeader:           urlWithQuery(downstreamRedirectURI, fositeInvalidCodeChallengeErrorQuery),
@@ -840,8 +841,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idpLister:                    oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider).Build(),
 			method:                       http.MethodGet,
 			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "plain"}),
-			customUsernameHeader:         stringPtr(happyLDAPUsername),
-			customPasswordHeader:         stringPtr(happyLDAPPassword),
+			customUsernameHeader:         pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader:         pointer.StringPtr(happyLDAPPassword),
 			wantStatus:                   http.StatusFound,
 			wantContentType:              "application/json; charset=utf-8",
 			wantLocationHeader:           urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
@@ -868,8 +869,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idpLister:                    oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider).Build(),
 			method:                       http.MethodGet,
 			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": ""}),
-			customUsernameHeader:         stringPtr(happyLDAPUsername),
-			customPasswordHeader:         stringPtr(happyLDAPPassword),
+			customUsernameHeader:         pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader:         pointer.StringPtr(happyLDAPPassword),
 			wantStatus:                   http.StatusFound,
 			wantContentType:              "application/json; charset=utf-8",
 			wantLocationHeader:           urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
@@ -900,8 +901,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idpLister:                    oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider).Build(),
 			method:                       http.MethodGet,
 			path:                         modifiedHappyGetRequestPath(map[string]string{"prompt": "none login"}),
-			customUsernameHeader:         stringPtr(happyLDAPUsername),
-			customPasswordHeader:         stringPtr(happyLDAPPassword),
+			customUsernameHeader:         pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader:         pointer.StringPtr(happyLDAPPassword),
 			wantStatus:                   http.StatusFound,
 			wantContentType:              "application/json; charset=utf-8",
 			wantLocationHeader:           urlWithQuery(downstreamRedirectURI, fositePromptHasNoneAndOtherValueErrorQuery),
@@ -934,8 +935,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			method:    http.MethodGet,
 			// The following prompt value is illegal when openid is requested, but note that openid is not requested.
 			path:                              modifiedHappyGetRequestPath(map[string]string{"prompt": "none login", "scope": "email"}),
-			customUsernameHeader:              stringPtr(happyLDAPUsername),
-			customPasswordHeader:              stringPtr(happyLDAPPassword),
+			customUsernameHeader:              pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader:              pointer.StringPtr(happyLDAPPassword),
 			wantStatus:                        http.StatusFound,
 			wantContentType:                   htmlContentType,
 			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyState, // no scopes granted
@@ -970,8 +971,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idpLister:            oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider).Build(),
 			method:               http.MethodGet,
 			path:                 modifiedHappyGetRequestPath(map[string]string{"state": "short"}),
-			customUsernameHeader: stringPtr(happyLDAPUsername),
-			customPasswordHeader: stringPtr(happyLDAPPassword),
+			customUsernameHeader: pointer.StringPtr(happyLDAPUsername),
+			customPasswordHeader: pointer.StringPtr(happyLDAPPassword),
 			wantStatus:           http.StatusFound,
 			wantContentType:      "application/json; charset=utf-8",
 			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeInvalidStateErrorQuery),
@@ -1330,8 +1331,4 @@ func requireEqualURLs(t *testing.T, actualURL string, expectedURL string, ignore
 		actualLocationQuery.Del("state")
 	}
 	require.Equal(t, expectedLocationQuery, actualLocationQuery)
-}
-
-func stringPtr(s string) *string {
-	return &s
 }

@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/yaml"
 
 	"go.pinniped.dev/internal/constable"
@@ -69,27 +70,27 @@ func FromPath(path string) (*Config, error) {
 
 func maybeSetAPIDefaults(apiConfig *APIConfigSpec) {
 	if apiConfig.ServingCertificateConfig.DurationSeconds == nil {
-		apiConfig.ServingCertificateConfig.DurationSeconds = int64Ptr(aboutAYear)
+		apiConfig.ServingCertificateConfig.DurationSeconds = pointer.Int64Ptr(aboutAYear)
 	}
 
 	if apiConfig.ServingCertificateConfig.RenewBeforeSeconds == nil {
-		apiConfig.ServingCertificateConfig.RenewBeforeSeconds = int64Ptr(about9Months)
+		apiConfig.ServingCertificateConfig.RenewBeforeSeconds = pointer.Int64Ptr(about9Months)
 	}
 }
 
 func maybeSetAPIGroupSuffixDefault(apiGroupSuffix **string) {
 	if *apiGroupSuffix == nil {
-		*apiGroupSuffix = stringPtr(groupsuffix.PinnipedDefaultSuffix)
+		*apiGroupSuffix = pointer.StringPtr(groupsuffix.PinnipedDefaultSuffix)
 	}
 }
 
 func maybeSetKubeCertAgentDefaults(cfg *KubeCertAgentSpec) {
 	if cfg.NamePrefix == nil {
-		cfg.NamePrefix = stringPtr("pinniped-kube-cert-agent-")
+		cfg.NamePrefix = pointer.StringPtr("pinniped-kube-cert-agent-")
 	}
 
 	if cfg.Image == nil {
-		cfg.Image = stringPtr("debian:latest")
+		cfg.Image = pointer.StringPtr("debian:latest")
 	}
 }
 
@@ -145,12 +146,4 @@ func validateAPI(apiConfig *APIConfigSpec) error {
 
 func validateAPIGroupSuffix(apiGroupSuffix string) error {
 	return groupsuffix.Validate(apiGroupSuffix)
-}
-
-func int64Ptr(i int64) *int64 {
-	return &i
-}
-
-func stringPtr(s string) *string {
-	return &s
 }

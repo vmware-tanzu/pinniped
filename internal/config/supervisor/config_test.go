@@ -8,6 +8,8 @@ import (
 	"os"
 	"testing"
 
+	"k8s.io/utils/pointer"
+
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/here"
@@ -32,7 +34,7 @@ func TestFromPath(t *testing.T) {
 				  defaultTLSCertificateSecret: my-secret-name
 			`),
 			wantConfig: &Config{
-				APIGroupSuffix: stringPtr("some.suffix.com"),
+				APIGroupSuffix: pointer.StringPtr("some.suffix.com"),
 				Labels: map[string]string{
 					"myLabelKey1": "myLabelValue1",
 					"myLabelKey2": "myLabelValue2",
@@ -50,7 +52,7 @@ func TestFromPath(t *testing.T) {
 				  defaultTLSCertificateSecret: my-secret-name
 			`),
 			wantConfig: &Config{
-				APIGroupSuffix: stringPtr("pinniped.dev"),
+				APIGroupSuffix: pointer.StringPtr("pinniped.dev"),
 				Labels:         map[string]string{},
 				NamesConfig: NamesConfigSpec{
 					DefaultTLSCertificateSecret: "my-secret-name",

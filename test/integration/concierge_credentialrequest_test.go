@@ -16,6 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
@@ -147,7 +148,7 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 
 	require.Empty(t, response.Spec)
 	require.Nil(t, response.Status.Credential)
-	require.Equal(t, stringPtr("authentication failed"), response.Status.Message)
+	require.Equal(t, pointer.StringPtr("authentication failed"), response.Status.Message)
 }
 
 func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
@@ -175,10 +176,6 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T
 
 	require.Empty(t, response.Spec)
 	require.Nil(t, response.Status.Credential)
-}
-
-func stringPtr(s string) *string {
-	return &s
 }
 
 func getCommonName(t *testing.T, certPEM string) string {

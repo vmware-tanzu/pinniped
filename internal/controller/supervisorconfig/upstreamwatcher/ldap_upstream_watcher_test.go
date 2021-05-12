@@ -137,11 +137,7 @@ func TestLDAPUpstreamWatcherControllerFilterLDAPIdentityProviders(t *testing.T) 
 
 // Wrap the func into a struct so the test can do deep equal assertions on instances of upstreamldap.Provider.
 type comparableDialer struct {
-	f upstreamldap.LDAPDialerFunc
-}
-
-func (d *comparableDialer) Dial(ctx context.Context, hostAndPort string) (upstreamldap.Conn, error) {
-	return d.f(ctx, hostAndPort)
+	upstreamldap.LDAPDialerFunc
 }
 
 func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
@@ -689,7 +685,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				tt.setupMocks(conn)
 			}
 
-			dialer := &comparableDialer{f: upstreamldap.LDAPDialerFunc(func(ctx context.Context, _ string) (upstreamldap.Conn, error) {
+			dialer := &comparableDialer{upstreamldap.LDAPDialerFunc(func(ctx context.Context, _ string) (upstreamldap.Conn, error) {
 				if tt.dialError != nil {
 					return nil, tt.dialError
 				}

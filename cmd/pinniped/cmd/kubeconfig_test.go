@@ -74,13 +74,21 @@ func TestGetKubeconfig(t *testing.T) {
 		}
 	}
 
-	happyOIDCDIscoveryResponse := func(issuerURL string) string {
+	happyOIDCDiscoveryResponse := func(issuerURL string) string {
 		return here.Docf(`{
+			"issuer": "%s",
 			"other-key": "other-value",
 			"discovery.supervisor.pinniped.dev/v1alpha1": {
 				"pinniped_identity_providers_endpoint": "%s/v1alpha1/pinniped_identity_providers"
 			},
 			"another-key": "another-value"
+		}`, issuerURL, issuerURL)
+	}
+
+	onlyIssuerOIDCDiscoveryResponse := func(issuerURL string) string {
+		return here.Docf(`{
+			"issuer": "%s",
+			"other-key": "other-value"
 		}`, issuerURL)
 	}
 
@@ -643,6 +651,7 @@ func TestGetKubeconfig(t *testing.T) {
 					jwtAuthenticator(issuerCABundle, issuerURL),
 				}
 			},
+			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
 					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
@@ -730,7 +739,45 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantError: true,
 			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return "Error: unable to fetch OIDC discovery data from issuer: unexpected http response status: 400 Bad Request\n"
+				return "Error: while fetching OIDC discovery data from issuer: 400 Bad Request: {}\n"
+			},
+		},
+		{
+			name: "when OIDC discovery document lists the wrong issuer",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticator(issuerCABundle, issuerURL),
+				}
+			},
+			oidcDiscoveryResponse: func(issuerURL string) string {
+				return here.Doc(`{
+					"issuer": "https://wrong-issuer.com"
+				}`)
+			},
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
+					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
+					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
+					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
+					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
+					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
+					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+				}
+			},
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) string {
+				return fmt.Sprintf(
+					"Error: while fetching OIDC discovery data from issuer: oidc: issuer did not match the issuer returned by provider, expected \"%s\" got \"https://wrong-issuer.com\"\n",
+					issuerURL)
 			},
 		},
 		{
@@ -747,7 +794,7 @@ func TestGetKubeconfig(t *testing.T) {
 					jwtAuthenticator(issuerCABundle, issuerURL),
 				}
 			},
-			oidcDiscoveryResponse:   happyOIDCDIscoveryResponse,
+			oidcDiscoveryResponse:   happyOIDCDiscoveryResponse,
 			idpsDiscoveryStatusCode: http.StatusBadRequest,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
@@ -780,7 +827,7 @@ func TestGetKubeconfig(t *testing.T) {
 					jwtAuthenticator(issuerCABundle, issuerURL),
 				}
 			},
-			oidcDiscoveryResponse: happyOIDCDIscoveryResponse,
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			idpsDiscoveryResponse: here.Docf(`{
 				"pinniped_identity_providers": [
 					{"name": "some-ldap-idp", "type": "ldap"},
@@ -837,7 +884,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantError: true,
 			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return "Error: unable to fetch OIDC discovery data from issuer: could not parse response JSON: invalid character 'h' in literal true (expecting 'r')\n"
+				return "Error: while fetching OIDC discovery data from issuer: oidc: failed to decode provider discovery object: got Content-Type = application/json, but could not unmarshal as JSON: invalid character 'h' in literal true (expecting 'r')\n"
 			},
 		},
 		{
@@ -854,7 +901,7 @@ func TestGetKubeconfig(t *testing.T) {
 					jwtAuthenticator(issuerCABundle, issuerURL),
 				}
 			},
-			oidcDiscoveryResponse: happyOIDCDIscoveryResponse,
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			idpsDiscoveryResponse: "this is not valid JSON",
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
@@ -906,7 +953,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantError: true,
 			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return fmt.Sprintf("Error: unable to fetch OIDC discovery data from issuer: Get \"%s/.well-known/openid-configuration\": x509: certificate signed by unknown authority\n", issuerURL)
+				return fmt.Sprintf("Error: while fetching OIDC discovery data from issuer: Get \"%s/.well-known/openid-configuration\": x509: certificate signed by unknown authority\n", issuerURL)
 			},
 		},
 		{
@@ -944,7 +991,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantError: true,
 			wantStderr: func(issuerCABundle string, issuerURL string) string {
-				return `Error: while forming request to issuer URL: parse "https%://bad-issuer-url/.well-known/openid-configuration": first path segment in URL cannot contain colon` + "\n"
+				return `Error: while fetching OIDC discovery data from issuer: parse "https%://bad-issuer-url/.well-known/openid-configuration": first path segment in URL cannot contain colon` + "\n"
 			},
 		},
 		{
@@ -962,11 +1009,12 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			oidcDiscoveryResponse: func(issuerURL string) string {
-				return here.Doc(`{
+				return here.Docf(`{
+					"issuer": "%s",
 					"discovery.supervisor.pinniped.dev/v1alpha1": {
-						"pinniped_identity_providers_endpoint": "https%://illegal_url"
+						"pinniped_identity_providers_endpoint": "https%%://illegal_url"
 					}
-				}`)
+				}`, issuerURL)
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
@@ -998,7 +1046,7 @@ func TestGetKubeconfig(t *testing.T) {
 					"--upstream-identity-provider-type", "ldap",
 				}
 			},
-			oidcDiscoveryResponse: happyOIDCDIscoveryResponse,
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			idpsDiscoveryResponse: here.Docf(`{
 				"pinniped_identity_providers": [
 					{"name": "some-ldap-idp", "type": "ldap"},
@@ -1027,7 +1075,7 @@ func TestGetKubeconfig(t *testing.T) {
 					"--upstream-identity-provider-name", "my-idp",
 				}
 			},
-			oidcDiscoveryResponse: happyOIDCDIscoveryResponse,
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			idpsDiscoveryResponse: here.Docf(`{
 				"pinniped_identity_providers": [
 					{"name": "my-idp", "type": "ldap"},
@@ -1055,7 +1103,7 @@ func TestGetKubeconfig(t *testing.T) {
 					"--upstream-identity-provider-type", "ldap",
 				}
 			},
-			oidcDiscoveryResponse: happyOIDCDIscoveryResponse,
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			idpsDiscoveryResponse: here.Docf(`{
 				"pinniped_identity_providers": [
 					{"name": "some-oidc-idp", "type": "oidc"},
@@ -1081,7 +1129,7 @@ func TestGetKubeconfig(t *testing.T) {
 					"--upstream-identity-provider-name", "my-nonexistent-idp",
 				}
 			},
-			oidcDiscoveryResponse: happyOIDCDIscoveryResponse,
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			idpsDiscoveryResponse: here.Docf(`{
 				"pinniped_identity_providers": [
 					{"name": "some-oidc-idp", "type": "oidc"},
@@ -1232,6 +1280,7 @@ func TestGetKubeconfig(t *testing.T) {
 					jwtAuthenticator(issuerCABundle, issuerURL),
 				}
 			},
+			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
 					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
@@ -1319,7 +1368,8 @@ func TestGetKubeconfig(t *testing.T) {
 					&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 				}
 			},
-			wantLogs: func(issuerCABundle string, issuerURL string) []string { return nil },
+			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
+			wantLogs:              func(issuerCABundle string, issuerURL string) []string { return nil },
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
 				return here.Docf(`
 					apiVersion: v1
@@ -1424,6 +1474,7 @@ func TestGetKubeconfig(t *testing.T) {
 					jwtAuthenticator(issuerCABundle, issuerURL),
 				}
 			},
+			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
 					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
@@ -1529,6 +1580,7 @@ func TestGetKubeconfig(t *testing.T) {
 					jwtAuthenticator(issuerCABundle, issuerURL),
 				}
 			},
+			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
 					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
@@ -1598,7 +1650,7 @@ func TestGetKubeconfig(t *testing.T) {
 					jwtAuthenticator(issuerCABundle, issuerURL),
 				}
 			},
-			oidcDiscoveryResponse: happyOIDCDIscoveryResponse,
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			idpsDiscoveryResponse: here.Docf(`{
 				"pinniped_identity_providers": [
 					{"name": "some-ldap-idp", "type": "ldap"}
@@ -1675,7 +1727,7 @@ func TestGetKubeconfig(t *testing.T) {
 					jwtAuthenticator(issuerCABundle, issuerURL),
 				}
 			},
-			oidcDiscoveryResponse: happyOIDCDIscoveryResponse,
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			idpsDiscoveryResponse: here.Docf(`{
 				"pinniped_identity_providers": [
 					{"name": "some-oidc-idp", "type": "oidc"}
@@ -1752,7 +1804,7 @@ func TestGetKubeconfig(t *testing.T) {
 					jwtAuthenticator(issuerCABundle, issuerURL),
 				}
 			},
-			oidcDiscoveryResponse: happyOIDCDIscoveryResponse,
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			idpsDiscoveryResponse: here.Docf(`{
 				"pinniped_identity_providers": []
 			}`),
@@ -1825,9 +1877,7 @@ func TestGetKubeconfig(t *testing.T) {
 					jwtAuthenticator(issuerCABundle, issuerURL),
 				}
 			},
-			oidcDiscoveryResponse: func(issuerURL string) string {
-				return `{"other_field": "other_value"}`
-			},
+			oidcDiscoveryResponse:   onlyIssuerOIDCDiscoveryResponse,
 			idpsDiscoveryStatusCode: http.StatusBadRequest, // IDPs endpoint shouldn't be called by this test
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
@@ -1899,83 +1949,14 @@ func TestGetKubeconfig(t *testing.T) {
 				}
 			},
 			oidcDiscoveryResponse: func(issuerURL string) string {
-				return here.Doc(`{
+				return here.Docf(`{
+					"issuer": "%s",
 					"discovery.supervisor.pinniped.dev/v1alpha1": {
 						"wrong-key": "some-value"
 					}
-				}`)
+				}`, issuerURL)
 			},
 			idpsDiscoveryStatusCode: http.StatusBadRequest, // IDPs endpoint shouldn't be called by this test
-			wantLogs: func(issuerCABundle string, issuerURL string) []string {
-				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
-				}
-			},
-			wantStdout: func(issuerCABundle string, issuerURL string) string {
-				return here.Docf(`
-					apiVersion: v1
-					clusters:
-					- cluster:
-						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
-						server: https://fake-server-url-value
-					  name: kind-cluster-pinniped
-					contexts:
-					- context:
-						cluster: kind-cluster-pinniped
-						user: kind-user-pinniped
-					  name: kind-context-pinniped
-					current-context: kind-context-pinniped
-					kind: Config
-					preferences: {}
-					users:
-					- name: kind-user-pinniped
-					  user:
-						exec:
-						  apiVersion: client.authentication.k8s.io/v1beta1
-						  args:
-						  - login
-						  - oidc
-						  - --enable-concierge
-						  - --concierge-api-group-suffix=pinniped.dev
-						  - --concierge-authenticator-name=test-authenticator
-						  - --concierge-authenticator-type=jwt
-						  - --concierge-endpoint=https://fake-server-url-value
-						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
-						  - --issuer=%s
-						  - --client-id=pinniped-cli
-						  - --scopes=offline_access,openid,pinniped:request-audience
-						  - --ca-bundle-data=%s
-						  - --request-audience=test-audience
-						  command: '.../path/to/pinniped'
-						  env: []
-						  provideClusterInfo: true
-					`,
-					issuerURL,
-					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
-			},
-		},
-		{
-			name: "when OIDC discovery document 404s, dont set idp related flags",
-			args: func(issuerCABundle string, issuerURL string) []string {
-				return []string{
-					"--kubeconfig", "./testdata/kubeconfig.yaml",
-					"--skip-validation",
-				}
-			},
-			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
-				return []runtime.Object{
-					credentialIssuer(),
-					jwtAuthenticator(issuerCABundle, issuerURL),
-				}
-			},
-			oidcDiscoveryStatusCode: http.StatusNotFound,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
 					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
@@ -2121,7 +2102,7 @@ func TestGetKubeconfig(t *testing.T) {
 					jwtAuthenticator(issuerCABundle, issuerURL),
 				}
 			},
-			oidcDiscoveryResponse: happyOIDCDIscoveryResponse,
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			idpsDiscoveryResponse: here.Docf(`{
 				"pinniped_identity_providers": [
 					{"name": "some-other-ldap-idp", "type": "ldap"}
@@ -2196,7 +2177,7 @@ func TestGetKubeconfig(t *testing.T) {
 					"--oidc-ca-bundle", f.Name(),
 				}
 			},
-			oidcDiscoveryResponse: happyOIDCDIscoveryResponse,
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			idpsDiscoveryResponse: here.Docf(`{
 				"pinniped_identity_providers": [
 					{"name": "some-ldap-idp", "type": "ldap"}
@@ -2253,7 +2234,7 @@ func TestGetKubeconfig(t *testing.T) {
 					"--upstream-identity-provider-type", "ldap",
 				}
 			},
-			oidcDiscoveryResponse: happyOIDCDIscoveryResponse,
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			idpsDiscoveryResponse: here.Docf(`{
 				"pinniped_identity_providers": [
 					{"name": "some-ldap-idp", "type": "ldap"},
@@ -2312,7 +2293,7 @@ func TestGetKubeconfig(t *testing.T) {
 					"--upstream-identity-provider-name", "some-ldap-idp",
 				}
 			},
-			oidcDiscoveryResponse: happyOIDCDIscoveryResponse,
+			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			idpsDiscoveryResponse: here.Docf(`{
 				"pinniped_identity_providers": [
 					{"name": "some-ldap-idp", "type": "ldap"},
@@ -2364,6 +2345,7 @@ func TestGetKubeconfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var issuerEndpointPtr *string
 			issuerCABundle, issuerEndpoint := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("content-type", "application/json")
 				switch r.URL.Path {
 				case "/.well-known/openid-configuration":
 					jsonResponseBody := "{}"

@@ -28,6 +28,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Adds handlers for various dynamic auth plugins in client-go
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/client-go/transport"
 
 	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
@@ -735,18 +736,9 @@ func hasPendingStrategy(credentialIssuer *configv1alpha1.CredentialIssuer) bool 
 }
 
 func discoverSupervisorUpstreamIDP(ctx context.Context, flags *getKubeconfigParams) error {
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
-		Proxy:           http.ProxyFromEnvironment,
-	}
-	httpClient := &http.Client{Transport: transport}
-	if flags.oidc.caBundle != nil {
-		rootCAs := x509.NewCertPool()
-		ok := rootCAs.AppendCertsFromPEM(flags.oidc.caBundle)
-		if !ok {
-			return fmt.Errorf("unable to fetch OIDC discovery data from issuer: could not parse CA bundle")
-		}
-		transport.TLSClientConfig.RootCAs = rootCAs
+	httpClient, err := newDiscoveryHTTPClient(flags.oidc.caBundle)
+	if err != nil {
+		return err
 	}
 
 	pinnipedIDPsEndpoint, err := discoverIDPsDiscoveryEndpointURL(ctx, flags.oidc.issuer, httpClient)
@@ -776,38 +768,34 @@ func discoverSupervisorUpstreamIDP(ctx context.Context, flags *getKubeconfigPara
 	return nil
 }
 
+func newDiscoveryHTTPClient(caBundleFlag caBundleFlag) (*http.Client, error) {
+	t := &http.Transport{
+		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+		Proxy:           http.ProxyFromEnvironment,
+	}
+	httpClient := &http.Client{Transport: t}
+	if caBundleFlag != nil {
+		rootCAs := x509.NewCertPool()
+		ok := rootCAs.AppendCertsFromPEM(caBundleFlag)
+		if !ok {
+			return nil, fmt.Errorf("unable to fetch OIDC discovery data from issuer: could not parse CA bundle")
+		}
+		t.TLSClientConfig.RootCAs = rootCAs
+	}
+	httpClient.Transport = transport.DebugWrappers(httpClient.Transport)
+	return httpClient, nil
+}
+
 func discoverIDPsDiscoveryEndpointURL(ctx context.Context, issuer string, httpClient *http.Client) (string, error) {
-	issuerDiscoveryURL := issuer + "/.well-known/openid-configuration"
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, issuerDiscoveryURL, nil)
+	discoveredProvider, err := oidc.NewProvider(oidc.ClientContext(ctx, httpClient), issuer)
 	if err != nil {
-		return "", fmt.Errorf("while forming request to issuer URL: %w", err)
-	}
-
-	response, err := httpClient.Do(request)
-	if err != nil {
-		return "", fmt.Errorf("unable to fetch OIDC discovery data from issuer: %w", err)
-	}
-	defer func() {
-		_ = response.Body.Close()
-	}()
-	if response.StatusCode == http.StatusNotFound {
-		// 404 Not Found is not an error because OIDC discovery is an optional part of the OIDC spec.
-		return "", nil
-	}
-	if response.StatusCode != http.StatusOK {
-		// Other types of error responses aside from 404 are not expected.
-		return "", fmt.Errorf("unable to fetch OIDC discovery data from issuer: unexpected http response status: %s", response.Status)
-	}
-
-	rawBody, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return "", fmt.Errorf("unable to fetch OIDC discovery data from issuer: could not read response body: %w", err)
+		return "", fmt.Errorf("while fetching OIDC discovery data from issuer: %w", err)
 	}
 
 	var body supervisorOIDCDiscoveryResponseWithV1Alpha1
-	err = json.Unmarshal(rawBody, &body)
+	err = discoveredProvider.Claims(&body)
 	if err != nil {
-		return "", fmt.Errorf("unable to fetch OIDC discovery data from issuer: could not parse response JSON: %w", err)
+		return "", fmt.Errorf("while fetching OIDC discovery data from issuer: %w", err)
 	}
 
 	return body.SupervisorDiscovery.PinnipedIDPsEndpoint, nil

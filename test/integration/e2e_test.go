@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base32"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -25,11 +26,13 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	authv1alpha "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient"
@@ -42,7 +45,7 @@ import (
 func TestE2EFullIntegration(t *testing.T) {
 	env := library.IntegrationEnv(t)
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancelFunc()
 
 	// Build pinniped CLI.
@@ -284,6 +287,38 @@ func TestE2EFullIntegration(t *testing.T) {
 	})
 	require.NotNil(t, token)
 
+	// check that the access token is new (since it's just been refreshed) and has close to two minutes left.
+	testutil.RequireTimeInDelta(t, start.Add(2*time.Minute), token.AccessToken.Expiry.Time, 15*time.Second)
+
+	kubeClient := library.NewKubernetesClientset(t).CoreV1()
+
+	// get the access token secret that matches the signature from the cache
+	accessTokenSignature := strings.Split(token.AccessToken.Token, ".")[1]
+	accessSecretName := getSecretNameFromSignature(t, accessTokenSignature, "access-token")
+	accessTokenSecret, err := kubeClient.Secrets(env.SupervisorNamespace).Get(ctx, accessSecretName, metav1.GetOptions{})
+	require.NoError(t, err)
+
+	// Check that the access token garbage-collect-after value is 9 hours from now
+	accessTokenGCTimeString := accessTokenSecret.Annotations["storage.pinniped.dev/garbage-collect-after"]
+	accessTokenGCTime, err := time.Parse(crud.SecretLifetimeAnnotationDateFormat, accessTokenGCTimeString)
+	require.NoError(t, err)
+	require.True(t, accessTokenGCTime.After(time.Now().Add(9*time.Hour)))
+
+	// get the refresh token secret that matches the signature from the cache
+	refreshTokenSignature := strings.Split(token.RefreshToken.Token, ".")[1]
+	refreshSecretName := getSecretNameFromSignature(t, refreshTokenSignature, "refresh-token")
+	refreshTokenSecret, err := kubeClient.Secrets(env.SupervisorNamespace).Get(ctx, refreshSecretName, metav1.GetOptions{})
+	require.NoError(t, err)
+
+	// Check that the refresh token garbage-collect-after value is 9 hours
+	refreshTokenGCTimeString := refreshTokenSecret.Annotations["storage.pinniped.dev/garbage-collect-after"]
+	refreshTokenGCTime, err := time.Parse(crud.SecretLifetimeAnnotationDateFormat, refreshTokenGCTimeString)
+	require.NoError(t, err)
+	require.True(t, refreshTokenGCTime.After(time.Now().Add(9*time.Hour)))
+
+	// the access token and the refresh token should be garbage collected at essentially the same time
+	testutil.RequireTimeInDelta(t, accessTokenGCTime, refreshTokenGCTime, 1*time.Minute)
+
 	idTokenClaims := token.IDToken.Claims
 	require.Equal(t, env.SupervisorTestUpstream.Username, idTokenClaims[oidc.DownstreamUsernameClaim])
 
@@ -337,4 +372,15 @@ status:
 		env.SupervisorTestUpstream.Username,
 		append(env.SupervisorTestUpstream.ExpectedGroups, "system:authenticated"),
 	)
+}
+
+func getSecretNameFromSignature(t *testing.T, signature string, typeLabel string) string {
+	t.Helper()
+	// try to decode base64 signatures to prevent double encoding of binary data
+	signatureBytes, err := base64.RawURLEncoding.DecodeString(signature)
+	require.NoError(t, err)
+	// lower case base32 encoding insures that our secret name is valid per ValidateSecretName in k/k
+	var b32 = base32.StdEncoding.WithPadding(base32.NoPadding)
+	signatureAsValidName := strings.ToLower(b32.EncodeToString(signatureBytes))
+	return fmt.Sprintf("pinniped-storage-%s-%s", typeLabel, signatureAsValidName)
 }

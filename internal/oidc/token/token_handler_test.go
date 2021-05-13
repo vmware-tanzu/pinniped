@@ -9,8 +9,10 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base32"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -575,7 +577,7 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 			require.JSONEq(t, fositeReusedAuthCodeErrorBody, reusedAuthcodeResponse.Body.String())
 
 			// This was previously invalidated by the first request, so it remains invalidated
-			requireInvalidAuthCodeStorage(t, authCode, oauthStore)
+			requireInvalidAuthCodeStorage(t, authCode, oauthStore, secrets)
 			// Has now invalidated the access token that was previously handed out by the first request
 			requireInvalidAccessTokenStorage(t, parsedResponseBody, oauthStore)
 			// This was previously invalidated by the first request, so it remains invalidated
@@ -1200,8 +1202,8 @@ func requireTokenEndpointBehavior(
 		wantIDToken := contains(test.wantSuccessBodyFields, "id_token")
 		wantRefreshToken := contains(test.wantSuccessBodyFields, "refresh_token")
 
-		requireInvalidAuthCodeStorage(t, authCode, oauthStore)
-		requireValidAccessTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes)
+		requireInvalidAuthCodeStorage(t, authCode, oauthStore, secrets)
+		requireValidAccessTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, secrets)
 		requireInvalidPKCEStorage(t, authCode, oauthStore)
 		requireValidOIDCStorage(t, parsedResponseBody, authCode, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes)
 
@@ -1215,7 +1217,7 @@ func requireTokenEndpointBehavior(
 			requireValidIDToken(t, parsedResponseBody, jwtSigningKey, wantAtHashClaimInIDToken, wantNonceValueInIDToken, parsedResponseBody["access_token"].(string))
 		}
 		if wantRefreshToken {
-			requireValidRefreshTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes)
+			requireValidRefreshTokenStorage(t, parsedResponseBody, oauthStore, test.wantRequestedScopes, test.wantGrantedScopes, secrets)
 		}
 
 		testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
@@ -1436,12 +1438,15 @@ func requireInvalidAuthCodeStorage(
 	t *testing.T,
 	code string,
 	storage oauth2.CoreStorage,
+	secrets v1.SecretInterface,
 ) {
 	t.Helper()
 
 	// Make sure we have invalidated this auth code.
 	_, err := storage.GetAuthorizeCodeSession(context.Background(), getFositeDataSignature(t, code), nil)
 	require.True(t, errors.Is(err, fosite.ErrInvalidatedAuthorizeCode))
+	// make sure that its still around in storage so if someone tries to use it again we invalidate everything
+	requireGarbageCollectTimeInDelta(t, code, "authcode", secrets, time.Now().Add(9*time.Hour).Add(10*time.Minute), 30*time.Second)
 }
 
 func requireValidRefreshTokenStorage(
@@ -1450,6 +1455,7 @@ func requireValidRefreshTokenStorage(
 	storage oauth2.CoreStorage,
 	wantRequestedScopes []string,
 	wantGrantedScopes []string,
+	secrets v1.SecretInterface,
 ) {
 	t.Helper()
 
@@ -1471,6 +1477,8 @@ func requireValidRefreshTokenStorage(
 		wantGrantedScopes,
 		true,
 	)
+
+	requireGarbageCollectTimeInDelta(t, refreshTokenString, "refresh-token", secrets, time.Now().Add(9*time.Hour).Add(2*time.Minute), 1*time.Minute)
 }
 
 func requireValidAccessTokenStorage(
@@ -1479,6 +1487,7 @@ func requireValidAccessTokenStorage(
 	storage oauth2.CoreStorage,
 	wantRequestedScopes []string,
 	wantGrantedScopes []string,
+	secrets v1.SecretInterface,
 ) {
 	t.Helper()
 
@@ -1519,6 +1528,8 @@ func requireValidAccessTokenStorage(
 		wantGrantedScopes,
 		true,
 	)
+
+	requireGarbageCollectTimeInDelta(t, accessTokenString, "access-token", secrets, time.Now().Add(9*time.Hour).Add(2*time.Minute), 1*time.Minute)
 }
 
 func requireInvalidAccessTokenStorage(
@@ -1679,6 +1690,24 @@ func requireValidStoredRequest(
 	// We don't use these, so they should be empty.
 	require.Empty(t, session.Username)
 	require.Empty(t, session.Subject)
+}
+
+func requireGarbageCollectTimeInDelta(t *testing.T, tokenString string, typeLabel string, secrets v1.SecretInterface, wantExpirationTime time.Time, deltaTime time.Duration) {
+	t.Helper()
+	signature := getFositeDataSignature(t, tokenString)
+	signatureBytes, err := base64.RawURLEncoding.DecodeString(signature)
+	require.NoError(t, err)
+	// lower case base32 encoding insures that our secret name is valid per ValidateSecretName in k/k
+	var b32 = base32.StdEncoding.WithPadding(base32.NoPadding)
+	signatureAsValidName := strings.ToLower(b32.EncodeToString(signatureBytes))
+	secretName := fmt.Sprintf("pinniped-storage-%s-%s", typeLabel, signatureAsValidName)
+	secret, err := secrets.Get(context.Background(), secretName, metav1.GetOptions{})
+	require.NoError(t, err)
+	refreshTokenGCTimeString := secret.Annotations["storage.pinniped.dev/garbage-collect-after"]
+	refreshTokenGCTime, err := time.Parse(crud.SecretLifetimeAnnotationDateFormat, refreshTokenGCTimeString)
+	require.NoError(t, err)
+
+	testutil.RequireTimeInDelta(t, refreshTokenGCTime, wantExpirationTime, deltaTime)
 }
 
 func requireValidIDToken(

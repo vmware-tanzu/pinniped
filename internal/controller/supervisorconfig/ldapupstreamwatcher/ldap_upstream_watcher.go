@@ -9,7 +9,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
-	"regexp"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -44,10 +43,6 @@ const (
 	loadedTLSConfigurationMessage = "loaded TLS configuration"
 )
 
-var (
-	secretVersionParser = regexp.MustCompile(` \[validated with Secret ".+" at version "(.+)"]`)
-)
-
 // UpstreamLDAPIdentityProviderICache is a thread safe cache that holds a list of validated upstream LDAP IDP configurations.
 type UpstreamLDAPIdentityProviderICache interface {
 	SetLDAPIdentityProviders([]provider.UpstreamLDAPIdentityProviderI)
@@ -55,10 +50,21 @@ type UpstreamLDAPIdentityProviderICache interface {
 
 type ldapWatcherController struct {
 	cache                        UpstreamLDAPIdentityProviderICache
+	validatedSecretVersionsCache *secretVersionCache
 	ldapDialer                   upstreamldap.LDAPDialer
 	client                       pinnipedclientset.Interface
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer
 	secretInformer               corev1informers.SecretInformer
+}
+
+// An in-memory cache with an entry for each LDAPIdentityProvider, to keep track of which ResourceVersion
+// of the bind Secret was used during the most recent successful validation.
+type secretVersionCache struct {
+	ResourceVersionsByName map[string]string
+}
+
+func newSecretVersionCache() *secretVersionCache {
+	return &secretVersionCache{ResourceVersionsByName: map[string]string{}}
 }
 
 // New instantiates a new controllerlib.Controller which will populate the provided UpstreamLDAPIdentityProviderICache.
@@ -69,12 +75,23 @@ func New(
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
-	// nil means to use a real production dialer when creating objects to add to the dynamicUpstreamIDPProvider cache.
-	return newInternal(idpCache, nil, client, ldapIdentityProviderInformer, secretInformer, withInformer)
+	return newInternal(
+		idpCache,
+		// start with an empty secretVersionCache
+		newSecretVersionCache(),
+		// nil means to use a real production dialer when creating objects to add to the cache
+		nil,
+		client,
+		ldapIdentityProviderInformer,
+		secretInformer,
+		withInformer,
+	)
 }
 
+// For test dependency injection purposes.
 func newInternal(
 	idpCache UpstreamLDAPIdentityProviderICache,
+	validatedSecretVersionsCache *secretVersionCache,
 	ldapDialer upstreamldap.LDAPDialer,
 	client pinnipedclientset.Interface,
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer,
@@ -83,6 +100,7 @@ func newInternal(
 ) controllerlib.Controller {
 	c := ldapWatcherController{
 		cache:                        idpCache,
+		validatedSecretVersionsCache: validatedSecretVersionsCache,
 		ldapDialer:                   ldapDialer,
 		client:                       client,
 		ldapIdentityProviderInformer: ldapIdentityProviderInformer,
@@ -113,21 +131,24 @@ func (c *ldapWatcherController) Sync(ctx controllerlib.Context) error {
 	requeue := false
 	validatedUpstreams := make([]provider.UpstreamLDAPIdentityProviderI, 0, len(actualUpstreams))
 	for _, upstream := range actualUpstreams {
-		valid := c.validateUpstream(ctx.Context, upstream)
-		if valid == nil {
-			requeue = true
-		} else {
+		valid, requestedRequeue := c.validateUpstream(ctx.Context, upstream)
+		if valid != nil {
 			validatedUpstreams = append(validatedUpstreams, valid)
 		}
+		if requestedRequeue {
+			requeue = true
+		}
 	}
+
 	c.cache.SetLDAPIdentityProviders(validatedUpstreams)
+
 	if requeue {
 		return controllerlib.ErrSyntheticRequeue
 	}
 	return nil
 }
 
-func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider) provider.UpstreamLDAPIdentityProviderI {
+func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider) (p provider.UpstreamLDAPIdentityProviderI, requeue bool) {
 	spec := upstream.Spec
 
 	config := &upstreamldap.ProviderConfig{
@@ -148,20 +169,33 @@ func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *
 	conditions = append(conditions, secretValidCondition, tlsValidCondition)
 
 	// No point in trying to connect to the server if the config was already determined to be invalid.
+	var finishedConfigCondition *v1alpha1.Condition
 	if secretValidCondition.Status == v1alpha1.ConditionTrue && tlsValidCondition.Status == v1alpha1.ConditionTrue {
-		finishedConfigCondition := c.validateFinishedConfig(ctx, upstream, config, currentSecretVersion)
-		// nil when there is no need to update this condition.
+		finishedConfigCondition = c.validateFinishedConfig(ctx, upstream, config, currentSecretVersion)
 		if finishedConfigCondition != nil {
 			conditions = append(conditions, finishedConfigCondition)
 		}
 	}
 
-	hadErrorCondition := c.updateStatus(ctx, upstream, conditions)
-	if hadErrorCondition {
-		return nil
+	c.updateStatus(ctx, upstream, conditions)
+
+	switch {
+	case secretValidCondition.Status != v1alpha1.ConditionTrue || tlsValidCondition.Status != v1alpha1.ConditionTrue:
+		// Invalid provider, so do not load it into the cache.
+		p = nil
+		requeue = true
+	case finishedConfigCondition != nil && finishedConfigCondition.Status != v1alpha1.ConditionTrue:
+		// Error but load it into the cache anyway, treating this condition failure more like a warning.
+		p = upstreamldap.New(*config)
+		// Try again hoping that the condition will improve.
+		requeue = true
+	default:
+		// Fully validated provider, so load it into the cache.
+		p = upstreamldap.New(*config)
+		requeue = false
 	}
 
-	return upstreamldap.New(*config)
+	return p, requeue
 }
 
 func (c *ldapWatcherController) validateTLSConfig(upstream *v1alpha1.LDAPIdentityProvider, config *upstreamldap.ProviderConfig) *v1alpha1.Condition {
@@ -191,14 +225,23 @@ func (c *ldapWatcherController) validateTLSConfig(upstream *v1alpha1.LDAPIdentit
 func (c *ldapWatcherController) validateFinishedConfig(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider, config *upstreamldap.ProviderConfig, currentSecretVersion string) *v1alpha1.Condition {
 	ldapProvider := upstreamldap.New(*config)
 
-	if hasPreviousSuccessfulConditionForCurrentSpecGenerationAndSecretVersion(upstream, currentSecretVersion) {
+	if c.hasPreviousSuccessfulConditionForCurrentSpecGenerationAndSecretVersion(upstream, currentSecretVersion) {
 		return nil
 	}
 
 	testConnectionTimeout, cancelFunc := context.WithTimeout(ctx, testLDAPConnectionTimeout)
 	defer cancelFunc()
 
-	return c.testConnection(testConnectionTimeout, upstream, config, ldapProvider, currentSecretVersion)
+	condition := c.testConnection(testConnectionTimeout, upstream, config, ldapProvider, currentSecretVersion)
+
+	if condition.Status == v1alpha1.ConditionTrue {
+		// Remember (in-memory for this pod) that the controller has successfully validated the LDAP provider
+		// using this version of the Secret. This is for performance reasons, to avoid attempting to connect to
+		// the LDAP server more than is needed. If the pod restarts, it will attempt this validation again.
+		c.validatedSecretVersionsCache.ResourceVersionsByName[upstream.GetName()] = currentSecretVersion
+	}
+
+	return condition
 }
 
 func (c *ldapWatcherController) testConnection(
@@ -228,17 +271,13 @@ func (c *ldapWatcherController) testConnection(
 	}
 }
 
-func hasPreviousSuccessfulConditionForCurrentSpecGenerationAndSecretVersion(upstream *v1alpha1.LDAPIdentityProvider, currentSecretVersion string) bool {
+func (c *ldapWatcherController) hasPreviousSuccessfulConditionForCurrentSpecGenerationAndSecretVersion(upstream *v1alpha1.LDAPIdentityProvider, currentSecretVersion string) bool {
 	currentGeneration := upstream.Generation
-	for _, c := range upstream.Status.Conditions {
-		if c.Type == typeLDAPConnectionValid && c.Status == v1alpha1.ConditionTrue && c.ObservedGeneration == currentGeneration {
+	for _, cond := range upstream.Status.Conditions {
+		if cond.Type == typeLDAPConnectionValid && cond.Status == v1alpha1.ConditionTrue && cond.ObservedGeneration == currentGeneration {
 			// Found a previously successful condition for the current spec generation.
-			// Now figure out which version of the bind Secret was used during that previous validation.
-			matches := secretVersionParser.FindStringSubmatch(c.Message)
-			if len(matches) != 2 {
-				continue
-			}
-			validatedSecretVersion := matches[1]
+			// Now figure out which version of the bind Secret was used during that previous validation, if any.
+			validatedSecretVersion := c.validatedSecretVersionsCache.ResourceVersionsByName[upstream.GetName()]
 			if validatedSecretVersion == currentSecretVersion {
 				return true
 			}
@@ -308,7 +347,7 @@ func (c *ldapWatcherController) validateSecret(upstream *v1alpha1.LDAPIdentityPr
 	}, secret.ResourceVersion
 }
 
-func (c *ldapWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider, conditions []*v1alpha1.Condition) bool {
+func (c *ldapWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider, conditions []*v1alpha1.Condition) {
 	log := klogr.New().WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 
@@ -320,7 +359,7 @@ func (c *ldapWatcherController) updateStatus(ctx context.Context, upstream *v1al
 	}
 
 	if equality.Semantic.DeepEqual(upstream, updated) {
-		return hadErrorCondition
+		return // nothing to update
 	}
 
 	_, err := c.client.
@@ -330,6 +369,4 @@ func (c *ldapWatcherController) updateStatus(ctx context.Context, upstream *v1al
 	if err != nil {
 		log.Error(err, "failed to update status")
 	}
-
-	return hadErrorCondition
 }

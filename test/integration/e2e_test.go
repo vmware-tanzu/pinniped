@@ -348,8 +348,9 @@ func TestE2EFullIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Read all of the remaining output from the subprocess until EOF.
-		remainingOutput, err := ioutil.ReadAll(ptyFile)
-		require.NoError(t, err)
+		remainingOutput, _ := ioutil.ReadAll(ptyFile)
+		// Ignore any errors returned because there is always an error on linux.
+		require.Greaterf(t, len(remainingOutput), 0, "expected to get some more output from the kubectl subcommand, but did not")
 		require.Greaterf(t, len(strings.Split(string(remainingOutput), "\n")), 2, "expected some namespaces to be returned, got %q", string(remainingOutput))
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 

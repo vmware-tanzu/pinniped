@@ -86,13 +86,13 @@ func TestManager(t *testing.T) {
 			err = json.Unmarshal(responseBody, &parsedDiscoveryResult)
 			r.NoError(err)
 			r.Equal(expectedIssuer, parsedDiscoveryResult.Issuer)
-			r.Equal(parsedDiscoveryResult.PinnipedIDPsEndpoint, expectedIssuer+oidc.PinnipedIDPsPath)
+			r.Equal(parsedDiscoveryResult.SupervisorDiscovery.PinnipedIDPsEndpoint, expectedIssuer+oidc.PinnipedIDPsPathV1Alpha1)
 		}
 
 		requirePinnipedIDPsDiscoveryRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedIDPName, expectedIDPType string) {
 			recorder := httptest.NewRecorder()
 
-			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.PinnipedIDPsPath+requestURLSuffix))
+			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.PinnipedIDPsPathV1Alpha1+requestURLSuffix))
 
 			r.False(fallbackHandlerWasCalled)
 

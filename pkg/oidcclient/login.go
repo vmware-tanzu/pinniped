@@ -74,7 +74,7 @@ type handlerState struct {
 
 	upstreamIdentityProviderName string
 	upstreamIdentityProviderType string
-	ldapUpstreamIdentityProvider bool
+	cliToSendCredentials         bool
 
 	requestedAudience string
 
@@ -200,14 +200,15 @@ func WithRequestAudience(audience string) Option {
 	}
 }
 
-// WithLDAPUpstreamIdentityProvider causes the login flow to use CLI prompts for username and password and causes the
+// WithCLISendingCredentials causes the login flow to use CLI-based prompts for username and password and causes the
 // call to the Issuer's authorize endpoint to be made directly (no web browser) with the username and password on custom
 // HTTP headers. This is only intended to be used when the issuer is a Pinniped Supervisor and the upstream identity
-// provider is an LDAP provider. It should never be used with non-Supervisor issuers because it will send the user's
-// password as a custom header, which would be ignored but could potentially get logged somewhere by the issuer.
-func WithLDAPUpstreamIdentityProvider() Option {
+// provider type supports this style of authentication. Currently this is supported by LDAPIdentityProviders.
+// This should never be used with non-Supervisor issuers because it will send the user's password to the authorization
+// endpoint as a custom header, which would be ignored but could potentially get logged somewhere by the issuer.
+func WithCLISendingCredentials() Option {
 	return func(h *handlerState) error {
-		h.ldapUpstreamIdentityProvider = true
+		h.cliToSendCredentials = true
 		return nil
 	}
 }
@@ -356,7 +357,7 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 
 	// Choose the appropriate authorization and authcode exchange strategy.
 	var authFunc = h.webBrowserBasedAuth
-	if h.ldapUpstreamIdentityProvider {
+	if h.cliToSendCredentials {
 		authFunc = h.cliBasedAuth
 	}
 
@@ -371,8 +372,8 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 	return token, err
 }
 
-// Make a direct call to the authorize endpoint and parse the authcode from the response.
-// Exchange the authcode for tokens. Return the tokens or an error.
+// Make a direct call to the authorize endpoint, including the user's username and password on custom http headers,
+// and parse the authcode from the response. Exchange the authcode for tokens. Return the tokens or an error.
 func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (*oidctypes.Token, error) {
 	// Ask the user for their username and password.
 	username, err := h.promptForValue(defaultLDAPUsernamePrompt)

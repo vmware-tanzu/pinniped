@@ -107,7 +107,7 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 
 		m.providerHandlers[(issuerHostWithPath + oidc.JWKSEndpointPath)] = jwks.NewHandler(issuer, m.dynamicJWKSProvider)
 
-		m.providerHandlers[(issuerHostWithPath + oidc.PinnipedIDPsPath)] = idpdiscovery.NewHandler(m.upstreamIDPs)
+		m.providerHandlers[(issuerHostWithPath + oidc.PinnipedIDPsPathV1Alpha1)] = idpdiscovery.NewHandler(m.upstreamIDPs)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.AuthorizationEndpointPath)] = auth.NewHandler(
 			issuer,

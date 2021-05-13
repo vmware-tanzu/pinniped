@@ -95,11 +95,15 @@ type getKubeconfigParams struct {
 	credentialCachePathSet    bool
 }
 
-type supervisorOIDCDiscoveryResponse struct {
+type supervisorOIDCDiscoveryResponseWithV1Alpha1 struct {
+	SupervisorDiscovery SupervisorDiscoveryResponseV1Alpha1 `json:"discovery.supervisor.pinniped.dev/v1alpha1"`
+}
+
+type SupervisorDiscoveryResponseV1Alpha1 struct {
 	PinnipedIDPsEndpoint string `json:"pinniped_identity_providers_endpoint"`
 }
 
-type supervisorIDPsDiscoveryResponse struct {
+type supervisorIDPsDiscoveryResponseV1Alpha1 struct {
 	PinnipedIDPs []pinnipedIDPResponse `json:"pinniped_identity_providers"`
 }
 
@@ -800,13 +804,13 @@ func discoverIDPsDiscoveryEndpointURL(ctx context.Context, issuer string, httpCl
 		return "", fmt.Errorf("unable to fetch OIDC discovery data from issuer: could not read response body: %w", err)
 	}
 
-	var body supervisorOIDCDiscoveryResponse
+	var body supervisorOIDCDiscoveryResponseWithV1Alpha1
 	err = json.Unmarshal(rawBody, &body)
 	if err != nil {
 		return "", fmt.Errorf("unable to fetch OIDC discovery data from issuer: could not parse response JSON: %w", err)
 	}
 
-	return body.PinnipedIDPsEndpoint, nil
+	return body.SupervisorDiscovery.PinnipedIDPsEndpoint, nil
 }
 
 func discoverAllAvailableSupervisorUpstreamIDPs(ctx context.Context, pinnipedIDPsEndpoint string, httpClient *http.Client) ([]pinnipedIDPResponse, error) {
@@ -831,7 +835,7 @@ func discoverAllAvailableSupervisorUpstreamIDPs(ctx context.Context, pinnipedIDP
 		return nil, fmt.Errorf("unable to fetch IDP discovery data from issuer: could not read response body: %w", err)
 	}
 
-	var body supervisorIDPsDiscoveryResponse
+	var body supervisorIDPsDiscoveryResponseV1Alpha1
 	err = json.Unmarshal(rawBody, &body)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch IDP discovery data from issuer: could not parse response JSON: %w", err)

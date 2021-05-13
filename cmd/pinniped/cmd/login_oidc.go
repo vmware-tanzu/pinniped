@@ -160,7 +160,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	case "oidc":
 		// this is the default, so don't need to do anything
 	case "ldap":
-		opts = append(opts, oidcclient.WithLDAPUpstreamIdentityProvider())
+		opts = append(opts, oidcclient.WithCLISendingCredentials())
 	default:
 		// Surprisingly cobra does not support this kind of flag validation. See https://github.com/spf13/pflag/issues/236
 		return fmt.Errorf(

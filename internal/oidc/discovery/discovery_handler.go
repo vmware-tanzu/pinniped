@@ -40,9 +40,13 @@ type Metadata struct {
 
 	// vvv Custom vvv
 
-	PinnipedIDPsEndpoint string `json:"pinniped_identity_providers_endpoint"`
+	SupervisorDiscovery SupervisorDiscoveryMetadataV1Alpha1 `json:"discovery.supervisor.pinniped.dev/v1alpha1"`
 
 	// ^^^ Custom ^^^
+}
+
+type SupervisorDiscoveryMetadataV1Alpha1 struct {
+	PinnipedIDPsEndpoint string `json:"pinniped_identity_providers_endpoint"`
 }
 
 type IdentityProviderMetadata struct {
@@ -57,7 +61,7 @@ func NewHandler(issuerURL string) http.Handler {
 		AuthorizationEndpoint:             issuerURL + oidc.AuthorizationEndpointPath,
 		TokenEndpoint:                     issuerURL + oidc.TokenEndpointPath,
 		JWKSURI:                           issuerURL + oidc.JWKSEndpointPath,
-		PinnipedIDPsEndpoint:              issuerURL + oidc.PinnipedIDPsPath,
+		SupervisorDiscovery:               SupervisorDiscoveryMetadataV1Alpha1{PinnipedIDPsEndpoint: issuerURL + oidc.PinnipedIDPsPathV1Alpha1},
 		ResponseTypesSupported:            []string{"code"},
 		SubjectTypesSupported:             []string{"public"},
 		IDTokenSigningAlgValuesSupported:  []string{"ES256"},

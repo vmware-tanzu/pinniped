@@ -232,7 +232,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
 		})
 		require.NoError(t, WithSessionCache(cache)(h))
-		require.NoError(t, WithLDAPUpstreamIdentityProvider()(h))
+		require.NoError(t, WithCLISendingCredentials()(h))
 		require.NoError(t, WithUpstreamIdentityProvider("some-upstream-name", "ldap")(h))
 
 		require.NoError(t, WithClient(&http.Client{
@@ -875,7 +875,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
 					})
 					require.NoError(t, WithSessionCache(cache)(h))
-					require.NoError(t, WithLDAPUpstreamIdentityProvider()(h))
+					require.NoError(t, WithCLISendingCredentials()(h))
 					require.NoError(t, WithUpstreamIdentityProvider("some-upstream-name", "ldap")(h))
 
 					discoveryRequestWasMade := false

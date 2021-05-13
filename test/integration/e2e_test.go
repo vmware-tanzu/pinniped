@@ -264,8 +264,6 @@ func TestE2EFullIntegration(t *testing.T) {
 	t.Logf("first kubectl command took %s", time.Since(start).String())
 
 	// 	Run kubectl again, which should work with no browser interaction.
-	t.Logf("Waiting 6 minutes to allow access token to expire")
-	time.Sleep(6 * time.Minute)
 	kubectlCmd2 := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
 	kubectlCmd2.Env = append(os.Environ(), env.ProxyEnv()...)
 	start = time.Now()

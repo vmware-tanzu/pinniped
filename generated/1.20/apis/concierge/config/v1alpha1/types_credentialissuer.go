@@ -3,7 +3,9 @@
 
 package v1alpha1
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 // StrategyType enumerates a type of "strategy" used to implement credential access on a cluster.
 // +kubebuilder:validation:Enum=KubeClusterSigningCertificate;ImpersonationProxy
@@ -39,6 +41,95 @@ const (
 	CouldNotGetClusterInfoStrategyReason = StrategyReason("CouldNotGetClusterInfo")
 	FetchedKeyStrategyReason             = StrategyReason("FetchedKey")
 )
+
+// CredentialIssuerSpec describes the intended configuration of the Concierge.
+type CredentialIssuerSpec struct {
+	// ImpersonationProxy describes the intended configuration of the Concierge impersonation proxy.
+	//
+	//+kubebuilder:default:={"mode": "disabled", "service": {"type": "LoadBalancer"}}
+	ImpersonationProxy ImpersonationProxySpec `json:"impersonationProxy"`
+}
+
+// ImpersonationProxyMode enumerates the configuration modes for the impersonation proxy.
+//
+// +kubebuilder:validation:Enum=auto;enabled;disabled
+type ImpersonationProxyMode string
+
+const (
+	// ImpersonationProxyModeDisabled explicitly disables the impersonation proxy.
+	ImpersonationProxyModeDisabled = ImpersonationProxyMode("disabled")
+
+	// ImpersonationProxyModeEnabled explicitly enables the impersonation proxy.
+	ImpersonationProxyModeEnabled = ImpersonationProxyMode("enabled")
+
+	// ImpersonationProxyModeAuto enables or disables the impersonation proxy based upon the cluster in which it is running.
+	ImpersonationProxyModeAuto = ImpersonationProxyMode("auto")
+)
+
+// ImpersonationProxyServiceType enumerates the types of service that can be provisioned for the impersonation proxy.
+//
+// +kubebuilder:validation:Enum=LoadBalancer;ClusterIP;None
+type ImpersonationProxyServiceType string
+
+const (
+	// ImpersonationProxyServiceTypeLoadBalancer provisions a service of type LoadBalancer.
+	ImpersonationProxyServiceTypeLoadBalancer = ImpersonationProxyServiceType("LoadBalancer")
+
+	// ImpersonationProxyServiceTypeClusterIP provisions a service of type ClusterIP.
+	ImpersonationProxyServiceTypeClusterIP = ImpersonationProxyServiceType("ClusterIP")
+
+	// ImpersonationProxyServiceTypeNone does not automatically provision any service.
+	ImpersonationProxyServiceTypeNone = ImpersonationProxyServiceType("None")
+)
+
+// ImpersonationProxySpec describes the intended configuration of the Concierge impersonation proxy.
+type ImpersonationProxySpec struct {
+	// Mode configures whether the impersonation proxy should be started:
+	// - "disabled" explicitly disables the impersonation proxy. This is the default.
+	// - "enabled" explicitly enables the impersonation proxy.
+	// - "auto" enables or disables the impersonation proxy based upon the cluster in which it is running.
+	//
+	// +kubebuilder:default:="disabled"
+	Mode ImpersonationProxyMode `json:"mode"`
+
+	// Service describes the configuraiton
+	//
+	// +kubebuilder:default:={"type": "LoadBalancer"}
+	Service ImpersonationProxyServiceSpec `json:"service"`
+
+	// ExternalEndpoint describes the HTTPS endpoint where the proxy will be exposed. If the proxy is enabled and this
+	// field is not set, a Service of type LoadBalancer will be automatically provisioned and its external name will be
+	// advertised.
+	//
+	// Setting this field disables the automatic creation of this LoadBalancer Service.
+	//
+	// +optional
+	ExternalEndpoint string `json:"externalEndpoint,omitempty"`
+}
+
+// ImpersonationProxyServiceSpec describes how the Concierge should provision a Service to expose the impersonation proxy.
+type ImpersonationProxyServiceSpec struct {
+	// Type specifies the type of Service to provision for the impersonation proxy.
+	//
+	// If the type is "None", then the "spec.impersonationProxy.externalEndpoint" field must be set to a non-empty
+	// value so that the Concierge can properly advertise the endpoint in the CredentialIssuer's status.
+	//
+	// +kubebuilder:default:="LoadBalancer"
+	Type ImpersonationProxyServiceType `json:"type,omitempty"`
+
+	// LoadBalancerIP specifies the IP address to set in the spec.loadBalancerIP field of the provisioned Service.
+	// This is not supported on all cloud providers.
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	// +optional
+	LoadBalancerIP string `json:"loadBalancerIP,omitempty"`
+
+	// Annotations specifies zero or more key/value pairs to set as annotations on the provisioned Service.
+	//
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
 
 // CredentialIssuerStatus describes the status of the Concierge.
 type CredentialIssuerStatus struct {
@@ -134,7 +225,14 @@ type CredentialIssuer struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// Status of the credential issuer.
+	// Spec describes the intended configuration of the Concierge.
+	//
+	// +optional
+	// +kubebuilder:default:={"impersonationProxy": {"mode": "disabled", "service": {"type": "LoadBalancer"}}}
+	Spec CredentialIssuerSpec `json:"spec"`
+
+	// CredentialIssuerStatus describes the status of the Concierge.
+	//
 	// +optional
 	Status CredentialIssuerStatus `json:"status"`
 }

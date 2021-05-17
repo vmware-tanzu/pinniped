@@ -394,9 +394,12 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 	require.Eventuallyf(t, func() bool {
 		var err error
 		result, err = upstreams.Get(ctx, created.Name, metav1.GetOptions{})
-		require.NoError(t, err)
+		if err != nil {
+			t.Logf("error while getting OIDCIdentityProvider %s/%s: %s", created.Namespace, created.Name, err.Error())
+			return false
+		}
 		return result.Status.Phase == expectedPhase
-	}, 60*time.Second, 1*time.Second, "expected the OIDCIdentityProvider to go into phase %s", expectedPhase)
+	}, 60*time.Second, 1*time.Second, "expected the OIDCIdentityProvider to go into phase %s, OIDCIdentityProvider was: %s", expectedPhase, Sdump(result))
 	return result
 }
 
@@ -429,9 +432,12 @@ func CreateTestLDAPIdentityProvider(t *testing.T, spec idpv1alpha1.LDAPIdentityP
 	require.Eventuallyf(t, func() bool {
 		var err error
 		result, err = upstreams.Get(ctx, created.Name, metav1.GetOptions{})
-		require.NoError(t, err)
+		if err != nil {
+			t.Logf("error while getting LDAPIdentityProvider %s/%s: %s", created.Namespace, created.Name, err.Error())
+			return false
+		}
 		return result.Status.Phase == expectedPhase
-	}, 60*time.Second, 1*time.Second, "expected the LDAPIdentityProvider to go into phase %s", expectedPhase)
+	}, 60*time.Second, 1*time.Second, "expected the LDAPIdentityProvider to go into phase %s, LDAPIdentityProvider was: %s", expectedPhase, Sdump(result))
 	return result
 }
 

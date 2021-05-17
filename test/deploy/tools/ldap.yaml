@@ -161,7 +161,7 @@ spec:
               cpu: "100m" #! one-tenth of one CPU
               memory: "64Mi"
             limits:
-              cpu: "200m" #! slapd needs a reasonable amount of CPU during initial startup or else it is slow to start
+              #! Do not limit CPU because it was causing issues running integration tests on AKS where openldap became very slow.
               memory: "64Mi"
           readinessProbe:
             tcpSocket:

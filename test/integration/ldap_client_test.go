@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -510,7 +511,10 @@ func TestSimultaneousRequestsOnSingleProvider(t *testing.T) {
 	resultCh := make(chan authUserResult, iterations)
 	for i := 0; i < iterations; i++ {
 		go func() {
-			authResponse, authenticated, err := provider.AuthenticateUser(ctx,
+			authUserCtx, authUserCtxCancelFunc := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer authUserCtxCancelFunc()
+
+			authResponse, authenticated, err := provider.AuthenticateUser(authUserCtx,
 				env.SupervisorUpstreamLDAP.TestUserCN, env.SupervisorUpstreamLDAP.TestUserPassword,
 			)
 			resultCh <- authUserResult{
@@ -522,9 +526,10 @@ func TestSimultaneousRequestsOnSingleProvider(t *testing.T) {
 	}
 	for i := 0; i < iterations; i++ {
 		result := <-resultCh
-		require.NoError(t, result.err)
-		require.True(t, result.authenticated, "expected the user to be authenticated, but they were not")
-		require.Equal(t, &authenticator.Response{
+		// Record failures but allow the test to keep running so that all the background goroutines have a chance to try.
+		assert.NoError(t, result.err)
+		assert.True(t, result.authenticated, "expected the user to be authenticated, but they were not")
+		assert.Equal(t, &authenticator.Response{
 			User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 		}, result.response)
 	}

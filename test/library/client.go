@@ -396,7 +396,7 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 		result, err = upstreams.Get(ctx, created.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		return result.Status.Phase == expectedPhase
-	}, 60*time.Second, 1*time.Second, "expected the OIDCIdentityProvider to go into phase %s", expectedPhase)
+	}, 60*time.Second, 1*time.Second, "expected the OIDCIdentityProvider to go into phase %s, OIDCIdentityProvider was: %s", expectedPhase, Sdump(result))
 	return result
 }
 
@@ -431,7 +431,7 @@ func CreateTestLDAPIdentityProvider(t *testing.T, spec idpv1alpha1.LDAPIdentityP
 		result, err = upstreams.Get(ctx, created.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		return result.Status.Phase == expectedPhase
-	}, 60*time.Second, 1*time.Second, "expected the LDAPIdentityProvider to go into phase %s", expectedPhase)
+	}, 60*time.Second, 1*time.Second, "expected the LDAPIdentityProvider to go into phase %s, LDAPIdentityProvider was: %s", expectedPhase, Sdump(result))
 	return result
 }
 

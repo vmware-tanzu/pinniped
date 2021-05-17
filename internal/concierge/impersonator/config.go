@@ -8,6 +8,8 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/yaml"
+
+	"go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 )
 
 type Mode string
@@ -61,5 +63,21 @@ func ConfigFromConfigMap(configMap *v1.ConfigMap) (*Config, error) {
 	if config.Mode != ModeAuto && config.Mode != ModeEnabled && config.Mode != ModeDisabled {
 		return nil, fmt.Errorf(`illegal value for "mode": %s`, config.Mode)
 	}
+	return config, nil
+}
+
+func ConfigFromCredentialIssuer(credIssuer *v1alpha1.CredentialIssuer) (*Config, error) {
+	config := NewConfig()
+	switch mode := credIssuer.Spec.ImpersonationProxy.Mode; mode {
+	case v1alpha1.ImpersonationProxyModeAuto:
+		config.Mode = ModeAuto
+	case v1alpha1.ImpersonationProxyModeDisabled:
+		config.Mode = ModeDisabled
+	case v1alpha1.ImpersonationProxyModeEnabled:
+		config.Mode = ModeEnabled
+	default:
+		return nil, fmt.Errorf("invalid impersonation proxy mode %q, valid values are auto, disabled, or enabled", mode)
+	}
+	config.Endpoint = credIssuer.Spec.ImpersonationProxy.ExternalEndpoint
 	return config, nil
 }

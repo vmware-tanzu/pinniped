@@ -33,9 +33,11 @@ type APIConfigSpec struct {
 
 // NamesConfigSpec configures the names of some Kubernetes resources for the Concierge.
 type NamesConfigSpec struct {
-	ServingCertificateSecret          string `json:"servingCertificateSecret"`
-	CredentialIssuer                  string `json:"credentialIssuer"`
-	APIService                        string `json:"apiService"`
+	ServingCertificateSecret string `json:"servingCertificateSecret"`
+	CredentialIssuer         string `json:"credentialIssuer"`
+	APIService               string `json:"apiService"`
+
+	// TODO: remove this key entirely
 	ImpersonationConfigMap            string `json:"impersonationConfigMap"`
 	ImpersonationLoadBalancerService  string `json:"impersonationLoadBalancerService"`
 	ImpersonationTLSCertificateSecret string `json:"impersonationTLSCertificateSecret"`

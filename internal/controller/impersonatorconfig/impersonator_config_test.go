@@ -35,6 +35,7 @@ import (
 
 	"go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	pinnipedfake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
+	pinnipedinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controllerlib"
@@ -46,7 +47,7 @@ import (
 func TestImpersonatorConfigControllerOptions(t *testing.T) {
 	spec.Run(t, "options", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
-		const configMapResourceName = "some-configmap-resource-name"
+		const credentialIssuerResourceName = "some-credential-issuer-resource-name"
 		const generatedLoadBalancerServiceName = "some-service-resource-name"
 		const tlsSecretName = "some-tls-secret-name" //nolint:gosec // this is not a credential
 		const caSecretName = "some-ca-secret-name"
@@ -55,7 +56,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 		var r *require.Assertions
 		var observableWithInformerOption *testutil.ObservableWithInformerOption
 		var observableWithInitialEventOption *testutil.ObservableWithInitialEventOption
-		var configMapsInformerFilter controllerlib.Filter
+		var credIssuerInformerFilter controllerlib.Filter
 		var servicesInformerFilter controllerlib.Filter
 		var secretsInformerFilter controllerlib.Filter
 
@@ -63,18 +64,18 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			observableWithInitialEventOption = testutil.NewObservableWithInitialEventOption()
+			pinnipedInformerFactory := pinnipedinformers.NewSharedInformerFactory(nil, 0)
 			sharedInformerFactory := kubeinformers.NewSharedInformerFactory(nil, 0)
-			configMapsInformer := sharedInformerFactory.Core().V1().ConfigMaps()
+			credIssuerInformer := pinnipedInformerFactory.Config().V1alpha1().CredentialIssuers()
 			servicesInformer := sharedInformerFactory.Core().V1().Services()
 			secretsInformer := sharedInformerFactory.Core().V1().Secrets()
 
 			_ = NewImpersonatorConfigController(
 				installedInNamespace,
-				configMapResourceName,
-				"",
+				credentialIssuerResourceName,
 				nil,
 				nil,
-				configMapsInformer,
+				credIssuerInformer,
 				servicesInformer,
 				secretsInformer,
 				observableWithInformerOption.WithInformer,
@@ -88,55 +89,37 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 				caSignerName,
 				nil,
 			)
-			configMapsInformerFilter = observableWithInformerOption.GetFilterForInformer(configMapsInformer)
+			credIssuerInformerFilter = observableWithInformerOption.GetFilterForInformer(credIssuerInformer)
 			servicesInformerFilter = observableWithInformerOption.GetFilterForInformer(servicesInformer)
 			secretsInformerFilter = observableWithInformerOption.GetFilterForInformer(secretsInformer)
 		})
 
-		when("watching ConfigMap objects", func() {
+		when("watching CredentialIssuer objects", func() {
 			var subject controllerlib.Filter
-			var target, wrongNamespace, wrongName, unrelated *corev1.ConfigMap
+			var target, wrongName, otherWrongName *v1alpha1.CredentialIssuer
 
 			it.Before(func() {
-				subject = configMapsInformerFilter
-				target = &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapResourceName, Namespace: installedInNamespace}}
-				wrongNamespace = &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: configMapResourceName, Namespace: "wrong-namespace"}}
-				wrongName = &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: installedInNamespace}}
-				unrelated = &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: "wrong-namespace"}}
+				subject = credIssuerInformerFilter
+				target = &v1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName}}
+				wrongName = &v1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "wrong-name"}}
+				otherWrongName = &v1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "other-wrong-name"}}
 			})
 
-			when("the target ConfigMap changes", func() {
+			when("the target CredentialIssuer changes", func() {
 				it("returns true to trigger the sync method", func() {
 					r.True(subject.Add(target))
-					r.True(subject.Update(target, unrelated))
-					r.True(subject.Update(unrelated, target))
+					r.True(subject.Update(target, wrongName))
+					r.True(subject.Update(wrongName, target))
 					r.True(subject.Delete(target))
 				})
 			})
 
-			when("a ConfigMap from another namespace changes", func() {
-				it("returns false to avoid triggering the sync method", func() {
-					r.False(subject.Add(wrongNamespace))
-					r.False(subject.Update(wrongNamespace, unrelated))
-					r.False(subject.Update(unrelated, wrongNamespace))
-					r.False(subject.Delete(wrongNamespace))
-				})
-			})
-
-			when("a ConfigMap with a different name changes", func() {
+			when("a CredentialIssuer with a different name changes", func() {
 				it("returns false to avoid triggering the sync method", func() {
 					r.False(subject.Add(wrongName))
-					r.False(subject.Update(wrongName, unrelated))
-					r.False(subject.Update(unrelated, wrongName))
+					r.False(subject.Update(wrongName, otherWrongName))
+					r.False(subject.Update(otherWrongName, wrongName))
 					r.False(subject.Delete(wrongName))
-				})
-			})
-
-			when("a ConfigMap with a different name and a different namespace changes", func() {
-				it("returns false to avoid triggering the sync method", func() {
-					r.False(subject.Add(unrelated))
-					r.False(subject.Update(unrelated, unrelated))
-					r.False(subject.Delete(unrelated))
 				})
 			})
 		})
@@ -253,10 +236,9 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 		})
 
 		when("starting up", func() {
-			it("asks for an initial event because the ConfigMap may not exist yet and it needs to run anyway", func() {
+			it("asks for an initial event because the CredentialIssuer may not exist yet and it needs to run anyway", func() {
 				r.Equal(&controllerlib.Key{
-					Namespace: installedInNamespace,
-					Name:      configMapResourceName,
+					Name: credentialIssuerResourceName,
 				}, observableWithInitialEventOption.GetInitialEventKey())
 			})
 		})
@@ -267,7 +249,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 	name := t.Name()
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
-		const configMapResourceName = "some-configmap-resource-name"
 		const credentialIssuerResourceName = "some-credential-issuer-resource-name"
 		const loadBalancerServiceName = "some-service-resource-name"
 		const tlsSecretName = "some-tls-secret-name" //nolint:gosec // this is not a credential
@@ -283,6 +264,8 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		var subject controllerlib.Controller
 		var kubeAPIClient *kubernetesfake.Clientset
 		var pinnipedAPIClient *pinnipedfake.Clientset
+		var pinnipedInformerClient *pinnipedfake.Clientset
+		var pinnipedInformers pinnipedinformers.SharedInformerFactory
 		var kubeInformerClient *kubernetesfake.Clientset
 		var kubeInformers kubeinformers.SharedInformerFactory
 		var cancelContext context.Context
@@ -533,11 +516,10 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			// Set this at the last second to allow for injection of server override.
 			subject = NewImpersonatorConfigController(
 				installedInNamespace,
-				configMapResourceName,
 				credentialIssuerResourceName,
 				kubeAPIClient,
 				pinnipedAPIClient,
-				kubeInformers.Core().V1().ConfigMaps(),
+				pinnipedInformers.Config().V1alpha1().CredentialIssuers(),
 				kubeInformers.Core().V1().Services(),
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
@@ -557,28 +539,25 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				Context: cancelContext,
 				Name:    subject.Name(),
 				Key: controllerlib.Key{
-					Namespace: installedInNamespace,
-					Name:      configMapResourceName,
+					Name: credentialIssuerResourceName,
 				},
 				Queue: queue,
 			}
 
 			// Must start informers before calling TestRunSynchronously()
 			kubeInformers.Start(cancelContext.Done())
+			pinnipedInformers.Start(cancelContext.Done())
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
-		var addImpersonatorConfigMapToTracker = func(resourceName, configYAML string, client *kubernetesfake.Clientset) {
-			impersonatorConfigMap := &corev1.ConfigMap{
+		var addCredentialIssuerToTracker = func(resourceName string, credIssuerSpec v1alpha1.CredentialIssuerSpec, client *pinnipedfake.Clientset) {
+			t.Logf("adding CredentialIssuer %s to informer clientset", resourceName)
+			r.NoError(client.Tracker().Add(&v1alpha1.CredentialIssuer{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: installedInNamespace,
+					Name: resourceName,
 				},
-				Data: map[string]string{
-					"config.yaml": configYAML,
-				},
-			}
-			r.NoError(client.Tracker().Add(impersonatorConfigMap))
+				Spec: credIssuerSpec,
+			}))
 		}
 
 		var newSecretWithData = func(resourceName string, data map[string][]byte) *corev1.Secret {
@@ -670,6 +649,19 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.Equal(obj, objFromInformer, "was waiting for expected to be found in informer, but found actual")
 		}
 
+		var waitForClusterScopedObjectToAppearInInformer = func(obj kubeclient.Object, informer controllerlib.InformerGetter) {
+			var objFromInformer interface{}
+			var exists bool
+			var err error
+			assert.Eventually(t, func() bool {
+				objFromInformer, exists, err = informer.Informer().GetIndexer().GetByKey(obj.GetName())
+				return err == nil && exists && reflect.DeepEqual(objFromInformer.(kubeclient.Object), obj)
+			}, 30*time.Second, 10*time.Millisecond)
+			r.NoError(err)
+			r.True(exists, "this object should have existed in informer but didn't: %+v", obj)
+			r.Equal(obj, objFromInformer, "was waiting for expected to be found in informer, but found actual")
+		}
+
 		// See comment for waitForObjectToAppearInInformer above.
 		var waitForObjectToBeDeletedFromInformer = func(resourceName string, informer controllerlib.InformerGetter) {
 			var objFromInformer interface{}
@@ -683,7 +675,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.False(exists, "this object should have been deleted from informer but wasn't: %s", objFromInformer)
 		}
 
-		var addObjectToInformerAndWait = func(obj kubeclient.Object, informer controllerlib.InformerGetter) {
+		var addObjectToKubeInformerAndWait = func(obj kubeclient.Object, informer controllerlib.InformerGetter) {
 			r.NoError(kubeInformerClient.Tracker().Add(obj))
 			waitForObjectToAppearInInformer(obj, informer)
 		}
@@ -691,27 +683,19 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		var addObjectFromCreateActionToInformerAndWait = func(action coretesting.Action, informer controllerlib.InformerGetter) {
 			createdObject, ok := action.(coretesting.CreateAction).GetObject().(kubeclient.Object)
 			r.True(ok, "should have been able to cast this action's object to kubeclient.Object: %v", action)
-			addObjectToInformerAndWait(createdObject, informer)
+			addObjectToKubeInformerAndWait(createdObject, informer)
 		}
 
-		var updateImpersonatorConfigMapInInformerAndWait = func(resourceName, configYAML string, informer controllerlib.InformerGetter) {
-			configMapObj, err := kubeInformerClient.Tracker().Get(
-				schema.GroupVersionResource{Version: "v1", Resource: "configmaps"},
-				installedInNamespace,
-				resourceName,
-			)
-			r.NoError(err)
-			configMap := configMapObj.(*corev1.ConfigMap)
-			configMap = configMap.DeepCopy() // don't edit the original from the tracker
-			configMap.Data = map[string]string{
-				"config.yaml": configYAML,
-			}
-			r.NoError(kubeInformerClient.Tracker().Update(
-				schema.GroupVersionResource{Version: "v1", Resource: "configmaps"},
-				configMap,
-				installedInNamespace,
-			))
-			waitForObjectToAppearInInformer(configMap, informer)
+		var updateCredentialIssuerInInformerAndWait = func(resourceName string, credIssuerSpec v1alpha1.CredentialIssuerSpec, informer controllerlib.InformerGetter) {
+			credIssuersGVR := v1alpha1.Resource("credentialissuers").WithVersion("v1alpha1")
+			credIssuerObj, err := pinnipedInformerClient.Tracker().Get(credIssuersGVR, "", resourceName)
+			r.NoError(err, "could not find CredentialIssuer to update for test")
+
+			credIssuer := credIssuerObj.(*v1alpha1.CredentialIssuer)
+			credIssuer = credIssuer.DeepCopy() // don't edit the original from the tracker
+			credIssuer.Spec = credIssuerSpec
+			r.NoError(pinnipedInformerClient.Tracker().Update(credIssuersGVR, credIssuer, ""))
+			waitForClusterScopedObjectToAppearInInformer(credIssuer, informer)
 		}
 
 		var updateLoadBalancerServiceInInformerAndWait = func(resourceName string, ingresses []corev1.LoadBalancerIngress, informer controllerlib.InformerGetter) {
@@ -968,6 +952,10 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r = require.New(t)
 			queue = &testQueue{}
 			cancelContext, cancelContextCancelFunc = context.WithCancel(context.Background())
+
+			pinnipedInformerClient = pinnipedfake.NewSimpleClientset()
+			pinnipedInformers = pinnipedinformers.NewSharedInformerFactoryWithOptions(pinnipedInformerClient, 0)
+
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeInformers = kubeinformers.NewSharedInformerFactoryWithOptions(kubeInformerClient, 0,
 				kubeinformers.WithNamespace(installedInNamespace),
@@ -992,10 +980,9 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			closeTestHTTPServer()
 		})
 
-		when("the ConfigMap does not yet exist in the installation namespace or it was deleted (defaults to auto mode)", func() {
+		when("the CredentialIssuer does not yet exist or it was deleted (defaults to auto mode)", func() {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
-				addImpersonatorConfigMapToTracker("some-other-unrelated-configmap", "foo: bar", kubeInformerClient)
 			})
 
 			when("there are visible control plane nodes", func() {
@@ -1286,15 +1273,19 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			})
 		})
 
-		when("the ConfigMap is already in the installation namespace", func() {
+		when("the CredentialIssuer is already present", func() {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
 			})
 
 			when("the configuration is auto mode with an endpoint", func() {
 				it.Before(func() {
-					configMapYAML := fmt.Sprintf("{mode: auto, endpoint: %s}", localhostIP)
-					addImpersonatorConfigMapToTracker(configMapResourceName, configMapYAML, kubeInformerClient)
+					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeAuto,
+							ExternalEndpoint: localhostIP,
+						},
+					}, pinnipedInformerClient)
 				})
 
 				when("there are visible control plane nodes", func() {
@@ -1318,7 +1309,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						addNodeWithRoleToTracker("worker", kubeAPIClient)
 					})
 
-					it("starts the impersonator according to the settings in the ConfigMap", func() {
+					it("starts the impersonator according to the settings in the CredentialIssuer", func() {
 						startInformersAndController()
 						r.NoError(runControllerSync())
 						r.Len(kubeAPIClient.Actions(), 3)
@@ -1334,7 +1325,11 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 			when("the configuration is disabled mode", func() {
 				it.Before(func() {
-					addImpersonatorConfigMapToTracker(configMapResourceName, "mode: disabled", kubeInformerClient)
+					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeDisabled,
+						},
+					}, pinnipedInformerClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 				})
 
@@ -1352,7 +1347,11 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			when("the configuration is enabled mode", func() {
 				when("no load balancer", func() {
 					it.Before(func() {
-						addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled", kubeInformerClient)
+						addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+								Mode: v1alpha1.ImpersonationProxyModeEnabled,
+							},
+						}, pinnipedInformerClient)
 						addNodeWithRoleToTracker("control-plane", kubeAPIClient)
 					})
 
@@ -1379,7 +1378,11 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 				when("a loadbalancer already exists", func() {
 					it.Before(func() {
-						addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled", kubeInformerClient)
+						addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+								Mode: v1alpha1.ImpersonationProxyModeEnabled,
+							},
+						}, pinnipedInformerClient)
 						addNodeWithRoleToTracker("worker", kubeAPIClient)
 						addLoadBalancerServiceToTracker(loadBalancerServiceName, kubeInformerClient)
 						addLoadBalancerServiceToTracker(loadBalancerServiceName, kubeAPIClient)
@@ -1408,7 +1411,11 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				when("a load balancer and a secret already exists", func() {
 					var caCrt []byte
 					it.Before(func() {
-						addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled", kubeInformerClient)
+						addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+								Mode: v1alpha1.ImpersonationProxyModeEnabled,
+							},
+						}, pinnipedInformerClient)
 						addNodeWithRoleToTracker("worker", kubeAPIClient)
 						ca := newCA()
 						caSecret := newActualCASecret(ca, caSecretName)
@@ -1431,11 +1438,15 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					})
 				})
 
-				when("the configmap has a hostname specified for the endpoint", func() {
+				when("the CredentialIssuer has a hostname specified for the endpoint", func() {
 					const fakeHostname = "fake.example.com"
 					it.Before(func() {
-						configMapYAML := fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeHostname)
-						addImpersonatorConfigMapToTracker(configMapResourceName, configMapYAML, kubeInformerClient)
+						addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+								ExternalEndpoint: fakeHostname,
+							},
+						}, pinnipedInformerClient)
 						addNodeWithRoleToTracker("worker", kubeAPIClient)
 					})
 
@@ -1453,11 +1464,15 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					})
 				})
 
-				when("the configmap has a endpoint which is an IP address with a port", func() {
+				when("the CredentialIssuer has a endpoint which is an IP address with a port", func() {
 					const fakeIPWithPort = "127.0.0.1:3000"
 					it.Before(func() {
-						configMapYAML := fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeIPWithPort)
-						addImpersonatorConfigMapToTracker(configMapResourceName, configMapYAML, kubeInformerClient)
+						addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+								ExternalEndpoint: fakeIPWithPort,
+							},
+						}, pinnipedInformerClient)
 						addNodeWithRoleToTracker("worker", kubeAPIClient)
 					})
 
@@ -1475,11 +1490,15 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					})
 				})
 
-				when("the configmap has a endpoint which is a hostname with a port", func() {
+				when("the CredentialIssuer has a endpoint which is a hostname with a port", func() {
 					const fakeHostnameWithPort = "fake.example.com:3000"
 					it.Before(func() {
-						configMapYAML := fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeHostnameWithPort)
-						addImpersonatorConfigMapToTracker(configMapResourceName, configMapYAML, kubeInformerClient)
+						addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+								ExternalEndpoint: fakeHostnameWithPort,
+							},
+						}, pinnipedInformerClient)
 						addNodeWithRoleToTracker("worker", kubeAPIClient)
 					})
 
@@ -1497,13 +1516,25 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					})
 				})
 
-				when("switching the configmap from ip address endpoint to hostname endpoint and back to ip address", func() {
+				when("switching the CredentialIssuer from ip address endpoint to hostname endpoint and back to ip address", func() {
 					const fakeHostname = "fake.example.com"
 					const fakeIP = "127.0.0.42"
-					var hostnameYAML = fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeHostname)
-					var ipAddressYAML = fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeIP)
+
+					var hostnameConfig = v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: fakeHostname,
+						},
+					}
+					var ipAddressConfig = v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: fakeIP,
+						},
+					}
+
 					it.Before(func() {
-						addImpersonatorConfigMapToTracker(configMapResourceName, ipAddressYAML, kubeInformerClient)
+						addCredentialIssuerToTracker(credentialIssuerResourceName, ipAddressConfig, pinnipedInformerClient)
 						addNodeWithRoleToTracker("worker", kubeAPIClient)
 					})
 
@@ -1524,7 +1555,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						addObjectFromCreateActionToInformerAndWait(kubeAPIClient.Actions()[2], kubeInformers.Core().V1().Secrets())
 
 						// Switch the endpoint config to a hostname.
-						updateImpersonatorConfigMapInInformerAndWait(configMapResourceName, hostnameYAML, kubeInformers.Core().V1().ConfigMaps())
+						updateCredentialIssuerInInformerAndWait(credentialIssuerResourceName, hostnameConfig, pinnipedInformers.Config().V1alpha1().CredentialIssuers())
 
 						r.NoError(runControllerSync())
 						r.Len(kubeAPIClient.Actions(), 5)
@@ -1541,7 +1572,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						addObjectFromCreateActionToInformerAndWait(kubeAPIClient.Actions()[4], kubeInformers.Core().V1().Secrets())
 
 						// Switch the endpoint config back to an IP.
-						updateImpersonatorConfigMapInInformerAndWait(configMapResourceName, ipAddressYAML, kubeInformers.Core().V1().ConfigMaps())
+						updateCredentialIssuerInInformerAndWait(credentialIssuerResourceName, ipAddressConfig, pinnipedInformers.Config().V1alpha1().CredentialIssuers())
 
 						r.NoError(runControllerSync())
 						r.Len(kubeAPIClient.Actions(), 7)
@@ -1557,8 +1588,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				when("the TLS cert goes missing and needs to be recreated, e.g. when a user manually deleted it", func() {
 					const fakeHostname = "fake.example.com"
 					it.Before(func() {
-						configMapYAML := fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeHostname)
-						addImpersonatorConfigMapToTracker(configMapResourceName, configMapYAML, kubeInformerClient)
+						addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+								ExternalEndpoint: fakeHostname,
+							},
+						}, pinnipedInformerClient)
 						addNodeWithRoleToTracker("worker", kubeAPIClient)
 						startInformersAndController()
 					})
@@ -1595,8 +1630,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				when("the CA cert goes missing and needs to be recreated, e.g. when a user manually deleted it", func() {
 					const fakeHostname = "fake.example.com"
 					it.Before(func() {
-						configMapYAML := fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeHostname)
-						addImpersonatorConfigMapToTracker(configMapResourceName, configMapYAML, kubeInformerClient)
+						addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+								ExternalEndpoint: fakeHostname,
+							},
+						}, pinnipedInformerClient)
 						addNodeWithRoleToTracker("worker", kubeAPIClient)
 						startInformersAndController()
 					})
@@ -1636,8 +1675,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					const fakeHostname = "fake.example.com"
 					var caCrt []byte
 					it.Before(func() {
-						configMapYAML := fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeHostname)
-						addImpersonatorConfigMapToTracker(configMapResourceName, configMapYAML, kubeInformerClient)
+						addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+								ExternalEndpoint: fakeHostname,
+							},
+						}, pinnipedInformerClient)
 						addNodeWithRoleToTracker("worker", kubeAPIClient)
 						startInformersAndController()
 						r.NoError(runControllerSync())
@@ -1662,7 +1705,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 						newCASecret := newActualCASecret(anotherCA, caSecretName)
 						caCrt = newCASecret.Data["ca.crt"]
 						addSecretToTrackers(newCASecret, kubeAPIClient)
-						addObjectToInformerAndWait(newCASecret, kubeInformers.Core().V1().Secrets())
+						addObjectToKubeInformerAndWait(newCASecret, kubeInformers.Core().V1().Secrets())
 					})
 
 					it("deletes the old TLS cert and makes a new TLS cert using the new CA", func() {
@@ -1700,7 +1743,11 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 			when("the configuration switches from enabled to disabled mode", func() {
 				it.Before(func() {
-					addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled", kubeInformerClient)
+					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeEnabled,
+						},
+					}, pinnipedInformerClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 				})
 
@@ -1720,8 +1767,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					addObjectFromCreateActionToInformerAndWait(kubeAPIClient.Actions()[1], kubeInformers.Core().V1().Services())
 					addObjectFromCreateActionToInformerAndWait(kubeAPIClient.Actions()[2], kubeInformers.Core().V1().Secrets())
 
-					// Update the configmap.
-					updateImpersonatorConfigMapInInformerAndWait(configMapResourceName, "mode: disabled", kubeInformers.Core().V1().ConfigMaps())
+					// Update the CredentialIssuer.
+					updateCredentialIssuerInInformerAndWait(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeDisabled,
+						},
+					}, pinnipedInformers.Config().V1alpha1().CredentialIssuers())
 
 					r.NoError(runControllerSync())
 					requireTLSServerIsNoLongerRunning()
@@ -1733,8 +1784,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					deleteServiceFromTracker(loadBalancerServiceName, kubeInformerClient)
 					waitForObjectToBeDeletedFromInformer(loadBalancerServiceName, kubeInformers.Core().V1().Services())
 
-					// Update the configmap again.
-					updateImpersonatorConfigMapInInformerAndWait(configMapResourceName, "mode: enabled", kubeInformers.Core().V1().ConfigMaps())
+					// Update the CredentialIssuer again.
+					updateCredentialIssuerInInformerAndWait(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeEnabled,
+						},
+					}, pinnipedInformers.Config().V1alpha1().CredentialIssuers())
 
 					r.NoError(runControllerSync())
 					requireTLSServerIsRunningWithoutCerts()
@@ -1747,8 +1802,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 			when("the endpoint switches from specified, to not specified, to specified again", func() {
 				it.Before(func() {
-					configMapYAML := fmt.Sprintf("{mode: enabled, endpoint: %s}", localhostIP)
-					addImpersonatorConfigMapToTracker(configMapResourceName, configMapYAML, kubeInformerClient)
+					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: localhostIP,
+						},
+					}, pinnipedInformerClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 				})
 
@@ -1770,7 +1829,11 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					addObjectFromCreateActionToInformerAndWait(kubeAPIClient.Actions()[2], kubeInformers.Core().V1().Secrets())
 
 					// Switch to "enabled" mode without an "endpoint", so a load balancer is needed now.
-					updateImpersonatorConfigMapInInformerAndWait(configMapResourceName, "mode: enabled", kubeInformers.Core().V1().ConfigMaps())
+					updateCredentialIssuerInInformerAndWait(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeEnabled,
+						},
+					}, pinnipedInformers.Config().V1alpha1().CredentialIssuers())
 
 					r.NoError(runControllerSync())
 					r.Len(kubeAPIClient.Actions(), 5)
@@ -1807,8 +1870,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					addObjectFromCreateActionToInformerAndWait(kubeAPIClient.Actions()[5], kubeInformers.Core().V1().Secrets())
 
 					// Now switch back to having the "endpoint" specified, so the load balancer is not needed anymore.
-					configMapYAML := fmt.Sprintf("{mode: enabled, endpoint: %s}", localhostIP)
-					updateImpersonatorConfigMapInInformerAndWait(configMapResourceName, configMapYAML, kubeInformers.Core().V1().ConfigMaps())
+					updateCredentialIssuerInInformerAndWait(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: localhostIP,
+						},
+					}, pinnipedInformers.Config().V1alpha1().CredentialIssuers())
 
 					r.NoError(runControllerSync())
 					r.Len(kubeAPIClient.Actions(), 9)
@@ -2077,14 +2144,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			})
 		})
 
-		when("the configmap is invalid", func() {
+		when("the CredentialIssuer is invalid", func() {
 			it.Before(func() {
-				addImpersonatorConfigMapToTracker(configMapResourceName, "not yaml", kubeInformerClient)
+				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+					ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+						Mode: "not-valid",
+					},
+				}, pinnipedInformerClient)
 			})
 
 			it("returns an error", func() {
 				startInformersAndController()
-				errString := "invalid impersonator configuration: decode yaml: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type impersonator.Config"
+				errString := `invalid impersonator configuration: invalid impersonation proxy mode "not-valid", valid values are auto, disabled, or enabled`
 				r.EqualError(runControllerSync(), errString)
 				requireCredentialIssuer(newErrorStrategy(errString))
 				requireSigningCertProviderIsEmpty()
@@ -2111,7 +2182,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("there is an error creating the tls secret", func() {
 			it.Before(func() {
-				addImpersonatorConfigMapToTracker(configMapResourceName, "{mode: enabled, endpoint: example.com}", kubeInformerClient)
+				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+					ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+						ExternalEndpoint: "example.com",
+					},
+				}, pinnipedInformerClient)
 				addNodeWithRoleToTracker("control-plane", kubeAPIClient)
 				kubeAPIClient.PrependReactor("create", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
 					createdSecret := action.(coretesting.CreateAction).GetObject().(*corev1.Secret)
@@ -2137,7 +2213,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("there is an error creating the CA secret", func() {
 			it.Before(func() {
-				addImpersonatorConfigMapToTracker(configMapResourceName, "{mode: enabled, endpoint: example.com}", kubeInformerClient)
+				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+					ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+						ExternalEndpoint: "example.com",
+					},
+				}, pinnipedInformerClient)
 				addNodeWithRoleToTracker("control-plane", kubeAPIClient)
 				kubeAPIClient.PrependReactor("create", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
 					createdSecret := action.(coretesting.CreateAction).GetObject().(*corev1.Secret)
@@ -2163,7 +2244,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		when("the CA secret exists but is invalid while the TLS secret needs to be created", func() {
 			it.Before(func() {
 				addNodeWithRoleToTracker("control-plane", kubeAPIClient)
-				addImpersonatorConfigMapToTracker(configMapResourceName, "{mode: enabled, endpoint: example.com}", kubeInformerClient)
+				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+					ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+						ExternalEndpoint: "example.com",
+					},
+				}, pinnipedInformerClient)
 				addSecretToTrackers(newEmptySecret(caSecretName), kubeAPIClient, kubeInformerClient)
 			})
 
@@ -2207,7 +2293,11 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			it.Before(func() {
 				addNodeWithRoleToTracker("control-plane", kubeAPIClient)
 				addSecretToTrackers(newEmptySecret(tlsSecretName), kubeInformerClient)
-				addImpersonatorConfigMapToTracker(configMapResourceName, "{mode: disabled}", kubeInformerClient)
+				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+					ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+						Mode: v1alpha1.ImpersonationProxyModeDisabled,
+					},
+				}, pinnipedInformerClient)
 			})
 
 			it("does not pass the not found error through", func() {
@@ -2225,8 +2315,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		when("the PEM formatted data in the TLS Secret is not a valid cert", func() {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
-				configMapYAML := fmt.Sprintf("{mode: enabled, endpoint: %s}", localhostIP)
-				addImpersonatorConfigMapToTracker(configMapResourceName, configMapYAML, kubeInformerClient)
+				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+					ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+						ExternalEndpoint: localhostIP,
+					},
+				}, pinnipedInformerClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
 				tlsSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
@@ -2281,7 +2375,11 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			var caCrt []byte
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
-				addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled", kubeInformerClient)
+				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+					ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+						Mode: v1alpha1.ImpersonationProxyModeEnabled,
+					},
+				}, pinnipedInformerClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
 				ca := newCA()
 				caSecret := newActualCASecret(ca, caSecretName)
@@ -2330,7 +2428,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			var caCrt []byte
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
-				addImpersonatorConfigMapToTracker(configMapResourceName, "mode: enabled", kubeInformerClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
 				ca := newCA()
 				caSecret := newActualCASecret(ca, caSecretName)
@@ -2408,8 +2505,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		when("the impersonator is ready but there is a problem with the signing secret, which should be created by another controller", func() {
 			const fakeHostname = "foo.example.com"
 			it.Before(func() {
-				configMapYAML := fmt.Sprintf("{mode: enabled, endpoint: %s}", fakeHostname)
-				addImpersonatorConfigMapToTracker(configMapResourceName, configMapYAML, kubeInformerClient)
+				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+					ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+						ExternalEndpoint: fakeHostname,
+					},
+				}, pinnipedInformerClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
 			})
 

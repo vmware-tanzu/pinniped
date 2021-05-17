@@ -251,11 +251,10 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		WithController(
 			impersonatorconfig.NewImpersonatorConfigController(
 				c.ServerInstallationInfo.Namespace,
-				c.NamesConfig.ImpersonationConfigMap,
 				c.NamesConfig.CredentialIssuer,
 				client.Kubernetes,
 				client.PinnipedConcierge,
-				informers.installationNamespaceK8s.Core().V1().ConfigMaps(),
+				informers.pinniped.Config().V1alpha1().CredentialIssuers(),
 				informers.installationNamespaceK8s.Core().V1().Services(),
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
 				controllerlib.WithInformer,

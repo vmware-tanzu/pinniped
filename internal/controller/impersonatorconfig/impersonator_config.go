@@ -27,6 +27,7 @@ import (
 
 	"go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
+	conciergeconfiginformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions/config/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/clusterhost"
 	"go.pinniped.dev/internal/concierge/impersonator"
@@ -51,7 +52,6 @@ const (
 
 type impersonatorConfigController struct {
 	namespace                        string
-	configMapResourceName            string
 	credentialIssuerResourceName     string
 	generatedLoadBalancerServiceName string
 	tlsSecretName                    string
@@ -61,7 +61,7 @@ type impersonatorConfigController struct {
 	k8sClient         kubernetes.Interface
 	pinnipedAPIClient pinnipedclientset.Interface
 
-	configMapsInformer corev1informers.ConfigMapInformer
+	credIssuerInformer conciergeconfiginformers.CredentialIssuerInformer
 	servicesInformer   corev1informers.ServiceInformer
 	secretsInformer    corev1informers.SecretInformer
 
@@ -78,11 +78,10 @@ type impersonatorConfigController struct {
 
 func NewImpersonatorConfigController(
 	namespace string,
-	configMapResourceName string,
 	credentialIssuerResourceName string,
 	k8sClient kubernetes.Interface,
 	pinnipedAPIClient pinnipedclientset.Interface,
-	configMapsInformer corev1informers.ConfigMapInformer,
+	credentialIssuerInformer conciergeconfiginformers.CredentialIssuerInformer,
 	servicesInformer corev1informers.ServiceInformer,
 	secretsInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
@@ -102,7 +101,6 @@ func NewImpersonatorConfigController(
 			Name: "impersonator-config-controller",
 			Syncer: &impersonatorConfigController{
 				namespace:                         namespace,
-				configMapResourceName:             configMapResourceName,
 				credentialIssuerResourceName:      credentialIssuerResourceName,
 				generatedLoadBalancerServiceName:  generatedLoadBalancerServiceName,
 				tlsSecretName:                     tlsSecretName,
@@ -110,7 +108,7 @@ func NewImpersonatorConfigController(
 				impersonationSignerSecretName:     impersonationSignerSecretName,
 				k8sClient:                         k8sClient,
 				pinnipedAPIClient:                 pinnipedAPIClient,
-				configMapsInformer:                configMapsInformer,
+				credIssuerInformer:                credentialIssuerInformer,
 				servicesInformer:                  servicesInformer,
 				secretsInformer:                   secretsInformer,
 				labels:                            labels,
@@ -120,9 +118,10 @@ func NewImpersonatorConfigController(
 				tlsServingCertDynamicCertProvider: dynamiccert.NewServingCert("impersonation-proxy-serving-cert"),
 			},
 		},
-		withInformer(
-			configMapsInformer,
-			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(configMapResourceName, namespace),
+		withInformer(credentialIssuerInformer,
+			pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
+				return obj.GetName() == credentialIssuerResourceName
+			}),
 			controllerlib.InformerOption{},
 		),
 		withInformer(
@@ -137,12 +136,9 @@ func NewImpersonatorConfigController(
 			}, nil),
 			controllerlib.InformerOption{},
 		),
-		// Be sure to run once even if the ConfigMap that the informer is watching doesn't exist so we can implement
+		// Be sure to run once even if the CredentialIssuer that the informer is watching doesn't exist so we can implement
 		// the default configuration behavior.
-		withInitialEvent(controllerlib.Key{
-			Namespace: namespace,
-			Name:      configMapResourceName,
-		}),
+		withInitialEvent(controllerlib.Key{Name: credentialIssuerResourceName}),
 		// TODO fix these controller options to make this a singleton queue
 	)
 }
@@ -264,30 +260,26 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context) (*v
 }
 
 func (c *impersonatorConfigController) loadImpersonationProxyConfiguration() (*impersonator.Config, error) {
-	configMap, err := c.configMapsInformer.Lister().ConfigMaps(c.namespace).Get(c.configMapResourceName)
-	notFound := k8serrors.IsNotFound(err)
-	if err != nil && !notFound {
-		return nil, fmt.Errorf("failed to get %s/%s configmap: %w", c.namespace, c.configMapResourceName, err)
-	}
+	credIssuer, err := c.credIssuerInformer.Lister().Get(c.credentialIssuerResourceName)
 
-	var config *impersonator.Config
-	if notFound {
+	if k8serrors.IsNotFound(err) {
 		plog.Info("Did not find impersonation proxy config: using default config values",
-			"configmap", c.configMapResourceName,
-			"namespace", c.namespace,
+			"credentialIssuer", c.credentialIssuerResourceName,
 		)
-		config = impersonator.NewConfig() // use default configuration options
-	} else {
-		config, err = impersonator.ConfigFromConfigMap(configMap)
-		if err != nil {
-			return nil, fmt.Errorf("invalid impersonator configuration: %v", err)
-		}
-		plog.Info("Read impersonation proxy config",
-			"configmap", c.configMapResourceName,
-			"namespace", c.namespace,
-		)
+		return impersonator.NewConfig(), nil
 	}
 
+	if err != nil {
+		return nil, fmt.Errorf("failed to get %s CredentialIssuer: %w", c.credentialIssuerResourceName, err)
+	}
+
+	config, err := impersonator.ConfigFromCredentialIssuer(credIssuer)
+	if err != nil {
+		return nil, fmt.Errorf("invalid impersonator configuration: %v", err)
+	}
+	plog.Info("Read impersonation proxy config",
+		"credentialIssuer", c.credentialIssuerResourceName,
+	)
 	return config, nil
 }
 

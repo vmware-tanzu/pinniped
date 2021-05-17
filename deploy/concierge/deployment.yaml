@@ -247,3 +247,15 @@ spec:
     name: #@ defaultResourceNameWithSuffix("api")
     namespace: #@ namespace()
     port: 443
+---
+apiVersion: config.concierge.pinniped.dev/v1alpha1
+kind: CredentialIssuer
+metadata:
+    name: #@ defaultResourceNameWithSuffix("config")
+spec:
+  impersonationProxy:
+    mode: auto
+    service:
+      mode: LoadBalancer
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "4000"

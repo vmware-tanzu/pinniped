@@ -482,10 +482,11 @@ func requireWellKnownEndpointIsWorking(t *testing.T, supervisorScheme, superviso
       "scopes_supported": ["openid", "offline"],
       "response_types_supported": ["code"],
       "claims_supported": ["groups"],
+      "discovery.supervisor.pinniped.dev/v1alpha1": {"pinniped_identity_providers_endpoint": "%s/v1alpha1/pinniped_identity_providers"},
       "subject_types_supported": ["public"],
       "id_token_signing_alg_values_supported": ["ES256"]
     }`)
-	expectedJSON := fmt.Sprintf(expectedResultTemplate, issuerName, issuerName, issuerName, issuerName)
+	expectedJSON := fmt.Sprintf(expectedResultTemplate, issuerName, issuerName, issuerName, issuerName, issuerName)
 
 	require.Equal(t, "application/json", response.Header.Get("content-type"))
 	require.JSONEq(t, expectedJSON, responseBody)

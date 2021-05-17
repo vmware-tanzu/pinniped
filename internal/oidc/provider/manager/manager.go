@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package manager
@@ -8,10 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"go.pinniped.dev/internal/secret"
-
-	"go.pinniped.dev/internal/oidc/dynamiccodec"
-
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/internal/oidc"
@@ -19,10 +15,13 @@ import (
 	"go.pinniped.dev/internal/oidc/callback"
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/discovery"
+	"go.pinniped.dev/internal/oidc/dynamiccodec"
+	"go.pinniped.dev/internal/oidc/idpdiscovery"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/token"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/secret"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
@@ -33,22 +32,22 @@ import (
 type Manager struct {
 	mu                  sync.RWMutex
 	providers           []*provider.FederationDomainIssuer
-	providerHandlers    map[string]http.Handler  // map of all routes for all providers
-	nextHandler         http.Handler             // the next handler in a chain, called when this manager didn't know how to handle a request
-	dynamicJWKSProvider jwks.DynamicJWKSProvider // in-memory cache of per-issuer JWKS data
-	idpListGetter       oidc.IDPListGetter       // in-memory cache of upstream IDPs
-	secretCache         *secret.Cache            // in-memory cache of cryptographic material
+	providerHandlers    map[string]http.Handler              // map of all routes for all providers
+	nextHandler         http.Handler                         // the next handler in a chain, called when this manager didn't know how to handle a request
+	dynamicJWKSProvider jwks.DynamicJWKSProvider             // in-memory cache of per-issuer JWKS data
+	upstreamIDPs        oidc.UpstreamIdentityProvidersLister // in-memory cache of upstream IDPs
+	secretCache         *secret.Cache                        // in-memory cache of cryptographic material
 	secretsClient       corev1client.SecretInterface
 }
 
 // NewManager returns an empty Manager.
 // nextHandler will be invoked for any requests that could not be handled by this manager's providers.
 // dynamicJWKSProvider will be used as an in-memory cache for per-issuer JWKS data.
-// idpListGetter will be used as an in-memory cache of currently configured upstream IDPs.
+// upstreamIDPs will be used as an in-memory cache of currently configured upstream IDPs.
 func NewManager(
 	nextHandler http.Handler,
 	dynamicJWKSProvider jwks.DynamicJWKSProvider,
-	idpListGetter oidc.IDPListGetter,
+	upstreamIDPs oidc.UpstreamIdentityProvidersLister,
 	secretCache *secret.Cache,
 	secretsClient corev1client.SecretInterface,
 ) *Manager {
@@ -56,7 +55,7 @@ func NewManager(
 		providerHandlers:    make(map[string]http.Handler),
 		nextHandler:         nextHandler,
 		dynamicJWKSProvider: dynamicJWKSProvider,
-		idpListGetter:       idpListGetter,
+		upstreamIDPs:        upstreamIDPs,
 		secretCache:         secretCache,
 		secretsClient:       secretsClient,
 	}
@@ -108,10 +107,13 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 
 		m.providerHandlers[(issuerHostWithPath + oidc.JWKSEndpointPath)] = jwks.NewHandler(issuer, m.dynamicJWKSProvider)
 
+		m.providerHandlers[(issuerHostWithPath + oidc.PinnipedIDPsPathV1Alpha1)] = idpdiscovery.NewHandler(m.upstreamIDPs)
+
 		m.providerHandlers[(issuerHostWithPath + oidc.AuthorizationEndpointPath)] = auth.NewHandler(
 			issuer,
-			m.idpListGetter,
+			m.upstreamIDPs,
 			oauthHelperWithNullStorage,
+			oauthHelperWithKubeStorage,
 			csrftoken.Generate,
 			pkce.Generate,
 			nonce.Generate,
@@ -120,7 +122,7 @@ func (m *Manager) SetProviders(federationDomains ...*provider.FederationDomainIs
 		)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.CallbackEndpointPath)] = callback.NewHandler(
-			m.idpListGetter,
+			m.upstreamIDPs,
 			oauthHelperWithKubeStorage,
 			upstreamStateEncoder,
 			csrfCookieEncoder,

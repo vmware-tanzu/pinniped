@@ -1,7 +1,7 @@
 // Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package upstreamwatcher
+package oidcupstreamwatcher
 
 import (
 	"context"
@@ -24,14 +24,14 @@ import (
 	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/oidc/oidctestutil"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/testutil/oidctestutil"
 	"go.pinniped.dev/internal/testutil/testlogger"
 	"go.pinniped.dev/internal/upstreamoidc"
 )
 
-func TestControllerFilterSecret(t *testing.T) {
+func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -76,7 +76,7 @@ func TestControllerFilterSecret(t *testing.T) {
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			testLog := testlogger.New(t)
 			cache := provider.NewDynamicUpstreamIDPProvider()
-			cache.SetIDPList([]provider.UpstreamOIDCIdentityProviderI{
+			cache.SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI{
 				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
 			})
 			secretInformer := kubeInformers.Core().V1().Secrets()
@@ -101,7 +101,7 @@ func TestControllerFilterSecret(t *testing.T) {
 	}
 }
 
-func TestController(t *testing.T) {
+func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 	t.Parallel()
 	now := metav1.NewTime(time.Now().UTC())
 	earlier := metav1.NewTime(now.Add(-1 * time.Hour).UTC())
@@ -150,9 +150,9 @@ func TestController(t *testing.T) {
 			inputSecrets: []runtime.Object{},
 			wantErr:      controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="secret \"test-client-secret\" not found" "reason"="SecretNotFound" "status"="False" "type"="ClientCredentialsValid"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="secret \"test-client-secret\" not found" "name"="test-name" "namespace"="test-namespace" "reason"="SecretNotFound" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="secret \"test-client-secret\" not found" "reason"="SecretNotFound" "status"="False" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="secret \"test-client-secret\" not found" "name"="test-name" "namespace"="test-namespace" "reason"="SecretNotFound" "type"="ClientCredentialsValid"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -196,9 +196,9 @@ func TestController(t *testing.T) {
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")" "reason"="SecretWrongType" "status"="False" "type"="ClientCredentialsValid"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")" "name"="test-name" "namespace"="test-namespace" "reason"="SecretWrongType" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")" "reason"="SecretWrongType" "status"="False" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")" "name"="test-name" "namespace"="test-namespace" "reason"="SecretWrongType" "type"="ClientCredentialsValid"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -241,9 +241,9 @@ func TestController(t *testing.T) {
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]" "reason"="SecretMissingKeys" "status"="False" "type"="ClientCredentialsValid"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]" "name"="test-name" "namespace"="test-namespace" "reason"="SecretMissingKeys" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]" "reason"="SecretMissingKeys" "status"="False" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]" "name"="test-name" "namespace"="test-namespace" "reason"="SecretMissingKeys" "type"="ClientCredentialsValid"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -289,9 +289,9 @@ func TestController(t *testing.T) {
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7" "reason"="InvalidTLSConfig" "status"="False" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidTLSConfig" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7" "reason"="InvalidTLSConfig" "status"="False" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidTLSConfig" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -337,9 +337,9 @@ func TestController(t *testing.T) {
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="spec.certificateAuthorityData is invalid: no certificates found" "reason"="InvalidTLSConfig" "status"="False" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="spec.certificateAuthorityData is invalid: no certificates found" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidTLSConfig" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="spec.certificateAuthorityData is invalid: no certificates found" "reason"="InvalidTLSConfig" "status"="False" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="spec.certificateAuthorityData is invalid: no certificates found" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidTLSConfig" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -382,10 +382,10 @@ func TestController(t *testing.T) {
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`upstream-observer "msg"="failed to perform OIDC discovery" "error"="Get \"invalid-url-that-is-really-really-long/.well-known/openid-configuration\": unsupported protocol scheme \"\"" "issuer"="invalid-url-that-is-really-really-long" "name"="test-name" "namespace"="test-namespace"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"invalid-url-that-is-really-really-long\":\nGet \"invalid-url-that-is-really-really-long/.well-known/openid-configuration\": unsupported protocol  [truncated 9 chars]" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"invalid-url-that-is-really-really-long\":\nGet \"invalid-url-that-is-really-really-long/.well-known/openid-configuration\": unsupported protocol  [truncated 9 chars]" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "msg"="failed to perform OIDC discovery" "error"="Get \"invalid-url-that-is-really-really-long/.well-known/openid-configuration\": unsupported protocol scheme \"\"" "issuer"="invalid-url-that-is-really-really-long" "name"="test-name" "namespace"="test-namespace"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"invalid-url-that-is-really-really-long\":\nGet \"invalid-url-that-is-really-really-long/.well-known/openid-configuration\": unsupported protocol  [truncated 9 chars]" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"invalid-url-that-is-really-really-long\":\nGet \"invalid-url-that-is-really-really-long/.well-known/openid-configuration\": unsupported protocol  [truncated 9 chars]" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -430,9 +430,9 @@ Get "invalid-url-that-is-really-really-long/.well-known/openid-configuration": u
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to parse authorization endpoint URL: parse \"%\": invalid URL escape \"%\"" "reason"="InvalidResponse" "status"="False" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to parse authorization endpoint URL: parse \"%\": invalid URL escape \"%\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to parse authorization endpoint URL: parse \"%\": invalid URL escape \"%\"" "reason"="InvalidResponse" "status"="False" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to parse authorization endpoint URL: parse \"%\": invalid URL escape \"%\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -476,9 +476,9 @@ Get "invalid-url-that-is-really-really-long/.well-known/openid-configuration": u
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="authorization endpoint URL scheme must be \"https\", not \"http\"" "reason"="InvalidResponse" "status"="False" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="authorization endpoint URL scheme must be \"https\", not \"http\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="authorization endpoint URL scheme must be \"https\", not \"http\"" "reason"="InvalidResponse" "status"="False" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="authorization endpoint URL scheme must be \"https\", not \"http\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -529,8 +529,8 @@ Get "invalid-url-that-is-really-really-long/.well-known/openid-configuration": u
 				Data:       testValidSecretData,
 			}},
 			wantLogs: []string{
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{
@@ -578,8 +578,8 @@ Get "invalid-url-that-is-really-really-long/.well-known/openid-configuration": u
 				Data:       testValidSecretData,
 			}},
 			wantLogs: []string{
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{
@@ -627,8 +627,8 @@ Get "invalid-url-that-is-really-really-long/.well-known/openid-configuration": u
 				Data:       testValidSecretData,
 			}},
 			wantLogs: []string{
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{
@@ -669,10 +669,10 @@ Get "invalid-url-that-is-really-really-long/.well-known/openid-configuration": u
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`upstream-observer "msg"="failed to perform OIDC discovery" "error"="oidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\"" "issuer"="` + testIssuerURL + `/ends-with-slash" "name"="test-name" "namespace"="test-namespace"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/ends-with-slash\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\"" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/ends-with-slash\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "msg"="failed to perform OIDC discovery" "error"="oidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\"" "issuer"="` + testIssuerURL + `/ends-with-slash" "name"="test-name" "namespace"="test-namespace"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/ends-with-slash\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\"" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/ends-with-slash\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -717,10 +717,10 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`upstream-observer "msg"="failed to perform OIDC discovery" "error"="oidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\"" "issuer"="` + testIssuerURL + `/" "name"="test-name" "namespace"="test-namespace"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
-				`upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\"" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
-				`upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "msg"="failed to perform OIDC discovery" "error"="oidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\"" "issuer"="` + testIssuerURL + `/" "name"="test-name" "namespace"="test-namespace"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\"" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
+				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -758,7 +758,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			testLog := testlogger.New(t)
 			cache := provider.NewDynamicUpstreamIDPProvider()
-			cache.SetIDPList([]provider.UpstreamOIDCIdentityProviderI{
+			cache.SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI{
 				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
 			})
 
@@ -787,7 +787,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 			}
 			require.Equal(t, strings.Join(tt.wantLogs, "\n"), strings.Join(testLog.Lines(), "\n"))
 
-			actualIDPList := cache.GetIDPList()
+			actualIDPList := cache.GetOIDCIdentityProviders()
 			require.Equal(t, len(tt.wantResultingCache), len(actualIDPList))
 			for i := range actualIDPList {
 				actualIDP := actualIDPList[i].(*upstreamoidc.ProviderConfig)
@@ -802,8 +802,8 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 			actualUpstreams, err := fakePinnipedClient.IDPV1alpha1().OIDCIdentityProviders(testNamespace).List(ctx, metav1.ListOptions{})
 			require.NoError(t, err)
 
-			// Preprocess the set of upstreams a bit so that they're easier to assert against.
-			require.ElementsMatch(t, tt.wantResultingUpstreams, normalizeUpstreams(actualUpstreams.Items, now))
+			// Assert on the expected Status of the upstreams. Preprocess the upstreams a bit so that they're easier to assert against.
+			require.ElementsMatch(t, tt.wantResultingUpstreams, normalizeOIDCUpstreams(actualUpstreams.Items, now))
 
 			// Running the sync() a second time should be idempotent except for logs, and should return the same error.
 			// This also helps exercise code paths where the OIDC provider discovery hits cache.
@@ -816,7 +816,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 	}
 }
 
-func normalizeUpstreams(upstreams []v1alpha1.OIDCIdentityProvider, now metav1.Time) []v1alpha1.OIDCIdentityProvider {
+func normalizeOIDCUpstreams(upstreams []v1alpha1.OIDCIdentityProvider, now metav1.Time) []v1alpha1.OIDCIdentityProvider {
 	result := make([]v1alpha1.OIDCIdentityProvider, 0, len(upstreams))
 	for _, u := range upstreams {
 		normalized := u.DeepCopy()

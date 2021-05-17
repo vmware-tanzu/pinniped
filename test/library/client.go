@@ -190,13 +190,13 @@ func CreateTestWebhookAuthenticator(ctx context.Context, t *testing.T) corev1.Ty
 // test's lifetime. It returns a corev1.TypedLocalObjectReference which describes the test JWT
 // authenticator within the test namespace.
 //
-// CreateTestJWTAuthenticatorForCLIUpstream gets the OIDC issuer info from IntegrationEnv().CLITestUpstream.
+// CreateTestJWTAuthenticatorForCLIUpstream gets the OIDC issuer info from IntegrationEnv().CLIUpstreamOIDC.
 func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T) corev1.TypedLocalObjectReference {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 	spec := auth1alpha1.JWTAuthenticatorSpec{
-		Issuer:   testEnv.CLITestUpstream.Issuer,
-		Audience: testEnv.CLITestUpstream.ClientID,
+		Issuer:   testEnv.CLIUpstreamOIDC.Issuer,
+		Audience: testEnv.CLIUpstreamOIDC.ClientID,
 		// The default UsernameClaim is "username" but the upstreams that we use for
 		// integration tests won't necessarily have that claim, so use "sub" here.
 		Claims: auth1alpha1.JWTTokenClaims{Username: "sub"},
@@ -204,9 +204,9 @@ func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T)
 	// If the test upstream does not have a CA bundle specified, then don't configure one in the
 	// JWTAuthenticator. Leaving TLSSpec set to nil will result in OIDC discovery using the OS's root
 	// CA store.
-	if testEnv.CLITestUpstream.CABundle != "" {
+	if testEnv.CLIUpstreamOIDC.CABundle != "" {
 		spec.TLS = &auth1alpha1.TLSSpec{
-			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(testEnv.CLITestUpstream.CABundle)),
+			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(testEnv.CLIUpstreamOIDC.CABundle)),
 		}
 	}
 	return CreateTestJWTAuthenticator(ctx, t, spec)
@@ -250,8 +250,7 @@ func CreateTestJWTAuthenticator(ctx context.Context, t *testing.T, spec auth1alp
 
 // CreateTestFederationDomain creates and returns a test FederationDomain in
 // $PINNIPED_TEST_SUPERVISOR_NAMESPACE, which will be automatically deleted at the end of the
-// current test's lifetime. It generates a random, valid, issuer for the FederationDomain.
-//
+// current test's lifetime.
 // If the provided issuer is not the empty string, then it will be used for the
 // FederationDomain.Spec.Issuer field. Else, a random issuer will be generated.
 func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string, certSecretName string, expectStatus configv1alpha1.FederationDomainStatusCondition) *configv1alpha1.FederationDomain {
@@ -377,7 +376,7 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 	upstreams := client.IDPV1alpha1().OIDCIdentityProviders(env.SupervisorNamespace)
 
 	created, err := upstreams.Create(ctx, &idpv1alpha1.OIDCIdentityProvider{
-		ObjectMeta: testObjectMeta(t, "upstream"),
+		ObjectMeta: testObjectMeta(t, "upstream-oidc-idp"),
 		Spec:       spec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
@@ -398,6 +397,41 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 		require.NoError(t, err)
 		return result.Status.Phase == expectedPhase
 	}, 60*time.Second, 1*time.Second, "expected the OIDCIdentityProvider to go into phase %s", expectedPhase)
+	return result
+}
+
+func CreateTestLDAPIdentityProvider(t *testing.T, spec idpv1alpha1.LDAPIdentityProviderSpec, expectedPhase idpv1alpha1.LDAPIdentityProviderPhase) *idpv1alpha1.LDAPIdentityProvider {
+	t.Helper()
+	env := IntegrationEnv(t)
+	client := NewSupervisorClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// Create the LDAPIdentityProvider using GenerateName to get a random name.
+	upstreams := client.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace)
+
+	created, err := upstreams.Create(ctx, &idpv1alpha1.LDAPIdentityProvider{
+		ObjectMeta: testObjectMeta(t, "upstream-ldap-idp"),
+		Spec:       spec,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Always clean this up after this point.
+	t.Cleanup(func() {
+		t.Logf("cleaning up test LDAPIdentityProvider %s/%s", created.Namespace, created.Name)
+		err := upstreams.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+	t.Logf("created test LDAPIdentityProvider %s", created.Name)
+
+	// Wait for the LDAPIdentityProvider to enter the expected phase (or time out).
+	var result *idpv1alpha1.LDAPIdentityProvider
+	require.Eventuallyf(t, func() bool {
+		var err error
+		result, err = upstreams.Get(ctx, created.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		return result.Status.Phase == expectedPhase
+	}, 60*time.Second, 1*time.Second, "expected the LDAPIdentityProvider to go into phase %s", expectedPhase)
 	return result
 }
 

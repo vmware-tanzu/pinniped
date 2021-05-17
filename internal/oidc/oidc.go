@@ -24,6 +24,7 @@ const (
 	TokenEndpointPath         = "/oauth2/token" //nolint:gosec // ignore lint warning that this is a credential
 	CallbackEndpointPath      = "/callback"
 	JWKSEndpointPath          = "/jwks.json"
+	PinnipedIDPsPathV1Alpha1  = "/v1alpha1/pinniped_identity_providers"
 )
 
 const (
@@ -269,8 +270,17 @@ func FositeErrorForLog(err error) []interface{} {
 	return keysAndValues
 }
 
-type IDPListGetter interface {
-	GetIDPList() []provider.UpstreamOIDCIdentityProviderI
+type UpstreamOIDCIdentityProvidersLister interface {
+	GetOIDCIdentityProviders() []provider.UpstreamOIDCIdentityProviderI
+}
+
+type UpstreamLDAPIdentityProvidersLister interface {
+	GetLDAPIdentityProviders() []provider.UpstreamLDAPIdentityProviderI
+}
+
+type UpstreamIdentityProvidersLister interface {
+	UpstreamOIDCIdentityProvidersLister
+	UpstreamLDAPIdentityProvidersLister
 }
 
 func GrantScopeIfRequested(authorizeRequester fosite.AuthorizeRequester, scopeName string) {

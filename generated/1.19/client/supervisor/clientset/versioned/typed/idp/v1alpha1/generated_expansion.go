@@ -5,4 +5,6 @@
 
 package v1alpha1
 
+type LDAPIdentityProviderExpansion interface{}
+
 type OIDCIdentityProviderExpansion interface{}

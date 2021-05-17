@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidc
@@ -21,7 +21,7 @@ import (
 	"gopkg.in/square/go-jose.v2"
 
 	"go.pinniped.dev/internal/oidc/jwks"
-	"go.pinniped.dev/internal/oidc/oidctestutil"
+	"go.pinniped.dev/internal/testutil/oidctestutil"
 )
 
 func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {

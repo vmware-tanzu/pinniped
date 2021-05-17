@@ -6,7 +6,9 @@ require (
 	cloud.google.com/go v0.60.0 // indirect
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/coreos/go-oidc/v3 v3.0.0
+	github.com/creack/pty v1.1.11
 	github.com/davecgh/go-spew v1.1.1
+	github.com/go-ldap/ldap/v3 v3.3.0
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/stdr v0.4.0
 	github.com/go-openapi/spec v0.20.3
@@ -30,6 +32,7 @@ require (
 	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
+	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d
 	gopkg.in/square/go-jose.v2 v2.5.1
 	k8s.io/api v0.21.0
 	k8s.io/apimachinery v0.21.0

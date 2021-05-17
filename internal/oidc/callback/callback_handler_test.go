@@ -9,26 +9,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gorilla/securecookie"
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/openid"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"go.pinniped.dev/internal/crud"
-	"go.pinniped.dev/internal/fositestorage/authorizationcode"
-	"go.pinniped.dev/internal/fositestorage/openidconnect"
-	"go.pinniped.dev/internal/fositestorage/pkce"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/jwks"
-	"go.pinniped.dev/internal/oidc/oidctestutil"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/testutil/oidctestutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	oidcpkce "go.pinniped.dev/pkg/oidcclient/pkce"
@@ -44,8 +35,7 @@ const (
 	upstreamUsernameClaim = "the-user-claim"
 	upstreamGroupsClaim   = "the-groups-claim"
 
-	happyUpstreamAuthcode = "upstream-auth-code"
-
+	happyUpstreamAuthcode    = "upstream-auth-code"
 	happyUpstreamRedirectURI = "https://example.com/callback"
 
 	happyDownstreamState        = "8b-state"
@@ -61,8 +51,7 @@ const (
 	downstreamPKCEChallenge       = "some-challenge"
 	downstreamPKCEChallengeMethod = "S256"
 
-	authCodeExpirationSeconds = 10 * 60 // Current, we set our auth code expiration to 10 minutes
-	timeComparisonFudgeFactor = time.Second * 15
+	htmlContentType = "text/html; charset=utf-8"
 )
 
 var (
@@ -129,6 +118,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		csrfCookie string
 
 		wantStatus                        int
+		wantContentType                   string
 		wantBody                          string
 		wantRedirectLocationRegexp        string
 		wantDownstreamGrantedScopes       []string
@@ -252,6 +242,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusUnprocessableEntity,
+			wantContentType:                   htmlContentType,
 			wantBody:                          "Unprocessable Entity: email_verified claim in upstream ID token has invalid format\n",
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
@@ -264,6 +255,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusUnprocessableEntity,
+			wantContentType:                   htmlContentType,
 			wantBody:                          "Unprocessable Entity: email_verified claim in upstream ID token has false value\n",
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
@@ -327,57 +319,64 @@ func TestCallbackEndpoint(t *testing.T) {
 
 		// Pre-upstream-exchange verification
 		{
-			name:       "PUT method is invalid",
-			method:     http.MethodPut,
-			path:       newRequestPath().String(),
-			wantStatus: http.StatusMethodNotAllowed,
-			wantBody:   "Method Not Allowed: PUT (try GET)\n",
+			name:            "PUT method is invalid",
+			method:          http.MethodPut,
+			path:            newRequestPath().String(),
+			wantStatus:      http.StatusMethodNotAllowed,
+			wantContentType: htmlContentType,
+			wantBody:        "Method Not Allowed: PUT (try GET)\n",
 		},
 		{
-			name:       "POST method is invalid",
-			method:     http.MethodPost,
-			path:       newRequestPath().String(),
-			wantStatus: http.StatusMethodNotAllowed,
-			wantBody:   "Method Not Allowed: POST (try GET)\n",
+			name:            "POST method is invalid",
+			method:          http.MethodPost,
+			path:            newRequestPath().String(),
+			wantStatus:      http.StatusMethodNotAllowed,
+			wantContentType: htmlContentType,
+			wantBody:        "Method Not Allowed: POST (try GET)\n",
 		},
 		{
-			name:       "PATCH method is invalid",
-			method:     http.MethodPatch,
-			path:       newRequestPath().String(),
-			wantStatus: http.StatusMethodNotAllowed,
-			wantBody:   "Method Not Allowed: PATCH (try GET)\n",
+			name:            "PATCH method is invalid",
+			method:          http.MethodPatch,
+			path:            newRequestPath().String(),
+			wantStatus:      http.StatusMethodNotAllowed,
+			wantContentType: htmlContentType,
+			wantBody:        "Method Not Allowed: PATCH (try GET)\n",
 		},
 		{
-			name:       "DELETE method is invalid",
-			method:     http.MethodDelete,
-			path:       newRequestPath().String(),
-			wantStatus: http.StatusMethodNotAllowed,
-			wantBody:   "Method Not Allowed: DELETE (try GET)\n",
+			name:            "DELETE method is invalid",
+			method:          http.MethodDelete,
+			path:            newRequestPath().String(),
+			wantStatus:      http.StatusMethodNotAllowed,
+			wantContentType: htmlContentType,
+			wantBody:        "Method Not Allowed: DELETE (try GET)\n",
 		},
 		{
-			name:       "code param was not included on request",
-			method:     http.MethodGet,
-			path:       newRequestPath().WithState(happyState).WithoutCode().String(),
-			csrfCookie: happyCSRFCookie,
-			wantStatus: http.StatusBadRequest,
-			wantBody:   "Bad Request: code param not found\n",
+			name:            "code param was not included on request",
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).WithoutCode().String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: code param not found\n",
 		},
 		{
-			name:       "state param was not included on request",
-			method:     http.MethodGet,
-			path:       newRequestPath().WithoutState().String(),
-			csrfCookie: happyCSRFCookie,
-			wantStatus: http.StatusBadRequest,
-			wantBody:   "Bad Request: state param not found\n",
+			name:            "state param was not included on request",
+			method:          http.MethodGet,
+			path:            newRequestPath().WithoutState().String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: state param not found\n",
 		},
 		{
-			name:       "state param was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
-			idp:        happyUpstream().Build(),
-			method:     http.MethodGet,
-			path:       newRequestPath().WithState("this-will-not-decode").String(),
-			csrfCookie: happyCSRFCookie,
-			wantStatus: http.StatusBadRequest,
-			wantBody:   "Bad Request: error reading state\n",
+			name:            "state param was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
+			idp:             happyUpstream().Build(),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState("this-will-not-decode").String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: error reading state\n",
 		},
 		{
 			// This shouldn't happen in practice because the authorize endpoint should have already run the same
@@ -393,16 +392,18 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:                        happyCSRFCookie,
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 			wantStatus:                        http.StatusInternalServerError,
+			wantContentType:                   htmlContentType,
 			wantBody:                          "Internal Server Error: error while generating and saving authcode\n",
 		},
 		{
-			name:       "state's internal version does not match what we want",
-			idp:        happyUpstream().Build(),
-			method:     http.MethodGet,
-			path:       newRequestPath().WithState(happyUpstreamStateParam().WithStateVersion("wrong-state-version").Build(t, happyStateCodec)).String(),
-			csrfCookie: happyCSRFCookie,
-			wantStatus: http.StatusUnprocessableEntity,
-			wantBody:   "Unprocessable Entity: state format version is invalid\n",
+			name:            "state's internal version does not match what we want",
+			idp:             happyUpstream().Build(),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyUpstreamStateParam().WithStateVersion("wrong-state-version").Build(t, happyStateCodec)).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: state format version is invalid\n",
 		},
 		{
 			name:   "state's downstream auth params element is invalid",
@@ -411,9 +412,10 @@ func TestCallbackEndpoint(t *testing.T) {
 			path: newRequestPath().WithState(happyUpstreamStateParam().
 				WithAuthorizeRequestParams("the following is an invalid url encoding token, and therefore this is an invalid param: %z").
 				Build(t, happyStateCodec)).String(),
-			csrfCookie: happyCSRFCookie,
-			wantStatus: http.StatusBadRequest,
-			wantBody:   "Bad Request: error reading state downstream auth params\n",
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: error reading state downstream auth params\n",
 		},
 		{
 			name:   "state's downstream auth params are missing required value (e.g., client_id)",
@@ -424,9 +426,10 @@ func TestCallbackEndpoint(t *testing.T) {
 					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery, map[string]string{"client_id": ""}).Encode()).
 					Build(t, happyStateCodec),
 			).String(),
-			csrfCookie: happyCSRFCookie,
-			wantStatus: http.StatusBadRequest,
-			wantBody:   "Bad Request: error using state downstream auth params\n",
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: error using state downstream auth params\n",
 		},
 		{
 			name:   "state's downstream auth params does not contain openid scope",
@@ -474,39 +477,43 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 		{
-			name:       "the OIDCIdentityProvider CRD has been deleted",
-			idp:        otherUpstreamOIDCIdentityProvider,
-			method:     http.MethodGet,
-			path:       newRequestPath().WithState(happyState).String(),
-			csrfCookie: happyCSRFCookie,
-			wantStatus: http.StatusUnprocessableEntity,
-			wantBody:   "Unprocessable Entity: upstream provider not found\n",
+			name:            "the OIDCIdentityProvider CRD has been deleted",
+			idp:             otherUpstreamOIDCIdentityProvider,
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: upstream provider not found\n",
 		},
 		{
-			name:       "the CSRF cookie does not exist on request",
-			idp:        happyUpstream().Build(),
-			method:     http.MethodGet,
-			path:       newRequestPath().WithState(happyState).String(),
-			wantStatus: http.StatusForbidden,
-			wantBody:   "Forbidden: CSRF cookie is missing\n",
+			name:            "the CSRF cookie does not exist on request",
+			idp:             happyUpstream().Build(),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			wantStatus:      http.StatusForbidden,
+			wantContentType: htmlContentType,
+			wantBody:        "Forbidden: CSRF cookie is missing\n",
 		},
 		{
-			name:       "cookie was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
-			idp:        happyUpstream().Build(),
-			method:     http.MethodGet,
-			path:       newRequestPath().WithState(happyState).String(),
-			csrfCookie: "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
-			wantStatus: http.StatusForbidden,
-			wantBody:   "Forbidden: error reading CSRF cookie\n",
+			name:            "cookie was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
+			idp:             happyUpstream().Build(),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
+			wantStatus:      http.StatusForbidden,
+			wantContentType: htmlContentType,
+			wantBody:        "Forbidden: error reading CSRF cookie\n",
 		},
 		{
-			name:       "cookie csrf value does not match state csrf value",
-			idp:        happyUpstream().Build(),
-			method:     http.MethodGet,
-			path:       newRequestPath().WithState(happyUpstreamStateParam().WithCSRF("wrong-csrf-value").Build(t, happyStateCodec)).String(),
-			csrfCookie: happyCSRFCookie,
-			wantStatus: http.StatusForbidden,
-			wantBody:   "Forbidden: CSRF value does not match\n",
+			name:            "cookie csrf value does not match state csrf value",
+			idp:             happyUpstream().Build(),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyUpstreamStateParam().WithCSRF("wrong-csrf-value").Build(t, happyStateCodec)).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusForbidden,
+			wantContentType: htmlContentType,
+			wantBody:        "Forbidden: CSRF value does not match\n",
 		},
 
 		// Upstream exchange
@@ -518,6 +525,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusBadGateway,
 			wantBody:                          "Bad Gateway: error exchanging and validating upstream tokens\n",
+			wantContentType:                   htmlContentType,
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 		{
@@ -528,6 +536,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusUnprocessableEntity,
 			wantBody:                          "Unprocessable Entity: no username claim in upstream ID token\n",
+			wantContentType:                   htmlContentType,
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
 		{
@@ -556,6 +565,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusUnprocessableEntity,
+			wantContentType:                   htmlContentType,
 			wantBody:                          "Unprocessable Entity: username claim in upstream ID token has invalid format\n",
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
@@ -566,6 +576,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusUnprocessableEntity,
+			wantContentType:                   htmlContentType,
 			wantBody:                          "Unprocessable Entity: issuer claim in upstream ID token missing\n",
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
@@ -576,6 +587,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusUnprocessableEntity,
+			wantContentType:                   htmlContentType,
 			wantBody:                          "Unprocessable Entity: issuer claim in upstream ID token has invalid format\n",
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
@@ -586,6 +598,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusUnprocessableEntity,
+			wantContentType:                   htmlContentType,
 			wantBody:                          "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
@@ -596,6 +609,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusUnprocessableEntity,
+			wantContentType:                   htmlContentType,
 			wantBody:                          "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
@@ -606,6 +620,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusUnprocessableEntity,
+			wantContentType:                   htmlContentType,
 			wantBody:                          "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
 			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
 		},
@@ -626,8 +641,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
 			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration)
 
-			idpListGetter := oidctestutil.NewIDPListGetter(&test.idp)
-			subject := NewHandler(idpListGetter, oauthHelper, happyStateCodec, happyCookieCodec, happyUpstreamRedirectURI)
+			idpLister := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(&test.idp).Build()
+			subject := NewHandler(idpLister, oauthHelper, happyStateCodec, happyCookieCodec, happyUpstreamRedirectURI)
 			req := httptest.NewRequest(test.method, test.path, nil)
 			if test.csrfCookie != "" {
 				req.Header.Set("Cookie", test.csrfCookie)
@@ -648,6 +663,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			}
 
 			require.Equal(t, test.wantStatus, rsp.Code)
+			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), test.wantContentType)
 
 			if test.wantBody != "" {
 				require.Equal(t, test.wantBody, rsp.Body.String())
@@ -656,77 +672,28 @@ func TestCallbackEndpoint(t *testing.T) {
 			}
 
 			if test.wantRedirectLocationRegexp != "" { //nolint:nestif // don't mind have several sequential if statements in this test
-				// Assert that Location header matches regular expression.
 				require.Len(t, rsp.Header().Values("Location"), 1)
-				actualLocation := rsp.Header().Get("Location")
-				regex := regexp.MustCompile(test.wantRedirectLocationRegexp)
-				submatches := regex.FindStringSubmatch(actualLocation)
-				require.Lenf(t, submatches, 2, "no regexp match in actualLocation: %q", actualLocation)
-				capturedAuthCode := submatches[1]
-
-				// fosite authcodes are in the format `data.signature`, so grab the signature part, which is the lookup key in the storage interface
-				authcodeDataAndSignature := strings.Split(capturedAuthCode, ".")
-				require.Len(t, authcodeDataAndSignature, 2)
-
-				// Several Secrets should have been created
-				expectedNumberOfCreatedSecrets := 2
-				if includesOpenIDScope(test.wantDownstreamGrantedScopes) {
-					expectedNumberOfCreatedSecrets++
-				}
-				require.Len(t, client.Actions(), expectedNumberOfCreatedSecrets)
-
-				// One authcode should have been stored.
-				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
-
-				storedRequestFromAuthcode, storedSessionFromAuthcode := validateAuthcodeStorage(
+				oidctestutil.RequireAuthcodeRedirectLocation(
 					t,
+					rsp.Header().Get("Location"),
+					test.wantRedirectLocationRegexp,
+					client,
+					secrets,
 					oauthStore,
-					authcodeDataAndSignature[1], // Authcode store key is authcode signature
 					test.wantDownstreamGrantedScopes,
 					test.wantDownstreamIDTokenSubject,
 					test.wantDownstreamIDTokenUsername,
 					test.wantDownstreamIDTokenGroups,
 					test.wantDownstreamRequestedScopes,
-				)
-
-				// One PKCE should have been stored.
-				testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: pkce.TypeLabelValue}, 1)
-
-				validatePKCEStorage(
-					t,
-					oauthStore,
-					authcodeDataAndSignature[1], // PKCE store key is authcode signature
-					storedRequestFromAuthcode,
-					storedSessionFromAuthcode,
 					test.wantDownstreamPKCEChallenge,
 					test.wantDownstreamPKCEChallengeMethod,
+					test.wantDownstreamNonce,
+					downstreamClientID,
+					downstreamRedirectURI,
 				)
-
-				// One IDSession should have been stored, if the downstream actually requested the "openid" scope
-				if includesOpenIDScope(test.wantDownstreamGrantedScopes) {
-					testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secrets, labels.Set{crud.SecretLabelKey: openidconnect.TypeLabelValue}, 1)
-
-					validateIDSessionStorage(
-						t,
-						oauthStore,
-						capturedAuthCode, // IDSession store key is full authcode
-						storedRequestFromAuthcode,
-						storedSessionFromAuthcode,
-						test.wantDownstreamNonce,
-					)
-				}
 			}
 		})
 	}
-}
-
-func includesOpenIDScope(scopes []string) bool {
-	for _, scope := range scopes {
-		if scope == "openid" {
-			return true
-		}
-	}
-	return false
 }
 
 type requestPath struct {
@@ -897,142 +864,4 @@ func shallowCopyAndModifyQuery(query url.Values, modifications map[string]string
 		}
 	}
 	return copied
-}
-
-func validateAuthcodeStorage(
-	t *testing.T,
-	oauthStore *oidc.KubeStorage,
-	storeKey string,
-	wantDownstreamGrantedScopes []string,
-	wantDownstreamIDTokenSubject string,
-	wantDownstreamIDTokenUsername string,
-	wantDownstreamIDTokenGroups []string,
-	wantDownstreamRequestedScopes []string,
-) (*fosite.Request, *openid.DefaultSession) {
-	t.Helper()
-
-	// Get the authcode session back from storage so we can require that it was stored correctly.
-	storedAuthorizeRequestFromAuthcode, err := oauthStore.GetAuthorizeCodeSession(context.Background(), storeKey, nil)
-	require.NoError(t, err)
-
-	// Check that storage returned the expected concrete data types.
-	storedRequestFromAuthcode, storedSessionFromAuthcode := castStoredAuthorizeRequest(t, storedAuthorizeRequestFromAuthcode)
-
-	// Check which scopes were granted.
-	require.ElementsMatch(t, wantDownstreamGrantedScopes, storedRequestFromAuthcode.GetGrantedScopes())
-
-	// Check all the other fields of the stored request.
-	require.NotEmpty(t, storedRequestFromAuthcode.ID)
-	require.Equal(t, downstreamClientID, storedRequestFromAuthcode.Client.GetID())
-	require.ElementsMatch(t, wantDownstreamRequestedScopes, storedRequestFromAuthcode.RequestedScope)
-	require.Nil(t, storedRequestFromAuthcode.RequestedAudience)
-	require.Empty(t, storedRequestFromAuthcode.GrantedAudience)
-	require.Equal(t, url.Values{"redirect_uri": []string{downstreamRedirectURI}}, storedRequestFromAuthcode.Form)
-	testutil.RequireTimeInDelta(t, time.Now(), storedRequestFromAuthcode.RequestedAt, timeComparisonFudgeFactor)
-
-	// We're not using these fields yet, so confirm that we did not set them (for now).
-	require.Empty(t, storedSessionFromAuthcode.Subject)
-	require.Empty(t, storedSessionFromAuthcode.Username)
-	require.Empty(t, storedSessionFromAuthcode.Headers)
-
-	// The authcode that we are issuing should be good for the length of time that we declare in the fosite config.
-	testutil.RequireTimeInDelta(t, time.Now().Add(authCodeExpirationSeconds*time.Second), storedSessionFromAuthcode.ExpiresAt[fosite.AuthorizeCode], timeComparisonFudgeFactor)
-	require.Len(t, storedSessionFromAuthcode.ExpiresAt, 1)
-
-	// Now confirm the ID token claims.
-	actualClaims := storedSessionFromAuthcode.Claims
-
-	// Check the user's identity, which are put into the downstream ID token's subject, username and groups claims.
-	require.Equal(t, wantDownstreamIDTokenSubject, actualClaims.Subject)
-	require.Equal(t, wantDownstreamIDTokenUsername, actualClaims.Extra["username"])
-	require.Len(t, actualClaims.Extra, 2)
-	actualDownstreamIDTokenGroups := actualClaims.Extra["groups"]
-	require.NotNil(t, actualDownstreamIDTokenGroups)
-	require.ElementsMatch(t, wantDownstreamIDTokenGroups, actualDownstreamIDTokenGroups)
-
-	// Check the rest of the downstream ID token's claims. Fosite wants us to set these (in UTC time).
-	testutil.RequireTimeInDelta(t, time.Now().UTC(), actualClaims.RequestedAt, timeComparisonFudgeFactor)
-	testutil.RequireTimeInDelta(t, time.Now().UTC(), actualClaims.AuthTime, timeComparisonFudgeFactor)
-	requestedAtZone, _ := actualClaims.RequestedAt.Zone()
-	require.Equal(t, "UTC", requestedAtZone)
-	authTimeZone, _ := actualClaims.AuthTime.Zone()
-	require.Equal(t, "UTC", authTimeZone)
-
-	// Fosite will set these fields for us in the token endpoint based on the store session
-	// information. Therefore, we assert that they are empty because we want the library to do the
-	// lifting for us.
-	require.Empty(t, actualClaims.Issuer)
-	require.Nil(t, actualClaims.Audience)
-	require.Empty(t, actualClaims.Nonce)
-	require.Zero(t, actualClaims.ExpiresAt)
-	require.Zero(t, actualClaims.IssuedAt)
-
-	// These are not needed yet.
-	require.Empty(t, actualClaims.JTI)
-	require.Empty(t, actualClaims.CodeHash)
-	require.Empty(t, actualClaims.AccessTokenHash)
-	require.Empty(t, actualClaims.AuthenticationContextClassReference)
-	require.Empty(t, actualClaims.AuthenticationMethodsReference)
-
-	return storedRequestFromAuthcode, storedSessionFromAuthcode
-}
-
-func validatePKCEStorage(
-	t *testing.T,
-	oauthStore *oidc.KubeStorage,
-	storeKey string,
-	storedRequestFromAuthcode *fosite.Request,
-	storedSessionFromAuthcode *openid.DefaultSession,
-	wantDownstreamPKCEChallenge, wantDownstreamPKCEChallengeMethod string,
-) {
-	t.Helper()
-
-	storedAuthorizeRequestFromPKCE, err := oauthStore.GetPKCERequestSession(context.Background(), storeKey, nil)
-	require.NoError(t, err)
-
-	// Check that storage returned the expected concrete data types.
-	storedRequestFromPKCE, storedSessionFromPKCE := castStoredAuthorizeRequest(t, storedAuthorizeRequestFromPKCE)
-
-	// The stored PKCE request should be the same as the stored authcode request.
-	require.Equal(t, storedRequestFromAuthcode.ID, storedRequestFromPKCE.ID)
-	require.Equal(t, storedSessionFromAuthcode, storedSessionFromPKCE)
-
-	// The stored PKCE request should also contain the PKCE challenge that the downstream sent us.
-	require.Equal(t, wantDownstreamPKCEChallenge, storedRequestFromPKCE.Form.Get("code_challenge"))
-	require.Equal(t, wantDownstreamPKCEChallengeMethod, storedRequestFromPKCE.Form.Get("code_challenge_method"))
-}
-
-func validateIDSessionStorage(
-	t *testing.T,
-	oauthStore *oidc.KubeStorage,
-	storeKey string,
-	storedRequestFromAuthcode *fosite.Request,
-	storedSessionFromAuthcode *openid.DefaultSession,
-	wantDownstreamNonce string,
-) {
-	t.Helper()
-
-	storedAuthorizeRequestFromIDSession, err := oauthStore.GetOpenIDConnectSession(context.Background(), storeKey, nil)
-	require.NoError(t, err)
-
-	// Check that storage returned the expected concrete data types.
-	storedRequestFromIDSession, storedSessionFromIDSession := castStoredAuthorizeRequest(t, storedAuthorizeRequestFromIDSession)
-
-	// The stored IDSession request should be the same as the stored authcode request.
-	require.Equal(t, storedRequestFromAuthcode.ID, storedRequestFromIDSession.ID)
-	require.Equal(t, storedSessionFromAuthcode, storedSessionFromIDSession)
-
-	// The stored IDSession request should also contain the nonce that the downstream sent us.
-	require.Equal(t, wantDownstreamNonce, storedRequestFromIDSession.Form.Get("nonce"))
-}
-
-func castStoredAuthorizeRequest(t *testing.T, storedAuthorizeRequest fosite.Requester) (*fosite.Request, *openid.DefaultSession) {
-	t.Helper()
-
-	storedRequest, ok := storedAuthorizeRequest.(*fosite.Request)
-	require.Truef(t, ok, "could not cast %T to %T", storedAuthorizeRequest, &fosite.Request{})
-	storedSession, ok := storedAuthorizeRequest.GetSession().(*openid.DefaultSession)
-	require.Truef(t, ok, "could not cast %T to %T", storedAuthorizeRequest.GetSession(), &openid.DefaultSession{})
-
-	return storedRequest, storedSession
 }

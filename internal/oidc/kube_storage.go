@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package oidc
@@ -19,6 +19,7 @@ import (
 	"go.pinniped.dev/internal/fositestorage/openidconnect"
 	"go.pinniped.dev/internal/fositestorage/pkce"
 	"go.pinniped.dev/internal/fositestorage/refreshtoken"
+	"go.pinniped.dev/internal/fositestoragei"
 )
 
 const errKubeStorageNotImplemented = constable.Error("KubeStorage does not implement this method. It should not have been called.")
@@ -30,6 +31,8 @@ type KubeStorage struct {
 	accessTokenStorage       accesstoken.RevocationStorage
 	refreshTokenStorage      refreshtoken.RevocationStorage
 }
+
+var _ fositestoragei.AllFositeStorage = &KubeStorage{}
 
 func NewKubeStorage(secrets corev1client.SecretInterface, timeoutsConfiguration TimeoutsConfiguration) *KubeStorage {
 	nowFunc := time.Now

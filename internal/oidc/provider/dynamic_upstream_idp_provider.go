@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package provider
@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/oauth2"
 
+	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -48,30 +49,59 @@ type UpstreamOIDCIdentityProviderI interface {
 	ValidateToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error)
 }
 
+type UpstreamLDAPIdentityProviderI interface {
+	// A name for this upstream provider.
+	GetName() string
+
+	// Return a URL which uniquely identifies this LDAP provider, e.g. "ldaps://host.example.com:1234".
+	// This URL is not used for connecting to the provider, but rather is used for creating a globally unique user
+	// identifier by being combined with the user's UID, since user UIDs are only unique within one provider.
+	GetURL() string
+
+	// A method for performing user authentication against the upstream LDAP provider.
+	authenticators.UserAuthenticator
+}
+
 type DynamicUpstreamIDPProvider interface {
-	SetIDPList(oidcIDPs []UpstreamOIDCIdentityProviderI)
-	GetIDPList() []UpstreamOIDCIdentityProviderI
+	SetOIDCIdentityProviders(oidcIDPs []UpstreamOIDCIdentityProviderI)
+	GetOIDCIdentityProviders() []UpstreamOIDCIdentityProviderI
+	SetLDAPIdentityProviders(ldapIDPs []UpstreamLDAPIdentityProviderI)
+	GetLDAPIdentityProviders() []UpstreamLDAPIdentityProviderI
 }
 
 type dynamicUpstreamIDPProvider struct {
-	federationDomains []UpstreamOIDCIdentityProviderI
-	mutex             sync.RWMutex
+	oidcUpstreams []UpstreamOIDCIdentityProviderI
+	ldapUpstreams []UpstreamLDAPIdentityProviderI
+	mutex         sync.RWMutex
 }
 
 func NewDynamicUpstreamIDPProvider() DynamicUpstreamIDPProvider {
 	return &dynamicUpstreamIDPProvider{
-		federationDomains: []UpstreamOIDCIdentityProviderI{},
+		oidcUpstreams: []UpstreamOIDCIdentityProviderI{},
+		ldapUpstreams: []UpstreamLDAPIdentityProviderI{},
 	}
 }
 
-func (p *dynamicUpstreamIDPProvider) SetIDPList(oidcIDPs []UpstreamOIDCIdentityProviderI) {
+func (p *dynamicUpstreamIDPProvider) SetOIDCIdentityProviders(oidcIDPs []UpstreamOIDCIdentityProviderI) {
 	p.mutex.Lock() // acquire a write lock
 	defer p.mutex.Unlock()
-	p.federationDomains = oidcIDPs
+	p.oidcUpstreams = oidcIDPs
 }
 
-func (p *dynamicUpstreamIDPProvider) GetIDPList() []UpstreamOIDCIdentityProviderI {
+func (p *dynamicUpstreamIDPProvider) GetOIDCIdentityProviders() []UpstreamOIDCIdentityProviderI {
 	p.mutex.RLock() // acquire a read lock
 	defer p.mutex.RUnlock()
-	return p.federationDomains
+	return p.oidcUpstreams
+}
+
+func (p *dynamicUpstreamIDPProvider) SetLDAPIdentityProviders(ldapIDPs []UpstreamLDAPIdentityProviderI) {
+	p.mutex.Lock() // acquire a write lock
+	defer p.mutex.Unlock()
+	p.ldapUpstreams = ldapIDPs
+}
+
+func (p *dynamicUpstreamIDPProvider) GetLDAPIdentityProviders() []UpstreamLDAPIdentityProviderI {
+	p.mutex.RLock() // acquire a read lock
+	defer p.mutex.RUnlock()
+	return p.ldapUpstreams
 }

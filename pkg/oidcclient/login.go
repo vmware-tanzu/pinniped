@@ -5,13 +5,16 @@
 package oidcclient
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -20,6 +23,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/browser"
 	"golang.org/x/oauth2"
+	"golang.org/x/term"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -46,6 +50,16 @@ const (
 	// we set this to be relatively long.
 	overallTimeout = 90 * time.Minute
 
+	supervisorAuthorizeUpstreamNameParam      = "pinniped_idp_name"
+	supervisorAuthorizeUpstreamTypeParam      = "pinniped_idp_type"
+	supervisorAuthorizeUpstreamUsernameHeader = "Pinniped-Username"
+	supervisorAuthorizeUpstreamPasswordHeader = "Pinniped-Password" // nolint:gosec // this is not a credential
+
+	defaultLDAPUsernamePrompt = "Username: "
+	defaultLDAPPasswordPrompt = "Password: "
+
+	httpLocationHeaderName = "Location"
+
 	debugLogLevel = 4
 )
 
@@ -57,6 +71,10 @@ type handlerState struct {
 	clientID string
 	scopes   []string
 	cache    SessionCache
+
+	upstreamIdentityProviderName string
+	upstreamIdentityProviderType string
+	cliToSendCredentials         bool
 
 	requestedAudience string
 
@@ -80,6 +98,8 @@ type handlerState struct {
 	openURL         func(string) error
 	getProvider     func(*oauth2.Config, *oidc.Provider, *http.Client) provider.UpstreamOIDCIdentityProviderI
 	validateIDToken func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error)
+	promptForValue  func(promptLabel string) (string, error)
+	promptForSecret func(promptLabel string) (string, error)
 
 	callbacks chan callbackResult
 }
@@ -112,7 +132,7 @@ func WithLogger(logger logr.Logger) Option {
 
 // WithListenPort specifies a TCP listen port on localhost, which will be used for the redirect_uri and to handle the
 // authorization code callback. By default, a random high port will be chosen which requires the authorization server
-// to support wildcard port numbers as described by https://tools.ietf.org/html/rfc8252:
+// to support wildcard port numbers as described by https://tools.ietf.org/html/rfc8252#section-7.3:
 //
 // The authorization server MUST allow any port to be specified at the
 // time of the request for loopback IP redirect URIs, to accommodate
@@ -180,6 +200,31 @@ func WithRequestAudience(audience string) Option {
 	}
 }
 
+// WithCLISendingCredentials causes the login flow to use CLI-based prompts for username and password and causes the
+// call to the Issuer's authorize endpoint to be made directly (no web browser) with the username and password on custom
+// HTTP headers. This is only intended to be used when the issuer is a Pinniped Supervisor and the upstream identity
+// provider type supports this style of authentication. Currently this is supported by LDAPIdentityProviders.
+// This should never be used with non-Supervisor issuers because it will send the user's password to the authorization
+// endpoint as a custom header, which would be ignored but could potentially get logged somewhere by the issuer.
+func WithCLISendingCredentials() Option {
+	return func(h *handlerState) error {
+		h.cliToSendCredentials = true
+		return nil
+	}
+}
+
+// WithUpstreamIdentityProvider causes the specified name and type to be sent as custom query parameters to the
+// issuer's authorize endpoint. This is only intended to be used when the issuer is a Pinniped Supervisor, in which
+// case it provides a mechanism to choose among several upstream identity providers.
+// Other issuers will ignore these custom query parameters.
+func WithUpstreamIdentityProvider(upstreamName, upstreamType string) Option {
+	return func(h *handlerState) error {
+		h.upstreamIdentityProviderName = upstreamName
+		h.upstreamIdentityProviderType = upstreamType
+		return nil
+	}
+}
+
 // nopCache is a SessionCache that doesn't actually do anything.
 type nopCache struct{}
 
@@ -209,6 +254,8 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		validateIDToken: func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error) {
 			return provider.Verifier(&oidc.Config{ClientID: audience}).Verify(ctx, token)
 		},
+		promptForValue:  promptForValue,
+		promptForSecret: promptForSecret,
 	}
 	for _, opt := range opts {
 		if err := opt(&h); err != nil {
@@ -296,6 +343,138 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 		}
 	}
 
+	// Prepare the common options for the authorization URL. We don't have the redirect URL yet though.
+	authorizeOptions := []oauth2.AuthCodeOption{
+		oauth2.AccessTypeOffline,
+		h.nonce.Param(),
+		h.pkce.Challenge(),
+		h.pkce.Method(),
+	}
+	if h.upstreamIdentityProviderName != "" {
+		authorizeOptions = append(authorizeOptions, oauth2.SetAuthURLParam(supervisorAuthorizeUpstreamNameParam, h.upstreamIdentityProviderName))
+		authorizeOptions = append(authorizeOptions, oauth2.SetAuthURLParam(supervisorAuthorizeUpstreamTypeParam, h.upstreamIdentityProviderType))
+	}
+
+	// Choose the appropriate authorization and authcode exchange strategy.
+	var authFunc = h.webBrowserBasedAuth
+	if h.cliToSendCredentials {
+		authFunc = h.cliBasedAuth
+	}
+
+	// Perform the authorize request and authcode exchange to get back OIDC tokens.
+	token, err := authFunc(&authorizeOptions)
+
+	// If we got tokens, put them in the cache.
+	if err == nil {
+		h.cache.PutToken(cacheKey, token)
+	}
+
+	return token, err
+}
+
+// Make a direct call to the authorize endpoint, including the user's username and password on custom http headers,
+// and parse the authcode from the response. Exchange the authcode for tokens. Return the tokens or an error.
+func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (*oidctypes.Token, error) {
+	// Ask the user for their username and password.
+	username, err := h.promptForValue(defaultLDAPUsernamePrompt)
+	if err != nil {
+		return nil, fmt.Errorf("error prompting for username: %w", err)
+	}
+	password, err := h.promptForSecret(defaultLDAPPasswordPrompt)
+	if err != nil {
+		return nil, fmt.Errorf("error prompting for password: %w", err)
+	}
+
+	// Make a callback URL even though we won't be listening on this port, because providing a redirect URL is
+	// required for OIDC authorize endpoints, and it must match the allowed redirect URL of the OIDC client
+	// registered on the server. The Supervisor oauth client does not have "localhost" in the allowed redirect
+	// URI list, so use 127.0.0.1.
+	localhostAddr := strings.ReplaceAll(h.listenAddr, "localhost", "127.0.0.1")
+	h.oauth2Config.RedirectURL = (&url.URL{
+		Scheme: "http",
+		Host:   localhostAddr,
+		Path:   h.callbackPath,
+	}).String()
+
+	// Now that we have a redirect URL, we can build the authorize URL.
+	authorizeURL := h.oauth2Config.AuthCodeURL(h.state.String(), *authorizeOptions...)
+
+	// Don't follow redirects automatically because we want to handle redirects here.
+	h.httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	// Send an authorize request.
+	authCtx, authorizeCtxCancelFunc := context.WithTimeout(h.ctx, httpRequestTimeout)
+	defer authorizeCtxCancelFunc()
+	authReq, err := http.NewRequestWithContext(authCtx, http.MethodGet, authorizeURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("could not build authorize request: %w", err)
+	}
+	authReq.Header.Set(supervisorAuthorizeUpstreamUsernameHeader, username)
+	authReq.Header.Set(supervisorAuthorizeUpstreamPasswordHeader, password)
+	authRes, err := h.httpClient.Do(authReq)
+	if err != nil {
+		return nil, fmt.Errorf("authorization response error: %w", err)
+	}
+	_ = authRes.Body.Close() // don't need the response body, and okay if it fails to close
+
+	// A successful authorization always results in a 302.
+	if authRes.StatusCode != http.StatusFound {
+		return nil, fmt.Errorf(
+			"error getting authorization: expected to be redirected, but response status was %s", authRes.Status)
+	}
+	rawLocation := authRes.Header.Get(httpLocationHeaderName)
+	location, err := url.Parse(rawLocation)
+	if err != nil {
+		// This shouldn't be possible in practice because httpClient.Do() already parses the Location header.
+		return nil, fmt.Errorf("error getting authorization: could not parse redirect location: %w", err)
+	}
+
+	// Check that the redirect was to the expected location.
+	if location.Scheme != "http" || location.Host != localhostAddr || location.Path != h.callbackPath {
+		return nil, fmt.Errorf("error getting authorization: redirected to the wrong location: %s", rawLocation)
+	}
+
+	// Validate OAuth2 state and fail if it's incorrect (to block CSRF).
+	if err := h.state.Validate(location.Query().Get("state")); err != nil {
+		return nil, fmt.Errorf("missing or invalid state parameter in authorization response: %s", rawLocation)
+	}
+
+	// Get the auth code or return the error from the server.
+	authCode := location.Query().Get("code")
+	if authCode == "" {
+		// Check for error response parameters. See https://openid.net/specs/openid-connect-core-1_0.html#AuthError.
+		requiredErrorCode := location.Query().Get("error")
+		optionalErrorDescription := location.Query().Get("error_description")
+		if optionalErrorDescription == "" {
+			return nil, fmt.Errorf("login failed with code %q", requiredErrorCode)
+		}
+		return nil, fmt.Errorf("login failed with code %q: %s", requiredErrorCode, optionalErrorDescription)
+	}
+
+	// Exchange the authorization code for access, ID, and refresh tokens and perform required
+	// validations on the returned ID token.
+	tokenCtx, tokenCtxCancelFunc := context.WithTimeout(h.ctx, httpRequestTimeout)
+	defer tokenCtxCancelFunc()
+	token, err := h.getProvider(h.oauth2Config, h.provider, h.httpClient).
+		ExchangeAuthcodeAndValidateTokens(
+			tokenCtx,
+			authCode,
+			h.pkce,
+			h.nonce,
+			h.oauth2Config.RedirectURL,
+		)
+	if err != nil {
+		return nil, fmt.Errorf("error during authorization code exchange: %w", err)
+	}
+
+	return token, nil
+}
+
+// Open a web browser, or ask the user to open a web browser, to visit the authorize endpoint.
+// Create a localhost callback listener which exchanges the authcode for tokens. Return the tokens or an error.
+func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (*oidctypes.Token, error) {
 	// Open a TCP listener and update the OAuth2 redirect_uri to match (in case we are using an ephemeral port number).
 	listener, err := net.Listen("tcp", h.listenAddr)
 	if err != nil {
@@ -307,18 +486,14 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 		Path:   h.callbackPath,
 	}).String()
 
+	// Now that we have a redirect URL with the listener port, we can build the authorize URL.
+	authorizeURL := h.oauth2Config.AuthCodeURL(h.state.String(), *authorizeOptions...)
+
 	// Start a callback server in a background goroutine.
 	shutdown := h.serve(listener)
 	defer shutdown()
 
 	// Open the authorize URL in the users browser.
-	authorizeURL := h.oauth2Config.AuthCodeURL(
-		h.state.String(),
-		oauth2.AccessTypeOffline,
-		h.nonce.Param(),
-		h.pkce.Challenge(),
-		h.pkce.Method(),
-	)
 	if err := h.openURL(authorizeURL); err != nil {
 		return nil, fmt.Errorf("could not open browser: %w", err)
 	}
@@ -331,9 +506,46 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 		if callback.err != nil {
 			return nil, fmt.Errorf("error handling callback: %w", callback.err)
 		}
-		h.cache.PutToken(cacheKey, callback.token)
 		return callback.token, nil
 	}
+}
+
+func promptForValue(promptLabel string) (string, error) {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return "", errors.New("stdin is not connected to a terminal")
+	}
+	_, err := fmt.Fprint(os.Stderr, promptLabel)
+	if err != nil {
+		return "", fmt.Errorf("could not print prompt to stderr: %w", err)
+	}
+	text, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("could read input from stdin: %w", err)
+	}
+	text = strings.TrimSpace(text)
+	return text, nil
+}
+
+func promptForSecret(promptLabel string) (string, error) {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return "", errors.New("stdin is not connected to a terminal")
+	}
+	_, err := fmt.Fprint(os.Stderr, promptLabel)
+	if err != nil {
+		return "", fmt.Errorf("could not print prompt to stderr: %w", err)
+	}
+	password, err := term.ReadPassword(0)
+	if err != nil {
+		return "", fmt.Errorf("could not read password: %w", err)
+	}
+	// term.ReadPassword swallows the newline that was typed by the user, so to
+	// avoid the next line of output from happening on same line as the password
+	// prompt, we need to print a newline.
+	_, err = fmt.Fprint(os.Stderr, "\n")
+	if err != nil {
+		return "", fmt.Errorf("could not print newline to stderr: %w", err)
+	}
+	return string(password), err
 }
 
 func (h *handlerState) initOIDCDiscovery() error {
@@ -463,8 +675,11 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 		return httperr.New(http.StatusForbidden, "missing or invalid state parameter")
 	}
 
-	// Check for error response parameters.
+	// Check for error response parameters. See https://openid.net/specs/openid-connect-core-1_0.html#AuthError.
 	if errorParam := params.Get("error"); errorParam != "" {
+		if errorDescParam := params.Get("error_description"); errorDescParam != "" {
+			return httperr.Newf(http.StatusBadRequest, "login failed with code %q: %s", errorParam, errorDescParam)
+		}
 		return httperr.Newf(http.StatusBadRequest, "login failed with code %q", errorParam)
 	}
 

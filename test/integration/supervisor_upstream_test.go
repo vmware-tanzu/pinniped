@@ -46,9 +46,9 @@ Get "https://127.0.0.1:444444/issuer/.well-known/openid-configuration": dial tcp
 	t.Run("invalid issuer with trailing slash", func(t *testing.T) {
 		t.Parallel()
 		spec := v1alpha1.OIDCIdentityProviderSpec{
-			Issuer: env.SupervisorTestUpstream.Issuer + "/",
+			Issuer: env.SupervisorUpstreamOIDC.Issuer + "/",
 			TLS: &v1alpha1.TLSSpec{
-				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
 			},
 			AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{
 				AdditionalScopes: []string{"email", "profile"},
@@ -69,8 +69,8 @@ Get "https://127.0.0.1:444444/issuer/.well-known/openid-configuration": dial tcp
 				Type:   "OIDCDiscoverySucceeded",
 				Status: v1alpha1.ConditionFalse,
 				Reason: "Unreachable",
-				Message: `failed to perform OIDC discovery against "` + env.SupervisorTestUpstream.Issuer + `/":
-oidc: issuer did not match the issuer returned by provider, expected "` + env.SupervisorTestUpstream.Issuer + `/" got "` + env.SupervisorTestUpstream.Issuer + `"`,
+				Message: `failed to perform OIDC discovery against "` + env.SupervisorUpstreamOIDC.Issuer + `/":
+oidc: issuer did not match the issuer returned by provider, expected "` + env.SupervisorUpstreamOIDC.Issuer + `/" got "` + env.SupervisorUpstreamOIDC.Issuer + `"`,
 			},
 		})
 	})
@@ -78,9 +78,9 @@ oidc: issuer did not match the issuer returned by provider, expected "` + env.Su
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
 		spec := v1alpha1.OIDCIdentityProviderSpec{
-			Issuer: env.SupervisorTestUpstream.Issuer,
+			Issuer: env.SupervisorUpstreamOIDC.Issuer,
 			TLS: &v1alpha1.TLSSpec{
-				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorTestUpstream.CABundle)),
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
 			},
 			AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{
 				AdditionalScopes: []string{"email", "profile"},

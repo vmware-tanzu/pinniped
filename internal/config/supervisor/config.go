@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/yaml"
 
 	"go.pinniped.dev/internal/constable"
@@ -54,7 +55,7 @@ func FromPath(path string) (*Config, error) {
 
 func maybeSetAPIGroupSuffixDefault(apiGroupSuffix **string) {
 	if *apiGroupSuffix == nil {
-		*apiGroupSuffix = stringPtr(groupsuffix.PinnipedDefaultSuffix)
+		*apiGroupSuffix = pointer.StringPtr(groupsuffix.PinnipedDefaultSuffix)
 	}
 }
 
@@ -71,8 +72,4 @@ func validateNames(names *NamesConfigSpec) error {
 		return constable.Error("missing required names: " + strings.Join(missingNames, ", "))
 	}
 	return nil
-}
-
-func stringPtr(s string) *string {
-	return &s
 }

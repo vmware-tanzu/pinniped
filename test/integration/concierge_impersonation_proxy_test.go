@@ -1040,7 +1040,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				dialer.Proxy = func(req *http.Request) (*url.URL, error) {
 					proxyURL, err := url.Parse(env.Proxy)
 					require.NoError(t, err)
-					t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
+					t.Logf("passing request for %s through proxy %s", library.RedactURLParams(req.URL), proxyURL.String())
 					return proxyURL, nil
 				}
 			}
@@ -1119,7 +1119,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				httpTransport.Proxy = func(req *http.Request) (*url.URL, error) {
 					proxyURL, err := url.Parse(env.Proxy)
 					require.NoError(t, err)
-					t.Logf("passing request for %s through proxy %s", req.URL, proxyURL.String())
+					t.Logf("passing request for %s through proxy %s", library.RedactURLParams(req.URL), proxyURL.String())
 					return proxyURL, nil
 				}
 			}
@@ -1445,7 +1445,7 @@ func kubeconfigProxyFunc(t *testing.T, squidProxyURL string) func(req *http.Requ
 
 		parsedSquidProxyURL, err := url.Parse(squidProxyURL)
 		require.NoError(t, err)
-		t.Logf("passing request for %s through proxy %s", req.URL, parsedSquidProxyURL.String())
+		t.Logf("passing request for %s through proxy %s", library.RedactURLParams(req.URL), parsedSquidProxyURL.String())
 		return parsedSquidProxyURL, nil
 	}
 }

@@ -32,10 +32,10 @@ spec:
             containerPort: 3128
           resources:
             requests:
-              cpu: "10m"
+              cpu: "100m" #! one-tenth of one CPU
               memory: "64Mi"
             limits:
-              cpu: "10m"
+              cpu: "100m" #! one-tenth of one CPU
               memory: "64Mi"
           volumeMounts:
             - name: log-dir

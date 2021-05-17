@@ -51,8 +51,9 @@ type TestEnv struct {
 		ExpectedGroups   []string `json:"expectedGroups"`
 	} `json:"testUser"`
 
-	CLITestUpstream        TestOIDCUpstream `json:"cliOIDCUpstream"`
-	SupervisorTestUpstream TestOIDCUpstream `json:"supervisorOIDCUpstream"`
+	CLIUpstreamOIDC        TestOIDCUpstream `json:"cliOIDCUpstream"`
+	SupervisorUpstreamOIDC TestOIDCUpstream `json:"supervisorOIDCUpstream"`
+	SupervisorUpstreamLDAP TestLDAPUpstream `json:"supervisorLDAPUpstream"`
 }
 
 type TestOIDCUpstream struct {
@@ -67,6 +68,21 @@ type TestOIDCUpstream struct {
 	Username         string   `json:"username"`
 	Password         string   `json:"password"`
 	ExpectedGroups   []string `json:"expectedGroups"`
+}
+
+type TestLDAPUpstream struct {
+	Host                           string `json:"host"`
+	CABundle                       string `json:"caBundle"`
+	BindUsername                   string `json:"bindUsername"`
+	BindPassword                   string `json:"bindPassword"`
+	UserSearchBase                 string `json:"userSearchBase"`
+	TestUserDN                     string `json:"testUserDN"`
+	TestUserCN                     string `json:"testUserCN"`
+	TestUserPassword               string `json:"testUserPassword"`
+	TestUserMailAttributeName      string `json:"testUserMailAttributeName"`
+	TestUserMailAttributeValue     string `json:"testUserMailAttributeValue"`
+	TestUserUniqueIDAttributeName  string `json:"testUserUniqueIDAttributeName"`
+	TestUserUniqueIDAttributeValue string `json:"testUserUniqueIDAttributeValue"`
 }
 
 // ProxyEnv returns a set of environment variable strings (e.g., to combine with os.Environ()) which set up the configured test HTTP proxy.
@@ -195,7 +211,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 	result.Proxy = os.Getenv("PINNIPED_TEST_PROXY")
 	result.APIGroupSuffix = wantEnv("PINNIPED_TEST_API_GROUP_SUFFIX", "pinniped.dev")
 
-	result.CLITestUpstream = TestOIDCUpstream{
+	result.CLIUpstreamOIDC = TestOIDCUpstream{
 		Issuer:      needEnv(t, "PINNIPED_TEST_CLI_OIDC_ISSUER"),
 		CABundle:    base64Decoded(t, os.Getenv("PINNIPED_TEST_CLI_OIDC_ISSUER_CA_BUNDLE")),
 		ClientID:    needEnv(t, "PINNIPED_TEST_CLI_OIDC_CLIENT_ID"),
@@ -204,7 +220,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 		Password:    needEnv(t, "PINNIPED_TEST_CLI_OIDC_PASSWORD"),
 	}
 
-	result.SupervisorTestUpstream = TestOIDCUpstream{
+	result.SupervisorUpstreamOIDC = TestOIDCUpstream{
 		Issuer:           needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER"),
 		CABundle:         base64Decoded(t, os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ISSUER_CA_BUNDLE")),
 		AdditionalScopes: strings.Fields(os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_ADDITIONAL_SCOPES")),
@@ -216,6 +232,21 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 		Username:         needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME"),
 		Password:         needEnv(t, "PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD"),
 		ExpectedGroups:   filterEmpty(strings.Split(strings.ReplaceAll(os.Getenv("PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_EXPECTED_GROUPS"), " ", ""), ",")),
+	}
+
+	result.SupervisorUpstreamLDAP = TestLDAPUpstream{
+		Host:                           needEnv(t, "PINNIPED_TEST_LDAP_HOST"),
+		CABundle:                       base64Decoded(t, os.Getenv("PINNIPED_TEST_LDAP_LDAPS_CA_BUNDLE")),
+		BindUsername:                   needEnv(t, "PINNIPED_TEST_LDAP_BIND_ACCOUNT_USERNAME"),
+		BindPassword:                   needEnv(t, "PINNIPED_TEST_LDAP_BIND_ACCOUNT_PASSWORD"),
+		UserSearchBase:                 needEnv(t, "PINNIPED_TEST_LDAP_USERS_SEARCH_BASE"),
+		TestUserDN:                     needEnv(t, "PINNIPED_TEST_LDAP_USER_DN"),
+		TestUserCN:                     needEnv(t, "PINNIPED_TEST_LDAP_USER_CN"),
+		TestUserUniqueIDAttributeName:  needEnv(t, "PINNIPED_TEST_LDAP_USER_UNIQUE_ID_ATTRIBUTE_NAME"),
+		TestUserUniqueIDAttributeValue: needEnv(t, "PINNIPED_TEST_LDAP_USER_UNIQUE_ID_ATTRIBUTE_VALUE"),
+		TestUserMailAttributeName:      needEnv(t, "PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_NAME"),
+		TestUserMailAttributeValue:     needEnv(t, "PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_VALUE"),
+		TestUserPassword:               needEnv(t, "PINNIPED_TEST_LDAP_USER_PASSWORD"),
 	}
 }
 

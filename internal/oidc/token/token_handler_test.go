@@ -42,11 +42,12 @@ import (
 	"go.pinniped.dev/internal/fositestorage/openidconnect"
 	storagepkce "go.pinniped.dev/internal/fositestorage/pkce"
 	"go.pinniped.dev/internal/fositestorage/refreshtoken"
+	"go.pinniped.dev/internal/fositestoragei"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/jwks"
-	"go.pinniped.dev/internal/oidc/oidctestutil"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/testutil/oidctestutil"
 )
 
 const (
@@ -216,25 +217,13 @@ type authcodeExchangeInputs struct {
 	modifyTokenRequest func(tokenRequest *http.Request, authCode string)
 	modifyStorage      func(
 		t *testing.T,
-		s interface {
-			oauth2.TokenRevocationStorage
-			oauth2.CoreStorage
-			openid.OpenIDConnectRequestStorage
-			pkce.PKCERequestStorage
-			fosite.ClientManager
-		},
+		s fositestoragei.AllFositeStorage,
 		authCode string,
 	)
 	makeOathHelper func(
 		t *testing.T,
 		authRequest *http.Request,
-		store interface {
-			oauth2.TokenRevocationStorage
-			oauth2.CoreStorage
-			openid.OpenIDConnectRequestStorage
-			pkce.PKCERequestStorage
-			fosite.ClientManager
-		},
+		store fositestoragei.AllFositeStorage,
 	) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey)
 
 	want tokenEndpointResponseExpectedValues
@@ -1317,13 +1306,7 @@ func getFositeDataSignature(t *testing.T, data string) string {
 func makeHappyOauthHelper(
 	t *testing.T,
 	authRequest *http.Request,
-	store interface {
-		oauth2.TokenRevocationStorage
-		oauth2.CoreStorage
-		openid.OpenIDConnectRequestStorage
-		pkce.PKCERequestStorage
-		fosite.ClientManager
-	},
+	store fositestoragei.AllFositeStorage,
 ) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
 	t.Helper()
 
@@ -1349,13 +1332,7 @@ func (s *singleUseJWKProvider) GetJWKS(issuerName string) (jwks *jose.JSONWebKey
 func makeOauthHelperWithJWTKeyThatWorksOnlyOnce(
 	t *testing.T,
 	authRequest *http.Request,
-	store interface {
-		oauth2.TokenRevocationStorage
-		oauth2.CoreStorage
-		openid.OpenIDConnectRequestStorage
-		pkce.PKCERequestStorage
-		fosite.ClientManager
-	},
+	store fositestoragei.AllFositeStorage,
 ) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
 	t.Helper()
 
@@ -1368,13 +1345,7 @@ func makeOauthHelperWithJWTKeyThatWorksOnlyOnce(
 func makeOauthHelperWithNilPrivateJWTSigningKey(
 	t *testing.T,
 	authRequest *http.Request,
-	store interface {
-		oauth2.TokenRevocationStorage
-		oauth2.CoreStorage
-		openid.OpenIDConnectRequestStorage
-		pkce.PKCERequestStorage
-		fosite.ClientManager
-	},
+	store fositestoragei.AllFositeStorage,
 ) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
 	t.Helper()
 

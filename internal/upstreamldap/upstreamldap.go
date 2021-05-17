@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,9 +25,11 @@ import (
 )
 
 const (
-	ldapsScheme                                 = "ldaps"
-	distinguishedNameAttributeName              = "dn"
-	userSearchFilterInterpolationLocationMarker = "{}"
+	ldapsScheme                             = "ldaps"
+	distinguishedNameAttributeName          = "dn"
+	commonNameAttributeName                 = "cn"
+	searchFilterInterpolationLocationMarker = "{}"
+	groupSearchPageSize                     = uint32(250)
 )
 
 // Conn abstracts the upstream LDAP communication protocol (mostly for testing).
@@ -34,6 +37,8 @@ type Conn interface {
 	Bind(username, password string) error
 
 	Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error)
+
+	SearchWithPaging(searchRequest *ldap.SearchRequest, pagingSize uint32) (*ldap.SearchResult, error)
 
 	Close()
 }
@@ -78,6 +83,9 @@ type ProviderConfig struct {
 	// UserSearch contains information about how to search for users in the upstream LDAP IDP.
 	UserSearch UserSearchConfig
 
+	// GroupSearch contains information about how to search for group membership in the upstream LDAP IDP.
+	GroupSearch GroupSearchConfig
+
 	// Dialer exists to enable testing. When nil, will use a default appropriate for production use.
 	Dialer LDAPDialer
 }
@@ -97,6 +105,20 @@ type UserSearchConfig struct {
 	// UIDAttribute is the attribute in the LDAP entry from which the user's unique ID should be
 	// retrieved.
 	UIDAttribute string
+}
+
+// GroupSearchConfig contains information about how to search for group membership for users in the upstream LDAP IDP.
+type GroupSearchConfig struct {
+	// Base is the base DN to use for the group search in the upstream LDAP IDP. Empty means to skip group search
+	// entirely, in which case authenticated users will not belong to any groups from the upstream LDAP IDP.
+	Base string
+
+	// Filter is the filter to use for the group search in the upstream LDAP IDP. Empty means to use `member={}`.
+	Filter string
+
+	// GroupNameAttribute is the attribute in the LDAP group entry from which the group name should be
+	// retrieved. Empty means to use 'cn'.
+	GroupNameAttribute string
 }
 
 type Provider struct {
@@ -257,7 +279,7 @@ func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bi
 		return nil, false, fmt.Errorf(`error binding as "%s" before user search: %w`, p.c.BindUsername, err)
 	}
 
-	mappedUsername, mappedUID, err := p.searchAndBindUser(conn, username, bindFunc)
+	mappedUsername, mappedUID, mappedGroupNames, err := p.searchAndBindUser(conn, username, bindFunc)
 	if err != nil {
 		p.traceAuthFailure(t, err)
 		return nil, false, err
@@ -272,11 +294,37 @@ func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bi
 		User: &user.DefaultInfo{
 			Name:   mappedUsername,
 			UID:    mappedUID,
-			Groups: []string{}, // Support for group search coming soon.
+			Groups: mappedGroupNames,
 		},
 	}
 	p.traceAuthSuccess(t)
 	return response, true, nil
+}
+
+func (p *Provider) searchGroupsForUserDN(conn Conn, userDN string) ([]string, error) {
+	searchResult, err := conn.SearchWithPaging(p.groupSearchRequest(userDN), groupSearchPageSize)
+	if err != nil {
+		return nil, fmt.Errorf(`error searching for group memberships for user with DN %q: %w`, userDN, err)
+	}
+
+	groupAttributeName := p.c.GroupSearch.GroupNameAttribute
+	if len(groupAttributeName) == 0 {
+		groupAttributeName = commonNameAttributeName
+	}
+
+	groups := []string{}
+	for _, groupEntry := range searchResult.Entries {
+		if len(groupEntry.DN) == 0 {
+			return nil, fmt.Errorf(`searching for group memberships for user with DN %q resulted in search result without DN`, userDN)
+		}
+		mappedGroupName, err := p.getSearchResultAttributeValue(groupAttributeName, groupEntry, userDN)
+		if err != nil {
+			return nil, fmt.Errorf(`error searching for group memberships for user with DN %q: %w`, userDN, err)
+		}
+		groups = append(groups, mappedGroupName)
+	}
+
+	return groups, nil
 }
 
 func (p *Provider) validateConfig() error {
@@ -287,35 +335,44 @@ func (p *Provider) validateConfig() error {
 	return nil
 }
 
-func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(conn Conn, foundUserDN string) error) (string, string, error) {
+func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(conn Conn, foundUserDN string) error) (string, string, []string, error) {
 	searchResult, err := conn.Search(p.userSearchRequest(username))
 	if err != nil {
-		return "", "", fmt.Errorf(`error searching for user "%s": %w`, username, err)
+		return "", "", nil, fmt.Errorf(`error searching for user "%s": %w`, username, err)
 	}
 	if len(searchResult.Entries) == 0 {
 		plog.Debug("error finding user: user not found (if this username is valid, please check the user search configuration)",
 			"upstreamName", p.GetName(), "username", username)
-		return "", "", nil
+		return "", "", nil, nil
 	}
 	if len(searchResult.Entries) > 1 {
-		return "", "", fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
+		return "", "", nil, fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
 			username, len(searchResult.Entries),
 		)
 	}
 	userEntry := searchResult.Entries[0]
 	if len(userEntry.DN) == 0 {
-		return "", "", fmt.Errorf(`searching for user "%s" resulted in search result without DN`, username)
+		return "", "", nil, fmt.Errorf(`searching for user "%s" resulted in search result without DN`, username)
 	}
 
 	mappedUsername, err := p.getSearchResultAttributeValue(p.c.UserSearch.UsernameAttribute, userEntry, username)
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
 
 	mappedUID, err := p.getSearchResultAttributeValue(p.c.UserSearch.UIDAttribute, userEntry, username)
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
+
+	mappedGroupNames := []string{}
+	if len(p.c.GroupSearch.Base) > 0 {
+		mappedGroupNames, err = p.searchGroupsForUserDN(conn, userEntry.DN)
+		if err != nil {
+			return "", "", nil, err
+		}
+	}
+	sort.Strings(mappedGroupNames)
 
 	// Caution: Note that any other LDAP commands after this bind will be run as this user instead of as the configured BindUsername!
 	err = bindFunc(conn, userEntry.DN)
@@ -324,12 +381,12 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 			err, "upstreamName", p.GetName(), "username", username, "dn", userEntry.DN)
 		ldapErr := &ldap.Error{}
 		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultInvalidCredentials {
-			return "", "", nil
+			return "", "", nil, nil
 		}
-		return "", "", fmt.Errorf(`error binding for user "%s" using provided password against DN "%s": %w`, username, userEntry.DN, err)
+		return "", "", nil, fmt.Errorf(`error binding for user "%s" using provided password against DN "%s": %w`, username, userEntry.DN, err)
 	}
 
-	return mappedUsername, mappedUID, nil
+	return mappedUsername, mappedUID, mappedGroupNames, nil
 }
 
 func (p *Provider) userSearchRequest(username string) *ldap.SearchRequest {
@@ -347,6 +404,21 @@ func (p *Provider) userSearchRequest(username string) *ldap.SearchRequest {
 	}
 }
 
+func (p *Provider) groupSearchRequest(userDN string) *ldap.SearchRequest {
+	// See https://ldap.com/the-ldap-search-operation for general documentation of LDAP search options.
+	return &ldap.SearchRequest{
+		BaseDN:       p.c.GroupSearch.Base,
+		Scope:        ldap.ScopeWholeSubtree,
+		DerefAliases: ldap.NeverDerefAliases,
+		SizeLimit:    0, // unlimited size because we will search with paging
+		TimeLimit:    90,
+		TypesOnly:    false,
+		Filter:       p.groupSearchFilter(userDN),
+		Attributes:   p.groupSearchRequestedAttributes(),
+		Controls:     nil, // nil because ldap.SearchWithPaging() will set the appropriate controls for us
+	}
+}
+
 func (p *Provider) userSearchRequestedAttributes() []string {
 	attributes := []string{}
 	if p.c.UserSearch.UsernameAttribute != distinguishedNameAttributeName {
@@ -358,12 +430,34 @@ func (p *Provider) userSearchRequestedAttributes() []string {
 	return attributes
 }
 
+func (p *Provider) groupSearchRequestedAttributes() []string {
+	switch p.c.GroupSearch.GroupNameAttribute {
+	case "":
+		return []string{commonNameAttributeName}
+	case distinguishedNameAttributeName:
+		return []string{}
+	default:
+		return []string{p.c.GroupSearch.GroupNameAttribute}
+	}
+}
+
 func (p *Provider) userSearchFilter(username string) string {
 	safeUsername := p.escapeUsernameForSearchFilter(username)
 	if len(p.c.UserSearch.Filter) == 0 {
 		return fmt.Sprintf("(%s=%s)", p.c.UserSearch.UsernameAttribute, safeUsername)
 	}
-	filter := strings.ReplaceAll(p.c.UserSearch.Filter, userSearchFilterInterpolationLocationMarker, safeUsername)
+	return interpolateSearchFilter(p.c.UserSearch.Filter, safeUsername)
+}
+
+func (p *Provider) groupSearchFilter(userDN string) string {
+	if len(p.c.GroupSearch.Filter) == 0 {
+		return fmt.Sprintf("(member=%s)", userDN)
+	}
+	return interpolateSearchFilter(p.c.GroupSearch.Filter, userDN)
+}
+
+func interpolateSearchFilter(filterFormat, valueToInterpolateIntoFilter string) string {
+	filter := strings.ReplaceAll(filterFormat, searchFilterInterpolationLocationMarker, valueToInterpolateIntoFilter)
 	if strings.HasPrefix(filter, "(") && strings.HasSuffix(filter, ")") {
 		return filter
 	}
@@ -375,12 +469,12 @@ func (p *Provider) escapeUsernameForSearchFilter(username string) string {
 	return ldap.EscapeFilter(username)
 }
 
-func (p *Provider) getSearchResultAttributeValue(attributeName string, fromUserEntry *ldap.Entry, username string) (string, error) {
+func (p *Provider) getSearchResultAttributeValue(attributeName string, entry *ldap.Entry, username string) (string, error) {
 	if attributeName == distinguishedNameAttributeName {
-		return fromUserEntry.DN, nil
+		return entry.DN, nil
 	}
 
-	attributeValues := fromUserEntry.GetAttributeValues(attributeName)
+	attributeValues := entry.GetAttributeValues(attributeName)
 
 	if len(attributeValues) != 1 {
 		return "", fmt.Errorf(`found %d values for attribute "%s" while searching for user "%s", but expected 1 result`,

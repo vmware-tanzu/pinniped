@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"io/ioutil"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -71,18 +72,21 @@ type TestOIDCUpstream struct {
 }
 
 type TestLDAPUpstream struct {
-	Host                           string `json:"host"`
-	CABundle                       string `json:"caBundle"`
-	BindUsername                   string `json:"bindUsername"`
-	BindPassword                   string `json:"bindPassword"`
-	UserSearchBase                 string `json:"userSearchBase"`
-	TestUserDN                     string `json:"testUserDN"`
-	TestUserCN                     string `json:"testUserCN"`
-	TestUserPassword               string `json:"testUserPassword"`
-	TestUserMailAttributeName      string `json:"testUserMailAttributeName"`
-	TestUserMailAttributeValue     string `json:"testUserMailAttributeValue"`
-	TestUserUniqueIDAttributeName  string `json:"testUserUniqueIDAttributeName"`
-	TestUserUniqueIDAttributeValue string `json:"testUserUniqueIDAttributeValue"`
+	Host                           string   `json:"host"`
+	CABundle                       string   `json:"caBundle"`
+	BindUsername                   string   `json:"bindUsername"`
+	BindPassword                   string   `json:"bindPassword"`
+	UserSearchBase                 string   `json:"userSearchBase"`
+	GroupSearchBase                string   `json:"groupSearchBase"`
+	TestUserDN                     string   `json:"testUserDN"`
+	TestUserCN                     string   `json:"testUserCN"`
+	TestUserPassword               string   `json:"testUserPassword"`
+	TestUserMailAttributeName      string   `json:"testUserMailAttributeName"`
+	TestUserMailAttributeValue     string   `json:"testUserMailAttributeValue"`
+	TestUserUniqueIDAttributeName  string   `json:"testUserUniqueIDAttributeName"`
+	TestUserUniqueIDAttributeValue string   `json:"testUserUniqueIDAttributeValue"`
+	TestUserDirectGroupsCNs        []string `json:"testUserDirectGroupsCNs"`
+	TestUserDirectGroupsDNs        []string `json:"testUserDirectGroupsDNs"` //nolint:golint // this is "distinguished names", not "DNS"
 }
 
 // ProxyEnv returns a set of environment variable strings (e.g., to combine with os.Environ()) which set up the configured test HTTP proxy.
@@ -240,14 +244,20 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 		BindUsername:                   needEnv(t, "PINNIPED_TEST_LDAP_BIND_ACCOUNT_USERNAME"),
 		BindPassword:                   needEnv(t, "PINNIPED_TEST_LDAP_BIND_ACCOUNT_PASSWORD"),
 		UserSearchBase:                 needEnv(t, "PINNIPED_TEST_LDAP_USERS_SEARCH_BASE"),
+		GroupSearchBase:                needEnv(t, "PINNIPED_TEST_LDAP_GROUPS_SEARCH_BASE"),
 		TestUserDN:                     needEnv(t, "PINNIPED_TEST_LDAP_USER_DN"),
 		TestUserCN:                     needEnv(t, "PINNIPED_TEST_LDAP_USER_CN"),
 		TestUserUniqueIDAttributeName:  needEnv(t, "PINNIPED_TEST_LDAP_USER_UNIQUE_ID_ATTRIBUTE_NAME"),
 		TestUserUniqueIDAttributeValue: needEnv(t, "PINNIPED_TEST_LDAP_USER_UNIQUE_ID_ATTRIBUTE_VALUE"),
 		TestUserMailAttributeName:      needEnv(t, "PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_NAME"),
 		TestUserMailAttributeValue:     needEnv(t, "PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_VALUE"),
+		TestUserDirectGroupsCNs:        filterEmpty(strings.Split(needEnv(t, "PINNIPED_TEST_LDAP_EXPECTED_DIRECT_GROUPS_CN"), ";")),
+		TestUserDirectGroupsDNs:        filterEmpty(strings.Split(needEnv(t, "PINNIPED_TEST_LDAP_EXPECTED_DIRECT_GROUPS_DN"), ";")),
 		TestUserPassword:               needEnv(t, "PINNIPED_TEST_LDAP_USER_PASSWORD"),
 	}
+
+	sort.Strings(result.SupervisorUpstreamLDAP.TestUserDirectGroupsCNs)
+	sort.Strings(result.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs)
 }
 
 func (e *TestEnv) HasCapability(cap Capability) bool {

@@ -145,16 +145,19 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 	now := metav1.NewTime(time.Now().UTC())
 
 	const (
-		testNamespace        = "test-namespace"
-		testName             = "test-name"
-		testSecretName       = "test-bind-secret"
-		testBindUsername     = "test-bind-username"
-		testBindPassword     = "test-bind-password"
-		testHost             = "ldap.example.com:123"
-		testUserSearchBase   = "test-user-search-base"
-		testUserSearchFilter = "test-user-search-filter"
-		testUsernameAttrName = "test-username-attr"
-		testUIDAttrName      = "test-uid-attr"
+		testNamespace         = "test-namespace"
+		testName              = "test-name"
+		testSecretName        = "test-bind-secret"
+		testBindUsername      = "test-bind-username"
+		testBindPassword      = "test-bind-password"
+		testHost              = "ldap.example.com:123"
+		testUserSearchBase    = "test-user-search-base"
+		testUserSearchFilter  = "test-user-search-filter"
+		testGroupSearchBase   = "test-group-search-base"
+		testGroupSearchFilter = "test-group-search-filter"
+		testUsernameAttrName  = "test-username-attr"
+		testGroupNameAttrName = "test-group-name-attr"
+		testUIDAttrName       = "test-uid-attr"
 	)
 
 	testValidSecretData := map[string][]byte{"username": []byte(testBindUsername), "password": []byte(testBindPassword)}
@@ -178,6 +181,13 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					UID:      testUIDAttrName,
 				},
 			},
+			GroupSearch: v1alpha1.LDAPIdentityProviderGroupSearch{
+				Base:   testGroupSearchBase,
+				Filter: testGroupSearchFilter,
+				Attributes: v1alpha1.LDAPIdentityProviderGroupSearchAttributes{
+					GroupName: testGroupNameAttrName,
+				},
+			},
 		},
 	}
 	editedValidUpstream := func(editFunc func(*v1alpha1.LDAPIdentityProvider)) *v1alpha1.LDAPIdentityProvider {
@@ -197,6 +207,11 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			Filter:            testUserSearchFilter,
 			UsernameAttribute: testUsernameAttrName,
 			UIDAttribute:      testUIDAttrName,
+		},
+		GroupSearch: upstreamldap.GroupSearchConfig{
+			Base:               testGroupSearchBase,
+			Filter:             testGroupSearchFilter,
+			GroupNameAttribute: testGroupNameAttrName,
 		},
 	}
 
@@ -438,6 +453,11 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 						UsernameAttribute: testUsernameAttrName,
 						UIDAttribute:      testUIDAttrName,
 					},
+					GroupSearch: upstreamldap.GroupSearchConfig{
+						Base:               testGroupSearchBase,
+						Filter:             testGroupSearchFilter,
+						GroupNameAttribute: testGroupNameAttrName,
+					},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
@@ -483,6 +503,11 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:            testUserSearchFilter,
 						UsernameAttribute: testUsernameAttrName,
 						UIDAttribute:      testUIDAttrName,
+					},
+					GroupSearch: upstreamldap.GroupSearchConfig{
+						Base:               testGroupSearchBase,
+						Filter:             testGroupSearchFilter,
+						GroupNameAttribute: testGroupNameAttrName,
 					},
 				},
 			},

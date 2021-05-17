@@ -278,7 +278,7 @@ func TestE2EFullIntegration(t *testing.T) {
 	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands.
 	t.Run("with Supervisor LDAP upstream IDP", func(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
-		expectedGroups := []string{} // LDAP groups are not implemented yet
+		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsCNs
 
 		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
 		library.CreateTestClusterRoleBinding(t,
@@ -315,6 +315,13 @@ func TestE2EFullIntegration(t *testing.T) {
 				Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
 					Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
 					UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
+				},
+			},
+			GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
+				Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
+				Filter: "", // use the default value of "member={}"
+				Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
+					GroupName: "", // use the default value of "cn"
 				},
 			},
 		}, idpv1alpha1.LDAPPhaseReady)
@@ -438,17 +445,10 @@ func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 	for _, g := range expectedGroups {
 		expectedGroupsAsEmptyInterfaces = append(expectedGroupsAsEmptyInterfaces, g)
 	}
-	require.Equal(t, expectedGroupsAsEmptyInterfaces, idTokenClaims[oidc.DownstreamGroupsClaim])
+	require.ElementsMatch(t, expectedGroupsAsEmptyInterfaces, idTokenClaims[oidc.DownstreamGroupsClaim])
 
-	expectedYAMLGroups := func() string {
-		var b strings.Builder
-		for _, g := range expectedGroups {
-			b.WriteString("\n")
-			b.WriteString(`      - `)
-			b.WriteString(g)
-		}
-		return b.String()
-	}()
+	expectedGroupsPlusAuthenticated := append([]string{}, expectedGroups...)
+	expectedGroupsPlusAuthenticated = append(expectedGroupsPlusAuthenticated, "system:authenticated")
 
 	// Confirm we are the right user according to Kube by calling the whoami API.
 	kubectlCmd3 := exec.CommandContext(ctx, "kubectl", "create", "-f", "-", "-o", "yaml", "--kubeconfig", kubeconfigPath)
@@ -456,28 +456,15 @@ func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 	kubectlCmd3.Stdin = strings.NewReader(here.Docf(`
 			apiVersion: identity.concierge.%s/v1alpha1
 			kind: WhoAmIRequest
-		`, env.APIGroupSuffix))
+	`, env.APIGroupSuffix))
 
 	kubectlOutput3, err := kubectlCmd3.CombinedOutput()
 	require.NoError(t, err)
 
-	require.Equal(t, here.Docf(`
-			apiVersion: identity.concierge.%s/v1alpha1
-			kind: WhoAmIRequest
-			metadata:
-			  creationTimestamp: null
-			spec: {}
-			status:
-			  kubernetesUserInfo:
-				user:
-				  groups:%s
-				  - system:authenticated
-				  username: %s
-		`, env.APIGroupSuffix, expectedYAMLGroups, expectedUsername),
-		string(kubectlOutput3))
+	whoAmI := deserializeWhoAmIRequest(t, string(kubectlOutput3), env.APIGroupSuffix)
+	require.Equal(t, expectedUsername, whoAmI.Status.KubernetesUserInfo.User.Username)
+	require.ElementsMatch(t, expectedGroupsPlusAuthenticated, whoAmI.Status.KubernetesUserInfo.User.Groups)
 
-	expectedGroupsPlusAuthenticated := append([]string{}, expectedGroups...)
-	expectedGroupsPlusAuthenticated = append(expectedGroupsPlusAuthenticated, "system:authenticated")
 	// Validate that `pinniped whoami` returns the correct identity.
 	assertWhoami(
 		ctx,

@@ -525,7 +525,7 @@ func TestSimultaneousRequestsOnSingleProvider(t *testing.T) {
 		require.NoError(t, result.err)
 		require.True(t, result.authenticated, "expected the user to be authenticated, but they were not")
 		require.Equal(t, &authenticator.Response{
-			User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+			User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 		}, result.response)
 	}
 }

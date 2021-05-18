@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net"
+	"reflect"
 	"strings"
 	"time"
 
@@ -222,7 +223,7 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context) (*v
 	}
 
 	if c.shouldHaveLoadBalancer(config) {
-		if err = c.ensureLoadBalancerIsStarted(ctx); err != nil {
+		if err = c.ensureLoadBalancerIsStarted(ctx, config); err != nil {
 			return nil, err
 		}
 	} else {
@@ -321,6 +322,18 @@ func (c *impersonatorConfigController) loadBalancerExists() (bool, error) {
 	return true, nil
 }
 
+func (c *impersonatorConfigController) loadBalancerNeedsUpdate(config *v1alpha1.ImpersonationProxySpec) (bool, error) {
+	lb, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedLoadBalancerServiceName)
+	if err != nil {
+		return false, err
+	}
+	if !reflect.DeepEqual(lb.Annotations, config.Service.Annotations) {
+		return true, nil
+	}
+	// TODO also check for loadBalancerIP
+	return false, nil
+}
+
 func (c *impersonatorConfigController) tlsSecretExists() (bool, *v1.Secret, error) {
 	secret, err := c.secretsInformer.Lister().Secrets(c.namespace).Get(c.tlsSecretName)
 	notFound := k8serrors.IsNotFound(err)
@@ -406,14 +419,7 @@ func (c *impersonatorConfigController) ensureImpersonatorIsStopped(shouldCloseEr
 	return stopErr
 }
 
-func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.Context) error {
-	running, err := c.loadBalancerExists()
-	if err != nil {
-		return err
-	}
-	if running {
-		return nil
-	}
+func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.Context, config *v1alpha1.ImpersonationProxySpec) error {
 	appNameLabel := c.labels[appLabelKey]
 	loadBalancer := v1.Service{
 		Spec: v1.ServiceSpec{
@@ -425,16 +431,33 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.C
 					Protocol:   v1.ProtocolTCP,
 				},
 			},
-			Selector: map[string]string{appLabelKey: appNameLabel},
+			LoadBalancerIP: config.Service.LoadBalancerIP,
+			Selector:       map[string]string{appLabelKey: appNameLabel},
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      c.generatedLoadBalancerServiceName,
-			Namespace: c.namespace,
-			Labels:    c.labels,
-			Annotations: map[string]string{
-				"service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout": "4000", // AWS' default is to time out after 60 seconds idle. Prevent that.
-			},
+			Name:        c.generatedLoadBalancerServiceName,
+			Namespace:   c.namespace,
+			Labels:      c.labels,
+			Annotations: config.Service.Annotations,
 		},
+	}
+	running, err := c.loadBalancerExists()
+	if err != nil {
+		return err
+	}
+	if running {
+		needsUpdate, err := c.loadBalancerNeedsUpdate(config)
+		if err != nil {
+			return err
+		}
+		if needsUpdate {
+			plog.Info("updating load balancer for impersonation proxy",
+				"service", c.generatedLoadBalancerServiceName,
+				"namespace", c.namespace)
+			_, err = c.k8sClient.CoreV1().Services(c.namespace).Update(ctx, &loadBalancer, metav1.UpdateOptions{})
+
+		}
+		return nil
 	}
 	plog.Info("creating load balancer for impersonation proxy",
 		"service", c.generatedLoadBalancerServiceName,

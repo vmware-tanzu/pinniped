@@ -191,6 +191,16 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	// this point depending on the capabilities of the cluster under test. We handle each possible case here.
 	switch {
 	case impersonatorShouldHaveStartedAutomaticallyByDefault && clusterSupportsLoadBalancers:
+		// configure the credential issuer spec to have the impersonation proxy in auto mode
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
+			ImpersonationProxy: conciergev1alpha.ImpersonationProxySpec{
+				Mode: conciergev1alpha.ImpersonationProxyModeAuto,
+				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
+					Type:        conciergev1alpha.ImpersonationProxyServiceTypeLoadBalancer,
+					Annotations: map[string]string{"service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout": "4000"},
+				},
+			},
+		})
 		// Auto mode should have decided that the impersonator will run and should have started a load balancer,
 		// and we will be able to use the load balancer to access the impersonator. (e.g. GKE, AKS, EKS)
 		// Check that load balancer has been automatically created by the impersonator's "auto" mode.

@@ -259,55 +259,53 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context) (*v
 	return credentialIssuerStrategyResult, nil
 }
 
-func (c *impersonatorConfigController) loadImpersonationProxyConfiguration() (*impersonator.Config, error) {
+func (c *impersonatorConfigController) loadImpersonationProxyConfiguration() (*v1alpha1.ImpersonationProxySpec, error) {
 	credIssuer, err := c.credIssuerInformer.Lister().Get(c.credentialIssuerResourceName)
-
-	if k8serrors.IsNotFound(err) {
-		plog.Info("Did not find impersonation proxy config: using default config values",
-			"credentialIssuer", c.credentialIssuerResourceName,
-		)
-		return impersonator.NewConfig(), nil
-	}
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get %s CredentialIssuer: %w", c.credentialIssuerResourceName, err)
 	}
 
-	config, err := impersonator.ConfigFromCredentialIssuer(credIssuer)
+	credIssuer = credIssuer.DeepCopy()
+	err = validateCredentialIssuerSpec(credIssuer)
 	if err != nil {
 		return nil, fmt.Errorf("invalid impersonator configuration: %v", err)
 	}
 	plog.Info("Read impersonation proxy config",
 		"credentialIssuer", c.credentialIssuerResourceName,
 	)
-	return config, nil
+	if credIssuer.Spec.ImpersonationProxy.Service.Type == "" {
+		credIssuer.Spec.ImpersonationProxy.Service.Type = v1alpha1.ImpersonationProxyServiceTypeLoadBalancer
+	}
+	return &credIssuer.Spec.ImpersonationProxy, nil
 }
 
-func (c *impersonatorConfigController) shouldHaveImpersonator(config *impersonator.Config) bool {
-	return c.enabledByAutoMode(config) || config.Mode == impersonator.ModeEnabled
+func (c *impersonatorConfigController) shouldHaveImpersonator(config *v1alpha1.ImpersonationProxySpec) bool {
+	return c.enabledByAutoMode(config) || config.Mode == v1alpha1.ImpersonationProxyModeEnabled
 }
 
-func (c *impersonatorConfigController) enabledByAutoMode(config *impersonator.Config) bool {
-	return config.Mode == impersonator.ModeAuto && !*c.hasControlPlaneNodes
+func (c *impersonatorConfigController) enabledByAutoMode(config *v1alpha1.ImpersonationProxySpec) bool {
+	return config.Mode == v1alpha1.ImpersonationProxyModeAuto && !*c.hasControlPlaneNodes
 }
 
-func (c *impersonatorConfigController) disabledByAutoMode(config *impersonator.Config) bool {
-	return config.Mode == impersonator.ModeAuto && *c.hasControlPlaneNodes
+func (c *impersonatorConfigController) disabledByAutoMode(config *v1alpha1.ImpersonationProxySpec) bool {
+	return config.Mode == v1alpha1.ImpersonationProxyModeAuto && *c.hasControlPlaneNodes
 }
 
-func (c *impersonatorConfigController) disabledExplicitly(config *impersonator.Config) bool {
-	return config.Mode == impersonator.ModeDisabled
+func (c *impersonatorConfigController) disabledExplicitly(config *v1alpha1.ImpersonationProxySpec) bool {
+	return config.Mode == v1alpha1.ImpersonationProxyModeDisabled
 }
 
-func (c *impersonatorConfigController) shouldHaveLoadBalancer(config *impersonator.Config) bool {
-	return c.shouldHaveImpersonator(config) && !config.HasEndpoint()
+func (c *impersonatorConfigController) shouldHaveLoadBalancer(config *v1alpha1.ImpersonationProxySpec) bool {
+	return c.shouldHaveImpersonator(config) && config.Service.Type == v1alpha1.ImpersonationProxyServiceTypeLoadBalancer
 }
 
-func (c *impersonatorConfigController) shouldHaveTLSSecret(config *impersonator.Config) bool {
+func (c *impersonatorConfigController) shouldHaveTLSSecret(config *v1alpha1.ImpersonationProxySpec) bool {
 	return c.shouldHaveImpersonator(config)
 }
 
 func (c *impersonatorConfigController) updateStrategy(ctx context.Context, strategy *v1alpha1.CredentialIssuerStrategy) error {
+	// TODO use informer client rather than api client for reading
 	return issuerconfig.UpdateStrategy(ctx, c.credentialIssuerResourceName, c.labels, c.pinnipedAPIClient, *strategy)
 }
 
@@ -652,15 +650,25 @@ func (c *impersonatorConfigController) createCASecret(ctx context.Context) (*cer
 	return impersonationCA, nil
 }
 
-func (c *impersonatorConfigController) findDesiredTLSCertificateName(config *impersonator.Config) (*certNameInfo, error) {
-	if config.HasEndpoint() {
+func (c *impersonatorConfigController) findDesiredTLSCertificateName(config *v1alpha1.ImpersonationProxySpec) (*certNameInfo, error) {
+	// possible valid options:
+	// - you have a loadbalancer and are autoconfiguring the endpoint -> get cert info based on load balancer ip/hostnome
+	// - you have a loadbalancer AND an external endpoint -> either should work since they should be the same
+	// - external endpoint no loadbalancer or other service -> use the endpoint config
+	// - external endpoint and ClusterIP -> use external endpoint?
+	//
+	// - is it legal to have a clusterip and no external endpoint???
+	if config.ExternalEndpoint != "" {
 		return c.findTLSCertificateNameFromEndpointConfig(config), nil
+	} else if config.Service.Type == v1alpha1.ImpersonationProxyServiceTypeClusterIP {
+		// c.findTLSCertificateNameFromClusterIPService()
+		// TODO implement this
 	}
 	return c.findTLSCertificateNameFromLoadBalancer()
 }
 
-func (c *impersonatorConfigController) findTLSCertificateNameFromEndpointConfig(config *impersonator.Config) *certNameInfo {
-	endpointMaybeWithPort := config.Endpoint
+func (c *impersonatorConfigController) findTLSCertificateNameFromEndpointConfig(config *v1alpha1.ImpersonationProxySpec) *certNameInfo {
+	endpointMaybeWithPort := config.ExternalEndpoint
 	endpointWithoutPort := strings.Split(endpointMaybeWithPort, ":")[0]
 	parsedAsIP := net.ParseIP(endpointWithoutPort)
 	if parsedAsIP != nil {
@@ -820,7 +828,7 @@ func (c *impersonatorConfigController) clearSignerCA() {
 	c.impersonationSigningCertProvider.UnsetCertKeyContent()
 }
 
-func (c *impersonatorConfigController) doSyncResult(nameInfo *certNameInfo, config *impersonator.Config, ca *certauthority.CA) *v1alpha1.CredentialIssuerStrategy {
+func (c *impersonatorConfigController) doSyncResult(nameInfo *certNameInfo, config *v1alpha1.ImpersonationProxySpec, ca *certauthority.CA) *v1alpha1.CredentialIssuerStrategy {
 	switch {
 	case c.disabledExplicitly(config):
 		return &v1alpha1.CredentialIssuerStrategy{
@@ -862,4 +870,17 @@ func (c *impersonatorConfigController) doSyncResult(nameInfo *certNameInfo, conf
 			},
 		}
 	}
+}
+
+func validateCredentialIssuerSpec(credIssuer *v1alpha1.CredentialIssuer) error {
+	// TODO check external endpoint for valid ip or hostname
+	// TODO if service type is none and externalendpoint is "" return error
+	switch mode := credIssuer.Spec.ImpersonationProxy.Mode; mode {
+	case v1alpha1.ImpersonationProxyModeAuto:
+	case v1alpha1.ImpersonationProxyModeDisabled:
+	case v1alpha1.ImpersonationProxyModeEnabled:
+	default:
+		return fmt.Errorf("invalid impersonation proxy mode %q, valid values are auto, disabled, or enabled", mode)
+	}
+	return nil
 }

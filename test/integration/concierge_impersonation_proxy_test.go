@@ -51,13 +51,12 @@ import (
 	"k8s.io/client-go/util/cert"
 	"k8s.io/client-go/util/certificate/csr"
 	"k8s.io/client-go/util/keyutil"
-	"sigs.k8s.io/yaml"
+	"k8s.io/client-go/util/retry"
 
 	conciergev1alpha "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	pinnipedconciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
-	"go.pinniped.dev/internal/concierge/impersonator"
 	"go.pinniped.dev/internal/httputil/roundtripper"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/testutil"
@@ -159,33 +158,25 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		return mostRecentTokenCredentialRequestResponse.Status.Credential
 	}
 
-	oldConfigMap, err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Get(ctx, impersonationProxyConfigMapName(env), metav1.GetOptions{})
-	if !k8serrors.IsNotFound(err) {
-		require.NoError(t, err) // other errors aside from NotFound are unexpected
-		t.Logf("stashing a pre-existing configmap %s", oldConfigMap.Name)
-		require.NoError(t, adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, impersonationProxyConfigMapName(env), metav1.DeleteOptions{}))
-	}
-	// At the end of the test, clean up the ConfigMap.
+	oldCredentialIssuer, err := adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuerName(env), metav1.GetOptions{})
+	require.NoError(t, err)
+	// At the end of the test, clean up the CredentialIssuer
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 
 		// Delete any version that was created by this test.
-		t.Logf("cleaning up configmap at end of test %s", impersonationProxyConfigMapName(env))
-		err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Delete(ctx, impersonationProxyConfigMapName(env), metav1.DeleteOptions{})
-		if !k8serrors.IsNotFound(err) {
-			require.NoError(t, err) // only not found errors are acceptable
-		}
-
-		// Only recreate it if it already existed at the start of this test.
-		if len(oldConfigMap.Data) != 0 {
-			t.Log(oldConfigMap)
-			oldConfigMap.UID = "" // cant have a UID yet
-			oldConfigMap.ResourceVersion = ""
-			t.Logf("restoring a pre-existing configmap %s", oldConfigMap.Name)
-			_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, oldConfigMap, metav1.CreateOptions{})
-			require.NoError(t, err)
-		}
+		t.Logf("cleaning up credentialissuer at end of test %s", credentialIssuerName(env))
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			newCredentialIssuer, err := adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuerName(env), metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+			oldCredentialIssuer.Spec.DeepCopyInto(&newCredentialIssuer.Spec)
+			_, err = adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Update(ctx, newCredentialIssuer, metav1.UpdateOptions{})
+			return err
+		})
+		require.NoError(t, err)
 
 		// If we are running on an environment that has a load balancer, expect that the
 		// CredentialIssuer will be updated eventually with a successful impersonation proxy frontend.
@@ -221,10 +212,11 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		requireDisabledStrategy(ctx, t, env, adminConciergeClient)
 
 		// Create configuration to make the impersonation proxy turn on with no endpoint (i.e. automatically create a load balancer).
-		configMap := impersonationProxyConfigMapForConfig(t, env, impersonator.Config{Mode: impersonator.ModeEnabled})
-		t.Logf("creating configmap %s", configMap.Name)
-		_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, &configMap, metav1.CreateOptions{})
-		require.NoError(t, err)
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
+			ImpersonationProxy: conciergev1alpha.ImpersonationProxySpec{
+				Mode: conciergev1alpha.ImpersonationProxyModeEnabled,
+			},
+		})
 
 	default:
 		// Auto mode should have decided that the impersonator will be disabled. We need to manually enable it.
@@ -246,13 +238,12 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		require.Truef(t, isErr, "wanted error %q to be service unavailable via squid error, but: %s", err, message)
 
 		// Create configuration to make the impersonation proxy turn on with a hard coded endpoint (without a load balancer).
-		configMap := impersonationProxyConfigMapForConfig(t, env, impersonator.Config{
-			Mode:     impersonator.ModeEnabled,
-			Endpoint: proxyServiceEndpoint,
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
+			ImpersonationProxy: conciergev1alpha.ImpersonationProxySpec{
+				Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+				ExternalEndpoint: proxyServiceEndpoint,
+			},
 		})
-		t.Logf("creating configmap %s", configMap.Name)
-		_, err = adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, &configMap, metav1.CreateOptions{})
-		require.NoError(t, err)
 	}
 
 	// At this point the impersonator should be starting/running. When it is ready, the CredentialIssuer's
@@ -1183,16 +1174,11 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 	t.Run("manually disabling the impersonation proxy feature", func(t *testing.T) {
 		// Update configuration to force the proxy to disabled mode
-		configMap := impersonationProxyConfigMapForConfig(t, env, impersonator.Config{Mode: impersonator.ModeDisabled})
-		if clusterSupportsLoadBalancers {
-			t.Logf("creating configmap %s", configMap.Name)
-			_, err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Create(ctx, &configMap, metav1.CreateOptions{})
-			require.NoError(t, err)
-		} else {
-			t.Logf("updating configmap %s", configMap.Name)
-			_, err := adminClient.CoreV1().ConfigMaps(env.ConciergeNamespace).Update(ctx, &configMap, metav1.UpdateOptions{})
-			require.NoError(t, err)
-		}
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
+			ImpersonationProxy: conciergev1alpha.ImpersonationProxySpec{
+				Mode: conciergev1alpha.ImpersonationProxyModeDisabled,
+			},
+		})
 
 		if clusterSupportsLoadBalancers {
 			// The load balancer should have been deleted when we disabled the impersonation proxy.
@@ -1450,19 +1436,19 @@ func kubeconfigProxyFunc(t *testing.T, squidProxyURL string) func(req *http.Requ
 	}
 }
 
-func impersonationProxyConfigMapForConfig(t *testing.T, env *library.TestEnv, config impersonator.Config) corev1.ConfigMap {
+func updateCredentialIssuer(ctx context.Context, t *testing.T, env *library.TestEnv, adminConciergeClient pinnipedconciergeclientset.Interface, spec conciergev1alpha.CredentialIssuerSpec) {
 	t.Helper()
 
-	configString, err := yaml.Marshal(config)
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		newCredentialIssuer, err := adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuerName(env), metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		spec.DeepCopyInto(&newCredentialIssuer.Spec)
+		_, err = adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Update(ctx, newCredentialIssuer, metav1.UpdateOptions{})
+		return err
+	})
 	require.NoError(t, err)
-	configMap := corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: impersonationProxyConfigMapName(env),
-		},
-		Data: map[string]string{
-			"config.yaml": string(configString),
-		}}
-	return configMap
 }
 
 func hasImpersonationProxyLoadBalancerService(ctx context.Context, env *library.TestEnv, client kubernetes.Interface) (bool, error) {
@@ -1474,10 +1460,6 @@ func hasImpersonationProxyLoadBalancerService(ctx context.Context, env *library.
 		return false, err
 	}
 	return service.Spec.Type == corev1.ServiceTypeLoadBalancer, nil
-}
-
-func impersonationProxyConfigMapName(env *library.TestEnv) string {
-	return env.ConciergeAppName + "-impersonation-proxy-config"
 }
 
 func impersonationProxyTLSSecretName(env *library.TestEnv) string {

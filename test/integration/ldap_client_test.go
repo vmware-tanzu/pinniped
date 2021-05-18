@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -70,7 +69,7 @@ func TestLDAPSearch(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(nil)),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -79,7 +78,7 @@ func TestLDAPSearch(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Base = "dc=pinniped,dc=dev" })),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -88,7 +87,7 @@ func TestLDAPSearch(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Filter = "(cn={})" })),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -100,7 +99,7 @@ func TestLDAPSearch(t *testing.T) {
 				p.UserSearch.Filter = "cn={}"
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "cn=pinny,ou=users,dc=pinniped,dc=dev", UID: "1000", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "cn=pinny,ou=users,dc=pinniped,dc=dev", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -111,7 +110,7 @@ func TestLDAPSearch(t *testing.T) {
 				p.UserSearch.Filter = "(|(cn={})(mail={}))"
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -122,7 +121,7 @@ func TestLDAPSearch(t *testing.T) {
 				p.UserSearch.Filter = "(|(cn={})(mail={}))"
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -131,7 +130,7 @@ func TestLDAPSearch(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.UIDAttribute = "dn" })),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: "cn=pinny,ou=users,dc=pinniped,dc=dev", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: "cn=pinny,ou=users,dc=pinniped,dc=dev", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -140,7 +139,7 @@ func TestLDAPSearch(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.UIDAttribute = "sn" })),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: "Seal", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: "Seal", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -149,7 +148,7 @@ func TestLDAPSearch(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.UsernameAttribute = "sn" })),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "Seal", UID: "1000", Groups: []string{}}, // note that the final answer has case preserved from the entry
+				User: &user.DefaultInfo{Name: "Seal", UID: "1000", Groups: []string{"ball-game-players", "seals"}}, // note that the final answer has case preserved from the entry
 			},
 		},
 		{
@@ -161,6 +160,75 @@ func TestLDAPSearch(t *testing.T) {
 				p.UserSearch.Filter = ""
 			})),
 			wantError: `must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`,
+		},
+		{
+			name:     "group search disabled",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.Base = ""
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+			},
+		},
+		{
+			name:     "group search base causes no groups to be found for user",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.Base = "ou=users,dc=pinniped,dc=dev" // there are no groups under this part of the tree
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+			},
+		},
+		{
+			name:     "using dn as the group name attribute",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.GroupNameAttribute = "dn"
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{
+					"cn=ball-game-players,ou=beach-groups,ou=groups,dc=pinniped,dc=dev",
+					"cn=seals,ou=groups,dc=pinniped,dc=dev",
+				}},
+			},
+		},
+		{
+			name:     "using some other custom group name attribute",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.GroupNameAttribute = "objectClass" // silly example, but still a meaningful test
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"groupOfNames", "groupOfNames"}},
+			},
+		},
+		{
+			name:     "using a more complex group search filter",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.Filter = "(&(&(objectClass=groupOfNames)(member={}))(cn=seals))"
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"seals"}},
+			},
+		},
+		{
+			name:     "using a group filter which causes no groups to be found for the user",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.Filter = "foobar={}" // foobar is not a valid attribute name for this LDAP server's schema
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+			},
 		},
 		{
 			name:      "when the bind user username is not a valid DN",
@@ -210,6 +278,13 @@ func TestLDAPSearch(t *testing.T) {
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Filter = "*" })),
 			wantError: `error searching for user "pinny": LDAP Result Code 201 "Filter Compile Error": ldap: error parsing filter`,
+		},
+		{
+			name:      "when the group search filter does not compile",
+			username:  "pinny",
+			password:  pinnyPassword,
+			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.GroupSearch.Filter = "*" })),
+			wantError: `error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 201 "Filter Compile Error": ldap: error parsing filter`,
 		},
 		{
 			name:     "when there are too many search results for the user",
@@ -294,6 +369,13 @@ func TestLDAPSearch(t *testing.T) {
 			wantError: `found 0 values for attribute "SN" while searching for user "pinny", but expected 1 result`,
 		},
 		{
+			name:      "when the GroupNameAttribute has the wrong case",
+			username:  "pinny",
+			password:  pinnyPassword,
+			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.GroupSearch.GroupNameAttribute = "CN" })), // this is case-sensitive
+			wantError: `error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": found 0 values for attribute "CN" while searching for user "cn=pinny,ou=users,dc=pinniped,dc=dev", but expected 1 result`,
+		},
+		{
 			name:     "when the UsernameAttribute is DN and has the wrong case",
 			username: "pinny",
 			password: pinnyPassword,
@@ -313,21 +395,44 @@ func TestLDAPSearch(t *testing.T) {
 			wantError: `found 0 values for attribute "DN" while searching for user "pinny", but expected 1 result`,
 		},
 		{
-			name:      "when the search base is invalid",
+			name:     "when the GroupNameAttribute is DN and has the wrong case",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.GroupNameAttribute = "DN" // dn must be lower-case
+			})),
+			wantError: `error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": found 0 values for attribute "DN" while searching for user "cn=pinny,ou=users,dc=pinniped,dc=dev", but expected 1 result`,
+		},
+		{
+			name:      "when the user search base is invalid",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Base = "invalid-base" })),
 			wantError: `error searching for user "pinny": LDAP Result Code 34 "Invalid DN Syntax": invalid DN`,
 		},
 		{
-			name:      "when the search base does not exist",
+			name:      "when the group search base is invalid",
+			username:  "pinny",
+			password:  pinnyPassword,
+			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.GroupSearch.Base = "invalid-base" })),
+			wantError: `error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 34 "Invalid DN Syntax": invalid DN`,
+		},
+		{
+			name:      "when the user search base does not exist",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Base = "ou=does-not-exist,dc=pinniped,dc=dev" })),
 			wantError: `error searching for user "pinny": LDAP Result Code 32 "No Such Object": `,
 		},
 		{
-			name:                "when the search base causes no search results",
+			name:      "when the group search base does not exist",
+			username:  "pinny",
+			password:  pinnyPassword,
+			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.GroupSearch.Base = "ou=does-not-exist,dc=pinniped,dc=dev" })),
+			wantError: `error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 32 "No Such Object": `,
+		},
+		{
+			name:                "when the user search base causes no search results",
 			username:            "pinny",
 			password:            pinnyPassword,
 			provider:            upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Base = "ou=groups,dc=pinniped,dc=dev" })),
@@ -425,7 +530,7 @@ func TestSimultaneousRequestsOnSingleProvider(t *testing.T) {
 		assert.NoError(t, result.err)
 		assert.True(t, result.authenticated, "expected the user to be authenticated, but they were not")
 		assert.Equal(t, &authenticator.Response{
-			User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+			User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 		}, result.response)
 	}
 }
@@ -448,6 +553,11 @@ func defaultProviderConfig(env *library.TestEnv, ldapHostPort string) *upstreaml
 			Filter:            "", // defaults to UsernameAttribute={}, i.e. "cn={}" in this case
 			UsernameAttribute: "cn",
 			UIDAttribute:      "uidNumber",
+		},
+		GroupSearch: upstreamldap.GroupSearchConfig{
+			Base:               "ou=groups,dc=pinniped,dc=dev",
+			Filter:             "", // defaults to member={}
+			GroupNameAttribute: "", // defaults to cn
 		},
 	}
 }

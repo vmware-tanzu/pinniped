@@ -78,3 +78,18 @@ func (mr *MockConnMockRecorder) Search(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Search", reflect.TypeOf((*MockConn)(nil).Search), arg0)
 }
+
+// SearchWithPaging mocks base method.
+func (m *MockConn) SearchWithPaging(arg0 *ldap.SearchRequest, arg1 uint32) (*ldap.SearchResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SearchWithPaging", arg0, arg1)
+	ret0, _ := ret[0].(*ldap.SearchResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SearchWithPaging indicates an expected call of SearchWithPaging.
+func (mr *MockConnMockRecorder) SearchWithPaging(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchWithPaging", reflect.TypeOf((*MockConn)(nil).SearchWithPaging), arg0, arg1)
+}

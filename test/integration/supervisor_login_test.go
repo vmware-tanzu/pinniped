@@ -45,6 +45,7 @@ func TestSupervisorLogin(t *testing.T) {
 		requestAuthorization                 func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, httpClient *http.Client)
 		wantDownstreamIDTokenSubjectToMatch  string
 		wantDownstreamIDTokenUsernameToMatch string
+		wantDownstreamIDTokenGroups          []string
 	}{
 		{
 			name: "oidc",
@@ -65,9 +66,10 @@ func TestSupervisorLogin(t *testing.T) {
 			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 		},
 		{
-			name: "ldap with email as username",
+			name: "ldap with email as username and groups names as DNs",
 			createIDP: func(t *testing.T) {
 				t.Helper()
 				secret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
@@ -92,6 +94,13 @@ func TestSupervisorLogin(t *testing.T) {
 							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
 						},
 					},
+					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
+						Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
+						Filter: "",
+						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
+							GroupName: "dn",
+						},
+					},
 				}, idpv1alpha1.LDAPPhaseReady)
 				expectedMsg := fmt.Sprintf(
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
@@ -114,9 +123,10 @@ func TestSupervisorLogin(t *testing.T) {
 			),
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue),
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
 		},
 		{
-			name: "ldap with CN as username ", // try another variation of configuration options
+			name: "ldap with CN as username and group names as CNs", // try another variation of configuration options
 			createIDP: func(t *testing.T) {
 				t.Helper()
 				secret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
@@ -141,6 +151,13 @@ func TestSupervisorLogin(t *testing.T) {
 							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
 						},
 					},
+					GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
+						Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
+						Filter: "",
+						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
+							GroupName: "cn",
+						},
+					},
 				}, idpv1alpha1.LDAPPhaseReady)
 				expectedMsg := fmt.Sprintf(
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
@@ -163,6 +180,7 @@ func TestSupervisorLogin(t *testing.T) {
 			),
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserDN),
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamLDAP.TestUserDirectGroupsCNs,
 		},
 	}
 	for _, test := range tests {
@@ -173,6 +191,7 @@ func TestSupervisorLogin(t *testing.T) {
 				test.requestAuthorization,
 				test.wantDownstreamIDTokenSubjectToMatch,
 				test.wantDownstreamIDTokenUsernameToMatch,
+				test.wantDownstreamIDTokenGroups,
 			)
 		})
 	}
@@ -207,7 +226,7 @@ func testSupervisorLogin(
 	t *testing.T,
 	createIDP func(t *testing.T),
 	requestAuthorization func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, httpClient *http.Client),
-	wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch string,
+	wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch string, wantDownstreamIDTokenGroups []string,
 ) {
 	env := library.IntegrationEnv(t)
 
@@ -350,7 +369,7 @@ func testSupervisorLogin(
 	expectedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "nonce", "rat", "username", "groups"}
 	verifyTokenResponse(t,
 		tokenResponse, discovery, downstreamOAuth2Config, nonceParam,
-		expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch)
+		expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch, wantDownstreamIDTokenGroups)
 
 	// token exchange on the original token
 	doTokenExchange(t, &downstreamOAuth2Config, tokenResponse, httpClient, discovery)
@@ -363,7 +382,7 @@ func testSupervisorLogin(
 	expectedIDTokenClaims = append(expectedIDTokenClaims, "at_hash")
 	verifyTokenResponse(t,
 		refreshedTokenResponse, discovery, downstreamOAuth2Config, "",
-		expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch)
+		expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch, wantDownstreamIDTokenGroups)
 
 	require.NotEqual(t, tokenResponse.AccessToken, refreshedTokenResponse.AccessToken)
 	require.NotEqual(t, tokenResponse.RefreshToken, refreshedTokenResponse.RefreshToken)
@@ -380,7 +399,7 @@ func verifyTokenResponse(
 	downstreamOAuth2Config oauth2.Config,
 	nonceParam nonce.Nonce,
 	expectedIDTokenClaims []string,
-	wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch string,
+	wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch string, wantDownstreamIDTokenGroups []string,
 ) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -414,6 +433,9 @@ func verifyTokenResponse(
 
 	// Check username claim of the ID token.
 	require.Regexp(t, wantDownstreamIDTokenUsernameToMatch, idTokenClaims["username"].(string))
+
+	// Check the groups claim.
+	require.ElementsMatch(t, wantDownstreamIDTokenGroups, idTokenClaims["groups"])
 
 	// Some light verification of the other tokens that were returned.
 	require.NotEmpty(t, tokenResponse.AccessToken)

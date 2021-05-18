@@ -2073,6 +2073,11 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
+				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+					ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+						Mode: v1alpha1.ImpersonationProxyModeAuto,
+					},
+				}, pinnipedInformerClient)
 				r.NoError(pinnipedAPIClient.Tracker().Add(&v1alpha1.CredentialIssuer{
 					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
 					Status:     v1alpha1.CredentialIssuerStatus{Strategies: []v1alpha1.CredentialIssuerStrategy{preExistingStrategy}},
@@ -2367,6 +2372,11 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				addLoadBalancerServiceToTracker(loadBalancerServiceName, kubeInformerClient)
 				addLoadBalancerServiceToTracker(loadBalancerServiceName, kubeAPIClient)
 				addSecretToTrackers(newEmptySecret(tlsSecretName), kubeAPIClient, kubeInformerClient)
+				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+					ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+						Mode: v1alpha1.ImpersonationProxyModeAuto,
+					},
+				}, pinnipedInformerClient)
 				startInformersAndController()
 				kubeAPIClient.PrependReactor("delete", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, fmt.Errorf("error on delete")
@@ -2582,6 +2592,11 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
+				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+					ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+						Mode: v1alpha1.ImpersonationProxyModeAuto,
+					},
+				}, pinnipedInformerClient)
 				pinnipedAPIClient.PrependReactor("create", "credentialissuers", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, fmt.Errorf("error on create")
 				})
@@ -2696,7 +2711,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				})
 			})
 		})
-	}, spec.Parallel(), spec.Report(report.Terminal{}))
+	}, spec.Report(report.Terminal{}))
 }
 
 type testQueue struct {

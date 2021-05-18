@@ -1498,6 +1498,36 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				})
 			})
 
+			when("the CredentialIssuer has a hostname specified and service type loadbalancer", func() {
+				const fakeHostname = "fake.example.com"
+				it.Before(func() {
+					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: fakeHostname,
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type: v1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
+							},
+						},
+					}, pinnipedInformerClient)
+					addNodeWithRoleToTracker("worker", kubeAPIClient)
+				})
+
+				it("starts the impersonator, generates a valid cert for the specified hostname, starts a loadbalancer", func() {
+					startInformersAndController()
+					r.NoError(runControllerSync())
+					r.Len(kubeAPIClient.Actions(), 4)
+					requireNodesListed(kubeAPIClient.Actions()[0])
+					requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
+					ca := requireCASecretWasCreated(kubeAPIClient.Actions()[2])
+					requireTLSSecretWasCreated(kubeAPIClient.Actions()[3], ca)
+					// Check that the server is running and that TLS certs that are being served are are for fakeHostname.
+					requireTLSServerIsRunning(ca, fakeHostname, map[string]string{fakeHostname + httpsPort: testServerAddr()})
+					requireCredentialIssuer(newSuccessStrategy(fakeHostname, ca))
+					requireSigningCertProviderHasLoadedCerts(signingCACertPEM, signingCAKeyPEM)
+				})
+			})
+
 			when("the CredentialIssuer has a endpoint which is an IP address with a port", func() {
 				const fakeIPWithPort = "127.0.0.1:3000"
 				it.Before(func() {
@@ -1549,6 +1579,36 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireNodesListed(kubeAPIClient.Actions()[0])
 					ca := requireCASecretWasCreated(kubeAPIClient.Actions()[1])
 					requireTLSSecretWasCreated(kubeAPIClient.Actions()[2], ca)
+					// Check that the server is running and that TLS certs that are being served are are for fakeHostnameWithPort.
+					requireTLSServerIsRunning(ca, fakeHostnameWithPort, map[string]string{fakeHostnameWithPort: testServerAddr()})
+					requireCredentialIssuer(newSuccessStrategy(fakeHostnameWithPort, ca))
+					requireSigningCertProviderHasLoadedCerts(signingCACertPEM, signingCAKeyPEM)
+				})
+			})
+
+			when("the CredentialIssuer has a endpoint which is a hostname with a port, service type loadbalancer", func() {
+				const fakeHostnameWithPort = "fake.example.com:3000"
+				it.Before(func() {
+					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: fakeHostnameWithPort,
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type: v1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
+							},
+						},
+					}, pinnipedInformerClient)
+					addNodeWithRoleToTracker("worker", kubeAPIClient)
+				})
+
+				it("starts the impersonator, starts the loadbalancer, generates a valid cert for the specified hostname", func() {
+					startInformersAndController()
+					r.NoError(runControllerSync())
+					r.Len(kubeAPIClient.Actions(), 4)
+					requireNodesListed(kubeAPIClient.Actions()[0])
+					requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
+					ca := requireCASecretWasCreated(kubeAPIClient.Actions()[2])
+					requireTLSSecretWasCreated(kubeAPIClient.Actions()[3], ca)
 					// Check that the server is running and that TLS certs that are being served are are for fakeHostnameWithPort.
 					requireTLSServerIsRunning(ca, fakeHostnameWithPort, map[string]string{fakeHostnameWithPort: testServerAddr()})
 					requireCredentialIssuer(newSuccessStrategy(fakeHostnameWithPort, ca))
@@ -2709,6 +2769,28 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireCredentialIssuer(newErrorStrategy(errString))
 					requireSigningCertProviderIsEmpty()
 				})
+			})
+		})
+
+		when("the impersonator is enabled but the service type is none and the external endpoint is empty", func() {
+			it.Before(func() {
+				addSecretToTrackers(signingCASecret, kubeInformerClient)
+				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+					ImpersonationProxy: v1alpha1.ImpersonationProxySpec{
+						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+						ExternalEndpoint: "",
+						Service: v1alpha1.ImpersonationProxyServiceSpec{
+							Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+						},
+					},
+				}, pinnipedInformerClient)
+				addNodeWithRoleToTracker("control-plane", kubeAPIClient)
+			})
+
+			it("returns a validation error", func() {
+				startInformersAndController()
+				r.EqualError(runControllerSync(), "invalid impersonator configuration: invalid impersonation proxy configuration: must specify an external endpoint or set a service type")
+				r.Len(kubeAPIClient.Actions(), 0)
 			})
 		})
 	}, spec.Report(report.Terminal{}))

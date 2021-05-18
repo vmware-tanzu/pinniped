@@ -656,8 +656,7 @@ func (c *impersonatorConfigController) findDesiredTLSCertificateName(config *v1a
 	// - you have a loadbalancer AND an external endpoint -> either should work since they should be the same
 	// - external endpoint no loadbalancer or other service -> use the endpoint config
 	// - external endpoint and ClusterIP -> use external endpoint?
-	//
-	// - is it legal to have a clusterip and no external endpoint???
+	// - clusterip and no external endpoint
 	if config.ExternalEndpoint != "" {
 		return c.findTLSCertificateNameFromEndpointConfig(config), nil
 	} else if config.Service.Type == v1alpha1.ImpersonationProxyServiceTypeClusterIP {
@@ -874,7 +873,11 @@ func (c *impersonatorConfigController) doSyncResult(nameInfo *certNameInfo, conf
 
 func validateCredentialIssuerSpec(credIssuer *v1alpha1.CredentialIssuer) error {
 	// TODO check external endpoint for valid ip or hostname
-	// TODO if service type is none and externalendpoint is "" return error
+	impersonationProxySpec := credIssuer.Spec.ImpersonationProxy
+	if impersonationProxySpec.Mode != v1alpha1.ImpersonationProxyModeDisabled &&
+		impersonationProxySpec.ExternalEndpoint == "" && impersonationProxySpec.Service.Type == v1alpha1.ImpersonationProxyServiceTypeNone {
+		return fmt.Errorf("invalid impersonation proxy configuration: must specify an external endpoint or set a service type")
+	}
 	switch mode := credIssuer.Spec.ImpersonationProxy.Mode; mode {
 	case v1alpha1.ImpersonationProxyModeAuto:
 	case v1alpha1.ImpersonationProxyModeDisabled:

@@ -334,10 +334,13 @@ func (c *impersonatorConfigController) loadBalancerNeedsUpdate(config *v1alpha1.
 	if err != nil {
 		return false, err
 	}
+	// TODO this will break if anything other than pinniped is adding annotations
 	if !reflect.DeepEqual(lb.Annotations, config.Service.Annotations) {
 		return true, nil
 	}
-	// TODO also check for loadBalancerIP
+	if lb.Spec.LoadBalancerIP != config.Service.LoadBalancerIP {
+		return true, nil
+	}
 	return false, nil
 }
 

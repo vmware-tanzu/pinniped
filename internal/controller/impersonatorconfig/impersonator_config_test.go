@@ -2112,6 +2112,65 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			})
 		})
 
+		when("requesting a load balancer via CredentialIssuer, then adding a static loadBalancerIP to the spec", func() {
+			it.Before(func() {
+				addSecretToTrackers(signingCASecret, kubeInformerClient)
+				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+						ExternalEndpoint: localhostIP,
+						Service: v1alpha1.ImpersonationProxyServiceSpec{
+							Type: v1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
+						},
+					},
+				}, pinnipedInformerClient)
+				addNodeWithRoleToTracker("worker", kubeAPIClient)
+			})
+
+			it("creates the load balancer without loadBalancerIP set, then adds it", func() {
+				startInformersAndController()
+
+				// Should have started in "enabled" mode with service type load balancer, so one is created.
+				r.NoError(runControllerSync())
+				r.Len(kubeAPIClient.Actions(), 4)
+				requireNodesListed(kubeAPIClient.Actions()[0])
+				lbService := requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
+				require.Equal(t, map[string]string(nil), lbService.Annotations) // there should be no annotations at first
+				require.Equal(t, "", lbService.Spec.LoadBalancerIP)
+				ca := requireCASecretWasCreated(kubeAPIClient.Actions()[2])
+				requireTLSSecretWasCreated(kubeAPIClient.Actions()[3], ca)
+				requireTLSServerIsRunning(ca, testServerAddr(), nil)
+				requireCredentialIssuer(newSuccessStrategy(localhostIP, ca))
+				requireSigningCertProviderHasLoadedCerts(signingCACertPEM, signingCAKeyPEM)
+
+				// Simulate the informer cache's background update from its watch.
+				addObjectFromCreateActionToInformerAndWait(kubeAPIClient.Actions()[1], kubeInformers.Core().V1().Services())
+				addObjectFromCreateActionToInformerAndWait(kubeAPIClient.Actions()[2], kubeInformers.Core().V1().Secrets())
+				addObjectFromCreateActionToInformerAndWait(kubeAPIClient.Actions()[3], kubeInformers.Core().V1().Secrets())
+
+				// Add annotations to the spec.
+				loadBalancerIP := "1.2.3.4"
+				updateCredentialIssuerInInformerAndWait(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+						ExternalEndpoint: localhostIP,
+						Service: v1alpha1.ImpersonationProxyServiceSpec{
+							Type:           v1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
+							LoadBalancerIP: loadBalancerIP,
+						},
+					},
+				}, pinnipedInformers.Config().V1alpha1().CredentialIssuers())
+
+				r.NoError(runControllerSync())
+				r.Len(kubeAPIClient.Actions(), 5) // one more item to update the loadbalancer
+				lbService = requireLoadBalancerWasUpdated(kubeAPIClient.Actions()[4])
+				require.Equal(t, loadBalancerIP, lbService.Spec.LoadBalancerIP)
+				requireTLSServerIsRunning(ca, testServerAddr(), nil)
+				requireCredentialIssuer(newSuccessStrategy(localhostIP, ca))
+				requireSigningCertProviderHasLoadedCerts(signingCACertPEM, signingCAKeyPEM)
+			})
+		})
+
 		when("sync is called more than once", func() {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)

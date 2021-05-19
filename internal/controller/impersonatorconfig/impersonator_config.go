@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/validation"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -262,23 +264,28 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context) (*v
 
 func (c *impersonatorConfigController) loadImpersonationProxyConfiguration() (*v1alpha1.ImpersonationProxySpec, error) {
 	credIssuer, err := c.credIssuerInformer.Lister().Get(c.credentialIssuerResourceName)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get %s CredentialIssuer: %w", c.credentialIssuerResourceName, err)
 	}
 
-	credIssuer = credIssuer.DeepCopy()
-	err = validateCredentialIssuerSpec(credIssuer)
-	if err != nil {
-		return nil, fmt.Errorf("invalid impersonator configuration: %v", err)
+	// Make a copy of the spec since we got this object from informer cache.
+	spec := credIssuer.Spec.DeepCopy().ImpersonationProxy
+	if spec == nil {
+		return nil, fmt.Errorf("could not load CredentialIssuer: spec.impersonationProxy is nil")
+	}
+
+	// Default service type to LoadBalancer (this is normally already done via CRD defaulting).
+	if spec.Service.Type == "" {
+		spec.Service.Type = v1alpha1.ImpersonationProxyServiceTypeLoadBalancer
+	}
+
+	if err := validateCredentialIssuerSpec(spec); err != nil {
+		return nil, fmt.Errorf("could not load CredentialIssuer spec.impersonationProxy: %w", err)
 	}
 	plog.Info("Read impersonation proxy config",
 		"credentialIssuer", c.credentialIssuerResourceName,
 	)
-	if credIssuer.Spec.ImpersonationProxy.Service.Type == "" {
-		credIssuer.Spec.ImpersonationProxy.Service.Type = v1alpha1.ImpersonationProxyServiceTypeLoadBalancer
-	}
-	return &credIssuer.Spec.ImpersonationProxy, nil
+	return spec, nil
 }
 
 func (c *impersonatorConfigController) shouldHaveImpersonator(config *v1alpha1.ImpersonationProxySpec) bool {
@@ -455,7 +462,7 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.C
 				"service", c.generatedLoadBalancerServiceName,
 				"namespace", c.namespace)
 			_, err = c.k8sClient.CoreV1().Services(c.namespace).Update(ctx, &loadBalancer, metav1.UpdateOptions{})
-
+			// TODO: make sure this error is handled if necessary
 		}
 		return nil
 	}
@@ -894,19 +901,80 @@ func (c *impersonatorConfigController) doSyncResult(nameInfo *certNameInfo, conf
 	}
 }
 
-func validateCredentialIssuerSpec(credIssuer *v1alpha1.CredentialIssuer) error {
-	// TODO check external endpoint for valid ip or hostname
-	impersonationProxySpec := credIssuer.Spec.ImpersonationProxy
-	if impersonationProxySpec.Mode != v1alpha1.ImpersonationProxyModeDisabled &&
-		impersonationProxySpec.ExternalEndpoint == "" && impersonationProxySpec.Service.Type == v1alpha1.ImpersonationProxyServiceTypeNone {
-		return fmt.Errorf("invalid impersonation proxy configuration: must specify an external endpoint or set a service type")
-	}
-	switch mode := credIssuer.Spec.ImpersonationProxy.Mode; mode {
-	case v1alpha1.ImpersonationProxyModeAuto:
+func validateCredentialIssuerSpec(spec *v1alpha1.ImpersonationProxySpec) error {
+	// Validate that the mode is one of our known values.
+	switch spec.Mode {
 	case v1alpha1.ImpersonationProxyModeDisabled:
+	case v1alpha1.ImpersonationProxyModeAuto:
 	case v1alpha1.ImpersonationProxyModeEnabled:
 	default:
-		return fmt.Errorf("invalid impersonation proxy mode %q, valid values are auto, disabled, or enabled", mode)
+		return fmt.Errorf("invalid proxy mode %q (expected auto, disabled, or enabled)", spec.Mode)
 	}
+
+	// If disabled, ignore all other fields and consider the configuration valid.
+	if spec.Mode == v1alpha1.ImpersonationProxyModeDisabled {
+		return nil
+	}
+
+	// Validate that the service type is one of our known values.
+	switch spec.Service.Type {
+	case v1alpha1.ImpersonationProxyServiceTypeNone:
+	case v1alpha1.ImpersonationProxyServiceTypeLoadBalancer:
+	case v1alpha1.ImpersonationProxyServiceTypeClusterIP:
+	default:
+		return fmt.Errorf("invalid service type %q (expected None, LoadBalancer, or ClusterIP)", spec.Service.Type)
+	}
+
+	// If specified, validate that the LoadBalancerIP is a valid IPv4 or IPv6 address.
+	if ip := spec.Service.LoadBalancerIP; ip != "" && len(validation.IsValidIP(ip)) > 0 {
+		return fmt.Errorf("invalid LoadBalancerIP %q", spec.Service.LoadBalancerIP)
+	}
+
+	// If service is type "None", a non-empty external endpoint must be specified.
+	if spec.ExternalEndpoint == "" && spec.Service.Type == v1alpha1.ImpersonationProxyServiceTypeNone {
+		return fmt.Errorf("externalEndpoint must be set when service.type is None")
+	}
+
+	if err := validateExternalEndpoint(spec.ExternalEndpoint); err != nil {
+		return fmt.Errorf("invalid ExternalEndpoint %q: %w", spec.ExternalEndpoint, err)
+	}
+
 	return nil
+}
+
+func validateExternalEndpoint(endpoint string) error {
+	// Empty string is valid (no external endpoint, default to service name)
+	if endpoint == "" {
+		return nil
+	}
+
+	// Try parsing it both with and without an implicit port 443 at the end.
+	host, port, err := net.SplitHostPort(endpoint)
+
+	// If we got an error parsing the raw input, try adding an implicit port 443.
+	if err != nil {
+		host, port, err = net.SplitHostPort(net.JoinHostPort(endpoint, "443"))
+	}
+
+	// If there's still an error, fail now.
+	if err != nil {
+		return err
+	}
+
+	portInt, _ := strconv.Atoi(port)
+	if len(validation.IsValidPortNum(portInt)) > 0 {
+		return fmt.Errorf("invalid port %q", port)
+	}
+
+	// Check if the host part is a valid IP address.
+	if len(validation.IsValidIP(host)) == 0 {
+		return nil
+	}
+
+	// Check if the host part is a valid hostname according to RFC 1123.
+	if len(validation.IsDNS1123Subdomain(host)) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf("host %q is not a valid hostname or IP address", host)
 }

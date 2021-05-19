@@ -193,7 +193,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	case impersonatorShouldHaveStartedAutomaticallyByDefault && clusterSupportsLoadBalancers:
 		// configure the credential issuer spec to have the impersonation proxy in auto mode
 		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: conciergev1alpha.ImpersonationProxySpec{
+			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
 				Mode: conciergev1alpha.ImpersonationProxyModeAuto,
 				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
 					Type:        conciergev1alpha.ImpersonationProxyServiceTypeLoadBalancer,
@@ -223,7 +223,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// Create configuration to make the impersonation proxy turn on with no endpoint (i.e. automatically create a load balancer).
 		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: conciergev1alpha.ImpersonationProxySpec{
+			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
 				Mode: conciergev1alpha.ImpersonationProxyModeEnabled,
 			},
 		})
@@ -249,7 +249,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// Create configuration to make the impersonation proxy turn on with a hard coded endpoint (without a load balancer).
 		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: conciergev1alpha.ImpersonationProxySpec{
+			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
 				Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
 				ExternalEndpoint: proxyServiceEndpoint,
 			},
@@ -1185,7 +1185,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	t.Run("manually disabling the impersonation proxy feature", func(t *testing.T) {
 		// Update configuration to force the proxy to disabled mode
 		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: conciergev1alpha.ImpersonationProxySpec{
+			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
 				Mode: conciergev1alpha.ImpersonationProxyModeDisabled,
 			},
 		})

@@ -25,7 +25,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	kubeinformers "k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -45,8 +44,6 @@ func TestWebhook(t *testing.T) {
 
 	user, otherUser, colonUser, noGroupUser, oneGroupUser, passwordUndefinedUser, emptyPasswordUser, invalidPasswordHashUser, undefinedGroupsUser :=
 		"some-user", "other-user", "colon-user", "no-group-user", "one-group-user", "password-undefined-user", "empty-password-user", "invalid-password-hash-user", "undefined-groups-user"
-	uid, otherUID, colonUID, noGroupUID, oneGroupUID, passwordUndefinedUID, emptyPasswordUID, invalidPasswordHashUID, undefinedGroupsUID :=
-		"some-uid", "other-uid", "colon-uid", "no-group-uid", "one-group-uid", "password-undefined-uid", "empty-password-uid", "invalid-password-hash-uid", "undefined-groups-uid"
 	password, otherPassword, colonPassword, noGroupPassword, oneGroupPassword, undefinedGroupsPassword :=
 		"some-password", "other-password", "some-:-password", "no-group-password", "one-group-password", "undefined-groups-password"
 
@@ -54,16 +51,15 @@ func TestWebhook(t *testing.T) {
 	groups := group0 + " , " + group1
 
 	kubeClient := kubernetesfake.NewSimpleClientset()
-	addSecretToFakeClientTracker(t, kubeClient, user, uid, password, groups)
-	addSecretToFakeClientTracker(t, kubeClient, otherUser, otherUID, otherPassword, groups)
-	addSecretToFakeClientTracker(t, kubeClient, colonUser, colonUID, colonPassword, groups)
-	addSecretToFakeClientTracker(t, kubeClient, noGroupUser, noGroupUID, noGroupPassword, "")
-	addSecretToFakeClientTracker(t, kubeClient, oneGroupUser, oneGroupUID, oneGroupPassword, group0)
-	addSecretToFakeClientTracker(t, kubeClient, emptyPasswordUser, emptyPasswordUID, "", groups)
+	addSecretToFakeClientTracker(t, kubeClient, user, password, groups)
+	addSecretToFakeClientTracker(t, kubeClient, otherUser, otherPassword, groups)
+	addSecretToFakeClientTracker(t, kubeClient, colonUser, colonPassword, groups)
+	addSecretToFakeClientTracker(t, kubeClient, noGroupUser, noGroupPassword, "")
+	addSecretToFakeClientTracker(t, kubeClient, oneGroupUser, oneGroupPassword, group0)
+	addSecretToFakeClientTracker(t, kubeClient, emptyPasswordUser, "", groups)
 
 	require.NoError(t, kubeClient.Tracker().Add(&corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			UID:       types.UID(passwordUndefinedUID),
 			Name:      passwordUndefinedUser,
 			Namespace: namespace,
 		},
@@ -77,7 +73,6 @@ func TestWebhook(t *testing.T) {
 
 	require.NoError(t, kubeClient.Tracker().Add(&corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			UID:       types.UID(undefinedGroupsUID),
 			Name:      undefinedGroupsUser,
 			Namespace: namespace,
 		},
@@ -88,7 +83,6 @@ func TestWebhook(t *testing.T) {
 
 	require.NoError(t, kubeClient.Tracker().Add(&corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			UID:       types.UID(invalidPasswordHashUID),
 			Name:      invalidPasswordHashUser,
 			Namespace: namespace,
 		},
@@ -135,7 +129,7 @@ func TestWebhook(t *testing.T) {
 			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(user + ":" + password) },
 			wantStatus:  http.StatusOK,
 			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
-			wantBody:    authenticatedResponseJSON(user, uid, []string{group0, group1}),
+			wantBody:    authenticatedResponseJSON(user, []string{group0, group1}),
 		},
 		{
 			name:        "success for a user who belongs to one groups",
@@ -145,7 +139,7 @@ func TestWebhook(t *testing.T) {
 			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(oneGroupUser + ":" + oneGroupPassword) },
 			wantStatus:  http.StatusOK,
 			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
-			wantBody:    authenticatedResponseJSON(oneGroupUser, oneGroupUID, []string{group0}),
+			wantBody:    authenticatedResponseJSON(oneGroupUser, []string{group0}),
 		},
 		{
 			name:        "success for a user who belongs to no groups",
@@ -155,7 +149,7 @@ func TestWebhook(t *testing.T) {
 			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(noGroupUser + ":" + noGroupPassword) },
 			wantStatus:  http.StatusOK,
 			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
-			wantBody:    authenticatedResponseJSON(noGroupUser, noGroupUID, nil),
+			wantBody:    authenticatedResponseJSON(noGroupUser, nil),
 		},
 		{
 			name:        "wrong username for password",
@@ -197,7 +191,7 @@ func TestWebhook(t *testing.T) {
 			},
 			wantStatus:  http.StatusOK,
 			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
-			wantBody:    authenticatedResponseJSON(undefinedGroupsUser, undefinedGroupsUID, nil),
+			wantBody:    authenticatedResponseJSON(undefinedGroupsUser, nil),
 		},
 		{
 			name:        "when a user has empty string as their password",
@@ -255,7 +249,7 @@ func TestWebhook(t *testing.T) {
 			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(colonUser + ":" + colonPassword) },
 			wantStatus:  http.StatusOK,
 			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
-			wantBody:    authenticatedResponseJSON(colonUser, colonUID, []string{group0, group1}),
+			wantBody:    authenticatedResponseJSON(colonUser, []string{group0, group1}),
 		},
 		{
 			name:    "bad TokenReview group",
@@ -357,7 +351,7 @@ func TestWebhook(t *testing.T) {
 			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(user + ":" + password) },
 			wantStatus:  http.StatusOK,
 			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
-			wantBody:    authenticatedResponseJSON(user, uid, []string{group0, group1}),
+			wantBody:    authenticatedResponseJSON(user, []string{group0, group1}),
 		},
 		{
 			name:   "success when there are multiple accepts and one of them is */*",
@@ -370,7 +364,7 @@ func TestWebhook(t *testing.T) {
 			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(user + ":" + password) },
 			wantStatus:  http.StatusOK,
 			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
-			wantBody:    authenticatedResponseJSON(user, uid, []string{group0, group1}),
+			wantBody:    authenticatedResponseJSON(user, []string{group0, group1}),
 		},
 		{
 			name:   "success when there are multiple accepts and one of them is application/*",
@@ -383,7 +377,7 @@ func TestWebhook(t *testing.T) {
 			body:        func() (io.ReadCloser, error) { return newTokenReviewBody(user + ":" + password) },
 			wantStatus:  http.StatusOK,
 			wantHeaders: map[string][]string{"Content-Type": {"application/json"}},
-			wantBody:    authenticatedResponseJSON(user, uid, []string{group0, group1}),
+			wantBody:    authenticatedResponseJSON(user, []string{group0, group1}),
 		},
 		{
 			name:       "bad body",
@@ -538,7 +532,7 @@ func unauthenticatedResponseJSON() *authenticationv1beta1.TokenReview {
 	}
 }
 
-func authenticatedResponseJSON(user, uid string, groups []string) *authenticationv1beta1.TokenReview {
+func authenticatedResponseJSON(user string, groups []string) *authenticationv1beta1.TokenReview {
 	return &authenticationv1beta1.TokenReview{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "TokenReview",
@@ -549,19 +543,17 @@ func authenticatedResponseJSON(user, uid string, groups []string) *authenticatio
 			User: authenticationv1beta1.UserInfo{
 				Username: user,
 				Groups:   groups,
-				UID:      uid,
 			},
 		},
 	}
 }
 
-func addSecretToFakeClientTracker(t *testing.T, kubeClient *kubernetesfake.Clientset, username, uid, password, groups string) {
+func addSecretToFakeClientTracker(t *testing.T, kubeClient *kubernetesfake.Clientset, username, password, groups string) {
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 	require.NoError(t, err)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			UID:       types.UID(uid),
 			Name:      username,
 			Namespace: namespace,
 		},

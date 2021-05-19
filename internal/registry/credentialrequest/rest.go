@@ -101,7 +101,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		traceFailureWithError(t, "token authentication", err)
 		return failureResponse(), nil
 	}
-	if userInfo == nil || userInfo.GetName() == "" {
+	if ok := isUserInfoValid(userInfo); !ok {
 		traceSuccess(t, userInfo, false)
 		return failureResponse(), nil
 	}
@@ -169,13 +169,29 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 	return credentialRequest, nil
 }
 
+func isUserInfoValid(userInfo user.Info) bool {
+	switch {
+	case userInfo == nil, // must be non-nil
+		len(userInfo.GetName()) == 0,  // must have a username, groups are optional
+		len(userInfo.GetUID()) != 0,   // certs cannot assert UID
+		len(userInfo.GetExtra()) != 0: // certs cannot assert extra
+		return false
+
+	default:
+		return true
+	}
+}
+
 func traceSuccess(t *trace.Trace, userInfo user.Info, authenticated bool) {
 	userID := "<none>"
+	hasExtra := false
 	if userInfo != nil {
 		userID = userInfo.GetUID()
+		hasExtra = len(userInfo.GetExtra()) > 0
 	}
 	t.Step("success",
 		trace.Field{Key: "userID", Value: userID},
+		trace.Field{Key: "hasExtra", Value: hasExtra},
 		trace.Field{Key: "authenticated", Value: authenticated},
 	)
 }

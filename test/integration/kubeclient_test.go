@@ -228,6 +228,11 @@ func TestKubeClientOwnerRef(t *testing.T) {
 				GenerateName:    "owner-ref-test-",
 				OwnerReferences: nil, // no owner refs set
 			},
+			Spec: conciergeconfigv1alpha1.CredentialIssuerSpec{
+				ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+					Mode: conciergeconfigv1alpha1.ImpersonationProxyModeDisabled,
+				},
+			},
 		},
 		metav1.CreateOptions{},
 	)

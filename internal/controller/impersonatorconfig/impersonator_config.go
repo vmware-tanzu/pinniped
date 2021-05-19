@@ -462,7 +462,7 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.C
 				"service", c.generatedLoadBalancerServiceName,
 				"namespace", c.namespace)
 			_, err = c.k8sClient.CoreV1().Services(c.namespace).Update(ctx, &loadBalancer, metav1.UpdateOptions{})
-			// TODO: make sure this error is handled if necessary
+			return err
 		}
 		return nil
 	}
@@ -689,10 +689,10 @@ func (c *impersonatorConfigController) findDesiredTLSCertificateName(config *v1a
 	// - clusterip and no external endpoint
 	if config.ExternalEndpoint != "" {
 		return c.findTLSCertificateNameFromEndpointConfig(config), nil
-	} else if config.Service.Type == v1alpha1.ImpersonationProxyServiceTypeClusterIP {
-		// c.findTLSCertificateNameFromClusterIPService()
-		// TODO implement this
-	}
+	} // else if config.Service.Type == v1alpha1.ImpersonationProxyServiceTypeClusterIP {
+	//	// c.findTLSCertificateNameFromClusterIPService()
+	//	// TODO implement this
+	//}
 	return c.findTLSCertificateNameFromLoadBalancer()
 }
 

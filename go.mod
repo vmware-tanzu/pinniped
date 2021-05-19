@@ -34,8 +34,8 @@ require (
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d
 	gopkg.in/square/go-jose.v2 v2.5.1
-	k8s.io/api v0.21.0
-	k8s.io/apimachinery v0.21.0
+	k8s.io/api v0.21.1
+	k8s.io/apimachinery v0.21.1
 	k8s.io/apiserver v0.21.0
 	k8s.io/client-go v0.21.0
 	k8s.io/component-base v0.21.0

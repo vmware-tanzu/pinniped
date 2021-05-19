@@ -5,7 +5,11 @@ package issuerconfig
 
 import (
 	"context"
+	"fmt"
 	"sort"
+
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	"go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
@@ -26,6 +30,23 @@ func UpdateStrategy(ctx context.Context,
 		pinnipedAPIClient,
 		func(configToUpdate *v1alpha1.CredentialIssuerStatus) { mergeStrategy(configToUpdate, strategy) },
 	)
+}
+
+// Update a strategy on an existing CredentialIssuer, merging into any existing strategy entries.
+func Update(ctx context.Context, client versioned.Interface, issuer *v1alpha1.CredentialIssuer, strategy v1alpha1.CredentialIssuerStrategy) error {
+	// Update the existing object to merge in the new strategy.
+	updated := issuer.DeepCopy()
+	mergeStrategy(&updated.Status, strategy)
+
+	// If the status has not changed, we're done.
+	if apiequality.Semantic.DeepEqual(issuer.Status, updated.Status) {
+		return nil
+	}
+
+	if _, err := client.ConfigV1alpha1().CredentialIssuers().UpdateStatus(ctx, updated, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("failed to update CredentialIssuer status: %w", err)
+	}
+	return nil
 }
 
 func mergeStrategy(configToUpdate *v1alpha1.CredentialIssuerStatus, strategy v1alpha1.CredentialIssuerStrategy) {

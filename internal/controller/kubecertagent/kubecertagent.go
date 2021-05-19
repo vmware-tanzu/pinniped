@@ -32,6 +32,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	configv1alpha1informers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controllerlib"
@@ -101,6 +102,7 @@ type agentController struct {
 	agentDeployments     appsv1informers.DeploymentInformer
 	agentPods            corev1informers.PodInformer
 	kubePublicConfigMaps corev1informers.ConfigMapInformer
+	credentialIssuers    configv1alpha1informers.CredentialIssuerInformer
 	executor             PodCommandExecutor
 	dynamicCertProvider  dynamiccert.Private
 	clock                clock.Clock
@@ -129,6 +131,7 @@ func NewAgentController(
 	agentDeployments appsv1informers.DeploymentInformer,
 	agentPods corev1informers.PodInformer,
 	kubePublicConfigMaps corev1informers.ConfigMapInformer,
+	credentialIssuers configv1alpha1informers.CredentialIssuerInformer,
 	dynamicCertProvider dynamiccert.Private,
 ) controllerlib.Controller {
 	return newAgentController(
@@ -138,6 +141,7 @@ func NewAgentController(
 		agentDeployments,
 		agentPods,
 		kubePublicConfigMaps,
+		credentialIssuers,
 		NewPodCommandExecutor(client.JSONConfig, client.Kubernetes),
 		dynamicCertProvider,
 		&clock.RealClock{},
@@ -153,6 +157,7 @@ func newAgentController(
 	agentDeployments appsv1informers.DeploymentInformer,
 	agentPods corev1informers.PodInformer,
 	kubePublicConfigMaps corev1informers.ConfigMapInformer,
+	credentialIssuers configv1alpha1informers.CredentialIssuerInformer,
 	podCommandExecutor PodCommandExecutor,
 	dynamicCertProvider dynamiccert.Private,
 	clock clock.Clock,
@@ -170,6 +175,7 @@ func newAgentController(
 				agentDeployments:     agentDeployments,
 				agentPods:            agentPods,
 				kubePublicConfigMaps: kubePublicConfigMaps,
+				credentialIssuers:    credentialIssuers,
 				executor:             podCommandExecutor,
 				dynamicCertProvider:  dynamicCertProvider,
 				clock:                clock,
@@ -206,6 +212,13 @@ func newAgentController(
 				}),
 				controllerlib.InformerOption{},
 			),
+			controllerlib.WithInformer(
+				credentialIssuers,
+				pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
+					return obj.GetName() == cfg.CredentialIssuerName
+				}),
+				controllerlib.InformerOption{},
+			),
 			// Be sure to run once even to make sure the CredentialIssuer is updated if there are no controller manager
 			// pods. We should be able to pass an empty key since we don't use the key in the sync (we sync
 			// the world).
@@ -216,11 +229,17 @@ func newAgentController(
 
 // Sync implements controllerlib.Syncer.
 func (c *agentController) Sync(ctx controllerlib.Context) error {
+	// Load the CredentialIssuer that we'll update with status.
+	credIssuer, err := c.credentialIssuers.Lister().Get(c.cfg.CredentialIssuerName)
+	if err != nil {
+		return fmt.Errorf("could not get CredentialIssuer to update: %w", err)
+	}
+
 	// Find the latest healthy kube-controller-manager Pod in kube-system..
 	controllerManagerPods, err := c.kubeSystemPods.Lister().Pods(ControllerManagerNamespace).List(controllerManagerLabels)
 	if err != nil {
 		err := fmt.Errorf("could not list controller manager pods: %w", err)
-		return c.failStrategyAndErr(ctx.Context, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
+		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
 	}
 	newestControllerManager := newestRunningPod(controllerManagerPods)
 
@@ -228,19 +247,19 @@ func (c *agentController) Sync(ctx controllerlib.Context) error {
 	// the CredentialIssuer.
 	if newestControllerManager == nil {
 		err := fmt.Errorf("could not find a healthy kube-controller-manager pod (%s)", pluralize(controllerManagerPods))
-		return c.failStrategyAndErr(ctx.Context, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
+		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
 	}
 
 	if err := c.createOrUpdateDeployment(ctx, newestControllerManager); err != nil {
 		err := fmt.Errorf("could not ensure agent deployment: %w", err)
-		return c.failStrategyAndErr(ctx.Context, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
+		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
 	}
 
 	// Find the latest healthy agent Pod in our namespace.
 	agentPods, err := c.agentPods.Lister().Pods(c.cfg.Namespace).List(agentLabels)
 	if err != nil {
 		err := fmt.Errorf("could not list agent pods: %w", err)
-		return c.failStrategyAndErr(ctx.Context, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
+		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
 	}
 	newestAgentPod := newestRunningPod(agentPods)
 
@@ -248,45 +267,39 @@ func (c *agentController) Sync(ctx controllerlib.Context) error {
 	// the CredentialIssuer.
 	if newestAgentPod == nil {
 		err := fmt.Errorf("could not find a healthy agent pod (%s)", pluralize(agentPods))
-		return c.failStrategyAndErr(ctx.Context, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
+		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
 	}
 
 	// Load the Kubernetes API info from the kube-public/cluster-info ConfigMap.
 	configMap, err := c.kubePublicConfigMaps.Lister().ConfigMaps(ClusterInfoNamespace).Get(clusterInfoName)
 	if err != nil {
 		err := fmt.Errorf("failed to get %s/%s configmap: %w", ClusterInfoNamespace, clusterInfoName, err)
-		return c.failStrategyAndErr(ctx.Context, err, configv1alpha1.CouldNotGetClusterInfoStrategyReason)
+		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotGetClusterInfoStrategyReason)
 	}
 
 	apiInfo, err := c.extractAPIInfo(configMap)
 	if err != nil {
 		err := fmt.Errorf("could not extract Kubernetes API endpoint info from %s/%s configmap: %w", ClusterInfoNamespace, clusterInfoName, err)
-		return c.failStrategyAndErr(ctx.Context, err, configv1alpha1.CouldNotGetClusterInfoStrategyReason)
+		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotGetClusterInfoStrategyReason)
 	}
 
 	// Load the certificate and key from the agent pod into our in-memory signer.
 	if err := c.loadSigningKey(newestAgentPod); err != nil {
-		return c.failStrategyAndErr(ctx.Context, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
+		return c.failStrategyAndErr(ctx.Context, credIssuer, err, configv1alpha1.CouldNotFetchKeyStrategyReason)
 	}
 
 	// Set the CredentialIssuer strategy to successful.
-	return issuerconfig.UpdateStrategy(
-		ctx.Context,
-		c.cfg.CredentialIssuerName,
-		c.cfg.Labels,
-		c.client.PinnipedConcierge,
-		configv1alpha1.CredentialIssuerStrategy{
-			Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-			Status:         configv1alpha1.SuccessStrategyStatus,
-			Reason:         configv1alpha1.FetchedKeyStrategyReason,
-			Message:        "key was fetched successfully",
-			LastUpdateTime: metav1.NewTime(c.clock.Now()),
-			Frontend: &configv1alpha1.CredentialIssuerFrontend{
-				Type:                          configv1alpha1.TokenCredentialRequestAPIFrontendType,
-				TokenCredentialRequestAPIInfo: apiInfo,
-			},
+	return issuerconfig.Update(ctx.Context, c.client.PinnipedConcierge, credIssuer, configv1alpha1.CredentialIssuerStrategy{
+		Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+		Status:         configv1alpha1.SuccessStrategyStatus,
+		Reason:         configv1alpha1.FetchedKeyStrategyReason,
+		Message:        "key was fetched successfully",
+		LastUpdateTime: metav1.NewTime(c.clock.Now()),
+		Frontend: &configv1alpha1.CredentialIssuerFrontend{
+			Type:                          configv1alpha1.TokenCredentialRequestAPIFrontendType,
+			TokenCredentialRequestAPIInfo: apiInfo,
 		},
-	)
+	})
 }
 
 func (c *agentController) loadSigningKey(agentPod *corev1.Pod) error {
@@ -358,20 +371,15 @@ func (c *agentController) createOrUpdateDeployment(ctx controllerlib.Context, ne
 	return err
 }
 
-func (c *agentController) failStrategyAndErr(ctx context.Context, err error, reason configv1alpha1.StrategyReason) error {
-	return utilerrors.NewAggregate([]error{err, issuerconfig.UpdateStrategy(
-		ctx,
-		c.cfg.CredentialIssuerName,
-		c.cfg.Labels,
-		c.client.PinnipedConcierge,
-		configv1alpha1.CredentialIssuerStrategy{
-			Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-			Status:         configv1alpha1.ErrorStrategyStatus,
-			Reason:         reason,
-			Message:        err.Error(),
-			LastUpdateTime: metav1.NewTime(c.clock.Now()),
-		},
-	)})
+func (c *agentController) failStrategyAndErr(ctx context.Context, credIssuer *configv1alpha1.CredentialIssuer, err error, reason configv1alpha1.StrategyReason) error {
+	updateErr := issuerconfig.Update(ctx, c.client.PinnipedConcierge, credIssuer, configv1alpha1.CredentialIssuerStrategy{
+		Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+		Status:         configv1alpha1.ErrorStrategyStatus,
+		Reason:         reason,
+		Message:        err.Error(),
+		LastUpdateTime: metav1.NewTime(c.clock.Now()),
+	})
+	return utilerrors.NewAggregate([]error{err, updateErr})
 }
 
 func (c *agentController) extractAPIInfo(configMap *corev1.ConfigMap) (*configv1alpha1.TokenCredentialRequestAPIInfo, error) {

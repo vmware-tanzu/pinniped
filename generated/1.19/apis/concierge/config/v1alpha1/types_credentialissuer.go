@@ -45,9 +45,7 @@ const (
 // CredentialIssuerSpec describes the intended configuration of the Concierge.
 type CredentialIssuerSpec struct {
 	// ImpersonationProxy describes the intended configuration of the Concierge impersonation proxy.
-	//
-	//+kubebuilder:default:={"mode": "disabled", "service": {"type": "LoadBalancer"}}
-	ImpersonationProxy ImpersonationProxySpec `json:"impersonationProxy"`
+	ImpersonationProxy *ImpersonationProxySpec `json:"impersonationProxy"`
 }
 
 // ImpersonationProxyMode enumerates the configuration modes for the impersonation proxy.
@@ -88,20 +86,17 @@ type ImpersonationProxySpec struct {
 	// - "disabled" explicitly disables the impersonation proxy. This is the default.
 	// - "enabled" explicitly enables the impersonation proxy.
 	// - "auto" enables or disables the impersonation proxy based upon the cluster in which it is running.
-	//
-	// +kubebuilder:default:="disabled"
 	Mode ImpersonationProxyMode `json:"mode"`
 
-	// Service describes the configuraiton
+	// Service describes the configuration of the Service provisioned to expose the impersonation proxy to clients.
 	//
 	// +kubebuilder:default:={"type": "LoadBalancer"}
 	Service ImpersonationProxyServiceSpec `json:"service"`
 
-	// ExternalEndpoint describes the HTTPS endpoint where the proxy will be exposed. If the proxy is enabled and this
-	// field is not set, a Service of type LoadBalancer will be automatically provisioned and its external name will be
-	// advertised.
+	// ExternalEndpoint describes the HTTPS endpoint where the proxy will be exposed. If not set, the proxy will
+	// be served using the external name of the LoadBalancer service or the cluster service DNS name.
 	//
-	// Setting this field disables the automatic creation of this LoadBalancer Service.
+	// This field must be non-empty when spec.impersonationProxy.service.mode is "None".
 	//
 	// +optional
 	ExternalEndpoint string `json:"externalEndpoint,omitempty"`
@@ -228,7 +223,6 @@ type CredentialIssuer struct {
 	// Spec describes the intended configuration of the Concierge.
 	//
 	// +optional
-	// +kubebuilder:default:={"impersonationProxy": {"mode": "disabled", "service": {"type": "LoadBalancer"}}}
 	Spec CredentialIssuerSpec `json:"spec"`
 
 	// CredentialIssuerStatus describes the status of the Concierge.

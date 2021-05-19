@@ -86,7 +86,6 @@ func TestCreate(t *testing.T) {
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
 				Return(&user.DefaultInfo{
 					Name:   "test-user",
-					UID:    "test-user-uid",
 					Groups: []string{"test-group-1", "test-group-2"},
 				}, nil)
 
@@ -118,7 +117,7 @@ func TestCreate(t *testing.T) {
 					},
 				},
 			})
-			requireOneLogStatement(r, logger, `"success" userID:test-user-uid,authenticated:true`)
+			requireOneLogStatement(r, logger, `"success" userID:,hasExtra:false,authenticated:true`)
 		})
 
 		it("CreateFailsWithValidTokenWhenCertIssuerFails", func() {
@@ -154,7 +153,7 @@ func TestCreate(t *testing.T) {
 			response, err := callCreate(context.Background(), storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			requireOneLogStatement(r, logger, `"success" userID:<none>,authenticated:false`)
+			requireOneLogStatement(r, logger, `"success" userID:<none>,hasExtra:false,authenticated:false`)
 		})
 
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookFails", func() {
@@ -184,7 +183,45 @@ func TestCreate(t *testing.T) {
 			response, err := callCreate(context.Background(), storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			requireOneLogStatement(r, logger, `"success" userID:,authenticated:false`)
+			requireOneLogStatement(r, logger, `"success" userID:,hasExtra:false,authenticated:false`)
+		})
+
+		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsAUserWithUID", func() {
+			req := validCredentialRequest()
+
+			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
+				Return(&user.DefaultInfo{
+					Name:   "test-user",
+					UID:    "test-uid",
+					Groups: []string{"test-group-1", "test-group-2"},
+				}, nil)
+
+			storage := NewREST(requestAuthenticator, nil, schema.GroupResource{})
+
+			response, err := callCreate(context.Background(), storage, req)
+
+			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
+			requireOneLogStatement(r, logger, `"success" userID:test-uid,hasExtra:false,authenticated:false`)
+		})
+
+		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsAUserWithExtra", func() {
+			req := validCredentialRequest()
+
+			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
+				Return(&user.DefaultInfo{
+					Name:   "test-user",
+					Groups: []string{"test-group-1", "test-group-2"},
+					Extra:  map[string][]string{"test-key": {"test-val-1", "test-val-2"}},
+				}, nil)
+
+			storage := NewREST(requestAuthenticator, nil, schema.GroupResource{})
+
+			response, err := callCreate(context.Background(), storage, req)
+
+			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
+			requireOneLogStatement(r, logger, `"success" userID:,hasExtra:true,authenticated:false`)
 		})
 
 		it("CreateFailsWhenGivenTheWrongInputType", func() {

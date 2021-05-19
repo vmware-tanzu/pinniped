@@ -150,7 +150,7 @@ func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 	}
 
 	plog.Debug("successful authentication")
-	respondWithAuthenticated(rsp, secret.ObjectMeta.Name, string(secret.UID), groups)
+	respondWithAuthenticated(rsp, secret.ObjectMeta.Name, groups)
 }
 
 func getUsernameAndPasswordFromRequest(rsp http.ResponseWriter, req *http.Request) (string, string, error) {
@@ -255,7 +255,7 @@ func respondWithUnauthenticated(rsp http.ResponseWriter) {
 
 func respondWithAuthenticated(
 	rsp http.ResponseWriter,
-	username, uid string,
+	username string,
 	groups []string,
 ) {
 	rsp.Header().Add("Content-Type", "application/json")
@@ -269,7 +269,6 @@ func respondWithAuthenticated(
 			User: authenticationv1beta1.UserInfo{
 				Username: username,
 				Groups:   groups,
-				UID:      uid,
 			},
 		},
 	}

@@ -248,10 +248,11 @@ spec:
     namespace: #@ namespace()
     port: 443
 ---
-apiVersion: config.concierge.pinniped.dev/v1alpha1
+apiVersion: #@ pinnipedDevAPIGroupWithPrefix("config.concierge") + "/v1alpha1"
 kind: CredentialIssuer
 metadata:
-    name: #@ defaultResourceNameWithSuffix("config")
+  name: #@ defaultResourceNameWithSuffix("config")
+  labels: #@ labels()
 spec:
   impersonationProxy:
     mode: auto

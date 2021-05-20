@@ -204,6 +204,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				informers.installationNamespaceK8s.Apps().V1().Deployments(),
 				informers.installationNamespaceK8s.Core().V1().Pods(),
 				informers.kubePublicNamespaceK8s.Core().V1().ConfigMaps(),
+				informers.pinniped.Config().V1alpha1().CredentialIssuers(),
 				c.DynamicSigningCertProvider,
 			),
 			singletonWorker,

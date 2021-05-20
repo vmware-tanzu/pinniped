@@ -26,6 +26,7 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/upstreamldap"
 )
 
@@ -266,15 +267,18 @@ func (c *ldapWatcherController) testConnection(
 	tlsLDAPProvider := upstreamldap.New(*config)
 	err := tlsLDAPProvider.TestConnection(ctx)
 	if err != nil {
+		plog.InfoErr("testing LDAP connection using TLS failed, so trying again with StartTLS", err, "host", config.Host)
 		// If there was any error, try again with StartTLS instead.
 		config.ConnectionProtocol = upstreamldap.StartTLS
 		startTLSLDAPProvider := upstreamldap.New(*config)
 		startTLSErr := startTLSLDAPProvider.TestConnection(ctx)
 		if startTLSErr == nil {
+			plog.Info("testing LDAP connection using StartTLS succeeded", "host", config.Host)
 			// Successfully able to fall back to using StartTLS, so clear the original
 			// error and consider the connection test to be successful.
 			err = nil
 		} else {
+			plog.InfoErr("testing LDAP connection using StartTLS also failed", err, "host", config.Host)
 			// Falling back to StartTLS also failed, so put TLS back into the config
 			// and consider the connection test to be failed.
 			config.ConnectionProtocol = upstreamldap.TLS

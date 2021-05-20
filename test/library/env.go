@@ -73,6 +73,7 @@ type TestOIDCUpstream struct {
 
 type TestLDAPUpstream struct {
 	Host                           string   `json:"host"`
+	StartTLSOnlyHost               string   `json:"startTLSOnlyHost"`
 	CABundle                       string   `json:"caBundle"`
 	BindUsername                   string   `json:"bindUsername"`
 	BindPassword                   string   `json:"bindPassword"`
@@ -240,6 +241,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 
 	result.SupervisorUpstreamLDAP = TestLDAPUpstream{
 		Host:                           needEnv(t, "PINNIPED_TEST_LDAP_HOST"),
+		StartTLSOnlyHost:               needEnv(t, "PINNIPED_TEST_LDAP_STARTTLS_ONLY_HOST"),
 		CABundle:                       base64Decoded(t, os.Getenv("PINNIPED_TEST_LDAP_LDAPS_CA_BUNDLE")),
 		BindUsername:                   needEnv(t, "PINNIPED_TEST_LDAP_BIND_ACCOUNT_USERNAME"),
 		BindPassword:                   needEnv(t, "PINNIPED_TEST_LDAP_BIND_ACCOUNT_PASSWORD"),

@@ -69,7 +69,7 @@ func TestSupervisorLogin(t *testing.T) {
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 		},
 		{
-			name: "ldap with email as username and groups names as DNs",
+			name: "ldap with email as username and groups names as DNs and using an LDAP provider which supports TLS",
 			createIDP: func(t *testing.T) {
 				t.Helper()
 				secret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
@@ -126,7 +126,7 @@ func TestSupervisorLogin(t *testing.T) {
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
 		},
 		{
-			name: "ldap with CN as username and group names as CNs", // try another variation of configuration options
+			name: "ldap with CN as username and group names as CNs and using an LDAP provider which only supports StartTLS", // try another variation of configuration options
 			createIDP: func(t *testing.T) {
 				t.Helper()
 				secret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
@@ -136,7 +136,7 @@ func TestSupervisorLogin(t *testing.T) {
 					},
 				)
 				ldapIDP := library.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
-					Host: env.SupervisorUpstreamLDAP.Host,
+					Host: env.SupervisorUpstreamLDAP.StartTLSOnlyHost,
 					TLS: &idpv1alpha1.TLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
 					},
@@ -161,7 +161,7 @@ func TestSupervisorLogin(t *testing.T) {
 				}, idpv1alpha1.LDAPPhaseReady)
 				expectedMsg := fmt.Sprintf(
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
-					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
+					env.SupervisorUpstreamLDAP.StartTLSOnlyHost, env.SupervisorUpstreamLDAP.BindUsername,
 					secret.Name, secret.ResourceVersion,
 				)
 				requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
@@ -176,7 +176,7 @@ func TestSupervisorLogin(t *testing.T) {
 			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(
-				"ldaps://" + env.SupervisorUpstreamLDAP.Host + "?sub=" + env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue,
+				"ldaps://" + env.SupervisorUpstreamLDAP.StartTLSOnlyHost + "?sub=" + env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue,
 			),
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserDN),

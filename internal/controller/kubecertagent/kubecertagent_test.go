@@ -27,6 +27,7 @@ import (
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	conciergefake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
+	conciergeinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/controller/kubecertagent/mocks"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/here"
@@ -37,6 +38,10 @@ import (
 func TestAgentController(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2021, 4, 13, 9, 57, 0, 0, time.UTC)
+
+	initialCredentialIssuer := &configv1alpha1.CredentialIssuer{
+		ObjectMeta: metav1.ObjectMeta{Name: "pinniped-concierge-config"},
+	}
 
 	healthyKubeControllerManagerPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -204,6 +209,7 @@ func TestAgentController(t *testing.T) {
 	tests := []struct {
 		name                 string
 		discoveryURLOverride *string
+		pinnipedObjects      []runtime.Object
 		kubeObjects          []runtime.Object
 		addKubeReactions     func(*kubefake.Clientset)
 		mocks                func(*testing.T, *mocks.MockPodCommandExecutorMockRecorder, *mocks.MockDynamicCertPrivateMockRecorder, *cache.Expiring)
@@ -213,7 +219,16 @@ func TestAgentController(t *testing.T) {
 		wantStrategy         *configv1alpha1.CredentialIssuerStrategy
 	}{
 		{
+			name: "no CredentialIssuer found",
+			wantDistinctErrors: []string{
+				`could not get CredentialIssuer to update: credentialissuer.config.concierge.pinniped.dev "pinniped-concierge-config" not found`,
+			},
+		},
+		{
 			name: "no kube-controller-manager pods",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
 			kubeObjects: []runtime.Object{
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
@@ -236,6 +251,9 @@ func TestAgentController(t *testing.T) {
 		},
 		{
 			name: "only unhealthy kube-controller-manager pods",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
 			kubeObjects: []runtime.Object{
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
@@ -276,6 +294,9 @@ func TestAgentController(t *testing.T) {
 		},
 		{
 			name: "failed to created new deployment",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
 			kubeObjects: []runtime.Object{
 				healthyKubeControllerManagerPod,
 			},
@@ -300,6 +321,9 @@ func TestAgentController(t *testing.T) {
 		},
 		{
 			name: "created new deployment, no agent pods running yet",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
 			kubeObjects: []runtime.Object{
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
@@ -341,6 +365,9 @@ func TestAgentController(t *testing.T) {
 		},
 		{
 			name: "created new deployment with defaulted paths, no agent pods running yet",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
 			kubeObjects: []runtime.Object{
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
@@ -382,6 +409,9 @@ func TestAgentController(t *testing.T) {
 		},
 		{
 			name: "update to existing deployment, no running agent pods yet",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
 			kubeObjects: []runtime.Object{
 				healthyKubeControllerManagerPod,
 				&corev1.Pod{
@@ -424,6 +454,9 @@ func TestAgentController(t *testing.T) {
 		},
 		{
 			name: "deployment exists, configmap missing",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
 			kubeObjects: []runtime.Object{
 				healthyKubeControllerManagerPod,
 				healthyAgentDeployment,
@@ -443,6 +476,9 @@ func TestAgentController(t *testing.T) {
 		},
 		{
 			name: "deployment exists, configmap missing key",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
 			kubeObjects: []runtime.Object{
 				healthyKubeControllerManagerPod,
 				healthyAgentDeployment,
@@ -466,6 +502,9 @@ func TestAgentController(t *testing.T) {
 		},
 		{
 			name: "deployment exists, configmap key has invalid data",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
 			kubeObjects: []runtime.Object{
 				healthyKubeControllerManagerPod,
 				healthyAgentDeployment,
@@ -489,6 +528,9 @@ func TestAgentController(t *testing.T) {
 		},
 		{
 			name: "deployment exists, configmap kubeconfig has no clusters",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
 			kubeObjects: []runtime.Object{
 				healthyKubeControllerManagerPod,
 				healthyAgentDeployment,
@@ -512,6 +554,9 @@ func TestAgentController(t *testing.T) {
 		},
 		{
 			name: "deployment exists, configmap is valid,, exec into agent pod fails",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
 			kubeObjects: []runtime.Object{
 				healthyKubeControllerManagerPod,
 				healthyAgentDeployment,
@@ -537,6 +582,9 @@ func TestAgentController(t *testing.T) {
 		},
 		{
 			name: "deployment exists, configmap is valid, exec into agent pod returns bogus certs",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
 			kubeObjects: []runtime.Object{
 				healthyKubeControllerManagerPod,
 				healthyAgentDeployment,
@@ -565,6 +613,9 @@ func TestAgentController(t *testing.T) {
 		},
 		{
 			name: "deployment exists, configmap is valid, exec is cached",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
 			kubeObjects: []runtime.Object{
 				healthyKubeControllerManagerPod,
 				healthyAgentDeployment,
@@ -594,6 +645,9 @@ func TestAgentController(t *testing.T) {
 		},
 		{
 			name: "deployment exists, configmap is valid, exec succeeds",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
 			kubeObjects: []runtime.Object{
 				healthyKubeControllerManagerPod,
 				healthyAgentDeployment,
@@ -620,6 +674,9 @@ func TestAgentController(t *testing.T) {
 		},
 		{
 			name: "deployment exists, configmap is valid, exec succeeds, overridden discovery URL",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
 			kubeObjects: []runtime.Object{
 				healthyKubeControllerManagerPod,
 				healthyAgentDeployment,
@@ -651,12 +708,13 @@ func TestAgentController(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			conciergeClientset := conciergefake.NewSimpleClientset(tt.pinnipedObjects...)
+			conciergeInformers := conciergeinformers.NewSharedInformerFactory(conciergeClientset, 0)
+
 			kubeClientset := kubefake.NewSimpleClientset(tt.kubeObjects...)
 			if tt.addKubeReactions != nil {
 				tt.addKubeReactions(kubeClientset)
 			}
-
-			conciergeClientset := conciergefake.NewSimpleClientset()
 			kubeInformers := informers.NewSharedInformerFactory(kubeClientset, 0)
 			log := testlogger.New(t)
 
@@ -676,7 +734,7 @@ func TestAgentController(t *testing.T) {
 					ServiceAccountName:        "test-service-account-name",
 					NamePrefix:                "pinniped-concierge-kube-cert-agent-",
 					ContainerImagePullSecrets: []string{"pinniped-image-pull-secret"},
-					CredentialIssuerName:      "pinniped-concierge-config",
+					CredentialIssuerName:      initialCredentialIssuer.Name,
 					Labels:                    map[string]string{"extralabel": "labelvalue"},
 					DiscoveryURLOverride:      tt.discoveryURLOverride,
 				},
@@ -685,6 +743,7 @@ func TestAgentController(t *testing.T) {
 				kubeInformers.Apps().V1().Deployments(),
 				kubeInformers.Core().V1().Pods(),
 				kubeInformers.Core().V1().ConfigMaps(),
+				conciergeInformers.Config().V1alpha1().CredentialIssuers(),
 				mockExecutor,
 				mockDynamicCert,
 				fakeClock,
@@ -696,7 +755,7 @@ func TestAgentController(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			errorMessages := runControllerUntilQuiet(ctx, t, controller, kubeInformers)
+			errorMessages := runControllerUntilQuiet(ctx, t, controller, kubeInformers, conciergeInformers)
 			assert.Equal(t, tt.wantDistinctErrors, deduplicate(errorMessages), "unexpected errors")
 			assert.Equal(t, tt.wantDistinctLogs, deduplicate(log.Lines()), "unexpected logs")
 
@@ -711,10 +770,12 @@ func TestAgentController(t *testing.T) {
 			}
 
 			// Assert that the CredentialIssuer is in the expected final state
-			credIssuer, err := conciergeClientset.ConfigV1alpha1().CredentialIssuers().Get(ctx, "pinniped-concierge-config", metav1.GetOptions{})
-			require.NoError(t, err)
-			require.Len(t, credIssuer.Status.Strategies, 1, "expected a single strategy in the CredentialIssuer")
-			require.Equal(t, tt.wantStrategy, &credIssuer.Status.Strategies[0])
+			if tt.wantStrategy != nil {
+				credIssuer, err := conciergeClientset.ConfigV1alpha1().CredentialIssuers().Get(ctx, initialCredentialIssuer.Name, metav1.GetOptions{})
+				require.NoError(t, err)
+				require.Len(t, credIssuer.Status.Strategies, 1, "expected a single strategy in the CredentialIssuer")
+				require.Equal(t, tt.wantStrategy, &credIssuer.Status.Strategies[0])
+			}
 		})
 	}
 }
@@ -794,7 +855,7 @@ func deduplicate(strings []string) []string {
 	return result
 }
 
-func runControllerUntilQuiet(ctx context.Context, t *testing.T, controller controllerlib.Controller, informers ...informers.SharedInformerFactory) []string {
+func runControllerUntilQuiet(ctx context.Context, t *testing.T, controller controllerlib.Controller, informers ...interface{ Start(<-chan struct{}) }) []string {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 

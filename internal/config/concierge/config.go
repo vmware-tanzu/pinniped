@@ -114,6 +114,9 @@ func validateNames(names *NamesConfigSpec) error {
 	if names.ImpersonationLoadBalancerService == "" {
 		missingNames = append(missingNames, "impersonationLoadBalancerService")
 	}
+	if names.ImpersonationClusterIPService == "" {
+		missingNames = append(missingNames, "impersonationClusterIPService")
+	}
 	if names.ImpersonationTLSCertificateSecret == "" {
 		missingNames = append(missingNames, "impersonationTLSCertificateSecret")
 	}

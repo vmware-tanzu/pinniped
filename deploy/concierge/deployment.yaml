@@ -51,6 +51,7 @@ data:
       apiService: (@= defaultResourceNameWithSuffix("api") @)
       impersonationConfigMap: (@= defaultResourceNameWithSuffix("impersonation-proxy-config") @)
       impersonationLoadBalancerService: (@= defaultResourceNameWithSuffix("impersonation-proxy-load-balancer") @)
+      impersonationClusterIPService: (@= defaultResourceNameWithSuffix("impersonation-proxy-cluster-ip") @)
       impersonationTLSCertificateSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-tls-serving-certificate") @)
       impersonationCACertificateSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-ca-certificate") @)
       impersonationSignerSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-signer-ca-certificate") @)

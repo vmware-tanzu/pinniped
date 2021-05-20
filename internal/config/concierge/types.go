@@ -40,6 +40,7 @@ type NamesConfigSpec struct {
 	// TODO: remove this key entirely
 	ImpersonationConfigMap            string `json:"impersonationConfigMap"`
 	ImpersonationLoadBalancerService  string `json:"impersonationLoadBalancerService"`
+	ImpersonationClusterIPService     string `json:"impersonationClusterIPService"`
 	ImpersonationTLSCertificateSecret string `json:"impersonationTLSCertificateSecret"`
 	ImpersonationCACertificateSecret  string `json:"impersonationCACertificateSecret"`
 	ImpersonationSignerSecret         string `json:"impersonationSignerSecret"`

@@ -55,11 +55,12 @@ var (
 func TestEndUserAuthentication(t *testing.T) {
 	providerConfig := func(editFunc func(p *ProviderConfig)) *ProviderConfig {
 		config := &ProviderConfig{
-			Name:         "some-provider-name",
-			Host:         testHost,
-			CABundle:     nil, // this field is only used by the production dialer, which is replaced by a mock for this test
-			BindUsername: testBindUsername,
-			BindPassword: testBindPassword,
+			Name:               "some-provider-name",
+			Host:               testHost,
+			CABundle:           nil, // this field is only used by the production dialer, which is replaced by a mock for this test
+			ConnectionProtocol: TLS,
+			BindUsername:       testBindUsername,
+			BindPassword:       testBindPassword,
 			UserSearch: UserSearchConfig{
 				Base:              testUserSearchBase,
 				Filter:            testUserSearchFilter,
@@ -989,12 +990,13 @@ func TestEndUserAuthentication(t *testing.T) {
 func TestTestConnection(t *testing.T) {
 	providerConfig := func(editFunc func(p *ProviderConfig)) *ProviderConfig {
 		config := &ProviderConfig{
-			Name:         "some-provider-name",
-			Host:         testHost,
-			CABundle:     nil, // this field is only used by the production dialer, which is replaced by a mock for this test
-			BindUsername: testBindUsername,
-			BindPassword: testBindPassword,
-			UserSearch:   UserSearchConfig{}, // not used by TestConnection
+			Name:               "some-provider-name",
+			Host:               testHost,
+			CABundle:           nil, // this field is only used by the production dialer, which is replaced by a mock for this test
+			ConnectionProtocol: TLS,
+			BindUsername:       testBindUsername,
+			BindPassword:       testBindPassword,
+			UserSearch:         UserSearchConfig{}, // not used by TestConnection
 		}
 		if editFunc != nil {
 			editFunc(config)

@@ -157,16 +157,26 @@ func (p *Provider) dial(ctx context.Context) (Conn, error) {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
 
+	// Choose how and where to dial based on TLS vs. StartTLS config option.
+	var dialFunc LDAPDialerFunc
+	var hostAndPort string
 	switch {
-	case p.c.Dialer != nil:
-		return p.c.Dialer.Dial(ctx, tlsHostAndPort)
 	case p.c.ConnectionProtocol == TLS:
-		return p.dialTLS(ctx, tlsHostAndPort)
+		dialFunc = p.dialTLS
+		hostAndPort = tlsHostAndPort
 	case p.c.ConnectionProtocol == StartTLS:
-		return p.dialStartTLS(ctx, startTLSHostAndPort)
+		dialFunc = p.dialStartTLS
+		hostAndPort = startTLSHostAndPort
 	default:
 		return nil, ldap.NewError(ldap.ErrorNetwork, fmt.Errorf("did not specify valid ConnectionProtocol"))
 	}
+
+	// Override the real dialer for testing purposes sometimes.
+	if p.c.Dialer != nil {
+		dialFunc = p.c.Dialer.Dial
+	}
+
+	return dialFunc(ctx, hostAndPort)
 }
 
 // dialTLS is a default implementation of the Dialer, used when Dialer is nil and ConnectionProtocol is TLS.

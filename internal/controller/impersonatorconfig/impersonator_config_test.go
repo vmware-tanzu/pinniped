@@ -554,14 +554,10 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			controllerlib.TestRunSynchronously(t, subject)
 		}
 
-		var addCredentialIssuerToTracker = func(resourceName string, credIssuerSpec v1alpha1.CredentialIssuerSpec, client *pinnipedfake.Clientset) {
-			t.Logf("adding CredentialIssuer %s to informer clientset", resourceName)
-			r.NoError(client.Tracker().Add(&v1alpha1.CredentialIssuer{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: resourceName,
-				},
-				Spec: credIssuerSpec,
-			}))
+		var addCredentialIssuerToTrackers = func(credIssuer v1alpha1.CredentialIssuer, informerClient *pinnipedfake.Clientset, mainClient *pinnipedfake.Clientset) {
+			t.Logf("adding CredentialIssuer %s to informer and main clientsets", credIssuer.Name)
+			r.NoError(informerClient.Tracker().Add(&credIssuer))
+			r.NoError(mainClient.Tracker().Add(&credIssuer))
 		}
 
 		var newSecretWithData = func(resourceName string, data map[string][]byte) *corev1.Secret {
@@ -856,7 +852,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			// As long as we get the final result that we wanted then we are happy for the purposes
 			// of this test.
 			credentialIssuer := getCredentialIssuer()
-			r.Equal(labels, credentialIssuer.Labels)
 			r.Equal([]v1alpha1.CredentialIssuerStrategy{expectedStrategy}, credentialIssuer.Status.Strategies)
 		}
 
@@ -1023,7 +1018,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 				it("errors and does nothing else", func() {
 					startInformersAndController()
-					r.EqualError(runControllerSync(), "failed to get some-credential-issuer-resource-name CredentialIssuer: credentialissuer.config.concierge.pinniped.dev \"some-credential-issuer-resource-name\" not found")
+					r.EqualError(runControllerSync(), `could not get CredentialIssuer to update: credentialissuer.config.concierge.pinniped.dev "some-credential-issuer-resource-name" not found`)
 					requireTLSServerWasNeverStarted()
 					r.Len(kubeAPIClient.Actions(), 0)
 				})
@@ -1033,15 +1028,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		when("the configuration is auto mode with an endpoint and service type none", func() {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode:             v1alpha1.ImpersonationProxyModeAuto,
-						ExternalEndpoint: localhostIP,
-						Service: v1alpha1.ImpersonationProxyServiceSpec{
-							Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeAuto,
+							ExternalEndpoint: localhostIP,
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+							},
 						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 			})
 
 			when("there are visible control plane nodes", func() {
@@ -1082,11 +1080,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		when("the configuration is auto mode", func() {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeAuto,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeAuto,
+						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 			})
 
 			when("there are visible control plane nodes", func() {
@@ -1380,11 +1381,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		when("the configuration is disabled mode", func() {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeDisabled,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeDisabled,
+						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
 			})
 
@@ -1405,11 +1409,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			})
 			when("no load balancer", func() {
 				it.Before(func() {
-					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-							Mode: v1alpha1.ImpersonationProxyModeEnabled,
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode: v1alpha1.ImpersonationProxyModeEnabled,
+							},
 						},
-					}, pinnipedInformerClient)
+					}, pinnipedInformerClient, pinnipedAPIClient)
 					addNodeWithRoleToTracker("control-plane", kubeAPIClient)
 				})
 
@@ -1436,11 +1443,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 			when("a loadbalancer already exists", func() {
 				it.Before(func() {
-					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-							Mode: v1alpha1.ImpersonationProxyModeEnabled,
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode: v1alpha1.ImpersonationProxyModeEnabled,
+							},
 						},
-					}, pinnipedInformerClient)
+					}, pinnipedInformerClient, pinnipedAPIClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 					addLoadBalancerServiceToTracker(loadBalancerServiceName, kubeInformerClient)
 					addLoadBalancerServiceToTracker(loadBalancerServiceName, kubeAPIClient)
@@ -1469,11 +1479,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			when("a load balancer and a secret already exists", func() {
 				var caCrt []byte
 				it.Before(func() {
-					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-							Mode: v1alpha1.ImpersonationProxyModeEnabled,
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode: v1alpha1.ImpersonationProxyModeEnabled,
+							},
 						},
-					}, pinnipedInformerClient)
+					}, pinnipedInformerClient, pinnipedAPIClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 					ca := newCA()
 					caSecret := newActualCASecret(ca, caSecretName)
@@ -1499,15 +1512,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			when("credentialissuer has service type loadbalancer and custom annotations", func() {
 				annotations := map[string]string{"some-annotation-key": "some-annotation-value"}
 				it.Before(func() {
-					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-							Mode: v1alpha1.ImpersonationProxyModeEnabled,
-							Service: v1alpha1.ImpersonationProxyServiceSpec{
-								Type:        v1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
-								Annotations: annotations,
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode: v1alpha1.ImpersonationProxyModeEnabled,
+								Service: v1alpha1.ImpersonationProxyServiceSpec{
+									Type:        v1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
+									Annotations: annotations,
+								},
 							},
 						},
-					}, pinnipedInformerClient)
+					}, pinnipedInformerClient, pinnipedAPIClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 				})
 
@@ -1528,15 +1544,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			when("the CredentialIssuer has a hostname specified and service type none", func() {
 				const fakeHostname = "fake.example.com"
 				it.Before(func() {
-					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-							ExternalEndpoint: fakeHostname,
-							Service: v1alpha1.ImpersonationProxyServiceSpec{
-								Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+								ExternalEndpoint: fakeHostname,
+								Service: v1alpha1.ImpersonationProxyServiceSpec{
+									Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+								},
 							},
 						},
-					}, pinnipedInformerClient)
+					}, pinnipedInformerClient, pinnipedAPIClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 				})
 
@@ -1557,15 +1576,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			when("the CredentialIssuer has a hostname specified and service type loadbalancer", func() {
 				const fakeHostname = "fake.example.com"
 				it.Before(func() {
-					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-							ExternalEndpoint: fakeHostname,
-							Service: v1alpha1.ImpersonationProxyServiceSpec{
-								Type: v1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+								ExternalEndpoint: fakeHostname,
+								Service: v1alpha1.ImpersonationProxyServiceSpec{
+									Type: v1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
+								},
 							},
 						},
-					}, pinnipedInformerClient)
+					}, pinnipedInformerClient, pinnipedAPIClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 				})
 
@@ -1586,14 +1608,17 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 			when("the CredentialIssuer has a hostname specified and service type clusterip", func() {
 				it.Before(func() {
-					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-							Mode: v1alpha1.ImpersonationProxyModeEnabled,
-							Service: v1alpha1.ImpersonationProxyServiceSpec{
-								Type: v1alpha1.ImpersonationProxyServiceTypeClusterIP,
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode: v1alpha1.ImpersonationProxyModeEnabled,
+								Service: v1alpha1.ImpersonationProxyServiceSpec{
+									Type: v1alpha1.ImpersonationProxyServiceTypeClusterIP,
+								},
 							},
 						},
-					}, pinnipedInformerClient)
+					}, pinnipedInformerClient, pinnipedAPIClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 				})
 
@@ -1614,15 +1639,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			when("the CredentialIssuer has a endpoint which is an IP address with a port", func() {
 				const fakeIPWithPort = "127.0.0.1:3000"
 				it.Before(func() {
-					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-							ExternalEndpoint: fakeIPWithPort,
-							Service: v1alpha1.ImpersonationProxyServiceSpec{
-								Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+								ExternalEndpoint: fakeIPWithPort,
+								Service: v1alpha1.ImpersonationProxyServiceSpec{
+									Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+								},
 							},
 						},
-					}, pinnipedInformerClient)
+					}, pinnipedInformerClient, pinnipedAPIClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 				})
 
@@ -1643,15 +1671,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			when("the CredentialIssuer has a endpoint which is a hostname with a port, service type none", func() {
 				const fakeHostnameWithPort = "fake.example.com:3000"
 				it.Before(func() {
-					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-							ExternalEndpoint: fakeHostnameWithPort,
-							Service: v1alpha1.ImpersonationProxyServiceSpec{
-								Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+								ExternalEndpoint: fakeHostnameWithPort,
+								Service: v1alpha1.ImpersonationProxyServiceSpec{
+									Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+								},
 							},
 						},
-					}, pinnipedInformerClient)
+					}, pinnipedInformerClient, pinnipedAPIClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 				})
 
@@ -1672,16 +1703,19 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			when("the CredentialIssuer has a endpoint which is a hostname with a port, service type loadbalancer with loadbalancerip", func() {
 				const fakeHostnameWithPort = "fake.example.com:3000"
 				it.Before(func() {
-					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-							ExternalEndpoint: fakeHostnameWithPort,
-							Service: v1alpha1.ImpersonationProxyServiceSpec{
-								Type:           v1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
-								LoadBalancerIP: localhostIP,
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+								ExternalEndpoint: fakeHostnameWithPort,
+								Service: v1alpha1.ImpersonationProxyServiceSpec{
+									Type:           v1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
+									LoadBalancerIP: localhostIP,
+								},
 							},
 						},
-					}, pinnipedInformerClient)
+					}, pinnipedInformerClient, pinnipedAPIClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 				})
 
@@ -1725,7 +1759,10 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				}
 
 				it.Before(func() {
-					addCredentialIssuerToTracker(credentialIssuerResourceName, ipAddressConfig, pinnipedInformerClient)
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec:       ipAddressConfig,
+					}, pinnipedInformerClient, pinnipedAPIClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 				})
 
@@ -1779,15 +1816,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			when("the TLS cert goes missing and needs to be recreated, e.g. when a user manually deleted it", func() {
 				const fakeHostname = "fake.example.com"
 				it.Before(func() {
-					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-							ExternalEndpoint: fakeHostname,
-							Service: v1alpha1.ImpersonationProxyServiceSpec{
-								Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+								ExternalEndpoint: fakeHostname,
+								Service: v1alpha1.ImpersonationProxyServiceSpec{
+									Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+								},
 							},
 						},
-					}, pinnipedInformerClient)
+					}, pinnipedInformerClient, pinnipedAPIClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 					startInformersAndController()
 				})
@@ -1824,15 +1864,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			when("the CA cert goes missing and needs to be recreated, e.g. when a user manually deleted it", func() {
 				const fakeHostname = "fake.example.com"
 				it.Before(func() {
-					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-							ExternalEndpoint: fakeHostname,
-							Service: v1alpha1.ImpersonationProxyServiceSpec{
-								Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+								ExternalEndpoint: fakeHostname,
+								Service: v1alpha1.ImpersonationProxyServiceSpec{
+									Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+								},
 							},
 						},
-					}, pinnipedInformerClient)
+					}, pinnipedInformerClient, pinnipedAPIClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 					startInformersAndController()
 				})
@@ -1872,15 +1915,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				const fakeHostname = "fake.example.com"
 				var caCrt []byte
 				it.Before(func() {
-					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-							ExternalEndpoint: fakeHostname,
-							Service: v1alpha1.ImpersonationProxyServiceSpec{
-								Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+								ExternalEndpoint: fakeHostname,
+								Service: v1alpha1.ImpersonationProxyServiceSpec{
+									Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+								},
 							},
 						},
-					}, pinnipedInformerClient)
+					}, pinnipedInformerClient, pinnipedAPIClient)
 					addNodeWithRoleToTracker("worker", kubeAPIClient)
 					startInformersAndController()
 					r.NoError(runControllerSync())
@@ -1944,11 +1990,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		when("the configuration switches from enabled to disabled mode", func() {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeEnabled,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeEnabled,
+						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
 			})
 
@@ -2004,15 +2053,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		when("the endpoint and mode switch from specified with no service, to not specified, to specified again", func() {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-						ExternalEndpoint: localhostIP,
-						Service: v1alpha1.ImpersonationProxyServiceSpec{
-							Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: localhostIP,
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+							},
 						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
 			})
 
@@ -2099,15 +2151,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		when("requesting a load balancer via CredentialIssuer, then updating the annotations", func() {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-						ExternalEndpoint: localhostIP,
-						Service: v1alpha1.ImpersonationProxyServiceSpec{
-							Type: v1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: localhostIP,
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type: v1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
+							},
 						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
 			})
 
@@ -2157,15 +2212,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		when("requesting a load balancer via CredentialIssuer, then adding a static loadBalancerIP to the spec", func() {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-						ExternalEndpoint: localhostIP,
-						Service: v1alpha1.ImpersonationProxyServiceSpec{
-							Type: v1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: localhostIP,
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type: v1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
+							},
 						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
 			})
 
@@ -2217,11 +2275,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeAuto,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeAuto,
+						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 			})
 
 			it("only starts the impersonator once and only lists the cluster's nodes once", func() {
@@ -2335,15 +2396,19 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeAuto,
-					},
-				}, pinnipedInformerClient)
-				r.NoError(pinnipedAPIClient.Tracker().Add(&v1alpha1.CredentialIssuer{
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
 					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
-					Status:     v1alpha1.CredentialIssuerStatus{Strategies: []v1alpha1.CredentialIssuerStrategy{preExistingStrategy}},
-				}))
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeAuto,
+						},
+					},
+					Status: v1alpha1.CredentialIssuerStatus{
+						Strategies: []v1alpha1.CredentialIssuerStrategy{
+							preExistingStrategy,
+						},
+					},
+				}, pinnipedInformerClient, pinnipedAPIClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
 			})
 
@@ -2362,11 +2427,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("getting the control plane nodes returns an error, e.g. when there are no nodes", func() {
 			it("returns an error", func() {
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeAuto,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeAuto,
+						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 				startInformersAndController()
 				r.EqualError(runControllerSync(), "no nodes found")
 				requireCredentialIssuer(newErrorStrategy("no nodes found"))
@@ -2379,11 +2447,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			it.Before(func() {
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
 				impersonatorFuncReturnedFuncError = errors.New("some immediate impersonator startup error")
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeAuto,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeAuto,
+						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 			})
 
 			it("causes an immediate resync, returns an error on that next sync, and then restarts the server in a following sync", func() {
@@ -2439,11 +2510,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		when("the impersonator server dies for no apparent reason after running for a while", func() {
 			it.Before(func() {
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeAuto,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeAuto,
+						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 			})
 
 			it("causes an immediate resync, returns an error on that next sync, and then restarts the server in a following sync", func() {
@@ -2495,9 +2569,12 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("the CredentialIssuer has nil impersonation spec", func() {
 			it.Before(func() {
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: nil,
-				}, pinnipedInformerClient)
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: nil,
+					},
+				}, pinnipedInformerClient, pinnipedAPIClient)
 			})
 
 			it("returns an error", func() {
@@ -2512,11 +2589,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("the CredentialIssuer has invalid mode", func() {
 			it.Before(func() {
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: "not-valid",
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: "not-valid",
+						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 			})
 
 			it("returns an error", func() {
@@ -2531,14 +2611,17 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("the CredentialIssuer has invalid service type", func() {
 			it.Before(func() {
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeEnabled,
-						Service: v1alpha1.ImpersonationProxyServiceSpec{
-							Type: "not-valid",
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeEnabled,
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type: "not-valid",
+							},
 						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 			})
 
 			it("returns an error", func() {
@@ -2553,14 +2636,17 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("the CredentialIssuer has invalid LoadBalancerIP", func() {
 			it.Before(func() {
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeEnabled,
-						Service: v1alpha1.ImpersonationProxyServiceSpec{
-							LoadBalancerIP: "invalid-ip-address",
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeEnabled,
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								LoadBalancerIP: "invalid-ip-address",
+							},
 						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 			})
 
 			it("returns an error", func() {
@@ -2575,12 +2661,15 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("the CredentialIssuer has invalid ExternalEndpoint", func() {
 			it.Before(func() {
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-						ExternalEndpoint: "[invalid",
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: "[invalid",
+						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 			})
 
 			it("returns an error", func() {
@@ -2599,11 +2688,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				kubeAPIClient.PrependReactor("create", "services", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, fmt.Errorf("error on create")
 				})
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeAuto,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeAuto,
+						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 			})
 
 			it("returns an error", func() {
@@ -2617,15 +2709,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("there is an error creating the tls secret", func() {
 			it.Before(func() {
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-						ExternalEndpoint: "example.com",
-						Service: v1alpha1.ImpersonationProxyServiceSpec{
-							Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: "example.com",
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+							},
 						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 				addNodeWithRoleToTracker("control-plane", kubeAPIClient)
 				kubeAPIClient.PrependReactor("create", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
 					createdSecret := action.(coretesting.CreateAction).GetObject().(*corev1.Secret)
@@ -2651,15 +2746,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		when("there is an error creating the CA secret", func() {
 			it.Before(func() {
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-						ExternalEndpoint: "example.com",
-						Service: v1alpha1.ImpersonationProxyServiceSpec{
-							Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: "example.com",
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+							},
 						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 				addNodeWithRoleToTracker("control-plane", kubeAPIClient)
 				kubeAPIClient.PrependReactor("create", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
 					createdSecret := action.(coretesting.CreateAction).GetObject().(*corev1.Secret)
@@ -2685,15 +2783,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		when("the CA secret exists but is invalid while the TLS secret needs to be created", func() {
 			it.Before(func() {
 				addNodeWithRoleToTracker("control-plane", kubeAPIClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-						ExternalEndpoint: "example.com",
-						Service: v1alpha1.ImpersonationProxyServiceSpec{
-							Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: "example.com",
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+							},
 						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 				addSecretToTrackers(newEmptySecret(caSecretName), kubeAPIClient, kubeInformerClient)
 			})
 
@@ -2715,11 +2816,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				addLoadBalancerServiceToTracker(loadBalancerServiceName, kubeInformerClient)
 				addLoadBalancerServiceToTracker(loadBalancerServiceName, kubeAPIClient)
 				addSecretToTrackers(newEmptySecret(tlsSecretName), kubeAPIClient, kubeInformerClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeAuto,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeAuto,
+						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 				startInformersAndController()
 				kubeAPIClient.PrependReactor("delete", "secrets", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, fmt.Errorf("error on delete")
@@ -2742,11 +2846,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			it.Before(func() {
 				addNodeWithRoleToTracker("control-plane", kubeAPIClient)
 				addSecretToTrackers(newEmptySecret(tlsSecretName), kubeInformerClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeDisabled,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeDisabled,
+						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 			})
 
 			it("does not pass the not found error through", func() {
@@ -2764,15 +2871,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		when("the PEM formatted data in the TLS Secret is not a valid cert", func() {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-						ExternalEndpoint: localhostIP,
-						Service: v1alpha1.ImpersonationProxyServiceSpec{
-							Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: localhostIP,
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+							},
 						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
 				tlsSecret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
@@ -2827,11 +2937,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			var caCrt []byte
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeEnabled,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeEnabled,
+						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
 				ca := newCA()
 				caSecret := newActualCASecret(ca, caSecretName)
@@ -2890,11 +3003,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				addSecretToTrackers(tlsSecret, kubeAPIClient, kubeInformerClient)
 				addLoadBalancerServiceWithIngressToTracker(loadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP}}, kubeInformerClient)
 				addLoadBalancerServiceWithIngressToTracker(loadBalancerServiceName, []corev1.LoadBalancerIngress{{IP: localhostIP}}, kubeAPIClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeAuto,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeAuto,
+						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 			})
 
 			it("deletes the invalid certs, creates new certs, and starts the impersonator", func() {
@@ -2935,19 +3051,22 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode: v1alpha1.ImpersonationProxyModeAuto,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeAuto,
+						},
 					},
-				}, pinnipedInformerClient)
-				pinnipedAPIClient.PrependReactor("create", "credentialissuers", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, fmt.Errorf("error on create")
+				}, pinnipedInformerClient, pinnipedAPIClient)
+				pinnipedAPIClient.PrependReactor("update", "credentialissuers", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, fmt.Errorf("error on update")
 				})
 			})
 
 			it("returns the error", func() {
 				startInformersAndController()
-				r.EqualError(runControllerSync(), "could not create or update credentialissuer: create failed: error on create")
+				r.EqualError(runControllerSync(), "failed to update CredentialIssuer status: error on update")
 			})
 
 			when("there is also a more fundamental error while starting the impersonator", func() {
@@ -2957,9 +3076,9 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					})
 				})
 
-				it("returns the more fundamental error instead of the CredentialIssuer error", func() {
+				it("returns both errors", func() {
 					startInformersAndController()
-					r.EqualError(runControllerSync(), "error on service creation")
+					r.EqualError(runControllerSync(), "[error on service creation, failed to update CredentialIssuer status: error on update]")
 				})
 			})
 		})
@@ -2967,15 +3086,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		when("the impersonator is ready but there is a problem with the signing secret, which should be created by another controller", func() {
 			const fakeHostname = "foo.example.com"
 			it.Before(func() {
-				addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-						ExternalEndpoint: fakeHostname,
-						Service: v1alpha1.ImpersonationProxyServiceSpec{
-							Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: fakeHostname,
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+							},
 						},
 					},
-				}, pinnipedInformerClient)
+				}, pinnipedInformerClient, pinnipedAPIClient)
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
 			})
 
@@ -3059,15 +3181,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			when("the impersonator is enabled but the service type is none and the external endpoint is empty", func() {
 				it.Before(func() {
 					addSecretToTrackers(signingCASecret, kubeInformerClient)
-					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
-						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
-							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
-							ExternalEndpoint: "",
-							Service: v1alpha1.ImpersonationProxyServiceSpec{
-								Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+								ExternalEndpoint: "",
+								Service: v1alpha1.ImpersonationProxyServiceSpec{
+									Type: v1alpha1.ImpersonationProxyServiceTypeNone,
+								},
 							},
 						},
-					}, pinnipedInformerClient)
+					}, pinnipedInformerClient, pinnipedAPIClient)
 					addNodeWithRoleToTracker("control-plane", kubeAPIClient)
 				})
 
@@ -3078,7 +3203,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				})
 			})
 		})
-	}, spec.Report(report.Terminal{}))
+	}, spec.Report(report.Terminal{})) // TODO: replace the Parallel() call here
 }
 
 type testQueue struct {

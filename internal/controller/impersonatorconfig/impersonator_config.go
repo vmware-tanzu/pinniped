@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -152,8 +153,13 @@ func NewImpersonatorConfigController(
 func (c *impersonatorConfigController) Sync(syncCtx controllerlib.Context) error {
 	plog.Debug("Starting impersonatorConfigController Sync")
 
-	strategy, err := c.doSync(syncCtx)
+	// Load the CredentialIssuer that we'll update with status.
+	credIssuer, err := c.credIssuerInformer.Lister().Get(c.credentialIssuerResourceName)
+	if err != nil {
+		return fmt.Errorf("could not get CredentialIssuer to update: %w", err)
+	}
 
+	strategy, err := c.doSync(syncCtx, credIssuer)
 	if err != nil {
 		strategy = &v1alpha1.CredentialIssuerStrategy{
 			Type:           v1alpha1.ImpersonationProxyStrategyType,
@@ -166,13 +172,12 @@ func (c *impersonatorConfigController) Sync(syncCtx controllerlib.Context) error
 		c.clearSignerCA()
 	}
 
-	updateStrategyErr := c.updateStrategy(syncCtx.Context, strategy)
-	if updateStrategyErr != nil {
-		plog.Error("error while updating the CredentialIssuer status", err)
-		if err == nil {
-			err = updateStrategyErr
-		}
-	}
+	err = utilerrors.NewAggregate([]error{err, issuerconfig.Update(
+		syncCtx.Context,
+		c.pinnipedAPIClient,
+		credIssuer,
+		*strategy,
+	)})
 
 	if err == nil {
 		plog.Debug("Successfully finished impersonatorConfigController Sync")
@@ -196,10 +201,10 @@ type certNameInfo struct {
 	clientEndpoint string
 }
 
-func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context) (*v1alpha1.CredentialIssuerStrategy, error) {
+func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context, credIssuer *v1alpha1.CredentialIssuer) (*v1alpha1.CredentialIssuerStrategy, error) {
 	ctx := syncCtx.Context
 
-	config, err := c.loadImpersonationProxyConfiguration()
+	impersonationSpec, err := c.loadImpersonationProxyConfiguration(credIssuer)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +222,7 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context) (*v
 		plog.Debug("Queried for control plane nodes", "foundControlPlaneNodes", hasControlPlaneNodes)
 	}
 
-	if c.shouldHaveImpersonator(config) {
+	if c.shouldHaveImpersonator(impersonationSpec) {
 		if err = c.ensureImpersonatorIsStarted(syncCtx); err != nil {
 			return nil, err
 		}
@@ -227,8 +232,8 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context) (*v
 		}
 	}
 
-	if c.shouldHaveLoadBalancer(config) {
-		if err = c.ensureLoadBalancerIsStarted(ctx, config); err != nil {
+	if c.shouldHaveLoadBalancer(impersonationSpec) {
+		if err = c.ensureLoadBalancerIsStarted(ctx, impersonationSpec); err != nil {
 			return nil, err
 		}
 	} else {
@@ -237,8 +242,8 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context) (*v
 		}
 	}
 
-	if c.shouldHaveClusterIPService(config) {
-		if err = c.ensureClusterIPServiceIsStarted(ctx, config); err != nil {
+	if c.shouldHaveClusterIPService(impersonationSpec) {
+		if err = c.ensureClusterIPServiceIsStarted(ctx, impersonationSpec); err != nil {
 			return nil, err
 		}
 	} // else { // TODO test stopping the cluster ip service
@@ -247,7 +252,7 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context) (*v
 	//	}
 	//}
 
-	nameInfo, err := c.findDesiredTLSCertificateName(config)
+	nameInfo, err := c.findDesiredTLSCertificateName(impersonationSpec)
 	if err != nil {
 		// Unexpected error while determining the name that should go into the certs, so clear any existing certs.
 		c.tlsServingCertDynamicCertProvider.UnsetCertKeyContent()
@@ -255,7 +260,7 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context) (*v
 	}
 
 	var impersonationCA *certauthority.CA
-	if c.shouldHaveTLSSecret(config) {
+	if c.shouldHaveTLSSecret(impersonationSpec) {
 		if impersonationCA, err = c.ensureCASecretIsCreated(ctx); err != nil {
 			return nil, err
 		}
@@ -266,7 +271,7 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context) (*v
 		return nil, err
 	}
 
-	credentialIssuerStrategyResult := c.doSyncResult(nameInfo, config, impersonationCA)
+	credentialIssuerStrategyResult := c.doSyncResult(nameInfo, impersonationSpec, impersonationCA)
 
 	if err = c.loadSignerCA(credentialIssuerStrategyResult.Status); err != nil {
 		return nil, err
@@ -275,12 +280,7 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context) (*v
 	return credentialIssuerStrategyResult, nil
 }
 
-func (c *impersonatorConfigController) loadImpersonationProxyConfiguration() (*v1alpha1.ImpersonationProxySpec, error) {
-	credIssuer, err := c.credIssuerInformer.Lister().Get(c.credentialIssuerResourceName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get %s CredentialIssuer: %w", c.credentialIssuerResourceName, err)
-	}
-
+func (c *impersonatorConfigController) loadImpersonationProxyConfiguration(credIssuer *v1alpha1.CredentialIssuer) (*v1alpha1.ImpersonationProxySpec, error) {
 	// Make a copy of the spec since we got this object from informer cache.
 	spec := credIssuer.Spec.DeepCopy().ImpersonationProxy
 	if spec == nil {
@@ -327,11 +327,6 @@ func (c *impersonatorConfigController) shouldHaveClusterIPService(config *v1alph
 
 func (c *impersonatorConfigController) shouldHaveTLSSecret(config *v1alpha1.ImpersonationProxySpec) bool {
 	return c.shouldHaveImpersonator(config)
-}
-
-func (c *impersonatorConfigController) updateStrategy(ctx context.Context, strategy *v1alpha1.CredentialIssuerStrategy) error {
-	// TODO use informer client rather than api client for reading
-	return issuerconfig.UpdateStrategy(ctx, c.credentialIssuerResourceName, c.labels, c.pinnipedAPIClient, *strategy)
 }
 
 func (c *impersonatorConfigController) loadBalancerExists() (bool, error) {

@@ -1,6 +1,7 @@
 // Copyright 2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+// Package issuerconfig contains helpers for updating CredentialIssuer status entries.
 package issuerconfig
 
 import (
@@ -14,23 +15,6 @@ import (
 	"go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	"go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 )
-
-// UpdateStrategy creates or updates the desired strategy in the CredentialIssuer status.strategies field.
-// The CredentialIssuer will be created if it does not already exist.
-func UpdateStrategy(ctx context.Context,
-	name string,
-	credentialIssuerLabels map[string]string,
-	pinnipedAPIClient versioned.Interface,
-	strategy v1alpha1.CredentialIssuerStrategy,
-) error {
-	return CreateOrUpdateCredentialIssuerStatus(
-		ctx,
-		name,
-		credentialIssuerLabels,
-		pinnipedAPIClient,
-		func(configToUpdate *v1alpha1.CredentialIssuerStatus) { mergeStrategy(configToUpdate, strategy) },
-	)
-}
 
 // Update a strategy on an existing CredentialIssuer, merging into any existing strategy entries.
 func Update(ctx context.Context, client versioned.Interface, issuer *v1alpha1.CredentialIssuer, strategy v1alpha1.CredentialIssuerStrategy) error {

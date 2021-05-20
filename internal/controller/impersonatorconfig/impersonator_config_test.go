@@ -908,7 +908,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			return updatedLoadBalancerService
 		}
 
-		var requireClusterIPWasCreated = func(action coretesting.Action) {
+		var requireClusterIPWasCreated = func(action coretesting.Action) *corev1.Service {
 			createAction, ok := action.(coretesting.CreateAction)
 			r.True(ok, "should have been able to cast this action to CreateAction: %v", action)
 			r.Equal("create", createAction.GetVerb())
@@ -917,6 +917,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.Equal(corev1.ServiceTypeClusterIP, createdClusterIPService.Spec.Type)
 			r.Equal("app-name", createdClusterIPService.Spec.Selector["app"])
 			r.Equal(labels, createdClusterIPService.Labels)
+			return createdClusterIPService
 		}
 
 		var requireClusterIPWasDeleted = func(action coretesting.Action) {
@@ -926,6 +927,19 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.Equal("delete", deleteAction.GetVerb())
 			r.Equal(clusterIPServiceName, deleteAction.GetName())
 			r.Equal("services", deleteAction.GetResource().Resource)
+		}
+
+		var requireClusterIPWasUpdated = func(action coretesting.Action) *corev1.Service {
+			updateAction, ok := action.(coretesting.UpdateAction)
+			r.True(ok, "should have been able to cast this action to UpdateAction: %v", action)
+			r.Equal("update", updateAction.GetVerb())
+			updatedLoadBalancerService := updateAction.GetObject().(*corev1.Service)
+			r.Equal(clusterIPServiceName, updatedLoadBalancerService.Name)
+			r.Equal(installedInNamespace, updatedLoadBalancerService.Namespace)
+			r.Equal(corev1.ServiceTypeClusterIP, updatedLoadBalancerService.Spec.Type)
+			r.Equal("app-name", updatedLoadBalancerService.Spec.Selector["app"])
+			r.Equal(labels, updatedLoadBalancerService.Labels)
+			return updatedLoadBalancerService
 		}
 
 		var requireTLSSecretWasDeleted = func(action coretesting.Action) {
@@ -2340,6 +2354,67 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			})
 		})
 
+		when("requesting a cluster ip via CredentialIssuer, then updating the annotations", func() {
+			it.Before(func() {
+				addSecretToTrackers(signingCASecret, kubeInformerClient)
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+							ExternalEndpoint: localhostIP,
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type: v1alpha1.ImpersonationProxyServiceTypeClusterIP,
+							},
+						},
+					},
+				}, pinnipedInformerClient, pinnipedAPIClient)
+				addNodeWithRoleToTracker("worker", kubeAPIClient)
+			})
+
+			it("creates the cluster ip without annotations, then adds them", func() {
+				startInformersAndController()
+
+				// Should have started in "enabled" mode with service type load balancer, so one is created.
+				r.NoError(runControllerSync())
+				r.Len(kubeAPIClient.Actions(), 4)
+				requireNodesListed(kubeAPIClient.Actions()[0])
+				clusterIPService := requireClusterIPWasCreated(kubeAPIClient.Actions()[1])
+				require.Equal(t, map[string]string(nil), clusterIPService.Annotations) // there should be no annotations at first
+				ca := requireCASecretWasCreated(kubeAPIClient.Actions()[2])
+				requireTLSSecretWasCreated(kubeAPIClient.Actions()[3], ca)
+				requireTLSServerIsRunning(ca, testServerAddr(), nil)
+				requireCredentialIssuer(newSuccessStrategy(localhostIP, ca))
+				requireSigningCertProviderHasLoadedCerts(signingCACertPEM, signingCAKeyPEM)
+
+				// Simulate the informer cache's background update from its watch.
+				addObjectFromCreateActionToInformerAndWait(kubeAPIClient.Actions()[1], kubeInformers.Core().V1().Services())
+				addObjectFromCreateActionToInformerAndWait(kubeAPIClient.Actions()[2], kubeInformers.Core().V1().Secrets())
+				addObjectFromCreateActionToInformerAndWait(kubeAPIClient.Actions()[3], kubeInformers.Core().V1().Secrets())
+
+				// Add annotations to the spec.
+				annotations := map[string]string{"my-annotation-key": "my-annotation-val"}
+				updateCredentialIssuerInInformerAndWait(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+					ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+						Mode:             v1alpha1.ImpersonationProxyModeEnabled,
+						ExternalEndpoint: localhostIP,
+						Service: v1alpha1.ImpersonationProxyServiceSpec{
+							Type:        v1alpha1.ImpersonationProxyServiceTypeClusterIP,
+							Annotations: annotations,
+						},
+					},
+				}, pinnipedInformers.Config().V1alpha1().CredentialIssuers())
+
+				r.NoError(runControllerSync())
+				r.Len(kubeAPIClient.Actions(), 5) // one more item to update the loadbalancer
+				clusterIPService = requireClusterIPWasUpdated(kubeAPIClient.Actions()[4])
+				require.Equal(t, annotations, clusterIPService.Annotations) // now the annotations should exist on the load balancer
+				requireTLSServerIsRunning(ca, testServerAddr(), nil)
+				requireCredentialIssuer(newSuccessStrategy(localhostIP, ca))
+				requireSigningCertProviderHasLoadedCerts(signingCACertPEM, signingCAKeyPEM)
+			})
+		})
+
 		when("requesting a load balancer via CredentialIssuer, then adding a static loadBalancerIP to the spec", func() {
 			it.Before(func() {
 				addSecretToTrackers(signingCASecret, kubeInformerClient)
@@ -2833,6 +2908,65 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				startInformersAndController()
 				r.EqualError(runControllerSync(), "error on create")
 				requireCredentialIssuer(newErrorStrategy("error on create"))
+				requireSigningCertProviderIsEmpty()
+				requireTLSServerIsRunningWithoutCerts()
+			})
+		})
+
+		when("there is an error creating the cluster ip", func() {
+			it.Before(func() {
+				addNodeWithRoleToTracker("worker", kubeAPIClient)
+				kubeAPIClient.PrependReactor("create", "services", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, fmt.Errorf("error on create")
+				})
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeAuto,
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type: v1alpha1.ImpersonationProxyServiceTypeClusterIP,
+							},
+						},
+					},
+				}, pinnipedInformerClient, pinnipedAPIClient)
+			})
+
+			it("returns an error", func() {
+				startInformersAndController()
+				r.EqualError(runControllerSync(), "error on create")
+				requireCredentialIssuer(newErrorStrategy("error on create"))
+				requireSigningCertProviderIsEmpty()
+				requireTLSServerIsRunningWithoutCerts()
+			})
+		})
+
+		when("there is an error updating the cluster ip", func() {
+			it.Before(func() {
+				addNodeWithRoleToTracker("worker", kubeAPIClient)
+				kubeAPIClient.PrependReactor("update", "services", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, fmt.Errorf("error on update")
+				})
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeAuto,
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type:        v1alpha1.ImpersonationProxyServiceTypeClusterIP,
+								Annotations: map[string]string{"key": "val"},
+							},
+						},
+					},
+				}, pinnipedInformerClient, pinnipedAPIClient)
+				addClusterIPServiceToTracker(clusterIPServiceName, localhostIP, kubeAPIClient)
+				addClusterIPServiceToTracker(clusterIPServiceName, localhostIP, kubeInformerClient)
+			})
+
+			it("returns an error", func() {
+				startInformersAndController()
+				r.EqualError(runControllerSync(), "error on update")
+				requireCredentialIssuer(newErrorStrategy("error on update"))
 				requireSigningCertProviderIsEmpty()
 				requireTLSServerIsRunningWithoutCerts()
 			})

@@ -368,6 +368,18 @@ func (c *impersonatorConfigController) loadBalancerNeedsUpdate(config *v1alpha1.
 	return false, nil
 }
 
+func (c *impersonatorConfigController) ClusterIPNeedsUpdate(config *v1alpha1.ImpersonationProxySpec) (bool, error) {
+	clusterIP, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedClusterIPServiceName)
+	if err != nil {
+		return false, err
+	}
+	// TODO this will break if anything other than pinniped is adding annotations
+	if !reflect.DeepEqual(clusterIP.Annotations, config.Service.Annotations) {
+		return true, nil
+	}
+	return false, nil
+}
+
 func (c *impersonatorConfigController) tlsSecretExists() (bool, *v1.Secret, error) {
 	secret, err := c.secretsInformer.Lister().Secrets(c.namespace).Get(c.tlsSecretName)
 	notFound := k8serrors.IsNotFound(err)
@@ -536,31 +548,28 @@ func (c *impersonatorConfigController) ensureClusterIPServiceIsStarted(ctx conte
 			Annotations: config.Service.Annotations,
 		},
 	}
-	running, _ := c.clusterIPExists()
+	running, err := c.clusterIPExists()
+	if err != nil {
+		return err
+	}
 	if running {
+		needsUpdate, err := c.ClusterIPNeedsUpdate(config)
+		if err != nil {
+			return err
+		}
+		if needsUpdate {
+			plog.Info("updating cluster ip for impersonation proxy",
+				"service", c.generatedLoadBalancerServiceName,
+				"namespace", c.namespace)
+			_, err = c.k8sClient.CoreV1().Services(c.namespace).Update(ctx, &clusterIP, metav1.UpdateOptions{})
+			return err
+		}
 		return nil
 	}
-	// if err != nil {
-	// return err // TODO test this error case
-	//}
-	// if running {
-	//	needsUpdate, err := c.ClusterIPNeedsUpdate(config) // TODO test updating annotations on clusterip
-	//	if err != nil {
-	//		return err
-	//	}
-	//	if needsUpdate {
-	//		plog.Info("updating load balancer for impersonation proxy",
-	//			"service", c.generatedLoadBalancerServiceName,
-	//			"namespace", c.namespace)
-	//		_, err = c.k8sClient.CoreV1().Services(c.namespace).Update(ctx, &loadBalancer, metav1.UpdateOptions{})
-	//		return err
-	//	}
-	//	return nil
-	// }
 	plog.Info("creating cluster ip for impersonation proxy",
 		"service", c.generatedClusterIPServiceName,
 		"namespace", c.namespace)
-	_, err := c.k8sClient.CoreV1().Services(c.namespace).Create(ctx, &clusterIP, metav1.CreateOptions{})
+	_, err = c.k8sClient.CoreV1().Services(c.namespace).Create(ctx, &clusterIP, metav1.CreateOptions{})
 	return err
 }
 

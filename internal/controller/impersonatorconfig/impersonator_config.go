@@ -246,11 +246,11 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context, cre
 		if err = c.ensureClusterIPServiceIsStarted(ctx, impersonationSpec); err != nil {
 			return nil, err
 		}
-	} // else { // TODO test stopping the cluster ip service
-	//	if err = c.ensureClusterIPServiceIsStopped(ctx); err != nil {
-	//		return nil, err
-	//	}
-	//}
+	} else {
+		if err = c.ensureClusterIPServiceIsStopped(ctx); err != nil {
+			return nil, err
+		}
+	}
 
 	nameInfo, err := c.findDesiredTLSCertificateName(impersonationSpec)
 	if err != nil {
@@ -331,6 +331,18 @@ func (c *impersonatorConfigController) shouldHaveTLSSecret(config *v1alpha1.Impe
 
 func (c *impersonatorConfigController) loadBalancerExists() (bool, error) {
 	_, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedLoadBalancerServiceName)
+	notFound := k8serrors.IsNotFound(err)
+	if notFound {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (c *impersonatorConfigController) clusterIPExists() (bool, error) {
+	_, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedClusterIPServiceName)
 	notFound := k8serrors.IsNotFound(err)
 	if notFound {
 		return false, nil
@@ -524,11 +536,14 @@ func (c *impersonatorConfigController) ensureClusterIPServiceIsStarted(ctx conte
 			Annotations: config.Service.Annotations,
 		},
 	}
-	//running, err := c.ClusterIPExists() // TODO test that clusterip is only created once
-	//if err != nil {
-	//	return err
+	running, _ := c.clusterIPExists()
+	if running {
+		return nil
+	}
+	// if err != nil {
+	// return err // TODO test this error case
 	//}
-	//if running {
+	// if running {
 	//	needsUpdate, err := c.ClusterIPNeedsUpdate(config) // TODO test updating annotations on clusterip
 	//	if err != nil {
 	//		return err
@@ -541,12 +556,27 @@ func (c *impersonatorConfigController) ensureClusterIPServiceIsStarted(ctx conte
 	//		return err
 	//	}
 	//	return nil
-	//}
+	// }
 	plog.Info("creating cluster ip for impersonation proxy",
 		"service", c.generatedClusterIPServiceName,
 		"namespace", c.namespace)
 	_, err := c.k8sClient.CoreV1().Services(c.namespace).Create(ctx, &clusterIP, metav1.CreateOptions{})
 	return err
+}
+
+func (c *impersonatorConfigController) ensureClusterIPServiceIsStopped(ctx context.Context) error {
+	running, err := c.clusterIPExists()
+	if err != nil {
+		return err
+	}
+	if !running {
+		return nil
+	}
+
+	plog.Info("Deleting cluster ip for impersonation proxy",
+		"service", c.generatedClusterIPServiceName,
+		"namespace", c.namespace)
+	return c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedClusterIPServiceName, metav1.DeleteOptions{})
 }
 
 func (c *impersonatorConfigController) ensureTLSSecret(ctx context.Context, nameInfo *certNameInfo, ca *certauthority.CA) error {
@@ -750,10 +780,9 @@ func (c *impersonatorConfigController) findDesiredTLSCertificateName(config *v1a
 	// - clusterip and no external endpoint
 	if config.ExternalEndpoint != "" {
 		return c.findTLSCertificateNameFromEndpointConfig(config), nil
-	} // else if config.Service.Type == v1alpha1.ImpersonationProxyServiceTypeClusterIP {
-	//	// c.findTLSCertificateNameFromClusterIPService()
-	//	// TODO implement this
-	//}
+	} else if config.Service.Type == v1alpha1.ImpersonationProxyServiceTypeClusterIP {
+		return c.findTLSCertificateNameFromClusterIPService()
+	}
 	return c.findTLSCertificateNameFromLoadBalancer()
 }
 
@@ -799,6 +828,24 @@ func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() 
 	}
 
 	return nil, fmt.Errorf("could not find valid IP addresses or hostnames from load balancer %s/%s", c.namespace, lb.Name)
+}
+
+func (c *impersonatorConfigController) findTLSCertificateNameFromClusterIPService() (*certNameInfo, error) {
+	clusterIP, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedClusterIPServiceName)
+	notFound := k8serrors.IsNotFound(err)
+	if notFound {
+		// We aren't ready and will try again later in this case.
+		return &certNameInfo{ready: false}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	ip := clusterIP.Spec.ClusterIP
+	if ip != "" {
+		parsedIP := net.ParseIP(ip)
+		return &certNameInfo{ready: true, selectedIP: parsedIP, clientEndpoint: ip}, nil
+	}
+	return &certNameInfo{ready: false}, nil
 }
 
 func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, ca *certauthority.CA, ip net.IP, hostname string) (*v1.Secret, error) {

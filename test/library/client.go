@@ -437,7 +437,10 @@ func CreateTestLDAPIdentityProvider(t *testing.T, spec idpv1alpha1.LDAPIdentityP
 			return false
 		}
 		return result.Status.Phase == expectedPhase
-	}, 60*time.Second, 1*time.Second, "expected the LDAPIdentityProvider to go into phase %s, LDAPIdentityProvider was: %s", expectedPhase, Sdump(result))
+	},
+		2*time.Minute, // it takes 1 minute for a failed LDAP TLS connection test to timeout before it tries using StartTLS, so wait longer than that
+		1*time.Second,
+		"expected the LDAPIdentityProvider to go into phase %s, LDAPIdentityProvider was: %s", expectedPhase, Sdump(result))
 	return result
 }
 

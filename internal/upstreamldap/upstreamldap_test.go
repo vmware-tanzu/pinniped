@@ -55,11 +55,12 @@ var (
 func TestEndUserAuthentication(t *testing.T) {
 	providerConfig := func(editFunc func(p *ProviderConfig)) *ProviderConfig {
 		config := &ProviderConfig{
-			Name:         "some-provider-name",
-			Host:         testHost,
-			CABundle:     nil, // this field is only used by the production dialer, which is replaced by a mock for this test
-			BindUsername: testBindUsername,
-			BindPassword: testBindPassword,
+			Name:               "some-provider-name",
+			Host:               testHost,
+			CABundle:           nil, // this field is only used by the production dialer, which is replaced by a mock for this test
+			ConnectionProtocol: TLS,
+			BindUsername:       testBindUsername,
+			BindPassword:       testBindPassword,
 			UserSearch: UserSearchConfig{
 				Base:              testUserSearchBase,
 				Filter:            testUserSearchFilter,
@@ -989,12 +990,13 @@ func TestEndUserAuthentication(t *testing.T) {
 func TestTestConnection(t *testing.T) {
 	providerConfig := func(editFunc func(p *ProviderConfig)) *ProviderConfig {
 		config := &ProviderConfig{
-			Name:         "some-provider-name",
-			Host:         testHost,
-			CABundle:     nil, // this field is only used by the production dialer, which is replaced by a mock for this test
-			BindUsername: testBindUsername,
-			BindPassword: testBindPassword,
-			UserSearch:   UserSearchConfig{}, // not used by TestConnection
+			Name:               "some-provider-name",
+			Host:               testHost,
+			CABundle:           nil, // this field is only used by the production dialer, which is replaced by a mock for this test
+			ConnectionProtocol: TLS,
+			BindUsername:       testBindUsername,
+			BindPassword:       testBindPassword,
+			UserSearch:         UserSearchConfig{}, // not used by TestConnection
 		}
 		if editFunc != nil {
 			editFunc(config)
@@ -1132,27 +1134,55 @@ func TestRealTLSDialing(t *testing.T) {
 	tests := []struct {
 		name      string
 		host      string
+		connProto LDAPConnectionProtocol
 		caBundle  []byte
 		context   context.Context
 		wantError string
 	}{
 		{
-			name:     "happy path",
-			host:     testServerHostAndPort,
-			caBundle: []byte(testServerCABundle),
-			context:  context.Background(),
+			name:      "happy path",
+			host:      testServerHostAndPort,
+			caBundle:  []byte(testServerCABundle),
+			connProto: TLS,
+			context:   context.Background(),
 		},
 		{
-			name:      "invalid CA bundle",
+			name:      "invalid CA bundle with TLS",
 			host:      testServerHostAndPort,
 			caBundle:  []byte("not a ca bundle"),
+			connProto: TLS,
 			context:   context.Background(),
 			wantError: `LDAP Result Code 200 "Network Error": could not parse CA bundle`,
+		},
+		{
+			name:      "invalid CA bundle with StartTLS",
+			host:      testServerHostAndPort,
+			caBundle:  []byte("not a ca bundle"),
+			connProto: StartTLS,
+			context:   context.Background(),
+			wantError: `LDAP Result Code 200 "Network Error": could not parse CA bundle`,
+		},
+		{
+			name:      "invalid host with TLS",
+			host:      "this:is:not:a:valid:hostname",
+			caBundle:  []byte(testServerCABundle),
+			connProto: TLS,
+			context:   context.Background(),
+			wantError: `LDAP Result Code 200 "Network Error": address this:is:not:a:valid:hostname: too many colons in address`,
+		},
+		{
+			name:      "invalid host with StartTLS",
+			host:      "this:is:not:a:valid:hostname",
+			caBundle:  []byte(testServerCABundle),
+			connProto: StartTLS,
+			context:   context.Background(),
+			wantError: `LDAP Result Code 200 "Network Error": address this:is:not:a:valid:hostname: too many colons in address`,
 		},
 		{
 			name:      "missing CA bundle when it is required because the host is not using a trusted CA",
 			host:      testServerHostAndPort,
 			caBundle:  nil,
+			connProto: TLS,
 			context:   context.Background(),
 			wantError: `LDAP Result Code 200 "Network Error": x509: certificate signed by unknown authority`,
 		},
@@ -1161,6 +1191,7 @@ func TestRealTLSDialing(t *testing.T) {
 			// This is assuming that this port was not reclaimed by another app since the test setup ran. Seems safe enough.
 			host:      recentlyClaimedHostAndPort,
 			caBundle:  []byte(testServerCABundle),
+			connProto: TLS,
 			context:   context.Background(),
 			wantError: fmt.Sprintf(`LDAP Result Code 200 "Network Error": dial tcp %s: connect: connection refused`, recentlyClaimedHostAndPort),
 		},
@@ -1168,25 +1199,35 @@ func TestRealTLSDialing(t *testing.T) {
 			name:      "pays attention to the passed context",
 			host:      testServerHostAndPort,
 			caBundle:  []byte(testServerCABundle),
+			connProto: TLS,
 			context:   alreadyCancelledContext,
 			wantError: fmt.Sprintf(`LDAP Result Code 200 "Network Error": dial tcp %s: operation was canceled`, testServerHostAndPort),
 		},
+		{
+			name:      "unsupported connection protocol",
+			host:      testServerHostAndPort,
+			caBundle:  []byte(testServerCABundle),
+			connProto: "bad usage of this type",
+			context:   alreadyCancelledContext,
+			wantError: `LDAP Result Code 200 "Network Error": did not specify valid ConnectionProtocol`,
+		},
 	}
 	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
 			provider := New(ProviderConfig{
-				Host:     test.host,
-				CABundle: test.caBundle,
-				Dialer:   nil, // this test is for the default (production) dialer
+				Host:               tt.host,
+				CABundle:           tt.caBundle,
+				ConnectionProtocol: tt.connProto,
+				Dialer:             nil, // this test is for the default (production) TLS dialer
 			})
-			conn, err := provider.dial(test.context)
+			conn, err := provider.dial(tt.context)
 			if conn != nil {
 				defer conn.Close()
 			}
-			if test.wantError != "" {
+			if tt.wantError != "" {
 				require.Nil(t, conn)
-				require.EqualError(t, err, test.wantError)
+				require.EqualError(t, err, tt.wantError)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, conn)
@@ -1232,6 +1273,12 @@ func TestHostAndPortWithDefaultPort(t *testing.T) {
 			wantHostAndPort: "host.example.com",
 		},
 		{
+			name:            "host has port and default port is empty",
+			hostAndPort:     "host.example.com:42",
+			defaultPort:     "",
+			wantHostAndPort: "host.example.com:42",
+		},
+		{
 			name:            "IPv6 host already has port",
 			hostAndPort:     "[::1%lo0]:80",
 			defaultPort:     "42",
@@ -1257,15 +1304,63 @@ func TestHostAndPortWithDefaultPort(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
-			hostAndPort, err := hostAndPortWithDefaultPort(test.hostAndPort, test.defaultPort)
-			if test.wantError != "" {
-				require.EqualError(t, err, test.wantError)
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			hostAndPort, err := hostAndPortWithDefaultPort(tt.hostAndPort, tt.defaultPort)
+			if tt.wantError != "" {
+				require.EqualError(t, err, tt.wantError)
 			} else {
 				require.NoError(t, err)
 			}
-			require.Equal(t, test.wantHostAndPort, hostAndPort)
+			require.Equal(t, tt.wantHostAndPort, hostAndPort)
+		})
+	}
+}
+
+// Test various cases of host and port parsing.
+func TestHostWithoutPort(t *testing.T) {
+	tests := []struct {
+		name            string
+		hostAndPort     string
+		wantError       string
+		wantHostAndPort string
+	}{
+		{
+			name:            "host already has port",
+			hostAndPort:     "host.example.com:99",
+			wantHostAndPort: "host.example.com",
+		},
+		{
+			name:            "host does not have port",
+			hostAndPort:     "host.example.com",
+			wantHostAndPort: "host.example.com",
+		},
+		{
+			name:            "IPv6 host already has port",
+			hostAndPort:     "[::1%lo0]:80",
+			wantHostAndPort: "[::1%lo0]",
+		},
+		{
+			name:            "IPv6 host does not have port",
+			hostAndPort:     "[::1%lo0]",
+			wantHostAndPort: "[::1%lo0]",
+		},
+		{
+			name:        "host is not valid",
+			hostAndPort: "host.example.com:port1:port2",
+			wantError:   "address host.example.com:port1:port2: too many colons in address",
+		},
+	}
+	for _, test := range tests {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			hostAndPort, err := hostWithoutPort(tt.hostAndPort)
+			if tt.wantError != "" {
+				require.EqualError(t, err, tt.wantError)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.wantHostAndPort, hostAndPort)
 		})
 	}
 }

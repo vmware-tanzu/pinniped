@@ -37,15 +37,19 @@ func TestLDAPSearch(t *testing.T) {
 		cancelFunc() // this will send SIGKILL to the subprocess, just in case
 	})
 
-	hostPorts := findRecentlyUnusedLocalhostPorts(t, 2)
-	ldapHostPort := hostPorts[0]
-	unusedHostPort := hostPorts[1]
+	localhostPorts := findRecentlyUnusedLocalhostPorts(t, 3)
+	ldapLocalhostPort := localhostPorts[0]
+	ldapsLocalhostPort := localhostPorts[1]
+	unusedLocalhostPort := localhostPorts[2]
 
 	// Expose the the test LDAP server's TLS port on the localhost.
-	startKubectlPortForward(ctx, t, ldapHostPort, "ldaps", "ldap", env.ToolsNamespace)
+	startKubectlPortForward(ctx, t, ldapsLocalhostPort, "ldaps", "ldap", env.ToolsNamespace)
+
+	// Expose the the test LDAP server's StartTLS port on the localhost.
+	startKubectlPortForward(ctx, t, ldapLocalhostPort, "ldap", "ldap", env.ToolsNamespace)
 
 	providerConfig := func(editFunc func(p *upstreamldap.ProviderConfig)) *upstreamldap.ProviderConfig {
-		providerConfig := defaultProviderConfig(env, ldapHostPort)
+		providerConfig := defaultProviderConfig(env, ldapsLocalhostPort)
 		if editFunc != nil {
 			editFunc(providerConfig)
 		}
@@ -64,10 +68,22 @@ func TestLDAPSearch(t *testing.T) {
 		wantUnauthenticated bool
 	}{
 		{
-			name:     "happy path",
+			name:     "happy path with TLS",
 			username: "pinny",
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(nil)),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
+			},
+		},
+		{
+			name:     "happy path with StartTLS",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.Host = "127.0.0.1:" + ldapLocalhostPort
+				p.ConnectionProtocol = upstreamldap.StartTLS
+			})),
 			wantAuthResponse: &authenticator.Response{
 				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 			},
@@ -252,6 +268,17 @@ func TestLDAPSearch(t *testing.T) {
 			wantError: `error binding as "cn=admin,dc=pinniped,dc=dev" before user search: LDAP Result Code 49 "Invalid Credentials": `,
 		},
 		{
+			name:     "when the bind user username is wrong with StartTLS: example of an error after successful connection with StartTLS",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.Host = "127.0.0.1:" + ldapLocalhostPort
+				p.ConnectionProtocol = upstreamldap.StartTLS
+				p.BindUsername = "cn=wrong,dc=pinniped,dc=dev"
+			})),
+			wantError: `error binding as "cn=wrong,dc=pinniped,dc=dev" before user search: LDAP Result Code 49 "Invalid Credentials": `,
+		},
+		{
 			name:                "when the end user password is wrong",
 			username:            "pinny",
 			password:            "wrong-pinny-password",
@@ -296,32 +323,89 @@ func TestLDAPSearch(t *testing.T) {
 			wantError: `error searching for user "pinny": LDAP Result Code 4 "Size Limit Exceeded": `,
 		},
 		{
-			name:      "when the server is unreachable",
+			name:      "when the server is unreachable with TLS",
 			username:  "pinny",
 			password:  pinnyPassword,
-			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.Host = "127.0.0.1:" + unusedHostPort })),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": dial tcp 127.0.0.1:%s: connect: connection refused`, unusedHostPort, unusedHostPort),
+			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.Host = "127.0.0.1:" + unusedLocalhostPort })),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": dial tcp 127.0.0.1:%s: connect: connection refused`, unusedLocalhostPort, unusedLocalhostPort),
 		},
 		{
-			name:      "when the server is not parsable",
+			name:     "when the server is unreachable with StartTLS",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.Host = "127.0.0.1:" + unusedLocalhostPort
+				p.ConnectionProtocol = upstreamldap.StartTLS
+			})),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": dial tcp 127.0.0.1:%s: connect: connection refused`, unusedLocalhostPort, unusedLocalhostPort),
+		},
+		{
+			name:      "when the server is not parsable with TLS",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.Host = "too:many:ports" })),
 			wantError: `error dialing host "too:many:ports": LDAP Result Code 200 "Network Error": address too:many:ports: too many colons in address`,
 		},
 		{
-			name:      "when the CA bundle is not parsable",
+			name:     "when the server is not parsable with StartTLS",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.Host = "127.0.0.1:" + ldapLocalhostPort
+				p.ConnectionProtocol = upstreamldap.StartTLS
+				p.Host = "too:many:ports"
+			})),
+			wantError: `error dialing host "too:many:ports": LDAP Result Code 200 "Network Error": address too:many:ports: too many colons in address`,
+		},
+		{
+			name:      "when the CA bundle is not parsable with TLS",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.CABundle = []byte("invalid-pem") })),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": could not parse CA bundle`, ldapHostPort),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": could not parse CA bundle`, ldapsLocalhostPort),
 		},
 		{
-			name:      "when the CA bundle does not cause the host to be trusted",
+			name:     "when the CA bundle is not parsable with StartTLS",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.Host = "127.0.0.1:" + ldapLocalhostPort
+				p.ConnectionProtocol = upstreamldap.StartTLS
+				p.CABundle = []byte("invalid-pem")
+			})),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": could not parse CA bundle`, ldapLocalhostPort),
+		},
+		{
+			name:      "when the CA bundle does not cause the host to be trusted with TLS",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.CABundle = nil })),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": x509: certificate signed by unknown authority`, ldapHostPort),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": x509: certificate signed by unknown authority`, ldapsLocalhostPort),
+		},
+		{
+			name:     "when the CA bundle does not cause the host to be trusted with StartTLS",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.Host = "127.0.0.1:" + ldapLocalhostPort
+				p.ConnectionProtocol = upstreamldap.StartTLS
+				p.CABundle = nil
+			})),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": TLS handshake failed (x509: certificate signed by unknown authority)`, ldapLocalhostPort),
+		},
+		{
+			name:      "when trying to use TLS to connect to a port which only supports StartTLS",
+			username:  "pinny",
+			password:  pinnyPassword,
+			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.Host = "127.0.0.1:" + ldapLocalhostPort })),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": EOF`, ldapLocalhostPort),
+		},
+		{
+			name:      "when trying to use StartTLS to connect to a port which only supports TLS",
+			username:  "pinny",
+			password:  pinnyPassword,
+			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.ConnectionProtocol = upstreamldap.StartTLS })),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": unable to read LDAP response packet: unexpected EOF`, ldapsLocalhostPort),
 		},
 		{
 			name:      "when the UsernameAttribute attribute has multiple values in the entry",
@@ -541,13 +625,14 @@ type authUserResult struct {
 	err           error
 }
 
-func defaultProviderConfig(env *library.TestEnv, ldapHostPort string) *upstreamldap.ProviderConfig {
+func defaultProviderConfig(env *library.TestEnv, port string) *upstreamldap.ProviderConfig {
 	return &upstreamldap.ProviderConfig{
-		Name:         "test-ldap-provider",
-		Host:         "127.0.0.1:" + ldapHostPort,
-		CABundle:     []byte(env.SupervisorUpstreamLDAP.CABundle),
-		BindUsername: "cn=admin,dc=pinniped,dc=dev",
-		BindPassword: "password",
+		Name:               "test-ldap-provider",
+		Host:               "127.0.0.1:" + port,
+		ConnectionProtocol: upstreamldap.TLS,
+		CABundle:           []byte(env.SupervisorUpstreamLDAP.CABundle),
+		BindUsername:       "cn=admin,dc=pinniped,dc=dev",
+		BindPassword:       "password",
 		UserSearch: upstreamldap.UserSearchConfig{
 			Base:              "ou=users,dc=pinniped,dc=dev",
 			Filter:            "", // defaults to UsernameAttribute={}, i.e. "cn={}" in this case

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-ldap/ldap/v3"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -196,12 +197,13 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		return deepCopy
 	}
 
-	providerConfigForValidUpstream := &upstreamldap.ProviderConfig{
-		Name:         testName,
-		Host:         testHost,
-		CABundle:     testCABundle,
-		BindUsername: testBindUsername,
-		BindPassword: testBindPassword,
+	providerConfigForValidUpstreamWithTLS := &upstreamldap.ProviderConfig{
+		Name:               testName,
+		Host:               testHost,
+		ConnectionProtocol: upstreamldap.TLS,
+		CABundle:           testCABundle,
+		BindUsername:       testBindUsername,
+		BindPassword:       testBindPassword,
 		UserSearch: upstreamldap.UserSearchConfig{
 			Base:              testUserSearchBase,
 			Filter:            testUserSearchFilter,
@@ -214,6 +216,11 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			GroupNameAttribute: testGroupNameAttrName,
 		},
 	}
+
+	// Make a copy with targeted changes.
+	copyOfProviderConfigForValidUpstreamWithTLS := *providerConfigForValidUpstreamWithTLS
+	providerConfigForValidUpstreamWithStartTLS := &copyOfProviderConfigForValidUpstreamWithTLS
+	providerConfigForValidUpstreamWithStartTLS.ConnectionProtocol = upstreamldap.StartTLS
 
 	bindSecretValidTrueCondition := func(gen int64) v1alpha1.Condition {
 		return v1alpha1.Condition{
@@ -264,16 +271,16 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                           string
-		initialValidatedSecretVersions map[string]string
-		inputUpstreams                 []runtime.Object
-		inputSecrets                   []runtime.Object
-		setupMocks                     func(conn *mockldapconn.MockConn)
-		dialError                      error
-		wantErr                        string
-		wantResultingCache             []*upstreamldap.ProviderConfig
-		wantResultingUpstreams         []v1alpha1.LDAPIdentityProvider
-		wantValidatedSecretVersions    map[string]string
+		name                     string
+		initialValidatedSettings map[string]validatedSettings
+		inputUpstreams           []runtime.Object
+		inputSecrets             []runtime.Object
+		setupMocks               func(conn *mockldapconn.MockConn)
+		dialErrors               map[string]error
+		wantErr                  string
+		wantResultingCache       []*upstreamldap.ProviderConfig
+		wantResultingUpstreams   []v1alpha1.LDAPIdentityProvider
+		wantValidatedSettings    map[string]validatedSettings
 	}{
 		{
 			name:               "no LDAPIdentityProvider upstreams clears the cache",
@@ -288,7 +295,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstream},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
 				Status: v1alpha1.LDAPIdentityProviderStatus{
@@ -296,7 +303,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
 			}},
-			wantValidatedSecretVersions: map[string]string{testName: "4242"},
+			wantValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
 		},
 		{
 			name:               "missing secret",
@@ -442,11 +449,12 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
-					Name:         testName,
-					Host:         testHost,
-					CABundle:     nil,
-					BindUsername: testBindUsername,
-					BindPassword: testBindPassword,
+					Name:               testName,
+					Host:               testHost,
+					ConnectionProtocol: upstreamldap.TLS,
+					CABundle:           nil,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
 					UserSearch: upstreamldap.UserSearchConfig{
 						Base:              testUserSearchBase,
 						Filter:            testUserSearchFilter,
@@ -478,7 +486,121 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					},
 				},
 			}},
-			wantValidatedSecretVersions: map[string]string{testName: "4242"},
+			wantValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
+		},
+		{
+			name: "when TLS connection fails it tries to use StartTLS instead: without a specified port it automatically switches ports",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+				upstream.Spec.Host = "ldap.example.com" // when the port is not specified, automatically switch ports for StartTLS
+			})},
+			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			dialErrors: map[string]error{
+				"ldap.example.com:" + ldap.DefaultLdapsPort: fmt.Errorf("some ldaps dial error"),
+				"ldap.example.com:" + ldap.DefaultLdapPort:  nil, // no error on the regular ldap:// port
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{
+				{
+					Name:               testName,
+					Host:               "ldap.example.com",
+					ConnectionProtocol: upstreamldap.StartTLS, // successfully fell back to using StartTLS
+					CABundle:           testCABundle,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
+					UserSearch: upstreamldap.UserSearchConfig{
+						Base:              testUserSearchBase,
+						Filter:            testUserSearchFilter,
+						UsernameAttribute: testUsernameAttrName,
+						UIDAttribute:      testUIDAttrName,
+					},
+					GroupSearch: upstreamldap.GroupSearchConfig{
+						Base:               testGroupSearchBase,
+						Filter:             testGroupSearchFilter,
+						GroupNameAttribute: testGroupNameAttrName,
+					},
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.LDAPIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						{
+							Type:               "LDAPConnectionValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message: fmt.Sprintf(
+								`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+								"ldap.example.com", testBindUsername, testSecretName, "4242"),
+							ObservedGeneration: 1234,
+						},
+						tlsConfigurationValidLoadedTrueCondition(1234),
+					},
+				},
+			}},
+			wantValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.StartTLS}},
+		},
+		{
+			name: "when TLS connection fails it tries to use StartTLS instead: with a specified port it does not automatically switch ports",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+				upstream.Spec.Host = "ldap.example.com:5678" // when the port is specified, do not automatically switch ports for StartTLS
+			})},
+			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Both dials fail, so there should be no bind.
+			},
+			dialErrors: map[string]error{
+				"ldap.example.com:5678": fmt.Errorf("some dial error"), // both TLS and StartTLS should try the same port and both fail
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{
+				// even though the connection test failed, still loads into the cache because it is treated like a warning
+				{
+					Name:               testName,
+					Host:               "ldap.example.com:5678",
+					ConnectionProtocol: upstreamldap.TLS, // need to pick TLS or StartTLS to load into the cache when both fail, so choose TLS
+					CABundle:           testCABundle,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
+					UserSearch: upstreamldap.UserSearchConfig{
+						Base:              testUserSearchBase,
+						Filter:            testUserSearchFilter,
+						UsernameAttribute: testUsernameAttrName,
+						UIDAttribute:      testUIDAttrName,
+					},
+					GroupSearch: upstreamldap.GroupSearchConfig{
+						Base:               testGroupSearchBase,
+						Filter:             testGroupSearchFilter,
+						GroupNameAttribute: testGroupNameAttrName,
+					},
+				},
+			},
+			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
+			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.LDAPIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						{
+							Type:               "LDAPConnectionValid",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "LDAPConnectionError",
+							Message: fmt.Sprintf(
+								`could not successfully connect to "%s" and bind as user "%s": error dialing host "%s": some dial error`,
+								"ldap.example.com:5678", testBindUsername, "ldap.example.com:5678"),
+							ObservedGeneration: 1234,
+						},
+						tlsConfigurationValidLoadedTrueCondition(1234),
+					},
+				},
+			}},
 		},
 		{
 			name: "non-nil TLS configuration with empty CertificateAuthorityData is valid",
@@ -493,11 +615,12 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
-					Name:         testName,
-					Host:         testHost,
-					CABundle:     nil,
-					BindUsername: testBindUsername,
-					BindPassword: testBindPassword,
+					Name:               testName,
+					Host:               testHost,
+					ConnectionProtocol: upstreamldap.TLS,
+					CABundle:           nil,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
 					UserSearch: upstreamldap.UserSearchConfig{
 						Base:              testUserSearchBase,
 						Filter:            testUserSearchFilter,
@@ -518,7 +641,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
 			}},
-			wantValidatedSecretVersions: map[string]string{testName: "4242"},
+			wantValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
 		},
 		{
 			name: "one valid upstream and one invalid upstream updates the cache to include only the valid upstream",
@@ -534,7 +657,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				conn.EXPECT().Close().Times(1)
 			},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
-			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstream},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "other-upstream", Generation: 42},
@@ -561,7 +684,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					},
 				},
 			},
-			wantValidatedSecretVersions: map[string]string{testName: "4242"},
+			wantValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
 		},
 		{
 			name:           "when testing the connection to the LDAP server fails then the upstream is still added to the cache anyway (treated like a warning)",
@@ -569,11 +692,12 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			inputSecrets:   []runtime.Object{validBindUserSecret("")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1).Return(errors.New("some bind error"))
-				conn.EXPECT().Close().Times(1)
+				// Expect two calls to each of these: once for trying TLS and once for trying StartTLS.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2).Return(errors.New("some bind error"))
+				conn.EXPECT().Close().Times(2)
 			},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
-			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstream},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
 				Status: v1alpha1.LDAPIdentityProviderStatus{
@@ -596,19 +720,19 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 		},
 		{
-			name: "when the LDAP server connection was already validated for the current resource generation and secret version, then do not validate it again",
+			name: "when the LDAP server connection was already validated using TLS for the current resource generation and secret version, then do not validate it again and keep using TLS",
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
 				upstream.Generation = 1234
 				upstream.Status.Conditions = []v1alpha1.Condition{
 					ldapConnectionValidTrueCondition(1234, "4242"),
 				}
 			})},
-			inputSecrets:                   []runtime.Object{validBindUserSecret("4242")},
-			initialValidatedSecretVersions: map[string]string{testName: "4242"},
+			inputSecrets:             []runtime.Object{validBindUserSecret("4242")},
+			initialValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should not perform a test dial and bind. No mocking here means the test will fail if Bind() or Close() are called.
 			},
-			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstream},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
 				Status: v1alpha1.LDAPIdentityProviderStatus{
@@ -616,7 +740,30 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
 			}},
-			wantValidatedSecretVersions: map[string]string{testName: "4242"},
+			wantValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
+		},
+		{
+			name: "when the LDAP server connection was already validated using StartTLS for the current resource generation and secret version, then do not validate it again and keep using StartTLS",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+				upstream.Generation = 1234
+				upstream.Status.Conditions = []v1alpha1.Condition{
+					ldapConnectionValidTrueCondition(1234, "4242"),
+				}
+			})},
+			inputSecrets:             []runtime.Object{validBindUserSecret("4242")},
+			initialValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.StartTLS}},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should not perform a test dial and bind. No mocking here means the test will fail if Bind() or Close() are called.
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithStartTLS},
+			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.LDAPIdentityProviderStatus{
+					Phase:      "Ready",
+					Conditions: allConditionsTrue(1234, "4242"),
+				},
+			}},
+			wantValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.StartTLS}},
 		},
 		{
 			name: "when the LDAP server connection was validated for an older resource generation, then try to validate it again",
@@ -626,14 +773,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					ldapConnectionValidTrueCondition(1233, "4242"), // older spec generation!
 				}
 			})},
-			inputSecrets:                   []runtime.Object{validBindUserSecret("4242")},
-			initialValidatedSecretVersions: map[string]string{testName: "4242"},
+			inputSecrets:             []runtime.Object{validBindUserSecret("4242")},
+			initialValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstream},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
 				Status: v1alpha1.LDAPIdentityProviderStatus{
@@ -641,7 +788,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
 			}},
-			wantValidatedSecretVersions: map[string]string{testName: "4242"},
+			wantValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
 		},
 		{
 			name: "when the LDAP server connection validation previously failed for this resource generation, then try to validate it again",
@@ -658,14 +805,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					},
 				}
 			})},
-			inputSecrets:                   []runtime.Object{validBindUserSecret("4242")},
-			initialValidatedSecretVersions: map[string]string{testName: "1"},
+			inputSecrets:             []runtime.Object{validBindUserSecret("4242")},
+			initialValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "1", LDAPConnectionProtocol: upstreamldap.TLS}},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstream},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
 				Status: v1alpha1.LDAPIdentityProviderStatus{
@@ -673,7 +820,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
 			}},
-			wantValidatedSecretVersions: map[string]string{testName: "4242"},
+			wantValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
 		},
 		{
 			name: "when the LDAP server connection was already validated for this resource generation but the bind secret has changed, then try to validate it again",
@@ -683,14 +830,14 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					ldapConnectionValidTrueCondition(1234, "4241"), // same spec generation, old secret version
 				}
 			})},
-			inputSecrets:                   []runtime.Object{validBindUserSecret("4242")}, // newer secret version!
-			initialValidatedSecretVersions: map[string]string{testName: "4241"},           // old version was validated
+			inputSecrets:             []runtime.Object{validBindUserSecret("4242")},                                                                         // newer secret version!
+			initialValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4241", LDAPConnectionProtocol: upstreamldap.TLS}}, // old version was validated
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstream},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
 			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
 				Status: v1alpha1.LDAPIdentityProviderStatus{
@@ -698,7 +845,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
 			}},
-			wantValidatedSecretVersions: map[string]string{testName: "4242"},
+			wantValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
 		},
 	}
 
@@ -724,16 +871,19 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				tt.setupMocks(conn)
 			}
 
-			dialer := &comparableDialer{upstreamldap.LDAPDialerFunc(func(ctx context.Context, _ string) (upstreamldap.Conn, error) {
-				if tt.dialError != nil {
-					return nil, tt.dialError
+			dialer := &comparableDialer{upstreamldap.LDAPDialerFunc(func(ctx context.Context, hostAndPort string) (upstreamldap.Conn, error) {
+				if tt.dialErrors != nil {
+					dialErr := tt.dialErrors[hostAndPort]
+					if dialErr != nil {
+						return nil, dialErr
+					}
 				}
 				return conn, nil
 			})}
 
 			validatedSecretVersionCache := newSecretVersionCache()
-			if tt.initialValidatedSecretVersions != nil {
-				validatedSecretVersionCache.ResourceVersionsByName = tt.initialValidatedSecretVersions
+			if tt.initialValidatedSettings != nil {
+				validatedSecretVersionCache.ValidatedSettingsByName = tt.initialValidatedSettings
 			}
 
 			controller := newInternal(
@@ -765,11 +915,11 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			require.Equal(t, len(tt.wantResultingCache), len(actualIDPList))
 			for i := range actualIDPList {
 				actualIDP := actualIDPList[i].(*upstreamldap.Provider)
-				copyOfExpectedValue := *tt.wantResultingCache[i] // copy before edit to avoid race because these tests are run in parallel
+				copyOfExpectedValueForResultingCache := *tt.wantResultingCache[i] // copy before edit to avoid race because these tests are run in parallel
 				// The dialer that was passed in to the controller's constructor should always have been
 				// passed through to the provider.
-				copyOfExpectedValue.Dialer = dialer
-				require.Equal(t, copyOfExpectedValue, actualIDP.GetConfig())
+				copyOfExpectedValueForResultingCache.Dialer = dialer
+				require.Equal(t, copyOfExpectedValueForResultingCache, actualIDP.GetConfig())
 			}
 
 			actualUpstreams, err := fakePinnipedClient.IDPV1alpha1().LDAPIdentityProviders(testNamespace).List(ctx, metav1.ListOptions{})
@@ -784,10 +934,10 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			}
 
 			// Check that the controller remembered which version of the secret it most recently validated successfully with.
-			if tt.wantValidatedSecretVersions == nil {
-				tt.wantValidatedSecretVersions = map[string]string{}
+			if tt.wantValidatedSettings == nil {
+				tt.wantValidatedSettings = map[string]validatedSettings{}
 			}
-			require.Equal(t, tt.wantValidatedSecretVersions, validatedSecretVersionCache.ResourceVersionsByName)
+			require.Equal(t, tt.wantValidatedSettings, validatedSecretVersionCache.ValidatedSettingsByName)
 		})
 	}
 }

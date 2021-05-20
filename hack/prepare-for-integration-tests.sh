@@ -333,6 +333,7 @@ export PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS="127.0.0.1:12345"
 export PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS="localhost:12344"
 export PINNIPED_TEST_PROXY=http://127.0.0.1:12346
 export PINNIPED_TEST_LDAP_HOST=ldap.tools.svc.cluster.local
+export PINNIPED_TEST_LDAP_STARTTLS_ONLY_HOST=ldapstarttls.tools.svc.cluster.local
 export PINNIPED_TEST_LDAP_LDAPS_CA_BUNDLE="${test_ca_bundle_pem}"
 export PINNIPED_TEST_LDAP_BIND_ACCOUNT_USERNAME="cn=admin,dc=pinniped,dc=dev"
 export PINNIPED_TEST_LDAP_BIND_ACCOUNT_PASSWORD=password

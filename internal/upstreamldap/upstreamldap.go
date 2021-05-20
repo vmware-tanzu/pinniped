@@ -60,6 +60,13 @@ func (f LDAPDialerFunc) Dial(ctx context.Context, hostAndPort string) (Conn, err
 	return f(ctx, hostAndPort)
 }
 
+type LDAPConnectionProtocol string
+
+const (
+	StartTLS = LDAPConnectionProtocol("StartTLS")
+	TLS      = LDAPConnectionProtocol("TLS")
+)
+
 // ProviderConfig includes all of the settings for connection and searching for users and groups in
 // the upstream LDAP IDP. It also provides methods for testing the connection and performing logins.
 // The nested structs are not pointer fields to enable deep copy on function params and return values.
@@ -70,6 +77,9 @@ type ProviderConfig struct {
 	// Host is the hostname or "hostname:port" of the LDAP server. When the port is not specified,
 	// the default LDAP port will be used.
 	Host string
+
+	// ConnectionProtocol determines how to establish the connection to the server. Either StartTLS or TLS.
+	ConnectionProtocol LDAPConnectionProtocol
 
 	// PEM-encoded CA cert bundle to trust when connecting to the LDAP server. Can be nil.
 	CABundle []byte
@@ -137,33 +147,48 @@ func (p *Provider) GetConfig() ProviderConfig {
 }
 
 func (p *Provider) dial(ctx context.Context) (Conn, error) {
-	hostAndPort, err := hostAndPortWithDefaultPort(p.c.Host, ldap.DefaultLdapsPort)
+	tlsHostAndPort, err := hostAndPortWithDefaultPort(p.c.Host, ldap.DefaultLdapsPort)
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
-	if p.c.Dialer != nil {
-		return p.c.Dialer.Dial(ctx, hostAndPort)
+
+	startTLSHostAndPort, err := hostAndPortWithDefaultPort(p.c.Host, ldap.DefaultLdapPort)
+	if err != nil {
+		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
-	return p.dialTLS(ctx, hostAndPort)
+
+	// Choose how and where to dial based on TLS vs. StartTLS config option.
+	var dialFunc LDAPDialerFunc
+	var hostAndPort string
+	switch {
+	case p.c.ConnectionProtocol == TLS:
+		dialFunc = p.dialTLS
+		hostAndPort = tlsHostAndPort
+	case p.c.ConnectionProtocol == StartTLS:
+		dialFunc = p.dialStartTLS
+		hostAndPort = startTLSHostAndPort
+	default:
+		return nil, ldap.NewError(ldap.ErrorNetwork, fmt.Errorf("did not specify valid ConnectionProtocol"))
+	}
+
+	// Override the real dialer for testing purposes sometimes.
+	if p.c.Dialer != nil {
+		dialFunc = p.c.Dialer.Dial
+	}
+
+	return dialFunc(ctx, hostAndPort)
 }
 
-// dialTLS is the default implementation of the Dialer, used when Dialer is nil.
+// dialTLS is a default implementation of the Dialer, used when Dialer is nil and ConnectionProtocol is TLS.
 // Unfortunately, the go-ldap library does not seem to support dialing with a context.Context,
 // so we implement it ourselves, heavily inspired by ldap.DialURL.
 func (p *Provider) dialTLS(ctx context.Context, hostAndPort string) (Conn, error) {
-	var rootCAs *x509.CertPool
-	if p.c.CABundle != nil {
-		rootCAs = x509.NewCertPool()
-		if !rootCAs.AppendCertsFromPEM(p.c.CABundle) {
-			return nil, ldap.NewError(ldap.ErrorNetwork, fmt.Errorf("could not parse CA bundle"))
-		}
+	tlsConfig, err := p.tlsConfig()
+	if err != nil {
+		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
 
-	dialer := &tls.Dialer{Config: &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		RootCAs:    rootCAs,
-	}}
-
+	dialer := &tls.Dialer{NetDialer: netDialer(), Config: tlsConfig}
 	c, err := dialer.DialContext(ctx, "tcp", hostAndPort)
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
@@ -172,6 +197,52 @@ func (p *Provider) dialTLS(ctx context.Context, hostAndPort string) (Conn, error
 	conn := ldap.NewConn(c, true)
 	conn.Start()
 	return conn, nil
+}
+
+// dialTLS is a default implementation of the Dialer, used when Dialer is nil and ConnectionProtocol is StartTLS.
+// Unfortunately, the go-ldap library does not seem to support dialing with a context.Context,
+// so we implement it ourselves, heavily inspired by ldap.DialURL.
+func (p *Provider) dialStartTLS(ctx context.Context, hostAndPort string) (Conn, error) {
+	tlsConfig, err := p.tlsConfig()
+	if err != nil {
+		return nil, ldap.NewError(ldap.ErrorNetwork, err)
+	}
+
+	host, err := hostWithoutPort(hostAndPort)
+	if err != nil {
+		return nil, ldap.NewError(ldap.ErrorNetwork, err)
+	}
+	// Unfortunately, this seems to be required for StartTLS, even though it is not needed for regular TLS.
+	tlsConfig.ServerName = host
+
+	c, err := netDialer().DialContext(ctx, "tcp", hostAndPort)
+	if err != nil {
+		return nil, ldap.NewError(ldap.ErrorNetwork, err)
+	}
+
+	conn := ldap.NewConn(c, false)
+	conn.Start()
+	err = conn.StartTLS(tlsConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
+}
+
+func netDialer() *net.Dialer {
+	return &net.Dialer{Timeout: time.Minute}
+}
+
+func (p *Provider) tlsConfig() (*tls.Config, error) {
+	var rootCAs *x509.CertPool
+	if p.c.CABundle != nil {
+		rootCAs = x509.NewCertPool()
+		if !rootCAs.AppendCertsFromPEM(p.c.CABundle) {
+			return nil, fmt.Errorf("could not parse CA bundle")
+		}
+	}
+	return &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: rootCAs}, nil
 }
 
 // Adds the default port if hostAndPort did not already include a port.
@@ -188,12 +259,28 @@ func hostAndPortWithDefaultPort(hostAndPort string, defaultPort string) (string,
 	switch {
 	case port != "" && strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]"):
 		// don't add extra square brackets to an IPv6 address that already has them
-		return host + ":" + port, nil
+		return fmt.Sprintf("%s:%s", host, port), nil
 	case port != "":
 		return net.JoinHostPort(host, port), nil
 	default:
 		return host, nil
 	}
+}
+
+// Strip the port from a host or host:port.
+func hostWithoutPort(hostAndPort string) (string, error) {
+	host, _, err := net.SplitHostPort(hostAndPort)
+	if err != nil {
+		if strings.HasSuffix(err.Error(), ": missing port in address") { // sad to need to do this string compare
+			return hostAndPort, nil
+		}
+		return "", err // hostAndPort argument was not parsable
+	}
+	if strings.HasPrefix(hostAndPort, "[") {
+		// it was an IPv6 address, so preserve the square brackets.
+		return fmt.Sprintf("[%s]", host), nil
+	}
+	return host, nil
 }
 
 // A name for this upstream provider.

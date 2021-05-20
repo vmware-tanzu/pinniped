@@ -49,6 +49,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 		const installedInNamespace = "some-namespace"
 		const credentialIssuerResourceName = "some-credential-issuer-resource-name"
 		const generatedLoadBalancerServiceName = "some-service-resource-name"
+		const generatedClusterIPServiceName = "some-cluster-ip-resource-name"
 		const tlsSecretName = "some-tls-secret-name" //nolint:gosec // this is not a credential
 		const caSecretName = "some-ca-secret-name"
 		const caSignerName = "some-ca-signer-name"
@@ -81,6 +82,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 				observableWithInformerOption.WithInformer,
 				observableWithInitialEventOption.WithInitialEvent,
 				generatedLoadBalancerServiceName,
+				generatedClusterIPServiceName,
 				tlsSecretName,
 				caSecretName,
 				nil,
@@ -251,6 +253,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		const installedInNamespace = "some-namespace"
 		const credentialIssuerResourceName = "some-credential-issuer-resource-name"
 		const loadBalancerServiceName = "some-service-resource-name"
+		const clusterIPServiceName = "some-cluster-ip-resource-name"
 		const tlsSecretName = "some-tls-secret-name" //nolint:gosec // this is not a credential
 		const caSecretName = "some-ca-secret-name"
 		const caSignerName = "some-ca-signer-name"
@@ -525,6 +528,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				controllerlib.WithInformer,
 				controllerlib.WithInitialEvent,
 				loadBalancerServiceName,
+				clusterIPServiceName,
 				tlsSecretName,
 				caSecretName,
 				labels,
@@ -888,6 +892,17 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.Equal("app-name", updatedLoadBalancerService.Spec.Selector["app"])
 			r.Equal(labels, updatedLoadBalancerService.Labels)
 			return updatedLoadBalancerService
+		}
+
+		var requireClusterIPWasCreated = func(action coretesting.Action) {
+			createAction, ok := action.(coretesting.CreateAction)
+			r.True(ok, "should have been able to cast this action to CreateAction: %v", action)
+			r.Equal("create", createAction.GetVerb())
+			createdClusterIPService := createAction.GetObject().(*corev1.Service)
+			r.Equal(clusterIPServiceName, createdClusterIPService.Name)
+			r.Equal(corev1.ServiceTypeClusterIP, createdClusterIPService.Spec.Type)
+			r.Equal("app-name", createdClusterIPService.Spec.Selector["app"])
+			r.Equal(labels, createdClusterIPService.Labels)
 		}
 
 		var requireTLSSecretWasDeleted = func(action coretesting.Action) {
@@ -1566,6 +1581,33 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireTLSServerIsRunning(ca, fakeHostname, map[string]string{fakeHostname + httpsPort: testServerAddr()})
 					requireCredentialIssuer(newSuccessStrategy(fakeHostname, ca))
 					requireSigningCertProviderHasLoadedCerts(signingCACertPEM, signingCAKeyPEM)
+				})
+			})
+
+			when("the CredentialIssuer has a hostname specified and service type clusterip", func() {
+				it.Before(func() {
+					addCredentialIssuerToTracker(credentialIssuerResourceName, v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeEnabled,
+							Service: v1alpha1.ImpersonationProxyServiceSpec{
+								Type: v1alpha1.ImpersonationProxyServiceTypeClusterIP,
+							},
+						},
+					}, pinnipedInformerClient)
+					addNodeWithRoleToTracker("worker", kubeAPIClient)
+				})
+
+				it("starts the impersonator and creates a clusterip service", func() {
+					startInformersAndController()
+					r.NoError(runControllerSync())
+					r.Len(kubeAPIClient.Actions(), 3)
+					requireNodesListed(kubeAPIClient.Actions()[0])
+					requireClusterIPWasCreated(kubeAPIClient.Actions()[1])
+					requireCASecretWasCreated(kubeAPIClient.Actions()[2])
+					// Check that the server is running without certs.
+					requireTLSServerIsRunningWithoutCerts()
+					requireCredentialIssuer(newPendingStrategy())
+					requireSigningCertProviderIsEmpty()
 				})
 			})
 

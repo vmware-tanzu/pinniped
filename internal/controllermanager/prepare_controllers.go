@@ -260,6 +260,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				controllerlib.WithInformer,
 				controllerlib.WithInitialEvent,
 				c.NamesConfig.ImpersonationLoadBalancerService,
+				"impersonation-proxy-cluster-ip", // TODO wire this through from namesConfig
 				c.NamesConfig.ImpersonationTLSCertificateSecret,
 				c.NamesConfig.ImpersonationCACertificateSecret,
 				c.Labels,

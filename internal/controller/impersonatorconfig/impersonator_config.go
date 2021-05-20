@@ -57,6 +57,7 @@ type impersonatorConfigController struct {
 	namespace                        string
 	credentialIssuerResourceName     string
 	generatedLoadBalancerServiceName string
+	generatedClusterIPServiceName    string
 	tlsSecretName                    string
 	caSecretName                     string
 	impersonationSignerSecretName    string
@@ -90,6 +91,7 @@ func NewImpersonatorConfigController(
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	withInitialEvent pinnipedcontroller.WithInitialEventOptionFunc,
 	generatedLoadBalancerServiceName string,
+	generatedClusterIPServiceName string,
 	tlsSecretName string,
 	caSecretName string,
 	labels map[string]string,
@@ -106,6 +108,7 @@ func NewImpersonatorConfigController(
 				namespace:                         namespace,
 				credentialIssuerResourceName:      credentialIssuerResourceName,
 				generatedLoadBalancerServiceName:  generatedLoadBalancerServiceName,
+				generatedClusterIPServiceName:     generatedClusterIPServiceName,
 				tlsSecretName:                     tlsSecretName,
 				caSecretName:                      caSecretName,
 				impersonationSignerSecretName:     impersonationSignerSecretName,
@@ -234,6 +237,16 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context) (*v
 		}
 	}
 
+	if c.shouldHaveClusterIPService(config) {
+		if err = c.ensureClusterIPServiceIsStarted(ctx, config); err != nil {
+			return nil, err
+		}
+	} // else { // TODO test stopping the cluster ip service
+	//	if err = c.ensureClusterIPServiceIsStopped(ctx); err != nil {
+	//		return nil, err
+	//	}
+	//}
+
 	nameInfo, err := c.findDesiredTLSCertificateName(config)
 	if err != nil {
 		// Unexpected error while determining the name that should go into the certs, so clear any existing certs.
@@ -306,6 +319,10 @@ func (c *impersonatorConfigController) disabledExplicitly(config *v1alpha1.Imper
 
 func (c *impersonatorConfigController) shouldHaveLoadBalancer(config *v1alpha1.ImpersonationProxySpec) bool {
 	return c.shouldHaveImpersonator(config) && config.Service.Type == v1alpha1.ImpersonationProxyServiceTypeLoadBalancer
+}
+
+func (c *impersonatorConfigController) shouldHaveClusterIPService(config *v1alpha1.ImpersonationProxySpec) bool {
+	return c.shouldHaveImpersonator(config) && config.Service.Type == v1alpha1.ImpersonationProxyServiceTypeClusterIP
 }
 
 func (c *impersonatorConfigController) shouldHaveTLSSecret(config *v1alpha1.ImpersonationProxySpec) bool {
@@ -489,6 +506,52 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.C
 		"service", c.generatedLoadBalancerServiceName,
 		"namespace", c.namespace)
 	return c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedLoadBalancerServiceName, metav1.DeleteOptions{})
+}
+
+func (c *impersonatorConfigController) ensureClusterIPServiceIsStarted(ctx context.Context, config *v1alpha1.ImpersonationProxySpec) error {
+	appNameLabel := c.labels[appLabelKey]
+	clusterIP := v1.Service{
+		Spec: v1.ServiceSpec{
+			Type: v1.ServiceTypeClusterIP,
+			Ports: []v1.ServicePort{
+				{
+					TargetPort: intstr.FromInt(impersonationProxyPort),
+					Port:       defaultHTTPSPort,
+					Protocol:   v1.ProtocolTCP,
+				},
+			},
+			Selector: map[string]string{appLabelKey: appNameLabel},
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        c.generatedClusterIPServiceName,
+			Namespace:   c.namespace,
+			Labels:      c.labels,
+			Annotations: config.Service.Annotations,
+		},
+	}
+	//running, err := c.ClusterIPExists() // TODO test that clusterip is only created once
+	//if err != nil {
+	//	return err
+	//}
+	//if running {
+	//	needsUpdate, err := c.ClusterIPNeedsUpdate(config) // TODO test updating annotations on clusterip
+	//	if err != nil {
+	//		return err
+	//	}
+	//	if needsUpdate {
+	//		plog.Info("updating load balancer for impersonation proxy",
+	//			"service", c.generatedLoadBalancerServiceName,
+	//			"namespace", c.namespace)
+	//		_, err = c.k8sClient.CoreV1().Services(c.namespace).Update(ctx, &loadBalancer, metav1.UpdateOptions{})
+	//		return err
+	//	}
+	//	return nil
+	//}
+	plog.Info("creating cluster ip for impersonation proxy",
+		"service", c.generatedClusterIPServiceName,
+		"namespace", c.namespace)
+	_, err := c.k8sClient.CoreV1().Services(c.namespace).Create(ctx, &clusterIP, metav1.CreateOptions{})
+	return err
 }
 
 func (c *impersonatorConfigController) ensureTLSSecret(ctx context.Context, nameInfo *certNameInfo, ca *certauthority.CA) error {

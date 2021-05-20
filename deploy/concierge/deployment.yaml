@@ -3,6 +3,7 @@
 
 #@ load("@ytt:data", "data")
 #@ load("@ytt:json", "json")
+#@ load("@ytt:yaml", "yaml")
 #@ load("helpers.lib.yaml", "defaultLabel", "labels", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix", "getAndValidateLogLevel", "pinnipedDevAPIGroupWithPrefix")
 
 #@ if not data.values.into_namespace:
@@ -28,6 +29,49 @@ metadata:
   namespace: #@ namespace()
   labels: #@ labels()
 ---
+#@ def image():
+#@   if data.values.kube_cert_agent_image:
+#@     return data.values.kube_cert_agent_image
+#@   else:
+#@     if data.values.image_digest:
+#@       return data.values.image_repo + "@" + data.values.image_digest
+#@     else:
+#@       return data.values.image_repo + ":" + data.values.image_tag
+#@     end
+#@   end
+#@   return ""
+#@ end
+
+#@ def pinniped_yaml():
+discovery:
+  url: #@ data.values.discovery_url or None
+api:
+  servingCertificate:
+    durationSeconds: #@ data.values.api_serving_certificate_duration_seconds
+    renewBeforeSeconds: #@ data.values.api_serving_certificate_renew_before_seconds
+apiGroupSuffix: #@ data.values.api_group_suffix
+names:
+  servingCertificateSecret: #@ defaultResourceNameWithSuffix("api-tls-serving-certificate")
+  credentialIssuer: #@ defaultResourceNameWithSuffix("config")
+  apiService: #@ defaultResourceNameWithSuffix("api")
+  impersonationConfigMap: #@ defaultResourceNameWithSuffix("impersonation-proxy-config")
+  impersonationLoadBalancerService: #@ defaultResourceNameWithSuffix("impersonation-proxy-load-balancer")
+  impersonationTLSCertificateSecret: #@ defaultResourceNameWithSuffix("impersonation-proxy-tls-serving-certificate")
+  impersonationCACertificateSecret: #@ defaultResourceNameWithSuffix("impersonation-proxy-ca-certificate")
+  impersonationSignerSecret: #@ defaultResourceNameWithSuffix("impersonation-proxy-signer-ca-certificate")
+  agentServiceAccount: #@ defaultResourceNameWithSuffix("kube-cert-agent")
+labels: #@ json.encode(labels()).rstrip()
+kubeCertAgent:
+  namePrefix: #@ defaultResourceNameWithSuffix("kube-cert-agent-")
+  #@ if/end image():
+  image: #@ image()
+  #@ if/end data.values.image_pull_dockerconfigjson:
+  imagePullSecrets:
+    - image-pull-secret
+#@ if/end data.values.log_level:
+logLevel: #@ getAndValidateLogLevel()
+#@ end
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -36,45 +80,8 @@ metadata:
   labels: #@ labels()
 data:
   #! If names.apiService is changed in this ConfigMap, must also change name of the ClusterIP Service resource below.
-  #@yaml/text-templated-strings
-  pinniped.yaml: |
-    discovery:
-      url: (@= data.values.discovery_url or "null" @)
-    api:
-      servingCertificate:
-        durationSeconds: (@= str(data.values.api_serving_certificate_duration_seconds) @)
-        renewBeforeSeconds: (@= str(data.values.api_serving_certificate_renew_before_seconds) @)
-    apiGroupSuffix: (@= data.values.api_group_suffix @)
-    names:
-      servingCertificateSecret: (@= defaultResourceNameWithSuffix("api-tls-serving-certificate") @)
-      credentialIssuer: (@= defaultResourceNameWithSuffix("config") @)
-      apiService: (@= defaultResourceNameWithSuffix("api") @)
-      impersonationConfigMap: (@= defaultResourceNameWithSuffix("impersonation-proxy-config") @)
-      impersonationLoadBalancerService: (@= defaultResourceNameWithSuffix("impersonation-proxy-load-balancer") @)
-      impersonationTLSCertificateSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-tls-serving-certificate") @)
-      impersonationCACertificateSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-ca-certificate") @)
-      impersonationSignerSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-signer-ca-certificate") @)
-      agentServiceAccount: (@= defaultResourceNameWithSuffix("kube-cert-agent") @)
-    labels: (@= json.encode(labels()).rstrip() @)
-    kubeCertAgent:
-      namePrefix: (@= defaultResourceNameWithSuffix("kube-cert-agent-") @)
-      (@ if data.values.kube_cert_agent_image: @)
-      image: (@= data.values.kube_cert_agent_image @)
-      (@ else: @)
-      (@ if data.values.image_digest: @)
-      image: (@= data.values.image_repo + "@" + data.values.image_digest @)
-      (@ else: @)
-      image: (@= data.values.image_repo + ":" + data.values.image_tag @)
-      (@ end @)
-      (@ end @)
-      (@ if data.values.image_pull_dockerconfigjson: @)
-      imagePullSecrets:
-        - image-pull-secret
-      (@ end @)
-    (@ if data.values.log_level: @)
-    logLevel: (@= getAndValidateLogLevel() @)
-    (@ end @)
----
+  pinniped.yaml: #@ yaml.encode(pinniped_yaml())
+--
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
 apiVersion: v1
 kind: Secret

@@ -160,6 +160,11 @@ func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *
 			UsernameAttribute: spec.UserSearch.Attributes.Username,
 			UIDAttribute:      spec.UserSearch.Attributes.UID,
 		},
+		GroupSearch: upstreamldap.GroupSearchConfig{
+			Base:               spec.GroupSearch.Base,
+			Filter:             spec.GroupSearch.Filter,
+			GroupNameAttribute: spec.GroupSearch.Attributes.GroupName,
+		},
 		Dialer: c.ldapDialer,
 	}
 

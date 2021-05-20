@@ -208,8 +208,8 @@ spec:
         - name: ldap
           #! Use our own fork of docker.io/bitnami/openldap for now, because we added the
           #! LDAP_SERVER_CONFIG_BEFORE_CUSTOM_LDIF_DIR and LDAP_SERVER_CONFIG_AFTER_CUSTOM_LDIF_DIR options.
-          #! See https://github.com/pinniped-ci-bot/bitnami-docker-openldap/tree/ldap_server_config
-          image: ghcr.io/pinniped-ci-bot/bitnami-openldap-forked:2.4.58-debian-10-r57
+          #! See https://github.com/pinniped-ci-bot/bitnami-docker-openldap/tree/pinniped
+          image: projects.registry.vmware.com/pinniped/test-ldap:latest
           imagePullPolicy: Always
           ports:
             - name: ldap

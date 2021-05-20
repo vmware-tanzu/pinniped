@@ -247,3 +247,9 @@ spec:
     name: #@ defaultResourceNameWithSuffix("api")
     namespace: #@ namespace()
     port: 443
+---
+apiVersion: #@ pinnipedDevAPIGroupWithPrefix("config.concierge") + "/v1alpha1"
+kind: CredentialIssuer
+metadata:
+  name: #@ defaultResourceNameWithSuffix("config")
+  labels: #@ labels()

@@ -197,11 +197,12 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 	}
 
 	providerConfigForValidUpstream := &upstreamldap.ProviderConfig{
-		Name:         testName,
-		Host:         testHost,
-		CABundle:     testCABundle,
-		BindUsername: testBindUsername,
-		BindPassword: testBindPassword,
+		Name:               testName,
+		Host:               testHost,
+		ConnectionProtocol: upstreamldap.TLS,
+		CABundle:           testCABundle,
+		BindUsername:       testBindUsername,
+		BindPassword:       testBindPassword,
 		UserSearch: upstreamldap.UserSearchConfig{
 			Base:              testUserSearchBase,
 			Filter:            testUserSearchFilter,
@@ -442,11 +443,12 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
-					Name:         testName,
-					Host:         testHost,
-					CABundle:     nil,
-					BindUsername: testBindUsername,
-					BindPassword: testBindPassword,
+					Name:               testName,
+					Host:               testHost,
+					ConnectionProtocol: upstreamldap.TLS,
+					CABundle:           nil,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
 					UserSearch: upstreamldap.UserSearchConfig{
 						Base:              testUserSearchBase,
 						Filter:            testUserSearchFilter,
@@ -493,11 +495,12 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{
 				{
-					Name:         testName,
-					Host:         testHost,
-					CABundle:     nil,
-					BindUsername: testBindUsername,
-					BindPassword: testBindPassword,
+					Name:               testName,
+					Host:               testHost,
+					ConnectionProtocol: upstreamldap.TLS,
+					CABundle:           nil,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
 					UserSearch: upstreamldap.UserSearchConfig{
 						Base:              testUserSearchBase,
 						Filter:            testUserSearchFilter,

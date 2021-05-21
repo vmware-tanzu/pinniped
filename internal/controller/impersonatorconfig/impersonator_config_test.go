@@ -874,6 +874,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.Equal([]v1alpha1.CredentialIssuerStrategy{expectedStrategy}, credentialIssuer.Status.Strategies)
 		}
 
+		var requireServiceWasDeleted = func(action coretesting.Action, serviceName string) {
+			deleteAction, ok := action.(coretesting.DeleteAction)
+			r.True(ok, "should have been able to cast this action to DeleteAction: %v", action)
+			r.Equal("delete", deleteAction.GetVerb())
+			r.Equal(serviceName, deleteAction.GetName())
+			r.Equal("services", deleteAction.GetResource().Resource)
+		}
+
 		var requireLoadBalancerWasCreated = func(action coretesting.Action) *corev1.Service {
 			createAction, ok := action.(coretesting.CreateAction)
 			r.True(ok, "should have been able to cast this action to CreateAction: %v", action)
@@ -885,14 +893,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.Equal("app-name", createdLoadBalancerService.Spec.Selector["app"])
 			r.Equal(labels, createdLoadBalancerService.Labels)
 			return createdLoadBalancerService
-		}
-
-		var requireLoadBalancerWasDeleted = func(action coretesting.Action) {
-			deleteAction, ok := action.(coretesting.DeleteAction)
-			r.True(ok, "should have been able to cast this action to DeleteAction: %v", action)
-			r.Equal("delete", deleteAction.GetVerb())
-			r.Equal(loadBalancerServiceName, deleteAction.GetName())
-			r.Equal("services", deleteAction.GetResource().Resource)
 		}
 
 		var requireLoadBalancerWasUpdated = func(action coretesting.Action) *corev1.Service {
@@ -918,15 +918,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			r.Equal("app-name", createdClusterIPService.Spec.Selector["app"])
 			r.Equal(labels, createdClusterIPService.Labels)
 			return createdClusterIPService
-		}
-
-		var requireClusterIPWasDeleted = func(action coretesting.Action) {
-			// TODO maybe de-dup this with loadbalancerwasdeleted
-			deleteAction, ok := action.(coretesting.DeleteAction)
-			r.True(ok, "should have been able to cast this action to DeleteAction: %v", action)
-			r.Equal("delete", deleteAction.GetVerb())
-			r.Equal(clusterIPServiceName, deleteAction.GetName())
-			r.Equal("services", deleteAction.GetResource().Resource)
 		}
 
 		var requireClusterIPWasUpdated = func(action coretesting.Action) *corev1.Service {
@@ -1162,7 +1153,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireTLSServerWasNeverStarted()
 					r.Len(kubeAPIClient.Actions(), 3)
 					requireNodesListed(kubeAPIClient.Actions()[0])
-					requireLoadBalancerWasDeleted(kubeAPIClient.Actions()[1])
+					requireServiceWasDeleted(kubeAPIClient.Actions()[1], loadBalancerServiceName)
 					requireTLSSecretWasDeleted(kubeAPIClient.Actions()[2])
 					requireCredentialIssuer(newAutoDisabledStrategy())
 					requireSigningCertProviderIsEmpty()
@@ -2102,7 +2093,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					r.NoError(runControllerSync())
 					requireTLSServerIsNoLongerRunning()
 					r.Len(kubeAPIClient.Actions(), 4)
-					requireLoadBalancerWasDeleted(kubeAPIClient.Actions()[3])
+					requireServiceWasDeleted(kubeAPIClient.Actions()[3], loadBalancerServiceName)
 					requireCredentialIssuer(newManuallyDisabledStrategy())
 					requireSigningCertProviderIsEmpty()
 
@@ -2168,7 +2159,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					r.NoError(runControllerSync())
 					requireTLSServerIsNoLongerRunning()
 					r.Len(kubeAPIClient.Actions(), 4)
-					requireClusterIPWasDeleted(kubeAPIClient.Actions()[3])
+					requireServiceWasDeleted(kubeAPIClient.Actions()[3], clusterIPServiceName)
 					requireCredentialIssuer(newManuallyDisabledStrategy())
 					requireSigningCertProviderIsEmpty()
 
@@ -2284,7 +2275,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 				r.NoError(runControllerSync())
 				r.Len(kubeAPIClient.Actions(), 9)
-				requireLoadBalancerWasDeleted(kubeAPIClient.Actions()[6])
+				requireServiceWasDeleted(kubeAPIClient.Actions()[6], loadBalancerServiceName)
 				requireTLSSecretWasDeleted(kubeAPIClient.Actions()[7])
 				requireTLSSecretWasCreated(kubeAPIClient.Actions()[8], ca) // recreated because the endpoint was updated, reused the old CA
 				requireTLSServerIsRunning(ca, testServerAddr(), nil)
@@ -3102,7 +3093,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireTLSServerWasNeverStarted()
 				r.Len(kubeAPIClient.Actions(), 3)
 				requireNodesListed(kubeAPIClient.Actions()[0])
-				requireLoadBalancerWasDeleted(kubeAPIClient.Actions()[1])
+				requireServiceWasDeleted(kubeAPIClient.Actions()[1], loadBalancerServiceName)
 				requireTLSSecretWasDeleted(kubeAPIClient.Actions()[2])
 			})
 		})

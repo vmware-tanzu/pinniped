@@ -329,8 +329,8 @@ func (c *impersonatorConfigController) shouldHaveTLSSecret(config *v1alpha1.Impe
 	return c.shouldHaveImpersonator(config)
 }
 
-func (c *impersonatorConfigController) loadBalancerExists() (bool, error) {
-	_, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedLoadBalancerServiceName)
+func (c *impersonatorConfigController) serviceExists(serviceName string) (bool, error) {
+	_, err := c.servicesInformer.Lister().Services(c.namespace).Get(serviceName)
 	notFound := k8serrors.IsNotFound(err)
 	if notFound {
 		return false, nil
@@ -341,40 +341,16 @@ func (c *impersonatorConfigController) loadBalancerExists() (bool, error) {
 	return true, nil
 }
 
-func (c *impersonatorConfigController) clusterIPExists() (bool, error) {
-	_, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedClusterIPServiceName)
-	notFound := k8serrors.IsNotFound(err)
-	if notFound {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func (c *impersonatorConfigController) loadBalancerNeedsUpdate(config *v1alpha1.ImpersonationProxySpec) (bool, error) {
-	lb, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedLoadBalancerServiceName)
+func (c *impersonatorConfigController) serviceNeedsUpdate(config *v1alpha1.ImpersonationProxySpec, serviceName string) (bool, error) {
+	service, err := c.servicesInformer.Lister().Services(c.namespace).Get(serviceName)
 	if err != nil {
 		return false, err
 	}
 	// TODO this will break if anything other than pinniped is adding annotations
-	if !reflect.DeepEqual(lb.Annotations, config.Service.Annotations) {
+	if !reflect.DeepEqual(service.Annotations, config.Service.Annotations) {
 		return true, nil
 	}
-	if lb.Spec.LoadBalancerIP != config.Service.LoadBalancerIP {
-		return true, nil
-	}
-	return false, nil
-}
-
-func (c *impersonatorConfigController) ClusterIPNeedsUpdate(config *v1alpha1.ImpersonationProxySpec) (bool, error) {
-	clusterIP, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedClusterIPServiceName)
-	if err != nil {
-		return false, err
-	}
-	// TODO this will break if anything other than pinniped is adding annotations
-	if !reflect.DeepEqual(clusterIP.Annotations, config.Service.Annotations) {
+	if service.Spec.LoadBalancerIP != config.Service.LoadBalancerIP {
 		return true, nil
 	}
 	return false, nil
@@ -487,33 +463,11 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.C
 			Annotations: config.Service.Annotations,
 		},
 	}
-	running, err := c.loadBalancerExists()
-	if err != nil {
-		return err
-	}
-	if running {
-		needsUpdate, err := c.loadBalancerNeedsUpdate(config)
-		if err != nil {
-			return err
-		}
-		if needsUpdate {
-			plog.Info("updating load balancer for impersonation proxy",
-				"service", c.generatedLoadBalancerServiceName,
-				"namespace", c.namespace)
-			_, err = c.k8sClient.CoreV1().Services(c.namespace).Update(ctx, &loadBalancer, metav1.UpdateOptions{})
-			return err
-		}
-		return nil
-	}
-	plog.Info("creating load balancer for impersonation proxy",
-		"service", c.generatedLoadBalancerServiceName,
-		"namespace", c.namespace)
-	_, err = c.k8sClient.CoreV1().Services(c.namespace).Create(ctx, &loadBalancer, metav1.CreateOptions{})
-	return err
+	return c.createOrUpdateService(ctx, config, &loadBalancer)
 }
 
 func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.Context) error {
-	running, err := c.loadBalancerExists()
+	running, err := c.serviceExists(c.generatedLoadBalancerServiceName)
 	if err != nil {
 		return err
 	}
@@ -548,33 +502,11 @@ func (c *impersonatorConfigController) ensureClusterIPServiceIsStarted(ctx conte
 			Annotations: config.Service.Annotations,
 		},
 	}
-	running, err := c.clusterIPExists()
-	if err != nil {
-		return err
-	}
-	if running {
-		needsUpdate, err := c.ClusterIPNeedsUpdate(config)
-		if err != nil {
-			return err
-		}
-		if needsUpdate {
-			plog.Info("updating cluster ip for impersonation proxy",
-				"service", c.generatedLoadBalancerServiceName,
-				"namespace", c.namespace)
-			_, err = c.k8sClient.CoreV1().Services(c.namespace).Update(ctx, &clusterIP, metav1.UpdateOptions{})
-			return err
-		}
-		return nil
-	}
-	plog.Info("creating cluster ip for impersonation proxy",
-		"service", c.generatedClusterIPServiceName,
-		"namespace", c.namespace)
-	_, err = c.k8sClient.CoreV1().Services(c.namespace).Create(ctx, &clusterIP, metav1.CreateOptions{})
-	return err
+	return c.createOrUpdateService(ctx, config, &clusterIP)
 }
 
 func (c *impersonatorConfigController) ensureClusterIPServiceIsStopped(ctx context.Context) error {
-	running, err := c.clusterIPExists()
+	running, err := c.serviceExists(c.generatedClusterIPServiceName)
 	if err != nil {
 		return err
 	}
@@ -586,6 +518,34 @@ func (c *impersonatorConfigController) ensureClusterIPServiceIsStopped(ctx conte
 		"service", c.generatedClusterIPServiceName,
 		"namespace", c.namespace)
 	return c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedClusterIPServiceName, metav1.DeleteOptions{})
+}
+
+func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context, config *v1alpha1.ImpersonationProxySpec, service *v1.Service) error {
+	running, err := c.serviceExists(service.Name)
+	if err != nil {
+		return err
+	}
+	if running {
+		needsUpdate, err := c.serviceNeedsUpdate(config, service.Name)
+		if err != nil {
+			return err
+		}
+		if needsUpdate {
+			plog.Info("updating service for impersonation proxy",
+				"service type", service.Spec.Type,
+				"service", service.Name,
+				"namespace", c.namespace)
+			_, err = c.k8sClient.CoreV1().Services(c.namespace).Update(ctx, service, metav1.UpdateOptions{})
+			return err
+		}
+		return nil
+	}
+	plog.Info("creating service for impersonation proxy",
+		"service type", service.Spec.Type,
+		"service", service.Name,
+		"namespace", c.namespace)
+	_, err = c.k8sClient.CoreV1().Services(c.namespace).Create(ctx, service, metav1.CreateOptions{})
+	return err
 }
 
 func (c *impersonatorConfigController) ensureTLSSecret(ctx context.Context, nameInfo *certNameInfo, ca *certauthority.CA) error {

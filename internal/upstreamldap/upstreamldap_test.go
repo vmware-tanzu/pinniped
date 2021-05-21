@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/go-ldap/ldap/v3"
 	"github.com/golang/mock/gomock"
@@ -19,6 +20,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 
+	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/mocks/mockldapconn"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -1123,6 +1125,13 @@ func TestRealTLSDialing(t *testing.T) {
 	require.NoError(t, err)
 	testServerHostAndPort := parsedURL.Host
 
+	caForTestServerWithBadCertName, err := certauthority.New("Test CA", time.Hour)
+	require.NoError(t, err)
+	wrongIP := net.ParseIP("10.2.3.4")
+	cert, err := caForTestServerWithBadCertName.IssueServerCert([]string{"wrong-dns-name"}, []net.IP{wrongIP}, time.Hour)
+	require.NoError(t, err)
+	testServerWithBadCertNameAddr := testutil.TLSTestServerWithCert(t, func(w http.ResponseWriter, r *http.Request) {}, cert)
+
 	unusedPortGrabbingListener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	recentlyClaimedHostAndPort := unusedPortGrabbingListener.Addr().String()
@@ -1145,6 +1154,14 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  []byte(testServerCABundle),
 			connProto: TLS,
 			context:   context.Background(),
+		},
+		{
+			name:      "server cert name does not match the address to which the client connected",
+			host:      testServerWithBadCertNameAddr,
+			caBundle:  caForTestServerWithBadCertName.Bundle(),
+			connProto: TLS,
+			context:   context.Background(),
+			wantError: `LDAP Result Code 200 "Network Error": x509: certificate is valid for 10.2.3.4, not 127.0.0.1`,
 		},
 		{
 			name:      "invalid CA bundle with TLS",

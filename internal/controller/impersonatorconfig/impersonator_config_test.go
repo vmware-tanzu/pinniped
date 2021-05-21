@@ -2904,6 +2904,32 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			})
 		})
 
+		when("there is an error deleting the load balancer", func() {
+			it.Before(func() {
+				addNodeWithRoleToTracker("worker", kubeAPIClient)
+				kubeAPIClient.PrependReactor("delete", "services", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, fmt.Errorf("error on delete")
+				})
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeDisabled,
+						},
+					},
+				}, pinnipedInformerClient, pinnipedAPIClient)
+				addLoadBalancerServiceToTracker(loadBalancerServiceName, kubeAPIClient)
+				addLoadBalancerServiceToTracker(loadBalancerServiceName, kubeInformerClient)
+			})
+
+			it("returns an error", func() {
+				startInformersAndController()
+				r.EqualError(runControllerSync(), "error on delete")
+				requireCredentialIssuer(newErrorStrategy("error on delete"))
+				requireSigningCertProviderIsEmpty()
+			})
+		})
+
 		when("there is an error creating the cluster ip", func() {
 			it.Before(func() {
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
@@ -2960,6 +2986,32 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireCredentialIssuer(newErrorStrategy("error on update"))
 				requireSigningCertProviderIsEmpty()
 				requireTLSServerIsRunningWithoutCerts()
+			})
+		})
+
+		when("there is an error deleting the cluster ip", func() {
+			it.Before(func() {
+				addNodeWithRoleToTracker("worker", kubeAPIClient)
+				kubeAPIClient.PrependReactor("delete", "services", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, fmt.Errorf("error on delete")
+				})
+				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+					Spec: v1alpha1.CredentialIssuerSpec{
+						ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+							Mode: v1alpha1.ImpersonationProxyModeDisabled,
+						},
+					},
+				}, pinnipedInformerClient, pinnipedAPIClient)
+				addClusterIPServiceToTracker(clusterIPServiceName, localhostIP, kubeAPIClient)
+				addClusterIPServiceToTracker(clusterIPServiceName, localhostIP, kubeInformerClient)
+			})
+
+			it("returns an error", func() {
+				startInformersAndController()
+				r.EqualError(runControllerSync(), "error on delete")
+				requireCredentialIssuer(newErrorStrategy("error on delete"))
+				requireSigningCertProviderIsEmpty()
 			})
 		})
 

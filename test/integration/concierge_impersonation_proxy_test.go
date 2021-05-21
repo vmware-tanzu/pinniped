@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -196,8 +197,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
 				Mode: conciergev1alpha.ImpersonationProxyModeAuto,
 				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
-					Type:        conciergev1alpha.ImpersonationProxyServiceTypeLoadBalancer,
-					Annotations: map[string]string{"service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout": "4000"},
+					Type: conciergev1alpha.ImpersonationProxyServiceTypeLoadBalancer,
 				},
 			},
 		})
@@ -376,6 +376,25 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		t.Run("kubectl port-forward and keeping the connection open for over a minute (idle)", func(t *testing.T) {
 			t.Parallel()
 			kubeconfigPath, envVarsWithProxy, _ := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM, credentialRequestSpecWithWorkingCredentials.Authenticator)
+
+			// set credential issuer to have new annotation to ensure the idle timeout is long enough on AWS.
+			// this also ensures that updates to the credential issuer impersonation proxy spec go through
+			if impersonatorShouldHaveStartedAutomaticallyByDefault && clusterSupportsLoadBalancers {
+				// configure the credential issuer spec to have the impersonation proxy in auto mode
+				updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
+					ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
+						Mode: conciergev1alpha.ImpersonationProxyModeAuto,
+						Service: conciergev1alpha.ImpersonationProxyServiceSpec{
+							Type:        conciergev1alpha.ImpersonationProxyServiceTypeLoadBalancer,
+							Annotations: map[string]string{"service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout": "4000"},
+						},
+					},
+				})
+				// Wait until the annotation shows up on the load balancer
+				library.RequireEventuallyWithoutError(t, func() (bool, error) {
+					return loadBalancerHasAnnotations(ctx, env, adminClient, map[string]string{"service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout": "4000"})
+				}, 30*time.Second, 500*time.Millisecond)
+			}
 
 			// Run the kubectl port-forward command.
 			timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
@@ -1470,6 +1489,18 @@ func hasImpersonationProxyLoadBalancerService(ctx context.Context, env *library.
 		return false, err
 	}
 	return service.Spec.Type == corev1.ServiceTypeLoadBalancer, nil
+}
+
+func loadBalancerHasAnnotations(ctx context.Context, env *library.TestEnv, client kubernetes.Interface, annotations map[string]string) (bool, error) {
+	service, err := client.CoreV1().Services(env.ConciergeNamespace).Get(ctx, impersonationProxyLoadBalancerName(env), metav1.GetOptions{})
+	if k8serrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	hasExactAnnotations := reflect.DeepEqual(annotations, service.Annotations)
+	return service.Spec.Type == corev1.ServiceTypeLoadBalancer && hasExactAnnotations, nil
 }
 
 func impersonationProxyTLSSecretName(env *library.TestEnv) string {

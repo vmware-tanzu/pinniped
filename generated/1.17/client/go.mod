@@ -4,11 +4,9 @@ module go.pinniped.dev/generated/1.17/client
 go 1.13
 
 require (
-	github.com/go-openapi/spec v0.19.9
 	go.pinniped.dev/generated/1.17/apis v0.0.0-00010101000000-000000000000
 	k8s.io/apimachinery v0.17.11
 	k8s.io/client-go v0.17.11
-	k8s.io/kube-openapi v0.0.0-20200410145947-bcb3869e6f29
 )
 
 replace go.pinniped.dev/generated/1.17/apis => ../apis

@@ -10,7 +10,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.3.0
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/stdr v0.4.0
-	github.com/go-openapi/spec v0.20.3
+	github.com/go-openapi/spec v0.20.3 // indirect
 	github.com/gofrs/flock v0.8.0
 	github.com/golang/mock v1.5.0
 	github.com/google/go-cmp v0.5.5
@@ -41,7 +41,6 @@ require (
 	k8s.io/gengo v0.0.0-20210203185629-de9496dff47b
 	k8s.io/klog/v2 v2.8.0
 	k8s.io/kube-aggregator v0.21.1
-	k8s.io/kube-openapi v0.0.0-20210305001622-591a79e4bda7
 	k8s.io/utils v0.0.0-20210521133846-da695404a2bc
 	sigs.k8s.io/yaml v1.2.0
 )

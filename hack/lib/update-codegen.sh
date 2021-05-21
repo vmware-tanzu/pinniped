@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -95,7 +95,6 @@ module ${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client
 go 1.13
 
 require (
-    github.com/go-openapi/spec v0.19.9
     k8s.io/api ${KUBE_MODULE_VERSION}
     k8s.io/apimachinery ${KUBE_MODULE_VERSION}
     k8s.io/client-go ${KUBE_MODULE_VERSION}
@@ -120,7 +119,7 @@ echo "generating API-related code for our public API groups..."
 echo "generating API-related code for our internal API groups..."
 (cd apis &&
     bash "${GOPATH}/src/k8s.io/code-generator/generate-internal-groups.sh" \
-        deepcopy,defaulter,conversion,openapi \
+        deepcopy,defaulter,conversion \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/client/concierge" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \
         "${BASE_PKG}/generated/${KUBE_MINOR_VERSION}/apis" \

@@ -3,7 +3,6 @@ module go.pinniped.dev
 go 1.14
 
 require (
-	cloud.google.com/go v0.60.0 // indirect
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/coreos/go-oidc/v3 v3.0.0
 	github.com/creack/pty v1.1.12
@@ -28,11 +27,11 @@ require (
 	github.com/spf13/cobra v1.1.3
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
-	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
+	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
+	golang.org/x/net v0.0.0-20210520170846-37e1c6afe023
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
-	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
-	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	golang.org/x/term v0.0.0-20210503060354-a79de5458b56
 	gopkg.in/square/go-jose.v2 v2.5.1
 	k8s.io/api v0.21.1
 	k8s.io/apimachinery v0.21.1

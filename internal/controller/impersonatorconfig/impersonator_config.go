@@ -341,19 +341,19 @@ func (c *impersonatorConfigController) serviceExists(serviceName string) (bool, 
 	return true, nil
 }
 
-func (c *impersonatorConfigController) serviceNeedsUpdate(config *v1alpha1.ImpersonationProxySpec, serviceName string) (bool, error) {
+func (c *impersonatorConfigController) serviceNeedsUpdate(config *v1alpha1.ImpersonationProxySpec, serviceName string) (*v1.Service, bool, error) {
 	service, err := c.servicesInformer.Lister().Services(c.namespace).Get(serviceName)
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
 	// TODO this will break if anything other than pinniped is adding annotations
 	if !reflect.DeepEqual(service.Annotations, config.Service.Annotations) {
-		return true, nil
+		return service, true, nil
 	}
 	if service.Spec.LoadBalancerIP != config.Service.LoadBalancerIP {
-		return true, nil
+		return service, true, nil
 	}
-	return false, nil
+	return nil, false, nil
 }
 
 func (c *impersonatorConfigController) tlsSecretExists() (bool, *v1.Secret, error) {
@@ -526,7 +526,7 @@ func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context
 		return err
 	}
 	if running {
-		needsUpdate, err := c.serviceNeedsUpdate(config, service.Name)
+		existingService, needsUpdate, err := c.serviceNeedsUpdate(config, service.Name)
 		if err != nil {
 			return err
 		}
@@ -535,7 +535,12 @@ func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context
 				"service type", service.Spec.Type,
 				"service", service.Name,
 				"namespace", c.namespace)
-			_, err = c.k8sClient.CoreV1().Services(c.namespace).Update(ctx, service, metav1.UpdateOptions{})
+			// update only the annotation and loadBalancerIP fields on the service
+			var newService = &v1.Service{}
+			existingService.DeepCopyInto(newService)
+			newService.Annotations = service.Annotations
+			newService.Spec.LoadBalancerIP = service.Spec.LoadBalancerIP
+			_, err = c.k8sClient.CoreV1().Services(c.namespace).Update(ctx, newService, metav1.UpdateOptions{})
 			return err
 		}
 		return nil

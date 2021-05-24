@@ -43,17 +43,19 @@ func TLSTestServerWithCert(t *testing.T, handler http.HandlerFunc, certificate *
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
+	serverShutdownChan := make(chan error)
 	go func() {
 		// Empty certFile and keyFile will use certs from Server.TLSConfig.
-		serveErr := server.ServeTLS(l, "", "")
-		if !errors.Is(serveErr, http.ErrServerClosed) {
-			t.Log("Got an unexpected error while starting the fake http server!")
-			require.NoError(t, serveErr)
-		}
+		serverShutdownChan <- server.ServeTLS(l, "", "")
 	}()
 
 	t.Cleanup(func() {
 		_ = server.Close()
+		serveErr := <-serverShutdownChan
+		if !errors.Is(serveErr, http.ErrServerClosed) {
+			t.Log("Got an unexpected error while starting the fake http server!")
+			require.NoError(t, serveErr)
+		}
 	})
 
 	return l.Addr().String()

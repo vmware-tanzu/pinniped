@@ -24,9 +24,9 @@ You should have a [supported Kubernetes cluster]({{< ref "../reference/supported
 
 1. Install the Concierge into the `pinniped-concierge` namespace with default options:
 
-   - `kubectl apply -f https://get.pinniped.dev/v0.4.1/install-pinniped-concierge.yaml` 
+   - `kubectl apply -f https://get.pinniped.dev/v0.8.0/install-pinniped-concierge.yaml`
 
-      *Replace v0.4.1 with your preferred version number.*
+      *Replace v0.8.0 with your preferred version number.*
   
 ## With custom options
 

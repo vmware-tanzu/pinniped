@@ -26,6 +26,7 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/upstreamldap"
 )
 
@@ -58,13 +59,18 @@ type ldapWatcherController struct {
 }
 
 // An in-memory cache with an entry for each LDAPIdentityProvider, to keep track of which ResourceVersion
-// of the bind Secret was used during the most recent successful validation.
+// of the bind Secret and which TLS/StartTLS setting was used during the most recent successful validation.
 type secretVersionCache struct {
-	ResourceVersionsByName map[string]string
+	ValidatedSettingsByName map[string]validatedSettings
+}
+
+type validatedSettings struct {
+	BindSecretResourceVersion string
+	LDAPConnectionProtocol    upstreamldap.LDAPConnectionProtocol
 }
 
 func newSecretVersionCache() *secretVersionCache {
-	return &secretVersionCache{ResourceVersionsByName: map[string]string{}}
+	return &secretVersionCache{ValidatedSettingsByName: map[string]validatedSettings{}}
 }
 
 // New instantiates a new controllerlib.Controller which will populate the provided UpstreamLDAPIdentityProviderICache.
@@ -160,6 +166,11 @@ func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *
 			UsernameAttribute: spec.UserSearch.Attributes.Username,
 			UIDAttribute:      spec.UserSearch.Attributes.UID,
 		},
+		GroupSearch: upstreamldap.GroupSearchConfig{
+			Base:               spec.GroupSearch.Base,
+			Filter:             spec.GroupSearch.Filter,
+			GroupNameAttribute: spec.GroupSearch.Attributes.GroupName,
+		},
 		Dialer: c.ldapDialer,
 	}
 
@@ -223,22 +234,23 @@ func (c *ldapWatcherController) validateTLSConfig(upstream *v1alpha1.LDAPIdentit
 }
 
 func (c *ldapWatcherController) validateFinishedConfig(ctx context.Context, upstream *v1alpha1.LDAPIdentityProvider, config *upstreamldap.ProviderConfig, currentSecretVersion string) *v1alpha1.Condition {
-	ldapProvider := upstreamldap.New(*config)
-
-	if c.hasPreviousSuccessfulConditionForCurrentSpecGenerationAndSecretVersion(upstream, currentSecretVersion) {
+	if c.hasPreviousSuccessfulConditionForCurrentSpecGenerationAndSecretVersion(upstream, currentSecretVersion, config) {
 		return nil
 	}
 
 	testConnectionTimeout, cancelFunc := context.WithTimeout(ctx, testLDAPConnectionTimeout)
 	defer cancelFunc()
 
-	condition := c.testConnection(testConnectionTimeout, upstream, config, ldapProvider, currentSecretVersion)
+	condition := c.testConnection(testConnectionTimeout, upstream, config, currentSecretVersion)
 
 	if condition.Status == v1alpha1.ConditionTrue {
 		// Remember (in-memory for this pod) that the controller has successfully validated the LDAP provider
 		// using this version of the Secret. This is for performance reasons, to avoid attempting to connect to
 		// the LDAP server more than is needed. If the pod restarts, it will attempt this validation again.
-		c.validatedSecretVersionsCache.ResourceVersionsByName[upstream.GetName()] = currentSecretVersion
+		c.validatedSecretVersionsCache.ValidatedSettingsByName[upstream.GetName()] = validatedSettings{
+			BindSecretResourceVersion: currentSecretVersion,
+			LDAPConnectionProtocol:    config.ConnectionProtocol,
+		}
 	}
 
 	return condition
@@ -248,10 +260,31 @@ func (c *ldapWatcherController) testConnection(
 	ctx context.Context,
 	upstream *v1alpha1.LDAPIdentityProvider,
 	config *upstreamldap.ProviderConfig,
-	ldapProvider *upstreamldap.Provider,
 	currentSecretVersion string,
 ) *v1alpha1.Condition {
-	err := ldapProvider.TestConnection(ctx)
+	// First try using TLS.
+	config.ConnectionProtocol = upstreamldap.TLS
+	tlsLDAPProvider := upstreamldap.New(*config)
+	err := tlsLDAPProvider.TestConnection(ctx)
+	if err != nil {
+		plog.InfoErr("testing LDAP connection using TLS failed, so trying again with StartTLS", err, "host", config.Host)
+		// If there was any error, try again with StartTLS instead.
+		config.ConnectionProtocol = upstreamldap.StartTLS
+		startTLSLDAPProvider := upstreamldap.New(*config)
+		startTLSErr := startTLSLDAPProvider.TestConnection(ctx)
+		if startTLSErr == nil {
+			plog.Info("testing LDAP connection using StartTLS succeeded", "host", config.Host)
+			// Successfully able to fall back to using StartTLS, so clear the original
+			// error and consider the connection test to be successful.
+			err = nil
+		} else {
+			plog.InfoErr("testing LDAP connection using StartTLS also failed", err, "host", config.Host)
+			// Falling back to StartTLS also failed, so put TLS back into the config
+			// and consider the connection test to be failed.
+			config.ConnectionProtocol = upstreamldap.TLS
+		}
+	}
+
 	if err != nil {
 		return &v1alpha1.Condition{
 			Type:   typeLDAPConnectionValid,
@@ -271,14 +304,16 @@ func (c *ldapWatcherController) testConnection(
 	}
 }
 
-func (c *ldapWatcherController) hasPreviousSuccessfulConditionForCurrentSpecGenerationAndSecretVersion(upstream *v1alpha1.LDAPIdentityProvider, currentSecretVersion string) bool {
+func (c *ldapWatcherController) hasPreviousSuccessfulConditionForCurrentSpecGenerationAndSecretVersion(upstream *v1alpha1.LDAPIdentityProvider, currentSecretVersion string, config *upstreamldap.ProviderConfig) bool {
 	currentGeneration := upstream.Generation
 	for _, cond := range upstream.Status.Conditions {
 		if cond.Type == typeLDAPConnectionValid && cond.Status == v1alpha1.ConditionTrue && cond.ObservedGeneration == currentGeneration {
 			// Found a previously successful condition for the current spec generation.
 			// Now figure out which version of the bind Secret was used during that previous validation, if any.
-			validatedSecretVersion := c.validatedSecretVersionsCache.ResourceVersionsByName[upstream.GetName()]
-			if validatedSecretVersion == currentSecretVersion {
+			validatedSecretVersion := c.validatedSecretVersionsCache.ValidatedSettingsByName[upstream.GetName()]
+			if validatedSecretVersion.BindSecretResourceVersion == currentSecretVersion {
+				// Reload the TLS vs StartTLS setting that was previously validated.
+				config.ConnectionProtocol = validatedSecretVersion.LDAPConnectionProtocol
 				return true
 			}
 		}

@@ -816,7 +816,43 @@ LDAPIdentityProvider describes the configuration of an upstream Lightweight Dire
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`secretName`* __string__ | SecretName contains the name of a namespace-local Secret object that provides the username and password for an LDAP bind user. This account will be used to perform LDAP searches. The Secret should be of type "kubernetes.io/basic-auth" which includes "username" and "password" keys. The username value should be the full DN of your bind account, e.g. "cn=bind-account,ou=users,dc=example,dc=com". The password must be non-empty.
+| *`secretName`* __string__ | SecretName contains the name of a namespace-local Secret object that provides the username and password for an LDAP bind user. This account will be used to perform LDAP searches. The Secret should be of type "kubernetes.io/basic-auth" which includes "username" and "password" keys. The username value should be the full dn (distinguished name) of your bind account, e.g. "cn=bind-account,ou=users,dc=example,dc=com". The password must be non-empty.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityprovidergroupsearch"]
+==== LDAPIdentityProviderGroupSearch 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`base`* __string__ | Base is the dn (distinguished name) that should be used as the search base when searching for groups. E.g. "ou=groups,dc=example,dc=com". When not specified, no group search will be performed and authenticated users will not belong to any groups from the LDAP provider. Also, when not specified, the values of Filter and Attributes are ignored.
+| *`filter`* __string__ | Filter is the LDAP search filter which should be applied when searching for groups for a user. The pattern "{}" must occur in the filter at least once and will be dynamically replaced by the dn (distinguished name) of the user entry found as a result of the user search. E.g. "member={}" or "&(objectClass=groupOfNames)(member={})". For more information about LDAP filters, see https://ldap.com/ldap-filters. Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}" cannot be used. Optional. When not specified, the default will act as if the Filter were specified as "member={}".
+| *`attributes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityprovidergroupsearchattributes[$$LDAPIdentityProviderGroupSearchAttributes$$]__ | Attributes specifies how the group's information should be read from each LDAP entry which was found as the result of the group search.
+|===
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityprovidergroupsearchattributes"]
+==== LDAPIdentityProviderGroupSearchAttributes 
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityprovidergroupsearch[$$LDAPIdentityProviderGroupSearch$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`groupName`* __string__ | GroupName specifies the name of the attribute in the LDAP entries whose value shall become a group name in the user's list of groups after a successful authentication. The value of this field is case-sensitive and must match the case of the attribute name returned by the LDAP server in the user's entry. Distinguished names can be used by specifying lower-case "dn". Optional. When not specified, the default will act as if the GroupName were specified as "cn" (common name).
 |===
 
 
@@ -839,6 +875,7 @@ Spec for configuring an LDAP identity provider.
 | *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS contains the connection settings for how to establish the connection to the Host.
 | *`bind`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderbind[$$LDAPIdentityProviderBind$$]__ | Bind contains the configuration for how to provide access credentials during an initial bind to the LDAP server to be allowed to perform searches and binds to validate a user's credentials during a user's authentication attempt.
 | *`userSearch`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearch[$$LDAPIdentityProviderUserSearch$$]__ | UserSearch contains the configuration for searching for a user by name in the LDAP provider.
+| *`groupSearch`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityprovidergroupsearch[$$LDAPIdentityProviderGroupSearch$$]__ | GroupSearch contains the configuration for searching for a user's group membership in the LDAP provider.
 |===
 
 
@@ -873,8 +910,8 @@ Status of an LDAP identity provider.
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`base`* __string__ | Base is the DN that should be used as the search base when searching for users. E.g. "ou=users,dc=example,dc=com".
-| *`filter`* __string__ | Filter is the LDAP search filter which should be applied when searching for users. The pattern "{}" must occur in the filter and will be dynamically replaced by the username for which the search is being run. E.g. "mail={}" or "&(objectClass=person)(uid={})". For more information about LDAP filters, see https://ldap.com/ldap-filters. Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}" cannot be used. Optional. When not specified, the default will act as if the Filter were specified as the value from Attributes.Username appended by "={}". When the Attributes.Username is set to "dn" then the Filter must be explicitly specified, since the default value of "dn={}" would not work.
+| *`base`* __string__ | Base is the dn (distinguished name) that should be used as the search base when searching for users. E.g. "ou=users,dc=example,dc=com".
+| *`filter`* __string__ | Filter is the LDAP search filter which should be applied when searching for users. The pattern "{}" must occur in the filter at least once and will be dynamically replaced by the username for which the search is being run. E.g. "mail={}" or "&(objectClass=person)(uid={})". For more information about LDAP filters, see https://ldap.com/ldap-filters. Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}" cannot be used. Optional. When not specified, the default will act as if the Filter were specified as the value from Attributes.Username appended by "={}". When the Attributes.Username is set to "dn" then the Filter must be explicitly specified, since the default value of "dn={}" would not work.
 | *`attributes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-18-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearchattributes[$$LDAPIdentityProviderUserSearchAttributes$$]__ | Attributes specifies how the user's information should be read from the LDAP entry which was found as the result of the user search.
 |===
 
@@ -892,7 +929,7 @@ Status of an LDAP identity provider.
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`username`* __string__ | Username specifies the name of attribute in the LDAP entry which whose value shall become the username of the user after a successful authentication. This would typically be the same attribute name used in the user search filter, although it can be different. E.g. "mail" or "uid" or "userPrincipalName". The value of this field is case-sensitive and must match the case of the attribute name returned by the LDAP server in the user's entry. Distinguished names can be used by specifying lower-case "dn". When this field is set to "dn" then the LDAPIdentityProviderUserSearch's Filter field cannot be blank, since the default value of "dn={}" would not work.
+| *`username`* __string__ | Username specifies the name of the attribute in the LDAP entry whose value shall become the username of the user after a successful authentication. This would typically be the same attribute name used in the user search filter, although it can be different. E.g. "mail" or "uid" or "userPrincipalName". The value of this field is case-sensitive and must match the case of the attribute name returned by the LDAP server in the user's entry. Distinguished names can be used by specifying lower-case "dn". When this field is set to "dn" then the LDAPIdentityProviderUserSearch's Filter field cannot be blank, since the default value of "dn={}" would not work.
 | *`uid`* __string__ | UID specifies the name of the attribute in the LDAP entry which whose value shall be used to uniquely identify the user within this LDAP provider after a successful authentication. E.g. "uidNumber" or "objectGUID". The value of this field is case-sensitive and must match the case of the attribute name returned by the LDAP server in the user's entry. Distinguished names can be used by specifying lower-case "dn".
 |===
 

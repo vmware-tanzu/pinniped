@@ -127,6 +127,63 @@ metadata:
 type: Opaque
 stringData: #@ ldapLIDIF()
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ldap-server-config-before-ldif-files
+  namespace: tools
+type: Opaque
+stringData:
+  server-config.ldif: |
+    # Load the memberof module.
+    dn: cn=module,cn=config
+    cn: module
+    objectClass: olcModuleList
+    objectClass: top
+    olcModulePath: /opt/bitnami/openldap/lib/openldap
+    olcModuleLoad: memberof
+
+    dn: olcOverlay={0}memberof,olcDatabase={2}hdb,cn=config
+    objectClass: olcConfig
+    objectClass: olcMemberOf
+    objectClass: olcOverlayConfig
+    objectClass: top
+    olcOverlay: memberof
+    olcMemberOfDangling: ignore
+    olcMemberOfRefInt: TRUE
+    olcMemberOfGroupOC: groupOfNames
+    olcMemberOfMemberAD: member
+
+    # Load the refint module.
+    dn: cn=module,cn=config
+    cn: module
+    objectclass: olcModuleList
+    objectclass: top
+    olcmodulepath: /opt/bitnami/openldap/lib/openldap
+    olcmoduleload: refint
+
+    dn: olcOverlay={1}refint,olcDatabase={2}hdb,cn=config
+    objectClass: olcConfig
+    objectClass: olcOverlayConfig
+    objectClass: olcRefintConfig
+    objectClass: top
+    olcOverlay: {1}refint
+    olcRefintAttribute: memberof member manager owner
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ldap-server-config-after-ldif-files
+  namespace: tools
+type: Opaque
+stringData:
+  server-config.ldif: |
+    # Reject any further connections that do not use TLS or StartTLS
+    dn: olcDatabase={2}hdb,cn=config
+    changetype: modify
+    add: olcSecurity
+    olcSecurity: tls=1
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -149,7 +206,10 @@ spec:
     spec:
       containers:
         - name: ldap
-          image: docker.io/bitnami/openldap
+          #! Use our own fork of docker.io/bitnami/openldap for now, because we added the
+          #! LDAP_SERVER_CONFIG_BEFORE_CUSTOM_LDIF_DIR and LDAP_SERVER_CONFIG_AFTER_CUSTOM_LDIF_DIR options.
+          #! See https://github.com/pinniped-ci-bot/bitnami-docker-openldap/tree/pinniped
+          image: projects.registry.vmware.com/pinniped/test-ldap:latest
           imagePullPolicy: Always
           ports:
             - name: ldap
@@ -173,8 +233,14 @@ spec:
           env:
             #! Example ldapsearch commands that can be run from within the container based on these env vars.
             #! These will print the whole LDAP tree starting at our root.
-            #!  ldapsearch -x -H 'ldap://ldap.tools.svc.cluster.local' -D 'cn=admin,dc=pinniped,dc=dev' -w password -b 'dc=pinniped,dc=dev'
-            #!  LDAPTLS_CACERT=/var/certs/ca.pem ldapsearch -x -H 'ldaps://ldap.tools.svc.cluster.local' -D 'cn=admin,dc=pinniped,dc=dev' -w password -b 'dc=pinniped,dc=dev'
+            #! Using StartTLS (-ZZ) on the ldap port...
+            #!   LDAPTLS_CACERT=/var/certs/ca.pem ldapsearch -x -ZZ -H 'ldap://ldap.tools.svc.cluster.local' -D 'cn=admin,dc=pinniped,dc=dev' -w password -b 'dc=pinniped,dc=dev'
+            #! Using ldaps...
+            #!   LDAPTLS_CACERT=/var/certs/ca.pem ldapsearch -x -H 'ldaps://ldap.tools.svc.cluster.local' -D 'cn=admin,dc=pinniped,dc=dev' -w password -b 'dc=pinniped,dc=dev'
+            #! Note that the memberOf attribute is special and not returned by default. It must be specified as one of attributes to return in the search, e.g.:
+            #!   LDAPTLS_CACERT=/var/certs/ca.pem ldapsearch -x -H 'ldaps://ldap.tools.svc.cluster.local' -D 'cn=admin,dc=pinniped,dc=dev' -w password -b 'dc=pinniped,dc=dev' cn uidNumber mail member memberOf
+            #! This should fail and report "TLS confidentiality required" because we require TLS and this does not use TLS or StartTLS...
+            #!   ldapsearch -x -H 'ldap://ldap.tools.svc.cluster.local' -D 'cn=admin,dc=pinniped,dc=dev' -w password -b 'dc=pinniped,dc=dev'
             - name: BITNAMI_DEBUG
               value: "true"
             - name: LDAP_ADMIN_USERNAME
@@ -192,6 +258,10 @@ spec:
               #! Note that the custom LDIF file is only read at pod start-up time.
             - name: LDAP_CUSTOM_LDIF_DIR
               value: "/var/ldifs"
+            - name: LDAP_SERVER_CONFIG_BEFORE_CUSTOM_LDIF_DIR
+              value: "/var/server-config-before-ldifs"
+            - name: LDAP_SERVER_CONFIG_AFTER_CUSTOM_LDIF_DIR
+              value: "/var/server-config-after-ldifs"
               #! Seems like LDAP_ROOT is still required when using LDAP_CUSTOM_LDIF_DIR because it effects the admin user.
               #! Presumably this needs to match the root that we create in the LDIF file.
             - name: LDAP_ROOT
@@ -203,6 +273,12 @@ spec:
             - name: ldifs
               mountPath: /var/ldifs
               readOnly: true
+            - name: server-config-before-ldifs
+              mountPath: /var/server-config-before-ldifs
+              readOnly: true
+            - name: server-config-after-ldifs
+              mountPath: /var/server-config-after-ldifs
+              readOnly: true
       volumes:
         - name: certs
           secret:
@@ -210,6 +286,12 @@ spec:
         - name: ldifs
           secret:
             secretName: ldap-ldif-files
+        - name: server-config-before-ldifs
+          secret:
+            secretName: ldap-server-config-before-ldif-files
+        - name: server-config-after-ldifs
+          secret:
+            secretName: ldap-server-config-after-ldif-files
 ---
 apiVersion: v1
 kind: Service
@@ -231,3 +313,37 @@ spec:
       port: 636
       targetPort: 1636
       name: ldaps
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ldaps
+  namespace: tools
+  labels:
+    app: ldap
+spec:
+  type: ClusterIP
+  selector:
+    app: ldap
+  ports:
+    - protocol: TCP
+      port: 636
+      targetPort: 1636
+      name: ldaps
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ldapstarttls
+  namespace: tools
+  labels:
+    app: ldap
+spec:
+  type: ClusterIP
+  selector:
+    app: ldap
+  ports:
+    - protocol: TCP
+      port: 389
+      targetPort: 1389
+      name: ldap

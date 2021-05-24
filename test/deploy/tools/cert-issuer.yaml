@@ -77,13 +77,15 @@ spec:
             | cfssljson -bare dex
 
           # Cheat and add 127.0.0.1 as an IP SAN so we can use the ldaps port through port forwarding.
+          # Also allow the server to be accessed by multiple Service names to different Services
+          # can provide/hide different ports.
           echo "generating LDAP server certificate..."
           cfssl gencert \
             -ca ca.pem -ca-key ca-key.pem \
             -config /tmp/cfssl-default.json \
             -profile www \
             -cn "ldap.tools.svc.cluster.local" \
-            -hostname "ldap.tools.svc.cluster.local,127.0.0.1" \
+            -hostname "ldap.tools.svc.cluster.local,ldaps.tools.svc.cluster.local,ldapstarttls.tools.svc.cluster.local,127.0.0.1" \
             /tmp/csr.json \
             | cfssljson -bare ldap
 

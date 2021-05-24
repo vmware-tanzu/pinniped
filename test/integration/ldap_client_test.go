@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -38,15 +37,19 @@ func TestLDAPSearch(t *testing.T) {
 		cancelFunc() // this will send SIGKILL to the subprocess, just in case
 	})
 
-	hostPorts := findRecentlyUnusedLocalhostPorts(t, 2)
-	ldapHostPort := hostPorts[0]
-	unusedHostPort := hostPorts[1]
+	localhostPorts := findRecentlyUnusedLocalhostPorts(t, 3)
+	ldapLocalhostPort := localhostPorts[0]
+	ldapsLocalhostPort := localhostPorts[1]
+	unusedLocalhostPort := localhostPorts[2]
 
 	// Expose the the test LDAP server's TLS port on the localhost.
-	startKubectlPortForward(ctx, t, ldapHostPort, "ldaps", "ldap", env.ToolsNamespace)
+	startKubectlPortForward(ctx, t, ldapsLocalhostPort, "ldaps", "ldap", env.ToolsNamespace)
+
+	// Expose the the test LDAP server's StartTLS port on the localhost.
+	startKubectlPortForward(ctx, t, ldapLocalhostPort, "ldap", "ldap", env.ToolsNamespace)
 
 	providerConfig := func(editFunc func(p *upstreamldap.ProviderConfig)) *upstreamldap.ProviderConfig {
-		providerConfig := defaultProviderConfig(env, ldapHostPort)
+		providerConfig := defaultProviderConfig(env, ldapsLocalhostPort)
 		if editFunc != nil {
 			editFunc(providerConfig)
 		}
@@ -65,12 +68,24 @@ func TestLDAPSearch(t *testing.T) {
 		wantUnauthenticated bool
 	}{
 		{
-			name:     "happy path",
+			name:     "happy path with TLS",
 			username: "pinny",
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(nil)),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
+			},
+		},
+		{
+			name:     "happy path with StartTLS",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.Host = "127.0.0.1:" + ldapLocalhostPort
+				p.ConnectionProtocol = upstreamldap.StartTLS
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -79,7 +94,7 @@ func TestLDAPSearch(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Base = "dc=pinniped,dc=dev" })),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -88,7 +103,7 @@ func TestLDAPSearch(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Filter = "(cn={})" })),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -100,7 +115,7 @@ func TestLDAPSearch(t *testing.T) {
 				p.UserSearch.Filter = "cn={}"
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "cn=pinny,ou=users,dc=pinniped,dc=dev", UID: "1000", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "cn=pinny,ou=users,dc=pinniped,dc=dev", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -111,7 +126,7 @@ func TestLDAPSearch(t *testing.T) {
 				p.UserSearch.Filter = "(|(cn={})(mail={}))"
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -122,7 +137,7 @@ func TestLDAPSearch(t *testing.T) {
 				p.UserSearch.Filter = "(|(cn={})(mail={}))"
 			})),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -131,7 +146,7 @@ func TestLDAPSearch(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.UIDAttribute = "dn" })),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: "cn=pinny,ou=users,dc=pinniped,dc=dev", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: "cn=pinny,ou=users,dc=pinniped,dc=dev", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -140,7 +155,7 @@ func TestLDAPSearch(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.UIDAttribute = "sn" })),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "pinny", UID: "Seal", Groups: []string{}},
+				User: &user.DefaultInfo{Name: "pinny", UID: "Seal", Groups: []string{"ball-game-players", "seals"}},
 			},
 		},
 		{
@@ -149,7 +164,7 @@ func TestLDAPSearch(t *testing.T) {
 			password: pinnyPassword,
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.UsernameAttribute = "sn" })),
 			wantAuthResponse: &authenticator.Response{
-				User: &user.DefaultInfo{Name: "Seal", UID: "1000", Groups: []string{}}, // note that the final answer has case preserved from the entry
+				User: &user.DefaultInfo{Name: "Seal", UID: "1000", Groups: []string{"ball-game-players", "seals"}}, // note that the final answer has case preserved from the entry
 			},
 		},
 		{
@@ -161,6 +176,75 @@ func TestLDAPSearch(t *testing.T) {
 				p.UserSearch.Filter = ""
 			})),
 			wantError: `must specify UserSearch Filter when UserSearch UsernameAttribute is "dn"`,
+		},
+		{
+			name:     "group search disabled",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.Base = ""
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+			},
+		},
+		{
+			name:     "group search base causes no groups to be found for user",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.Base = "ou=users,dc=pinniped,dc=dev" // there are no groups under this part of the tree
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+			},
+		},
+		{
+			name:     "using dn as the group name attribute",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.GroupNameAttribute = "dn"
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{
+					"cn=ball-game-players,ou=beach-groups,ou=groups,dc=pinniped,dc=dev",
+					"cn=seals,ou=groups,dc=pinniped,dc=dev",
+				}},
+			},
+		},
+		{
+			name:     "using some other custom group name attribute",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.GroupNameAttribute = "objectClass" // silly example, but still a meaningful test
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"groupOfNames", "groupOfNames"}},
+			},
+		},
+		{
+			name:     "using a more complex group search filter",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.Filter = "(&(&(objectClass=groupOfNames)(member={}))(cn=seals))"
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"seals"}},
+			},
+		},
+		{
+			name:     "using a group filter which causes no groups to be found for the user",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.Filter = "foobar={}" // foobar is not a valid attribute name for this LDAP server's schema
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+			},
 		},
 		{
 			name:      "when the bind user username is not a valid DN",
@@ -182,6 +266,17 @@ func TestLDAPSearch(t *testing.T) {
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.BindPassword = "wrong-password" })),
 			wantError: `error binding as "cn=admin,dc=pinniped,dc=dev" before user search: LDAP Result Code 49 "Invalid Credentials": `,
+		},
+		{
+			name:     "when the bind user username is wrong with StartTLS: example of an error after successful connection with StartTLS",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.Host = "127.0.0.1:" + ldapLocalhostPort
+				p.ConnectionProtocol = upstreamldap.StartTLS
+				p.BindUsername = "cn=wrong,dc=pinniped,dc=dev"
+			})),
+			wantError: `error binding as "cn=wrong,dc=pinniped,dc=dev" before user search: LDAP Result Code 49 "Invalid Credentials": `,
 		},
 		{
 			name:                "when the end user password is wrong",
@@ -212,6 +307,13 @@ func TestLDAPSearch(t *testing.T) {
 			wantError: `error searching for user "pinny": LDAP Result Code 201 "Filter Compile Error": ldap: error parsing filter`,
 		},
 		{
+			name:      "when the group search filter does not compile",
+			username:  "pinny",
+			password:  pinnyPassword,
+			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.GroupSearch.Filter = "*" })),
+			wantError: `error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 201 "Filter Compile Error": ldap: error parsing filter`,
+		},
+		{
 			name:     "when there are too many search results for the user",
 			username: "pinny",
 			password: pinnyPassword,
@@ -221,32 +323,89 @@ func TestLDAPSearch(t *testing.T) {
 			wantError: `error searching for user "pinny": LDAP Result Code 4 "Size Limit Exceeded": `,
 		},
 		{
-			name:      "when the server is unreachable",
+			name:      "when the server is unreachable with TLS",
 			username:  "pinny",
 			password:  pinnyPassword,
-			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.Host = "127.0.0.1:" + unusedHostPort })),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": dial tcp 127.0.0.1:%s: connect: connection refused`, unusedHostPort, unusedHostPort),
+			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.Host = "127.0.0.1:" + unusedLocalhostPort })),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": dial tcp 127.0.0.1:%s: connect: connection refused`, unusedLocalhostPort, unusedLocalhostPort),
 		},
 		{
-			name:      "when the server is not parsable",
+			name:     "when the server is unreachable with StartTLS",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.Host = "127.0.0.1:" + unusedLocalhostPort
+				p.ConnectionProtocol = upstreamldap.StartTLS
+			})),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": dial tcp 127.0.0.1:%s: connect: connection refused`, unusedLocalhostPort, unusedLocalhostPort),
+		},
+		{
+			name:      "when the server is not parsable with TLS",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.Host = "too:many:ports" })),
 			wantError: `error dialing host "too:many:ports": LDAP Result Code 200 "Network Error": address too:many:ports: too many colons in address`,
 		},
 		{
-			name:      "when the CA bundle is not parsable",
+			name:     "when the server is not parsable with StartTLS",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.Host = "127.0.0.1:" + ldapLocalhostPort
+				p.ConnectionProtocol = upstreamldap.StartTLS
+				p.Host = "too:many:ports"
+			})),
+			wantError: `error dialing host "too:many:ports": LDAP Result Code 200 "Network Error": address too:many:ports: too many colons in address`,
+		},
+		{
+			name:      "when the CA bundle is not parsable with TLS",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.CABundle = []byte("invalid-pem") })),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": could not parse CA bundle`, ldapHostPort),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": could not parse CA bundle`, ldapsLocalhostPort),
 		},
 		{
-			name:      "when the CA bundle does not cause the host to be trusted",
+			name:     "when the CA bundle is not parsable with StartTLS",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.Host = "127.0.0.1:" + ldapLocalhostPort
+				p.ConnectionProtocol = upstreamldap.StartTLS
+				p.CABundle = []byte("invalid-pem")
+			})),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": could not parse CA bundle`, ldapLocalhostPort),
+		},
+		{
+			name:      "when the CA bundle does not cause the host to be trusted with TLS",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.CABundle = nil })),
-			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": x509: certificate signed by unknown authority`, ldapHostPort),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": x509: certificate signed by unknown authority`, ldapsLocalhostPort),
+		},
+		{
+			name:     "when the CA bundle does not cause the host to be trusted with StartTLS",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.Host = "127.0.0.1:" + ldapLocalhostPort
+				p.ConnectionProtocol = upstreamldap.StartTLS
+				p.CABundle = nil
+			})),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": TLS handshake failed (x509: certificate signed by unknown authority)`, ldapLocalhostPort),
+		},
+		{
+			name:      "when trying to use TLS to connect to a port which only supports StartTLS",
+			username:  "pinny",
+			password:  pinnyPassword,
+			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.Host = "127.0.0.1:" + ldapLocalhostPort })),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": LDAP Result Code 200 "Network Error": EOF`, ldapLocalhostPort),
+		},
+		{
+			name:      "when trying to use StartTLS to connect to a port which only supports TLS",
+			username:  "pinny",
+			password:  pinnyPassword,
+			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.ConnectionProtocol = upstreamldap.StartTLS })),
+			wantError: fmt.Sprintf(`error dialing host "127.0.0.1:%s": unable to read LDAP response packet: unexpected EOF`, ldapsLocalhostPort),
 		},
 		{
 			name:      "when the UsernameAttribute attribute has multiple values in the entry",
@@ -294,6 +453,13 @@ func TestLDAPSearch(t *testing.T) {
 			wantError: `found 0 values for attribute "SN" while searching for user "pinny", but expected 1 result`,
 		},
 		{
+			name:      "when the GroupNameAttribute has the wrong case",
+			username:  "pinny",
+			password:  pinnyPassword,
+			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.GroupSearch.GroupNameAttribute = "CN" })), // this is case-sensitive
+			wantError: `error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": found 0 values for attribute "CN" while searching for user "cn=pinny,ou=users,dc=pinniped,dc=dev", but expected 1 result`,
+		},
+		{
 			name:     "when the UsernameAttribute is DN and has the wrong case",
 			username: "pinny",
 			password: pinnyPassword,
@@ -313,21 +479,44 @@ func TestLDAPSearch(t *testing.T) {
 			wantError: `found 0 values for attribute "DN" while searching for user "pinny", but expected 1 result`,
 		},
 		{
-			name:      "when the search base is invalid",
+			name:     "when the GroupNameAttribute is DN and has the wrong case",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.GroupNameAttribute = "DN" // dn must be lower-case
+			})),
+			wantError: `error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": found 0 values for attribute "DN" while searching for user "cn=pinny,ou=users,dc=pinniped,dc=dev", but expected 1 result`,
+		},
+		{
+			name:      "when the user search base is invalid",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Base = "invalid-base" })),
 			wantError: `error searching for user "pinny": LDAP Result Code 34 "Invalid DN Syntax": invalid DN`,
 		},
 		{
-			name:      "when the search base does not exist",
+			name:      "when the group search base is invalid",
+			username:  "pinny",
+			password:  pinnyPassword,
+			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.GroupSearch.Base = "invalid-base" })),
+			wantError: `error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 34 "Invalid DN Syntax": invalid DN`,
+		},
+		{
+			name:      "when the user search base does not exist",
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Base = "ou=does-not-exist,dc=pinniped,dc=dev" })),
 			wantError: `error searching for user "pinny": LDAP Result Code 32 "No Such Object": `,
 		},
 		{
-			name:                "when the search base causes no search results",
+			name:      "when the group search base does not exist",
+			username:  "pinny",
+			password:  pinnyPassword,
+			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.GroupSearch.Base = "ou=does-not-exist,dc=pinniped,dc=dev" })),
+			wantError: `error searching for group memberships for user with DN "cn=pinny,ou=users,dc=pinniped,dc=dev": LDAP Result Code 32 "No Such Object": `,
+		},
+		{
+			name:                "when the user search base causes no search results",
 			username:            "pinny",
 			password:            pinnyPassword,
 			provider:            upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Base = "ou=groups,dc=pinniped,dc=dev" })),
@@ -425,7 +614,7 @@ func TestSimultaneousRequestsOnSingleProvider(t *testing.T) {
 		assert.NoError(t, result.err)
 		assert.True(t, result.authenticated, "expected the user to be authenticated, but they were not")
 		assert.Equal(t, &authenticator.Response{
-			User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{}},
+			User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
 		}, result.response)
 	}
 }
@@ -436,18 +625,24 @@ type authUserResult struct {
 	err           error
 }
 
-func defaultProviderConfig(env *library.TestEnv, ldapHostPort string) *upstreamldap.ProviderConfig {
+func defaultProviderConfig(env *library.TestEnv, port string) *upstreamldap.ProviderConfig {
 	return &upstreamldap.ProviderConfig{
-		Name:         "test-ldap-provider",
-		Host:         "127.0.0.1:" + ldapHostPort,
-		CABundle:     []byte(env.SupervisorUpstreamLDAP.CABundle),
-		BindUsername: "cn=admin,dc=pinniped,dc=dev",
-		BindPassword: "password",
+		Name:               "test-ldap-provider",
+		Host:               "127.0.0.1:" + port,
+		ConnectionProtocol: upstreamldap.TLS,
+		CABundle:           []byte(env.SupervisorUpstreamLDAP.CABundle),
+		BindUsername:       "cn=admin,dc=pinniped,dc=dev",
+		BindPassword:       "password",
 		UserSearch: upstreamldap.UserSearchConfig{
 			Base:              "ou=users,dc=pinniped,dc=dev",
 			Filter:            "", // defaults to UsernameAttribute={}, i.e. "cn={}" in this case
 			UsernameAttribute: "cn",
 			UIDAttribute:      "uidNumber",
+		},
+		GroupSearch: upstreamldap.GroupSearchConfig{
+			Base:               "ou=groups,dc=pinniped,dc=dev",
+			Filter:             "", // defaults to member={}
+			GroupNameAttribute: "", // defaults to cn
 		},
 	}
 }

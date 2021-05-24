@@ -39,14 +39,14 @@ type LDAPIdentityProviderBind struct {
 	// SecretName contains the name of a namespace-local Secret object that provides the username and
 	// password for an LDAP bind user. This account will be used to perform LDAP searches. The Secret should be
 	// of type "kubernetes.io/basic-auth" which includes "username" and "password" keys. The username value
-	// should be the full DN of your bind account, e.g. "cn=bind-account,ou=users,dc=example,dc=com".
+	// should be the full dn (distinguished name) of your bind account, e.g. "cn=bind-account,ou=users,dc=example,dc=com".
 	// The password must be non-empty.
 	// +kubebuilder:validation:MinLength=1
 	SecretName string `json:"secretName"`
 }
 
 type LDAPIdentityProviderUserSearchAttributes struct {
-	// Username specifies the name of attribute in the LDAP entry which whose value shall become the username
+	// Username specifies the name of the attribute in the LDAP entry whose value shall become the username
 	// of the user after a successful authentication. This would typically be the same attribute name used in
 	// the user search filter, although it can be different. E.g. "mail" or "uid" or "userPrincipalName".
 	// The value of this field is case-sensitive and must match the case of the attribute name returned by the LDAP
@@ -64,14 +64,26 @@ type LDAPIdentityProviderUserSearchAttributes struct {
 	UID string `json:"uid,omitempty"`
 }
 
+type LDAPIdentityProviderGroupSearchAttributes struct {
+	// GroupName specifies the name of the attribute in the LDAP entries whose value shall become a group name
+	// in the user's list of groups after a successful authentication.
+	// The value of this field is case-sensitive and must match the case of the attribute name returned by the LDAP
+	// server in the user's entry. Distinguished names can be used by specifying lower-case "dn".
+	// Optional. When not specified, the default will act as if the GroupName were specified as "cn" (common name).
+	// +optional
+	GroupName string `json:"groupName,omitempty"`
+}
+
 type LDAPIdentityProviderUserSearch struct {
-	// Base is the DN that should be used as the search base when searching for users. E.g. "ou=users,dc=example,dc=com".
+	// Base is the dn (distinguished name) that should be used as the search base when searching for users.
+	// E.g. "ou=users,dc=example,dc=com".
 	// +kubebuilder:validation:MinLength=1
 	Base string `json:"base,omitempty"`
 
 	// Filter is the LDAP search filter which should be applied when searching for users. The pattern "{}" must occur
-	// in the filter and will be dynamically replaced by the username for which the search is being run. E.g. "mail={}"
-	// or "&(objectClass=person)(uid={})". For more information about LDAP filters, see https://ldap.com/ldap-filters.
+	// in the filter at least once and will be dynamically replaced by the username for which the search is being run.
+	// E.g. "mail={}" or "&(objectClass=person)(uid={})". For more information about LDAP filters, see
+	// https://ldap.com/ldap-filters.
 	// Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}" cannot be used.
 	// Optional. When not specified, the default will act as if the Filter were specified as the value from
 	// Attributes.Username appended by "={}". When the Attributes.Username is set to "dn" then the Filter must be
@@ -83,6 +95,30 @@ type LDAPIdentityProviderUserSearch struct {
 	// the result of the user search.
 	// +optional
 	Attributes LDAPIdentityProviderUserSearchAttributes `json:"attributes,omitempty"`
+}
+
+type LDAPIdentityProviderGroupSearch struct {
+	// Base is the dn (distinguished name) that should be used as the search base when searching for groups. E.g.
+	// "ou=groups,dc=example,dc=com". When not specified, no group search will be performed and
+	// authenticated users will not belong to any groups from the LDAP provider. Also, when not specified,
+	// the values of Filter and Attributes are ignored.
+	// +optional
+	Base string `json:"base,omitempty"`
+
+	// Filter is the LDAP search filter which should be applied when searching for groups for a user.
+	// The pattern "{}" must occur in the filter at least once and will be dynamically replaced by the
+	// dn (distinguished name) of the user entry found as a result of the user search. E.g. "member={}" or
+	// "&(objectClass=groupOfNames)(member={})". For more information about LDAP filters, see
+	// https://ldap.com/ldap-filters.
+	// Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}" cannot be used.
+	// Optional. When not specified, the default will act as if the Filter were specified as "member={}".
+	// +optional
+	Filter string `json:"filter,omitempty"`
+
+	// Attributes specifies how the group's information should be read from each LDAP entry which was found as
+	// the result of the group search.
+	// +optional
+	Attributes LDAPIdentityProviderGroupSearchAttributes `json:"attributes,omitempty"`
 }
 
 // Spec for configuring an LDAP identity provider.
@@ -100,6 +136,9 @@ type LDAPIdentityProviderSpec struct {
 
 	// UserSearch contains the configuration for searching for a user by name in the LDAP provider.
 	UserSearch LDAPIdentityProviderUserSearch `json:"userSearch,omitempty"`
+
+	// GroupSearch contains the configuration for searching for a user's group membership in the LDAP provider.
+	GroupSearch LDAPIdentityProviderGroupSearch `json:"groupSearch,omitempty"`
 }
 
 // LDAPIdentityProvider describes the configuration of an upstream Lightweight Directory Access

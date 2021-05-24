@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,9 +25,11 @@ import (
 )
 
 const (
-	ldapsScheme                                 = "ldaps"
-	distinguishedNameAttributeName              = "dn"
-	userSearchFilterInterpolationLocationMarker = "{}"
+	ldapsScheme                             = "ldaps"
+	distinguishedNameAttributeName          = "dn"
+	commonNameAttributeName                 = "cn"
+	searchFilterInterpolationLocationMarker = "{}"
+	groupSearchPageSize                     = uint32(250)
 )
 
 // Conn abstracts the upstream LDAP communication protocol (mostly for testing).
@@ -34,6 +37,8 @@ type Conn interface {
 	Bind(username, password string) error
 
 	Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error)
+
+	SearchWithPaging(searchRequest *ldap.SearchRequest, pagingSize uint32) (*ldap.SearchResult, error)
 
 	Close()
 }
@@ -55,6 +60,13 @@ func (f LDAPDialerFunc) Dial(ctx context.Context, hostAndPort string) (Conn, err
 	return f(ctx, hostAndPort)
 }
 
+type LDAPConnectionProtocol string
+
+const (
+	StartTLS = LDAPConnectionProtocol("StartTLS")
+	TLS      = LDAPConnectionProtocol("TLS")
+)
+
 // ProviderConfig includes all of the settings for connection and searching for users and groups in
 // the upstream LDAP IDP. It also provides methods for testing the connection and performing logins.
 // The nested structs are not pointer fields to enable deep copy on function params and return values.
@@ -65,6 +77,9 @@ type ProviderConfig struct {
 	// Host is the hostname or "hostname:port" of the LDAP server. When the port is not specified,
 	// the default LDAP port will be used.
 	Host string
+
+	// ConnectionProtocol determines how to establish the connection to the server. Either StartTLS or TLS.
+	ConnectionProtocol LDAPConnectionProtocol
 
 	// PEM-encoded CA cert bundle to trust when connecting to the LDAP server. Can be nil.
 	CABundle []byte
@@ -77,6 +92,9 @@ type ProviderConfig struct {
 
 	// UserSearch contains information about how to search for users in the upstream LDAP IDP.
 	UserSearch UserSearchConfig
+
+	// GroupSearch contains information about how to search for group membership in the upstream LDAP IDP.
+	GroupSearch GroupSearchConfig
 
 	// Dialer exists to enable testing. When nil, will use a default appropriate for production use.
 	Dialer LDAPDialer
@@ -99,6 +117,20 @@ type UserSearchConfig struct {
 	UIDAttribute string
 }
 
+// GroupSearchConfig contains information about how to search for group membership for users in the upstream LDAP IDP.
+type GroupSearchConfig struct {
+	// Base is the base DN to use for the group search in the upstream LDAP IDP. Empty means to skip group search
+	// entirely, in which case authenticated users will not belong to any groups from the upstream LDAP IDP.
+	Base string
+
+	// Filter is the filter to use for the group search in the upstream LDAP IDP. Empty means to use `member={}`.
+	Filter string
+
+	// GroupNameAttribute is the attribute in the LDAP group entry from which the group name should be
+	// retrieved. Empty means to use 'cn'.
+	GroupNameAttribute string
+}
+
 type Provider struct {
 	c ProviderConfig
 }
@@ -115,33 +147,48 @@ func (p *Provider) GetConfig() ProviderConfig {
 }
 
 func (p *Provider) dial(ctx context.Context) (Conn, error) {
-	hostAndPort, err := hostAndPortWithDefaultPort(p.c.Host, ldap.DefaultLdapsPort)
+	tlsHostAndPort, err := hostAndPortWithDefaultPort(p.c.Host, ldap.DefaultLdapsPort)
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
-	if p.c.Dialer != nil {
-		return p.c.Dialer.Dial(ctx, hostAndPort)
+
+	startTLSHostAndPort, err := hostAndPortWithDefaultPort(p.c.Host, ldap.DefaultLdapPort)
+	if err != nil {
+		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
-	return p.dialTLS(ctx, hostAndPort)
+
+	// Choose how and where to dial based on TLS vs. StartTLS config option.
+	var dialFunc LDAPDialerFunc
+	var hostAndPort string
+	switch {
+	case p.c.ConnectionProtocol == TLS:
+		dialFunc = p.dialTLS
+		hostAndPort = tlsHostAndPort
+	case p.c.ConnectionProtocol == StartTLS:
+		dialFunc = p.dialStartTLS
+		hostAndPort = startTLSHostAndPort
+	default:
+		return nil, ldap.NewError(ldap.ErrorNetwork, fmt.Errorf("did not specify valid ConnectionProtocol"))
+	}
+
+	// Override the real dialer for testing purposes sometimes.
+	if p.c.Dialer != nil {
+		dialFunc = p.c.Dialer.Dial
+	}
+
+	return dialFunc(ctx, hostAndPort)
 }
 
-// dialTLS is the default implementation of the Dialer, used when Dialer is nil.
+// dialTLS is a default implementation of the Dialer, used when Dialer is nil and ConnectionProtocol is TLS.
 // Unfortunately, the go-ldap library does not seem to support dialing with a context.Context,
 // so we implement it ourselves, heavily inspired by ldap.DialURL.
 func (p *Provider) dialTLS(ctx context.Context, hostAndPort string) (Conn, error) {
-	var rootCAs *x509.CertPool
-	if p.c.CABundle != nil {
-		rootCAs = x509.NewCertPool()
-		if !rootCAs.AppendCertsFromPEM(p.c.CABundle) {
-			return nil, ldap.NewError(ldap.ErrorNetwork, fmt.Errorf("could not parse CA bundle"))
-		}
+	tlsConfig, err := p.tlsConfig()
+	if err != nil {
+		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
 
-	dialer := &tls.Dialer{Config: &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		RootCAs:    rootCAs,
-	}}
-
+	dialer := &tls.Dialer{NetDialer: netDialer(), Config: tlsConfig}
 	c, err := dialer.DialContext(ctx, "tcp", hostAndPort)
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
@@ -150,6 +197,52 @@ func (p *Provider) dialTLS(ctx context.Context, hostAndPort string) (Conn, error
 	conn := ldap.NewConn(c, true)
 	conn.Start()
 	return conn, nil
+}
+
+// dialTLS is a default implementation of the Dialer, used when Dialer is nil and ConnectionProtocol is StartTLS.
+// Unfortunately, the go-ldap library does not seem to support dialing with a context.Context,
+// so we implement it ourselves, heavily inspired by ldap.DialURL.
+func (p *Provider) dialStartTLS(ctx context.Context, hostAndPort string) (Conn, error) {
+	tlsConfig, err := p.tlsConfig()
+	if err != nil {
+		return nil, ldap.NewError(ldap.ErrorNetwork, err)
+	}
+
+	host, err := hostWithoutPort(hostAndPort)
+	if err != nil {
+		return nil, ldap.NewError(ldap.ErrorNetwork, err)
+	}
+	// Unfortunately, this seems to be required for StartTLS, even though it is not needed for regular TLS.
+	tlsConfig.ServerName = host
+
+	c, err := netDialer().DialContext(ctx, "tcp", hostAndPort)
+	if err != nil {
+		return nil, ldap.NewError(ldap.ErrorNetwork, err)
+	}
+
+	conn := ldap.NewConn(c, false)
+	conn.Start()
+	err = conn.StartTLS(tlsConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
+}
+
+func netDialer() *net.Dialer {
+	return &net.Dialer{Timeout: time.Minute}
+}
+
+func (p *Provider) tlsConfig() (*tls.Config, error) {
+	var rootCAs *x509.CertPool
+	if p.c.CABundle != nil {
+		rootCAs = x509.NewCertPool()
+		if !rootCAs.AppendCertsFromPEM(p.c.CABundle) {
+			return nil, fmt.Errorf("could not parse CA bundle")
+		}
+	}
+	return &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: rootCAs}, nil
 }
 
 // Adds the default port if hostAndPort did not already include a port.
@@ -166,12 +259,28 @@ func hostAndPortWithDefaultPort(hostAndPort string, defaultPort string) (string,
 	switch {
 	case port != "" && strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]"):
 		// don't add extra square brackets to an IPv6 address that already has them
-		return host + ":" + port, nil
+		return fmt.Sprintf("%s:%s", host, port), nil
 	case port != "":
 		return net.JoinHostPort(host, port), nil
 	default:
 		return host, nil
 	}
+}
+
+// Strip the port from a host or host:port.
+func hostWithoutPort(hostAndPort string) (string, error) {
+	host, _, err := net.SplitHostPort(hostAndPort)
+	if err != nil {
+		if strings.HasSuffix(err.Error(), ": missing port in address") { // sad to need to do this string compare
+			return hostAndPort, nil
+		}
+		return "", err // hostAndPort argument was not parsable
+	}
+	if strings.HasPrefix(hostAndPort, "[") {
+		// it was an IPv6 address, so preserve the square brackets.
+		return fmt.Sprintf("[%s]", host), nil
+	}
+	return host, nil
 }
 
 // A name for this upstream provider.
@@ -257,7 +366,7 @@ func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bi
 		return nil, false, fmt.Errorf(`error binding as "%s" before user search: %w`, p.c.BindUsername, err)
 	}
 
-	mappedUsername, mappedUID, err := p.searchAndBindUser(conn, username, bindFunc)
+	mappedUsername, mappedUID, mappedGroupNames, err := p.searchAndBindUser(conn, username, bindFunc)
 	if err != nil {
 		p.traceAuthFailure(t, err)
 		return nil, false, err
@@ -272,11 +381,37 @@ func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bi
 		User: &user.DefaultInfo{
 			Name:   mappedUsername,
 			UID:    mappedUID,
-			Groups: []string{}, // Support for group search coming soon.
+			Groups: mappedGroupNames,
 		},
 	}
 	p.traceAuthSuccess(t)
 	return response, true, nil
+}
+
+func (p *Provider) searchGroupsForUserDN(conn Conn, userDN string) ([]string, error) {
+	searchResult, err := conn.SearchWithPaging(p.groupSearchRequest(userDN), groupSearchPageSize)
+	if err != nil {
+		return nil, fmt.Errorf(`error searching for group memberships for user with DN %q: %w`, userDN, err)
+	}
+
+	groupAttributeName := p.c.GroupSearch.GroupNameAttribute
+	if len(groupAttributeName) == 0 {
+		groupAttributeName = commonNameAttributeName
+	}
+
+	groups := []string{}
+	for _, groupEntry := range searchResult.Entries {
+		if len(groupEntry.DN) == 0 {
+			return nil, fmt.Errorf(`searching for group memberships for user with DN %q resulted in search result without DN`, userDN)
+		}
+		mappedGroupName, err := p.getSearchResultAttributeValue(groupAttributeName, groupEntry, userDN)
+		if err != nil {
+			return nil, fmt.Errorf(`error searching for group memberships for user with DN %q: %w`, userDN, err)
+		}
+		groups = append(groups, mappedGroupName)
+	}
+
+	return groups, nil
 }
 
 func (p *Provider) validateConfig() error {
@@ -287,35 +422,44 @@ func (p *Provider) validateConfig() error {
 	return nil
 }
 
-func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(conn Conn, foundUserDN string) error) (string, string, error) {
+func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(conn Conn, foundUserDN string) error) (string, string, []string, error) {
 	searchResult, err := conn.Search(p.userSearchRequest(username))
 	if err != nil {
-		return "", "", fmt.Errorf(`error searching for user "%s": %w`, username, err)
+		return "", "", nil, fmt.Errorf(`error searching for user "%s": %w`, username, err)
 	}
 	if len(searchResult.Entries) == 0 {
 		plog.Debug("error finding user: user not found (if this username is valid, please check the user search configuration)",
 			"upstreamName", p.GetName(), "username", username)
-		return "", "", nil
+		return "", "", nil, nil
 	}
 	if len(searchResult.Entries) > 1 {
-		return "", "", fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
+		return "", "", nil, fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
 			username, len(searchResult.Entries),
 		)
 	}
 	userEntry := searchResult.Entries[0]
 	if len(userEntry.DN) == 0 {
-		return "", "", fmt.Errorf(`searching for user "%s" resulted in search result without DN`, username)
+		return "", "", nil, fmt.Errorf(`searching for user "%s" resulted in search result without DN`, username)
 	}
 
 	mappedUsername, err := p.getSearchResultAttributeValue(p.c.UserSearch.UsernameAttribute, userEntry, username)
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
 
 	mappedUID, err := p.getSearchResultAttributeValue(p.c.UserSearch.UIDAttribute, userEntry, username)
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
+
+	mappedGroupNames := []string{}
+	if len(p.c.GroupSearch.Base) > 0 {
+		mappedGroupNames, err = p.searchGroupsForUserDN(conn, userEntry.DN)
+		if err != nil {
+			return "", "", nil, err
+		}
+	}
+	sort.Strings(mappedGroupNames)
 
 	// Caution: Note that any other LDAP commands after this bind will be run as this user instead of as the configured BindUsername!
 	err = bindFunc(conn, userEntry.DN)
@@ -324,12 +468,12 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 			err, "upstreamName", p.GetName(), "username", username, "dn", userEntry.DN)
 		ldapErr := &ldap.Error{}
 		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultInvalidCredentials {
-			return "", "", nil
+			return "", "", nil, nil
 		}
-		return "", "", fmt.Errorf(`error binding for user "%s" using provided password against DN "%s": %w`, username, userEntry.DN, err)
+		return "", "", nil, fmt.Errorf(`error binding for user "%s" using provided password against DN "%s": %w`, username, userEntry.DN, err)
 	}
 
-	return mappedUsername, mappedUID, nil
+	return mappedUsername, mappedUID, mappedGroupNames, nil
 }
 
 func (p *Provider) userSearchRequest(username string) *ldap.SearchRequest {
@@ -347,6 +491,21 @@ func (p *Provider) userSearchRequest(username string) *ldap.SearchRequest {
 	}
 }
 
+func (p *Provider) groupSearchRequest(userDN string) *ldap.SearchRequest {
+	// See https://ldap.com/the-ldap-search-operation for general documentation of LDAP search options.
+	return &ldap.SearchRequest{
+		BaseDN:       p.c.GroupSearch.Base,
+		Scope:        ldap.ScopeWholeSubtree,
+		DerefAliases: ldap.NeverDerefAliases,
+		SizeLimit:    0, // unlimited size because we will search with paging
+		TimeLimit:    90,
+		TypesOnly:    false,
+		Filter:       p.groupSearchFilter(userDN),
+		Attributes:   p.groupSearchRequestedAttributes(),
+		Controls:     nil, // nil because ldap.SearchWithPaging() will set the appropriate controls for us
+	}
+}
+
 func (p *Provider) userSearchRequestedAttributes() []string {
 	attributes := []string{}
 	if p.c.UserSearch.UsernameAttribute != distinguishedNameAttributeName {
@@ -358,12 +517,34 @@ func (p *Provider) userSearchRequestedAttributes() []string {
 	return attributes
 }
 
+func (p *Provider) groupSearchRequestedAttributes() []string {
+	switch p.c.GroupSearch.GroupNameAttribute {
+	case "":
+		return []string{commonNameAttributeName}
+	case distinguishedNameAttributeName:
+		return []string{}
+	default:
+		return []string{p.c.GroupSearch.GroupNameAttribute}
+	}
+}
+
 func (p *Provider) userSearchFilter(username string) string {
 	safeUsername := p.escapeUsernameForSearchFilter(username)
 	if len(p.c.UserSearch.Filter) == 0 {
 		return fmt.Sprintf("(%s=%s)", p.c.UserSearch.UsernameAttribute, safeUsername)
 	}
-	filter := strings.ReplaceAll(p.c.UserSearch.Filter, userSearchFilterInterpolationLocationMarker, safeUsername)
+	return interpolateSearchFilter(p.c.UserSearch.Filter, safeUsername)
+}
+
+func (p *Provider) groupSearchFilter(userDN string) string {
+	if len(p.c.GroupSearch.Filter) == 0 {
+		return fmt.Sprintf("(member=%s)", userDN)
+	}
+	return interpolateSearchFilter(p.c.GroupSearch.Filter, userDN)
+}
+
+func interpolateSearchFilter(filterFormat, valueToInterpolateIntoFilter string) string {
+	filter := strings.ReplaceAll(filterFormat, searchFilterInterpolationLocationMarker, valueToInterpolateIntoFilter)
 	if strings.HasPrefix(filter, "(") && strings.HasSuffix(filter, ")") {
 		return filter
 	}
@@ -375,12 +556,12 @@ func (p *Provider) escapeUsernameForSearchFilter(username string) string {
 	return ldap.EscapeFilter(username)
 }
 
-func (p *Provider) getSearchResultAttributeValue(attributeName string, fromUserEntry *ldap.Entry, username string) (string, error) {
+func (p *Provider) getSearchResultAttributeValue(attributeName string, entry *ldap.Entry, username string) (string, error) {
 	if attributeName == distinguishedNameAttributeName {
-		return fromUserEntry.DN, nil
+		return entry.DN, nil
 	}
 
-	attributeValues := fromUserEntry.GetAttributeValues(attributeName)
+	attributeValues := entry.GetAttributeValues(attributeName)
 
 	if len(attributeValues) != 1 {
 		return "", fmt.Errorf(`found %d values for attribute "%s" while searching for user "%s", but expected 1 result`,

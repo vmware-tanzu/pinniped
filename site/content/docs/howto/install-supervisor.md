@@ -26,7 +26,7 @@ You should have a supported Kubernetes cluster with working HTTPS ingress capabi
 1. Install the Supervisor into the `pinniped-supervisor` namespace with default options:
 
    - `kubectl apply -f https://get.pinniped.dev/v0.8.0/install-pinniped-supervisor.yaml`
-  
+
      *Replace v0.8.0 with your preferred version number.*
 
 ## With custom options
@@ -57,3 +57,5 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
    - *If you're using [`kapp` from Carvel](https://carvel.dev/kapp/):*
 
      `ytt --file . | kapp deploy --yes --app pinniped-supervisor --diff-changes --file -`
+
+Please follow further steps from the [configure-supervisor]({{< ref "configure-supervisor" >}})      

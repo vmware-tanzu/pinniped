@@ -26,6 +26,7 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/mocks/mockldapconn"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/testutil"
@@ -871,9 +872,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				tt.setupMocks(conn)
 			}
 
-			dialer := &comparableDialer{upstreamldap.LDAPDialerFunc(func(ctx context.Context, hostAndPort string) (upstreamldap.Conn, error) {
+			dialer := &comparableDialer{upstreamldap.LDAPDialerFunc(func(ctx context.Context, addr endpointaddr.HostPort) (upstreamldap.Conn, error) {
 				if tt.dialErrors != nil {
-					dialErr := tt.dialErrors[hostAndPort]
+					dialErr := tt.dialErrors[addr.Endpoint()]
 					if dialErr != nil {
 						return nil, dialErr
 					}

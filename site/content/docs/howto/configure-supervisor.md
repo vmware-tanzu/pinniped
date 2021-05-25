@@ -9,7 +9,8 @@ menu:
     weight: 35
     parent: howtos
 ---
-The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single "upstream" OIDC identity provider to many "downstream" cluster clients.
+The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single
+"upstream" identity provider to many "downstream" cluster clients.
 
 This guide show you how to use this capability to issue [JSON Web Tokens (JWTs)](https://tools.ietf.org/html/rfc7519) that can be validated by the [Pinniped Concierge]({{< ref "configure-concierge-jwt" >}}).
 

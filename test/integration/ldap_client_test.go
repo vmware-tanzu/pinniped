@@ -344,7 +344,7 @@ func TestLDAPSearch(t *testing.T) {
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.Host = "too:many:ports" })),
-			wantError: `error dialing host "too:many:ports": LDAP Result Code 200 "Network Error": address too:many:ports: too many colons in address`,
+			wantError: `error dialing host "too:many:ports": LDAP Result Code 200 "Network Error": host "too:many:ports" is not a valid hostname or IP address`,
 		},
 		{
 			name:     "when the server is not parsable with StartTLS",
@@ -355,7 +355,7 @@ func TestLDAPSearch(t *testing.T) {
 				p.ConnectionProtocol = upstreamldap.StartTLS
 				p.Host = "too:many:ports"
 			})),
-			wantError: `error dialing host "too:many:ports": LDAP Result Code 200 "Network Error": address too:many:ports: too many colons in address`,
+			wantError: `error dialing host "too:many:ports": LDAP Result Code 200 "Network Error": host "too:many:ports" is not a valid hostname or IP address`,
 		},
 		{
 			name:      "when the CA bundle is not parsable with TLS",

@@ -21,6 +21,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 
+	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -30,6 +31,8 @@ const (
 	commonNameAttributeName                 = "cn"
 	searchFilterInterpolationLocationMarker = "{}"
 	groupSearchPageSize                     = uint32(250)
+	defaultLDAPPort                         = uint16(389)
+	defaultLDAPSPort                        = uint16(636)
 )
 
 // Conn abstracts the upstream LDAP communication protocol (mostly for testing).
@@ -48,16 +51,16 @@ var _ Conn = &ldap.Conn{}
 
 // LDAPDialer is a factory of Conn, and the resulting Conn can then be used to interact with an upstream LDAP IDP.
 type LDAPDialer interface {
-	Dial(ctx context.Context, hostAndPort string) (Conn, error)
+	Dial(ctx context.Context, addr endpointaddr.HostPort) (Conn, error)
 }
 
 // LDAPDialerFunc makes it easy to use a func as an LDAPDialer.
-type LDAPDialerFunc func(ctx context.Context, hostAndPort string) (Conn, error)
+type LDAPDialerFunc func(ctx context.Context, addr endpointaddr.HostPort) (Conn, error)
 
 var _ LDAPDialer = LDAPDialerFunc(nil)
 
-func (f LDAPDialerFunc) Dial(ctx context.Context, hostAndPort string) (Conn, error) {
-	return f(ctx, hostAndPort)
+func (f LDAPDialerFunc) Dial(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
+	return f(ctx, addr)
 }
 
 type LDAPConnectionProtocol string
@@ -147,26 +150,26 @@ func (p *Provider) GetConfig() ProviderConfig {
 }
 
 func (p *Provider) dial(ctx context.Context) (Conn, error) {
-	tlsHostAndPort, err := hostAndPortWithDefaultPort(p.c.Host, ldap.DefaultLdapsPort)
+	tlsAddr, err := endpointaddr.Parse(p.c.Host, defaultLDAPSPort)
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
 
-	startTLSHostAndPort, err := hostAndPortWithDefaultPort(p.c.Host, ldap.DefaultLdapPort)
+	startTLSAddr, err := endpointaddr.Parse(p.c.Host, defaultLDAPPort)
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
 
 	// Choose how and where to dial based on TLS vs. StartTLS config option.
 	var dialFunc LDAPDialerFunc
-	var hostAndPort string
+	var addr endpointaddr.HostPort
 	switch {
 	case p.c.ConnectionProtocol == TLS:
 		dialFunc = p.dialTLS
-		hostAndPort = tlsHostAndPort
+		addr = tlsAddr
 	case p.c.ConnectionProtocol == StartTLS:
 		dialFunc = p.dialStartTLS
-		hostAndPort = startTLSHostAndPort
+		addr = startTLSAddr
 	default:
 		return nil, ldap.NewError(ldap.ErrorNetwork, fmt.Errorf("did not specify valid ConnectionProtocol"))
 	}
@@ -176,20 +179,20 @@ func (p *Provider) dial(ctx context.Context) (Conn, error) {
 		dialFunc = p.c.Dialer.Dial
 	}
 
-	return dialFunc(ctx, hostAndPort)
+	return dialFunc(ctx, addr)
 }
 
 // dialTLS is a default implementation of the Dialer, used when Dialer is nil and ConnectionProtocol is TLS.
 // Unfortunately, the go-ldap library does not seem to support dialing with a context.Context,
 // so we implement it ourselves, heavily inspired by ldap.DialURL.
-func (p *Provider) dialTLS(ctx context.Context, hostAndPort string) (Conn, error) {
+func (p *Provider) dialTLS(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
 	tlsConfig, err := p.tlsConfig()
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
 
 	dialer := &tls.Dialer{NetDialer: netDialer(), Config: tlsConfig}
-	c, err := dialer.DialContext(ctx, "tcp", hostAndPort)
+	c, err := dialer.DialContext(ctx, "tcp", addr.Endpoint())
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
@@ -202,20 +205,16 @@ func (p *Provider) dialTLS(ctx context.Context, hostAndPort string) (Conn, error
 // dialTLS is a default implementation of the Dialer, used when Dialer is nil and ConnectionProtocol is StartTLS.
 // Unfortunately, the go-ldap library does not seem to support dialing with a context.Context,
 // so we implement it ourselves, heavily inspired by ldap.DialURL.
-func (p *Provider) dialStartTLS(ctx context.Context, hostAndPort string) (Conn, error) {
+func (p *Provider) dialStartTLS(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
 	tlsConfig, err := p.tlsConfig()
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
 
-	host, err := hostWithoutPort(hostAndPort)
-	if err != nil {
-		return nil, ldap.NewError(ldap.ErrorNetwork, err)
-	}
 	// Unfortunately, this seems to be required for StartTLS, even though it is not needed for regular TLS.
-	tlsConfig.ServerName = host
+	tlsConfig.ServerName = addr.Host
 
-	c, err := netDialer().DialContext(ctx, "tcp", hostAndPort)
+	c, err := netDialer().DialContext(ctx, "tcp", addr.Endpoint())
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
@@ -243,44 +242,6 @@ func (p *Provider) tlsConfig() (*tls.Config, error) {
 		}
 	}
 	return &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: rootCAs}, nil
-}
-
-// Adds the default port if hostAndPort did not already include a port.
-func hostAndPortWithDefaultPort(hostAndPort string, defaultPort string) (string, error) {
-	host, port, err := net.SplitHostPort(hostAndPort)
-	if err != nil {
-		if strings.HasSuffix(err.Error(), ": missing port in address") { // sad to need to do this string compare
-			host = hostAndPort
-			port = defaultPort
-		} else {
-			return "", err // hostAndPort argument was not parsable
-		}
-	}
-	switch {
-	case port != "" && strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]"):
-		// don't add extra square brackets to an IPv6 address that already has them
-		return fmt.Sprintf("%s:%s", host, port), nil
-	case port != "":
-		return net.JoinHostPort(host, port), nil
-	default:
-		return host, nil
-	}
-}
-
-// Strip the port from a host or host:port.
-func hostWithoutPort(hostAndPort string) (string, error) {
-	host, _, err := net.SplitHostPort(hostAndPort)
-	if err != nil {
-		if strings.HasSuffix(err.Error(), ": missing port in address") { // sad to need to do this string compare
-			return hostAndPort, nil
-		}
-		return "", err // hostAndPort argument was not parsable
-	}
-	if strings.HasPrefix(hostAndPort, "[") {
-		// it was an IPv6 address, so preserve the square brackets.
-		return fmt.Sprintf("[%s]", host), nil
-	}
-	return host, nil
 }
 
 // A name for this upstream provider.

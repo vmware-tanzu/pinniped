@@ -21,6 +21,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/mocks/mockldapconn"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -926,9 +927,9 @@ func TestEndUserAuthentication(t *testing.T) {
 			}
 
 			dialWasAttempted := false
-			tt.providerConfig.Dialer = LDAPDialerFunc(func(ctx context.Context, hostAndPort string) (Conn, error) {
+			tt.providerConfig.Dialer = LDAPDialerFunc(func(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
 				dialWasAttempted = true
-				require.Equal(t, tt.providerConfig.Host, hostAndPort)
+				require.Equal(t, tt.providerConfig.Host, addr.Endpoint())
 				if tt.dialError != nil {
 					return nil, tt.dialError
 				}
@@ -1061,9 +1062,9 @@ func TestTestConnection(t *testing.T) {
 			}
 
 			dialWasAttempted := false
-			tt.providerConfig.Dialer = LDAPDialerFunc(func(ctx context.Context, hostAndPort string) (Conn, error) {
+			tt.providerConfig.Dialer = LDAPDialerFunc(func(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
 				dialWasAttempted = true
-				require.Equal(t, tt.providerConfig.Host, hostAndPort)
+				require.Equal(t, tt.providerConfig.Host, addr.Endpoint())
 				if tt.dialError != nil {
 					return nil, tt.dialError
 				}
@@ -1185,7 +1186,7 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  []byte(testServerCABundle),
 			connProto: TLS,
 			context:   context.Background(),
-			wantError: `LDAP Result Code 200 "Network Error": address this:is:not:a:valid:hostname: too many colons in address`,
+			wantError: `LDAP Result Code 200 "Network Error": host "this:is:not:a:valid:hostname" is not a valid hostname or IP address`,
 		},
 		{
 			name:      "invalid host with StartTLS",
@@ -1193,7 +1194,7 @@ func TestRealTLSDialing(t *testing.T) {
 			caBundle:  []byte(testServerCABundle),
 			connProto: StartTLS,
 			context:   context.Background(),
-			wantError: `LDAP Result Code 200 "Network Error": address this:is:not:a:valid:hostname: too many colons in address`,
+			wantError: `LDAP Result Code 200 "Network Error": host "this:is:not:a:valid:hostname" is not a valid hostname or IP address`,
 		},
 		{
 			name:      "missing CA bundle when it is required because the host is not using a trusted CA",
@@ -1258,126 +1259,6 @@ func TestRealTLSDialing(t *testing.T) {
 				err := conn.(*ldap.Conn).StartTLS(&tls.Config{})
 				require.EqualError(t, err, `LDAP Result Code 200 "Network Error": ldap: already encrypted`)
 			}
-		})
-	}
-}
-
-// Test various cases of host and port parsing.
-func TestHostAndPortWithDefaultPort(t *testing.T) {
-	tests := []struct {
-		name            string
-		hostAndPort     string
-		defaultPort     string
-		wantError       string
-		wantHostAndPort string
-	}{
-		{
-			name:            "host already has port",
-			hostAndPort:     "host.example.com:99",
-			defaultPort:     "42",
-			wantHostAndPort: "host.example.com:99",
-		},
-		{
-			name:            "host does not have port",
-			hostAndPort:     "host.example.com",
-			defaultPort:     "42",
-			wantHostAndPort: "host.example.com:42",
-		},
-		{
-			name:            "host does not have port and default port is empty",
-			hostAndPort:     "host.example.com",
-			defaultPort:     "",
-			wantHostAndPort: "host.example.com",
-		},
-		{
-			name:            "host has port and default port is empty",
-			hostAndPort:     "host.example.com:42",
-			defaultPort:     "",
-			wantHostAndPort: "host.example.com:42",
-		},
-		{
-			name:            "IPv6 host already has port",
-			hostAndPort:     "[::1%lo0]:80",
-			defaultPort:     "42",
-			wantHostAndPort: "[::1%lo0]:80",
-		},
-		{
-			name:            "IPv6 host does not have port",
-			hostAndPort:     "[::1%lo0]",
-			defaultPort:     "42",
-			wantHostAndPort: "[::1%lo0]:42",
-		},
-		{
-			name:            "IPv6 host does not have port and default port is empty",
-			hostAndPort:     "[::1%lo0]",
-			defaultPort:     "",
-			wantHostAndPort: "[::1%lo0]",
-		},
-		{
-			name:        "host is not valid",
-			hostAndPort: "host.example.com:port1:port2",
-			defaultPort: "42",
-			wantError:   "address host.example.com:port1:port2: too many colons in address",
-		},
-	}
-	for _, test := range tests {
-		tt := test
-		t.Run(tt.name, func(t *testing.T) {
-			hostAndPort, err := hostAndPortWithDefaultPort(tt.hostAndPort, tt.defaultPort)
-			if tt.wantError != "" {
-				require.EqualError(t, err, tt.wantError)
-			} else {
-				require.NoError(t, err)
-			}
-			require.Equal(t, tt.wantHostAndPort, hostAndPort)
-		})
-	}
-}
-
-// Test various cases of host and port parsing.
-func TestHostWithoutPort(t *testing.T) {
-	tests := []struct {
-		name            string
-		hostAndPort     string
-		wantError       string
-		wantHostAndPort string
-	}{
-		{
-			name:            "host already has port",
-			hostAndPort:     "host.example.com:99",
-			wantHostAndPort: "host.example.com",
-		},
-		{
-			name:            "host does not have port",
-			hostAndPort:     "host.example.com",
-			wantHostAndPort: "host.example.com",
-		},
-		{
-			name:            "IPv6 host already has port",
-			hostAndPort:     "[::1%lo0]:80",
-			wantHostAndPort: "[::1%lo0]",
-		},
-		{
-			name:            "IPv6 host does not have port",
-			hostAndPort:     "[::1%lo0]",
-			wantHostAndPort: "[::1%lo0]",
-		},
-		{
-			name:        "host is not valid",
-			hostAndPort: "host.example.com:port1:port2",
-			wantError:   "address host.example.com:port1:port2: too many colons in address",
-		},
-	}
-	for _, test := range tests {
-		tt := test
-		t.Run(tt.name, func(t *testing.T) {
-			hostAndPort, err := hostWithoutPort(tt.hostAndPort)
-			if tt.wantError != "" {
-				require.EqualError(t, err, tt.wantError)
-			} else {
-				require.NoError(t, err)
-			}
-			require.Equal(t, tt.wantHostAndPort, hostAndPort)
 		})
 	}
 }

@@ -17,9 +17,8 @@ require (
 	github.com/google/gofuzz v1.2.0
 	github.com/gorilla/securecookie v1.1.1
 	github.com/gorilla/websocket v1.4.2
-	github.com/oleiade/reflections v1.0.1 // indirect
 	github.com/onsi/ginkgo v1.13.0 // indirect
-	github.com/ory/fosite v0.39.0
+	github.com/ory/fosite v0.40.1
 	github.com/pkg/browser v0.0.0-20210115035449-ce105d075bb4
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/agouti v3.0.0+incompatible

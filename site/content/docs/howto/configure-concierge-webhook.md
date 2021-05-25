@@ -6,7 +6,7 @@ cascade:
 menu:
   docs:
     name: Configure Concierge Webhook Authentication
-    weight: 26
+    weight: 40
     parent: howtos
 ---
 

@@ -6,13 +6,14 @@ cascade:
 menu:
   docs:
     name: Configure Supervisor With JumpCloud LDAP
-    weight: 35
+    weight: 110
     parent: howtos
 ---
 The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single
 "upstream" identity provider to many "downstream" cluster clients.
 
-[JumpCloud](https://jumpcloud.com) provides a comprehensive and flexible cloud directory platform.
+[JumpCloud](https://jumpcloud.com) is a cloud-based service which bills itself as
+"a comprehensive and flexible cloud directory platform". It includes the capability to act as an LDAP identity provider.
 
 This guide shows you how to configure the Supervisor so that users can authenticate to their Kubernetes
 cluster using their identity from an JumpCloud's LDAP service.
@@ -22,12 +23,23 @@ cluster using their identity from an JumpCloud's LDAP service.
 This how-to guide assumes that you have already [installed the Pinniped Supervisor]({{< ref "install-supervisor" >}}) with working ingress,
 and that you have [configured a FederationDomain to issue tokens for your downstream clusters]({{< ref "configure-supervisor" >}}).
 
-## Create a JumpCloud Account
-If you dont already have a JumpCloud account, you can create one for free with upto 10 users in the account.
-You will need two types of users - one as a user logging into the cluster and the other as the service account to be used by the Pinniped Supervisor. Specify passwords for the users you create at the time of creation of the user.
-*Note: when you create your service account user, click the "Enable as LDAP Bind DN" option to create the service account. For the user that will be accessing the cluster with kubectl commands, make sure the user is part of the Directory in which ldap search will occur. You will have to check the option to add under Jumpcloud console->User->Directory tab*
+## Configure Your JumpCloud Account
+If you don't already have a JumpCloud account, you can create one for free with up to 10 users in the account.
 
-Here are some good resources to review while setting up and using LDAP service on JumpCloud:
+You will need to create two types of users in your JumpCloud account using the JumpCloud console UI:
+
+1. Users who can use `kubectl` to authenticate into the cluster
+   
+   You may want to specify passwords for these users at the time of creation, unless you prefer to use JumpCloud's email invitation feature.
+   Make sure these users are part of the LDAP Directory in which the LDAP searches will occur by checking the option
+   to add the directory for the user in the JumpCloud console under the User->Directory tab.
+   
+2. An LDAP service account to be used by the Pinniped Supervisor to perform LDAP searches and binds
+
+   Specify a password for this user at the time of creation.
+   Also click the "Enable as LDAP Bind DN" option for this user.
+
+Here are some good resources to review while setting up and using JumpCloud's LDAP service:
 1. [Using JumpCloud's LDAP-as-a-Service](https://support.jumpcloud.com/support/s/article/using-jumpclouds-ldap-as-a-service1)
 2. [Filtering by User or Group in LDAP](https://support.jumpcloud.com/support/s/article/filtering-by-user-or-group-in-ldap-search-filters1?topicId=0TO1M000000EUx3WAG&topicName=LDAP-as-a-Service)
 
@@ -38,12 +50,12 @@ Create an [LDAPIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/m
 For example, this LDAPIdentityProvider configures the LDAP entry's `uid` as the Kubernetes username,
 and the `cn` (common name) of each group to which the user belongs as the Kubernetes group names.
 
-```sh
-cat <<EOF | kubectl apply -n pinniped-supervisor -f -
+```yaml
 apiVersion: idp.supervisor.pinniped.dev/v1alpha1
 kind: LDAPIdentityProvider
 metadata:
   name: jumpcloudldap
+  namespace: pinniped-supervisor
 spec:
 
   # Specify the host of the LDAP server.
@@ -55,7 +67,7 @@ spec:
 
     # Specify the root of the user search.
     # You can get YOUR_ORG_ID from:
-    # https://console.jumpcloud.com LDAP->Name->Details section
+    # https://console.jumpcloud.com LDAP->Name->Details section.
     base: "ou=Users,o=YOUR_ORG_ID,dc=jumpcloud,dc=com"
 
     # Specify how to filter the search to find the specific user by username.
@@ -84,7 +96,7 @@ spec:
     # the LDAP database compared to the user search, but in this case users
     # and groups are mixed together in the LDAP database.
     # You can get YOUR_ORG_ID from:
-    # https://console.jumpcloud.com LDAP->Name->Details section
+    # https://console.jumpcloud.com LDAP->Name->Details section.
     base: "ou=Users,o=YOUR_ORG_ID,dc=jumpcloud,dc=com"
 
     # Specify the search filter which should be applied when searching for
@@ -105,7 +117,7 @@ spec:
   # bind account credentials. This service account will be used by the
   # Supervisor to perform user and group searches on the LDAP server.
   bind:
-    secretName: jumpcloudldap-bind-account
+    secretName: "jumpcloudldap-bind-account"
 
 ---
 
@@ -113,16 +125,23 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: jumpcloudldap-bind-account
+  namespace: pinniped-supervisor
 type: kubernetes.io/basic-auth
 stringData:
 
   # The dn (distinguished name) of your JumpCloud bind account.
-  # This can be found in the https://console.jumpcloud.com USERS->Details section
-  username: "uid=YOUR_SERVICE_ACCOUNT_NAME,ou=Users,o=YOUR_ORG_ID,dc=jumpcloud,dc=com"
+  # This dn can be found in the
+  # https://console.jumpcloud.com Users->Details section.
+  username: "uid=YOUR_USERNAME,ou=Users,o=YOUR_ORG_ID,dc=jumpcloud,dc=com"
 
   # The password of your JumpCloud bind account.
-  password: "YOUR_SERVICE_ACCOUNT_PASSWORD"
-EOF
+  password: "YOUR_PASSWORD"
+```
+
+If you've saved this into a file `jumpcloud.yaml`, then install it into your cluster using:
+
+```sh
+kubectl apply -f jumpcloud.yaml
 ```
 
 Once your LDAPIdentityProvider has been created, you can validate your configuration by running:

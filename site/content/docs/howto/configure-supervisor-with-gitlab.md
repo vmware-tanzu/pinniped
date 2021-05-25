@@ -6,7 +6,7 @@ cascade:
 menu:
   docs:
     name: Configure Supervisor With GitLab
-    weight: 35
+    weight: 90
     parent: howtos
 ---
 The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single

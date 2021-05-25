@@ -6,7 +6,7 @@ cascade:
 menu:
   docs:
     name: Configure Supervisor With OpenLDAP
-    weight: 35
+    weight: 100
     parent: howtos
 ---
 The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single

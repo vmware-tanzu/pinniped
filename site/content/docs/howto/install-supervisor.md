@@ -6,7 +6,7 @@ cascade:
 menu:
   docs:
     name: Install Supervisor
-    weight: 30
+    weight: 60
     parent: howtos
 ---
 This guide shows you how to install the Pinniped Supervisor, which allows seamless login across one or many Kubernetes clusters.
@@ -58,4 +58,6 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
 
      `ytt --file . | kapp deploy --yes --app pinniped-supervisor --diff-changes --file -`
 
-Please follow further steps from the [configure-supervisor]({{< ref "configure-supervisor" >}})      
+## Next Steps
+
+Now that you have installed the Supervisor, you will want to [configure the Supervisor]({{< ref "configure-supervisor" >}}).

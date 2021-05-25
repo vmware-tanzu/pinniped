@@ -380,7 +380,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// set credential issuer to have new annotation to ensure the idle timeout is long enough on AWS.
 			// this also ensures that updates to the credential issuer impersonation proxy spec go through
 			if impersonatorShouldHaveStartedAutomaticallyByDefault && clusterSupportsLoadBalancers {
-				// configure the credential issuer spec to have the impersonation proxy in auto mode
 				updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
 					ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
 						Mode: conciergev1alpha.ImpersonationProxyModeAuto,
@@ -1201,6 +1200,40 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 	})
 
+	t.Run("running impersonation proxy with ClusterIP service", func(t *testing.T) {
+		if env.Proxy == "" {
+			t.Skip("Skipping ClusterIP test because squid proxy is not present")
+		}
+		clusterIPServiceURL := fmt.Sprintf("%s.%s.svc.cluster.local", impersonationProxyClusterIPName(env), env.ConciergeNamespace)
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
+				Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+				ExternalEndpoint: clusterIPServiceURL,
+				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
+					Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+				},
+			},
+		})
+		// Wait until the clusterip exists
+		library.RequireEventuallyWithoutError(t, func() (bool, error) {
+			return hasImpersonationProxyClusterIPService(ctx, env, adminClient)
+		}, 30*time.Second, 500*time.Millisecond)
+
+		newImpersonationProxyURL, newImpersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
+
+		refreshedCredentials := refreshCredential(t, impersonationProxyURL, impersonationProxyCACertPEM).DeepCopy()
+		kubeconfig := impersonationProxyRestConfig(refreshedCredentials, newImpersonationProxyURL, newImpersonationProxyCACertPEM, nil)
+		kubeconfig.Proxy = kubeconfigProxyFunc(t, env.Proxy)
+
+		client := library.NewKubeclient(t, kubeconfig).Kubernetes
+
+		// everything should work properly through the cluster ip service
+		t.Run(
+			"access as user",
+			library.AccessAsUserTest(ctx, env.TestUser.ExpectedUsername, client),
+		)
+	})
+
 	t.Run("manually disabling the impersonation proxy feature", func(t *testing.T) {
 		// Update configuration to force the proxy to disabled mode
 		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
@@ -1503,6 +1536,17 @@ func loadBalancerHasAnnotations(ctx context.Context, env *library.TestEnv, clien
 	return service.Spec.Type == corev1.ServiceTypeLoadBalancer && hasExactAnnotations, nil
 }
 
+func hasImpersonationProxyClusterIPService(ctx context.Context, env *library.TestEnv, client kubernetes.Interface) (bool, error) {
+	service, err := client.CoreV1().Services(env.ConciergeNamespace).Get(ctx, impersonationProxyClusterIPName(env), metav1.GetOptions{})
+	if k8serrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return service.Spec.Type == corev1.ServiceTypeClusterIP, nil
+}
+
 func impersonationProxyTLSSecretName(env *library.TestEnv) string {
 	return env.ConciergeAppName + "-impersonation-proxy-tls-serving-certificate"
 }
@@ -1513,6 +1557,10 @@ func impersonationProxyCASecretName(env *library.TestEnv) string {
 
 func impersonationProxyLoadBalancerName(env *library.TestEnv) string {
 	return env.ConciergeAppName + "-impersonation-proxy-load-balancer"
+}
+
+func impersonationProxyClusterIPName(env *library.TestEnv) string {
+	return env.ConciergeAppName + "-impersonation-proxy-cluster-ip"
 }
 
 func credentialIssuerName(env *library.TestEnv) string {

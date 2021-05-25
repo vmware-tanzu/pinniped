@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidc contains common OIDC functionality needed by Pinniped.
@@ -199,7 +199,7 @@ func DefaultOIDCTimeoutsConfiguration() TimeoutsConfiguration {
 		AuthorizationCodeSessionStorageLifetime: authorizationCodeLifespan + refreshTokenLifespan,
 		PKCESessionStorageLifetime:              authorizationCodeLifespan + (1 * time.Minute),
 		OIDCSessionStorageLifetime:              authorizationCodeLifespan + (1 * time.Minute),
-		AccessTokenSessionStorageLifetime:       accessTokenLifespan + (1 * time.Minute),
+		AccessTokenSessionStorageLifetime:       refreshTokenLifespan + accessTokenLifespan,
 		RefreshTokenSessionStorageLifetime:      refreshTokenLifespan + accessTokenLifespan,
 	}
 }

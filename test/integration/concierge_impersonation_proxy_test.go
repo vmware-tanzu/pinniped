@@ -121,7 +121,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		mostRecentTokenCredentialRequestResponse     *loginv1alpha1.TokenCredentialRequest
 		mostRecentTokenCredentialRequestResponseLock sync.Mutex
 	)
-	refreshCredential := func(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte) *loginv1alpha1.ClusterCredential {
+
+	refreshCredentialHelper := func(t *testing.T, client pinnipedconciergeclientset.Interface) *loginv1alpha1.ClusterCredential {
+		t.Helper()
+
 		mostRecentTokenCredentialRequestResponseLock.Lock()
 		defer mostRecentTokenCredentialRequestResponseLock.Unlock()
 		if mostRecentTokenCredentialRequestResponse == nil || credentialAlmostExpired(t, mostRecentTokenCredentialRequestResponse) {
@@ -133,11 +136,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// However, we issue short-lived certs, so this cert will only be valid for a few minutes.
 			// Cache it until it is almost expired and then refresh it whenever it is close to expired.
 			//
-			// Also, use an anonymous client which goes through the impersonation proxy to make the request because that's
-			// what would normally happen when a user is using a kubeconfig where the server is the impersonation proxy,
-			// so it more closely simulates the normal use case, and also because we want this to work on AKS clusters
-			// which do not allow anonymous requests.
-			client := newAnonymousImpersonationProxyClient(t, impersonationProxyURL, impersonationProxyCACertPEM, nil).PinnipedConcierge
 			require.Eventually(t, func() bool {
 				mostRecentTokenCredentialRequestResponse, err = createTokenCredentialRequest(credentialRequestSpecWithWorkingCredentials, client)
 				if err != nil {
@@ -156,7 +154,17 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// tokens, we should revisit this test's rest config below.
 			require.Empty(t, mostRecentTokenCredentialRequestResponse.Status.Credential.Token)
 		}
+
 		return mostRecentTokenCredentialRequestResponse.Status.Credential
+	}
+
+	refreshCredential := func(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte) *loginv1alpha1.ClusterCredential {
+		// Use an anonymous client which goes through the impersonation proxy to make the request because that's
+		// what would normally happen when a user is using a kubeconfig where the server is the impersonation proxy,
+		// so it more closely simulates the normal use case, and also because we want this to work on AKS clusters
+		// which do not allow anonymous requests.
+		client := newAnonymousImpersonationProxyClient(t, impersonationProxyURL, impersonationProxyCACertPEM, nil).PinnipedConcierge
+		return refreshCredentialHelper(t, client)
 	}
 
 	oldCredentialIssuer, err := adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuerName(env), metav1.GetOptions{})
@@ -1214,18 +1222,18 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				},
 			},
 		})
-		// Wait until the clusterip exists
-		library.RequireEventuallyWithoutError(t, func() (bool, error) {
-			return hasImpersonationProxyClusterIPService(ctx, env, adminClient)
-		}, 30*time.Second, 500*time.Millisecond)
 
+		// wait until the credential issuer is updated with the new url
+		require.Eventually(t, func() bool {
+			newImpersonationProxyURL, _ := performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
+			return newImpersonationProxyURL == "https://"+clusterIPServiceURL
+		}, 30*time.Second, 500*time.Millisecond)
 		newImpersonationProxyURL, newImpersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
 
-		refreshedCredentials := refreshCredential(t, impersonationProxyURL, impersonationProxyCACertPEM).DeepCopy()
-		kubeconfig := impersonationProxyRestConfig(refreshedCredentials, newImpersonationProxyURL, newImpersonationProxyCACertPEM, nil)
-		kubeconfig.Proxy = kubeconfigProxyFunc(t, env.Proxy)
+		anonymousClient := newAnonymousImpersonationProxyClientWithProxy(t, newImpersonationProxyURL, newImpersonationProxyCACertPEM, nil).PinnipedConcierge
+		refreshedCredentials := refreshCredentialHelper(t, anonymousClient)
 
-		client := library.NewKubeclient(t, kubeconfig).Kubernetes
+		client := newImpersonationProxyClientWithCredentialsAndProxy(t, refreshedCredentials, newImpersonationProxyURL, newImpersonationProxyCACertPEM, nil).Kubernetes
 
 		// everything should work properly through the cluster ip service
 		t.Run(
@@ -1536,17 +1544,6 @@ func loadBalancerHasAnnotations(ctx context.Context, env *library.TestEnv, clien
 	return service.Spec.Type == corev1.ServiceTypeLoadBalancer && hasExactAnnotations, nil
 }
 
-func hasImpersonationProxyClusterIPService(ctx context.Context, env *library.TestEnv, client kubernetes.Interface) (bool, error) {
-	service, err := client.CoreV1().Services(env.ConciergeNamespace).Get(ctx, impersonationProxyClusterIPName(env), metav1.GetOptions{})
-	if k8serrors.IsNotFound(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return service.Spec.Type == corev1.ServiceTypeClusterIP, nil
-}
-
 func impersonationProxyTLSSecretName(env *library.TestEnv) string {
 	return env.ConciergeAppName + "-impersonation-proxy-tls-serving-certificate"
 }
@@ -1712,6 +1709,29 @@ func newAnonymousImpersonationProxyClient(t *testing.T, impersonationProxyURL st
 
 	emptyCredentials := &loginv1alpha1.ClusterCredential{}
 	return newImpersonationProxyClientWithCredentials(t, emptyCredentials, impersonationProxyURL, impersonationProxyCACertPEM, nestedImpersonationConfig)
+}
+
+func newImpersonationProxyClientWithCredentialsAndProxy(t *testing.T, credentials *loginv1alpha1.ClusterCredential, impersonationProxyURL string, impersonationProxyCACertPEM []byte, nestedImpersonationConfig *rest.ImpersonationConfig) *kubeclient.Client {
+	t.Helper()
+
+	env := library.IntegrationEnv(t)
+
+	kubeconfig := impersonationProxyRestConfig(credentials, impersonationProxyURL, impersonationProxyCACertPEM, nestedImpersonationConfig)
+	kubeconfig.Proxy = kubeconfigProxyFunc(t, env.Proxy)
+	return library.NewKubeclient(t, kubeconfig)
+}
+
+// this uses a proxy in all cases, the other will only use it if you don't have load balancer capabilities.
+func newAnonymousImpersonationProxyClientWithProxy(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte, nestedImpersonationConfig *rest.ImpersonationConfig) *kubeclient.Client {
+	t.Helper()
+	env := library.IntegrationEnv(t)
+
+	emptyCredentials := &loginv1alpha1.ClusterCredential{}
+	kubeconfig := impersonationProxyRestConfig(emptyCredentials, impersonationProxyURL, impersonationProxyCACertPEM, nestedImpersonationConfig)
+
+	kubeconfig.Proxy = kubeconfigProxyFunc(t, env.Proxy)
+
+	return library.NewKubeclient(t, kubeconfig)
 }
 
 func impersonationProxyViaSquidKubeClientWithoutCredential(t *testing.T, proxyServiceEndpoint string) kubernetes.Interface {

@@ -269,6 +269,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				impersonator.New,
 				c.NamesConfig.ImpersonationSignerSecret,
 				c.ImpersonationSigningCertProvider,
+				klogr.New(),
 			),
 			singletonWorker,
 		).

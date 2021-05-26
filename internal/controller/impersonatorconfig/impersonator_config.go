@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
 
 	"go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	pinnipedclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
@@ -41,7 +43,6 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/endpointaddr"
-	"go.pinniped.dev/internal/plog"
 )
 
 const (
@@ -79,6 +80,8 @@ type impersonatorConfigController struct {
 	serverStopCh                      chan struct{}
 	errorCh                           chan error
 	tlsServingCertDynamicCertProvider dynamiccert.Private
+	infoLog                           logr.Logger
+	debugLog                          logr.Logger
 }
 
 func NewImpersonatorConfigController(
@@ -100,8 +103,10 @@ func NewImpersonatorConfigController(
 	impersonatorFunc impersonator.FactoryFunc,
 	impersonationSignerSecretName string,
 	impersonationSigningCertProvider dynamiccert.Provider,
+	log logr.Logger,
 ) controllerlib.Controller {
 	secretNames := sets.NewString(tlsSecretName, caSecretName, impersonationSignerSecretName)
+	log = log.WithName("impersonator-config-controller")
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "impersonator-config-controller",
@@ -123,6 +128,8 @@ func NewImpersonatorConfigController(
 				impersonationSigningCertProvider:  impersonationSigningCertProvider,
 				impersonatorFunc:                  impersonatorFunc,
 				tlsServingCertDynamicCertProvider: dynamiccert.NewServingCert("impersonation-proxy-serving-cert"),
+				infoLog:                           log,
+				debugLog:                          log.V(10),
 			},
 		},
 		withInformer(credentialIssuerInformer,
@@ -151,7 +158,7 @@ func NewImpersonatorConfigController(
 }
 
 func (c *impersonatorConfigController) Sync(syncCtx controllerlib.Context) error {
-	plog.Debug("Starting impersonatorConfigController Sync")
+	c.debugLog.Info("starting impersonatorConfigController Sync")
 
 	// Load the CredentialIssuer that we'll update with status.
 	credIssuer, err := c.credIssuerInformer.Lister().Get(c.credentialIssuerResourceName)
@@ -180,7 +187,7 @@ func (c *impersonatorConfigController) Sync(syncCtx controllerlib.Context) error
 	)})
 
 	if err == nil {
-		plog.Debug("Successfully finished impersonatorConfigController Sync")
+		c.debugLog.Info("successfully finished impersonatorConfigController Sync")
 	}
 	return err
 }
@@ -219,7 +226,7 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context, cre
 			return nil, err
 		}
 		c.hasControlPlaneNodes = &hasControlPlaneNodes
-		plog.Debug("Queried for control plane nodes", "foundControlPlaneNodes", hasControlPlaneNodes)
+		c.debugLog.Info("queried for control plane nodes", "foundControlPlaneNodes", hasControlPlaneNodes)
 	}
 
 	if c.shouldHaveImpersonator(impersonationSpec) {
@@ -295,9 +302,7 @@ func (c *impersonatorConfigController) loadImpersonationProxyConfiguration(credI
 	if err := validateCredentialIssuerSpec(spec); err != nil {
 		return nil, fmt.Errorf("could not load CredentialIssuer spec.impersonationProxy: %w", err)
 	}
-	plog.Info("Read impersonation proxy config",
-		"credentialIssuer", c.credentialIssuerResourceName,
-	)
+	c.infoLog.Info("read impersonation proxy config", "credentialIssuer", c.credentialIssuerResourceName)
 	return spec, nil
 }
 
@@ -392,7 +397,7 @@ func (c *impersonatorConfigController) ensureImpersonatorIsStarted(syncCtx contr
 		}
 	}
 
-	plog.Info("Starting impersonation proxy", "port", impersonationProxyPort)
+	c.infoLog.Info("starting impersonation proxy", "port", impersonationProxyPort)
 	startImpersonatorFunc, err := c.impersonatorFunc(
 		impersonationProxyPort,
 		c.tlsServingCertDynamicCertProvider,
@@ -427,7 +432,7 @@ func (c *impersonatorConfigController) ensureImpersonatorIsStopped(shouldCloseEr
 		return nil
 	}
 
-	plog.Info("Stopping impersonation proxy", "port", impersonationProxyPort)
+	c.infoLog.Info("stopping impersonation proxy", "port", impersonationProxyPort)
 	close(c.serverStopCh)
 	stopErr := <-c.errorCh
 
@@ -475,9 +480,9 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.C
 		return nil
 	}
 
-	plog.Info("Deleting load balancer for impersonation proxy",
-		"service", c.generatedLoadBalancerServiceName,
-		"namespace", c.namespace)
+	c.infoLog.Info("deleting load balancer for impersonation proxy",
+		"service", klog.KRef(c.namespace, c.generatedLoadBalancerServiceName),
+	)
 	return c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedLoadBalancerServiceName, metav1.DeleteOptions{})
 }
 
@@ -514,9 +519,9 @@ func (c *impersonatorConfigController) ensureClusterIPServiceIsStopped(ctx conte
 		return nil
 	}
 
-	plog.Info("Deleting cluster ip for impersonation proxy",
-		"service", c.generatedClusterIPServiceName,
-		"namespace", c.namespace)
+	c.infoLog.Info("deleting cluster ip for impersonation proxy",
+		"service", klog.KRef(c.namespace, c.generatedClusterIPServiceName),
+	)
 	return c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedClusterIPServiceName, metav1.DeleteOptions{})
 }
 
@@ -531,10 +536,10 @@ func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context
 			return err
 		}
 		if needsUpdate {
-			plog.Info("updating service for impersonation proxy",
-				"service type", service.Spec.Type,
-				"service", service.Name,
-				"namespace", c.namespace)
+			c.infoLog.Info("updating service for impersonation proxy",
+				"serviceType", service.Spec.Type,
+				"service", klog.KObj(service),
+			)
 			// update only the annotation and loadBalancerIP fields on the service
 			var newService = &v1.Service{}
 			existingService.DeepCopyInto(newService)
@@ -545,10 +550,10 @@ func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context
 		}
 		return nil
 	}
-	plog.Info("creating service for impersonation proxy",
-		"service type", service.Spec.Type,
-		"service", service.Name,
-		"namespace", c.namespace)
+	c.infoLog.Info("creating service for impersonation proxy",
+		"serviceType", service.Spec.Type,
+		"service", klog.KObj(service),
+	)
 	_, err = c.k8sClient.CoreV1().Services(c.namespace).Create(ctx, service, metav1.CreateOptions{})
 	return err
 }
@@ -579,10 +584,10 @@ func (c *impersonatorConfigController) deleteTLSSecretWhenCertificateDoesNotMatc
 	certPEM := secret.Data[v1.TLSCertKey]
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
-		plog.Warning("Found missing or not PEM-encoded data in TLS Secret",
+		c.infoLog.Info("found missing or not PEM-encoded data in TLS Secret",
 			"invalidCertPEM", string(certPEM),
-			"secret", c.tlsSecretName,
-			"namespace", c.namespace)
+			"secret", klog.KObj(secret),
+		)
 		deleteErr := c.ensureTLSSecretIsRemoved(ctx)
 		if deleteErr != nil {
 			return false, fmt.Errorf("found missing or not PEM-encoded data in TLS Secret, but got error while deleting it: %w", deleteErr)
@@ -592,10 +597,10 @@ func (c *impersonatorConfigController) deleteTLSSecretWhenCertificateDoesNotMatc
 
 	actualCertFromSecret, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		plog.Error("Found invalid PEM data in TLS Secret", err,
+		c.infoLog.Error(err, "found missing or not PEM-encoded data in TLS Secret",
 			"invalidCertPEM", string(certPEM),
-			"secret", c.tlsSecretName,
-			"namespace", c.namespace)
+			"secret", klog.KObj(secret),
+		)
 		if err = c.ensureTLSSecretIsRemoved(ctx); err != nil {
 			return false, fmt.Errorf("PEM data represented an invalid cert, but got error while deleting it: %w", err)
 		}
@@ -605,9 +610,10 @@ func (c *impersonatorConfigController) deleteTLSSecretWhenCertificateDoesNotMatc
 	keyPEM := secret.Data[v1.TLSPrivateKeyKey]
 	_, err = tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
-		plog.Error("Found invalid private key PEM data in TLS Secret", err,
-			"secret", c.tlsSecretName,
-			"namespace", c.namespace)
+		c.infoLog.Error(err, "found invalid private key PEM data in TLS Secret",
+			"invalidCertPEM", string(certPEM),
+			"secret", klog.KObj(secret),
+		)
 		if err = c.ensureTLSSecretIsRemoved(ctx); err != nil {
 			return false, fmt.Errorf("cert had an invalid private key, but got error while deleting it: %w", err)
 		}
@@ -635,13 +641,13 @@ func (c *impersonatorConfigController) deleteTLSSecretWhenCertificateDoesNotMatc
 
 	actualIPs := actualCertFromSecret.IPAddresses
 	actualHostnames := actualCertFromSecret.DNSNames
-	plog.Info("Checking TLS certificate names",
+	c.infoLog.Info("checking TLS certificate names",
 		"desiredIPs", nameInfo.selectedIPs,
 		"desiredHostname", nameInfo.selectedHostname,
 		"actualIPs", actualIPs,
 		"actualHostnames", actualHostnames,
-		"secret", c.tlsSecretName,
-		"namespace", c.namespace)
+		"secret", klog.KObj(secret),
+	)
 
 	if certHostnameAndIPMatchDesiredState(nameInfo.selectedIPs, actualIPs, nameInfo.selectedHostname, actualHostnames) {
 		// The cert already matches the desired state, so there is no need to delete/recreate it.
@@ -740,9 +746,9 @@ func (c *impersonatorConfigController) createCASecret(ctx context.Context) (*cer
 		Type: v1.SecretTypeOpaque,
 	}
 
-	plog.Info("Creating CA certificates for impersonation proxy",
-		"secret", c.caSecretName,
-		"namespace", c.namespace)
+	c.infoLog.Info("creating CA certificates for impersonation proxy",
+		"secret", klog.KObj(&secret),
+	)
 	if _, err = c.k8sClient.CoreV1().Secrets(c.namespace).Create(ctx, &secret, metav1.CreateOptions{}); err != nil {
 		return nil, err
 	}
@@ -781,9 +787,9 @@ func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() 
 	}
 	ingresses := lb.Status.LoadBalancer.Ingress
 	if len(ingresses) == 0 || (ingresses[0].Hostname == "" && ingresses[0].IP == "") {
-		plog.Info("load balancer for impersonation proxy does not have an ingress yet, so skipping tls cert generation while we wait",
-			"service", c.generatedLoadBalancerServiceName,
-			"namespace", c.namespace)
+		c.infoLog.Info("load balancer for impersonation proxy does not have an ingress yet, so skipping tls cert generation while we wait",
+			"service", klog.KObj(lb),
+		)
 		return &certNameInfo{ready: false}, nil
 	}
 	for _, ingress := range ingresses {
@@ -859,11 +865,11 @@ func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, c
 		Type: v1.SecretTypeTLS,
 	}
 
-	plog.Info("Creating TLS certificates for impersonation proxy",
+	c.infoLog.Info("creating TLS certificates for impersonation proxy",
 		"ips", ips,
 		"hostnames", hostnames,
-		"secret", c.tlsSecretName,
-		"namespace", c.namespace)
+		"secret", klog.KObj(newTLSSecret),
+	)
 	return c.k8sClient.CoreV1().Secrets(c.namespace).Create(ctx, newTLSSecret, metav1.CreateOptions{})
 }
 
@@ -876,10 +882,10 @@ func (c *impersonatorConfigController) loadTLSCertFromSecret(tlsSecret *v1.Secre
 		return fmt.Errorf("could not parse TLS cert PEM data from Secret: %w", err)
 	}
 
-	plog.Info("Loading TLS certificates for impersonation proxy",
+	c.infoLog.Info("loading TLS certificates for impersonation proxy",
 		"certPEM", string(certPEM),
-		"secret", c.tlsSecretName,
-		"namespace", c.namespace)
+		"secret", klog.KObj(tlsSecret),
+	)
 
 	return nil
 }
@@ -892,9 +898,9 @@ func (c *impersonatorConfigController) ensureTLSSecretIsRemoved(ctx context.Cont
 	if !tlsSecretExists {
 		return nil
 	}
-	plog.Info("Deleting TLS certificates for impersonation proxy",
-		"secret", c.tlsSecretName,
-		"namespace", c.namespace)
+	c.infoLog.Info("deleting TLS certificates for impersonation proxy",
+		"secret", klog.KRef(c.namespace, c.tlsSecretName),
+	)
 	err = c.k8sClient.CoreV1().Secrets(c.namespace).Delete(ctx, c.tlsSecretName, metav1.DeleteOptions{})
 	notFound := k8serrors.IsNotFound(err)
 	if notFound {
@@ -930,16 +936,16 @@ func (c *impersonatorConfigController) loadSignerCA(status v1alpha1.StrategyStat
 		return fmt.Errorf("could not load the impersonator's credential signing secret: %w", err)
 	}
 
-	plog.Info("Loading credential signing certificate for impersonation proxy",
+	c.infoLog.Info("loading credential signing certificate for impersonation proxy",
 		"certPEM", string(certPEM),
-		"fromSecret", c.impersonationSignerSecretName,
-		"namespace", c.namespace)
+		"secret", klog.KObj(signingCertSecret),
+	)
 
 	return nil
 }
 
 func (c *impersonatorConfigController) clearSignerCA() {
-	plog.Info("Clearing credential signing certificate for impersonation proxy")
+	c.infoLog.Info("clearing credential signing certificate for impersonation proxy")
 	c.impersonationSigningCertProvider.UnsetCertKeyContent()
 }
 

@@ -127,8 +127,8 @@ func NewImpersonatorConfigController(
 				impersonationSigningCertProvider:  impersonationSigningCertProvider,
 				impersonatorFunc:                  impersonatorFunc,
 				tlsServingCertDynamicCertProvider: dynamiccert.NewServingCert("impersonation-proxy-serving-cert"),
-				infoLog:                           log,
-				debugLog:                          log.V(10),
+				infoLog:                           log.V(2),
+				debugLog:                          log.V(4),
 			},
 		},
 		withInformer(credentialIssuerInformer,
@@ -299,7 +299,7 @@ func (c *impersonatorConfigController) loadImpersonationProxyConfiguration(credI
 	if err := validateCredentialIssuerSpec(spec); err != nil {
 		return nil, fmt.Errorf("could not load CredentialIssuer spec.impersonationProxy: %w", err)
 	}
-	c.infoLog.Info("read impersonation proxy config", "credentialIssuer", c.credentialIssuerResourceName)
+	c.debugLog.Info("read impersonation proxy config", "credentialIssuer", c.credentialIssuerResourceName)
 	return spec, nil
 }
 
@@ -926,7 +926,7 @@ func (c *impersonatorConfigController) loadSignerCA(status v1alpha1.StrategyStat
 }
 
 func (c *impersonatorConfigController) clearSignerCA() {
-	c.infoLog.Info("clearing credential signing certificate for impersonation proxy")
+	c.debugLog.Info("clearing credential signing certificate for impersonation proxy")
 	c.impersonationSigningCertProvider.UnsetCertKeyContent()
 }
 

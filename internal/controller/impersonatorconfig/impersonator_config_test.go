@@ -1552,7 +1552,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 			when("a clusterip service exists with dual stack ips", func() {
 				const fakeIP1 = "127.0.0.123"
-				const fakeIP2 = "127.0.0.234" // TODO test that this works for an IPv6 address, which is the actual use case for multiple clusterips
+				const fakeIP2 = "fd00::5118"
 				it.Before(func() {
 					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
 						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
@@ -1577,7 +1577,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireNodesListed(kubeAPIClient.Actions()[0])
 					ca := requireCASecretWasCreated(kubeAPIClient.Actions()[1])
 					requireTLSSecretWasCreated(kubeAPIClient.Actions()[2], ca)
-					requireTLSServerIsRunning(ca, fakeIP2, map[string]string{fakeIP2 + ":443": testServerAddr()})
+					requireTLSServerIsRunning(ca, "["+fakeIP2+"]", map[string]string{"[fd00::5118]:443": testServerAddr()})
 					requireTLSServerIsRunning(ca, fakeIP1, map[string]string{fakeIP1 + ":443": testServerAddr()})
 					requireCredentialIssuer(newSuccessStrategy(fakeIP1, ca))
 				})

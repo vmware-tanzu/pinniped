@@ -259,7 +259,6 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 				informers.installationNamespaceK8s.Core().V1().Services(),
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
 				controllerlib.WithInformer,
-				controllerlib.WithInitialEvent,
 				c.NamesConfig.ImpersonationLoadBalancerService,
 				c.NamesConfig.ImpersonationClusterIPService,
 				c.NamesConfig.ImpersonationTLSCertificateSecret,

@@ -93,7 +93,6 @@ func NewImpersonatorConfigController(
 	servicesInformer corev1informers.ServiceInformer,
 	secretsInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
-	withInitialEvent pinnipedcontroller.WithInitialEventOptionFunc,
 	generatedLoadBalancerServiceName string,
 	generatedClusterIPServiceName string,
 	tlsSecretName string,
@@ -140,20 +139,18 @@ func NewImpersonatorConfigController(
 		),
 		withInformer(
 			servicesInformer,
-			pinnipedcontroller.NameAndNamespaceExactMatchFilterFactory(generatedLoadBalancerServiceName, namespace),
+			pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
+				return obj.GetNamespace() == namespace && obj.GetName() == generatedLoadBalancerServiceName
+			}),
 			controllerlib.InformerOption{},
 		),
 		withInformer(
 			secretsInformer,
-			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
+			pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
 				return obj.GetNamespace() == namespace && secretNames.Has(obj.GetName())
-			}, nil),
+			}),
 			controllerlib.InformerOption{},
 		),
-		// Be sure to run once even if the CredentialIssuer that the informer is watching doesn't exist so we can implement
-		// the default configuration behavior.
-		withInitialEvent(controllerlib.Key{Name: credentialIssuerResourceName}),
-		// TODO fix these controller options to make this a singleton queue
 	)
 }
 

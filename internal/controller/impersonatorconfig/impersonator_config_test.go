@@ -57,7 +57,6 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 
 		var r *require.Assertions
 		var observableWithInformerOption *testutil.ObservableWithInformerOption
-		var observableWithInitialEventOption *testutil.ObservableWithInitialEventOption
 		var credIssuerInformerFilter controllerlib.Filter
 		var servicesInformerFilter controllerlib.Filter
 		var secretsInformerFilter controllerlib.Filter
@@ -66,7 +65,6 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 		it.Before(func() {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
-			observableWithInitialEventOption = testutil.NewObservableWithInitialEventOption()
 			pinnipedInformerFactory := pinnipedinformers.NewSharedInformerFactory(nil, 0)
 			sharedInformerFactory := kubeinformers.NewSharedInformerFactory(nil, 0)
 			credIssuerInformer := pinnipedInformerFactory.Config().V1alpha1().CredentialIssuers()
@@ -83,7 +81,6 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 				servicesInformer,
 				secretsInformer,
 				observableWithInformerOption.WithInformer,
-				observableWithInitialEventOption.WithInitialEvent,
 				generatedLoadBalancerServiceName,
 				generatedClusterIPServiceName,
 				tlsSecretName,
@@ -238,14 +235,6 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 					r.False(subject.Update(unrelated, unrelated))
 					r.False(subject.Delete(unrelated))
 				})
-			})
-		})
-
-		when("starting up", func() {
-			it("asks for an initial event because the CredentialIssuer may not exist yet and it needs to run anyway", func() {
-				r.Equal(&controllerlib.Key{
-					Name: credentialIssuerResourceName,
-				}, observableWithInitialEventOption.GetInitialEventKey())
 			})
 		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))
@@ -531,7 +520,6 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				kubeInformers.Core().V1().Services(),
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
-				controllerlib.WithInitialEvent,
 				loadBalancerServiceName,
 				clusterIPServiceName,
 				tlsSecretName,

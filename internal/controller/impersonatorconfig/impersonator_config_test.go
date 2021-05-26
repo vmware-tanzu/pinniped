@@ -427,7 +427,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					t.Logf("DialContext replacing addr %s with %s", addr, replacementAddr)
 					addr = replacementAddr
 				} else if dnsOverrides != nil {
-					t.Fatal("dnsOverrides was provided but not used, which was probably a mistake")
+					t.Fatalf("dnsOverrides was provided but not used, which was probably a mistake. addr %s", addr)
 				}
 				return realDialer.DialContext(ctx, network, addr)
 			}
@@ -743,6 +743,15 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			clusterIPService := newClusterIPService(resourceName, corev1.ServiceStatus{}, corev1.ServiceSpec{
 				Type:      corev1.ServiceTypeClusterIP,
 				ClusterIP: clusterIP,
+			})
+			r.NoError(client.Tracker().Add(clusterIPService))
+		}
+
+		var addDualStackClusterIPServiceToTracker = func(resourceName string, clusterIP0 string, clusterIP1 string, client *kubernetesfake.Clientset) {
+			clusterIPService := newClusterIPService(resourceName, corev1.ServiceStatus{}, corev1.ServiceSpec{
+				Type:       corev1.ServiceTypeClusterIP,
+				ClusterIP:  clusterIP0,
+				ClusterIPs: []string{clusterIP0, clusterIP1},
 			})
 			r.NoError(client.Tracker().Add(clusterIPService))
 		}
@@ -1538,6 +1547,39 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireTLSServerIsRunning(ca, fakeIP, map[string]string{fakeIP + ":443": testServerAddr()})
 					requireCredentialIssuer(newSuccessStrategy(fakeIP, ca))
 					// requireSigningCertProviderHasLoadedCerts()
+				})
+			})
+
+			when("a clusterip service exists with dual stack ips", func() {
+				const fakeIP1 = "127.0.0.123"
+				const fakeIP2 = "127.0.0.234" // TODO test that this works for an IPv6 address, which is the actual use case for multiple clusterips
+				it.Before(func() {
+					addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
+						ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
+						Spec: v1alpha1.CredentialIssuerSpec{
+							ImpersonationProxy: &v1alpha1.ImpersonationProxySpec{
+								Mode: v1alpha1.ImpersonationProxyModeEnabled,
+								Service: v1alpha1.ImpersonationProxyServiceSpec{
+									Type: v1alpha1.ImpersonationProxyServiceTypeClusterIP,
+								},
+							},
+						},
+					}, pinnipedInformerClient, pinnipedAPIClient)
+					addNodeWithRoleToTracker("worker", kubeAPIClient)
+					addDualStackClusterIPServiceToTracker(clusterIPServiceName, fakeIP1, fakeIP2, kubeInformerClient)
+					addDualStackClusterIPServiceToTracker(clusterIPServiceName, fakeIP1, fakeIP2, kubeAPIClient)
+				})
+
+				it("certs are valid for both ip addresses", func() {
+					startInformersAndController()
+					r.NoError(runControllerSync())
+					r.Len(kubeAPIClient.Actions(), 3)
+					requireNodesListed(kubeAPIClient.Actions()[0])
+					ca := requireCASecretWasCreated(kubeAPIClient.Actions()[1])
+					requireTLSSecretWasCreated(kubeAPIClient.Actions()[2], ca)
+					requireTLSServerIsRunning(ca, fakeIP2, map[string]string{fakeIP2 + ":443": testServerAddr()})
+					requireTLSServerIsRunning(ca, fakeIP1, map[string]string{fakeIP1 + ":443": testServerAddr()})
+					requireCredentialIssuer(newSuccessStrategy(fakeIP1, ca))
 				})
 			})
 

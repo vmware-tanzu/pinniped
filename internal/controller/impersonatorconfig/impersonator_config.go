@@ -193,7 +193,7 @@ type certNameInfo struct {
 
 	// The IP address or hostname which was selected to be used as the name in the cert.
 	// Either selectedIP or selectedHostname will be set, but not both.
-	selectedIP       net.IP
+	selectedIPs      []net.IP
 	selectedHostname string
 
 	// The name of the endpoint to which a client should connect to talk to the impersonator.
@@ -636,14 +636,14 @@ func (c *impersonatorConfigController) deleteTLSSecretWhenCertificateDoesNotMatc
 	actualIPs := actualCertFromSecret.IPAddresses
 	actualHostnames := actualCertFromSecret.DNSNames
 	plog.Info("Checking TLS certificate names",
-		"desiredIP", nameInfo.selectedIP,
+		"desiredIPs", nameInfo.selectedIPs,
 		"desiredHostname", nameInfo.selectedHostname,
 		"actualIPs", actualIPs,
 		"actualHostnames", actualHostnames,
 		"secret", c.tlsSecretName,
 		"namespace", c.namespace)
 
-	if certHostnameAndIPMatchDesiredState(nameInfo.selectedIP, actualIPs, nameInfo.selectedHostname, actualHostnames) {
+	if certHostnameAndIPMatchDesiredState(nameInfo.selectedIPs, actualIPs, nameInfo.selectedHostname, actualHostnames) {
 		// The cert already matches the desired state, so there is no need to delete/recreate it.
 		return false, nil
 	}
@@ -654,8 +654,13 @@ func (c *impersonatorConfigController) deleteTLSSecretWhenCertificateDoesNotMatc
 	return true, nil
 }
 
-func certHostnameAndIPMatchDesiredState(desiredIP net.IP, actualIPs []net.IP, desiredHostname string, actualHostnames []string) bool {
-	if desiredIP != nil && len(actualIPs) == 1 && desiredIP.Equal(actualIPs[0]) && len(actualHostnames) == 0 {
+func certHostnameAndIPMatchDesiredState(desiredIPs []net.IP, actualIPs []net.IP, desiredHostname string, actualHostnames []string) bool {
+	if len(desiredIPs) > 0 && len(actualIPs) > 0 && len(actualIPs) == len(desiredIPs) && len(actualHostnames) == 0 {
+		for i := range desiredIPs {
+			if !actualIPs[i].Equal(desiredIPs[i]) {
+				return false
+			}
+		}
 		return true
 	}
 	if desiredHostname != "" && len(actualHostnames) == 1 && desiredHostname == actualHostnames[0] && len(actualIPs) == 0 {
@@ -677,7 +682,7 @@ func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx con
 		return nil
 	}
 
-	newTLSSecret, err := c.createNewTLSSecret(ctx, ca, nameInfo.selectedIP, nameInfo.selectedHostname)
+	newTLSSecret, err := c.createNewTLSSecret(ctx, ca, nameInfo.selectedIPs, nameInfo.selectedHostname)
 	if err != nil {
 		return err
 	}
@@ -746,12 +751,6 @@ func (c *impersonatorConfigController) createCASecret(ctx context.Context) (*cer
 }
 
 func (c *impersonatorConfigController) findDesiredTLSCertificateName(config *v1alpha1.ImpersonationProxySpec) (*certNameInfo, error) {
-	// possible valid options:
-	// - you have a loadbalancer and are autoconfiguring the endpoint -> get cert info based on load balancer ip/hostnome
-	// - you have a loadbalancer AND an external endpoint -> either should work since they should be the same
-	// - external endpoint no loadbalancer or other service -> use the endpoint config
-	// - external endpoint and ClusterIP -> use external endpoint?
-	// - clusterip and no external endpoint
 	if config.ExternalEndpoint != "" {
 		return c.findTLSCertificateNameFromEndpointConfig(config), nil
 	} else if config.Service.Type == v1alpha1.ImpersonationProxyServiceTypeClusterIP {
@@ -765,7 +764,7 @@ func (c *impersonatorConfigController) findTLSCertificateNameFromEndpointConfig(
 	endpointWithoutPort := strings.Split(endpointMaybeWithPort, ":")[0]
 	parsedAsIP := net.ParseIP(endpointWithoutPort)
 	if parsedAsIP != nil {
-		return &certNameInfo{ready: true, selectedIP: parsedAsIP, clientEndpoint: endpointMaybeWithPort}
+		return &certNameInfo{ready: true, selectedIPs: []net.IP{parsedAsIP}, clientEndpoint: endpointMaybeWithPort}
 	}
 	return &certNameInfo{ready: true, selectedHostname: endpointWithoutPort, clientEndpoint: endpointMaybeWithPort}
 }
@@ -797,7 +796,7 @@ func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() 
 		ip := ingress.IP
 		parsedIP := net.ParseIP(ip)
 		if parsedIP != nil {
-			return &certNameInfo{ready: true, selectedIP: parsedIP, clientEndpoint: ip}, nil
+			return &certNameInfo{ready: true, selectedIPs: []net.IP{parsedIP}, clientEndpoint: ip}, nil
 		}
 	}
 
@@ -815,21 +814,26 @@ func (c *impersonatorConfigController) findTLSCertificateNameFromClusterIPServic
 		return nil, err
 	}
 	ip := clusterIP.Spec.ClusterIP
+	ips := clusterIP.Spec.ClusterIPs
 	if ip != "" {
-		parsedIP := net.ParseIP(ip)
-		return &certNameInfo{ready: true, selectedIP: parsedIP, clientEndpoint: ip}, nil
+		// clusterIP will always exist when clusterIPs does, but not vice versa
+		var parsedIPs []net.IP
+		if len(ips) > 0 {
+			for _, ipFromIPs := range ips {
+				parsedIPs = append(parsedIPs, net.ParseIP(ipFromIPs))
+			}
+		} else {
+			parsedIPs = []net.IP{net.ParseIP(ip)}
+		}
+		return &certNameInfo{ready: true, selectedIPs: parsedIPs, clientEndpoint: ip}, nil
 	}
 	return &certNameInfo{ready: false}, nil
 }
 
-func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, ca *certauthority.CA, ip net.IP, hostname string) (*v1.Secret, error) {
+func (c *impersonatorConfigController) createNewTLSSecret(ctx context.Context, ca *certauthority.CA, ips []net.IP, hostname string) (*v1.Secret, error) {
 	var hostnames []string
-	var ips []net.IP
 	if hostname != "" {
 		hostnames = []string{hostname}
-	}
-	if ip != nil {
-		ips = []net.IP{ip}
 	}
 
 	impersonationCert, err := ca.IssueServerCert(hostnames, ips, approximatelyOneHundredYears)

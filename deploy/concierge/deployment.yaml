@@ -49,7 +49,6 @@ data:
       servingCertificateSecret: (@= defaultResourceNameWithSuffix("api-tls-serving-certificate") @)
       credentialIssuer: (@= defaultResourceNameWithSuffix("config") @)
       apiService: (@= defaultResourceNameWithSuffix("api") @)
-      impersonationConfigMap: (@= defaultResourceNameWithSuffix("impersonation-proxy-config") @)
       impersonationLoadBalancerService: (@= defaultResourceNameWithSuffix("impersonation-proxy-load-balancer") @)
       impersonationClusterIPService: (@= defaultResourceNameWithSuffix("impersonation-proxy-cluster-ip") @)
       impersonationTLSCertificateSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-tls-serving-certificate") @)

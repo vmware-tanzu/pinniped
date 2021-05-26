@@ -38,7 +38,6 @@ func TestFromPath(t *testing.T) {
 				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
 				  kubeCertAgentPrefix: kube-cert-agent-prefix
-				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationClusterIPService: impersonationClusterIPService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
@@ -46,6 +45,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationSignerSecret: impersonationSignerSecret-value
 				  impersonationSignerSecret: impersonationSignerSecret-value
 				  agentServiceAccount: agentServiceAccount-value
+				  extraName: extraName-value
 				labels:
 				  myLabelKey1: myLabelValue1
 				  myLabelKey2: myLabelValue2
@@ -70,7 +70,6 @@ func TestFromPath(t *testing.T) {
 					ServingCertificateSecret:          "pinniped-concierge-api-tls-serving-certificate",
 					CredentialIssuer:                  "pinniped-config",
 					APIService:                        "pinniped-api",
-					ImpersonationConfigMap:            "impersonationConfigMap-value",
 					ImpersonationLoadBalancerService:  "impersonationLoadBalancerService-value",
 					ImpersonationClusterIPService:     "impersonationClusterIPService-value",
 					ImpersonationTLSCertificateSecret: "impersonationTLSCertificateSecret-value",
@@ -98,7 +97,6 @@ func TestFromPath(t *testing.T) {
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
-				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationClusterIPService: impersonationClusterIPService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
@@ -121,7 +119,6 @@ func TestFromPath(t *testing.T) {
 					ServingCertificateSecret:          "pinniped-concierge-api-tls-serving-certificate",
 					CredentialIssuer:                  "pinniped-config",
 					APIService:                        "pinniped-api",
-					ImpersonationConfigMap:            "impersonationConfigMap-value",
 					ImpersonationLoadBalancerService:  "impersonationLoadBalancerService-value",
 					ImpersonationClusterIPService:     "impersonationClusterIPService-value",
 					ImpersonationTLSCertificateSecret: "impersonationTLSCertificateSecret-value",
@@ -140,7 +137,7 @@ func TestFromPath(t *testing.T) {
 			name: "Empty",
 			yaml: here.Doc(``),
 			wantError: "validate names: missing required names: servingCertificateSecret, credentialIssuer, " +
-				"apiService, impersonationConfigMap, impersonationLoadBalancerService, " +
+				"apiService, impersonationLoadBalancerService, " +
 				"impersonationClusterIPService, impersonationTLSCertificateSecret, impersonationCACertificateSecret, " +
 				"impersonationSignerSecret, agentServiceAccount",
 		},
@@ -151,7 +148,6 @@ func TestFromPath(t *testing.T) {
 				names:
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  credentialIssuer: pinniped-config
-				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationClusterIPService: impersonationClusterIPService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
@@ -168,7 +164,6 @@ func TestFromPath(t *testing.T) {
 				names:
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  apiService: pinniped-api
-				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationClusterIPService: impersonationClusterIPService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
@@ -185,7 +180,6 @@ func TestFromPath(t *testing.T) {
 				names:
 				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
-				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationClusterIPService: impersonationClusterIPService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
@@ -196,23 +190,6 @@ func TestFromPath(t *testing.T) {
 			wantError: "validate names: missing required names: servingCertificateSecret",
 		},
 		{
-			name: "Missing impersonationConfigMap name",
-			yaml: here.Doc(`
-				---
-				names:
-				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
-				  credentialIssuer: pinniped-config
-				  apiService: pinniped-api
-				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
-				  impersonationClusterIPService: impersonationClusterIPService-value
-				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
-				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
-				  impersonationSignerSecret: impersonationSignerSecret-value
-				  agentServiceAccount: agentServiceAccount-value
-			`),
-			wantError: "validate names: missing required names: impersonationConfigMap",
-		},
-		{
 			name: "Missing impersonationLoadBalancerService name",
 			yaml: here.Doc(`
 				---
@@ -220,7 +197,6 @@ func TestFromPath(t *testing.T) {
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
-				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationClusterIPService: impersonationClusterIPService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
@@ -237,7 +213,6 @@ func TestFromPath(t *testing.T) {
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
-				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
@@ -254,7 +229,6 @@ func TestFromPath(t *testing.T) {
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
-				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationClusterIPService: impersonationClusterIPService-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
@@ -271,7 +245,6 @@ func TestFromPath(t *testing.T) {
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
-				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationClusterIPService: impersonationClusterIPService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
@@ -288,7 +261,6 @@ func TestFromPath(t *testing.T) {
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
-				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationClusterIPService: impersonationClusterIPService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
@@ -310,7 +282,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationSignerSecret: impersonationSignerSecret-value
 				  agentServiceAccount: agentServiceAccount-value
 			`),
-			wantError: "validate names: missing required names: impersonationConfigMap, " +
+			wantError: "validate names: missing required names: " +
 				"impersonationTLSCertificateSecret, impersonationCACertificateSecret",
 		},
 		{
@@ -325,7 +297,6 @@ func TestFromPath(t *testing.T) {
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
-				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
@@ -345,7 +316,6 @@ func TestFromPath(t *testing.T) {
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
-				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
@@ -365,7 +335,6 @@ func TestFromPath(t *testing.T) {
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
-				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
@@ -386,7 +355,6 @@ func TestFromPath(t *testing.T) {
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
 				  credentialIssuer: pinniped-config
 				  apiService: pinniped-api
-				  impersonationConfigMap: impersonationConfigMap-value
 				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
 				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value

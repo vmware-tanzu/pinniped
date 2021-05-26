@@ -11,12 +11,12 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net"
-	"reflect"
 	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/clock"
@@ -232,7 +232,7 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context, cre
 		}
 	} else {
 		if err = c.ensureImpersonatorIsStopped(true); err != nil {
-			return nil, err // TODO write unit test that errors during stopping the server are returned by sync
+			return nil, err
 		}
 	}
 
@@ -343,21 +343,6 @@ func (c *impersonatorConfigController) serviceExists(serviceName string) (bool, 
 	return true, nil
 }
 
-func (c *impersonatorConfigController) serviceNeedsUpdate(config *v1alpha1.ImpersonationProxySpec, serviceName string) (*v1.Service, bool, error) {
-	service, err := c.servicesInformer.Lister().Services(c.namespace).Get(serviceName)
-	if err != nil {
-		return nil, false, err
-	}
-	// TODO this will break if anything other than pinniped is adding annotations
-	if !reflect.DeepEqual(service.Annotations, config.Service.Annotations) {
-		return service, true, nil
-	}
-	if service.Spec.LoadBalancerIP != config.Service.LoadBalancerIP {
-		return service, true, nil
-	}
-	return nil, false, nil
-}
-
 func (c *impersonatorConfigController) tlsSecretExists() (bool, *v1.Secret, error) {
 	secret, err := c.secretsInformer.Lister().Secrets(c.namespace).Get(c.tlsSecretName)
 	notFound := k8serrors.IsNotFound(err)
@@ -465,7 +450,7 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.C
 			Annotations: config.Service.Annotations,
 		},
 	}
-	return c.createOrUpdateService(ctx, config, &loadBalancer)
+	return c.createOrUpdateService(ctx, &loadBalancer)
 }
 
 func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.Context) error {
@@ -504,7 +489,7 @@ func (c *impersonatorConfigController) ensureClusterIPServiceIsStarted(ctx conte
 			Annotations: config.Service.Annotations,
 		},
 	}
-	return c.createOrUpdateService(ctx, config, &clusterIP)
+	return c.createOrUpdateService(ctx, &clusterIP)
 }
 
 func (c *impersonatorConfigController) ensureClusterIPServiceIsStopped(ctx context.Context) error {
@@ -522,36 +507,35 @@ func (c *impersonatorConfigController) ensureClusterIPServiceIsStopped(ctx conte
 	return c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedClusterIPServiceName, metav1.DeleteOptions{})
 }
 
-func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context, config *v1alpha1.ImpersonationProxySpec, service *v1.Service) error {
-	running, err := c.serviceExists(service.Name)
+func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context, service *v1.Service) error {
+	log := c.infoLog.WithValues("serviceType", service.Spec.Type, "service", klog.KObj(service))
+	existing, err := c.servicesInformer.Lister().Services(c.namespace).Get(service.Name)
+	if k8serrors.IsNotFound(err) {
+		log.Info("creating service for impersonation proxy")
+		_, err := c.k8sClient.CoreV1().Services(c.namespace).Create(ctx, service, metav1.CreateOptions{})
+		return err
+	}
 	if err != nil {
 		return err
 	}
-	if running {
-		existingService, needsUpdate, err := c.serviceNeedsUpdate(config, service.Name)
-		if err != nil {
-			return err
-		}
-		if needsUpdate {
-			c.infoLog.Info("updating service for impersonation proxy",
-				"serviceType", service.Spec.Type,
-				"service", klog.KObj(service),
-			)
-			// update only the annotation and loadBalancerIP fields on the service
-			var newService = &v1.Service{}
-			existingService.DeepCopyInto(newService)
-			newService.Annotations = service.Annotations
-			newService.Spec.LoadBalancerIP = service.Spec.LoadBalancerIP
-			_, err = c.k8sClient.CoreV1().Services(c.namespace).Update(ctx, newService, metav1.UpdateOptions{})
-			return err
-		}
+
+	// Update only the specific fields that are meaningfully part of our desired state.
+	updated := existing.DeepCopy()
+	updated.ObjectMeta.Labels = service.ObjectMeta.Labels
+	updated.ObjectMeta.Annotations = service.ObjectMeta.Annotations
+	updated.Spec.LoadBalancerIP = service.Spec.LoadBalancerIP
+	updated.Spec.Type = service.Spec.Type
+	updated.Spec.Selector = service.Spec.Selector
+	updated.Spec.Ports = service.Spec.Ports
+
+	// If our updates didn't change anything, we're done.
+	if equality.Semantic.DeepEqual(existing, updated) {
 		return nil
 	}
-	c.infoLog.Info("creating service for impersonation proxy",
-		"serviceType", service.Spec.Type,
-		"service", klog.KObj(service),
-	)
-	_, err = c.k8sClient.CoreV1().Services(c.namespace).Create(ctx, service, metav1.CreateOptions{})
+
+	// Otherwise apply the updates.
+	c.infoLog.Info("updating service for impersonation proxy")
+	_, err = c.k8sClient.CoreV1().Services(c.namespace).Update(ctx, updated, metav1.UpdateOptions{})
 	return err
 }
 

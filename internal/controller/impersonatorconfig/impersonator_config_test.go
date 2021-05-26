@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
@@ -618,9 +619,18 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
 					Namespace: installedInNamespace,
+					Labels:    labels,
 				},
 				Spec: corev1.ServiceSpec{
 					Type: corev1.ServiceTypeLoadBalancer,
+					Ports: []corev1.ServicePort{
+						{
+							TargetPort: intstr.FromInt(impersonationProxyPort),
+							Port:       defaultHTTPSPort,
+							Protocol:   corev1.ProtocolTCP,
+						},
+					},
+					Selector: map[string]string{appLabelKey: labels[appLabelKey]},
 				},
 				Status: status,
 			}
@@ -631,6 +641,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
 					Namespace: installedInNamespace,
+					Labels:    labels,
 				},
 				Spec:   spec,
 				Status: status,
@@ -737,6 +748,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			clusterIPService := newClusterIPService(resourceName, corev1.ServiceStatus{}, corev1.ServiceSpec{
 				Type:      corev1.ServiceTypeClusterIP,
 				ClusterIP: clusterIP,
+				Ports: []corev1.ServicePort{
+					{
+						TargetPort: intstr.FromInt(impersonationProxyPort),
+						Port:       defaultHTTPSPort,
+						Protocol:   corev1.ProtocolTCP,
+					},
+				},
+				Selector: map[string]string{appLabelKey: labels[appLabelKey]},
 			})
 			r.NoError(client.Tracker().Add(clusterIPService))
 		}
@@ -746,6 +765,14 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				Type:       corev1.ServiceTypeClusterIP,
 				ClusterIP:  clusterIP0,
 				ClusterIPs: []string{clusterIP0, clusterIP1},
+				Ports: []corev1.ServicePort{
+					{
+						TargetPort: intstr.FromInt(impersonationProxyPort),
+						Port:       defaultHTTPSPort,
+						Protocol:   corev1.ProtocolTCP,
+					},
+				},
+				Selector: map[string]string{appLabelKey: labels[appLabelKey]},
 			})
 			r.NoError(client.Tracker().Add(clusterIPService))
 		}

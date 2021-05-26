@@ -3548,7 +3548,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				})
 			})
 		})
-	}, spec.Report(report.Terminal{})) // TODO: replace the Parallel() call here
+	}, spec.Parallel(), spec.Report(report.Terminal{}))
 }
 
 type testQueue struct {

@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +40,7 @@ import (
 	"go.pinniped.dev/internal/controller/issuerconfig"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/dynamiccert"
+	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -760,13 +760,13 @@ func (c *impersonatorConfigController) findDesiredTLSCertificateName(config *v1a
 }
 
 func (c *impersonatorConfigController) findTLSCertificateNameFromEndpointConfig(config *v1alpha1.ImpersonationProxySpec) *certNameInfo {
-	endpointMaybeWithPort := config.ExternalEndpoint
-	endpointWithoutPort := strings.Split(endpointMaybeWithPort, ":")[0]
-	parsedAsIP := net.ParseIP(endpointWithoutPort)
-	if parsedAsIP != nil {
-		return &certNameInfo{ready: true, selectedIPs: []net.IP{parsedAsIP}, clientEndpoint: endpointMaybeWithPort}
+	addr, _ := endpointaddr.Parse(config.ExternalEndpoint, 443)
+	endpoint := strings.TrimSuffix(addr.Endpoint(), ":443")
+
+	if ip := net.ParseIP(addr.Host); ip != nil {
+		return &certNameInfo{ready: true, selectedIPs: []net.IP{ip}, clientEndpoint: endpoint}
 	}
-	return &certNameInfo{ready: true, selectedHostname: endpointWithoutPort, clientEndpoint: endpointMaybeWithPort}
+	return &certNameInfo{ready: true, selectedHostname: addr.Host, clientEndpoint: endpoint}
 }
 
 func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() (*certNameInfo, error) {
@@ -1021,46 +1021,11 @@ func validateCredentialIssuerSpec(spec *v1alpha1.ImpersonationProxySpec) error {
 		return fmt.Errorf("externalEndpoint must be set when service.type is None")
 	}
 
-	if err := validateExternalEndpoint(spec.ExternalEndpoint); err != nil {
-		return fmt.Errorf("invalid ExternalEndpoint %q: %w", spec.ExternalEndpoint, err)
+	if spec.ExternalEndpoint != "" {
+		if _, err := endpointaddr.Parse(spec.ExternalEndpoint, 443); err != nil {
+			return fmt.Errorf("invalid ExternalEndpoint %q: %w", spec.ExternalEndpoint, err)
+		}
 	}
 
 	return nil
-}
-
-func validateExternalEndpoint(endpoint string) error {
-	// Empty string is valid (no external endpoint, default to service name)
-	if endpoint == "" {
-		return nil
-	}
-
-	// Try parsing it both with and without an implicit port 443 at the end.
-	host, port, err := net.SplitHostPort(endpoint)
-
-	// If we got an error parsing the raw input, try adding an implicit port 443.
-	if err != nil {
-		host, port, err = net.SplitHostPort(net.JoinHostPort(endpoint, "443"))
-	}
-
-	// If there's still an error, fail now.
-	if err != nil {
-		return err
-	}
-
-	portInt, _ := strconv.Atoi(port)
-	if len(validation.IsValidPortNum(portInt)) > 0 {
-		return fmt.Errorf("invalid port %q", port)
-	}
-
-	// Check if the host part is a valid IP address.
-	if len(validation.IsValidIP(host)) == 0 {
-		return nil
-	}
-
-	// Check if the host part is a valid hostname according to RFC 1123.
-	if len(validation.IsDNS1123Subdomain(host)) == 0 {
-		return nil
-	}
-
-	return fmt.Errorf("host %q is not a valid hostname or IP address", host)
 }

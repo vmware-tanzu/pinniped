@@ -5,7 +5,7 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: Configure Supervisor With Okta
+    name: Configure Supervisor With Okta OIDC
     weight: 80
     parent: howtos
 ---

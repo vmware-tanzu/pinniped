@@ -5,7 +5,7 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: Configure Supervisor
+    name: Configure Supervisor as an OIDC Issuer
     weight: 70
     parent: howtos
 ---
@@ -110,7 +110,7 @@ spec:
 
 ### Configuring the Supervisor to act as an OIDC provider
 
-The Supervisor can be configured as an OIDC provider by creating `FederationDomain` resources
+The Supervisor can be configured as an OIDC provider by creating FederationDomain resources
 in the same namespace where the Supervisor app was installed. For example:
 
 ```yaml
@@ -130,6 +130,9 @@ spec:
   tls:
     secretName: my-tls-cert-secret
 ```
+
+You can create multiple FederationDomains as long as each has a unique issuer string.
+Each FederationDomain can be used to provide access to a set of Kubernetes clusters for a set of user identities.
 
 #### Configuring TLS for the Supervisor OIDC endpoints
 

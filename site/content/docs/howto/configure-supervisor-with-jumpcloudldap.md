@@ -16,7 +16,7 @@ The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer
 "a comprehensive and flexible cloud directory platform". It includes the capability to act as an LDAP identity provider.
 
 This guide shows you how to configure the Supervisor so that users can authenticate to their Kubernetes
-cluster using their identity from an JumpCloud's LDAP service.
+cluster using their identity from JumpCloud's LDAP service.
 
 ## Prerequisites
 

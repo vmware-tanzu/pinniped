@@ -26,6 +26,9 @@ If you would rather not use the Supervisor, you may want to [configure the Conci
 This how-to guide assumes that you have already [installed the Pinniped Supervisor]({{< ref "install-supervisor" >}}) with working ingress,
 and that you have [configured a FederationDomain to issue tokens for your downstream clusters]({{< ref "configure-supervisor" >}}).
 
+It also assumes that you have already [installed the Pinniped Concierge]({{< ref "install-concierge" >}})
+on all the clusters in which you would like to allow users to have a unified identity.
+
 ## Create a JWTAuthenticator
 
 Create a JWTAuthenticator describing how to validate tokens from your Supervisor's FederationDomain:
@@ -36,15 +39,18 @@ kind: JWTAuthenticator
 metadata:
   name: my-supervisor-authenticator
 spec:
+
   # The value of the `issuer` field should exactly match the `issuer`
   # field of your Supervisor's FederationDomain.
   issuer: https://my-issuer.example.com/any/path
+
   # You can use any `audience` identifier for your cluster, but it is
   # important that it is unique for security reasons.
   audience: my-unique-cluster-identifier-da79fa849
+
   # If the TLS certificate of your FederationDomain is not signed by
-  # a standard CA trusted by the Concierge pods, then specify its CA
-  # as a base64-encoded PEM.
+  # a standard CA trusted by the Concierge pods by default, then
+  # specify its CA here as a base64-encoded PEM.
   tls:
     certificateAuthorityData: LS0tLS1CRUdJTiBDRVJUSUZJQ0...0tLQo=
 ```
@@ -66,8 +72,14 @@ Generate a kubeconfig file for one of the clusters in which you installed and co
 pinniped get kubeconfig > my-cluster.yaml
 ```
 
+This assumes that your current kubeconfig is an admin-level kubeconfig for the cluster, such as the kubeconfig
+that you used to install the Concierge.
+
 This creates a kubeconfig YAML file `my-cluster.yaml`, unique to that cluster, which targets your JWTAuthenticator
 using `pinniped login oidc` as an [ExecCredential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins).
+This new kubeconfig can be shared with the other users of this cluster. It does not contain any specific
+identity or credentials. When a user uses this new kubeconfig with `kubectl`, the Pinniped plugin will
+prompt them to log in using their own identity.
 
 ## Use the kubeconfig file
 
@@ -93,6 +105,15 @@ You should see:
   kubectl create clusterrolebinding my-user-admin \
     --clusterrole admin \
     --user my-username@example.com
+  ```
+
+  Alternatively, you could create role bindings based on the group membership of your users
+  in the upstream identity provider, for example:
+
+  ```sh
+  kubectl create clusterrolebinding my-auditors \
+    --clusterrole view \
+    --group auditors
   ```
 
 ## Other notes

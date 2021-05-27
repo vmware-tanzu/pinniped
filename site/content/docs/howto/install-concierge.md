@@ -17,6 +17,8 @@ You should have a [supported Kubernetes cluster]({{< ref "../reference/supported
 1. Install the latest version of the Concierge into the `pinniped-concierge` namespace with default options:
 
    - `kubectl apply -f https://get.pinniped.dev/latest/install-pinniped-concierge.yaml`
+    
+Warning: the default configuration may create a public LoadBalancer Service on your cluster.
 
 ## With specific version and default options
 

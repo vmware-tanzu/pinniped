@@ -142,7 +142,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 					t.Logf("failed to make TokenCredentialRequest: %s", library.Sdump(err))
 					return false
 				}
-				return true
+				return mostRecentTokenCredentialRequestResponse.Status.Credential != nil
 			}, 5*time.Minute, 5*time.Second)
 
 			require.Nil(t, mostRecentTokenCredentialRequestResponse.Status.Message,

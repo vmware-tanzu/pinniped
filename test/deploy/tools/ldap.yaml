@@ -41,7 +41,7 @@ ldap.ldif: |
   objectClass: shadowAccount
   cn: pinny
   sn: Seal
-  givenName: Pinny
+  givenName: Pinny the 🦭
   mail: pinny.ldap@example.com
   userPassword: (@= data.values.pinny_ldap_password @)
   uid: pinny

@@ -11,17 +11,19 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
 
-	"k8s.io/utils/trace"
-
 	"github.com/go-ldap/ldap/v3"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/utils/trace"
 
+	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/endpointaddr"
+	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -138,6 +140,9 @@ type Provider struct {
 	c ProviderConfig
 }
 
+var _ provider.UpstreamLDAPIdentityProviderI = &Provider{}
+var _ authenticators.UserAuthenticator = &Provider{}
+
 // Create a Provider. The config is not a pointer to ensure that a copy of the config is created,
 // making the resulting Provider use an effectively read-only configuration.
 func New(config ProviderConfig) *Provider {
@@ -249,11 +254,15 @@ func (p *Provider) GetName() string {
 	return p.c.Name
 }
 
-// Return a URL which uniquely identifies this LDAP provider, e.g. "ldaps://host.example.com:1234".
+// Return a URL which uniquely identifies this LDAP provider, e.g. "ldaps://host.example.com:1234?base=user-search-base".
 // This URL is not used for connecting to the provider, but rather is used for creating a globally unique user
 // identifier by being combined with the user's UID, since user UIDs are only unique within one provider.
-func (p *Provider) GetURL() string {
-	return fmt.Sprintf("%s://%s", ldapsScheme, p.c.Host)
+func (p *Provider) GetURL() *url.URL {
+	u := &url.URL{Scheme: ldapsScheme, Host: p.c.Host}
+	q := u.Query()
+	q.Set("base", p.c.UserSearch.Base)
+	u.RawQuery = q.Encode()
+	return u
 }
 
 // TestConnection provides a method for testing the connection and bind settings. It performs a dial and bind

@@ -28,9 +28,10 @@ import (
 const (
 	happyUpstreamIDPName = "upstream-idp-name"
 
-	upstreamIssuer   = "https://my-upstream-issuer.com"
-	upstreamSubject  = "abc123-some-guid"
-	upstreamUsername = "test-pinniped-username"
+	upstreamIssuer              = "https://my-upstream-issuer.com"
+	upstreamSubject             = "abc123-some guid" // has a space character which should get escaped in URL
+	queryEscapedUpstreamSubject = "abc123-some+guid"
+	upstreamUsername            = "test-pinniped-username"
 
 	upstreamUsernameClaim = "the-user-claim"
 	upstreamGroupsClaim   = "the-groups-claim"
@@ -141,7 +142,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
 			wantDownstreamIDTokenUsername:     upstreamUsername,
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
@@ -160,8 +161,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
-			wantDownstreamIDTokenUsername:     upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
+			wantDownstreamIDTokenUsername:     upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
 			wantDownstreamIDTokenGroups:       []string{},
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
@@ -180,7 +181,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
 			wantDownstreamIDTokenUsername:     "joe@whitehouse.gov",
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
@@ -201,7 +202,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
 			wantDownstreamIDTokenUsername:     "joe@whitehouse.gov",
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
@@ -223,7 +224,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusFound, // succeed despite `email_verified=false` because we're not using the email claim for anything
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
 			wantDownstreamIDTokenUsername:     "joe",
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
@@ -268,7 +269,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
 			wantDownstreamIDTokenUsername:     upstreamSubject,
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
@@ -287,7 +288,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
 			wantDownstreamIDTokenUsername:     upstreamUsername,
 			wantDownstreamIDTokenGroups:       []string{"notAnArrayGroup1 notAnArrayGroup2"},
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
@@ -306,7 +307,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
 			wantDownstreamIDTokenUsername:     upstreamUsername,
 			wantDownstreamIDTokenGroups:       []string{"group1", "group2"},
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
@@ -445,7 +446,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyDownstreamState,
 			wantDownstreamIDTokenUsername:     upstreamUsername,
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
 			wantDownstreamRequestedScopes:     []string{"profile", "email"},
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
 			wantDownstreamNonce:               downstreamNonce,
@@ -467,7 +468,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access&state=` + happyDownstreamState,
 			wantDownstreamIDTokenUsername:     upstreamUsername,
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
 			wantDownstreamRequestedScopes:     []string{"openid", "offline_access"},
 			wantDownstreamGrantedScopes:       []string{"openid", "offline_access"},
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
@@ -548,7 +549,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + upstreamSubject,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
 			wantDownstreamIDTokenUsername:     upstreamUsername,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,

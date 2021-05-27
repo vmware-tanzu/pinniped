@@ -44,7 +44,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		downstreamPKCEChallengeMethod          = "S256"
 		happyState                             = "8b-state"
 		downstreamClientID                     = "pinniped-cli"
-		upstreamLDAPURL                        = "ldaps://some-ldap-host:123"
+		upstreamLDAPURL                        = "ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev"
 		htmlContentType                        = "text/html; charset=utf-8"
 	)
 
@@ -158,9 +158,12 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	happyLDAPUID := "some-ldap-uid"
 	happyLDAPGroups := []string{"group1", "group2", "group3"}
 
+	parsedUpstreamLDAPURL, err := url.Parse(upstreamLDAPURL)
+	require.NoError(t, err)
+
 	upstreamLDAPIdentityProvider := oidctestutil.TestUpstreamLDAPIdentityProvider{
 		Name: "some-ldap-idp",
-		URL:  upstreamLDAPURL,
+		URL:  parsedUpstreamLDAPURL,
 		AuthenticateFunc: func(ctx context.Context, username, password string) (*authenticator.Response, bool, error) {
 			if username == "" || password == "" {
 				return nil, false, fmt.Errorf("should not have passed empty username or password to the authenticator")
@@ -384,7 +387,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:                   htmlContentType,
 			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
 			wantBodyStringWithLocationInHref:  false,
-			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "?sub=" + happyLDAPUID,
+			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
 			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
 			wantDownstreamIDTokenGroups:       happyLDAPGroups,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
@@ -443,7 +446,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:                   htmlContentType,
 			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
 			wantBodyStringWithLocationInHref:  false,
-			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "?sub=" + happyLDAPUID,
+			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
 			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
 			wantDownstreamIDTokenGroups:       happyLDAPGroups,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
@@ -525,7 +528,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:                   htmlContentType,
 			wantRedirectLocationRegexp:        downstreamRedirectURIWithDifferentPort + `\?code=([^&]+)&scope=openid&state=` + happyState,
 			wantBodyStringWithLocationInHref:  false,
-			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "?sub=" + happyLDAPUID,
+			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
 			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
 			wantDownstreamIDTokenGroups:       happyLDAPGroups,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
@@ -941,7 +944,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:                   htmlContentType,
 			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyState, // no scopes granted
 			wantBodyStringWithLocationInHref:  false,
-			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "?sub=" + happyLDAPUID,
+			wantDownstreamIDTokenSubject:      upstreamLDAPURL + "&sub=" + happyLDAPUID,
 			wantDownstreamIDTokenUsername:     happyLDAPUsernameFromAuthenticator,
 			wantDownstreamIDTokenGroups:       happyLDAPGroups,
 			wantDownstreamRequestedScopes:     []string{"email"}, // only email was requested

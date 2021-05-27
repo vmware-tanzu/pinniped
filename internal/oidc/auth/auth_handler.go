@@ -15,6 +15,7 @@ import (
 	"github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
@@ -108,11 +109,10 @@ func handleAuthRequestForLDAPUpstream(
 		return nil
 	}
 
-	subject := fmt.Sprintf("%s?%s=%s", ldapUpstream.GetURL(), oidc.IDTokenSubjectClaim, authenticateResponse.User.GetUID())
 	now := time.Now().UTC()
 	openIDSession := &openid.DefaultSession{
 		Claims: &jwt.IDTokenClaims{
-			Subject:     subject,
+			Subject:     downstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse),
 			RequestedAt: now,
 			AuthTime:    now,
 		},
@@ -358,4 +358,12 @@ func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken
 	})
 
 	return nil
+}
+
+func downstreamSubjectFromUpstreamLDAP(ldapUpstream provider.UpstreamLDAPIdentityProviderI, authenticateResponse *authenticator.Response) string {
+	ldapURL := *ldapUpstream.GetURL()
+	q := ldapURL.Query()
+	q.Set(oidc.IDTokenSubjectClaim, authenticateResponse.User.GetUID())
+	ldapURL.RawQuery = q.Encode()
+	return ldapURL.String()
 }

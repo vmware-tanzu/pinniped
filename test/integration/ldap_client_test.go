@@ -168,6 +168,31 @@ func TestLDAPSearch(t *testing.T) {
 			},
 		},
 		{
+			name:     "when the UsernameAttribute or UIDAttribute are attributes whose value contains UTF-8 data",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.UserSearch.Filter = "cn={}"
+				p.UserSearch.UsernameAttribute = "givenName"
+				p.UserSearch.UIDAttribute = "givenName"
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "Pinny the 🦭", UID: "Pinny the 🦭", Groups: []string{"ball-game-players", "seals"}},
+			},
+		},
+		{
+			name:     "when the search filter is searching on an attribute whose value contains UTF-8 data",
+			username: "Pinny the 🦭",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.UserSearch.Filter = "givenName={}"
+				p.UserSearch.UsernameAttribute = "cn"
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: "1000", Groups: []string{"ball-game-players", "seals"}},
+			},
+		},
+		{
 			name:     "when the UsernameAttribute is dn and there is no user search filter provided",
 			username: "cn=pinny,ou=users,dc=pinniped,dc=dev",
 			password: pinnyPassword,

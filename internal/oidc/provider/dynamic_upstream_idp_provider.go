@@ -56,7 +56,7 @@ type UpstreamLDAPIdentityProviderI interface {
 	// Return a URL which uniquely identifies this LDAP provider, e.g. "ldaps://host.example.com:1234".
 	// This URL is not used for connecting to the provider, but rather is used for creating a globally unique user
 	// identifier by being combined with the user's UID, since user UIDs are only unique within one provider.
-	GetURL() string
+	GetURL() *url.URL
 
 	// A method for performing user authentication against the upstream LDAP provider.
 	authenticators.UserAuthenticator

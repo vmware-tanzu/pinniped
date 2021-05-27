@@ -1115,8 +1115,19 @@ func TestGetConfig(t *testing.T) {
 }
 
 func TestGetURL(t *testing.T) {
-	require.Equal(t, "ldaps://ldap.example.com:1234", New(ProviderConfig{Host: "ldap.example.com:1234"}).GetURL())
-	require.Equal(t, "ldaps://ldap.example.com", New(ProviderConfig{Host: "ldap.example.com"}).GetURL())
+	require.Equal(t,
+		"ldaps://ldap.example.com:1234?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev",
+		New(ProviderConfig{
+			Host:       "ldap.example.com:1234",
+			UserSearch: UserSearchConfig{Base: "ou=users,dc=pinniped,dc=dev"},
+		}).GetURL().String())
+
+	require.Equal(t,
+		"ldaps://ldap.example.com?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev",
+		New(ProviderConfig{
+			Host:       "ldap.example.com",
+			UserSearch: UserSearchConfig{Base: "ou=users,dc=pinniped,dc=dev"},
+		}).GetURL().String())
 }
 
 // Testing of host parsing, TLS negotiation, and CA bundle, etc. for the production code's dialer.

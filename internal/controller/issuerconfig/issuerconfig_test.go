@@ -126,6 +126,38 @@ func TestMergeStrategy(t *testing.T) {
 			},
 		},
 		{
+			name: "existing entry matches except for LastUpdated time",
+			configToUpdate: v1alpha1.CredentialIssuerStatus{
+				Strategies: []v1alpha1.CredentialIssuerStrategy{
+					{
+						Type:           "Type1",
+						Status:         v1alpha1.ErrorStrategyStatus,
+						Reason:         "some starting reason",
+						Message:        "some starting message",
+						LastUpdateTime: t1,
+					},
+				},
+			},
+			strategy: v1alpha1.CredentialIssuerStrategy{
+				Type:           "Type1",
+				Status:         v1alpha1.ErrorStrategyStatus,
+				Reason:         "some starting reason",
+				Message:        "some starting message",
+				LastUpdateTime: t2,
+			},
+			expected: v1alpha1.CredentialIssuerStatus{
+				Strategies: []v1alpha1.CredentialIssuerStrategy{
+					{
+						Type:           "Type1",
+						Status:         v1alpha1.ErrorStrategyStatus,
+						Reason:         "some starting reason",
+						Message:        "some starting message",
+						LastUpdateTime: t1,
+					},
+				},
+			},
+		},
+		{
 			name: "new entry among others",
 			configToUpdate: v1alpha1.CredentialIssuerStatus{
 				Strategies: []v1alpha1.CredentialIssuerStrategy{

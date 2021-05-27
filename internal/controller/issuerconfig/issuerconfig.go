@@ -42,7 +42,9 @@ func mergeStrategy(configToUpdate *v1alpha1.CredentialIssuerStatus, strategy v1a
 		}
 	}
 	if existing != nil {
-		strategy.DeepCopyInto(existing)
+		if !equalExceptLastUpdated(existing, &strategy) {
+			strategy.DeepCopyInto(existing)
+		}
 	} else {
 		configToUpdate.Strategies = append(configToUpdate.Strategies, strategy)
 	}
@@ -75,3 +77,11 @@ func (s sortableStrategies) Less(i, j int) bool {
 	return s[i].Type < s[j].Type
 }
 func (s sortableStrategies) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
+func equalExceptLastUpdated(s1, s2 *v1alpha1.CredentialIssuerStrategy) bool {
+	s1 = s1.DeepCopy()
+	s2 = s2.DeepCopy()
+	s1.LastUpdateTime = metav1.Time{}
+	s2.LastUpdateTime = metav1.Time{}
+	return apiequality.Semantic.DeepEqual(s1, s2)
+}

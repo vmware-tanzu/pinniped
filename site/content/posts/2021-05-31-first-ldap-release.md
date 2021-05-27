@@ -1,5 +1,5 @@
 ---
-title: "Pinniped v0.9.0: Bring your LDAP Identities to your Kubernetes Clusters"
+title: "Pinniped v0.9.0: Bring Your LDAP Identities to Your Kubernetes Clusters"
 slug: bringing-ldap-identities-to-clusters
 date: 2021-05-31
 author: Ryan Richard
@@ -43,8 +43,8 @@ Luckily, these other technologies could bridge LDAP into earlier versions of Pin
 
 At this point you may be asking yourself: since other systems can be used as a shim between Pinniped and an LDAP provider,
 then why would Pinniped ever need to provide direct support for LDAP providers? Good question. One of our goals is to make Kubernetes
-authentication as flexible and easy to use as possible. While Dex and UAA are excellent and feature-rich projects, they
-are not necessarily easy to configure. Also their deployment, initial configuration, and day-two reconfiguration are not necessarily
+authentication as flexible and easy to use as possible. While some of the available identity shims are feature-rich technologies, they
+are not necessarily easy to configure. Also, their deployment, initial configuration, and day-two reconfiguration are not necessarily
 accomplished in a Kubernetes-native style using K8s APIs.
 
 We felt it was worth the effort of building native LDAP support in order to reduce the number of moving parts in your
@@ -146,3 +146,5 @@ Find us in [#pinniped](https://kubernetes.slack.com/archives/C01BW364RJA) on Kub
 or start a [Discussion](https://github.com/vmware-tanzu/pinniped/discussions).
 
 Thanks for reading our announcement!
+
+{{< community >}}

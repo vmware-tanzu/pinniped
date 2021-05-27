@@ -51,9 +51,11 @@ type ExchangeAuthcodeAndValidateTokenArgs struct {
 
 type TestUpstreamLDAPIdentityProvider struct {
 	Name             string
-	URL              string
+	URL              *url.URL
 	AuthenticateFunc func(ctx context.Context, username, password string) (*authenticator.Response, bool, error)
 }
+
+var _ provider.UpstreamLDAPIdentityProviderI = &TestUpstreamLDAPIdentityProvider{}
 
 func (u *TestUpstreamLDAPIdentityProvider) GetName() string {
 	return u.Name
@@ -63,7 +65,7 @@ func (u *TestUpstreamLDAPIdentityProvider) AuthenticateUser(ctx context.Context,
 	return u.AuthenticateFunc(ctx, username, password)
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) GetURL() string {
+func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 	return u.URL
 }
 

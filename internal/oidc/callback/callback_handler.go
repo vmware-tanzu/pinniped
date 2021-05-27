@@ -228,7 +228,7 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 		return "", "", httperr.New(http.StatusUnprocessableEntity, "subject claim in upstream ID token has invalid format")
 	}
 
-	subject := fmt.Sprintf("%s?%s=%s", upstreamIssuerAsString, oidc.IDTokenSubjectClaim, upstreamSubject)
+	subject := downstreamSubjectFromUpstreamOIDC(upstreamIssuerAsString, upstreamSubject)
 
 	usernameClaimName := upstreamIDPConfig.GetUsernameClaim()
 	if usernameClaimName == "" {
@@ -280,6 +280,10 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 	}
 
 	return subject, username, nil
+}
+
+func downstreamSubjectFromUpstreamOIDC(upstreamIssuerAsString string, upstreamSubject string) string {
+	return fmt.Sprintf("%s?%s=%s", upstreamIssuerAsString, oidc.IDTokenSubjectClaim, url.QueryEscape(upstreamSubject))
 }
 
 func getGroupsFromUpstreamIDToken(

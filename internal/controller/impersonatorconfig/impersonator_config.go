@@ -538,7 +538,6 @@ func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context
 	updated.Spec.LoadBalancerIP = service.Spec.LoadBalancerIP
 	updated.Spec.Type = service.Spec.Type
 	updated.Spec.Selector = service.Spec.Selector
-	updated.Spec.Ports = service.Spec.Ports
 
 	// If our updates didn't change anything, we're done.
 	if equality.Semantic.DeepEqual(existing, updated) {

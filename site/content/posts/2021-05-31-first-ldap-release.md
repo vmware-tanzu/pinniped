@@ -61,7 +61,7 @@ We recognize that legacy Active Directory systems are probably one of the most p
 
 However, for this first release we have not specifically tested with Microsoft Active Directory.
 Our generic LDAP implementation should work with Active Directory too.
-We intended to add features in future releases to make it more convenient to integrate with Microsoft Active Directory
+We intend to add features in future releases to make it more convenient to integrate with Microsoft Active Directory
 as an LDAP provider, and to include AD in our automated testing suite. Stay tuned.
 
 In the meantime, please let us know if you run into any issues or concerns using your LDAP system.

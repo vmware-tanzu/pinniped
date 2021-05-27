@@ -1,7 +1,7 @@
 ---
 title: "Pinniped v0.9.0: Bring your LDAP Identities to your Kubernetes Clusters"
 slug: bringing-ldap-identities-to-clusters
-date: 2021-05-26
+date: 2021-05-31
 author: Ryan Richard
 image: https://cdn.pixabay.com/photo/2018/08/05/15/06/seal-3585727_1280.jpg
 excerpt: "With the release of v0.9.0, Pinniped now supports using LDAP identities to log in to Kubernetes clusters."
@@ -18,12 +18,13 @@ This post describes how v0.9.0 fits into Pinniped’s quest to bring a smooth, u
 
 ## Support for LDAP Identities in the Pinniped Supervisor
 
-Pinniped is made up of two main components:
+Pinniped is made up of three main components:
 - The Pinniped [_Concierge_]({{< ref "docs/howto/install-concierge.md" >}}) component implements cluster-level authentication.
 - The Pinniped [_Supervisor_]({{< ref "docs/howto/install-supervisor.md" >}}) component implements authentication federation
   across lots of clusters, which each run the Concierge, and makes it easy to bring your own identities using any OIDC or LDAP provider.
+- The `pinniped` [_CLI_]({{< ref "docs/howto/install-cli.md" >}}) acts as an authentication plugin to `kubectl`.
 
-The new LDAP support lives in the Supervisor component.
+The new LDAP support lives in the Supervisor component, along with enhancements to the CLI.
 
 ### Why LDAP? And why now?
 
@@ -116,6 +117,12 @@ an [LDAPIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/gen
 We've provided examples of using [OpenLDAP]({{< ref "docs/howto/install-supervisor.md" >}})
 and [JumpCloud]({{< ref "docs/howto/install-supervisor.md" >}}) as LDAP providers.
 Stay tuned for examples of using Active Directory.
+
+The `pinniped` CLI has also been enhanced to support LDAP authentication. Now when `pinnped get kubectl` sees
+that your cluster's Concierge is configured to use a Supervisor which has an LDAPIdentityProvider, then it
+will emit the appropriate kubeconfig to enable LDAP logins. When that kubeconfig is used with `kubectl`,
+the Pinniped plugin will directly prompt the user on the CLI for their LDAP username and password and
+securely transmit them to the Supervisor for authentication.
 
 ### What about SAML?
 

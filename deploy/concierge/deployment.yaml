@@ -255,8 +255,13 @@ metadata:
   labels: #@ labels()
 spec:
   impersonationProxy:
-    mode: auto
+    mode: #@ data.values.impersonation_proxy_spec.mode
+    #@ if data.values.impersonation_proxy_spec.external_endpoint:
+    externalEndpoint: #@ data.values.impersonation_proxy_spec.external_endpoint
+    #@ end
     service:
-      mode: LoadBalancer
-      annotations:
-        service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "4000"
+      mode: #@ data.values.impersonation_proxy_spec.service.mode
+      #@ if data.values.impersonation_proxy_spec.service.load_balancer_ip:
+      loadBalancerIP: #@ data.values.impersonation_proxy_spec.service.load_balancer_ip
+      #@ end
+      annotations: #@ data.values.impersonation_proxy_spec.service.annotations

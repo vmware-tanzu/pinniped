@@ -1413,6 +1413,10 @@ func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *librar
 			} else if strategy.Type == conciergev1alpha.ImpersonationProxyStrategyType {
 				t.Logf("Waiting for successful impersonation proxy strategy on %s: found status %s with reason %s and message: %s",
 					credentialIssuerName(env), strategy.Status, strategy.Reason, strategy.Message)
+				if strategy.Reason == conciergev1alpha.ErrorDuringSetupStrategyReason {
+					// The server encountered an unexpected error while starting the impersonator, so fail the test fast.
+					return false, fmt.Errorf("found impersonation strategy in %s state with message: %s", strategy.Reason, strategy.Message)
+				}
 			}
 		}
 		t.Log("Did not find any impersonation proxy strategy on CredentialIssuer")

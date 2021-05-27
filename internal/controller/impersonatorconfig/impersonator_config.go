@@ -168,7 +168,7 @@ func (c *impersonatorConfigController) Sync(syncCtx controllerlib.Context) error
 		strategy = &v1alpha1.CredentialIssuerStrategy{
 			Type:           v1alpha1.ImpersonationProxyStrategyType,
 			Status:         v1alpha1.ErrorStrategyStatus,
-			Reason:         v1alpha1.ErrorDuringSetupStrategyReason,
+			Reason:         strategyReasonForError(err),
 			Message:        err.Error(),
 			LastUpdateTime: metav1.NewTime(c.clock.Now()),
 		}
@@ -187,6 +187,18 @@ func (c *impersonatorConfigController) Sync(syncCtx controllerlib.Context) error
 		c.debugLog.Info("successfully finished impersonatorConfigController Sync")
 	}
 	return err
+}
+
+// strategyReasonForError returns the proper v1alpha1.StrategyReason for a sync error. Some errors are occasionally
+// expected because there are multiple pods running, in these cases we should  report a Pending reason and we'll
+// recover on a following sync.
+func strategyReasonForError(err error) v1alpha1.StrategyReason {
+	switch {
+	case k8serrors.IsConflict(err), k8serrors.IsAlreadyExists(err):
+		return v1alpha1.PendingStrategyReason
+	default:
+		return v1alpha1.ErrorDuringSetupStrategyReason
+	}
 }
 
 type certNameInfo struct {

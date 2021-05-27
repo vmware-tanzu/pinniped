@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -856,15 +857,19 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			return s
 		}
 
-		var newPendingStrategy = func() v1alpha1.CredentialIssuerStrategy {
+		var newPendingStrategy = func(msg string) v1alpha1.CredentialIssuerStrategy {
 			return v1alpha1.CredentialIssuerStrategy{
 				Type:           v1alpha1.ImpersonationProxyStrategyType,
 				Status:         v1alpha1.ErrorStrategyStatus,
 				Reason:         v1alpha1.PendingStrategyReason,
-				Message:        "waiting for load balancer Service to be assigned IP or hostname",
+				Message:        msg,
 				LastUpdateTime: metav1.NewTime(frozenNow),
 				Frontend:       nil,
 			}
+		}
+
+		var newPendingStrategyWaitingForLB = func() v1alpha1.CredentialIssuerStrategy {
+			return newPendingStrategy("waiting for load balancer Service to be assigned IP or hostname")
 		}
 
 		var newErrorStrategy = func(msg string) v1alpha1.CredentialIssuerStrategy {
@@ -1204,7 +1209,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireNodesListed(kubeAPIClient.Actions()[0])
 					requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
 					requireCASecretWasCreated(kubeAPIClient.Actions()[2])
-					requireCredentialIssuer(newPendingStrategy())
+					requireCredentialIssuer(newPendingStrategyWaitingForLB())
 					requireSigningCertProviderIsEmpty()
 				})
 			})
@@ -1223,7 +1228,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					r.Len(kubeAPIClient.Actions(), 2)
 					requireNodesListed(kubeAPIClient.Actions()[0])
 					requireCASecretWasCreated(kubeAPIClient.Actions()[1])
-					requireCredentialIssuer(newPendingStrategy())
+					requireCredentialIssuer(newPendingStrategyWaitingForLB())
 					requireSigningCertProviderIsEmpty()
 				})
 			})
@@ -1242,7 +1247,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					r.Len(kubeAPIClient.Actions(), 2)
 					requireNodesListed(kubeAPIClient.Actions()[0])
 					requireCASecretWasCreated(kubeAPIClient.Actions()[1])
-					requireCredentialIssuer(newPendingStrategy())
+					requireCredentialIssuer(newPendingStrategyWaitingForLB())
 					requireSigningCertProviderIsEmpty()
 				})
 			})
@@ -1492,7 +1497,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
 					requireCASecretWasCreated(kubeAPIClient.Actions()[2])
 					requireTLSServerIsRunningWithoutCerts()
-					requireCredentialIssuer(newPendingStrategy())
+					requireCredentialIssuer(newPendingStrategyWaitingForLB())
 					requireSigningCertProviderIsEmpty()
 				})
 
@@ -1527,7 +1532,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireNodesListed(kubeAPIClient.Actions()[0])
 					requireCASecretWasCreated(kubeAPIClient.Actions()[1])
 					requireTLSServerIsRunningWithoutCerts()
-					requireCredentialIssuer(newPendingStrategy())
+					requireCredentialIssuer(newPendingStrategyWaitingForLB())
 					requireSigningCertProviderIsEmpty()
 				})
 
@@ -1665,7 +1670,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					require.Equal(t, lbService.Annotations, annotations)
 					requireCASecretWasCreated(kubeAPIClient.Actions()[2])
 					requireTLSServerIsRunningWithoutCerts()
-					requireCredentialIssuer(newPendingStrategy())
+					requireCredentialIssuer(newPendingStrategyWaitingForLB())
 					requireSigningCertProviderIsEmpty()
 				})
 			})
@@ -1760,7 +1765,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireCASecretWasCreated(kubeAPIClient.Actions()[2])
 					// Check that the server is running without certs.
 					requireTLSServerIsRunningWithoutCerts()
-					requireCredentialIssuer(newPendingStrategy())
+					requireCredentialIssuer(newPendingStrategyWaitingForLB())
 					requireSigningCertProviderIsEmpty()
 				})
 			})
@@ -2140,7 +2145,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireNodesListed(kubeAPIClient.Actions()[0])
 					requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
 					requireCASecretWasCreated(kubeAPIClient.Actions()[2])
-					requireCredentialIssuer(newPendingStrategy())
+					requireCredentialIssuer(newPendingStrategyWaitingForLB())
 					requireSigningCertProviderIsEmpty()
 
 					// Simulate the informer cache's background update from its watch.
@@ -2175,7 +2180,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireTLSServerIsRunningWithoutCerts()
 					r.Len(kubeAPIClient.Actions(), 5)
 					requireLoadBalancerWasCreated(kubeAPIClient.Actions()[4])
-					requireCredentialIssuer(newPendingStrategy())
+					requireCredentialIssuer(newPendingStrategyWaitingForLB())
 					requireSigningCertProviderIsEmpty()
 				})
 			})
@@ -2206,7 +2211,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireNodesListed(kubeAPIClient.Actions()[0])
 					requireClusterIPWasCreated(kubeAPIClient.Actions()[1])
 					requireCASecretWasCreated(kubeAPIClient.Actions()[2])
-					requireCredentialIssuer(newPendingStrategy())
+					requireCredentialIssuer(newPendingStrategyWaitingForLB())
 					requireSigningCertProviderIsEmpty()
 
 					// Simulate the informer cache's background update from its watch.
@@ -2244,7 +2249,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 					requireTLSServerIsRunningWithoutCerts()
 					r.Len(kubeAPIClient.Actions(), 5)
 					requireClusterIPWasCreated(kubeAPIClient.Actions()[4])
-					requireCredentialIssuer(newPendingStrategy())
+					requireCredentialIssuer(newPendingStrategyWaitingForLB())
 					requireSigningCertProviderIsEmpty()
 				})
 			})
@@ -2297,7 +2302,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireLoadBalancerWasCreated(kubeAPIClient.Actions()[3])
 				requireTLSSecretWasDeleted(kubeAPIClient.Actions()[4]) // the Secret was deleted because it contained a cert with the wrong IP
 				requireTLSServerIsRunningWithoutCerts()
-				requireCredentialIssuer(newPendingStrategy())
+				requireCredentialIssuer(newPendingStrategyWaitingForLB())
 				requireSigningCertProviderIsEmpty()
 
 				// Simulate the informer cache's background update from its watch.
@@ -2309,7 +2314,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				r.NoError(runControllerSync())
 				r.Len(kubeAPIClient.Actions(), 5) // no new actions while it is waiting for the load balancer's ingress
 				requireTLSServerIsRunningWithoutCerts()
-				requireCredentialIssuer(newPendingStrategy())
+				requireCredentialIssuer(newPendingStrategyWaitingForLB())
 				requireSigningCertProviderIsEmpty()
 
 				// Update the ingress of the LB in the informer's client and run Sync again.
@@ -2554,7 +2559,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
 				requireCASecretWasCreated(kubeAPIClient.Actions()[2])
 				requireTLSServerIsRunningWithoutCerts()
-				requireCredentialIssuer(newPendingStrategy())
+				requireCredentialIssuer(newPendingStrategyWaitingForLB())
 				requireSigningCertProviderIsEmpty()
 
 				// Simulate the informer cache's background update from its watch.
@@ -2564,7 +2569,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				r.NoError(runControllerSync())
 				r.Equal(1, impersonatorFuncWasCalled)   // wasn't started a second time
 				requireTLSServerIsRunningWithoutCerts() // still running
-				requireCredentialIssuer(newPendingStrategy())
+				requireCredentialIssuer(newPendingStrategyWaitingForLB())
 				requireSigningCertProviderIsEmpty()
 				r.Len(kubeAPIClient.Actions(), 3) // no new API calls
 			})
@@ -2577,7 +2582,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
 				ca := requireCASecretWasCreated(kubeAPIClient.Actions()[2])
 				requireTLSServerIsRunningWithoutCerts()
-				requireCredentialIssuer(newPendingStrategy())
+				requireCredentialIssuer(newPendingStrategyWaitingForLB())
 				requireSigningCertProviderIsEmpty()
 
 				// Simulate the informer cache's background update from its watch.
@@ -2614,7 +2619,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
 				ca := requireCASecretWasCreated(kubeAPIClient.Actions()[2])
 				requireTLSServerIsRunningWithoutCerts()
-				requireCredentialIssuer(newPendingStrategy())
+				requireCredentialIssuer(newPendingStrategyWaitingForLB())
 				requireSigningCertProviderIsEmpty()
 
 				// Simulate the informer cache's background update from its watch.
@@ -2682,7 +2687,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
 				requireCASecretWasCreated(kubeAPIClient.Actions()[2])
 				credentialIssuer := getCredentialIssuer()
-				r.Equal([]v1alpha1.CredentialIssuerStrategy{preExistingStrategy, newPendingStrategy()}, credentialIssuer.Status.Strategies)
+				r.Equal([]v1alpha1.CredentialIssuerStrategy{preExistingStrategy, newPendingStrategyWaitingForLB()}, credentialIssuer.Status.Strategies)
 			})
 		})
 
@@ -2735,7 +2740,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireNodesListed(kubeAPIClient.Actions()[0])
 				requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
 				requireCASecretWasCreated(kubeAPIClient.Actions()[2])
-				requireCredentialIssuer(newPendingStrategy())
+				requireCredentialIssuer(newPendingStrategyWaitingForLB())
 				requireSigningCertProviderIsEmpty()
 
 				// Simulate the informer cache's background update from its watch.
@@ -2763,7 +2768,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				// Now everything should be working correctly.
 				r.NoError(runControllerSync())
 				requireTLSServerIsRunningWithoutCerts()
-				requireCredentialIssuer(newPendingStrategy())
+				requireCredentialIssuer(newPendingStrategyWaitingForLB())
 				requireSigningCertProviderIsEmpty()
 			})
 		})
@@ -2791,7 +2796,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				requireNodesListed(kubeAPIClient.Actions()[0])
 				requireLoadBalancerWasCreated(kubeAPIClient.Actions()[1])
 				requireCASecretWasCreated(kubeAPIClient.Actions()[2])
-				requireCredentialIssuer(newPendingStrategy())
+				requireCredentialIssuer(newPendingStrategyWaitingForLB())
 				requireSigningCertProviderIsEmpty()
 				requireTLSServerIsRunningWithoutCerts()
 
@@ -2823,7 +2828,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				// Now everything should be working correctly.
 				r.NoError(runControllerSync())
 				requireTLSServerIsRunningWithoutCerts()
-				requireCredentialIssuer(newPendingStrategy())
+				requireCredentialIssuer(newPendingStrategyWaitingForLB())
 				requireSigningCertProviderIsEmpty()
 			})
 		})
@@ -2947,7 +2952,10 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			it.Before(func() {
 				addNodeWithRoleToTracker("worker", kubeAPIClient)
 				kubeAPIClient.PrependReactor("create", "services", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, fmt.Errorf("error on create")
+					return true, nil, k8serrors.NewAlreadyExists(
+						action.GetResource().GroupResource(),
+						action.(coretesting.CreateAction).GetObject().(*corev1.Service).Name,
+					)
 				})
 				addCredentialIssuerToTrackers(v1alpha1.CredentialIssuer{
 					ObjectMeta: metav1.ObjectMeta{Name: credentialIssuerResourceName},
@@ -2961,8 +2969,8 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 			it("returns an error", func() {
 				startInformersAndController()
-				r.EqualError(runControllerSync(), "error on create")
-				requireCredentialIssuer(newErrorStrategy("error on create"))
+				r.EqualError(runControllerSync(), `services "some-service-resource-name" already exists`)
+				requireCredentialIssuer(newPendingStrategy(`services "some-service-resource-name" already exists`))
 				requireSigningCertProviderIsEmpty()
 				requireTLSServerIsRunningWithoutCerts()
 			})

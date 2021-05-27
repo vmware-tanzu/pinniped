@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -417,7 +418,9 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 		return "", "", nil, err
 	}
 
-	mappedUID, err := p.getSearchResultAttributeValue(p.c.UserSearch.UIDAttribute, userEntry, username)
+	// We would like to support binary typed attributes for UIDs, so always read them as binary and encode them,
+	// even when the attribute may not be binary.
+	mappedUID, err := p.getSearchResultAttributeRawValueEncoded(p.c.UserSearch.UIDAttribute, userEntry, username)
 	if err != nil {
 		return "", "", nil, err
 	}
@@ -524,6 +527,30 @@ func interpolateSearchFilter(filterFormat, valueToInterpolateIntoFilter string) 
 func (p *Provider) escapeUsernameForSearchFilter(username string) string {
 	// The username is end user input, so it should be escaped before being included in a search to prevent query injection.
 	return ldap.EscapeFilter(username)
+}
+
+// Returns the (potentially) binary data of the attribute's value, base64 URL encoded.
+func (p *Provider) getSearchResultAttributeRawValueEncoded(attributeName string, entry *ldap.Entry, username string) (string, error) {
+	if attributeName == distinguishedNameAttributeName {
+		return base64.RawURLEncoding.EncodeToString([]byte(entry.DN)), nil
+	}
+
+	attributeValues := entry.GetRawAttributeValues(attributeName)
+
+	if len(attributeValues) != 1 {
+		return "", fmt.Errorf(`found %d values for attribute "%s" while searching for user "%s", but expected 1 result`,
+			len(attributeValues), attributeName, username,
+		)
+	}
+
+	attributeValue := attributeValues[0]
+	if len(attributeValue) == 0 {
+		return "", fmt.Errorf(`found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`,
+			attributeName, username,
+		)
+	}
+
+	return base64.RawURLEncoding.EncodeToString(attributeValue), nil
 }
 
 func (p *Provider) getSearchResultAttributeValue(attributeName string, entry *ldap.Entry, username string) (string, error) {

@@ -8,20 +8,23 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
 
-	"k8s.io/utils/trace"
-
 	"github.com/go-ldap/ldap/v3"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/utils/trace"
 
+	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/endpointaddr"
+	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -138,6 +141,9 @@ type Provider struct {
 	c ProviderConfig
 }
 
+var _ provider.UpstreamLDAPIdentityProviderI = &Provider{}
+var _ authenticators.UserAuthenticator = &Provider{}
+
 // Create a Provider. The config is not a pointer to ensure that a copy of the config is created,
 // making the resulting Provider use an effectively read-only configuration.
 func New(config ProviderConfig) *Provider {
@@ -249,11 +255,15 @@ func (p *Provider) GetName() string {
 	return p.c.Name
 }
 
-// Return a URL which uniquely identifies this LDAP provider, e.g. "ldaps://host.example.com:1234".
+// Return a URL which uniquely identifies this LDAP provider, e.g. "ldaps://host.example.com:1234?base=user-search-base".
 // This URL is not used for connecting to the provider, but rather is used for creating a globally unique user
 // identifier by being combined with the user's UID, since user UIDs are only unique within one provider.
-func (p *Provider) GetURL() string {
-	return fmt.Sprintf("%s://%s", ldapsScheme, p.c.Host)
+func (p *Provider) GetURL() *url.URL {
+	u := &url.URL{Scheme: ldapsScheme, Host: p.c.Host}
+	q := u.Query()
+	q.Set("base", p.c.UserSearch.Base)
+	u.RawQuery = q.Encode()
+	return u
 }
 
 // TestConnection provides a method for testing the connection and bind settings. It performs a dial and bind
@@ -408,7 +418,9 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 		return "", "", nil, err
 	}
 
-	mappedUID, err := p.getSearchResultAttributeValue(p.c.UserSearch.UIDAttribute, userEntry, username)
+	// We would like to support binary typed attributes for UIDs, so always read them as binary and encode them,
+	// even when the attribute may not be binary.
+	mappedUID, err := p.getSearchResultAttributeRawValueEncoded(p.c.UserSearch.UIDAttribute, userEntry, username)
 	if err != nil {
 		return "", "", nil, err
 	}
@@ -515,6 +527,30 @@ func interpolateSearchFilter(filterFormat, valueToInterpolateIntoFilter string) 
 func (p *Provider) escapeUsernameForSearchFilter(username string) string {
 	// The username is end user input, so it should be escaped before being included in a search to prevent query injection.
 	return ldap.EscapeFilter(username)
+}
+
+// Returns the (potentially) binary data of the attribute's value, base64 URL encoded.
+func (p *Provider) getSearchResultAttributeRawValueEncoded(attributeName string, entry *ldap.Entry, username string) (string, error) {
+	if attributeName == distinguishedNameAttributeName {
+		return base64.RawURLEncoding.EncodeToString([]byte(entry.DN)), nil
+	}
+
+	attributeValues := entry.GetRawAttributeValues(attributeName)
+
+	if len(attributeValues) != 1 {
+		return "", fmt.Errorf(`found %d values for attribute "%s" while searching for user "%s", but expected 1 result`,
+			len(attributeValues), attributeName, username,
+		)
+	}
+
+	attributeValue := attributeValues[0]
+	if len(attributeValue) == 0 {
+		return "", fmt.Errorf(`found empty value for attribute "%s" while searching for user "%s", but expected value to be non-empty`,
+			attributeName, username,
+		)
+	}
+
+	return base64.RawURLEncoding.EncodeToString(attributeValue), nil
 }
 
 func (p *Provider) getSearchResultAttributeValue(attributeName string, entry *ldap.Entry, username string) (string, error) {

@@ -119,7 +119,9 @@ func TestSupervisorLogin(t *testing.T) {
 			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(
-				"ldaps://" + env.SupervisorUpstreamLDAP.Host + "?sub=" + env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue,
+				"ldaps://" + env.SupervisorUpstreamLDAP.Host +
+					"?base=" + url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase) +
+					"&sub=" + base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
 			),
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue),
@@ -176,7 +178,9 @@ func TestSupervisorLogin(t *testing.T) {
 			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(
-				"ldaps://" + env.SupervisorUpstreamLDAP.StartTLSOnlyHost + "?sub=" + env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue,
+				"ldaps://" + env.SupervisorUpstreamLDAP.StartTLSOnlyHost +
+					"?base=" + url.QueryEscape(env.SupervisorUpstreamLDAP.UserSearchBase) +
+					"&sub=" + base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
 			),
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserDN),

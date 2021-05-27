@@ -49,8 +49,8 @@ data:
       servingCertificateSecret: (@= defaultResourceNameWithSuffix("api-tls-serving-certificate") @)
       credentialIssuer: (@= defaultResourceNameWithSuffix("config") @)
       apiService: (@= defaultResourceNameWithSuffix("api") @)
-      impersonationConfigMap: (@= defaultResourceNameWithSuffix("impersonation-proxy-config") @)
       impersonationLoadBalancerService: (@= defaultResourceNameWithSuffix("impersonation-proxy-load-balancer") @)
+      impersonationClusterIPService: (@= defaultResourceNameWithSuffix("impersonation-proxy-cluster-ip") @)
       impersonationTLSCertificateSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-tls-serving-certificate") @)
       impersonationCACertificateSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-ca-certificate") @)
       impersonationSignerSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-signer-ca-certificate") @)
@@ -253,3 +253,15 @@ kind: CredentialIssuer
 metadata:
   name: #@ defaultResourceNameWithSuffix("config")
   labels: #@ labels()
+spec:
+  impersonationProxy:
+    mode: #@ data.values.impersonation_proxy_spec.mode
+    #@ if data.values.impersonation_proxy_spec.external_endpoint:
+    externalEndpoint: #@ data.values.impersonation_proxy_spec.external_endpoint
+    #@ end
+    service:
+      mode: #@ data.values.impersonation_proxy_spec.service.mode
+      #@ if data.values.impersonation_proxy_spec.service.load_balancer_ip:
+      loadBalancerIP: #@ data.values.impersonation_proxy_spec.service.load_balancer_ip
+      #@ end
+      annotations: #@ data.values.impersonation_proxy_spec.service.annotations

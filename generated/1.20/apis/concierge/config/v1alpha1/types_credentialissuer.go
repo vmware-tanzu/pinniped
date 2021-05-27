@@ -3,17 +3,23 @@
 
 package v1alpha1
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
+// StrategyType enumerates a type of "strategy" used to implement credential access on a cluster.
 // +kubebuilder:validation:Enum=KubeClusterSigningCertificate;ImpersonationProxy
 type StrategyType string
 
+// FrontendType enumerates a type of "frontend" used to provide access to users of a cluster.
 // +kubebuilder:validation:Enum=TokenCredentialRequestAPI;ImpersonationProxy
 type FrontendType string
 
+// StrategyStatus enumerates whether a strategy is working on a cluster.
 // +kubebuilder:validation:Enum=Success;Error
 type StrategyStatus string
 
+// StrategyReason enumerates the detailed reason why a strategy is in a particular status.
 // +kubebuilder:validation:Enum=Listening;Pending;Disabled;ErrorDuringSetup;CouldNotFetchKey;CouldNotGetClusterInfo;FetchedKey
 type StrategyReason string
 
@@ -36,7 +42,91 @@ const (
 	FetchedKeyStrategyReason             = StrategyReason("FetchedKey")
 )
 
-// Status of a credential issuer.
+// CredentialIssuerSpec describes the intended configuration of the Concierge.
+type CredentialIssuerSpec struct {
+	// ImpersonationProxy describes the intended configuration of the Concierge impersonation proxy.
+	ImpersonationProxy *ImpersonationProxySpec `json:"impersonationProxy"`
+}
+
+// ImpersonationProxyMode enumerates the configuration modes for the impersonation proxy.
+//
+// +kubebuilder:validation:Enum=auto;enabled;disabled
+type ImpersonationProxyMode string
+
+const (
+	// ImpersonationProxyModeDisabled explicitly disables the impersonation proxy.
+	ImpersonationProxyModeDisabled = ImpersonationProxyMode("disabled")
+
+	// ImpersonationProxyModeEnabled explicitly enables the impersonation proxy.
+	ImpersonationProxyModeEnabled = ImpersonationProxyMode("enabled")
+
+	// ImpersonationProxyModeAuto enables or disables the impersonation proxy based upon the cluster in which it is running.
+	ImpersonationProxyModeAuto = ImpersonationProxyMode("auto")
+)
+
+// ImpersonationProxyServiceType enumerates the types of service that can be provisioned for the impersonation proxy.
+//
+// +kubebuilder:validation:Enum=LoadBalancer;ClusterIP;None
+type ImpersonationProxyServiceType string
+
+const (
+	// ImpersonationProxyServiceTypeLoadBalancer provisions a service of type LoadBalancer.
+	ImpersonationProxyServiceTypeLoadBalancer = ImpersonationProxyServiceType("LoadBalancer")
+
+	// ImpersonationProxyServiceTypeClusterIP provisions a service of type ClusterIP.
+	ImpersonationProxyServiceTypeClusterIP = ImpersonationProxyServiceType("ClusterIP")
+
+	// ImpersonationProxyServiceTypeNone does not automatically provision any service.
+	ImpersonationProxyServiceTypeNone = ImpersonationProxyServiceType("None")
+)
+
+// ImpersonationProxySpec describes the intended configuration of the Concierge impersonation proxy.
+type ImpersonationProxySpec struct {
+	// Mode configures whether the impersonation proxy should be started:
+	// - "disabled" explicitly disables the impersonation proxy. This is the default.
+	// - "enabled" explicitly enables the impersonation proxy.
+	// - "auto" enables or disables the impersonation proxy based upon the cluster in which it is running.
+	Mode ImpersonationProxyMode `json:"mode"`
+
+	// Service describes the configuration of the Service provisioned to expose the impersonation proxy to clients.
+	//
+	// +kubebuilder:default:={"type": "LoadBalancer"}
+	Service ImpersonationProxyServiceSpec `json:"service"`
+
+	// ExternalEndpoint describes the HTTPS endpoint where the proxy will be exposed. If not set, the proxy will
+	// be served using the external name of the LoadBalancer service or the cluster service DNS name.
+	//
+	// This field must be non-empty when spec.impersonationProxy.service.mode is "None".
+	//
+	// +optional
+	ExternalEndpoint string `json:"externalEndpoint,omitempty"`
+}
+
+// ImpersonationProxyServiceSpec describes how the Concierge should provision a Service to expose the impersonation proxy.
+type ImpersonationProxyServiceSpec struct {
+	// Type specifies the type of Service to provision for the impersonation proxy.
+	//
+	// If the type is "None", then the "spec.impersonationProxy.externalEndpoint" field must be set to a non-empty
+	// value so that the Concierge can properly advertise the endpoint in the CredentialIssuer's status.
+	//
+	// +kubebuilder:default:="LoadBalancer"
+	Type ImpersonationProxyServiceType `json:"type,omitempty"`
+
+	// LoadBalancerIP specifies the IP address to set in the spec.loadBalancerIP field of the provisioned Service.
+	// This is not supported on all cloud providers.
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	// +optional
+	LoadBalancerIP string `json:"loadBalancerIP,omitempty"`
+
+	// Annotations specifies zero or more key/value pairs to set as annotations on the provisioned Service.
+	//
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+// CredentialIssuerStatus describes the status of the Concierge.
 type CredentialIssuerStatus struct {
 	// List of integration strategies that were attempted by Pinniped.
 	Strategies []CredentialIssuerStrategy `json:"strategies"`
@@ -47,7 +137,8 @@ type CredentialIssuerStatus struct {
 	KubeConfigInfo *CredentialIssuerKubeConfigInfo `json:"kubeConfigInfo,omitempty"`
 }
 
-// Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
+// CredentialIssuerKubeConfigInfo provides the information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
+// This type is deprecated and will be removed in a future version.
 type CredentialIssuerKubeConfigInfo struct {
 	// The K8s API server URL.
 	// +kubebuilder:validation:MinLength=1
@@ -59,7 +150,7 @@ type CredentialIssuerKubeConfigInfo struct {
 	CertificateAuthorityData string `json:"certificateAuthorityData"`
 }
 
-// Status of an integration strategy that was attempted by Pinniped.
+// CredentialIssuerStrategy describes the status of an integration strategy that was attempted by Pinniped.
 type CredentialIssuerStrategy struct {
 	// Type of integration attempted.
 	Type StrategyType `json:"type"`
@@ -81,6 +172,7 @@ type CredentialIssuerStrategy struct {
 	Frontend *CredentialIssuerFrontend `json:"frontend,omitempty"`
 }
 
+// CredentialIssuerFrontend describes how to connect using a particular integration strategy.
 type CredentialIssuerFrontend struct {
 	// Type describes which frontend mechanism clients can use with a strategy.
 	Type FrontendType `json:"type"`
@@ -118,7 +210,7 @@ type ImpersonationProxyInfo struct {
 	CertificateAuthorityData string `json:"certificateAuthorityData"`
 }
 
-// Describes the configuration status of a Pinniped credential issuer.
+// CredentialIssuer describes the configuration and status of the Pinniped Concierge credential issuer.
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -128,12 +220,18 @@ type CredentialIssuer struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// Status of the credential issuer.
+	// Spec describes the intended configuration of the Concierge.
+	//
+	// +optional
+	Spec CredentialIssuerSpec `json:"spec"`
+
+	// CredentialIssuerStatus describes the status of the Concierge.
+	//
 	// +optional
 	Status CredentialIssuerStatus `json:"status"`
 }
 
-// List of CredentialIssuer objects.
+// CredentialIssuerList is a list of CredentialIssuer objects.
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type CredentialIssuerList struct {
 	metav1.TypeMeta `json:",inline"`

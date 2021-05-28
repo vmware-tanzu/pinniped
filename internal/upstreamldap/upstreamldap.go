@@ -31,7 +31,6 @@ import (
 const (
 	ldapsScheme                             = "ldaps"
 	distinguishedNameAttributeName          = "dn"
-	commonNameAttributeName                 = "cn"
 	searchFilterInterpolationLocationMarker = "{}"
 	groupSearchPageSize                     = uint32(250)
 	defaultLDAPPort                         = uint16(389)
@@ -367,7 +366,7 @@ func (p *Provider) searchGroupsForUserDN(conn Conn, userDN string) ([]string, er
 
 	groupAttributeName := p.c.GroupSearch.GroupNameAttribute
 	if len(groupAttributeName) == 0 {
-		groupAttributeName = commonNameAttributeName
+		groupAttributeName = distinguishedNameAttributeName
 	}
 
 	groups := []string{}
@@ -493,7 +492,7 @@ func (p *Provider) userSearchRequestedAttributes() []string {
 func (p *Provider) groupSearchRequestedAttributes() []string {
 	switch p.c.GroupSearch.GroupNameAttribute {
 	case "":
-		return []string{commonNameAttributeName}
+		return []string{}
 	case distinguishedNameAttributeName:
 		return []string{}
 	default:

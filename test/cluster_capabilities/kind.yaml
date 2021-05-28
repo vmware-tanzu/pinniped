@@ -13,3 +13,6 @@ capabilities:
   # Does the cluster allow requests without authentication?
   # https://kubernetes.io/docs/reference/access-authn-authz/authentication/#anonymous-requests
   anonymousAuthenticationSupported: true
+
+  # Are LDAP ports on the Internet reachable without interference from network firewalls or proxies?
+  canReachInternetLDAPPorts: true

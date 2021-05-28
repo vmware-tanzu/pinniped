@@ -546,7 +546,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				conn.EXPECT().Search(expectedUserSearch(nil)).Return(nil, errors.New("some user search error")).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(`error searching for user "%s": some user search error`, testUpstreamUsername),
+			wantError: `error searching for user: some user search error`,
 		},
 		{
 			name:           "when searching for the user's groups returns an error",

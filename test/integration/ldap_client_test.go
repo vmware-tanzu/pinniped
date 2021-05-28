@@ -348,7 +348,7 @@ func TestLDAPSearch(t *testing.T) {
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Filter = "*" })),
-			wantError: `error searching for user "pinny": LDAP Result Code 201 "Filter Compile Error": ldap: error parsing filter`,
+			wantError: `error searching for user: LDAP Result Code 201 "Filter Compile Error": ldap: error parsing filter`,
 		},
 		{
 			name:      "when the group search filter does not compile",
@@ -364,7 +364,7 @@ func TestLDAPSearch(t *testing.T) {
 			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.UserSearch.Filter = "objectClass=*" // overly broad search filter
 			})),
-			wantError: `error searching for user "pinny": LDAP Result Code 4 "Size Limit Exceeded": `,
+			wantError: `error searching for user: LDAP Result Code 4 "Size Limit Exceeded": `,
 		},
 		{
 			name:      "when the server is unreachable with TLS",
@@ -536,7 +536,7 @@ func TestLDAPSearch(t *testing.T) {
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Base = "invalid-base" })),
-			wantError: `error searching for user "pinny": LDAP Result Code 34 "Invalid DN Syntax": invalid DN`,
+			wantError: `error searching for user: LDAP Result Code 34 "Invalid DN Syntax": invalid DN`,
 		},
 		{
 			name:      "when the group search base is invalid",
@@ -550,7 +550,7 @@ func TestLDAPSearch(t *testing.T) {
 			username:  "pinny",
 			password:  pinnyPassword,
 			provider:  upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) { p.UserSearch.Base = "ou=does-not-exist,dc=pinniped,dc=dev" })),
-			wantError: `error searching for user "pinny": LDAP Result Code 32 "No Such Object": `,
+			wantError: `error searching for user: LDAP Result Code 32 "No Such Object": `,
 		},
 		{
 			name:      "when the group search base does not exist",

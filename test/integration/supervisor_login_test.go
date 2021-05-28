@@ -408,10 +408,11 @@ func testSupervisorLogin(
 	refreshedTokenResponse, err := refreshSource.Token()
 	require.NoError(t, err)
 
-	expectedIDTokenClaims = append(expectedIDTokenClaims, "at_hash")
+	// When refreshing, expect to get an "at_hash" claim, but no "nonce" claim.
+	expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "username", "groups", "at_hash"}
 	verifyTokenResponse(t,
 		refreshedTokenResponse, discovery, downstreamOAuth2Config, "",
-		expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch, wantDownstreamIDTokenGroups)
+		expectRefreshedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch, wantDownstreamIDTokenGroups)
 
 	require.NotEqual(t, tokenResponse.AccessToken, refreshedTokenResponse.AccessToken)
 	require.NotEqual(t, tokenResponse.RefreshToken, refreshedTokenResponse.RefreshToken)

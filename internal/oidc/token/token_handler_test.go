@@ -799,7 +799,7 @@ func TestTokenExchange(t *testing.T) {
 			require.NoError(t, json.Unmarshal(parsedJWT.UnsafePayloadWithoutVerification(), &tokenClaims))
 
 			// Make sure that these are the only fields in the token.
-			idTokenFields := []string{"sub", "aud", "iss", "jti", "nonce", "auth_time", "exp", "iat", "rat", "groups", "username"}
+			idTokenFields := []string{"sub", "aud", "iss", "jti", "auth_time", "exp", "iat", "rat", "groups", "username"}
 			require.ElementsMatch(t, idTokenFields, getMapKeys(tokenClaims))
 
 			// Assert that the returned token has expected claims values.
@@ -808,7 +808,6 @@ func TestTokenExchange(t *testing.T) {
 			require.NotEmpty(t, tokenClaims["exp"])
 			require.NotEmpty(t, tokenClaims["iat"])
 			require.NotEmpty(t, tokenClaims["rat"])
-			require.Empty(t, tokenClaims["nonce"]) // ID tokens only contain nonce during an authcode exchange
 			require.Len(t, tokenClaims["aud"], 1)
 			require.Contains(t, tokenClaims["aud"], test.requestedAudience)
 			require.Equal(t, goodSubject, tokenClaims["sub"])
@@ -1717,9 +1716,12 @@ func requireValidIDToken(
 	// Note that there is a bug in fosite which prevents the `at_hash` claim from appearing in this ID token
 	// during the initial authcode exchange, but does not prevent `at_hash` from appearing in the refreshed ID token.
 	// We can add a workaround for this later.
-	idTokenFields := []string{"sub", "aud", "iss", "jti", "nonce", "auth_time", "exp", "iat", "rat", "groups", "username"}
+	idTokenFields := []string{"sub", "aud", "iss", "jti", "auth_time", "exp", "iat", "rat", "groups", "username"}
 	if wantAtHashClaimInIDToken {
 		idTokenFields = append(idTokenFields, "at_hash")
+	}
+	if wantNonceValueInIDToken {
+		idTokenFields = append(idTokenFields, "nonce")
 	}
 
 	// make sure that these are the only fields in the token

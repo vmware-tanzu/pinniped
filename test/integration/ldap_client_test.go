@@ -244,6 +244,20 @@ func TestLDAPSearch(t *testing.T) {
 			},
 		},
 		{
+			name:     "using the default group name attribute, which is dn",
+			username: "pinny",
+			password: pinnyPassword,
+			provider: upstreamldap.New(*providerConfig(func(p *upstreamldap.ProviderConfig) {
+				p.GroupSearch.GroupNameAttribute = ""
+			})),
+			wantAuthResponse: &authenticator.Response{
+				User: &user.DefaultInfo{Name: "pinny", UID: b64("1000"), Groups: []string{
+					"cn=ball-game-players,ou=beach-groups,ou=groups,dc=pinniped,dc=dev",
+					"cn=seals,ou=groups,dc=pinniped,dc=dev",
+				}},
+			},
+		},
+		{
 			name:     "using some other custom group name attribute",
 			username: "pinny",
 			password: pinnyPassword,
@@ -675,8 +689,8 @@ func defaultProviderConfig(env *library.TestEnv, port string) *upstreamldap.Prov
 		},
 		GroupSearch: upstreamldap.GroupSearchConfig{
 			Base:               "ou=groups,dc=pinniped,dc=dev",
-			Filter:             "", // defaults to member={}
-			GroupNameAttribute: "", // defaults to cn
+			Filter:             "",   // defaults to member={}
+			GroupNameAttribute: "cn", // defaults to dn, but here we set it to cn
 		},
 	}
 }

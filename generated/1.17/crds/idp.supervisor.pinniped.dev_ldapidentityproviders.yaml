@@ -86,10 +86,10 @@ spec:
                           in the user's list of groups after a successful authentication.
                           The value of this field is case-sensitive and must match
                           the case of the attribute name returned by the LDAP server
-                          in the user's entry. Distinguished names can be used by
-                          specifying lower-case "dn". Optional. When not specified,
-                          the default will act as if the GroupName were specified
-                          as "cn" (common name).
+                          in the user's entry. E.g. "cn" for common name. Distinguished
+                          names can be used by specifying lower-case "dn". Optional.
+                          When not specified, the default will act as if the GroupName
+                          were specified as "dn" (distinguished name).
                         type: string
                     type: object
                   base:

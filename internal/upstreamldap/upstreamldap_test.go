@@ -316,6 +316,29 @@ func TestEndUserAuthentication(t *testing.T) {
 			}),
 		},
 		{
+			name:     "when the GroupNameAttribute is empty then it defaults to dn",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.GroupNameAttribute = "" // blank means to use dn
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
+					r.Attributes = []string{}
+				}), expectedGroupSearchPageSize).
+					Return(exampleGroupSearchResult, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(func(r *user.DefaultInfo) {
+				r.Groups = []string{testGroupSearchResultDNValue1, testGroupSearchResultDNValue2}
+			}),
+		},
+		{
 			name:     "when the GroupNameAttribute is dn",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
@@ -339,11 +362,11 @@ func TestEndUserAuthentication(t *testing.T) {
 			}),
 		},
 		{
-			name:     "when the GroupNameAttribute is empty then it defaults to cn",
+			name:     "when the GroupNameAttribute is cn",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.GroupSearch.GroupNameAttribute = "" // blank means to use cn
+				p.GroupSearch.GroupNameAttribute = "cn"
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -523,7 +546,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				conn.EXPECT().Search(expectedUserSearch(nil)).Return(nil, errors.New("some user search error")).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: fmt.Sprintf(`error searching for user "%s": some user search error`, testUpstreamUsername),
+			wantError: `error searching for user: some user search error`,
 		},
 		{
 			name:           "when searching for the user's groups returns an error",

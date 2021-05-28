@@ -41,6 +41,7 @@ func TestSupervisorLogin(t *testing.T) {
 
 	tests := []struct {
 		name                                 string
+		maybeSkip                            func(t *testing.T)
 		createIDP                            func(t *testing.T)
 		requestAuthorization                 func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, httpClient *http.Client)
 		wantDownstreamIDTokenSubjectToMatch  string
@@ -48,7 +49,7 @@ func TestSupervisorLogin(t *testing.T) {
 		wantDownstreamIDTokenGroups          []string
 	}{
 		{
-			name: "oidc",
+			name: "oidc with default username and groups claim settings",
 			createIDP: func(t *testing.T) {
 				t.Helper()
 				library.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
@@ -66,10 +67,41 @@ func TestSupervisorLogin(t *testing.T) {
 			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+		},
+		{
+			name: "oidc with custom username and groups claim settings",
+			createIDP: func(t *testing.T) {
+				t.Helper()
+				library.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+					Issuer: env.SupervisorUpstreamOIDC.Issuer,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+					},
+					Client: idpv1alpha1.OIDCClient{
+						SecretName: library.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+					},
+					Claims: idpv1alpha1.OIDCClaims{
+						Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+						Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+					},
+					AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
+						AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+					},
+				}, idpv1alpha1.PhaseReady)
+			},
+			requestAuthorization:                 requestAuthorizationUsingOIDCIdentityProvider,
+			wantDownstreamIDTokenSubjectToMatch:  regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username),
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 		},
 		{
 			name: "ldap with email as username and groups names as DNs and using an LDAP provider which supports TLS",
+			maybeSkip: func(t *testing.T) {
+				t.Helper()
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(library.CanReachInternetLDAPPorts) {
+					t.Skip("LDAP integration test requires connectivity to an LDAP server")
+				}
+			},
 			createIDP: func(t *testing.T) {
 				t.Helper()
 				secret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
@@ -129,6 +161,12 @@ func TestSupervisorLogin(t *testing.T) {
 		},
 		{
 			name: "ldap with CN as username and group names as CNs and using an LDAP provider which only supports StartTLS", // try another variation of configuration options
+			maybeSkip: func(t *testing.T) {
+				t.Helper()
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(library.CanReachInternetLDAPPorts) {
+					t.Skip("LDAP integration test requires connectivity to an LDAP server")
+				}
+			},
 			createIDP: func(t *testing.T) {
 				t.Helper()
 				secret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
@@ -188,14 +226,16 @@ func TestSupervisorLogin(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			tt.maybeSkip(t)
+
 			testSupervisorLogin(t,
-				test.createIDP,
-				test.requestAuthorization,
-				test.wantDownstreamIDTokenSubjectToMatch,
-				test.wantDownstreamIDTokenUsernameToMatch,
-				test.wantDownstreamIDTokenGroups,
+				tt.createIDP,
+				tt.requestAuthorization,
+				tt.wantDownstreamIDTokenSubjectToMatch,
+				tt.wantDownstreamIDTokenUsernameToMatch,
+				tt.wantDownstreamIDTokenGroups,
 			)
 		})
 	}
@@ -383,10 +423,11 @@ func testSupervisorLogin(
 	refreshedTokenResponse, err := refreshSource.Token()
 	require.NoError(t, err)
 
-	expectedIDTokenClaims = append(expectedIDTokenClaims, "at_hash")
+	// When refreshing, expect to get an "at_hash" claim, but no "nonce" claim.
+	expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "username", "groups", "at_hash"}
 	verifyTokenResponse(t,
 		refreshedTokenResponse, discovery, downstreamOAuth2Config, "",
-		expectedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch, wantDownstreamIDTokenGroups)
+		expectRefreshedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch, wantDownstreamIDTokenGroups)
 
 	require.NotEqual(t, tokenResponse.AccessToken, refreshedTokenResponse.AccessToken)
 	require.NotEqual(t, tokenResponse.RefreshToken, refreshedTokenResponse.RefreshToken)

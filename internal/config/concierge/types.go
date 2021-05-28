@@ -36,8 +36,8 @@ type NamesConfigSpec struct {
 	ServingCertificateSecret          string `json:"servingCertificateSecret"`
 	CredentialIssuer                  string `json:"credentialIssuer"`
 	APIService                        string `json:"apiService"`
-	ImpersonationConfigMap            string `json:"impersonationConfigMap"`
 	ImpersonationLoadBalancerService  string `json:"impersonationLoadBalancerService"`
+	ImpersonationClusterIPService     string `json:"impersonationClusterIPService"`
 	ImpersonationTLSCertificateSecret string `json:"impersonationTLSCertificateSecret"`
 	ImpersonationCACertificateSecret  string `json:"impersonationCACertificateSecret"`
 	ImpersonationSignerSecret         string `json:"impersonationSignerSecret"`

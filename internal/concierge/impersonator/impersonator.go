@@ -195,7 +195,6 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		}
 
 		// wire up a fake audit backend at the metadata level so we can preserve the original user during nested impersonation
-		// TODO: wire up the real std out logging audit backend based on plog log level
 		serverConfig.AuditPolicyChecker = policy.FakeChecker(auditinternal.LevelMetadata, nil)
 		serverConfig.AuditBackend = &auditfake.Backend{}
 

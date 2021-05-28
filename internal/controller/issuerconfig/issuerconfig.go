@@ -1,6 +1,7 @@
 // Copyright 2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+// Package issuerconfig contains helpers for updating CredentialIssuer status entries.
 package issuerconfig
 
 import (
@@ -14,23 +15,6 @@ import (
 	"go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	"go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 )
-
-// UpdateStrategy creates or updates the desired strategy in the CredentialIssuer status.strategies field.
-// The CredentialIssuer will be created if it does not already exist.
-func UpdateStrategy(ctx context.Context,
-	name string,
-	credentialIssuerLabels map[string]string,
-	pinnipedAPIClient versioned.Interface,
-	strategy v1alpha1.CredentialIssuerStrategy,
-) error {
-	return CreateOrUpdateCredentialIssuerStatus(
-		ctx,
-		name,
-		credentialIssuerLabels,
-		pinnipedAPIClient,
-		func(configToUpdate *v1alpha1.CredentialIssuerStatus) { mergeStrategy(configToUpdate, strategy) },
-	)
-}
 
 // Update a strategy on an existing CredentialIssuer, merging into any existing strategy entries.
 func Update(ctx context.Context, client versioned.Interface, issuer *v1alpha1.CredentialIssuer, strategy v1alpha1.CredentialIssuerStrategy) error {
@@ -58,7 +42,9 @@ func mergeStrategy(configToUpdate *v1alpha1.CredentialIssuerStatus, strategy v1a
 		}
 	}
 	if existing != nil {
-		strategy.DeepCopyInto(existing)
+		if !equalExceptLastUpdated(existing, &strategy) {
+			strategy.DeepCopyInto(existing)
+		}
 	} else {
 		configToUpdate.Strategies = append(configToUpdate.Strategies, strategy)
 	}
@@ -91,3 +77,11 @@ func (s sortableStrategies) Less(i, j int) bool {
 	return s[i].Type < s[j].Type
 }
 func (s sortableStrategies) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
+func equalExceptLastUpdated(s1, s2 *v1alpha1.CredentialIssuerStrategy) bool {
+	s1 = s1.DeepCopy()
+	s2 = s2.DeepCopy()
+	s1.LastUpdateTime = metav1.Time{}
+	s2.LastUpdateTime = metav1.Time{}
+	return apiequality.Semantic.DeepEqual(s1, s2)
+}

@@ -17,9 +17,8 @@ require (
 	github.com/google/gofuzz v1.2.0
 	github.com/gorilla/securecookie v1.1.1
 	github.com/gorilla/websocket v1.4.2
-	github.com/oleiade/reflections v1.0.1 // indirect
 	github.com/onsi/ginkgo v1.13.0 // indirect
-	github.com/ory/fosite v0.39.0
+	github.com/ory/fosite v0.40.2
 	github.com/pkg/browser v0.0.0-20210115035449-ce105d075bb4
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/agouti v3.0.0+incompatible
@@ -39,7 +38,7 @@ require (
 	k8s.io/client-go v0.21.1
 	k8s.io/component-base v0.21.1
 	k8s.io/gengo v0.0.0-20210203185629-de9496dff47b
-	k8s.io/klog/v2 v2.8.0
+	k8s.io/klog/v2 v2.9.0
 	k8s.io/kube-aggregator v0.21.1
 	k8s.io/utils v0.0.0-20210521133846-da695404a2bc
 	sigs.k8s.io/yaml v1.2.0
@@ -56,3 +55,10 @@ replace github.com/oleiade/reflections v1.0.0 => github.com/oleiade/reflections 
 // We use the SHA of github.com/form3tech-oss/jwt-go@v3.2.2 to get around "used for two different module paths"
 // https://golang.org/issues/26904
 replace github.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/form3tech-oss/jwt-go v0.0.0-20200915135329-9162a5abdbc0
+
+// Pin gRPC back to v1.29.1 (the version required by Kubernetes), but also override a module that's only used in some tests.
+// This is required because sometime after v1.29.1, they moved this package into a separate module.
+replace (
+	google.golang.org/grpc => google.golang.org/grpc v1.29.1
+	google.golang.org/grpc/examples => ./hack/dependencyhacks/grpcexamples/
+)

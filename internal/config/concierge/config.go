@@ -108,11 +108,11 @@ func validateNames(names *NamesConfigSpec) error {
 	if names.APIService == "" {
 		missingNames = append(missingNames, "apiService")
 	}
-	if names.ImpersonationConfigMap == "" {
-		missingNames = append(missingNames, "impersonationConfigMap")
-	}
 	if names.ImpersonationLoadBalancerService == "" {
 		missingNames = append(missingNames, "impersonationLoadBalancerService")
+	}
+	if names.ImpersonationClusterIPService == "" {
+		missingNames = append(missingNames, "impersonationClusterIPService")
 	}
 	if names.ImpersonationTLSCertificateSecret == "" {
 		missingNames = append(missingNames, "impersonationTLSCertificateSecret")

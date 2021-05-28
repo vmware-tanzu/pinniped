@@ -41,6 +41,7 @@ func TestSupervisorLogin(t *testing.T) {
 
 	tests := []struct {
 		name                                 string
+		maybeSkip                            func(t *testing.T)
 		createIDP                            func(t *testing.T)
 		requestAuthorization                 func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, httpClient *http.Client)
 		wantDownstreamIDTokenSubjectToMatch  string
@@ -95,6 +96,12 @@ func TestSupervisorLogin(t *testing.T) {
 		},
 		{
 			name: "ldap with email as username and groups names as DNs and using an LDAP provider which supports TLS",
+			maybeSkip: func(t *testing.T) {
+				t.Helper()
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(library.CanReachInternetLDAPPorts) {
+					t.Skip("LDAP integration test requires connectivity to an LDAP server")
+				}
+			},
 			createIDP: func(t *testing.T) {
 				t.Helper()
 				secret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
@@ -154,6 +161,12 @@ func TestSupervisorLogin(t *testing.T) {
 		},
 		{
 			name: "ldap with CN as username and group names as CNs and using an LDAP provider which only supports StartTLS", // try another variation of configuration options
+			maybeSkip: func(t *testing.T) {
+				t.Helper()
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(library.CanReachInternetLDAPPorts) {
+					t.Skip("LDAP integration test requires connectivity to an LDAP server")
+				}
+			},
 			createIDP: func(t *testing.T) {
 				t.Helper()
 				secret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
@@ -213,14 +226,16 @@ func TestSupervisorLogin(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			tt.maybeSkip(t)
+
 			testSupervisorLogin(t,
-				test.createIDP,
-				test.requestAuthorization,
-				test.wantDownstreamIDTokenSubjectToMatch,
-				test.wantDownstreamIDTokenUsernameToMatch,
-				test.wantDownstreamIDTokenGroups,
+				tt.createIDP,
+				tt.requestAuthorization,
+				tt.wantDownstreamIDTokenSubjectToMatch,
+				tt.wantDownstreamIDTokenUsernameToMatch,
+				tt.wantDownstreamIDTokenGroups,
 			)
 		})
 	}

@@ -24,6 +24,7 @@ const (
 	ClusterSigningKeyIsAvailable     Capability = "clusterSigningKeyIsAvailable"
 	AnonymousAuthenticationSupported Capability = "anonymousAuthenticationSupported"
 	HasExternalLoadBalancerProvider  Capability = "hasExternalLoadBalancerProvider"
+	CanReachInternetLDAPPorts        Capability = "canReachInternetLDAPPorts"
 )
 
 // TestEnv captures all the external parameters consumed by our integration tests.

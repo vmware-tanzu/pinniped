@@ -277,6 +277,10 @@ func TestE2EFullIntegration(t *testing.T) {
 
 	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands.
 	t.Run("with Supervisor LDAP upstream IDP", func(t *testing.T) {
+		if len(env.ToolsNamespace) == 0 && !env.HasCapability(library.CanReachInternetLDAPPorts) {
+			t.Skip("LDAP integration test requires connectivity to an LDAP server")
+		}
+
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 

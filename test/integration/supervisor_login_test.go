@@ -48,7 +48,7 @@ func TestSupervisorLogin(t *testing.T) {
 		wantDownstreamIDTokenGroups          []string
 	}{
 		{
-			name: "oidc",
+			name: "oidc with default username and groups claim settings",
 			createIDP: func(t *testing.T) {
 				t.Helper()
 				library.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
@@ -66,6 +66,31 @@ func TestSupervisorLogin(t *testing.T) {
 			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+		},
+		{
+			name: "oidc with custom username and groups claim settings",
+			createIDP: func(t *testing.T) {
+				t.Helper()
+				library.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+					Issuer: env.SupervisorUpstreamOIDC.Issuer,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+					},
+					Client: idpv1alpha1.OIDCClient{
+						SecretName: library.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+					},
+					Claims: idpv1alpha1.OIDCClaims{
+						Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+						Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+					},
+					AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
+						AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+					},
+				}, idpv1alpha1.PhaseReady)
+			},
+			requestAuthorization:                 requestAuthorizationUsingOIDCIdentityProvider,
+			wantDownstreamIDTokenSubjectToMatch:  regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
+			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username),
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
 		},
 		{

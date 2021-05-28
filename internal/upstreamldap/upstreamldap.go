@@ -395,13 +395,27 @@ func (p *Provider) validateConfig() error {
 func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(conn Conn, foundUserDN string) error) (string, string, []string, error) {
 	searchResult, err := conn.Search(p.userSearchRequest(username))
 	if err != nil {
-		return "", "", nil, fmt.Errorf(`error searching for user "%s": %w`, username, err)
+		plog.All(`error searching for user`,
+			"upstreamName", p.GetName(),
+			"username", username,
+			"err", err,
+		)
+		return "", "", nil, fmt.Errorf(`error searching for user: %w`, err)
 	}
 	if len(searchResult.Entries) == 0 {
-		plog.Debug("error finding user: user not found (if this username is valid, please check the user search configuration)",
-			"upstreamName", p.GetName(), "username", username)
+		if plog.Enabled(plog.LevelAll) {
+			plog.All("error finding user: user not found (if this username is valid, please check the user search configuration)",
+				"upstreamName", p.GetName(),
+				"username", username,
+			)
+		} else {
+			plog.Debug("error finding user: user not found (cowardly avoiding printing username because log level is not 'all')", "upstreamName", p.GetName())
+		}
 		return "", "", nil, nil
 	}
+
+	// At this point, we have matched at least one entry, so we can be confident that the username is not actually
+	// someone's password mistakenly entered into the username field, so we can log it without concern.
 	if len(searchResult.Entries) > 1 {
 		return "", "", nil, fmt.Errorf(`searching for user "%s" resulted in %d search results, but expected 1 result`,
 			username, len(searchResult.Entries),

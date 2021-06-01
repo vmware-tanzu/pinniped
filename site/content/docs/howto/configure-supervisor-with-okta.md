@@ -5,11 +5,12 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: Configure Supervisor With Okta
-    weight: 35
+    name: Configure Supervisor With Okta OIDC
+    weight: 80
     parent: howtos
 ---
-The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single "upstream" OIDC identity provider to many "downstream" cluster clients.
+The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single
+"upstream" identity provider to many "downstream" cluster clients.
 
 This guide shows you how to configure the Supervisor so that users can authenticate to their Kubernetes
 cluster using their Okta credentials.
@@ -17,7 +18,7 @@ cluster using their Okta credentials.
 ## Prerequisites
 
 This how-to guide assumes that you have already [installed the Pinniped Supervisor]({{< ref "install-supervisor" >}}) with working ingress,
-and that you have [configured a `FederationDomain` to issue tokens for your downstream clusters]({{< ref "configure-supervisor" >}}).
+and that you have [configured a FederationDomain to issue tokens for your downstream clusters]({{< ref "configure-supervisor" >}}).
 
 ## Create an Okta Application
 
@@ -107,4 +108,4 @@ Look at the `status` field. If it was configured correctly, you should see `phas
 
 ## Next steps
 
-Now that you have configured the Supervisor to use Okta, you may want to [configure the Concierge to validate JWTs issued by the Supervisor]({{< ref "configure-concierge-jwt" >}}).
+Now that you have configured the Supervisor to use Okta, you will want to [configure the Concierge to validate JWTs issued by the Supervisor]({{< ref "configure-concierge-supervisor-jwt" >}}).

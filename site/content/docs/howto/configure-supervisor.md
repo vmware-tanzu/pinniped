@@ -5,11 +5,12 @@ cascade:
   layout: docs
 menu:
   docs:
-    name: Configure Supervisor
-    weight: 35
+    name: Configure Supervisor as an OIDC Issuer
+    weight: 70
     parent: howtos
 ---
-The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single "upstream" OIDC identity provider to many "downstream" cluster clients.
+The Supervisor is an [OpenID Connect (OIDC)](https://openid.net/connect/) issuer that supports connecting a single
+"upstream" identity provider to many "downstream" cluster clients.
 
 This guide show you how to use this capability to issue [JSON Web Tokens (JWTs)](https://tools.ietf.org/html/rfc7519) that can be validated by the [Pinniped Concierge]({{< ref "configure-concierge-jwt" >}}).
 
@@ -109,7 +110,7 @@ spec:
 
 ### Configuring the Supervisor to act as an OIDC provider
 
-The Supervisor can be configured as an OIDC provider by creating `FederationDomain` resources
+The Supervisor can be configured as an OIDC provider by creating FederationDomain resources
 in the same namespace where the Supervisor app was installed. For example:
 
 ```yaml
@@ -129,6 +130,9 @@ spec:
   tls:
     secretName: my-tls-cert-secret
 ```
+
+You can create multiple FederationDomains as long as each has a unique issuer string.
+Each FederationDomain can be used to provide access to a set of Kubernetes clusters for a set of user identities.
 
 #### Configuring TLS for the Supervisor OIDC endpoints
 

@@ -980,7 +980,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			logLinesCount := 10
 			stdout, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "logs", "--namespace", env.ConciergeNamespace, conciergePod.Name, fmt.Sprintf("--tail=%d", logLinesCount))
 			require.NoError(t, err, `"kubectl logs" failed`)
-			require.Equalf(t, logLinesCount, strings.Count(stdout, "\n"), "wanted %d newlines in kubectl logs output:\n%s", logLinesCount, stdout)
+			// Expect _approximately_ logLinesCount lines in the output
+			// (we can't match 100% exactly due to https://github.com/kubernetes/kubernetes/issues/72628).
+			require.InDeltaf(t, logLinesCount, strings.Count(stdout, "\n"), 1, "wanted %d newlines in kubectl logs output:\n%s", logLinesCount, stdout)
 
 			// run the kubectl attach command
 			namespaceName := createTestNamespace(t, adminClient)

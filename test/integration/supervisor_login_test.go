@@ -50,6 +50,9 @@ func TestSupervisorLogin(t *testing.T) {
 	}{
 		{
 			name: "oidc with default username and groups claim settings",
+			maybeSkip: func(t *testing.T) {
+				// never need to skip this test
+			},
 			createIDP: func(t *testing.T) {
 				t.Helper()
 				library.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
@@ -70,6 +73,9 @@ func TestSupervisorLogin(t *testing.T) {
 		},
 		{
 			name: "oidc with custom username and groups claim settings",
+			maybeSkip: func(t *testing.T) {
+				// never need to skip this test
+			},
 			createIDP: func(t *testing.T) {
 				t.Helper()
 				library.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{

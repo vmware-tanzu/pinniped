@@ -5,7 +5,7 @@ go 1.14
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/coreos/go-oidc/v3 v3.0.0
-	github.com/creack/pty v1.1.12
+	github.com/creack/pty v1.1.13
 	github.com/davecgh/go-spew v1.1.1
 	github.com/go-ldap/ldap/v3 v3.3.0
 	github.com/go-logr/logr v0.4.0

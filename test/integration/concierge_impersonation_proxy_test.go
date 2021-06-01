@@ -980,7 +980,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			logLinesCount := 10
 			stdout, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "logs", "--namespace", env.ConciergeNamespace, conciergePod.Name, fmt.Sprintf("--tail=%d", logLinesCount))
 			require.NoError(t, err, `"kubectl logs" failed`)
-			require.Equalf(t, logLinesCount, strings.Count(stdout, "\n"), "wanted %d newlines in kubectl logs output:\n%s", logLinesCount, stdout)
+			// Expect _approximately_ logLinesCount lines in the output
+			// (we can't match 100% exactly due to https://github.com/kubernetes/kubernetes/issues/72628).
+			require.InDeltaf(t, logLinesCount, strings.Count(stdout, "\n"), 1, "wanted %d newlines in kubectl logs output:\n%s", logLinesCount, stdout)
 
 			// run the kubectl attach command
 			namespaceName := createTestNamespace(t, adminClient)
@@ -1198,44 +1200,55 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			t.Skip("only running when the cluster is meant to be using LoadBalancer services")
 		}
 
-		applyAnnotations := func(mutateAnnotationsFunc func(map[string]string)) {
-			var expectedAnnotations map[string]string
+		// Grab the state of the CredentialIssuer prior to this test, so we can restore things back afterwards.
+		previous, err := adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuerName(env), metav1.GetOptions{})
+		require.NoError(t, err)
+
+		applyCredentialIssuerAnnotations := func(annotations map[string]string) {
 			require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				newCredentialIssuer, err := adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuerName(env), metav1.GetOptions{})
+				issuer, err := adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuerName(env), metav1.GetOptions{})
 				if err != nil {
 					return err
 				}
-				mutateAnnotationsFunc(newCredentialIssuer.Spec.ImpersonationProxy.Service.Annotations)
-				expectedAnnotations = newCredentialIssuer.Spec.ImpersonationProxy.Service.Annotations
-				_, err = adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Update(ctx, newCredentialIssuer, metav1.UpdateOptions{})
+				updated := issuer.DeepCopy()
+				updated.Spec.ImpersonationProxy.Service.Annotations = annotations
+				if equality.Semantic.DeepEqual(issuer, updated) {
+					return nil
+				}
+
+				t.Logf("updating CredentialIssuer with spec.impersonationProxy.service.annotations: %v", annotations)
+				_, err = adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Update(ctx, updated, metav1.UpdateOptions{})
 				return err
 			}))
-			t.Logf("updated CredentialIssuer with annotations %v", expectedAnnotations)
+		}
 
-			// Wait until the annotation shows up on the load balancer
+		waitForServiceAnnotations := func(annotations map[string]string) {
 			library.RequireEventuallyWithoutError(t, func() (bool, error) {
 				service, err := adminClient.CoreV1().Services(env.ConciergeNamespace).Get(ctx, impersonationProxyLoadBalancerName(env), metav1.GetOptions{})
 				if err != nil {
 					return false, err
 				}
 				t.Logf("found Service %s of type %s with annotations: %s", service.Name, service.Spec.Type, service.Annotations)
-				return equality.Semantic.DeepEqual(service.Annotations, expectedAnnotations), nil
+				return equality.Semantic.DeepEqual(service.Annotations, annotations), nil
 			}, 30*time.Second, 100*time.Millisecond)
 		}
 
-		// Set a new annotation and expect it to appear on the Service.
-		newAnnotationKey := "pinniped.dev/test-" + library.RandHex(t, 8)
-		newAnnotationValue := "test-" + library.RandHex(t, 8)
-		applyAnnotations(func(annotations map[string]string) {
-			annotations[newAnnotationKey] = newAnnotationValue
+		// Whatever happens, set the annotations back to the original value and expect the Service to be updated.
+		t.Cleanup(func() {
+			t.Log("reverting CredentialIssuer back to previous configuration")
+			applyCredentialIssuerAnnotations(previous.Spec.ImpersonationProxy.Service.DeepCopy().Annotations)
+			waitForServiceAnnotations(previous.Spec.ImpersonationProxy.Service.DeepCopy().Annotations)
 		})
 
-		// Remove the annotation and expect it to be removed from the Service
-		t.Cleanup(func() {
-			applyAnnotations(func(annotations map[string]string) {
-				delete(annotations, newAnnotationKey)
-			})
-		})
+		// Set a new annotation in the CredentialIssuer spec.impersonationProxy.service.annotations field.
+		newAnnotationKey := "pinniped.dev/test-" + library.RandHex(t, 8)
+		newAnnotationValue := "test-" + library.RandHex(t, 8)
+		updatedAnnotations := previous.Spec.ImpersonationProxy.Service.DeepCopy().Annotations
+		updatedAnnotations[newAnnotationKey] = newAnnotationValue
+		applyCredentialIssuerAnnotations(updatedAnnotations)
+
+		// Expect it to be applied to the Service.
+		waitForServiceAnnotations(updatedAnnotations)
 	})
 
 	t.Run("running impersonation proxy with ClusterIP service", func(t *testing.T) {

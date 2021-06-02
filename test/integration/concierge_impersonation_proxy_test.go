@@ -1267,9 +1267,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		// wait until the credential issuer is updated with the new url
-		require.Eventually(t, func() bool {
+		library.RequireEventuallyWithoutError(t, func() (bool, error) {
 			newImpersonationProxyURL, _ := performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
-			return newImpersonationProxyURL == "https://"+clusterIPServiceURL
+			return newImpersonationProxyURL == "https://"+clusterIPServiceURL, nil
 		}, 30*time.Second, 500*time.Millisecond)
 		newImpersonationProxyURL, newImpersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
 

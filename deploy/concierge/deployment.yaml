@@ -260,7 +260,7 @@ spec:
     externalEndpoint: #@ data.values.impersonation_proxy_spec.external_endpoint
     #@ end
     service:
-      mode: #@ data.values.impersonation_proxy_spec.service.mode
+      type: #@ data.values.impersonation_proxy_spec.service.type
       #@ if data.values.impersonation_proxy_spec.service.load_balancer_ip:
       loadBalancerIP: #@ data.values.impersonation_proxy_spec.service.load_balancer_ip
       #@ end

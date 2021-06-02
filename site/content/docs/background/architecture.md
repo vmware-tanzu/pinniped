@@ -43,6 +43,8 @@ Pinniped supports the following IDPs.
    identity provider (e.g., [Dex](https://github.com/dexidp/dex),
    [Okta](https://www.okta.com/)).
 
+1. Any [LDAP](https://ldap.com) identity provider.
+
 The
 [`idp.supervisor.pinniped.dev`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/1.20/README.adoc#k8s-api-idp-supervisor-pinniped-dev-v1alpha1)
 API group contains the Kubernetes custom resources that configure the Pinniped

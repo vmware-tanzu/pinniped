@@ -136,7 +136,9 @@ Additionally, SAML seems to be waning in popularity in favor of OIDC, which prov
 What do you think? Do you still use SAML in your enterprise?
 Do you need SAML for authentication into your Kubernetes clusters? Let us know!
 
-### We'd love to hear from you!
+## Community contributors
+
+The Pinniped community continues to grow, and is a vital part of the project's success. This release includes important feedback and contributions from community user [@jeuniii](https://github.com/jeuniii). Thank you for helping improve Pinniped!
 
 We thrive on community feedback. Did you try our new LDAP features?
 What else do you need from identity systems for your Kubernetes clusters?

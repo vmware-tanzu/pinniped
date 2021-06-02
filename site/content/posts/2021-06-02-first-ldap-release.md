@@ -12,7 +12,7 @@ tags: ['Ryan Richard', 'release']
 *Photo from [matos11 on Pixabay](https://pixabay.com/photos/seal-animal-water-hairy-3585727/)*
 
 Pinniped is a “batteries included” authentication system for Kubernetes clusters.
-With the release of v0.9.0, Pinniped now supports using LDAP identities to log in to Kubernetes clusters.
+With the [release of v0.9.0](https://github.com/vmware-tanzu/pinniped/releases/tag/v0.9.0), Pinniped now supports using LDAP identities to log in to Kubernetes clusters.
 
 This post describes how v0.9.0 fits into Pinniped’s quest to bring a smooth, unified login experience to all Kubernetes clusters.
 

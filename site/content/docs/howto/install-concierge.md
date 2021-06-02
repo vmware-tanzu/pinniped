@@ -26,9 +26,9 @@ Warning: the default configuration may create a public LoadBalancer Service on y
 
 1. Install the Concierge into the `pinniped-concierge` namespace with default options:
 
-   - `kubectl apply -f https://get.pinniped.dev/v0.8.0/install-pinniped-concierge.yaml`
+   - `kubectl apply -f https://get.pinniped.dev/v0.9.0/install-pinniped-concierge.yaml`
 
-      *Replace v0.8.0 with your preferred version number.*
+      *Replace v0.9.0 with your preferred version number.*
   
 ## With custom options
 

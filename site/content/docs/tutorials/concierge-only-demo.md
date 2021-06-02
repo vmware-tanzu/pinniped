@@ -79,7 +79,7 @@ as the authenticator.
    see [deploy/local-user-authenticator/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/local-user-authenticator/README.md)
    for instructions on how to deploy using `ytt`.
 
-   If you prefer to install a specific version, replace `latest` in the URL with the version number such as `v0.8.0`.
+   If you prefer to install a specific version, replace `latest` in the URL with the version number such as `v0.9.0`.
 
 1. Create a test user named `pinny-the-seal` in the local-user-authenticator namespace.
 

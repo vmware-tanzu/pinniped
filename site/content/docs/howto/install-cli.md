@@ -44,10 +44,10 @@ Click Open to allow the command to proceed.
 
 ## Install a specific version via script
 
-For example, to install v0.8.0 on Linux/amd64:
+For example, to install v0.9.0 on Linux/amd64:
 
 ```sh
-curl -Lso pinniped https://get.pinniped.dev/v0.8.0/pinniped-cli-linux-amd64 \
+curl -Lso pinniped https://get.pinniped.dev/v0.9.0/pinniped-cli-linux-amd64 \
   && chmod +x pinniped \
   && sudo mv pinniped /usr/local/bin/pinniped
 ```

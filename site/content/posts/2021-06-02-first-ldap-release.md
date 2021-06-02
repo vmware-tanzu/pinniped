@@ -1,7 +1,7 @@
 ---
 title: "Pinniped v0.9.0: Bring Your LDAP Identities to Your Kubernetes Clusters"
 slug: bringing-ldap-identities-to-clusters
-date: 2021-05-31
+date: 2021-06-02
 author: Ryan Richard
 image: https://cdn.pixabay.com/photo/2018/08/05/15/06/seal-3585727_1280.jpg
 excerpt: "With the release of v0.9.0, Pinniped now supports using LDAP identities to log in to Kubernetes clusters."

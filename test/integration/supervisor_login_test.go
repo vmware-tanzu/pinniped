@@ -540,11 +540,29 @@ func requestAuthorizationUsingLDAPIdentityProvider(t *testing.T, downstreamAutho
 	authRequest.Header.Set("Pinniped-Username", upstreamUsername)
 	authRequest.Header.Set("Pinniped-Password", upstreamPassword)
 
-	authResponse, err := httpClient.Do(authRequest)
-	require.NoError(t, err)
-	responseBody, err := ioutil.ReadAll(authResponse.Body)
-	defer authResponse.Body.Close()
-	require.NoError(t, err)
+	// At this point in the test, we've already waited for the LDAPIdentityProvider to be loaded and marked healthy by
+	// at least one Supervisor pod, but we can't be sure that _all_ of them have loaded the provider, so we may need
+	// to retry this request multiple times until we get the expected 302 status response.
+	var authResponse *http.Response
+	var responseBody []byte
+	library.RequireEventuallyWithoutError(t, func() (bool, error) {
+		authResponse, err = httpClient.Do(authRequest)
+		if err != nil {
+			t.Logf("got authorization response with error %v", err)
+			return false, nil
+		}
+		defer func() { _ = authResponse.Body.Close() }()
+		responseBody, err = ioutil.ReadAll(authResponse.Body)
+		if err != nil {
+			return false, nil
+		}
+		t.Logf("got authorization response with code %d (%d byte body)", authResponse.StatusCode, len(responseBody))
+		if authResponse.StatusCode != http.StatusFound {
+			return false, nil
+		}
+		return true, nil
+	}, 30*time.Second, 200*time.Millisecond)
+
 	expectSecurityHeaders(t, authResponse, true)
 
 	// A successful authorize request results in a redirect to our localhost callback listener with an authcode param.

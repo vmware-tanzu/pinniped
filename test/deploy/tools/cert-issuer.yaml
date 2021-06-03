@@ -1,5 +1,8 @@
 #! Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
+
+#@ load("@ytt:data", "data")
+
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -50,8 +53,7 @@ spec:
       serviceAccountName: cert-issuer
       initContainers:
       - name: generate-certs
-        image: cfssl/cfssl:1.5.0
-        imagePullPolicy: IfNotPresent
+        image: #@ data.values.cfssl_image
         command: ["/bin/bash"]
         args:
         - -c
@@ -108,7 +110,7 @@ spec:
           mountPath: /var/certs
       containers:
       - name: save-certs
-        image: bitnami/kubectl
+        image: #@ data.values.kubectl_image
         command: ["/bin/bash"]
         args:
         - -c

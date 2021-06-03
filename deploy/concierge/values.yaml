@@ -87,7 +87,7 @@ impersonation_proxy_spec:
     #! impersonation proxy.
     #! None does not provision either and assumes that you have set the external_endpoint
     #! and set up your own ingress to connect to the impersonation proxy.
-    mode: LoadBalancer
+    type: LoadBalancer
     #! The annotations that should be set on the ClusterIP or LoadBalancer Service.
     annotations:
       {service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "4000"}

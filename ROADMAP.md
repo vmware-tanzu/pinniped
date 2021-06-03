@@ -38,7 +38,8 @@ Theme|Description|Timeline|
 |--|--|--|
 |LDAP Support|Extends upstream IDP protocols|May 2021|
 |Improved Documentation|Reorganizing and improving Pinniped docs; new how-to guides and tutorials|May 2021|
-|Multiple IDPs|Support for multiple upstream IDPs to be configured simultaneously|Jun 2021|
+|Device Code Flow|Add support for OAuth 2.0 Device Authorization Grant in the Pinniped CLI and Supervisor|Jun 2021|
+|AD Support|Extends upstream IDP protocols|Jun 2021|
 |Wider Concierge cluster support|Support for more cluster types in the Concierge|Jul 2021|
 |Improving Security Posture|Offer the best security posture for Kubernetes cluster authentication|Exploring/Ongoing|
 |Improve our CI/CD systems|Upgrade tests; make Kind more efficient and reliable for CI ; Windows tests; performance tests; scale tests; soak tests|Exploring/Ongoing|

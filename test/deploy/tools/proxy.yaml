@@ -25,8 +25,7 @@ spec:
           emptyDir: {}
       containers:
         - name: proxy
-          image: projects.registry.vmware.com/pinniped/test-forward-proxy
-          imagePullPolicy: Always
+          image: #@ data.values.proxy_image
           ports:
           - name: http
             containerPort: 3128
@@ -48,7 +47,7 @@ spec:
             periodSeconds: 5
             failureThreshold: 2
         - name: accesslogs
-          image: debian:10.8-slim
+          image: #@ data.values.proxy_image
           command:
             - "/bin/sh"
             - "-c"

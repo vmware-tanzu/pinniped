@@ -68,8 +68,7 @@ spec:
     spec:
       containers:
       - name: dex
-        image: ghcr.io/dexidp/dex:v2.27.0
-        imagePullPolicy: IfNotPresent
+        image: #@ data.values.dex_image
         command:
         - /usr/local/bin/dex
         - serve

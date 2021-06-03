@@ -477,7 +477,8 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.C
 	c.infoLog.Info("deleting load balancer for impersonation proxy",
 		"service", klog.KRef(c.namespace, c.generatedLoadBalancerServiceName),
 	)
-	return c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedLoadBalancerServiceName, metav1.DeleteOptions{})
+	err = c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedLoadBalancerServiceName, metav1.DeleteOptions{})
+	return utilerrors.FilterOut(err, k8serrors.IsNotFound)
 }
 
 func (c *impersonatorConfigController) ensureClusterIPServiceIsStarted(ctx context.Context, config *v1alpha1.ImpersonationProxySpec) error {
@@ -516,7 +517,8 @@ func (c *impersonatorConfigController) ensureClusterIPServiceIsStopped(ctx conte
 	c.infoLog.Info("deleting cluster ip for impersonation proxy",
 		"service", klog.KRef(c.namespace, c.generatedClusterIPServiceName),
 	)
-	return c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedClusterIPServiceName, metav1.DeleteOptions{})
+	err = c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedClusterIPServiceName, metav1.DeleteOptions{})
+	return utilerrors.FilterOut(err, k8serrors.IsNotFound)
 }
 
 func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context, service *v1.Service) error {

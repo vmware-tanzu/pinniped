@@ -5,6 +5,7 @@ package impersonator
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"net"
 	"net/http"
@@ -17,8 +18,11 @@ import (
 	"github.com/stretchr/testify/require"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/unstructuredscheme"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/httpstream"
 	auditinternal "k8s.io/apiserver/pkg/apis/audit"
@@ -33,10 +37,13 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd/api"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
+	"k8s.io/utils/pointer"
 
+	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/dynamiccert"
+	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/httputil/roundtripper"
 	"go.pinniped.dev/internal/kubeclient"
@@ -72,6 +79,8 @@ func TestImpersonator(t *testing.T) {
 		clientNextProtos                   []string
 		kubeAPIServerClientBearerTokenFile string
 		kubeAPIServerStatusCode            int
+		kubeAPIServerHealthz               http.Handler
+		anonymousAuthDisabled              bool
 		wantKubeAPIServerRequestHeaders    http.Header
 		wantError                          string
 		wantConstructionError              string
@@ -80,6 +89,43 @@ func TestImpersonator(t *testing.T) {
 			name:                               "happy path",
 			clientCert:                         newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
 			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			wantKubeAPIServerRequestHeaders: http.Header{
+				"Impersonate-User":  {"test-username"},
+				"Impersonate-Group": {"test-group1", "test-group2", "system:authenticated"},
+				"Authorization":     {"Bearer some-service-account-token"},
+				"User-Agent":        {"test-agent"},
+				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+				"Accept-Encoding":   {"gzip"},
+				"X-Forwarded-For":   {"127.0.0.1"},
+			},
+		},
+		{
+			name:                               "happy path with forbidden healthz",
+			clientCert:                         newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
+			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			kubeAPIServerHealthz: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte("no healthz for you"))
+			}),
+			wantKubeAPIServerRequestHeaders: http.Header{
+				"Impersonate-User":  {"test-username"},
+				"Impersonate-Group": {"test-group1", "test-group2", "system:authenticated"},
+				"Authorization":     {"Bearer some-service-account-token"},
+				"User-Agent":        {"test-agent"},
+				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+				"Accept-Encoding":   {"gzip"},
+				"X-Forwarded-For":   {"127.0.0.1"},
+			},
+		},
+		{
+			name:                               "happy path with unauthorized healthz",
+			clientCert:                         newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
+			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
+			kubeAPIServerHealthz: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte("no healthz for you"))
+			}),
+			anonymousAuthDisabled: true,
 			wantKubeAPIServerRequestHeaders: http.Header{
 				"Impersonate-User":  {"test-username"},
 				"Impersonate-Group": {"test-group1", "test-group2", "system:authenticated"},
@@ -334,6 +380,14 @@ func TestImpersonator(t *testing.T) {
 			wantConstructionError: "invalid impersonator loopback rest config has wrong bearer token semantics",
 		},
 		{
+			name: "unexpected healthz response",
+			kubeAPIServerHealthz: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte("broken"))
+			}),
+			wantConstructionError: `could not detect if anonymous authentication is enabled: an error on the server ("broken") has prevented the request from succeeding`,
+		},
+		{
 			name:       "header canonicalization user header",
 			clientCert: newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
 			clientMutateHeaders: func(header http.Header) {
@@ -367,6 +421,9 @@ func TestImpersonator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			t.Cleanup(cancel)
+
 			// we need to create this listener ourselves because the API server
 			// code treats (port == 0 && listener == nil) to mean "do nothing"
 			listener, port, err := genericoptions.CreateListener("", "127.0.0.1:0", net.ListenConfig{})
@@ -384,22 +441,28 @@ func TestImpersonator(t *testing.T) {
 			testKubeAPIServerWasCalled := false
 			var testKubeAPIServerSawHeaders http.Header
 			testKubeAPIServerCA, testKubeAPIServerURL := testutil.TLSTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-				require.Equal(t, http.MethodGet, r.Method)
 				switch r.URL.Path {
 				case "/api/v1/namespaces/kube-system/configmaps":
+					require.Equal(t, http.MethodGet, r.Method)
+
 					// The production code uses NewDynamicCAFromConfigMapController which fetches a ConfigMap,
 					// so treat that differently. It wants to read the Kube API server CA from that ConfigMap
 					// to use it to validate client certs. We don't need it for this test, so return NotFound.
 					http.NotFound(w, r)
 					return
+
 				case "/api/v1/namespaces":
+					require.Equal(t, http.MethodGet, r.Method)
+
 					testKubeAPIServerWasCalled = true
 					testKubeAPIServerSawHeaders = r.Header
 					if tt.kubeAPIServerStatusCode != http.StatusOK {
 						w.WriteHeader(tt.kubeAPIServerStatusCode)
-					} else {
-						w.Header().Add("Content-Type", "application/json; charset=UTF-8")
-						_, _ = w.Write([]byte(here.Doc(`
+						return
+					}
+
+					w.Header().Add("Content-Type", "application/json; charset=UTF-8")
+					_, _ = w.Write([]byte(here.Doc(`
 						{
 							"kind": "NamespaceList",
 							"apiVersion":"v1",
@@ -409,9 +472,61 @@ func TestImpersonator(t *testing.T) {
 							]
 						}
 					`)))
+					return
+
+				case "/probe":
+					require.Equal(t, http.MethodGet, r.Method)
+
+					_, _ = fmt.Fprint(w, "probed")
+					return
+
+				case "/healthz":
+					require.Equal(t, http.MethodGet, r.Method)
+					require.Empty(t, r.Header.Get("Authorization"))
+					require.Contains(t, r.Header.Get("User-Agent"), "kubernetes")
+
+					if tt.kubeAPIServerHealthz != nil {
+						tt.kubeAPIServerHealthz.ServeHTTP(w, r)
+						return
 					}
+
+					// by default just match the KAS /healthz endpoint
+					w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+					w.Header().Set("X-Content-Type-Options", "nosniff")
+					_, _ = fmt.Fprint(w, "ok")
+					return
+
+				case "/apis/login.concierge.pinniped.dev/v1alpha1/tokencredentialrequests":
+					require.Equal(t, http.MethodPost, r.Method)
+
+					w.Header().Add("Content-Type", "application/json; charset=UTF-8")
+					_, _ = w.Write([]byte(`{}`))
+					return
+
+				case "/apis/login.concierge.walrus.tld/v1alpha1/tokencredentialrequests":
+					require.Equal(t, http.MethodPost, r.Method)
+
+					w.Header().Add("Content-Type", "application/json; charset=UTF-8")
+					_, _ = w.Write([]byte(`{}`))
+					return
+
+				case "/apis/not-concierge.walrus.tld/v1/tokencredentialrequests":
+					require.Equal(t, http.MethodGet, r.Method)
+
+					w.Header().Add("Content-Type", "application/json; charset=UTF-8")
+					_, _ = w.Write([]byte(`{"hello": "quack"}`))
+					return
+
+				case "/apis/not-concierge.walrus.tld/v1/ducks":
+					require.Equal(t, http.MethodGet, r.Method)
+
+					w.Header().Add("Content-Type", "application/json; charset=UTF-8")
+					_, _ = w.Write([]byte(`{"hello": "birds"}`))
+					return
+
 				default:
-					require.Fail(t, "fake Kube API server got an unexpected request")
+					require.Fail(t, "fake Kube API server got an unexpected request", "path: %s", r.URL.Path)
+					return
 				}
 			})
 
@@ -485,7 +600,7 @@ func TestImpersonator(t *testing.T) {
 
 			// The fake Kube API server knows how to to list namespaces, so make that request using the client
 			// through the impersonator.
-			listResponse, err := client.Kubernetes.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+			listResponse, err := client.Kubernetes.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 			if len(tt.wantError) > 0 {
 				require.EqualError(t, err, tt.wantError)
 				require.Equal(t, &corev1.NamespaceList{}, listResponse)
@@ -504,6 +619,81 @@ func TestImpersonator(t *testing.T) {
 			// If the impersonator proxied the request to the fake Kube API server, we should see the headers
 			// of the original request mutated by the impersonator.  Otherwise the headers should be nil.
 			require.Equal(t, tt.wantKubeAPIServerRequestHeaders, testKubeAPIServerSawHeaders)
+
+			// anonymous TCR should always work
+
+			tcrRegGroup, err := kubeclient.New(kubeclient.WithConfig(rest.AnonymousClientConfig(clientKubeconfig)))
+			require.NoError(t, err)
+
+			tcrOtherGroup, err := kubeclient.New(kubeclient.WithConfig(rest.AnonymousClientConfig(clientKubeconfig)),
+				kubeclient.WithMiddleware(groupsuffix.New("walrus.tld")))
+			require.NoError(t, err)
+
+			_, errTCR := tcrRegGroup.PinnipedConcierge.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{}, metav1.CreateOptions{})
+			require.NoError(t, errTCR)
+
+			_, errTCROtherGroup := tcrOtherGroup.PinnipedConcierge.LoginV1alpha1().TokenCredentialRequests().Create(ctx,
+				&loginv1alpha1.TokenCredentialRequest{
+					Spec: loginv1alpha1.TokenCredentialRequestSpec{
+						Authenticator: corev1.TypedLocalObjectReference{
+							APIGroup: pointer.String("anything.pinniped.dev"),
+						},
+					},
+				}, metav1.CreateOptions{})
+			require.NoError(t, errTCROtherGroup)
+
+			// these calls should only work when anonymous auth is enabled
+
+			anonymousConfig := rest.AnonymousClientConfig(clientKubeconfig)
+			anonymousConfig.GroupVersion = &schema.GroupVersion{
+				Group:   "not-concierge.walrus.tld",
+				Version: "v1",
+			}
+			anonymousConfig.APIPath = "/apis"
+			anonymousConfig.NegotiatedSerializer = unstructuredscheme.NewUnstructuredNegotiatedSerializer()
+			rc, err := rest.RESTClientFor(anonymousConfig)
+			require.NoError(t, err)
+
+			probeBody, errProbe := rc.Get().AbsPath("/probe").DoRaw(ctx)
+			if tt.anonymousAuthDisabled {
+				require.True(t, errors.IsUnauthorized(errProbe), errProbe)
+				require.Equal(t, `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Unauthorized","reason":"Unauthorized","code":401}`+"\n", string(probeBody))
+			} else {
+				require.NoError(t, errProbe)
+				require.Equal(t, "probed", string(probeBody))
+			}
+
+			notTCRBody, errNotTCR := rc.Get().Resource("tokencredentialrequests").DoRaw(ctx)
+			if tt.anonymousAuthDisabled {
+				require.True(t, errors.IsUnauthorized(errNotTCR), errNotTCR)
+				require.Equal(t, `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Unauthorized","reason":"Unauthorized","code":401}`+"\n", string(notTCRBody))
+			} else {
+				require.NoError(t, errNotTCR)
+				require.Equal(t, `{"hello": "quack"}`, string(notTCRBody))
+			}
+
+			ducksBody, errDucks := rc.Get().Resource("ducks").DoRaw(ctx)
+			if tt.anonymousAuthDisabled {
+				require.True(t, errors.IsUnauthorized(errDucks), errDucks)
+				require.Equal(t, `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Unauthorized","reason":"Unauthorized","code":401}`+"\n", string(ducksBody))
+			} else {
+				require.NoError(t, errDucks)
+				require.Equal(t, `{"hello": "birds"}`, string(ducksBody))
+			}
+
+			// this should always fail as unauthorized (even for TCR) because the cert is not valid
+
+			badCertConfig := rest.AnonymousClientConfig(clientKubeconfig)
+			badCert := newClientCert(t, unrelatedCA, "bad-user", []string{"bad-group"})
+			badCertConfig.TLSClientConfig.CertData = badCert.certPEM
+			badCertConfig.TLSClientConfig.KeyData = badCert.keyPEM
+
+			tcrBadCert, err := kubeclient.New(kubeclient.WithConfig(badCertConfig))
+			require.NoError(t, err)
+
+			_, errBadCert := tcrBadCert.PinnipedConcierge.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{}, metav1.CreateOptions{})
+			require.True(t, errors.IsUnauthorized(errBadCert), errBadCert)
+			require.EqualError(t, errBadCert, "Unauthorized")
 
 			// Stop the impersonator server.
 			close(stopCh)

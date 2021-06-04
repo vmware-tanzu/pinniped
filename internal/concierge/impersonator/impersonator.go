@@ -19,6 +19,7 @@ import (
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/unstructuredscheme"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -198,8 +199,58 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		serverConfig.AuditPolicyChecker = policy.FakeChecker(auditinternal.LevelMetadata, nil)
 		serverConfig.AuditBackend = &auditfake.Backend{}
 
+		// Probe the API server to figure out if anonymous auth is enabled.
+		anonymousAuthEnabled, err := isAnonymousAuthEnabled(kubeClient.JSONConfig)
+		if err != nil {
+			return nil, fmt.Errorf("could not detect if anonymous authentication is enabled: %w", err)
+		}
+		plog.Debug("anonymous authentication probed", "anonymousAuthEnabled", anonymousAuthEnabled)
+
 		// if we ever start unioning a TCR bearer token authenticator with serverConfig.Authenticator
 		// then we will need to update the related assumption in tokenPassthroughRoundTripper
+
+		delegatingAuthenticator := serverConfig.Authentication.Authenticator
+		blockAnonymousAuthenticator := &comparableAuthenticator{
+			RequestFunc: func(req *http.Request) (*authenticator.Response, bool, error) {
+				resp, ok, err := delegatingAuthenticator.AuthenticateRequest(req)
+
+				// anonymous auth is enabled so no further check is necessary
+				if anonymousAuthEnabled {
+					return resp, ok, err
+				}
+
+				// authentication failed
+				if err != nil || !ok {
+					return resp, ok, err
+				}
+
+				// any other user than anonymous is irrelevant
+				if resp.User.GetName() != user.Anonymous {
+					return resp, ok, err
+				}
+
+				reqInfo, ok := genericapirequest.RequestInfoFrom(req.Context())
+				if !ok {
+					return nil, false, constable.Error("no RequestInfo found in the context")
+				}
+
+				// a TKR is a resource, any request that is not for a resource should not be authenticated
+				if !reqInfo.IsResourceRequest {
+					return nil, false, nil
+				}
+
+				// any resource besides TKR should not be authenticated
+				if !isTokenCredReq(reqInfo) {
+					return nil, false, nil
+				}
+
+				// anonymous authentication is disabled, but we must let an anonymous request
+				// to TKR authenticate as this is the only method to retrieve credentials
+				return resp, ok, err
+			},
+		}
+		// Set our custom authenticator before calling Compete(), which will use it.
+		serverConfig.Authentication.Authenticator = blockAnonymousAuthenticator
 
 		delegatingAuthorizer := serverConfig.Authorization.Authorizer
 		nestedImpersonationAuthorizer := &comparableAuthorizer{
@@ -230,16 +281,22 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		// Set our custom authorizer before calling Compete(), which will use it.
 		serverConfig.Authorization.Authorizer = nestedImpersonationAuthorizer
 
-		impersonationProxyServer, err := serverConfig.Complete().New("impersonation-proxy", genericapiserver.NewEmptyDelegate())
+		completedConfig := serverConfig.Complete()
+		impersonationProxyServer, err := completedConfig.New("impersonation-proxy", genericapiserver.NewEmptyDelegate())
 		if err != nil {
 			return nil, err
 		}
 
 		preparedRun := impersonationProxyServer.PrepareRun()
 
+		// Sanity check. Make sure that our custom authenticator is still in place and did not get changed or wrapped.
+		if completedConfig.Authentication.Authenticator != blockAnonymousAuthenticator {
+			return nil, fmt.Errorf("invalid mutation of anonymous authenticator detected: %#v", completedConfig.Authentication.Authenticator)
+		}
+
 		// Sanity check. Make sure that our custom authorizer is still in place and did not get changed or wrapped.
 		if preparedRun.Authorizer != nestedImpersonationAuthorizer {
-			return nil, constable.Error("invalid mutation of impersonation authorizer detected")
+			return nil, fmt.Errorf("invalid mutation of impersonation authorizer detected: %#v", preparedRun.Authorizer)
 		}
 
 		// Sanity check. Assert that we have a functioning token file to use and no bearer token.
@@ -260,6 +317,59 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		return nil, errors.NewAggregate(errs)
 	}
 	return result, nil
+}
+
+func isAnonymousAuthEnabled(config *rest.Config) (bool, error) {
+	anonymousConfig := rest.AnonymousClientConfig(config)
+
+	// we do not need either of these but RESTClientFor complains if they are not set
+	anonymousConfig.GroupVersion = &schema.GroupVersion{}
+	anonymousConfig.NegotiatedSerializer = unstructuredscheme.NewUnstructuredNegotiatedSerializer()
+
+	// in case anyone looking at audit logs wants to know who is making the anonymous request
+	anonymousConfig.UserAgent = rest.DefaultKubernetesUserAgent()
+
+	rc, err := rest.RESTClientFor(anonymousConfig)
+	if err != nil {
+		return false, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, errHealthz := rc.Get().AbsPath("/healthz").DoRaw(ctx)
+
+	switch {
+	// 200 ok on healthz clearly indicates authentication success
+	case errHealthz == nil:
+		return true, nil
+
+	// we are authenticated but not authorized. anonymous authentication is enabled
+	case apierrors.IsForbidden(errHealthz):
+		return true, nil
+
+	// failure to authenticate will return unauthorized (http misnomer)
+	case apierrors.IsUnauthorized(errHealthz):
+		return false, nil
+
+	// any other error is unexpected
+	default:
+		return false, errHealthz
+	}
+}
+
+func isTokenCredReq(reqInfo *genericapirequest.RequestInfo) bool {
+	if reqInfo.Resource != "tokencredentialrequests" {
+		return false
+	}
+
+	// pinniped components allow for the group suffix to be customized
+	// rather than wiring in the current configured suffix, checking the prefix is sufficient
+	if !strings.HasPrefix(reqInfo.APIGroup, "login.concierge.") {
+		return false
+	}
+
+	return true
 }
 
 func deleteKnownImpersonationHeaders(delegate http.Handler) http.Handler {
@@ -288,6 +398,11 @@ func deleteKnownImpersonationHeaders(delegate http.Handler) http.Handler {
 
 		delegate.ServeHTTP(w, r)
 	})
+}
+
+// No-op wrapping around RequestFunc to allow for comparisons.
+type comparableAuthenticator struct {
+	authenticator.RequestFunc
 }
 
 // No-op wrapping around AuthorizerFunc to allow for comparisons.

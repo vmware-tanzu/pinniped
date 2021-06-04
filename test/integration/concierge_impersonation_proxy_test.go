@@ -39,12 +39,15 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/unstructuredscheme"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
 	"k8s.io/apiserver/pkg/authentication/serviceaccount"
+	"k8s.io/apiserver/pkg/authentication/user"
 	k8sinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -53,6 +56,7 @@ import (
 	"k8s.io/client-go/util/certificate/csr"
 	"k8s.io/client-go/util/keyutil"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/pointer"
 
 	conciergev1alpha "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
@@ -800,15 +804,21 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			).PinnipedConcierge
 			whoAmI, err = impersonationProxyAnonymousPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-			require.NoError(t, err)
-			require.Equal(t,
-				expectedWhoAmIRequestResponse(
-					"system:anonymous",
-					[]string{"system:unauthenticated"},
-					nil,
-				),
-				whoAmI,
-			)
+
+			// we expect the impersonation proxy to match the behavior of KAS in regards to anonymous requests
+			if env.HasCapability(library.AnonymousAuthenticationSupported) {
+				require.NoError(t, err)
+				require.Equal(t,
+					expectedWhoAmIRequestResponse(
+						"system:anonymous",
+						[]string{"system:unauthenticated"},
+						nil,
+					),
+					whoAmI,
+				)
+			} else {
+				require.True(t, k8serrors.IsUnauthorized(err), library.Sdump(err))
+			}
 
 			// Test using a service account token.
 			namespaceName := createTestNamespace(t, adminClient)
@@ -1192,6 +1202,173 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.Equal(t, "configmap-1", actualConfigMap.Name)
 			actualConfigMap.TypeMeta = metav1.TypeMeta{} // This isn't filled out in the wantConfigMap we got back from create.
 			require.Equal(t, *wantConfigMap, actualConfigMap)
+		})
+
+		t.Run("honors anonymous authentication of KAS", func(t *testing.T) {
+			t.Parallel()
+
+			impersonationProxyAnonymousClient := newAnonymousImpersonationProxyClient(
+				t, impersonationProxyURL, impersonationProxyCACertPEM, nil,
+			)
+
+			copyConfig := rest.CopyConfig(impersonationProxyAnonymousClient.JSONConfig)
+			copyConfig.GroupVersion = &schema.GroupVersion{}
+			copyConfig.NegotiatedSerializer = unstructuredscheme.NewUnstructuredNegotiatedSerializer()
+			impersonationProxyAnonymousRestClient, err := rest.RESTClientFor(copyConfig)
+			require.NoError(t, err)
+
+			adminClientRestConfig := library.NewClientConfig(t)
+			clusterAdminCredentials := getCredForConfig(t, adminClientRestConfig)
+			impersonationProxyAdminClientAsAnonymousConfig := newImpersonationProxyClientWithCredentials(t,
+				clusterAdminCredentials,
+				impersonationProxyURL, impersonationProxyCACertPEM,
+				&rest.ImpersonationConfig{UserName: user.Anonymous}).
+				JSONConfig
+			impersonationProxyAdminClientAsAnonymousConfigCopy := rest.CopyConfig(impersonationProxyAdminClientAsAnonymousConfig)
+			impersonationProxyAdminClientAsAnonymousConfigCopy.GroupVersion = &schema.GroupVersion{}
+			impersonationProxyAdminClientAsAnonymousConfigCopy.NegotiatedSerializer = unstructuredscheme.NewUnstructuredNegotiatedSerializer()
+			impersonationProxyAdminRestClientAsAnonymous, err := rest.RESTClientFor(impersonationProxyAdminClientAsAnonymousConfigCopy)
+			require.NoError(t, err)
+
+			t.Run("anonymous authentication irrelevant", func(t *testing.T) {
+				t.Parallel()
+
+				// - hit the token credential request endpoint with an empty body
+				//   - through the impersonation proxy
+				//   - should succeed as an invalid request whether anonymous authentication is enabled or disabled
+				//   - should not reject as unauthorized
+				t.Run("token credential request", func(t *testing.T) {
+					t.Parallel()
+
+					tkr, err := impersonationProxyAnonymousClient.PinnipedConcierge.LoginV1alpha1().TokenCredentialRequests().
+						Create(ctx, &loginv1alpha1.TokenCredentialRequest{
+							Spec: loginv1alpha1.TokenCredentialRequestSpec{
+								Authenticator: corev1.TypedLocalObjectReference{APIGroup: pointer.String("anything.pinniped.dev")},
+							},
+						}, metav1.CreateOptions{})
+					require.True(t, k8serrors.IsInvalid(err), library.Sdump(err))
+					require.Equal(t, `.login.concierge.pinniped.dev "" is invalid: spec.token.value: Required value: token must be supplied`, err.Error())
+					require.Equal(t, &loginv1alpha1.TokenCredentialRequest{}, tkr)
+				})
+
+				// - hit the healthz endpoint (non-resource endpoint)
+				//   - through the impersonation proxy
+				//   - as cluster admin, impersonating anonymous user
+				//   - should succeed, authentication happens as cluster-admin
+				//   - whoami should confirm we are using impersonation
+				//   - healthz should succeed, anonymous users can request this endpoint
+				//   - healthz/log should fail, forbidden anonymous
+				t.Run("non-resource request while impersonating anonymous - nested impersonation", func(t *testing.T) {
+					t.Parallel()
+
+					whoami, errWho := impersonationProxyAdminRestClientAsAnonymous.Post().Body([]byte(`{}`)).AbsPath("/apis/identity.concierge." + env.APIGroupSuffix + "/v1alpha1/whoamirequests").DoRaw(ctx)
+					require.NoError(t, errWho, library.Sdump(errWho))
+					require.True(t, strings.HasPrefix(string(whoami), `{"kind":"WhoAmIRequest","apiVersion":"identity.concierge.`+env.APIGroupSuffix+`/v1alpha1","metadata":{"creationTimestamp":null},"spec":{},"status":{"kubernetesUserInfo":{"user":{"username":"system:anonymous","groups":["system:unauthenticated"],"extra":{"original-user-info.impersonation-proxy.concierge.pinniped.dev":["{\"username\":`), string(whoami))
+
+					healthz, errHealth := impersonationProxyAdminRestClientAsAnonymous.Get().AbsPath("/healthz").DoRaw(ctx)
+					require.NoError(t, errHealth, library.Sdump(errHealth))
+					require.Equal(t, "ok", string(healthz))
+
+					healthzLog, errHealthzLog := impersonationProxyAdminRestClientAsAnonymous.Get().AbsPath("/healthz/log").DoRaw(ctx)
+					require.True(t, k8serrors.IsForbidden(errHealthzLog), "%s\n%s", library.Sdump(errHealthzLog), string(healthzLog))
+					require.Equal(t, `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"forbidden: User \"system:anonymous\" cannot get path \"/healthz/log\"","reason":"Forbidden","details":{},"code":403}`+"\n", string(healthzLog))
+				})
+			})
+
+			t.Run("anonymous authentication enabled", func(t *testing.T) {
+				library.IntegrationEnv(t).WithCapability(library.AnonymousAuthenticationSupported)
+				t.Parallel()
+
+				// anonymous auth enabled
+				// - hit the healthz endpoint (non-resource endpoint)
+				//   - through the impersonation proxy
+				//   - should succeed 200
+				//   - should respond "ok"
+				t.Run("non-resource request", func(t *testing.T) {
+					t.Parallel()
+
+					healthz, errHealth := impersonationProxyAnonymousRestClient.Get().AbsPath("/healthz").DoRaw(ctx)
+					require.NoError(t, errHealth, library.Sdump(errHealth))
+					require.Equal(t, "ok", string(healthz))
+				})
+
+				// - hit the pods endpoint (a resource endpoint)
+				//   - through the impersonation proxy
+				//   - should fail forbidden
+				//   - system:anonymous cannot get pods
+				t.Run("resource", func(t *testing.T) {
+					t.Parallel()
+
+					pod, err := impersonationProxyAnonymousClient.Kubernetes.CoreV1().Pods(metav1.NamespaceSystem).
+						Get(ctx, "does-not-matter", metav1.GetOptions{})
+					require.True(t, k8serrors.IsForbidden(err), library.Sdump(err))
+					require.EqualError(t, err, `pods "does-not-matter" is forbidden: User "system:anonymous" cannot get resource "pods" in API group "" in the namespace "kube-system"`, library.Sdump(err))
+					require.Equal(t, &corev1.Pod{}, pod)
+				})
+
+				// - request to whoami (pinniped resource endpoing)
+				//   - through the impersonation proxy
+				//   - should succeed 200
+				//   - should respond "you are system:anonymous"
+				t.Run("pinniped resource request", func(t *testing.T) {
+					t.Parallel()
+
+					whoAmI, err := impersonationProxyAnonymousClient.PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
+						Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
+					require.NoError(t, err)
+					require.Equal(t,
+						expectedWhoAmIRequestResponse(
+							"system:anonymous",
+							[]string{"system:unauthenticated"},
+							nil,
+						),
+						whoAmI,
+					)
+				})
+			})
+
+			t.Run("anonymous authentication disabled", func(t *testing.T) {
+				library.IntegrationEnv(t).WithoutCapability(library.AnonymousAuthenticationSupported)
+				t.Parallel()
+
+				// - hit the healthz endpoint (non-resource endpoint)
+				//   - through the impersonation proxy
+				//   - should fail unauthorized
+				//   - kube api server should reject it
+				t.Run("non-resource request", func(t *testing.T) {
+					t.Parallel()
+
+					healthz, err := impersonationProxyAnonymousRestClient.Get().AbsPath("/healthz").DoRaw(ctx)
+					require.True(t, k8serrors.IsUnauthorized(err), library.Sdump(err))
+					require.Equal(t, `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Unauthorized","reason":"Unauthorized","code":401}`+"\n", string(healthz))
+				})
+
+				// - hit the pods endpoint (a resource endpoint)
+				//   - through the impersonation proxy
+				//   - should fail unauthorized
+				//   - kube api server should reject it
+				t.Run("resource", func(t *testing.T) {
+					t.Parallel()
+
+					pod, err := impersonationProxyAnonymousClient.Kubernetes.CoreV1().Pods(metav1.NamespaceSystem).
+						Get(ctx, "does-not-matter", metav1.GetOptions{})
+					require.True(t, k8serrors.IsUnauthorized(err), library.Sdump(err))
+					require.Equal(t, &corev1.Pod{}, pod)
+				})
+
+				// - request to whoami (pinniped resource endpoing)
+				//   - through the impersonation proxy
+				//   - should fail unauthorized
+				//   - kube api server should reject it
+				t.Run("pinniped resource request", func(t *testing.T) {
+					t.Parallel()
+
+					whoAmI, err := impersonationProxyAnonymousClient.PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
+						Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
+					require.True(t, k8serrors.IsUnauthorized(err), library.Sdump(err))
+					require.Equal(t, &identityv1alpha1.WhoAmIRequest{}, whoAmI)
+				})
+			})
 		})
 	})
 

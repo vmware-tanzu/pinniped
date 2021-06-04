@@ -19,6 +19,12 @@ also honor client certs from a CA that is specific to the impersonation proxy.
 This approach allows clients to use the Token Credential Request API even when
 we do not have the cluster's signing key.
 
+The proxy will honor cluster configuration in regards to anonymous authentication.
+When disabled, the proxy will not authenticate these requests. There is one caveat
+in that Pinniped itself provides the Token Credential Request API which is used
+specifically by anonymous users to retrieve credentials.  This API is the single
+API that will remain available even when anonymous authentication is disabled.
+
 In terms of authorization, we rely mostly on the Kubernetes API server.  Since we
 impersonate the user, the proxied request will be authorized against that user.
 Thus for all regular REST verbs, we perform no authorization checks.

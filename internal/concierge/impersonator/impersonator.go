@@ -174,10 +174,6 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 			}))
 			handler = filterlatency.TrackStarted(handler, "impersonationproxy")
 
-			handler = filterlatency.TrackCompleted(handler)
-			handler = deleteKnownImpersonationHeaders(handler)
-			handler = filterlatency.TrackStarted(handler, "deleteimpersonationheaders")
-
 			// The standard Kube handler chain (authn, authz, impersonation, audit, etc).
 			// See the genericapiserver.DefaultBuildHandlerChain func for details.
 			handler = defaultBuildHandlerChainFunc(handler, c)
@@ -370,34 +366,6 @@ func isTokenCredReq(reqInfo *genericapirequest.RequestInfo) bool {
 	}
 
 	return true
-}
-
-func deleteKnownImpersonationHeaders(delegate http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// remove known impersonation headers while avoiding mutation of input request
-		// unknown future impersonation headers will still get caught by our later checks
-		if ensureNoImpersonationHeaders(r) != nil {
-			r = r.Clone(r.Context())
-
-			impersonationHeaders := []string{
-				transport.ImpersonateUserHeader,
-				transport.ImpersonateGroupHeader,
-			}
-
-			for k := range r.Header {
-				if !strings.HasPrefix(k, transport.ImpersonateUserExtraHeaderPrefix) {
-					continue
-				}
-				impersonationHeaders = append(impersonationHeaders, k)
-			}
-
-			for _, header := range impersonationHeaders {
-				r.Header.Del(header) // delay mutation until the end when we are done iterating over the map
-			}
-		}
-
-		delegate.ServeHTTP(w, r)
-	})
 }
 
 // No-op wrapping around RequestFunc to allow for comparisons.

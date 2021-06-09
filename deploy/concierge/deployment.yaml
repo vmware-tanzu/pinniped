@@ -29,6 +29,18 @@ metadata:
   labels: #@ labels()
 ---
 apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: #@ defaultResourceNameWithSuffix("impersonation-proxy")
+  namespace: #@ namespace()
+  labels: #@ labels()
+  annotations:
+    #! we need to create this service account before we create the secret
+    kapp.k14s.io/change-group: "impersonation-proxy.concierge.pinniped.dev/serviceaccount"
+secrets: #! make sure the token controller does not create any other secrets
+- name: #@ defaultResourceNameWithSuffix("impersonation-proxy")
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: #@ defaultResourceNameWithSuffix("config")
@@ -134,6 +146,8 @@ spec:
               mountPath: /etc/config
             - name: podinfo
               mountPath: /etc/podinfo
+            - name: impersonation-proxy
+              mountPath: /var/run/secrets/impersonation-proxy.concierge.pinniped.dev/serviceaccount
           livenessProbe:
             httpGet:
               path: /healthz
@@ -156,6 +170,12 @@ spec:
         - name: config-volume
           configMap:
             name: #@ defaultResourceNameWithSuffix("config")
+        - name: impersonation-proxy
+          secret:
+            secretName: #@ defaultResourceNameWithSuffix("impersonation-proxy")
+            items: #! make sure our pod does not start until the token controller has a chance to populate the secret
+              - key: token
+                path: token
         - name: podinfo
           downwardAPI:
             items:
@@ -265,3 +285,16 @@ spec:
       loadBalancerIP: #@ data.values.impersonation_proxy_spec.service.load_balancer_ip
       #@ end
       annotations: #@ data.values.impersonation_proxy_spec.service.annotations
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: #@ defaultResourceNameWithSuffix("impersonation-proxy")
+  namespace: #@ namespace()
+  labels: #@ labels()
+  annotations:
+    #! wait until the SA exists to create this secret so that the token controller does not delete it
+    #! we have this secret at the end so that kubectl will create the service account first
+    kapp.k14s.io/change-rule: "upsert after upserting impersonation-proxy.concierge.pinniped.dev/serviceaccount"
+    kubernetes.io/service-account.name: #@ defaultResourceNameWithSuffix("impersonation-proxy")
+type: kubernetes.io/service-account-token

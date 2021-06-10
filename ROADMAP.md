@@ -33,7 +33,7 @@ The following table includes the current roadmap for Pinniped. If you have any q
 
 
 
-Last Updated: April 2021
+Last Updated: June 2021
 Theme|Description|Timeline|
 |--|--|--|
 |Remote OIDC login support|Add support for logging in from remote hosts without web browsers in the Pinniped CLI and Supervisor|Jun 2021|

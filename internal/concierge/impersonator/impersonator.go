@@ -70,7 +70,7 @@ func New(
 	dynamicCertProvider dynamiccert.Private,
 	impersonationProxySignerCA dynamiccert.Public,
 ) (func(stopCh <-chan struct{}) error, error) {
-	return newInternal(port, dynamicCertProvider, impersonationProxySignerCA, nil, nil)
+	return newInternal(port, dynamicCertProvider, impersonationProxySignerCA, nil, nil, nil)
 }
 
 func newInternal( //nolint:funlen // yeah, it's kind of long.
@@ -79,6 +79,7 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 	impersonationProxySignerCA dynamiccert.Public,
 	clientOpts []kubeclient.Option, // for unit testing, should always be nil in production
 	recOpts func(*genericoptions.RecommendedOptions), // for unit testing, should always be nil in production
+	recConfig func(*genericapiserver.RecommendedConfig), // for unit testing, should always be nil in production
 ) (func(stopCh <-chan struct{}) error, error) {
 	var listener net.Listener
 
@@ -256,33 +257,38 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		serverConfig.Authentication.Authenticator = blockAnonymousAuthenticator
 
 		delegatingAuthorizer := serverConfig.Authorization.Authorizer
-		nestedImpersonationAuthorizer := &comparableAuthorizer{
+		customReasonAuthorizer := &comparableAuthorizer{
 			authorizerFunc: func(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error) {
+				const baseReason = "decision made by impersonation-proxy.concierge.pinniped.dev"
 				switch a.GetVerb() {
 				case "":
 					// Empty string is disallowed because request info has had bugs in the past where it would leave it empty.
-					return authorizer.DecisionDeny, "invalid verb", nil
-				case "create",
-					"update",
-					"delete",
-					"deletecollection",
-					"get",
-					"list",
-					"watch",
-					"patch",
-					"proxy":
-					// we know these verbs are from the request info parsing which is safe to delegate to KAS
-					return authorizer.DecisionAllow, "deferring standard verb authorization to kube API server", nil
+					return authorizer.DecisionDeny, "invalid verb, " + baseReason, nil
 				default:
-					// assume everything else is internal SAR checks that we need to run against the requesting user
-					// because when KAS does the check, it may run the check against our service account and not the
-					// requesting user.  This also handles the impersonate verb to allow for nested impersonation.
-					return delegatingAuthorizer.Authorize(ctx, a)
+					// Since we authenticate the requesting user, we are in the best position to correctly authorize them.
+					// When KAS does the check, it may run the check against our service account and not the requesting user
+					// (due to a bug in the code or any other internal SAR checks that the request processing does).
+					// This also handles the impersonate verb to allow for nested impersonation.
+					decision, reason, err := delegatingAuthorizer.Authorize(ctx, a)
+
+					// make it easier to detect when the impersonation proxy is authorizing a request vs KAS
+					switch len(reason) {
+					case 0:
+						reason = baseReason
+					default:
+						reason = reason + ", " + baseReason
+					}
+
+					return decision, reason, err
 				}
 			},
 		}
 		// Set our custom authorizer before calling Compete(), which will use it.
-		serverConfig.Authorization.Authorizer = nestedImpersonationAuthorizer
+		serverConfig.Authorization.Authorizer = customReasonAuthorizer
+
+		if recConfig != nil {
+			recConfig(serverConfig)
+		}
 
 		completedConfig := serverConfig.Complete()
 		impersonationProxyServer, err := completedConfig.New("impersonation-proxy", genericapiserver.NewEmptyDelegate())
@@ -298,7 +304,7 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		}
 
 		// Sanity check. Make sure that our custom authorizer is still in place and did not get changed or wrapped.
-		if preparedRun.Authorizer != nestedImpersonationAuthorizer {
+		if preparedRun.Authorizer != customReasonAuthorizer {
 			return nil, fmt.Errorf("invalid mutation of impersonation authorizer detected: %#v", preparedRun.Authorizer)
 		}
 

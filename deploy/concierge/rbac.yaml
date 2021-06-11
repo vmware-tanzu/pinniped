@@ -29,12 +29,6 @@ rules:
     verbs: [ use ]
     resourceNames: [ nonroot ]
   - apiGroups: [ "" ]
-    resources: [ "users", "groups", "serviceaccounts" ]
-    verbs: [ "impersonate" ]
-  - apiGroups: [ "authentication.k8s.io" ]
-    resources: [ "*" ]  #! What we really want is userextras/* but the RBAC authorizer only supports */subresource, not resource/*
-    verbs: [ "impersonate" ]
-  - apiGroups: [ "" ]
     resources: [ nodes ]
     verbs: [ list ]
   - apiGroups:
@@ -62,6 +56,35 @@ subjects:
 roleRef:
   kind: ClusterRole
   name: #@ defaultResourceNameWithSuffix("aggregated-api-server")
+  apiGroup: rbac.authorization.k8s.io
+
+#! Give minimal permissions to impersonation proxy service account
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: #@ defaultResourceNameWithSuffix("impersonation-proxy")
+  labels: #@ labels()
+rules:
+  - apiGroups: [ "" ]
+    resources: [ "users", "groups", "serviceaccounts" ]
+    verbs: [ "impersonate" ]
+  - apiGroups: [ "authentication.k8s.io" ]
+    resources: [ "*" ]  #! What we really want is userextras/* but the RBAC authorizer only supports */subresource, not resource/*
+    verbs: [ "impersonate" ]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: #@ defaultResourceNameWithSuffix("impersonation-proxy")
+  labels: #@ labels()
+subjects:
+  - kind: ServiceAccount
+    name: #@ defaultResourceNameWithSuffix("impersonation-proxy")
+    namespace: #@ namespace()
+roleRef:
+  kind: ClusterRole
+  name: #@ defaultResourceNameWithSuffix("impersonation-proxy")
   apiGroup: rbac.authorization.k8s.io
 
 #! Give permission to the kube-cert-agent Pod to run privileged.

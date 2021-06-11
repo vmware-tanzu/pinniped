@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -102,12 +103,12 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		// along with the Kube API server's CA.
 		// Note: any changes to the the Authentication stack need to be kept in sync with any assumptions made
 		// by getTransportForUser, especially if we ever update the TCR API to start returning bearer tokens.
-		kubeClient, err := kubeclient.New(clientOpts...)
+		kubeClientUnsafeForProxying, err := kubeclient.New(clientOpts...)
 		if err != nil {
 			return nil, err
 		}
 		kubeClientCA, err := dynamiccertificates.NewDynamicCAFromConfigMapController(
-			"client-ca", metav1.NamespaceSystem, "extension-apiserver-authentication", "client-ca-file", kubeClient.Kubernetes,
+			"client-ca", metav1.NamespaceSystem, "extension-apiserver-authentication", "client-ca-file", kubeClientUnsafeForProxying.Kubernetes,
 		)
 		if err != nil {
 			return nil, err
@@ -137,7 +138,7 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		// Loopback authentication to this server does not really make sense since we just proxy everything to
 		// the Kube API server, thus we replace loopback connection config with one that does direct connections
 		// the Kube API server. Loopback config is mainly used by post start hooks, so this is mostly future proofing.
-		serverConfig.LoopbackClientConfig = rest.CopyConfig(kubeClient.ProtoConfig) // assume proto is safe (hooks can override)
+		serverConfig.LoopbackClientConfig = rest.CopyConfig(kubeClientUnsafeForProxying.ProtoConfig) // assume proto is safe (hooks can override)
 		// Remove the bearer token so our authorizer does not get stomped on by AuthorizeClientBearerToken.
 		// See sanity checks at the end of this function.
 		serverConfig.LoopbackClientConfig.BearerToken = ""
@@ -152,9 +153,15 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 			sets.NewString("attach", "exec", "proxy", "log", "portforward"),
 		)
 
+		// use the custom impersonation proxy service account credentials when reverse proxying to the API server
+		kubeClientForProxy, err := getReverseProxyClient(clientOpts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build reverse proxy client: %w", err)
+		}
+
 		// Assume proto config is safe because transport level configs do not use rest.ContentConfig.
 		// Thus if we are interacting with actual APIs, they should be using pre-built clients.
-		impersonationProxyFunc, err := newImpersonationReverseProxyFunc(rest.CopyConfig(kubeClient.ProtoConfig))
+		impersonationProxyFunc, err := newImpersonationReverseProxyFunc(rest.CopyConfig(kubeClientForProxy.ProtoConfig))
 		if err != nil {
 			return nil, err
 		}
@@ -196,7 +203,7 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		serverConfig.AuditBackend = &auditfake.Backend{}
 
 		// Probe the API server to figure out if anonymous auth is enabled.
-		anonymousAuthEnabled, err := isAnonymousAuthEnabled(kubeClient.JSONConfig)
+		anonymousAuthEnabled, err := isAnonymousAuthEnabled(kubeClientUnsafeForProxying.JSONConfig)
 		if err != nil {
 			return nil, fmt.Errorf("could not detect if anonymous authentication is enabled: %w", err)
 		}
@@ -313,6 +320,31 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 		return nil, errors.NewAggregate(errs)
 	}
 	return result, nil
+}
+
+func getReverseProxyClient(clientOpts []kubeclient.Option) (*kubeclient.Client, error) {
+	// just use the overrides given during unit tests
+	if len(clientOpts) != 0 {
+		return kubeclient.New(clientOpts...)
+	}
+
+	// this is the magic path where the impersonation proxy SA token is mounted
+	const tokenFile = "/var/run/secrets/impersonation-proxy.concierge.pinniped.dev/serviceaccount/token" //nolint:gosec // this is not a credential
+
+	// make sure the token file we need exists before trying to use it
+	if _, err := os.Stat(tokenFile); err != nil {
+		return nil, err
+	}
+
+	// build an in cluster config that uses the impersonation proxy token file
+	impersonationProxyRestConfig, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, err
+	}
+	impersonationProxyRestConfig = rest.AnonymousClientConfig(impersonationProxyRestConfig)
+	impersonationProxyRestConfig.BearerTokenFile = tokenFile
+
+	return kubeclient.New(kubeclient.WithConfig(impersonationProxyRestConfig))
 }
 
 func isAnonymousAuthEnabled(config *rest.Config) (bool, error) {

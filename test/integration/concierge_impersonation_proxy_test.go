@@ -1372,6 +1372,76 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 	})
 
+	t.Run("assert correct impersonator service account is being used", func(t *testing.T) {
+		impersonationProxyNodesClient := impersonationProxyKubeClient(t).CoreV1().Nodes() // pick some resource the test user cannot access
+		crbClient := adminClient.RbacV1().ClusterRoleBindings()
+		impersonationProxyName := env.ConciergeAppName + "-impersonation-proxy"
+		saFullName := serviceaccount.MakeUsername(env.ConciergeNamespace, impersonationProxyName)
+
+		// sanity check default expected error message
+		_, err := impersonationProxyNodesClient.List(ctx, metav1.ListOptions{})
+		require.True(t, k8serrors.IsForbidden(err), library.Sdump(err))
+		require.EqualError(t, err, `nodes is forbidden: User "`+env.TestUser.ExpectedUsername+`" cannot list resource "nodes" in API group "" at the cluster scope`)
+
+		// remove the impersonation proxy SA's permissions
+		crb, err := crbClient.Get(ctx, impersonationProxyName, metav1.GetOptions{})
+		require.NoError(t, err)
+
+		// sanity check the subject
+		require.Len(t, crb.Subjects, 1)
+		sub := crb.Subjects[0].DeepCopy()
+		require.Equal(t, &rbacv1.Subject{
+			Kind:      "ServiceAccount",
+			APIGroup:  "",
+			Name:      impersonationProxyName,
+			Namespace: env.ConciergeNamespace,
+		}, sub)
+
+		crb.Subjects = nil
+		_, err = crbClient.Update(ctx, crb, metav1.UpdateOptions{})
+		require.NoError(t, err)
+
+		// make sure to put the permissions back at the end
+		t.Cleanup(func() {
+			crbEnd, errEnd := crbClient.Get(ctx, impersonationProxyName, metav1.GetOptions{})
+			require.NoError(t, errEnd)
+
+			crbEnd.Subjects = []rbacv1.Subject{*sub}
+			_, errUpdate := crbClient.Update(ctx, crbEnd, metav1.UpdateOptions{})
+			require.NoError(t, errUpdate)
+
+			library.WaitForUserToHaveAccess(t, saFullName, nil, &authorizationv1.ResourceAttributes{
+				Verb:     "impersonate",
+				Resource: "users",
+			})
+		})
+
+		// assert that the impersonation proxy stops working when we remove its permissions
+		library.RequireEventuallyWithoutError(t, func() (bool, error) {
+			_, errList := impersonationProxyNodesClient.List(ctx, metav1.ListOptions{})
+			if errList == nil {
+				return false, fmt.Errorf("unexpected nil error for test user node list")
+			}
+
+			if !k8serrors.IsForbidden(errList) {
+				return false, fmt.Errorf("unexpected error for test user node list: %w", errList)
+			}
+
+			switch errList.Error() {
+			case `nodes is forbidden: User "` + env.TestUser.ExpectedUsername + `" cannot list resource "nodes" in API group "" at the cluster scope`:
+				t.Log("waiting for impersonation proxy service account to lose impersonate permissions")
+				return false, nil // RBAC change has not rolled out yet
+
+			case `users "` + env.TestUser.ExpectedUsername + `" is forbidden: User "` + saFullName +
+				`" cannot impersonate resource "users" in API group "" at the cluster scope`:
+				return true, nil // expected RBAC error
+
+			default:
+				return false, fmt.Errorf("unexpected forbidden error for test user node list: %w", errList)
+			}
+		}, time.Minute, time.Second)
+	})
+
 	t.Run("adding an annotation reconciles the LoadBalancer service", func(t *testing.T) {
 		if !(impersonatorShouldHaveStartedAutomaticallyByDefault && clusterSupportsLoadBalancers) {
 			t.Skip("only running when the cluster is meant to be using LoadBalancer services")

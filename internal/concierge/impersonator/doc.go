@@ -11,7 +11,9 @@ The specifics of how it is implemented are of interest.  The most novel detail
 about the implementation is that we use the "front-end" of the aggregated API
 server logic, mainly the DefaultBuildHandlerChain func, to handle how incoming
 requests are authenticated, authorized, etc.  The "back-end" of the proxy is a
-reverse proxy that impersonates the user (instead of serving REST APIs).
+reverse proxy that impersonates the user (instead of serving REST APIs).  Since
+impersonation fails open, we impersonate users via a secondary service account
+that has no other permissions on the cluster.
 
 In terms of authentication, we aim to handle every type of authentication that
 the Kubernetes API server supports by delegating most of the checks to it.  We

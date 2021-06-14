@@ -566,7 +566,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.True(t, k8serrors.IsForbidden(err), err)
 			require.EqualError(t, err, fmt.Sprintf(
 				`users "other-user-to-impersonate" is forbidden: `+
-					`User "%s" cannot impersonate resource "users" in API group "" at the cluster scope`,
+					`User "%s" cannot impersonate resource "users" in API group "" at the cluster scope: `+
+					`decision made by impersonation-proxy.concierge.pinniped.dev`,
 				env.TestUser.ExpectedUsername))
 
 			// impersonate the GC service account instead which can read anything (the binding to edit allows this)
@@ -614,7 +615,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.True(t, k8serrors.IsForbidden(err), err)
 			require.EqualError(t, err, fmt.Sprintf(
 				`userextras.authentication.k8s.io "with a dangerous value" is forbidden: `+
-					`User "%s" cannot impersonate resource "userextras/some-fancy-key" in API group "authentication.k8s.io" at the cluster scope`,
+					`User "%s" cannot impersonate resource "userextras/some-fancy-key" in API group "authentication.k8s.io" at the cluster scope: `+
+					`decision made by impersonation-proxy.concierge.pinniped.dev`,
 				env.TestUser.ExpectedUsername))
 		})
 
@@ -672,7 +674,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// the impersonated user lacks the RBAC to perform this call
 			require.True(t, k8serrors.IsForbidden(err), err)
 			require.EqualError(t, err, fmt.Sprintf(
-				`secrets "%s" is forbidden: User "other-user-to-impersonate" cannot get resource "secrets" in API group "" in the namespace "%s"`,
+				`secrets "%s" is forbidden: User "other-user-to-impersonate" cannot get resource "secrets" in API group "" in the namespace "%s": `+
+					`decision made by impersonation-proxy.concierge.pinniped.dev`,
 				impersonationProxyTLSSecretName(env), env.ConciergeNamespace,
 			))
 
@@ -702,7 +705,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				clusterAdminCredentials, impersonationProxyURL, impersonationProxyCACertPEM,
 				&rest.ImpersonationConfig{
 					UserName: "other-user-to-impersonate",
-					Groups:   []string{"other-group-1", "other-group-2"},
+					Groups:   []string{"other-group-1", "other-group-2", "system:masters"}, // impersonate system:masters so we get past authorization checks
 					Extra: map[string][]string{
 						"this-good-key": {"to this good value"},
 						"something.impersonation-proxy.concierge.pinniped.dev": {"super sneaky value"},
@@ -744,7 +747,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.True(t, k8serrors.IsForbidden(err), err)
 			require.EqualError(t, err, fmt.Sprintf(
 				`serviceaccounts "root-ca-cert-publisher" is forbidden: `+
-					`User "%s" cannot impersonate resource "serviceaccounts" in API group "" in the namespace "kube-system"`,
+					`User "%s" cannot impersonate resource "serviceaccounts" in API group "" in the namespace "kube-system": `+
+					`decision made by impersonation-proxy.concierge.pinniped.dev`,
 				serviceaccount.MakeUsername(namespaceName, saName)))
 
 			// webhook authorizer deny cache TTL is 10 seconds so we need to wait long enough for it to drain
@@ -1271,7 +1275,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 					healthzLog, errHealthzLog := impersonationProxyAdminRestClientAsAnonymous.Get().AbsPath("/healthz/log").DoRaw(ctx)
 					require.True(t, k8serrors.IsForbidden(errHealthzLog), "%s\n%s", library.Sdump(errHealthzLog), string(healthzLog))
-					require.Equal(t, `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"forbidden: User \"system:anonymous\" cannot get path \"/healthz/log\"","reason":"Forbidden","details":{},"code":403}`+"\n", string(healthzLog))
+					require.Equal(t, `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"forbidden: User \"system:anonymous\" cannot get path \"/healthz/log\": decision made by impersonation-proxy.concierge.pinniped.dev","reason":"Forbidden","details":{},"code":403}`+"\n", string(healthzLog))
 				})
 			})
 
@@ -1302,7 +1306,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 					pod, err := impersonationProxyAnonymousClient.Kubernetes.CoreV1().Pods(metav1.NamespaceSystem).
 						Get(ctx, "does-not-matter", metav1.GetOptions{})
 					require.True(t, k8serrors.IsForbidden(err), library.Sdump(err))
-					require.EqualError(t, err, `pods "does-not-matter" is forbidden: User "system:anonymous" cannot get resource "pods" in API group "" in the namespace "kube-system"`, library.Sdump(err))
+					require.EqualError(t, err, `pods "does-not-matter" is forbidden: User "system:anonymous" cannot get resource "pods" in API group "" in the namespace "kube-system": `+
+						`decision made by impersonation-proxy.concierge.pinniped.dev`, library.Sdump(err))
 					require.Equal(t, &corev1.Pod{}, pod)
 				})
 
@@ -1373,15 +1378,18 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	})
 
 	t.Run("assert correct impersonator service account is being used", func(t *testing.T) {
-		impersonationProxyNodesClient := impersonationProxyKubeClient(t).CoreV1().Nodes() // pick some resource the test user cannot access
+		// pick an API that everyone can access but always make invalid requests to it
+		// we can tell that the request is reaching KAS because only it has the validation logic
+		impersonationProxySSRRClient := impersonationProxyKubeClient(t).AuthorizationV1().SelfSubjectRulesReviews()
 		crbClient := adminClient.RbacV1().ClusterRoleBindings()
 		impersonationProxyName := env.ConciergeAppName + "-impersonation-proxy"
 		saFullName := serviceaccount.MakeUsername(env.ConciergeNamespace, impersonationProxyName)
+		invalidSSRR := &authorizationv1.SelfSubjectRulesReview{}
 
 		// sanity check default expected error message
-		_, err := impersonationProxyNodesClient.List(ctx, metav1.ListOptions{})
-		require.True(t, k8serrors.IsForbidden(err), library.Sdump(err))
-		require.EqualError(t, err, `nodes is forbidden: User "`+env.TestUser.ExpectedUsername+`" cannot list resource "nodes" in API group "" at the cluster scope`)
+		_, err := impersonationProxySSRRClient.Create(ctx, invalidSSRR, metav1.CreateOptions{})
+		require.True(t, k8serrors.IsBadRequest(err), library.Sdump(err))
+		require.EqualError(t, err, "no namespace on request")
 
 		// remove the impersonation proxy SA's permissions
 		crb, err := crbClient.Get(ctx, impersonationProxyName, metav1.GetOptions{})
@@ -1418,26 +1426,23 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// assert that the impersonation proxy stops working when we remove its permissions
 		library.RequireEventuallyWithoutError(t, func() (bool, error) {
-			_, errList := impersonationProxyNodesClient.List(ctx, metav1.ListOptions{})
-			if errList == nil {
-				return false, fmt.Errorf("unexpected nil error for test user node list")
-			}
+			_, errCreate := impersonationProxySSRRClient.Create(ctx, invalidSSRR, metav1.CreateOptions{})
 
-			if !k8serrors.IsForbidden(errList) {
-				return false, fmt.Errorf("unexpected error for test user node list: %w", errList)
-			}
+			switch {
+			case errCreate == nil:
+				return false, fmt.Errorf("unexpected nil error for test user create invalid SSRR")
 
-			switch errList.Error() {
-			case `nodes is forbidden: User "` + env.TestUser.ExpectedUsername + `" cannot list resource "nodes" in API group "" at the cluster scope`:
+			case k8serrors.IsBadRequest(errCreate) && errCreate.Error() == "no namespace on request":
 				t.Log("waiting for impersonation proxy service account to lose impersonate permissions")
 				return false, nil // RBAC change has not rolled out yet
 
-			case `users "` + env.TestUser.ExpectedUsername + `" is forbidden: User "` + saFullName +
-				`" cannot impersonate resource "users" in API group "" at the cluster scope`:
+			case k8serrors.IsForbidden(errCreate) && errCreate.Error() ==
+				`users "`+env.TestUser.ExpectedUsername+`" is forbidden: User "`+saFullName+
+					`" cannot impersonate resource "users" in API group "" at the cluster scope`:
 				return true, nil // expected RBAC error
 
 			default:
-				return false, fmt.Errorf("unexpected forbidden error for test user node list: %w", errList)
+				return false, fmt.Errorf("unexpected error for test user create invalid SSRR: %w", errCreate)
 			}
 		}, time.Minute, time.Second)
 	})

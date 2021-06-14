@@ -11,7 +11,9 @@ The specifics of how it is implemented are of interest.  The most novel detail
 about the implementation is that we use the "front-end" of the aggregated API
 server logic, mainly the DefaultBuildHandlerChain func, to handle how incoming
 requests are authenticated, authorized, etc.  The "back-end" of the proxy is a
-reverse proxy that impersonates the user (instead of serving REST APIs).
+reverse proxy that impersonates the user (instead of serving REST APIs).  Since
+impersonation fails open, we impersonate users via a secondary service account
+that has no other permissions on the cluster.
 
 In terms of authentication, we aim to handle every type of authentication that
 the Kubernetes API server supports by delegating most of the checks to it.  We
@@ -25,9 +27,12 @@ in that Pinniped itself provides the Token Credential Request API which is used
 specifically by anonymous users to retrieve credentials.  This API is the single
 API that will remain available even when anonymous authentication is disabled.
 
-In terms of authorization, we rely mostly on the Kubernetes API server.  Since we
-impersonate the user, the proxied request will be authorized against that user.
-Thus for all regular REST verbs, we perform no authorization checks.
+In terms of authorization, in addition to the regular checks that the Kubernetes
+API server will make for the impersonated user, we perform the same authorization
+checks via subject access review calls.  This protects us from scenarios where
+we fail to correctly impersonate the user due to some bug in our proxy logic.
+We rely completely on the Kubernetes API server to perform admission checks on
+the impersonated requests.
 
 Nested impersonation is handled by performing the same authorization checks the
 Kubernetes API server would (we get this mostly for free by using the aggregated

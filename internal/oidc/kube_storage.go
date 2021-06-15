@@ -20,6 +20,7 @@ import (
 	"go.pinniped.dev/internal/fositestorage/pkce"
 	"go.pinniped.dev/internal/fositestorage/refreshtoken"
 	"go.pinniped.dev/internal/fositestoragei"
+	"go.pinniped.dev/internal/oidc/staticclient"
 )
 
 const errKubeStorageNotImplemented = constable.Error("KubeStorage does not implement this method. It should not have been called.")
@@ -188,11 +189,7 @@ func (k KubeStorage) RevokeRefreshToken(ctx context.Context, requestID string) e
 //
 
 func (KubeStorage) GetClient(_ context.Context, id string) (fosite.Client, error) {
-	client := PinnipedCLIOIDCClient()
-	if client.ID == id {
-		return client, nil
-	}
-	return nil, fosite.ErrNotFound
+	return staticclient.Get(id)
 }
 
 //

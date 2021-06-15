@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package authorizationcode
@@ -18,6 +18,7 @@ import (
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/fositestorage"
+	"go.pinniped.dev/internal/oidc/staticclient"
 )
 
 const (
@@ -137,7 +138,7 @@ func (a *authorizeCodeStorage) getSession(ctx context.Context, signature string)
 func NewValidEmptyAuthorizeCodeSession() *AuthorizeCodeSession {
 	return &AuthorizeCodeSession{
 		Request: &fosite.Request{
-			Client:  &fosite.DefaultOpenIDConnectClient{},
+			Client:  &staticclient.PinnipedCLI{},
 			Session: &openid.DefaultSession{},
 		},
 	}
@@ -168,161 +169,96 @@ func (e *errSerializationFailureWithCause) Error() string {
 // ExpectedAuthorizeCodeSessionJSONFromFuzzing is used for round tripping tests.
 // It is exported to allow integration tests to use it.
 const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
-	  "active": true,
-	  "request": {
-		"id": "曑x螠Gæ鄋楨",
-		"requestedAt": "2082-11-10T18:36:11.627253638Z",
-		"client": {
-		  "id": ":Ǌ¸Ɣ8(黋馛ÄRɴJa¶z",
-		  "client_secret": "UQ==",
-		  "redirect_uris": [
-			"ǖ枭kʍ切厦ȳ箦;¥ʊXĝ奨誷傥祩d",
-			"zŇZ",
-			"優蒼ĊɌț訫ǄǽeʀO2ƚ&N"
-		  ],
-		  "grant_types": [
-			"唐W6ɻ橩斚薛ɑƐ"
-		  ],
-		  "response_types": [
-			"w",
-			"ǔŭe[u@阽羂ŷ-Ĵ½輢OÅ濲喾H"
-		  ],
-		  "scopes": [
-			"G螩歐湡ƙı唡ɸğƎ&胢輢Ƈĵƚ"
-		  ],
-		  "audience": [
-			"ě"
-		  ],
-		  "public": false,
-		  "jwks_uri": "o*泞羅ʘ Ⱦķ瀊垰7ã\")",
-		  "jwks": {
-			"keys": [
-			  {
-				"kty": "OKP",
-				"crv": "Ed25519",
-				"x": "nK9xgX_iN7u3u_i8YOO7ZRT_WK028Vd_nhtsUu7Eo6E",
-				"x5u": {
-				  "Scheme": "",
-				  "Opaque": "",
-				  "User": null,
-				  "Host": "",
-				  "Path": "",
-				  "RawPath": "",
-				  "ForceQuery": false,
-				  "RawQuery": "",
-				  "Fragment": "",
-				  "RawFragment": ""
-				}
-			  },
-			  {
-				"kty": "OKP",
-				"crv": "Ed25519",
-				"x": "UbbswQgzWhfGCRlwQmMp6fw_HoIoqkIaKT-2XN2fuYU",
-				"x5u": {
-				  "Scheme": "",
-				  "Opaque": "",
-				  "User": null,
-				  "Host": "",
-				  "Path": "",
-				  "RawPath": "",
-				  "ForceQuery": false,
-				  "RawQuery": "",
-				  "Fragment": "",
-				  "RawFragment": ""
-				}
-			  }
-			]
-		  },
-		  "token_endpoint_auth_method": "ƿʥǟȒ伉<x¹T鼓c吏",
-		  "request_uris": [
-			"Ć捘j]=谅ʑɑɮ$Ól4Ȟ",
-			",Q7钎漡臧n"
-		  ],
-		  "request_object_signing_alg": "3@¡廜+v,淬Ʋ4Dʧ呩锏緍场",
-		  "token_endpoint_auth_signing_alg": "(ưƓǴ罷ǹ~]ea胠"
-		},
-		"scopes": [
-		  "ĩv絹b垇IŕĩǀŻQ'k頂箨J-a稆",
-		  "啶#昏Q遐*\\髎bŸ"
-		],
-		"grantedScopes": [
-		  "慂UFƼĮǡ鑻Z"
-		],
-		"form": {
-		  "褾攚ŝlĆ厦駳骪l拁乖¡J¿Ƈ妔": [
-			"懧¥ɂĵ~Čyʊ恀c\"Ǌřðȿ/",
-			"裢?霃谥vƘ:ƿ/濔Aʉ<",
-			"ȭ$奍囀ǅ悷鵱民撲ʓeŘ嬀j¤"
-		  ],
-		  "诞": [
-			"狲N<Cq罉ZPſĝEK郊©l",
-			"餚Ǉ/ɷȑ潠[ĝU噤'pX ",
-			"Y妶ǵ!ȁu狍ɶȳsčɦƦ诱"
-		  ]
-		},
-		"session": {
-		  "Claims": {
-			"JTI": "攬林Ñz焁糳¿o>Q鱙翑ȲŻ",
-			"Issuer": "锰劝旣樎Ȱ鍌#ȳńƩŴȭ",
-			"Subject": "绝TFǊĆw宵ɚeY48珎²",
-			"Audience": [
-			  "éã越|j¦鲶H股ƲLŋZ-{5£踉4"
+		"active": true,
+		"request": {
+			"id": "曑x螠Gæ鄋楨",
+			"requestedAt": "2082-11-10T18:36:11.627253638Z",
+			"client": {
+				"id": "pinniped-cli"
+			},
+			"scopes": [
+				":Ǌ¸Ɣ8(黋馛ÄRɴJa¶z",
+				";",
+				"刑ǖ枭kʍ"
 			],
-			"Nonce": "5^驜Ŗ~ů崧軒q腟u尿",
-			"ExpiresAt": "2065-11-30T13:47:03.613000626Z",
-			"IssuedAt": "1976-02-22T09:57:20.479850437Z",
-			"RequestedAt": "2016-04-13T04:18:53.648949323Z",
-			"AuthTime": "2098-07-12T04:38:54.034043015Z",
-			"AccessTokenHash": "嫯R",
-			"AuthenticationContextClassReference": "¤'+ʣ",
-			"AuthenticationMethodsReference": "L&ɽ艄ʬʏ",
-			"CodeHash": "ğǫ\\aȊ4ț髄Al",
-			"Extra": {
-			  "PƢ曰": {
-				"ĸŴB岺Ð嫹Sx镯荫ő": [
-				  843216989
+			"grantedScopes": [
+				"厦ȳ",
+				"魿A",
+				"ʊXĝ"
+			],
+			"form": {
+				"Ɛ课*ōǔŭe[u@阽": [
+					"C棊^/_Tø侔cʝl鼓[ò銱Hp",
+					"唡ɸğƎ\u0026胢輢Ƈĵƚĸ"
 				],
-				"疂ư墫ɓ": {
-				  "\\BRë_g\"ʎ啴SƇMǃļ": {
-					"ʦ4": false
-				  },
-				  "鶡萷ɵ啜s攦": null
-				}
-			  },
-			  "曓蓳n匟鯘磹*金爃鶴滱ůĮǐ_c3#": 2520197933
-			}
-		  },
-		  "Headers": {
-			"Extra": {
-			  "寱ĊƑ÷Ƒ螞费Ďğ~劰û橸ɽ銐ƭ?}": {
-				"ȜʁɁ;Bd謺錳4帳ŅǃĊd": {
-				  "翢砜Fȏl鐉诳DT=3骜": {
-					"ų厷ɁOƪ穋嶿鳈恱va|载ǰɱ汶C": false
-				  },
-				  "鸨EJ毕懴řĬń戹%c": null
-				},
-				"室癑勦e骲v0H晦XŘO溪V蔓Ȍ+~ē": [
-				  954647573
+				"攉çɟȘ¨/湹ĉ優蒼ĊɌț": [
+					"蕫V頔Lʏ努ĴKǼz唐W6ɻ橩斚薛"
 				]
-			  },
-			  "麈ƵDǀ\\郂üţ垂": 1572524915
-			}
-		  },
-		  "ExpiresAt": {
-			"'=ĸ闒NȢȰ.醋fʜ": "2031-10-18T22:07:34.950803105Z",
-			"ɦüHêQ仏1őƖ2Ė暮唍ǞʜƢú4": "2049-05-13T15:27:20.968432454Z"
-		  },
-		  "Username": "+韁臯氃妪婝rȤ\"h丬鎒ơ娻}ɼƟȥE",
-		  "Subject": "龳ǽÙ龦O亾EW莛8嘶×姮c恭企"
+			},
+			"session": {
+				"Claims": {
+					"JTI": "jA9;焋Ēƕ膊艥1ƶ埐祷錏交鲑趀Ȁ;",
+					"Issuer": "w簴ƿʥ",
+					"Subject": "蹗ĽǙ澅j翕q骽ļȗĺ",
+					"Audience": [
+						",JwwƐ\u003c",
+						"ɮ$Ól4Ȟ"
+					],
+					"Nonce": ",Q7钎漡臧n",
+					"ExpiresAt": "2059-03-29T04:28:16.806648832Z",
+					"IssuedAt": "2070-10-23T09:40:05.695297861Z",
+					"RequestedAt": "1971-09-16T08:16:07.666691628Z",
+					"AuthTime": "2002-04-24T21:10:59.715265983Z",
+					"AccessTokenHash": "+v,淬Ʋ4D",
+					"AuthenticationContextClassReference": "bǕOOF(ưƓǴ罷ǹ~]",
+					"AuthenticationMethodsReference": "'MR拍Á",
+					"CodeHash": "絹b垇IŕĩǀŻQ'k頂箨",
+					"Extra": {
+						"u4銈ɓ啶#昏Q遐*\\髎bŸ": 1262400391,
+						"慂UFƼĮǡ鑻Z": {
+							"Ć厦駳骪l拁乖¡J¿Ƈ妔Mʑ": {
+								"#碓Ɏ": {
+									"ƍdÚ慂+槰蚪": false
+								},
+								"¥": null
+							},
+							"ǟ褾攚ŝ": [
+								3419218499
+							]
+						}
+					}
+				},
+				"Headers": {
+					"Extra": {
+						"/槱黧郛ißɓ礐jµ筁ƿyJǽȭ$奍囀": 2625458941,
+						"悷鵱": {
+							"舸*ɲ3@": [
+								3950865152
+							],
+							"行": {
+								"ǆ霋Ɔ輡5ȏ樛ȧ.mĔ櫓Ǩ療": {
+									"Ǉ/": false
+								},
+								"囡莒汗狲N": null
+							}
+						}
+					}
+				},
+				"ExpiresAt": {
+					"ȗɉY妶": "2021-12-29T17:12:46.958686405Z",
+					"潠[ĝU噤'": "2049-07-17T23:15:11.66686771Z"
+				},
+				"Username": "ùŶ褰ʎɰ癟VĎĢ婄",
+				"Subject": "ļ攬林Ñz焁糳¿o\u003eQ"
+			},
+			"requestedAudience": [
+				"翑",
+				"1#锰劝旣樎Ȱ",
+				"Ǘū稖咾鎅ǸÖ绝"
+			],
+			"grantedAudience": [
+				"FǊĆw"
+			]
 		},
-		"requestedAudience": [
-		  "邖ɐ5檄¬",
-		  "Ĭ葜SŦ餧Ĭ倏4ĵ嶼仒篻ɥ闣ʬ橳(ý綃"
-		],
-		"grantedAudience": [
-		  "ʚƟ覣k眐4ĈtC嵽痊w©Ź榨Q|ô",
-		  "猊Ia瓕巈環_ɑ彨ƍ蛊ʚ£:設虝2"
-		]
-	  },
-	  "version": "1"
+		"version": "1"
 	}`

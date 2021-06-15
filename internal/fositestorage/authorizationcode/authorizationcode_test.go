@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package authorizationcode
@@ -33,6 +33,7 @@ import (
 	kubetesting "k8s.io/client-go/testing"
 
 	"go.pinniped.dev/internal/fositestorage"
+	"go.pinniped.dev/internal/oidc/staticclient"
 )
 
 const namespace = "test-ns"
@@ -61,7 +62,7 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"active":true,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
+				"pinniped-storage-data":    []byte(`{"active":true,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinniped-cli"},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/authcode",
@@ -80,7 +81,7 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 				},
 			},
 			Data: map[string][]byte{
-				"pinniped-storage-data":    []byte(`{"active":false,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
+				"pinniped-storage-data":    []byte(`{"active":false,"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinniped-cli"},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"1"}`),
 				"pinniped-storage-version": []byte("1"),
 			},
 			Type: "storage.pinniped.dev/authcode",
@@ -90,26 +91,9 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 	ctx, client, _, storage := makeTestSubject()
 
 	request := &fosite.Request{
-		ID:          "abcd-1",
-		RequestedAt: time.Time{},
-		Client: &fosite.DefaultOpenIDConnectClient{
-			DefaultClient: &fosite.DefaultClient{
-				ID:            "pinny",
-				Secret:        nil,
-				RedirectURIs:  nil,
-				GrantTypes:    nil,
-				ResponseTypes: nil,
-				Scopes:        nil,
-				Audience:      nil,
-				Public:        true,
-			},
-			JSONWebKeysURI:                    "where",
-			JSONWebKeys:                       nil,
-			TokenEndpointAuthMethod:           "something",
-			RequestURIs:                       nil,
-			RequestObjectSigningAlgorithm:     "",
-			TokenEndpointAuthSigningAlgorithm: "",
-		},
+		ID:             "abcd-1",
+		RequestedAt:    time.Time{},
+		Client:         &staticclient.PinnipedCLI{},
 		RequestedScope: nil,
 		GrantedScope:   nil,
 		Form:           url.Values{"key": []string{"val"}},
@@ -169,7 +153,7 @@ func TestInvalidateWhenConflictOnUpdateHappens(t *testing.T) {
 
 	request := &fosite.Request{
 		ID:      "some-request-id",
-		Client:  &fosite.DefaultOpenIDConnectClient{},
+		Client:  &staticclient.PinnipedCLI{},
 		Session: &openid.DefaultSession{},
 	}
 	err := storage.CreateAuthorizeCodeSession(ctx, "fancy-signature", request)
@@ -190,7 +174,7 @@ func TestWrongVersion(t *testing.T) {
 			},
 		},
 		Data: map[string][]byte{
-			"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinny","redirect_uris":null,"grant_types":null,"response_types":null,"scopes":null,"audience":null,"public":true,"jwks_uri":"where","jwks":null,"token_endpoint_auth_method":"something","request_uris":null,"request_object_signing_alg":"","token_endpoint_auth_signing_alg":""},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"not-the-right-version", "active": true}`),
+			"pinniped-storage-data":    []byte(`{"request":{"id":"abcd-1","requestedAt":"0001-01-01T00:00:00Z","client":{"id":"pinniped-cli"},"scopes":null,"grantedScopes":null,"form":{"key":["val"]},"session":{"Claims":null,"Headers":null,"ExpiresAt":null,"Username":"snorlax","Subject":"panda"},"requestedAudience":null,"grantedAudience":null},"version":"not-the-right-version", "active": true}`),
 			"pinniped-storage-version": []byte("1"),
 		},
 		Type: "storage.pinniped.dev/authcode",
@@ -240,7 +224,7 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 
 	request := &fosite.Request{
 		Session: nil,
-		Client:  &fosite.DefaultOpenIDConnectClient{},
+		Client:  &staticclient.PinnipedCLI{},
 	}
 	err := storage.CreateAuthorizeCodeSession(ctx, "signature-doesnt-matter", request)
 	require.EqualError(t, err, "requester's session must be of type openid.DefaultSession")
@@ -250,7 +234,7 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 		Client:  nil,
 	}
 	err = storage.CreateAuthorizeCodeSession(ctx, "signature-doesnt-matter", request)
-	require.EqualError(t, err, "requester's client must be of type fosite.DefaultOpenIDConnectClient")
+	require.EqualError(t, err, "requester's client must be of type staticclient.PinnipedCLI")
 }
 
 func makeTestSubject() (context.Context, *fake.Clientset, corev1client.SecretInterface, oauth2.AuthorizeCodeStorage) {
@@ -270,7 +254,7 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 	require.Equal(t, validSession.Request, extractedRequest)
 
 	// checked above
-	defaultClient := validSession.Request.Client.(*fosite.DefaultOpenIDConnectClient)
+	defaultClient := validSession.Request.Client.(*staticclient.PinnipedCLI)
 	defaultSession := validSession.Request.Session.(*openid.DefaultSession)
 
 	// makes it easier to use a raw string
@@ -391,5 +375,6 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 	// while the fuzzer will panic if AuthorizeRequest changes in a way that cannot be fuzzed,
 	// if it adds a new field that can be fuzzed, this check will fail
 	// thus if AuthorizeRequest changes, we will detect it here (though we could possibly miss an omitempty field)
+	t.Logf("found actual JSON:\n%s\n\n", authorizeCodeSessionJSONFromFuzzing)
 	require.JSONEq(t, ExpectedAuthorizeCodeSessionJSONFromFuzzing, authorizeCodeSessionJSONFromFuzzing)
 }

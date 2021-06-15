@@ -25,9 +25,9 @@ You should have a supported Kubernetes cluster with working HTTPS ingress capabi
 
 1. Install the Supervisor into the `pinniped-supervisor` namespace with default options:
 
-   - `kubectl apply -f https://get.pinniped.dev/v0.9.1/install-pinniped-supervisor.yaml`
+   - `kubectl apply -f https://get.pinniped.dev/v0.9.2/install-pinniped-supervisor.yaml`
 
-     *Replace v0.9.1 with your preferred version number.*
+     *Replace v0.9.2 with your preferred version number.*
 
 ## With custom options
 

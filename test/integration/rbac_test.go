@@ -67,6 +67,15 @@ func TestServiceAccountPermissions(t *testing.T) {
 		)
 	}
 
+	crbs, err := library.NewKubernetesClientset(t).RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{LabelSelector: "eks.amazonaws.com/component=pod-security-policy"})
+	require.NoError(t, err)
+	if len(crbs.Items) > 0 {
+		expectedResourceRules = append(expectedResourceRules,
+			// EKS binds these to system:authenticated
+			authorizationv1.ResourceRule{Verbs: []string{"use"}, APIGroups: []string{"policy"}, Resources: []string{"podsecuritypolicies"}, ResourceNames: []string{"eks.privileged"}},
+		)
+	}
+
 	expectedNonResourceRules := []authorizationv1.NonResourceRule{
 		// system:public-info-viewer is bound to system:authenticated and system:unauthenticated by default
 		{Verbs: []string{"get"}, NonResourceURLs: []string{"/healthz", "/livez", "/readyz", "/version", "/version/"}},

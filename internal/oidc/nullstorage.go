@@ -5,17 +5,19 @@ package oidc
 
 import (
 	"context"
-	"time"
 
 	"github.com/ory/fosite"
 
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/fositestoragei"
+	"go.pinniped.dev/internal/oidc/clientregistry"
 )
 
 const errNullStorageNotImplemented = constable.Error("NullStorage does not implement this method. It should not have been called.")
 
-type NullStorage struct{}
+type NullStorage struct {
+	clientregistry.StaticClientManager
+}
 
 var _ fositestoragei.AllFositeStorage = &NullStorage{}
 
@@ -84,21 +86,5 @@ func (NullStorage) GetAuthorizeCodeSession(_ context.Context, _ string, _ fosite
 }
 
 func (NullStorage) InvalidateAuthorizeCodeSession(_ context.Context, _ string) (err error) {
-	return errNullStorageNotImplemented
-}
-
-func (NullStorage) GetClient(_ context.Context, id string) (fosite.Client, error) {
-	client := PinnipedCLIOIDCClient()
-	if client.ID == id {
-		return client, nil
-	}
-	return nil, fosite.ErrNotFound
-}
-
-func (NullStorage) ClientAssertionJWTValid(_ context.Context, _ string) error {
-	return errNullStorageNotImplemented
-}
-
-func (NullStorage) SetClientAssertionJWT(_ context.Context, _ string, _ time.Time) error {
 	return errNullStorageNotImplemented
 }

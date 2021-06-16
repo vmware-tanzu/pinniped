@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/square/go-jose.v2"
 	corev1 "k8s.io/api/core/v1"
@@ -76,16 +75,15 @@ func TestSupervisorSecrets(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Ensure a secret is created with the FederationDomain's JWKS.
 			var updatedFederationDomain *configv1alpha1.FederationDomain
-			var err error
-			assert.Eventually(t, func() bool {
-				updatedFederationDomain, err = supervisorClient.
+			library.RequireEventually(t, func(requireEventually *require.Assertions) {
+				resp, err := supervisorClient.
 					ConfigV1alpha1().
 					FederationDomains(env.SupervisorNamespace).
 					Get(ctx, federationDomain.Name, metav1.GetOptions{})
-				return err == nil && test.secretName(updatedFederationDomain) != ""
+				requireEventually.NoError(err)
+				requireEventually.NotEmpty(test.secretName(resp))
+				updatedFederationDomain = resp
 			}, time.Second*10, time.Millisecond*500)
-			require.NoError(t, err)
-			require.NotEmpty(t, test.secretName(updatedFederationDomain))
 
 			// Ensure the secret actually exists.
 			secret, err := kubeClient.
@@ -109,14 +107,14 @@ func TestSupervisorSecrets(t *testing.T) {
 				Secrets(env.SupervisorNamespace).
 				Delete(ctx, test.secretName(updatedFederationDomain), metav1.DeleteOptions{})
 			require.NoError(t, err)
-			assert.Eventually(t, func() bool {
+			library.RequireEventually(t, func(requireEventually *require.Assertions) {
+				var err error
 				secret, err = kubeClient.
 					CoreV1().
 					Secrets(env.SupervisorNamespace).
 					Get(ctx, test.secretName(updatedFederationDomain), metav1.GetOptions{})
-				return err == nil
+				requireEventually.NoError(err)
 			}, time.Second*10, time.Millisecond*500)
-			require.NoError(t, err)
 
 			// Ensure that the new secret is valid.
 			test.ensureValid(t, secret)

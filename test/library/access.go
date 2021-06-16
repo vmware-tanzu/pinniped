@@ -11,10 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	authorizationv1 "k8s.io/api/authorization/v1"
-	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -39,16 +37,12 @@ func AccessAsUserTest(
 		addTestClusterUserCanViewEverythingRoleBinding(t, testUsername)
 
 		// Use the client which is authenticated as the test user to list namespaces
-		var listNamespaceResponse *v1.NamespaceList
-		var err error
-		var canListNamespaces = func() bool {
-			listNamespaceResponse, err = clientUnderTest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-			return err == nil
-		}
-		assert.Eventually(t, canListNamespaces, accessRetryTimeout, accessRetryInterval)
-		require.NoError(t, err) // prints out the error and stops the test in case of failure
-		require.NotNil(t, listNamespaceResponse)
-		require.NotEmpty(t, listNamespaceResponse.Items)
+		RequireEventually(t, func(requireEventually *require.Assertions) {
+			resp, err := clientUnderTest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+			requireEventually.NoError(err)
+			requireEventually.NotNil(resp)
+			requireEventually.NotEmpty(resp.Items)
+		}, accessRetryTimeout, accessRetryInterval, "user never had access to list namespaces")
 	}
 }
 
@@ -61,16 +55,11 @@ func AccessAsUserWithKubectlTest(
 		addTestClusterUserCanViewEverythingRoleBinding(t, testUsername)
 
 		// Use the given kubeconfig with kubectl to list namespaces as the test user
-		var kubectlCommandOutput string
-		var err error
-		var canListNamespaces = func() bool {
-			kubectlCommandOutput, err = runKubectlGetNamespaces(t, testKubeConfigYAML)
-			return err == nil
-		}
-
-		assert.Eventually(t, canListNamespaces, accessRetryTimeout, accessRetryInterval)
-		require.NoError(t, err) // prints out the error and stops the test in case of failure
-		require.Containsf(t, kubectlCommandOutput, expectedNamespace, "actual output: %q", kubectlCommandOutput)
+		RequireEventually(t, func(requireEventually *require.Assertions) {
+			kubectlCommandOutput, err := runKubectlGetNamespaces(t, testKubeConfigYAML)
+			requireEventually.NoError(err)
+			requireEventually.Containsf(kubectlCommandOutput, expectedNamespace, "actual output: %q", kubectlCommandOutput)
+		}, accessRetryTimeout, accessRetryInterval, "user never had access to list namespaces via kubectl")
 	}
 }
 
@@ -88,16 +77,12 @@ func AccessAsGroupTest(
 		addTestClusterGroupCanViewEverythingRoleBinding(t, testGroup)
 
 		// Use the client which is authenticated as the test user to list namespaces
-		var listNamespaceResponse *v1.NamespaceList
-		var err error
-		var canListNamespaces = func() bool {
-			listNamespaceResponse, err = clientUnderTest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-			return err == nil
-		}
-		assert.Eventually(t, canListNamespaces, accessRetryTimeout, accessRetryInterval)
-		require.NoError(t, err) // prints out the error and stops the test in case of failure
-		require.NotNil(t, listNamespaceResponse)
-		require.NotEmpty(t, listNamespaceResponse.Items)
+		RequireEventually(t, func(requireEventually *require.Assertions) {
+			listNamespaceResponse, err := clientUnderTest.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+			requireEventually.NoError(err)
+			requireEventually.NotNil(listNamespaceResponse)
+			requireEventually.NotEmpty(listNamespaceResponse.Items)
+		}, accessRetryTimeout, accessRetryInterval, "user never had access to list namespaces")
 	}
 }
 
@@ -110,16 +95,11 @@ func AccessAsGroupWithKubectlTest(
 		addTestClusterGroupCanViewEverythingRoleBinding(t, testGroup)
 
 		// Use the given kubeconfig with kubectl to list namespaces as the test user
-		var kubectlCommandOutput string
-		var err error
-		var canListNamespaces = func() bool {
-			kubectlCommandOutput, err = runKubectlGetNamespaces(t, testKubeConfigYAML)
-			return err == nil
-		}
-
-		assert.Eventually(t, canListNamespaces, accessRetryTimeout, accessRetryInterval)
-		require.NoError(t, err) // prints out the error and stops the test in case of failure
-		require.Containsf(t, kubectlCommandOutput, expectedNamespace, "actual output: %q", kubectlCommandOutput)
+		RequireEventually(t, func(requireEventually *require.Assertions) {
+			kubectlCommandOutput, err := runKubectlGetNamespaces(t, testKubeConfigYAML)
+			requireEventually.NoError(err)
+			requireEventually.Containsf(kubectlCommandOutput, expectedNamespace, "actual output: %q", kubectlCommandOutput)
+		}, accessRetryTimeout, accessRetryInterval, "user never had access to list namespaces")
 	}
 }
 

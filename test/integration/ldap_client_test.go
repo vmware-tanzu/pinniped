@@ -775,28 +775,11 @@ func startLongRunningCommandAndWaitForInitialOutput(
 		require.NoError(t, err)
 	})
 
-	earlyTerminationCh := make(chan bool, 1)
-	go func() {
-		err = cmd.Wait()
-		earlyTerminationCh <- true
-	}()
-
-	terminatedEarly := false
-	require.Eventually(t, func() bool {
+	library.RequireEventually(t, func(requireEventually *require.Assertions) {
 		t.Logf(`Waiting for %s to emit output: "%s"`, command, waitForOutputToContain)
-		if strings.Contains(watchOn.String(), waitForOutputToContain) {
-			return true
-		}
-		select {
-		case <-earlyTerminationCh:
-			terminatedEarly = true
-			return true
-		default: // ignore when this non-blocking read found no message
-		}
-		return false
+		requireEventually.Equal(-1, cmd.ProcessState.ExitCode(), "subcommand ended sooner than expected")
+		requireEventually.Contains(watchOn.String(), waitForOutputToContain, "expected process to emit output")
 	}, 1*time.Minute, 1*time.Second)
-
-	require.Falsef(t, terminatedEarly, "subcommand ended sooner than expected")
 
 	t.Logf("Detected that %s has started successfully", command)
 }

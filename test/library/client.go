@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -295,30 +294,20 @@ func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string
 
 	// Wait for the FederationDomain to enter the expected phase (or time out).
 	var result *configv1alpha1.FederationDomain
-	assert.Eventuallyf(t, func() bool {
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
 		var err error
 		result, err = federationDomains.Get(ctx, federationDomain.Name, metav1.GetOptions{})
-		require.NoError(t, err)
-		return result.Status.Status == expectStatus
-	}, 60*time.Second, 1*time.Second, "expected the FederationDomain to have status %q", expectStatus)
-	require.Equal(t, expectStatus, result.Status.Status)
+		requireEventually.NoError(err)
+		requireEventually.Equal(expectStatus, result.Status.Status)
 
-	// If the FederationDomain was successfully created, ensure all secrets are present before continuing
-	if result.Status.Status == configv1alpha1.SuccessFederationDomainStatusCondition {
-		assert.Eventually(t, func() bool {
-			var err error
-			result, err = federationDomains.Get(ctx, federationDomain.Name, metav1.GetOptions{})
-			require.NoError(t, err)
-			return result.Status.Secrets.JWKS.Name != "" &&
-				result.Status.Secrets.TokenSigningKey.Name != "" &&
-				result.Status.Secrets.StateSigningKey.Name != "" &&
-				result.Status.Secrets.StateEncryptionKey.Name != ""
-		}, 60*time.Second, 1*time.Second, "expected the FederationDomain to have secrets populated")
-		require.NotEmpty(t, result.Status.Secrets.JWKS.Name)
-		require.NotEmpty(t, result.Status.Secrets.TokenSigningKey.Name)
-		require.NotEmpty(t, result.Status.Secrets.StateSigningKey.Name)
-		require.NotEmpty(t, result.Status.Secrets.StateEncryptionKey.Name)
-	}
+		// If the FederationDomain was successfully created, ensure all secrets are present before continuing
+		if expectStatus == configv1alpha1.SuccessFederationDomainStatusCondition {
+			requireEventually.NotEmpty(result.Status.Secrets.JWKS.Name, "expected status.secrets.jwks.name not to be empty")
+			requireEventually.NotEmpty(result.Status.Secrets.TokenSigningKey.Name, "expected status.secrets.tokenSigningKey.name not to be empty")
+			requireEventually.NotEmpty(result.Status.Secrets.StateSigningKey.Name, "expected status.secrets.stateSigningKey.name not to be empty")
+			requireEventually.NotEmpty(result.Status.Secrets.StateEncryptionKey.Name, "expected status.secrets.stateEncryptionKey.name not to be empty")
+		}
+	}, 60*time.Second, 1*time.Second, "expected the FederationDomain to have status %q", expectStatus)
 	return federationDomain
 }
 
@@ -391,14 +380,11 @@ func CreateTestOIDCIdentityProvider(t *testing.T, spec idpv1alpha1.OIDCIdentityP
 
 	// Wait for the OIDCIdentityProvider to enter the expected phase (or time out).
 	var result *idpv1alpha1.OIDCIdentityProvider
-	require.Eventuallyf(t, func() bool {
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
 		var err error
 		result, err = upstreams.Get(ctx, created.Name, metav1.GetOptions{})
-		if err != nil {
-			t.Logf("error while getting OIDCIdentityProvider %s/%s: %s", created.Namespace, created.Name, err.Error())
-			return false
-		}
-		return result.Status.Phase == expectedPhase
+		requireEventually.NoErrorf(err, "error while getting OIDCIdentityProvider %s/%s", created.Namespace, created.Name)
+		requireEventually.Equal(expectedPhase, result.Status.Phase)
 	}, 60*time.Second, 1*time.Second, "expected the OIDCIdentityProvider to go into phase %s, OIDCIdentityProvider was: %s", expectedPhase, Sdump(result))
 	return result
 }
@@ -429,18 +415,18 @@ func CreateTestLDAPIdentityProvider(t *testing.T, spec idpv1alpha1.LDAPIdentityP
 
 	// Wait for the LDAPIdentityProvider to enter the expected phase (or time out).
 	var result *idpv1alpha1.LDAPIdentityProvider
-	require.Eventuallyf(t, func() bool {
-		var err error
-		result, err = upstreams.Get(ctx, created.Name, metav1.GetOptions{})
-		if err != nil {
-			t.Logf("error while getting LDAPIdentityProvider %s/%s: %s", created.Namespace, created.Name, err.Error())
-			return false
-		}
-		return result.Status.Phase == expectedPhase
-	},
+	RequireEventuallyf(t,
+		func(requireEventually *require.Assertions) {
+			var err error
+			result, err = upstreams.Get(ctx, created.Name, metav1.GetOptions{})
+			requireEventually.NoErrorf(err, "error while getting LDAPIdentityProvider %s/%s", created.Namespace, created.Name)
+			requireEventually.Equalf(expectedPhase, result.Status.Phase, "LDAPIdentityProvider is not in phase %s: %v", expectedPhase, Sdump(result))
+		},
 		2*time.Minute, // it takes 1 minute for a failed LDAP TLS connection test to timeout before it tries using StartTLS, so wait longer than that
 		1*time.Second,
-		"expected the LDAPIdentityProvider to go into phase %s, LDAPIdentityProvider was: %s", expectedPhase, Sdump(result))
+		"expected the LDAPIdentityProvider to go into phase %s",
+		expectedPhase,
+	)
 	return result
 }
 
@@ -502,11 +488,11 @@ func CreatePod(ctx context.Context, t *testing.T, name, namespace string, spec c
 	})
 
 	var result *corev1.Pod
-	require.Eventuallyf(t, func() bool {
+	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
 		var err error
 		result, err = pods.Get(ctx, created.Name, metav1.GetOptions{})
-		require.NoError(t, err)
-		return result.Status.Phase == corev1.PodRunning
+		requireEventually.NoError(err)
+		requireEventually.Equal(corev1.PodRunning, result.Status.Phase)
 	}, 15*time.Second, 1*time.Second, "expected the Pod to go into phase %s", corev1.PodRunning)
 	return result
 }

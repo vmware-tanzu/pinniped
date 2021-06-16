@@ -59,15 +59,13 @@ func Open(t *testing.T) *agouti.Page {
 func WaitForVisibleElements(t *testing.T, page *agouti.Page, selectors ...string) {
 	t.Helper()
 
-	require.Eventuallyf(t,
-		func() bool {
+	library.RequireEventuallyf(t,
+		func(requireEventually *require.Assertions) {
 			for _, sel := range selectors {
 				vis, err := page.First(sel).Visible()
-				if !(err == nil && vis) {
-					return false
-				}
+				requireEventually.NoError(err)
+				requireEventually.Truef(vis, "expected element %q to be visible", sel)
 			}
-			return true
 		},
 		operationTimeout,
 		operationPollingInterval,
@@ -80,17 +78,15 @@ func WaitForVisibleElements(t *testing.T, page *agouti.Page, selectors ...string
 // to occur and times out, failing the test, if it never does.
 func WaitForURL(t *testing.T, page *agouti.Page, pat *regexp.Regexp) {
 	var lastURL string
-	require.Eventuallyf(t,
-		func() bool {
+	library.RequireEventuallyf(t,
+		func(requireEventually *require.Assertions) {
 			url, err := page.URL()
-			if err == nil && pat.MatchString(url) {
-				return true
-			}
 			if url != lastURL {
 				t.Logf("saw URL %s", url)
 				lastURL = url
 			}
-			return false
+			requireEventually.NoError(err)
+			requireEventually.Regexp(pat, url)
 		},
 		operationTimeout,
 		operationPollingInterval,

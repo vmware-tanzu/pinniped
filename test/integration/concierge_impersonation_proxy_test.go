@@ -132,7 +132,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		mostRecentTokenCredentialRequestResponseLock.Lock()
 		defer mostRecentTokenCredentialRequestResponseLock.Unlock()
 		if mostRecentTokenCredentialRequestResponse == nil || credentialAlmostExpired(t, mostRecentTokenCredentialRequestResponse) {
-			var err error
 			// Make a TokenCredentialRequest. This can either return a cert signed by the Kube API server's CA (e.g. on kind)
 			// or a cert signed by the impersonator's signing CA (e.g. on GKE). Either should be accepted by the impersonation
 			// proxy server as a valid authentication.
@@ -140,23 +139,22 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// However, we issue short-lived certs, so this cert will only be valid for a few minutes.
 			// Cache it until it is almost expired and then refresh it whenever it is close to expired.
 			//
-			require.Eventually(t, func() bool {
-				mostRecentTokenCredentialRequestResponse, err = createTokenCredentialRequest(credentialRequestSpecWithWorkingCredentials, client)
-				if err != nil {
-					t.Logf("failed to make TokenCredentialRequest: %s", library.Sdump(err))
-					return false
-				}
-				return mostRecentTokenCredentialRequestResponse.Status.Credential != nil
+			library.RequireEventually(t, func(requireEventually *require.Assertions) {
+				resp, err := createTokenCredentialRequest(credentialRequestSpecWithWorkingCredentials, client)
+				requireEventually.NoError(err)
+				requireEventually.NotNil(resp)
+				requireEventually.NotNil(resp.Status)
+				requireEventually.NotNil(resp.Status.Credential)
+				requireEventually.Nilf(resp.Status.Message, "expected no error message but got: %s", library.Sdump(resp.Status.Message))
+				requireEventually.NotEmpty(resp.Status.Credential.ClientCertificateData)
+				requireEventually.NotEmpty(resp.Status.Credential.ClientKeyData)
+
+				// At the moment the credential request should not have returned a token. In the future, if we make it return
+				// tokens, we should revisit this test's rest config below.
+				requireEventually.Empty(resp.Status.Credential.Token)
+
+				mostRecentTokenCredentialRequestResponse = resp
 			}, 5*time.Minute, 5*time.Second)
-
-			require.Nil(t, mostRecentTokenCredentialRequestResponse.Status.Message,
-				"expected no error message but got: %s", library.Sdump(mostRecentTokenCredentialRequestResponse.Status.Message))
-			require.NotEmpty(t, mostRecentTokenCredentialRequestResponse.Status.Credential.ClientCertificateData)
-			require.NotEmpty(t, mostRecentTokenCredentialRequestResponse.Status.Credential.ClientKeyData)
-
-			// At the moment the credential request should not have returned a token. In the future, if we make it return
-			// tokens, we should revisit this test's rest config below.
-			require.Empty(t, mostRecentTokenCredentialRequestResponse.Status.Credential.Token)
 		}
 
 		return mostRecentTokenCredentialRequestResponse.Status.Credential
@@ -471,11 +469,13 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			// Make sure that all of the created ConfigMaps show up in the informer's cache to
 			// demonstrate that the informer's "watch" verb is working through the impersonation proxy.
-			require.Eventually(t, func() bool {
-				_, err1 := informer.Lister().ConfigMaps(namespaceName).Get("configmap-1")
-				_, err2 := informer.Lister().ConfigMaps(namespaceName).Get("configmap-2")
-				_, err3 := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
-				return err1 == nil && err2 == nil && err3 == nil
+			library.RequireEventually(t, func(requireEventually *require.Assertions) {
+				_, err := informer.Lister().ConfigMaps(namespaceName).Get("configmap-1")
+				requireEventually.NoError(err)
+				_, err = informer.Lister().ConfigMaps(namespaceName).Get("configmap-2")
+				requireEventually.NoError(err)
+				_, err = informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
+				requireEventually.NoError(err)
 			}, 10*time.Second, 50*time.Millisecond)
 
 			// Test "get" verb through the impersonation proxy.
@@ -496,9 +496,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.Equal(t, "bar", updateResult.Data["foo"])
 
 			// Make sure that the updated ConfigMap shows up in the informer's cache.
-			require.Eventually(t, func() bool {
+			library.RequireEventually(t, func(requireEventually *require.Assertions) {
 				configMap, err := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
-				return err == nil && configMap.Data["foo"] == "bar"
+				requireEventually.NoError(err)
+				requireEventually.Equal("bar", configMap.Data["foo"])
 			}, 10*time.Second, 50*time.Millisecond)
 
 			// Test "patch" verb through the impersonation proxy.
@@ -513,9 +514,11 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.Equal(t, "42", patchResult.Data["baz"])
 
 			// Make sure that the patched ConfigMap shows up in the informer's cache.
-			require.Eventually(t, func() bool {
+			library.RequireEventually(t, func(requireEventually *require.Assertions) {
 				configMap, err := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
-				return err == nil && configMap.Data["foo"] == "bar" && configMap.Data["baz"] == "42"
+				requireEventually.NoError(err)
+				requireEventually.Equal("bar", configMap.Data["foo"])
+				requireEventually.Equal("42", configMap.Data["baz"])
 			}, 10*time.Second, 50*time.Millisecond)
 
 			// Test "delete" verb through the impersonation proxy.
@@ -523,10 +526,13 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.NoError(t, err)
 
 			// Make sure that the deleted ConfigMap shows up in the informer's cache.
-			require.Eventually(t, func() bool {
-				_, getErr := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
-				list, listErr := informer.Lister().ConfigMaps(namespaceName).List(configMapLabels.AsSelector())
-				return k8serrors.IsNotFound(getErr) && listErr == nil && len(list) == 2
+			library.RequireEventually(t, func(requireEventually *require.Assertions) {
+				_, err := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
+				requireEventually.Truef(k8serrors.IsNotFound(err), "expected a NotFound error from get, got %v", err)
+
+				list, err := informer.Lister().ConfigMaps(namespaceName).List(configMapLabels.AsSelector())
+				requireEventually.NoError(err)
+				requireEventually.Len(list, 2)
 			}, 10*time.Second, 50*time.Millisecond)
 
 			// Test "deletecollection" verb through the impersonation proxy.
@@ -534,9 +540,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.NoError(t, err)
 
 			// Make sure that the deleted ConfigMaps shows up in the informer's cache.
-			require.Eventually(t, func() bool {
-				list, listErr := informer.Lister().ConfigMaps(namespaceName).List(configMapLabels.AsSelector())
-				return listErr == nil && len(list) == 0
+			library.RequireEventually(t, func(requireEventually *require.Assertions) {
+				list, err := informer.Lister().ConfigMaps(namespaceName).List(configMapLabels.AsSelector())
+				requireEventually.NoError(err)
+				requireEventually.Empty(list)
 			}, 10*time.Second, 50*time.Millisecond)
 
 			// There should be no ConfigMaps left.
@@ -1033,7 +1040,16 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			// see that we can read stdout and it spits out stdin output back to us
 			wantAttachStdout := fmt.Sprintf("VAR: %s\n", echoString)
-			require.Eventuallyf(t, func() bool { return attachStdout.String() == wantAttachStdout }, time.Second*60, time.Millisecond*250, `got "kubectl attach" stdout: %q, wanted: %q (stderr: %q)`, attachStdout.String(), wantAttachStdout, attachStderr.String())
+			library.RequireEventually(t, func(requireEventually *require.Assertions) {
+				requireEventually.Equal(
+					wantAttachStdout,
+					attachStdout.String(),
+					`got "kubectl attach" stdout: %q, wanted: %q (stderr: %q)`,
+					attachStdout.String(),
+					wantAttachStdout,
+					attachStderr.String(),
+				)
+			}, time.Second*60, time.Millisecond*250)
 
 			// close stdin and attach process should exit
 			err = attachStdin.Close()
@@ -1560,20 +1576,20 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// so we'll skip this check on clusters which have load balancers but don't run the squid proxy.
 		// The other cluster types that do run the squid proxy will give us sufficient coverage here.
 		if env.Proxy != "" {
-			require.Eventually(t, func() bool {
+			library.RequireEventually(t, func(requireEventually *require.Assertions) {
 				// It's okay if this returns RBAC errors because this user has no role bindings.
 				// What we want to see is that the proxy eventually shuts down entirely.
 				_, err := impersonationProxyViaSquidKubeClientWithoutCredential(t, proxyServiceEndpoint).CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 				isErr, _ := isServiceUnavailableViaSquidError(err, proxyServiceEndpoint)
-				return isErr
+				requireEventually.Truef(isErr, "wanted service unavailable via squid error, got %v", err)
 			}, 20*time.Second, 500*time.Millisecond)
 		}
 
 		// Check that the generated TLS cert Secret was deleted by the controller because it's supposed to clean this up
 		// when we disable the impersonator.
-		require.Eventually(t, func() bool {
+		library.RequireEventually(t, func(requireEventually *require.Assertions) {
 			_, err := adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
-			return k8serrors.IsNotFound(err)
+			requireEventually.Truef(k8serrors.IsNotFound(err), "expected NotFound error, got %v", err)
 		}, 10*time.Second, 250*time.Millisecond)
 
 		// Check that the generated CA cert Secret was not deleted by the controller because it's supposed to keep this

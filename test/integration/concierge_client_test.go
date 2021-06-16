@@ -9,9 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/pkg/conciergeclient"
@@ -77,20 +75,17 @@ func TestClient(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	var resp *clientauthenticationv1beta1.ExecCredential
-	assert.Eventually(t, func() bool {
-		resp, err = client.ExchangeToken(ctx, env.TestUser.Token)
-		return err == nil
+	library.RequireEventually(t, func(requireEventually *require.Assertions) {
+		resp, err := client.ExchangeToken(ctx, env.TestUser.Token)
+		requireEventually.NoError(err)
+		requireEventually.NotNil(resp.Status.ExpirationTimestamp)
+		requireEventually.InDelta(5*time.Minute, time.Until(resp.Status.ExpirationTimestamp.Time), float64(time.Minute))
+
+		// Create a client using the certificate and key returned by the token exchange.
+		validClient := library.NewClientsetWithCertAndKey(t, resp.Status.ClientCertificateData, resp.Status.ClientKeyData)
+
+		// Make a version request, which should succeed even without any authorization.
+		_, err = validClient.Discovery().ServerVersion()
+		requireEventually.NoError(err)
 	}, 10*time.Second, 500*time.Millisecond)
-	require.NoError(t, err)
-
-	require.NotNil(t, resp.Status.ExpirationTimestamp)
-	require.InDelta(t, 5*time.Minute, time.Until(resp.Status.ExpirationTimestamp.Time), float64(time.Minute))
-
-	// Create a client using the certificate and key returned by the token exchange.
-	validClient := library.NewClientsetWithCertAndKey(t, resp.Status.ClientCertificateData, resp.Status.ClientKeyData)
-
-	// Make a version request, which should succeed even without any authorization.
-	_, err = validClient.Discovery().ServerVersion()
-	require.NoError(t, err)
 }

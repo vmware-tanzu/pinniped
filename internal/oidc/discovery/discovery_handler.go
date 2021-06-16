@@ -25,6 +25,7 @@ type Metadata struct {
 	JWKSURI               string `json:"jwks_uri"`
 
 	ResponseTypesSupported           []string `json:"response_types_supported"`
+	ResponseModesSupported           []string `json:"response_modes_supported"`
 	SubjectTypesSupported            []string `json:"subject_types_supported"`
 	IDTokenSigningAlgValuesSupported []string `json:"id_token_signing_alg_values_supported"`
 
@@ -63,6 +64,7 @@ func NewHandler(issuerURL string) http.Handler {
 		JWKSURI:                           issuerURL + oidc.JWKSEndpointPath,
 		SupervisorDiscovery:               SupervisorDiscoveryMetadataV1Alpha1{PinnipedIDPsEndpoint: issuerURL + oidc.PinnipedIDPsPathV1Alpha1},
 		ResponseTypesSupported:            []string{"code"},
+		ResponseModesSupported:            []string{"query", "form_post"},
 		SubjectTypesSupported:             []string{"public"},
 		IDTokenSigningAlgValuesSupported:  []string{"ES256"},
 		TokenEndpointAuthMethodsSupported: []string{"client_secret_basic"},

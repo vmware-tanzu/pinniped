@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package accesstoken
@@ -17,6 +17,7 @@ import (
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/fositestorage"
+	"go.pinniped.dev/internal/oidc/clientregistry"
 )
 
 const (
@@ -108,7 +109,7 @@ func (a *accessTokenStorage) getSession(ctx context.Context, signature string) (
 func newValidEmptyAccessTokenSession() *session {
 	return &session{
 		Request: &fosite.Request{
-			Client:  &fosite.DefaultOpenIDConnectClient{},
+			Client:  &clientregistry.Client{},
 			Session: &openid.DefaultSession{},
 		},
 	}

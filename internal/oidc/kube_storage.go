@@ -13,18 +13,17 @@ import (
 	fositepkce "github.com/ory/fosite/handler/pkce"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
-	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/fositestorage/accesstoken"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
 	"go.pinniped.dev/internal/fositestorage/openidconnect"
 	"go.pinniped.dev/internal/fositestorage/pkce"
 	"go.pinniped.dev/internal/fositestorage/refreshtoken"
 	"go.pinniped.dev/internal/fositestoragei"
+	"go.pinniped.dev/internal/oidc/clientregistry"
 )
 
-const errKubeStorageNotImplemented = constable.Error("KubeStorage does not implement this method. It should not have been called.")
-
 type KubeStorage struct {
+	clientManager            fosite.ClientManager
 	authorizationCodeStorage oauth2.AuthorizeCodeStorage
 	pkceStorage              fositepkce.PKCERequestStorage
 	oidcStorage              openid.OpenIDConnectRequestStorage
@@ -37,6 +36,7 @@ var _ fositestoragei.AllFositeStorage = &KubeStorage{}
 func NewKubeStorage(secrets corev1client.SecretInterface, timeoutsConfiguration TimeoutsConfiguration) *KubeStorage {
 	nowFunc := time.Now
 	return &KubeStorage{
+		clientManager:            &clientregistry.StaticClientManager{},
 		authorizationCodeStorage: authorizationcode.New(secrets, nowFunc, timeoutsConfiguration.AuthorizationCodeSessionStorageLifetime),
 		pkceStorage:              pkce.New(secrets, nowFunc, timeoutsConfiguration.PKCESessionStorageLifetime),
 		oidcStorage:              openidconnect.New(secrets, nowFunc, timeoutsConfiguration.OIDCSessionStorageLifetime),
@@ -183,26 +183,15 @@ func (k KubeStorage) RevokeRefreshToken(ctx context.Context, requestID string) e
 //
 // OAuth client definitions:
 //
-// For the time being, we only allow a single pre-defined client, so we do not need to interact with any underlying
-// storage mechanism to fetch them.
-//
 
-func (KubeStorage) GetClient(_ context.Context, id string) (fosite.Client, error) {
-	client := PinnipedCLIOIDCClient()
-	if client.ID == id {
-		return client, nil
-	}
-	return nil, fosite.ErrNotFound
+func (k KubeStorage) GetClient(ctx context.Context, id string) (fosite.Client, error) {
+	return k.clientManager.GetClient(ctx, id)
 }
 
-//
-// Unused interface methods.
-//
-
-func (KubeStorage) ClientAssertionJWTValid(_ context.Context, _ string) error {
-	return errKubeStorageNotImplemented
+func (k KubeStorage) ClientAssertionJWTValid(ctx context.Context, jti string) error {
+	return k.clientManager.ClientAssertionJWTValid(ctx, jti)
 }
 
-func (KubeStorage) SetClientAssertionJWT(_ context.Context, _ string, _ time.Time) error {
-	return errKubeStorageNotImplemented
+func (k KubeStorage) SetClientAssertionJWT(ctx context.Context, jti string, exp time.Time) error {
+	return k.clientManager.SetClientAssertionJWT(ctx, jti, exp)
 }

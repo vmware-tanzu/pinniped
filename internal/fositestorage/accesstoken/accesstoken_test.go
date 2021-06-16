@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package accesstoken
@@ -20,6 +20,8 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	coretesting "k8s.io/client-go/testing"
+
+	"go.pinniped.dev/internal/oidc/clientregistry"
 )
 
 const namespace = "test-ns"
@@ -63,24 +65,25 @@ func TestAccessTokenStorage(t *testing.T) {
 	request := &fosite.Request{
 		ID:          "abcd-1",
 		RequestedAt: time.Time{},
-		Client: &fosite.DefaultOpenIDConnectClient{
-			DefaultClient: &fosite.DefaultClient{
-				ID:            "pinny",
-				Secret:        nil,
-				RedirectURIs:  nil,
-				GrantTypes:    nil,
-				ResponseTypes: nil,
-				Scopes:        nil,
-				Audience:      nil,
-				Public:        true,
-			},
-			JSONWebKeysURI:                    "where",
-			JSONWebKeys:                       nil,
-			TokenEndpointAuthMethod:           "something",
-			RequestURIs:                       nil,
-			RequestObjectSigningAlgorithm:     "",
-			TokenEndpointAuthSigningAlgorithm: "",
-		},
+		Client: &clientregistry.Client{
+			DefaultOpenIDConnectClient: fosite.DefaultOpenIDConnectClient{
+				DefaultClient: &fosite.DefaultClient{
+					ID:            "pinny",
+					Secret:        nil,
+					RedirectURIs:  nil,
+					GrantTypes:    nil,
+					ResponseTypes: nil,
+					Scopes:        nil,
+					Audience:      nil,
+					Public:        true,
+				},
+				JSONWebKeysURI:                    "where",
+				JSONWebKeys:                       nil,
+				TokenEndpointAuthMethod:           "something",
+				RequestURIs:                       nil,
+				RequestObjectSigningAlgorithm:     "",
+				TokenEndpointAuthSigningAlgorithm: "",
+			}},
 		RequestedScope: nil,
 		GrantedScope:   nil,
 		Form:           url.Values{"key": []string{"val"}},
@@ -138,13 +141,15 @@ func TestAccessTokenStorageRevocation(t *testing.T) {
 	request := &fosite.Request{
 		ID:          "abcd-1",
 		RequestedAt: time.Time{},
-		Client: &fosite.DefaultOpenIDConnectClient{
-			DefaultClient: &fosite.DefaultClient{
-				ID:     "pinny",
-				Public: true,
+		Client: &clientregistry.Client{
+			DefaultOpenIDConnectClient: fosite.DefaultOpenIDConnectClient{
+				DefaultClient: &fosite.DefaultClient{
+					ID:     "pinny",
+					Public: true,
+				},
+				JSONWebKeysURI:          "where",
+				TokenEndpointAuthMethod: "something",
 			},
-			JSONWebKeysURI:          "where",
-			TokenEndpointAuthMethod: "something",
 		},
 		Form: url.Values{"key": []string{"val"}},
 		Session: &openid.DefaultSession{
@@ -238,7 +243,7 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 
 	request := &fosite.Request{
 		Session: nil,
-		Client:  &fosite.DefaultOpenIDConnectClient{},
+		Client:  &clientregistry.Client{},
 	}
 	err := storage.CreateAccessTokenSession(ctx, "signature-doesnt-matter", request)
 	require.EqualError(t, err, "requester's session must be of type openid.DefaultSession")
@@ -248,7 +253,7 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 		Client:  nil,
 	}
 	err = storage.CreateAccessTokenSession(ctx, "signature-doesnt-matter", request)
-	require.EqualError(t, err, "requester's client must be of type fosite.DefaultOpenIDConnectClient")
+	require.EqualError(t, err, "requester's client must be of type clientregistry.Client")
 }
 
 func TestCreateWithoutRequesterID(t *testing.T) {
@@ -257,7 +262,7 @@ func TestCreateWithoutRequesterID(t *testing.T) {
 	request := &fosite.Request{
 		ID:      "", // empty ID
 		Session: &openid.DefaultSession{},
-		Client:  &fosite.DefaultOpenIDConnectClient{},
+		Client:  &clientregistry.Client{},
 	}
 	err := storage.CreateAccessTokenSession(ctx, "signature-doesnt-matter", request)
 	require.NoError(t, err)

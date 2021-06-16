@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package authorizationcode
@@ -33,6 +33,7 @@ import (
 	kubetesting "k8s.io/client-go/testing"
 
 	"go.pinniped.dev/internal/fositestorage"
+	"go.pinniped.dev/internal/oidc/clientregistry"
 )
 
 const namespace = "test-ns"
@@ -92,23 +93,25 @@ func TestAuthorizationCodeStorage(t *testing.T) {
 	request := &fosite.Request{
 		ID:          "abcd-1",
 		RequestedAt: time.Time{},
-		Client: &fosite.DefaultOpenIDConnectClient{
-			DefaultClient: &fosite.DefaultClient{
-				ID:            "pinny",
-				Secret:        nil,
-				RedirectURIs:  nil,
-				GrantTypes:    nil,
-				ResponseTypes: nil,
-				Scopes:        nil,
-				Audience:      nil,
-				Public:        true,
+		Client: &clientregistry.Client{
+			DefaultOpenIDConnectClient: fosite.DefaultOpenIDConnectClient{
+				DefaultClient: &fosite.DefaultClient{
+					ID:            "pinny",
+					Secret:        nil,
+					RedirectURIs:  nil,
+					GrantTypes:    nil,
+					ResponseTypes: nil,
+					Scopes:        nil,
+					Audience:      nil,
+					Public:        true,
+				},
+				JSONWebKeysURI:                    "where",
+				JSONWebKeys:                       nil,
+				TokenEndpointAuthMethod:           "something",
+				RequestURIs:                       nil,
+				RequestObjectSigningAlgorithm:     "",
+				TokenEndpointAuthSigningAlgorithm: "",
 			},
-			JSONWebKeysURI:                    "where",
-			JSONWebKeys:                       nil,
-			TokenEndpointAuthMethod:           "something",
-			RequestURIs:                       nil,
-			RequestObjectSigningAlgorithm:     "",
-			TokenEndpointAuthSigningAlgorithm: "",
 		},
 		RequestedScope: nil,
 		GrantedScope:   nil,
@@ -169,7 +172,7 @@ func TestInvalidateWhenConflictOnUpdateHappens(t *testing.T) {
 
 	request := &fosite.Request{
 		ID:      "some-request-id",
-		Client:  &fosite.DefaultOpenIDConnectClient{},
+		Client:  &clientregistry.Client{},
 		Session: &openid.DefaultSession{},
 	}
 	err := storage.CreateAuthorizeCodeSession(ctx, "fancy-signature", request)
@@ -240,7 +243,7 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 
 	request := &fosite.Request{
 		Session: nil,
-		Client:  &fosite.DefaultOpenIDConnectClient{},
+		Client:  &clientregistry.Client{},
 	}
 	err := storage.CreateAuthorizeCodeSession(ctx, "signature-doesnt-matter", request)
 	require.EqualError(t, err, "requester's session must be of type openid.DefaultSession")
@@ -250,7 +253,7 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 		Client:  nil,
 	}
 	err = storage.CreateAuthorizeCodeSession(ctx, "signature-doesnt-matter", request)
-	require.EqualError(t, err, "requester's client must be of type fosite.DefaultOpenIDConnectClient")
+	require.EqualError(t, err, "requester's client must be of type clientregistry.Client")
 }
 
 func makeTestSubject() (context.Context, *fake.Clientset, corev1client.SecretInterface, oauth2.AuthorizeCodeStorage) {
@@ -270,7 +273,7 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 	require.Equal(t, validSession.Request, extractedRequest)
 
 	// checked above
-	defaultClient := validSession.Request.Client.(*fosite.DefaultOpenIDConnectClient)
+	defaultClient := validSession.Request.Client.(*clientregistry.Client)
 	defaultSession := validSession.Request.Session.(*openid.DefaultSession)
 
 	// makes it easier to use a raw string

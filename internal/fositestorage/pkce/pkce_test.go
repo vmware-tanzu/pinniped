@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package pkce
@@ -21,6 +21,8 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	coretesting "k8s.io/client-go/testing"
+
+	"go.pinniped.dev/internal/oidc/clientregistry"
 )
 
 const namespace = "test-ns"
@@ -63,23 +65,25 @@ func TestPKCEStorage(t *testing.T) {
 	request := &fosite.Request{
 		ID:          "abcd-1",
 		RequestedAt: time.Time{},
-		Client: &fosite.DefaultOpenIDConnectClient{
-			DefaultClient: &fosite.DefaultClient{
-				ID:            "pinny",
-				Secret:        nil,
-				RedirectURIs:  nil,
-				GrantTypes:    nil,
-				ResponseTypes: nil,
-				Scopes:        nil,
-				Audience:      nil,
-				Public:        true,
+		Client: &clientregistry.Client{
+			DefaultOpenIDConnectClient: fosite.DefaultOpenIDConnectClient{
+				DefaultClient: &fosite.DefaultClient{
+					ID:            "pinny",
+					Secret:        nil,
+					RedirectURIs:  nil,
+					GrantTypes:    nil,
+					ResponseTypes: nil,
+					Scopes:        nil,
+					Audience:      nil,
+					Public:        true,
+				},
+				JSONWebKeysURI:                    "where",
+				JSONWebKeys:                       nil,
+				TokenEndpointAuthMethod:           "something",
+				RequestURIs:                       nil,
+				RequestObjectSigningAlgorithm:     "",
+				TokenEndpointAuthSigningAlgorithm: "",
 			},
-			JSONWebKeysURI:                    "where",
-			JSONWebKeys:                       nil,
-			TokenEndpointAuthMethod:           "something",
-			RequestURIs:                       nil,
-			RequestObjectSigningAlgorithm:     "",
-			TokenEndpointAuthSigningAlgorithm: "",
 		},
 		RequestedScope: nil,
 		GrantedScope:   nil,
@@ -183,7 +187,7 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 
 	request := &fosite.Request{
 		Session: nil,
-		Client:  &fosite.DefaultOpenIDConnectClient{},
+		Client:  &clientregistry.Client{},
 	}
 	err := storage.CreatePKCERequestSession(ctx, "signature-doesnt-matter", request)
 	require.EqualError(t, err, "requester's session must be of type openid.DefaultSession")
@@ -193,7 +197,7 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 		Client:  nil,
 	}
 	err = storage.CreatePKCERequestSession(ctx, "signature-doesnt-matter", request)
-	require.EqualError(t, err, "requester's client must be of type fosite.DefaultOpenIDConnectClient")
+	require.EqualError(t, err, "requester's client must be of type clientregistry.Client")
 }
 
 func makeTestSubject() (context.Context, *fake.Clientset, corev1client.SecretInterface, pkce.PKCERequestStorage) {

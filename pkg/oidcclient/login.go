@@ -87,6 +87,7 @@ type handlerState struct {
 	// Generated parameters of a login flow.
 	provider     *oidc.Provider
 	oauth2Config *oauth2.Config
+	useFormPost  bool
 	state        state.State
 	nonce        nonce.Nonce
 	pkce         pkce.Code
@@ -486,8 +487,14 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 		Path:   h.callbackPath,
 	}).String()
 
+	// If the server supports it, request response_mode=form_post.
+	authParams := *authorizeOptions
+	if h.useFormPost {
+		authParams = append(authParams, oauth2.SetAuthURLParam("response_mode", "form_post"))
+	}
+
 	// Now that we have a redirect URL with the listener port, we can build the authorize URL.
-	authorizeURL := h.oauth2Config.AuthCodeURL(h.state.String(), *authorizeOptions...)
+	authorizeURL := h.oauth2Config.AuthCodeURL(h.state.String(), authParams...)
 
 	// Start a callback server in a background goroutine.
 	shutdown := h.serve(listener)
@@ -567,7 +574,25 @@ func (h *handlerState) initOIDCDiscovery() error {
 		Endpoint: h.provider.Endpoint(),
 		Scopes:   h.scopes,
 	}
+
+	// Use response_mode=form_post if the provider supports it.
+	var discoveryClaims struct {
+		ResponseModesSupported []string `json:"response_modes_supported"`
+	}
+	if err := h.provider.Claims(&discoveryClaims); err != nil {
+		return fmt.Errorf("could not decode response_modes_supported in OIDC discovery from %q: %w", h.issuer, err)
+	}
+	h.useFormPost = stringSliceContains(discoveryClaims.ResponseModesSupported, "form_post")
 	return nil
+}
+
+func stringSliceContains(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidctypes.Token, error) {

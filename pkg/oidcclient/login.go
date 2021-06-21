@@ -689,13 +689,29 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 		}
 	}()
 
-	// Return HTTP 405 for anything that's not a GET.
-	if r.Method != http.MethodGet {
-		return httperr.Newf(http.StatusMethodNotAllowed, "wanted GET")
+	var params url.Values
+	if h.useFormPost {
+		// Return HTTP 405 for anything that's not a POST.
+		if r.Method != http.MethodPost {
+			return httperr.Newf(http.StatusMethodNotAllowed, "wanted POST")
+		}
+
+		// Parse and pull the response parameters from a application/x-www-form-urlencoded request body.
+		if err := r.ParseForm(); err != nil {
+			return httperr.Wrap(http.StatusBadRequest, "invalid form", err)
+		}
+		params = r.Form
+	} else {
+		// Return HTTP 405 for anything that's not a GET.
+		if r.Method != http.MethodGet {
+			return httperr.Newf(http.StatusMethodNotAllowed, "wanted GET")
+		}
+
+		// Pull response parameters from the URL query string.
+		params = r.URL.Query()
 	}
 
 	// Validate OAuth2 state and fail if it's incorrect (to block CSRF).
-	params := r.URL.Query()
 	if err := h.state.Validate(params.Get("state")); err != nil {
 		return httperr.New(http.StatusForbidden, "missing or invalid state parameter")
 	}

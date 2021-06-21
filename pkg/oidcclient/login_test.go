@@ -4,6 +4,7 @@
 package oidcclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -1427,10 +1428,18 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 func TestHandleAuthCodeCallback(t *testing.T) {
 	const testRedirectURI = "http://127.0.0.1:12324/callback"
 
+	withFormPostMode := func(t *testing.T) Option {
+		return func(h *handlerState) error {
+			h.useFormPost = true
+			return nil
+		}
+	}
 	tests := []struct {
 		name           string
 		method         string
 		query          string
+		body           []byte
+		contentType    string
 		opt            func(t *testing.T) Option
 		wantErr        string
 		wantHTTPStatus int
@@ -1441,6 +1450,24 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			query:          "",
 			wantErr:        "wanted GET",
 			wantHTTPStatus: http.StatusMethodNotAllowed,
+		},
+		{
+			name:           "wrong method for form_post",
+			method:         "GET",
+			query:          "",
+			opt:            withFormPostMode,
+			wantErr:        "wanted POST",
+			wantHTTPStatus: http.StatusMethodNotAllowed,
+		},
+		{
+			name:           "invalid form for form_post",
+			method:         "POST",
+			query:          "",
+			contentType:    "application/x-www-form-urlencoded",
+			body:           []byte(`%`),
+			opt:            withFormPostMode,
+			wantErr:        `invalid form: invalid URL escape "%"`,
+			wantHTTPStatus: http.StatusBadRequest,
 		},
 		{
 			name:           "invalid state",
@@ -1496,6 +1523,26 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:        "valid form_post",
+			method:      http.MethodPost,
+			contentType: "application/x-www-form-urlencoded",
+			body:        []byte(`state=test-state&code=valid`),
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.useFormPost = true
+					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+						mock := mockUpstream(t)
+						mock.EXPECT().
+							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
+							Return(&oidctypes.Token{IDToken: &oidctypes.IDToken{Token: "test-id-token"}}, nil)
+						return mock
+					}
+					return nil
+				}
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -1514,11 +1561,14 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			defer cancel()
 
 			resp := httptest.NewRecorder()
-			req, err := http.NewRequestWithContext(ctx, "GET", "/test-callback", nil)
+			req, err := http.NewRequestWithContext(ctx, "GET", "/test-callback", bytes.NewBuffer(tt.body))
 			require.NoError(t, err)
 			req.URL.RawQuery = tt.query
 			if tt.method != "" {
 				req.Method = tt.method
+			}
+			if tt.contentType != "" {
+				req.Header.Set("Content-Type", tt.contentType)
 			}
 
 			err = h.handleAuthCodeCallback(resp, req)

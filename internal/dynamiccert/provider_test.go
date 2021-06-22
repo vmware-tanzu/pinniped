@@ -18,7 +18,7 @@ import (
 	"k8s.io/apiserver/pkg/storage/names"
 
 	"go.pinniped.dev/internal/certauthority"
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestProviderWithDynamicServingCertificateController(t *testing.T) {
@@ -205,12 +205,12 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 			if err != nil && lastTLSConfig != nil {
 				// for debugging failures
 				t.Log("diff between client CAs:\n", cmp.Diff(
-					library.Sdump(wantClientCASubjects),
-					library.Sdump(poolSubjects(lastTLSConfig.ClientCAs)),
+					testlib.Sdump(wantClientCASubjects),
+					testlib.Sdump(poolSubjects(lastTLSConfig.ClientCAs)),
 				))
 				t.Log("diff between serving certs:\n", cmp.Diff(
-					library.Sdump(wantCerts),
-					library.Sdump(lastTLSConfig.Certificates),
+					testlib.Sdump(wantCerts),
+					testlib.Sdump(lastTLSConfig.Certificates),
 				))
 			}
 			require.NoError(t, err)

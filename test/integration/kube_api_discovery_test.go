@@ -16,13 +16,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/discovery"
 
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestGetAPIResourceList(t *testing.T) {
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 
-	client := library.NewKubernetesClientset(t)
+	client := testlib.NewKubernetesClientset(t)
 	groups, resources, err := client.Discovery().ServerGroupsAndResources()
 
 	// discovery can have partial failures when an API service is unavailable (i.e. because of TestAPIServingCertificateAutoCreationAndRotation)

@@ -16,13 +16,13 @@ import (
 
 	"go.pinniped.dev/internal/controllerlib/test/integration/examplecontroller/api"
 	examplestart "go.pinniped.dev/internal/controllerlib/test/integration/examplecontroller/starter"
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestExampleController(t *testing.T) {
-	library.SkipUnlessIntegration(t)
+	testlib.SkipUnlessIntegration(t)
 
-	config := library.NewClientConfig(t)
+	config := testlib.NewClientConfig(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -93,7 +93,7 @@ done:
 			expectedData := map[string][]byte{
 				api.SecretDataKey: []byte(secretData),
 			}
-			require.Equal(t, expectedData, secret.Data, "expected to see new secret data: %s", library.Sdump(secret))
+			require.Equal(t, expectedData, secret.Data, "expected to see new secret data: %s", testlib.Sdump(secret))
 			break done // immediately stop consuming events because we want to check for updated events below
 
 		case <-timeout:
@@ -132,7 +132,7 @@ done2:
 			expectedData := map[string][]byte{
 				api.SecretDataKey: []byte(secretData2),
 			}
-			require.Equal(t, expectedData, secret.Data, "expected to see updated secret data: %s", library.Sdump(secret))
+			require.Equal(t, expectedData, secret.Data, "expected to see updated secret data: %s", testlib.Sdump(secret))
 			break done2 // immediately stop consuming events because we want to check for hot loops below
 
 		case <-timeout:
@@ -154,7 +154,7 @@ done3:
 			}
 
 			// this assumes that no other actor in the system is trying to mutate this secret
-			t.Errorf("unexpected event seen for secret: %s", library.Sdump(event))
+			t.Errorf("unexpected event seen for secret: %s", testlib.Sdump(event))
 
 		case <-timeout:
 			break done3 // we saw no events matching our secret meaning that we are not hot looping

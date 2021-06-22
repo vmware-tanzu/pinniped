@@ -16,7 +16,7 @@ import (
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/internal/crud"
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestStorageGarbageCollection(t *testing.T) {
@@ -24,8 +24,8 @@ func TestStorageGarbageCollection(t *testing.T) {
 	// and will not impact other tests, or be impacted by other tests, when run in parallel.
 	t.Parallel()
 
-	env := library.IntegrationEnv(t)
-	client := library.NewKubernetesClientset(t)
+	env := testlib.IntegrationEnv(t)
+	client := testlib.NewKubernetesClientset(t)
 	secrets := client.CoreV1().Secrets(env.SupervisorNamespace)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -55,12 +55,12 @@ func TestStorageGarbageCollection(t *testing.T) {
 	// in practice we should only need to wait about 30 seconds, which is the GC controller's self-imposed
 	// rate throttling time period.
 	slightlyLongerThanGCControllerFullResyncPeriod := 3*time.Minute + 30*time.Second
-	library.RequireEventually(t, func(requireEventually *require.Assertions) {
+	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		_, err := secrets.Get(ctx, secretAlreadyExpired.Name, metav1.GetOptions{})
 		requireEventually.Truef(k8serrors.IsNotFound(err), "wanted a NotFound error but got %v", err)
 	}, slightlyLongerThanGCControllerFullResyncPeriod, 250*time.Millisecond)
 
-	library.RequireEventually(t, func(requireEventually *require.Assertions) {
+	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		_, err := secrets.Get(ctx, secretWhichWillExpireBeforeTheTestEnds.Name, metav1.GetOptions{})
 		requireEventually.Truef(k8serrors.IsNotFound(err), "wanted a NotFound error but got %v", err)
 	}, slightlyLongerThanGCControllerFullResyncPeriod, 250*time.Millisecond)

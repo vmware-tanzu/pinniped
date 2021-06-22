@@ -15,19 +15,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestSupervisorSecrets(t *testing.T) {
-	env := library.IntegrationEnv(t)
-	kubeClient := library.NewKubernetesClientset(t)
-	supervisorClient := library.NewSupervisorClientset(t)
+	env := testlib.IntegrationEnv(t)
+	kubeClient := testlib.NewKubernetesClientset(t)
+	supervisorClient := testlib.NewSupervisorClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	// Create our FederationDomain under test.
-	federationDomain := library.CreateTestFederationDomain(ctx, t, "", "", "")
+	federationDomain := testlib.CreateTestFederationDomain(ctx, t, "", "", "")
 
 	tests := []struct {
 		name        string
@@ -75,7 +75,7 @@ func TestSupervisorSecrets(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Ensure a secret is created with the FederationDomain's JWKS.
 			var updatedFederationDomain *configv1alpha1.FederationDomain
-			library.RequireEventually(t, func(requireEventually *require.Assertions) {
+			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 				resp, err := supervisorClient.
 					ConfigV1alpha1().
 					FederationDomains(env.SupervisorNamespace).
@@ -107,7 +107,7 @@ func TestSupervisorSecrets(t *testing.T) {
 				Secrets(env.SupervisorNamespace).
 				Delete(ctx, test.secretName(updatedFederationDomain), metav1.DeleteOptions{})
 			require.NoError(t, err)
-			library.RequireEventually(t, func(requireEventually *require.Assertions) {
+			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 				var err error
 				secret, err = kubeClient.
 					CoreV1().

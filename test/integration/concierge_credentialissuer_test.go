@@ -14,14 +14,14 @@ import (
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestCredentialIssuer(t *testing.T) {
-	env := library.IntegrationEnv(t)
-	config := library.NewClientConfig(t)
-	client := library.NewConciergeClientset(t)
-	aggregatedClientset := library.NewAggregatedClientset(t)
+	env := testlib.IntegrationEnv(t)
+	config := testlib.NewClientConfig(t)
+	client := testlib.NewConciergeClientset(t)
+	aggregatedClientset := testlib.NewAggregatedClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -66,7 +66,7 @@ func TestCredentialIssuer(t *testing.T) {
 		}
 		require.NotNil(t, actualStatusStrategy)
 
-		if env.HasCapability(library.ClusterSigningKeyIsAvailable) {
+		if env.HasCapability(testlib.ClusterSigningKeyIsAvailable) {
 			require.Equal(t, configv1alpha1.SuccessStrategyStatus, actualStatusStrategy.Status)
 			require.Equal(t, configv1alpha1.FetchedKeyStrategyReason, actualStatusStrategy.Reason)
 			require.Equal(t, "key was fetched successfully", actualStatusStrategy.Message)

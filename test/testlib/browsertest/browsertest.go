@@ -12,7 +12,7 @@ import (
 	"github.com/sclevine/agouti"
 	"github.com/stretchr/testify/require"
 
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 const (
@@ -25,7 +25,7 @@ const (
 // in a mode that ignore certificate errors.
 func Open(t *testing.T) *agouti.Page {
 	t.Logf("opening browser driver")
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 	caps := agouti.NewCapabilities()
 	if env.Proxy != "" {
 		t.Logf("configuring Chrome to use proxy %q", env.Proxy)
@@ -59,7 +59,7 @@ func Open(t *testing.T) *agouti.Page {
 func WaitForVisibleElements(t *testing.T, page *agouti.Page, selectors ...string) {
 	t.Helper()
 
-	library.RequireEventuallyf(t,
+	testlib.RequireEventuallyf(t,
 		func(requireEventually *require.Assertions) {
 			for _, sel := range selectors {
 				vis, err := page.First(sel).Visible()
@@ -78,7 +78,7 @@ func WaitForVisibleElements(t *testing.T, page *agouti.Page, selectors ...string
 // to occur and times out, failing the test, if it never does.
 func WaitForURL(t *testing.T, page *agouti.Page, pat *regexp.Regexp) {
 	var lastURL string
-	library.RequireEventuallyf(t,
+	testlib.RequireEventuallyf(t,
 		func(requireEventually *require.Assertions) {
 			url, err := page.URL()
 			if url != lastURL {
@@ -97,7 +97,7 @@ func WaitForURL(t *testing.T, page *agouti.Page, pat *regexp.Regexp) {
 
 // LoginToUpstream expects the page to be redirected to one of several known upstream IDPs.
 // It knows how to enter the test username/password and submit the upstream login form.
-func LoginToUpstream(t *testing.T, page *agouti.Page, upstream library.TestOIDCUpstream) {
+func LoginToUpstream(t *testing.T, page *agouti.Page, upstream testlib.TestOIDCUpstream) {
 	t.Helper()
 
 	type config struct {

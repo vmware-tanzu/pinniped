@@ -3,7 +3,7 @@
 
 // +build !go1.14
 
-package library
+package testlib
 
 import (
 	"context"

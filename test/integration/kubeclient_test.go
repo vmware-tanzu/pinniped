@@ -22,14 +22,14 @@ import (
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/ownerref"
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestKubeClientOwnerRef(t *testing.T) {
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 
-	regularClient := library.NewKubernetesClientset(t)
-	regularAggregationClient := library.NewAggregatedClientset(t)
+	regularClient := testlib.NewKubernetesClientset(t)
+	regularAggregationClient := testlib.NewAggregatedClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -75,7 +75,7 @@ func TestKubeClientOwnerRef(t *testing.T) {
 		UID:        parentSecret.UID,
 	}
 
-	snorlaxAPIGroup := fmt.Sprintf("%s.snorlax.dev", library.RandHex(t, 8))
+	snorlaxAPIGroup := fmt.Sprintf("%s.snorlax.dev", testlib.RandHex(t, 8))
 	parentAPIService, err := regularAggregationClient.ApiregistrationV1().APIServices().Create(
 		ctx,
 		&apiregistrationv1.APIService{
@@ -114,7 +114,7 @@ func TestKubeClientOwnerRef(t *testing.T) {
 		UID:        parentAPIService.UID,
 	}
 
-	apiServiceRef, err := apiserviceref.New(parentAPIService.Name, kubeclient.WithConfig(library.NewClientConfig(t)))
+	apiServiceRef, err := apiserviceref.New(parentAPIService.Name, kubeclient.WithConfig(testlib.NewClientConfig(t)))
 	require.NoError(t, err)
 
 	// create a client that should set an owner ref back to parent on create
@@ -122,7 +122,7 @@ func TestKubeClientOwnerRef(t *testing.T) {
 		kubeclient.WithMiddleware(ownerref.New(parentSecret)), // secret owner ref first when possible
 		apiServiceRef, // api service for everything else
 		kubeclient.WithMiddleware(groupsuffix.New(env.APIGroupSuffix)),
-		kubeclient.WithConfig(library.NewClientConfig(t)),
+		kubeclient.WithConfig(testlib.NewClientConfig(t)),
 	)
 	require.NoError(t, err)
 
@@ -188,7 +188,7 @@ func TestKubeClientOwnerRef(t *testing.T) {
 	})
 
 	// cluster scoped API service should be owned by the other one we created above
-	pandasAPIGroup := fmt.Sprintf("%s.pandas.dev", library.RandHex(t, 8))
+	pandasAPIGroup := fmt.Sprintf("%s.pandas.dev", testlib.RandHex(t, 8))
 	apiService, err := ownerRefClient.Aggregation.ApiregistrationV1().APIServices().Create(
 		ctx,
 		&apiregistrationv1.APIService{
@@ -305,7 +305,7 @@ func hasOwnerRef(t *testing.T, obj metav1.Object, ref metav1.OwnerReference) {
 func isEventuallyDeleted(t *testing.T, f func() error) {
 	t.Helper()
 
-	library.RequireEventuallyWithoutError(t, func() (bool, error) {
+	testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
 		err := f()
 		switch {
 		case err == nil:

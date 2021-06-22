@@ -14,11 +14,11 @@ import (
 
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/internal/testutil"
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 	defaultServingCertResourceName := env.ConciergeAppName + "-api-tls-serving-certificate"
 
 	tests := []struct {
@@ -72,9 +72,9 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			kubeClient := library.NewKubernetesClientset(t)
-			aggregatedClient := library.NewAggregatedClientset(t)
-			conciergeClient := library.NewConciergeClientset(t)
+			kubeClient := testlib.NewKubernetesClientset(t)
+			aggregatedClient := testlib.NewAggregatedClientset(t)
+			conciergeClient := testlib.NewConciergeClientset(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
@@ -82,7 +82,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 
 			// Create a testWebhook so we have a legitimate authenticator to pass to the
 			// TokenCredentialRequest API.
-			testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
+			testWebhook := testlib.CreateTestWebhookAuthenticator(ctx, t)
 
 			// Get the initial auto-generated version of the Secret.
 			secret, err := kubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})
@@ -107,7 +107,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			require.NoError(t, test.forceRotation(ctx, kubeClient, env.ConciergeNamespace))
 
 			// Expect that the Secret comes back right away with newly minted certs.
-			library.RequireEventually(t, func(requireEventually *require.Assertions) {
+			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 				var err error
 				secret, err = kubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})
 				requireEventually.NoError(err)
@@ -127,7 +127,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			require.Equal(t, env.ConciergeAppName, secret.Labels["app"])
 
 			// Expect that the APIService was also updated with the new CA.
-			library.RequireEventually(t, func(requireEventually *require.Assertions) {
+			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 				apiService, err := aggregatedClient.ApiregistrationV1().APIServices().Get(ctx, apiServiceName, metav1.GetOptions{})
 				requireEventually.NoErrorf(err, "get for APIService %q returned error", apiServiceName)
 				requireEventually.Equalf(regeneratedCACert, apiService.Spec.CABundle, "CA bundle in APIService %q does not yet have the expected value", apiServiceName)
@@ -141,7 +141,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			//
 			// our code changes all the certs immediately thus this should be healthy fairly quickly
 			// if this starts flaking, check for bugs in our dynamiccertificates.Notifier implementation
-			library.RequireEventually(t, func(requireEventually *require.Assertions) {
+			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 				for i := 0; i < 10; i++ {
 					_, err := conciergeClient.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 						TypeMeta:   metav1.TypeMeta{},

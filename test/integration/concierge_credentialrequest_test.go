@@ -19,16 +19,16 @@ import (
 
 	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestUnsuccessfulCredentialRequest(t *testing.T) {
-	env := library.IntegrationEnv(t).WithCapability(library.AnonymousAuthenticationSupported)
+	env := testlib.IntegrationEnv(t).WithCapability(testlib.AnonymousAuthenticationSupported)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	response, err := library.CreateTokenCredentialRequest(ctx, t,
+	response, err := testlib.CreateTokenCredentialRequest(ctx, t,
 		loginv1alpha1.TokenCredentialRequestSpec{
 			Token: env.TestUser.Token,
 			Authenticator: corev1.TypedLocalObjectReference{
@@ -45,7 +45,7 @@ func TestUnsuccessfulCredentialRequest(t *testing.T) {
 }
 
 func TestSuccessfulCredentialRequest(t *testing.T) {
-	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+	env := testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
@@ -57,16 +57,16 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 	}{
 		{
 			name:          "webhook",
-			authenticator: library.CreateTestWebhookAuthenticator,
+			authenticator: testlib.CreateTestWebhookAuthenticator,
 			token: func(t *testing.T) (string, string, []string) {
-				return library.IntegrationEnv(t).TestUser.Token, env.TestUser.ExpectedUsername, env.TestUser.ExpectedGroups
+				return testlib.IntegrationEnv(t).TestUser.Token, env.TestUser.ExpectedUsername, env.TestUser.ExpectedGroups
 			},
 		},
 		{
 			name:          "jwt authenticator",
-			authenticator: library.CreateTestJWTAuthenticatorForCLIUpstream,
+			authenticator: testlib.CreateTestJWTAuthenticatorForCLIUpstream,
 			token: func(t *testing.T) (string, string, []string) {
-				pinnipedExe := library.PinnipedCLIPath(t)
+				pinnipedExe := testlib.PinnipedCLIPath(t)
 				credOutput, _ := runPinnipedLoginOIDC(ctx, t, pinnipedExe)
 				token := credOutput.Status.Token
 
@@ -87,9 +87,9 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 			token, username, groups := test.token(t)
 
 			var response *loginv1alpha1.TokenCredentialRequest
-			library.RequireEventually(t, func(requireEventually *require.Assertions) {
+			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 				var err error
-				response, err = library.CreateTokenCredentialRequest(ctx, t,
+				response, err = testlib.CreateTokenCredentialRequest(ctx, t,
 					loginv1alpha1.TokenCredentialRequestSpec{Token: token, Authenticator: authenticator},
 				)
 				requireEventually.NoError(err, "the request should never fail at the HTTP level")
@@ -108,7 +108,7 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 			}, 10*time.Second, 500*time.Millisecond)
 
 			// Create a client using the certificate from the CredentialRequest.
-			clientWithCertFromCredentialRequest := library.NewClientsetWithCertAndKey(
+			clientWithCertFromCredentialRequest := testlib.NewClientsetWithCertAndKey(
 				t,
 				response.Status.Credential.ClientCertificateData,
 				response.Status.Credential.ClientKeyData,
@@ -116,13 +116,13 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 
 			t.Run(
 				"access as user",
-				library.AccessAsUserTest(ctx, username, clientWithCertFromCredentialRequest),
+				testlib.AccessAsUserTest(ctx, username, clientWithCertFromCredentialRequest),
 			)
 			for _, group := range groups {
 				group := group
 				t.Run(
 					"access as group "+group,
-					library.AccessAsGroupTest(ctx, group, clientWithCertFromCredentialRequest),
+					testlib.AccessAsGroupTest(ctx, group, clientWithCertFromCredentialRequest),
 				)
 			}
 		})
@@ -130,15 +130,15 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 }
 
 func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthenticateTheUser(t *testing.T) {
-	_ = library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+	_ = testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 
 	// Create a testWebhook so we have a legitimate authenticator to pass to the
 	// TokenCredentialRequest API.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
+	testWebhook := testlib.CreateTestWebhookAuthenticator(ctx, t)
 
-	response, err := library.CreateTokenCredentialRequest(context.Background(), t,
+	response, err := testlib.CreateTokenCredentialRequest(context.Background(), t,
 		loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token", Authenticator: testWebhook},
 	)
 
@@ -150,15 +150,15 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 }
 
 func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken(t *testing.T) {
-	_ = library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+	_ = testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 
 	// Create a testWebhook so we have a legitimate authenticator to pass to the
 	// TokenCredentialRequest API.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	testWebhook := library.CreateTestWebhookAuthenticator(ctx, t)
+	testWebhook := testlib.CreateTestWebhookAuthenticator(ctx, t)
 
-	response, err := library.CreateTokenCredentialRequest(context.Background(), t,
+	response, err := testlib.CreateTokenCredentialRequest(context.Background(), t,
 		loginv1alpha1.TokenCredentialRequestSpec{Token: "", Authenticator: testWebhook},
 	)
 

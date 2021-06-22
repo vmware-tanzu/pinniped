@@ -26,18 +26,18 @@ import (
 	"k8s.io/client-go/util/keyutil"
 
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestWhoAmI_Kubeadm(t *testing.T) {
 	// use the cluster signing key being available as a proxy for this being a kubeadm cluster
 	// we should add more robust logic around skipping clusters based on vendor
-	_ = library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+	_ = testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	whoAmI, err := library.NewConciergeClientset(t).IdentityV1alpha1().WhoAmIRequests().
+	whoAmI, err := testlib.NewConciergeClientset(t).IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
@@ -61,12 +61,12 @@ func TestWhoAmI_Kubeadm(t *testing.T) {
 }
 
 func TestWhoAmI_ServiceAccount_Legacy(t *testing.T) {
-	_ = library.IntegrationEnv(t)
+	_ = testlib.IntegrationEnv(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	kubeClient := library.NewKubernetesClientset(t).CoreV1()
+	kubeClient := testlib.NewKubernetesClientset(t).CoreV1()
 
 	ns, err := kubeClient.Namespaces().Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -97,7 +97,7 @@ func TestWhoAmI_ServiceAccount_Legacy(t *testing.T) {
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	library.RequireEventuallyWithoutError(t, func() (bool, error) {
+	testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
 		secret, err = kubeClient.Secrets(ns.Name).Get(ctx, secret.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -105,10 +105,10 @@ func TestWhoAmI_ServiceAccount_Legacy(t *testing.T) {
 		return len(secret.Data[corev1.ServiceAccountTokenKey]) > 0, nil
 	}, time.Minute, time.Second)
 
-	saConfig := library.NewAnonymousClientRestConfig(t)
+	saConfig := testlib.NewAnonymousClientRestConfig(t)
 	saConfig.BearerToken = string(secret.Data[corev1.ServiceAccountTokenKey])
 
-	whoAmI, err := library.NewKubeclient(t, saConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
+	whoAmI, err := testlib.NewKubeclient(t, saConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
@@ -134,12 +134,12 @@ func TestWhoAmI_ServiceAccount_Legacy(t *testing.T) {
 }
 
 func TestWhoAmI_ServiceAccount_TokenRequest(t *testing.T) {
-	_ = library.IntegrationEnv(t)
+	_ = testlib.IntegrationEnv(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	kubeClient := library.NewKubernetesClientset(t).CoreV1()
+	kubeClient := testlib.NewKubernetesClientset(t).CoreV1()
 
 	ns, err := kubeClient.Namespaces().Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -193,12 +193,12 @@ func TestWhoAmI_ServiceAccount_TokenRequest(t *testing.T) {
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	saBadAudConfig := library.NewAnonymousClientRestConfig(t)
+	saBadAudConfig := testlib.NewAnonymousClientRestConfig(t)
 	saBadAudConfig.BearerToken = tokenRequestBadAudience.Status.Token
 
-	_, badAudErr := library.NewKubeclient(t, saBadAudConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
+	_, badAudErr := testlib.NewKubeclient(t, saBadAudConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-	require.True(t, errors.IsUnauthorized(badAudErr), library.Sdump(badAudErr))
+	require.True(t, errors.IsUnauthorized(badAudErr), testlib.Sdump(badAudErr))
 
 	tokenRequest, err := kubeClient.ServiceAccounts(ns.Name).CreateToken(ctx, sa.Name, &authenticationv1.TokenRequest{
 		Spec: authenticationv1.TokenRequestSpec{
@@ -213,10 +213,10 @@ func TestWhoAmI_ServiceAccount_TokenRequest(t *testing.T) {
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	saTokenReqConfig := library.NewAnonymousClientRestConfig(t)
+	saTokenReqConfig := testlib.NewAnonymousClientRestConfig(t)
 	saTokenReqConfig.BearerToken = tokenRequest.Status.Token
 
-	whoAmITokenReq, err := library.NewKubeclient(t, saTokenReqConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
+	whoAmITokenReq, err := testlib.NewKubeclient(t, saTokenReqConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
@@ -248,12 +248,12 @@ func TestWhoAmI_ServiceAccount_TokenRequest(t *testing.T) {
 func TestWhoAmI_CSR(t *testing.T) {
 	// use the cluster signing key being available as a proxy for this not being an EKS cluster
 	// we should add more robust logic around skipping clusters based on vendor
-	_ = library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+	_ = testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	kubeClient := library.NewKubernetesClientset(t)
+	kubeClient := testlib.NewKubernetesClientset(t)
 
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
@@ -305,11 +305,11 @@ func TestWhoAmI_CSR(t *testing.T) {
 	crtPEM, err := csr.WaitForCertificate(ctx, kubeClient, csrName, csrUID)
 	require.NoError(t, err)
 
-	csrConfig := library.NewAnonymousClientRestConfig(t)
+	csrConfig := testlib.NewAnonymousClientRestConfig(t)
 	csrConfig.CertData = crtPEM
 	csrConfig.KeyData = keyPEM
 
-	whoAmI, err := library.NewKubeclient(t, csrConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
+	whoAmI, err := testlib.NewKubeclient(t, csrConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
@@ -333,14 +333,14 @@ func TestWhoAmI_CSR(t *testing.T) {
 }
 
 func TestWhoAmI_Anonymous(t *testing.T) {
-	_ = library.IntegrationEnv(t).WithCapability(library.AnonymousAuthenticationSupported)
+	_ = testlib.IntegrationEnv(t).WithCapability(testlib.AnonymousAuthenticationSupported)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	anonymousConfig := library.NewAnonymousClientRestConfig(t)
+	anonymousConfig := testlib.NewAnonymousClientRestConfig(t)
 
-	whoAmI, err := library.NewKubeclient(t, anonymousConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
+	whoAmI, err := testlib.NewKubeclient(t, anonymousConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
@@ -363,12 +363,12 @@ func TestWhoAmI_Anonymous(t *testing.T) {
 }
 
 func TestWhoAmI_ImpersonateDirectly(t *testing.T) {
-	_ = library.IntegrationEnv(t)
+	_ = testlib.IntegrationEnv(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	impersonationConfig := library.NewClientConfig(t)
+	impersonationConfig := testlib.NewClientConfig(t)
 	impersonationConfig.Impersonate = rest.ImpersonationConfig{
 		UserName: "solaire",
 		// need to impersonate system:authenticated directly to support older clusters otherwise we will get RBAC errors below
@@ -379,7 +379,7 @@ func TestWhoAmI_ImpersonateDirectly(t *testing.T) {
 		},
 	}
 
-	whoAmI, err := library.NewKubeclient(t, impersonationConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
+	whoAmI, err := testlib.NewKubeclient(t, impersonationConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
@@ -406,12 +406,12 @@ func TestWhoAmI_ImpersonateDirectly(t *testing.T) {
 		whoAmI,
 	)
 
-	impersonationAnonymousConfig := library.NewClientConfig(t)
+	impersonationAnonymousConfig := testlib.NewClientConfig(t)
 	impersonationAnonymousConfig.Impersonate.UserName = "system:anonymous"
 	// need to impersonate system:unauthenticated directly to support older clusters otherwise we will get RBAC errors below
 	impersonationAnonymousConfig.Impersonate.Groups = []string{"system:unauthenticated"}
 
-	whoAmIAnonymous, err := library.NewKubeclient(t, impersonationAnonymousConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
+	whoAmIAnonymous, err := testlib.NewKubeclient(t, impersonationAnonymousConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 	require.NoError(t, err)
 

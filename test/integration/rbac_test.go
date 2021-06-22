@@ -19,20 +19,20 @@ import (
 	v1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/client-go/rest"
 
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestServiceAccountPermissions(t *testing.T) {
 	// TODO: update this test to check the permissions of all service accounts
 	//  For now it just checks the permissions of the impersonation proxy SA
 
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
 	// impersonate the SA since it is easier than fetching a token and lets us control the group memberships
-	config := rest.CopyConfig(library.NewClientConfig(t))
+	config := rest.CopyConfig(testlib.NewClientConfig(t))
 	config.Impersonate = rest.ImpersonationConfig{
 		UserName: serviceaccount.MakeUsername(env.ConciergeNamespace, env.ConciergeAppName+"-impersonation-proxy"),
 		// avoid permissions assigned to system:serviceaccounts by explicitly impersonating system:serviceaccounts:<namespace>
@@ -42,7 +42,7 @@ func TestServiceAccountPermissions(t *testing.T) {
 		Groups: []string{serviceaccount.MakeNamespaceGroupName(env.ConciergeNamespace), user.AllAuthenticated},
 	}
 
-	ssrrClient := library.NewKubeclient(t, config).Kubernetes.AuthorizationV1().SelfSubjectRulesReviews()
+	ssrrClient := testlib.NewKubeclient(t, config).Kubernetes.AuthorizationV1().SelfSubjectRulesReviews()
 
 	// the impersonation proxy SA has the same permissions for all checks because it should only be authorized via cluster role bindings
 
@@ -67,7 +67,7 @@ func TestServiceAccountPermissions(t *testing.T) {
 		)
 	}
 
-	crbs, err := library.NewKubernetesClientset(t).RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{LabelSelector: "eks.amazonaws.com/component=pod-security-policy"})
+	crbs, err := testlib.NewKubernetesClientset(t).RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{LabelSelector: "eks.amazonaws.com/component=pod-security-policy"})
 	require.NoError(t, err)
 	if len(crbs.Items) > 0 {
 		expectedResourceRules = append(expectedResourceRules,
@@ -121,14 +121,14 @@ func testPermissionsInNamespace(ctx context.Context, t *testing.T, ssrrClient v1
 func getOtherPinnipedGroupSuffix(t *testing.T) string {
 	t.Helper()
 
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 
 	var resources []*metav1.APIResourceList
 
-	library.RequireEventuallyWithoutError(t, func() (bool, error) {
+	testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
 		// we need a complete discovery listing for the check we are trying to make below
 		// loop since tests like TestAPIServingCertificateAutoCreationAndRotation can break discovery
-		_, r, err := library.NewKubernetesClientset(t).Discovery().ServerGroupsAndResources()
+		_, r, err := testlib.NewKubernetesClientset(t).Discovery().ServerGroupsAndResources()
 		if err != nil {
 			t.Logf("retrying due to partial discovery failure: %v", err)
 			return false, nil

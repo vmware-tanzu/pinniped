@@ -20,12 +20,12 @@ import (
 
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
 	"go.pinniped.dev/internal/testutil"
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestAuthorizeCodeStorage(t *testing.T) {
-	env := library.IntegrationEnv(t)
-	client := library.NewKubernetesClientset(t)
+	env := testlib.IntegrationEnv(t)
+	client := testlib.NewKubernetesClientset(t)
 
 	const (
 		// randomly generated HMAC authorization code (see below)

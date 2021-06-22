@@ -13,7 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 // The Supervisor health endpoint is public because that makes it easier
@@ -23,7 +23,7 @@ import (
 // happen on a private container port at this time.
 // This test checks that it is working and that it is public.
 func TestSupervisorHealthz(t *testing.T) {
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 
 	if env.SupervisorHTTPAddress == "" {
 		t.Skip("PINNIPED_TEST_SUPERVISOR_HTTP_ADDRESS not defined")

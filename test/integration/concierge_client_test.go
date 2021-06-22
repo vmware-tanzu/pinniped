@@ -13,7 +13,7 @@ import (
 
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/pkg/conciergeclient"
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 // Test certificate and private key that should get an authentication error. Generated with cfssl [1], like this:
@@ -53,20 +53,20 @@ var (
 var maskKey = func(s string) string { return strings.ReplaceAll(s, "TESTING KEY", "PRIVATE KEY") }
 
 func TestClient(t *testing.T) {
-	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+	env := testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	webhook := library.CreateTestWebhookAuthenticator(ctx, t)
+	webhook := testlib.CreateTestWebhookAuthenticator(ctx, t)
 
 	// Use an invalid certificate/key to validate that the ServerVersion API fails like we assume.
-	invalidClient := library.NewClientsetWithCertAndKey(t, testCert, testKey)
+	invalidClient := testlib.NewClientsetWithCertAndKey(t, testCert, testKey)
 	_, err := invalidClient.Discovery().ServerVersion()
 	require.EqualError(t, err, "the server has asked for the client to provide credentials")
 
 	// Using the CA bundle and host from the current (admin) kubeconfig, do the token exchange.
-	clientConfig := library.NewClientConfig(t)
+	clientConfig := testlib.NewClientConfig(t)
 	client, err := conciergeclient.New(
 		conciergeclient.WithCABundle(string(clientConfig.CAData)),
 		conciergeclient.WithEndpoint(clientConfig.Host),
@@ -75,14 +75,14 @@ func TestClient(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	library.RequireEventually(t, func(requireEventually *require.Assertions) {
+	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		resp, err := client.ExchangeToken(ctx, env.TestUser.Token)
 		requireEventually.NoError(err)
 		requireEventually.NotNil(resp.Status.ExpirationTimestamp)
 		requireEventually.InDelta(5*time.Minute, time.Until(resp.Status.ExpirationTimestamp.Time), float64(time.Minute))
 
 		// Create a client using the certificate and key returned by the token exchange.
-		validClient := library.NewClientsetWithCertAndKey(t, resp.Status.ClientCertificateData, resp.Status.ClientKeyData)
+		validClient := testlib.NewClientsetWithCertAndKey(t, resp.Status.ClientCertificateData, resp.Status.ClientKeyData)
 
 		// Make a version request, which should succeed even without any authorization.
 		_, err = validClient.Discovery().ServerVersion()

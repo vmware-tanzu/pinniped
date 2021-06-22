@@ -17,18 +17,18 @@ import (
 	"k8s.io/utils/pointer"
 
 	conciergev1alpha "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestKubeCertAgent(t *testing.T) {
-	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+	env := testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	kubeClient := library.NewKubernetesClientset(t)
-	adminConciergeClient := library.NewConciergeClientset(t)
+	kubeClient := testlib.NewKubernetesClientset(t)
+	adminConciergeClient := testlib.NewConciergeClientset(t)
 
 	// Expect there to be at least on healthy kube-cert-agent pod on this cluster.
-	library.RequireEventuallyWithoutError(t, func() (bool, error) {
+	testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		agentPods, err := kubeClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{
@@ -50,7 +50,7 @@ func TestKubeCertAgent(t *testing.T) {
 	}, 1*time.Minute, 2*time.Second, "never saw a healthy kube-cert-agent Pod running")
 
 	// Expect that the CredentialIssuer will have a healthy KubeClusterSigningCertificate strategy.
-	library.RequireEventuallyWithoutError(t, func() (bool, error) {
+	testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		credentialIssuer, err := adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuerName(env), metav1.GetOptions{})
@@ -94,10 +94,10 @@ func findSuccessfulStrategy(credentialIssuer *conciergev1alpha.CredentialIssuer,
 }
 
 func TestLegacyPodCleaner(t *testing.T) {
-	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+	env := testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-	kubeClient := library.NewKubernetesClientset(t)
+	kubeClient := testlib.NewKubernetesClientset(t)
 
 	// Pick the same labels that the legacy code would have used to run the kube-cert-agent pod.
 	legacyAgentLabels := map[string]string{}
@@ -137,7 +137,7 @@ func TestLegacyPodCleaner(t *testing.T) {
 	})
 
 	// Expect the legacy-pod-cleaner controller to delete the pod.
-	library.RequireEventuallyWithoutError(t, func() (bool, error) {
+	testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
 		_, err := kubeClient.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
 		if k8serrors.IsNotFound(err) {
 			t.Logf("fake legacy agent pod %s/%s was deleted as expected", pod.Namespace, pod.Name)

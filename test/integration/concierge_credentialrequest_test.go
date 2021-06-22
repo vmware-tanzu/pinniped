@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	jwtpkg "gopkg.in/square/go-jose.v2/jwt"
 	corev1 "k8s.io/api/core/v1"
@@ -88,26 +87,25 @@ func TestSuccessfulCredentialRequest(t *testing.T) {
 			token, username, groups := test.token(t)
 
 			var response *loginv1alpha1.TokenCredentialRequest
-			successfulResponse := func() bool {
+			library.RequireEventually(t, func(requireEventually *require.Assertions) {
 				var err error
 				response, err = library.CreateTokenCredentialRequest(ctx, t,
 					loginv1alpha1.TokenCredentialRequestSpec{Token: token, Authenticator: authenticator},
 				)
-				require.NoError(t, err, "the request should never fail at the HTTP level")
-				return response.Status.Credential != nil
-			}
-			assert.Eventually(t, successfulResponse, 10*time.Second, 500*time.Millisecond)
-			require.NotNil(t, response)
-			require.Emptyf(t, response.Status.Message, "value is: %q", safeDerefStringPtr(response.Status.Message))
-			require.NotNil(t, response.Status.Credential)
-			require.Empty(t, response.Spec)
-			require.Empty(t, response.Status.Credential.Token)
-			require.NotEmpty(t, response.Status.Credential.ClientCertificateData)
-			require.Equal(t, username, getCommonName(t, response.Status.Credential.ClientCertificateData))
-			require.ElementsMatch(t, groups, getOrganizations(t, response.Status.Credential.ClientCertificateData))
-			require.NotEmpty(t, response.Status.Credential.ClientKeyData)
-			require.NotNil(t, response.Status.Credential.ExpirationTimestamp)
-			require.InDelta(t, 5*time.Minute, time.Until(response.Status.Credential.ExpirationTimestamp.Time), float64(time.Minute))
+				requireEventually.NoError(err, "the request should never fail at the HTTP level")
+				requireEventually.NotNil(response)
+				requireEventually.NotNil(response.Status.Credential, "the response should contain a credential")
+				requireEventually.Emptyf(response.Status.Message, "value is: %q", safeDerefStringPtr(response.Status.Message))
+				requireEventually.NotNil(response.Status.Credential)
+				requireEventually.Empty(response.Spec)
+				requireEventually.Empty(response.Status.Credential.Token)
+				requireEventually.NotEmpty(response.Status.Credential.ClientCertificateData)
+				requireEventually.Equal(username, getCommonName(t, response.Status.Credential.ClientCertificateData))
+				requireEventually.ElementsMatch(groups, getOrganizations(t, response.Status.Credential.ClientCertificateData))
+				requireEventually.NotEmpty(response.Status.Credential.ClientKeyData)
+				requireEventually.NotNil(response.Status.Credential.ExpirationTimestamp)
+				requireEventually.InDelta(5*time.Minute, time.Until(response.Status.Credential.ExpirationTimestamp.Time), float64(time.Minute))
+			}, 10*time.Second, 500*time.Millisecond)
 
 			// Create a client using the certificate from the CredentialRequest.
 			clientWithCertFromCredentialRequest := library.NewClientsetWithCertAndKey(

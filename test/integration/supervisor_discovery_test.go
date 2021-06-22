@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -398,15 +397,12 @@ func requireEndpointNotFound(t *testing.T, url, host, caBundle string) {
 
 	requestNonExistentPath.Host = host
 
-	var response *http.Response
-	assert.Eventually(t, func() bool {
-		response, err = httpClient.Do(requestNonExistentPath) //nolint:bodyclose
-		return err == nil && response.StatusCode == http.StatusNotFound
+	library.RequireEventually(t, func(requireEventually *require.Assertions) {
+		response, err := httpClient.Do(requestNonExistentPath)
+		requireEventually.NoError(err)
+		requireEventually.NoError(response.Body.Close())
+		requireEventually.Equal(http.StatusNotFound, response.StatusCode)
 	}, time.Minute, 200*time.Millisecond)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusNotFound, response.StatusCode)
-	err = response.Body.Close()
-	require.NoError(t, err)
 }
 
 func requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t *testing.T, url string) {
@@ -415,15 +411,17 @@ func requireEndpointHasTLSErrorBecauseCertificatesAreNotReady(t *testing.T, url 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	require.NoError(t, err)
+	library.RequireEventually(t, func(requireEventually *require.Assertions) {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		requireEventually.NoError(err)
 
-	assert.Eventually(t, func() bool {
-		_, err = httpClient.Do(request) //nolint:bodyclose
-		return err != nil && strings.Contains(err.Error(), "tls: unrecognized name")
+		response, err := httpClient.Do(request)
+		if err == nil {
+			_ = response.Body.Close()
+		}
+		requireEventually.Error(err)
+		requireEventually.EqualError(err, fmt.Sprintf(`Get "%s": remote error: tls: unrecognized name`, url))
 	}, time.Minute, 200*time.Millisecond)
-	require.Error(t, err)
-	require.EqualError(t, err, fmt.Sprintf(`Get "%s": remote error: tls: unrecognized name`, url))
 }
 
 func requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(
@@ -553,17 +551,19 @@ func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle 
 
 	// Fetch that discovery endpoint. Give it some time for the endpoint to come into existence.
 	var response *http.Response
-	assert.Eventually(t, func() bool {
-		response, err = httpClient.Do(requestDiscoveryEndpoint) //nolint:bodyclose
-		return err == nil && response.StatusCode == http.StatusOK
-	}, time.Minute, 200*time.Millisecond)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, response.StatusCode)
+	var responseBody []byte
+	library.RequireEventually(t, func(requireEventually *require.Assertions) {
+		var err error
+		response, err = httpClient.Do(requestDiscoveryEndpoint)
+		requireEventually.NoError(err)
+		defer func() { _ = response.Body.Close() }()
 
-	responseBody, err := ioutil.ReadAll(response.Body)
-	require.NoError(t, err)
-	err = response.Body.Close()
-	require.NoError(t, err)
+		requireEventually.Equal(http.StatusOK, response.StatusCode)
+
+		responseBody, err = ioutil.ReadAll(response.Body)
+		requireEventually.NoError(err)
+	}, time.Minute, 200*time.Millisecond)
+
 	return response, string(responseBody)
 }
 
@@ -603,26 +603,16 @@ func requireDelete(t *testing.T, client pinnipedclientset.Interface, ns, name st
 func requireStatus(t *testing.T, client pinnipedclientset.Interface, ns, name string, status v1alpha1.FederationDomainStatusCondition) {
 	t.Helper()
 
-	var federationDomain *v1alpha1.FederationDomain
-	var err error
-	assert.Eventually(t, func() bool {
+	library.RequireEventually(t, func(requireEventually *require.Assertions) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		federationDomain, err = client.ConfigV1alpha1().FederationDomains(ns).Get(ctx, name, metav1.GetOptions{})
-		if err != nil {
-			t.Logf("error trying to get FederationDomain %s/%s: %v", ns, name, err)
-			return false
-		}
+		federationDomain, err := client.ConfigV1alpha1().FederationDomains(ns).Get(ctx, name, metav1.GetOptions{})
+		requireEventually.NoError(err)
 
-		if federationDomain.Status.Status != status {
-			t.Logf("found FederationDomain %s/%s with status %s", ns, name, federationDomain.Status.Status)
-			return false
-		}
-		return true
+		t.Logf("found FederationDomain %s/%s with status %s", ns, name, federationDomain.Status.Status)
+		requireEventually.Equalf(status, federationDomain.Status.Status, "unexpected status (message = '%s')", federationDomain.Status.Message)
 	}, 5*time.Minute, 200*time.Millisecond)
-	require.NoError(t, err)
-	require.Equalf(t, status, federationDomain.Status.Status, "unexpected status (message = '%s')", federationDomain.Status.Message)
 }
 
 func newHTTPClient(t *testing.T, caBundle string, dnsOverrides map[string]string) *http.Client {

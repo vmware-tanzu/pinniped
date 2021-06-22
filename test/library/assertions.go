@@ -15,7 +15,111 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+
+	"go.pinniped.dev/internal/constable"
 )
+
+type (
+	// loopTestingT records the failures observed during an iteration of the RequireEventually() loop.
+	loopTestingT []assertionFailure
+
+	// assertionFailure is a single error observed during an iteration of the RequireEventually() loop.
+	assertionFailure struct {
+		format string
+		args   []interface{}
+	}
+)
+
+// loopTestingT implements require.TestingT:
+var _ require.TestingT = (*loopTestingT)(nil)
+
+// Errorf is called by the assert.Assertions methods to record an error.
+func (e *loopTestingT) Errorf(format string, args ...interface{}) {
+	*e = append(*e, assertionFailure{format, args})
+}
+
+const errLoopFailNow = constable.Error("failing test now")
+
+// FailNow is called by the require.Assertions methods to force the code to immediately halt. It panics with a
+// sentinel value that is recovered by recoverLoopFailNow().
+func (e *loopTestingT) FailNow() { panic(errLoopFailNow) }
+
+// ignoreFailNowPanic catches the panic from FailNow() and ignores it (allowing the FailNow() call to halt the test
+// but let the retry loop continue.
+func recoverLoopFailNow() {
+	switch p := recover(); p {
+	case nil, errLoopFailNow:
+		// Ignore nil (success) and our sentinel value.
+		return
+	default:
+		// Re-panic on any other value.
+		panic(p)
+	}
+}
+
+func RequireEventuallyf(
+	t *testing.T,
+	f func(requireEventually *require.Assertions),
+	waitFor time.Duration,
+	tick time.Duration,
+	msg string,
+	args ...interface{},
+) {
+	RequireEventually(t, f, waitFor, tick, fmt.Sprintf(msg, args...))
+}
+
+// RequireEventually is similar to require.Eventually() except that it is thread safe and provides a richer way to
+// write per-iteration assertions.
+func RequireEventually(
+	t *testing.T,
+	f func(requireEventually *require.Assertions),
+	waitFor time.Duration,
+	tick time.Duration,
+	msgAndArgs ...interface{},
+) {
+	t.Helper()
+
+	// Set up some bookkeeping so we can fail with a nice message if necessary.
+	var (
+		startTime          = time.Now()
+		attempts           int
+		mostRecentFailures loopTestingT
+	)
+
+	// Run the check until it completes with no assertion failures.
+	waitErr := wait.PollImmediate(tick, waitFor, func() (bool, error) {
+		t.Helper()
+		attempts++
+
+		// Reset the recorded failures on each iteration.
+		mostRecentFailures = nil
+
+		// Ignore any panics caused by FailNow() -- they will cause the f() to return immediately but any errors
+		// they've logged should be in mostRecentFailures.
+		defer recoverLoopFailNow()
+
+		// Run the per-iteration check, recording any failed assertions into mostRecentFailures.
+		f(require.New(&mostRecentFailures))
+
+		// We're only done iterating if no assertions have failed.
+		return len(mostRecentFailures) == 0, nil
+	})
+
+	// If things eventually completed with no failures/timeouts, we're done.
+	if waitErr == nil {
+		return
+	}
+
+	// Re-assert the most recent set of failures with a nice error log.
+	duration := time.Since(startTime).Round(100 * time.Millisecond)
+	t.Errorf("failed to complete even after %s (%d attempts): %v", duration, attempts, waitErr)
+	for _, failure := range mostRecentFailures {
+		t.Errorf(failure.format, failure.args...)
+	}
+
+	// Fail the test now with the provided message.
+	require.NoError(t, waitErr, msgAndArgs...)
+}
 
 // RequireEventuallyWithoutError is similar to require.Eventually() except that it also allows the caller to
 // return an error from the condition function. If the condition function returns an error at any

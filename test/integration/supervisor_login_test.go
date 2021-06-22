@@ -354,26 +354,23 @@ func testSupervisorLogin(
 		nil,
 	)
 	require.NoError(t, err)
-	var jwksRequestStatus int
-	assert.Eventually(t, func() bool {
+	library.RequireEventually(t, func(requireEventually *require.Assertions) {
 		rsp, err := httpClient.Do(requestJWKSEndpoint)
-		require.NoError(t, err)
-		require.NoError(t, rsp.Body.Close())
-		jwksRequestStatus = rsp.StatusCode
-		return jwksRequestStatus == http.StatusOK
+		requireEventually.NoError(err)
+		requireEventually.NoError(rsp.Body.Close())
+		requireEventually.Equal(http.StatusOK, rsp.StatusCode)
 	}, 30*time.Second, 200*time.Millisecond)
-	require.Equal(t, http.StatusOK, jwksRequestStatus)
 
 	// Create upstream IDP and wait for it to become ready.
 	createIDP(t)
 
 	// Perform OIDC discovery for our downstream.
 	var discovery *coreosoidc.Provider
-	assert.Eventually(t, func() bool {
+	library.RequireEventually(t, func(requireEventually *require.Assertions) {
+		var err error
 		discovery, err = coreosoidc.NewProvider(oidcHTTPClientContext, downstream.Spec.Issuer)
-		return err == nil
+		requireEventually.NoError(err)
 	}, 30*time.Second, 200*time.Millisecond)
-	require.NoError(t, err)
 
 	// Start a callback server on localhost.
 	localCallbackServer := startLocalCallbackServer(t)

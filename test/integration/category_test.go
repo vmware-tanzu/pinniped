@@ -7,11 +7,9 @@ import (
 	"bytes"
 	"os/exec"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/test/library"
@@ -19,40 +17,15 @@ import (
 
 func runTestKubectlCommand(t *testing.T, args ...string) (string, string) {
 	t.Helper()
-
-	var lock sync.Mutex
 	var stdOut, stdErr bytes.Buffer
-	var err error
-	start := time.Now()
-	attempts := 0
-	if !assert.Eventually(t, func() bool {
-		lock.Lock()
-		defer lock.Unlock()
-		attempts++
+	library.RequireEventually(t, func(requireEventually *require.Assertions) {
 		stdOut.Reset()
 		stdErr.Reset()
 		cmd := exec.Command("kubectl", args...)
 		cmd.Stdout = &stdOut
 		cmd.Stderr = &stdErr
-		err = cmd.Run()
-		return err == nil
-	},
-		120*time.Second,
-		200*time.Millisecond,
-	) {
-		lock.Lock()
-		defer lock.Unlock()
-		t.Logf(
-			"never ran %q successfully even after %d attempts (%s)",
-			"kubectl "+strings.Join(args, " "),
-			attempts,
-			time.Since(start).Round(time.Second),
-		)
-		t.Logf("last error: %v", err)
-		t.Logf("stdout:\n%s\n", stdOut.String())
-		t.Logf("stderr:\n%s\n", stdErr.String())
-		t.FailNow()
-	}
+		requireEventually.NoError(cmd.Run())
+	}, 120*time.Second, 200*time.Millisecond)
 	return stdOut.String(), stdErr.String()
 }
 

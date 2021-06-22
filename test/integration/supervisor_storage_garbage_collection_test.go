@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,14 +34,6 @@ func TestStorageGarbageCollection(t *testing.T) {
 	secretWhichWillExpireBeforeTheTestEnds := createSecret(ctx, t, secrets, "near-future", time.Now().Add(30*time.Second))
 	secretNotYetExpired := createSecret(ctx, t, secrets, "far-future", time.Now().Add(10*time.Minute))
 
-	var err error
-	secretIsNotFound := func(secretName string) func() bool {
-		return func() bool {
-			_, err = secrets.Get(ctx, secretName, metav1.GetOptions{})
-			return k8serrors.IsNotFound(err)
-		}
-	}
-
 	// Start a background goroutine which will end as soon as the test ends.
 	// Keep updating a secret which has the "storage.pinniped.dev/garbage-collect-after" annotation
 	// in the same namespace just to get the controller to respond faster.
@@ -64,13 +55,18 @@ func TestStorageGarbageCollection(t *testing.T) {
 	// in practice we should only need to wait about 30 seconds, which is the GC controller's self-imposed
 	// rate throttling time period.
 	slightlyLongerThanGCControllerFullResyncPeriod := 3*time.Minute + 30*time.Second
-	assert.Eventually(t, secretIsNotFound(secretAlreadyExpired.Name), slightlyLongerThanGCControllerFullResyncPeriod, 250*time.Millisecond)
-	require.Truef(t, k8serrors.IsNotFound(err), "wanted a NotFound error but got %v", err) // prints out the error and stops the test in case of failure
-	assert.Eventually(t, secretIsNotFound(secretWhichWillExpireBeforeTheTestEnds.Name), slightlyLongerThanGCControllerFullResyncPeriod, 250*time.Millisecond)
-	require.Truef(t, k8serrors.IsNotFound(err), "wanted a NotFound error but got %v", err) // prints out the error and stops the test in case of failure
+	library.RequireEventually(t, func(requireEventually *require.Assertions) {
+		_, err := secrets.Get(ctx, secretAlreadyExpired.Name, metav1.GetOptions{})
+		requireEventually.Truef(k8serrors.IsNotFound(err), "wanted a NotFound error but got %v", err)
+	}, slightlyLongerThanGCControllerFullResyncPeriod, 250*time.Millisecond)
+
+	library.RequireEventually(t, func(requireEventually *require.Assertions) {
+		_, err := secrets.Get(ctx, secretWhichWillExpireBeforeTheTestEnds.Name, metav1.GetOptions{})
+		requireEventually.Truef(k8serrors.IsNotFound(err), "wanted a NotFound error but got %v", err)
+	}, slightlyLongerThanGCControllerFullResyncPeriod, 250*time.Millisecond)
 
 	// The unexpired secret should not have been deleted within the timeframe of this test run.
-	_, err = secrets.Get(ctx, secretNotYetExpired.Name, metav1.GetOptions{})
+	_, err := secrets.Get(ctx, secretNotYetExpired.Name, metav1.GetOptions{})
 	require.NoError(t, err)
 }
 

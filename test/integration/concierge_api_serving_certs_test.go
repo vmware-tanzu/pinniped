@@ -4,12 +4,10 @@
 package integration
 
 import (
-	"bytes"
 	"context"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -109,12 +107,11 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			require.NoError(t, test.forceRotation(ctx, kubeClient, env.ConciergeNamespace))
 
 			// Expect that the Secret comes back right away with newly minted certs.
-			secretIsRegenerated := func() bool {
+			library.RequireEventually(t, func(requireEventually *require.Assertions) {
+				var err error
 				secret, err = kubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})
-				return err == nil
-			}
-			assert.Eventually(t, secretIsRegenerated, 10*time.Second, 250*time.Millisecond)
-			require.NoError(t, err) // prints out the error and stops the test in case of failure
+				requireEventually.NoError(err)
+			}, 10*time.Second, 250*time.Millisecond)
 			regeneratedCACert := secret.Data["caCertificate"]
 			regeneratedPrivateKey := secret.Data["tlsPrivateKey"]
 			regeneratedCertChain := secret.Data["tlsCertificateChain"]
@@ -130,18 +127,10 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			require.Equal(t, env.ConciergeAppName, secret.Labels["app"])
 
 			// Expect that the APIService was also updated with the new CA.
-			require.Eventually(t, func() bool {
+			library.RequireEventually(t, func(requireEventually *require.Assertions) {
 				apiService, err := aggregatedClient.ApiregistrationV1().APIServices().Get(ctx, apiServiceName, metav1.GetOptions{})
-				if err != nil {
-					t.Logf("get for APIService %q returned error %v", apiServiceName, err)
-					return false
-				}
-				if !bytes.Equal(regeneratedCACert, apiService.Spec.CABundle) {
-					t.Logf("CA bundle in APIService %q does not yet have the expected value", apiServiceName)
-					return false
-				}
-				t.Logf("found that APIService %q was updated to expected CA certificate", apiServiceName)
-				return true
+				requireEventually.NoErrorf(err, "get for APIService %q returned error", apiServiceName)
+				requireEventually.Equalf(regeneratedCACert, apiService.Spec.CABundle, "CA bundle in APIService %q does not yet have the expected value", apiServiceName)
 			}, 10*time.Second, 250*time.Millisecond, "never saw CA certificate rotate to expected value")
 
 			// Check that we can still make requests to the aggregated API through the kube API server,
@@ -149,25 +138,19 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			// so this is effectively checking that the aggregated API server is using these new certs.
 			// We ensure that 10 straight requests succeed so that we filter out false positives where a single
 			// pod has rotated their cert, but not the other ones sitting behind the service.
-			aggregatedAPIWorking := func() bool {
+			//
+			// our code changes all the certs immediately thus this should be healthy fairly quickly
+			// if this starts flaking, check for bugs in our dynamiccertificates.Notifier implementation
+			library.RequireEventually(t, func(requireEventually *require.Assertions) {
 				for i := 0; i < 10; i++ {
-					_, err = conciergeClient.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{
+					_, err := conciergeClient.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{
 						TypeMeta:   metav1.TypeMeta{},
 						ObjectMeta: metav1.ObjectMeta{},
 						Spec:       loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token", Authenticator: testWebhook},
 					}, metav1.CreateOptions{})
-					if err != nil {
-						break
-					}
+					requireEventually.NoError(err, "dynamiccertificates.Notifier broken?")
 				}
-				// Should have got a success response with an error message inside it complaining about the token value.
-				return err == nil
-			}
-
-			// our code changes all the certs immediately thus this should be healthy fairly quickly
-			// if this starts flaking, check for bugs in our dynamiccertificates.Notifier implementation
-			assert.Eventually(t, aggregatedAPIWorking, 30*time.Second, 250*time.Millisecond)
-			require.NoError(t, err, "dynamiccertificates.Notifier broken?") // prints out the error and stops the test in case of failure
+			}, 30*time.Second, 250*time.Millisecond)
 		})
 	}
 }

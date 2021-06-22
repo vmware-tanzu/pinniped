@@ -33,21 +33,21 @@ import (
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/filesession"
-	"go.pinniped.dev/test/library"
-	"go.pinniped.dev/test/library/browsertest"
+	"go.pinniped.dev/test/testlib"
+	"go.pinniped.dev/test/testlib/browsertest"
 )
 
 func TestCLIGetKubeconfigStaticToken(t *testing.T) {
-	env := library.IntegrationEnv(t).WithCapability(library.ClusterSigningKeyIsAvailable)
+	env := testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
 
 	// Create a test webhook configuration to use with the CLI.
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancelFunc()
 
-	authenticator := library.CreateTestWebhookAuthenticator(ctx, t)
+	authenticator := testlib.CreateTestWebhookAuthenticator(ctx, t)
 
 	// Build pinniped CLI.
-	pinnipedExe := library.PinnipedCLIPath(t)
+	pinnipedExe := testlib.PinnipedCLIPath(t)
 
 	credCacheDir := testutil.TempDir(t)
 	stdout, stderr := runPinnipedCLI(t, nil, pinnipedExe, "get", "kubeconfig",
@@ -63,7 +63,7 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 	assert.Contains(t, stderr, "validated connection to the cluster")
 
 	// Even the deprecated command should now generate a kubeconfig with the new "pinniped login static" command.
-	restConfig := library.NewRestConfigFromKubeconfig(t, stdout)
+	restConfig := testlib.NewRestConfigFromKubeconfig(t, stdout)
 	require.NotNil(t, restConfig.ExecProvider)
 	require.Equal(t, []string{"login", "static"}, restConfig.ExecProvider.Args[:2])
 
@@ -71,24 +71,24 @@ func TestCLIGetKubeconfigStaticToken(t *testing.T) {
 	// with kubectl to validate that it works.
 	t.Run(
 		"access as user with kubectl",
-		library.AccessAsUserWithKubectlTest(stdout, env.TestUser.ExpectedUsername, env.ConciergeNamespace),
+		testlib.AccessAsUserWithKubectlTest(stdout, env.TestUser.ExpectedUsername, env.ConciergeNamespace),
 	)
 	for _, group := range env.TestUser.ExpectedGroups {
 		group := group
 		t.Run(
 			"access as group "+group+" with kubectl",
-			library.AccessAsGroupWithKubectlTest(stdout, group, env.ConciergeNamespace),
+			testlib.AccessAsGroupWithKubectlTest(stdout, group, env.ConciergeNamespace),
 		)
 	}
 
 	// Create Kubernetes client with kubeconfig from pinniped CLI.
-	kubeClient := library.NewClientsetForKubeConfig(t, stdout)
+	kubeClient := testlib.NewClientsetForKubeConfig(t, stdout)
 
 	// Validate that we can auth to the API via our user.
-	t.Run("access as user with client-go", library.AccessAsUserTest(ctx, env.TestUser.ExpectedUsername, kubeClient))
+	t.Run("access as user with client-go", testlib.AccessAsUserTest(ctx, env.TestUser.ExpectedUsername, kubeClient))
 	for _, group := range env.TestUser.ExpectedGroups {
 		group := group
-		t.Run("access as group "+group+" with client-go", library.AccessAsGroupTest(ctx, group, kubeClient))
+		t.Run("access as group "+group+" with client-go", testlib.AccessAsGroupTest(ctx, group, kubeClient))
 	}
 
 	t.Run("whoami", func(t *testing.T) {
@@ -116,14 +116,14 @@ func runPinnipedCLI(t *testing.T, envVars []string, pinnipedExe string, args ...
 	cmd.Stderr = &stderr
 	cmd.Env = envVars
 	require.NoErrorf(t, cmd.Run(), "stderr:\n%s\n\nstdout:\n%s\n\n", stderr.String(), stdout.String())
-	t.Logf("ran %q in %s", library.MaskTokens("pinniped "+strings.Join(args, " ")), time.Since(start).Round(time.Millisecond))
+	t.Logf("ran %q in %s", testlib.MaskTokens("pinniped "+strings.Join(args, " ")), time.Since(start).Round(time.Millisecond))
 	return stdout.String(), stderr.String()
 }
 
 func assertWhoami(ctx context.Context, t *testing.T, useProxy bool, pinnipedExe, kubeconfigPath, wantUsername string, wantGroups []string) {
 	t.Helper()
 
-	apiGroupSuffix := library.IntegrationEnv(t).APIGroupSuffix
+	apiGroupSuffix := testlib.IntegrationEnv(t).APIGroupSuffix
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.CommandContext(
@@ -138,7 +138,7 @@ func assertWhoami(ctx context.Context, t *testing.T, useProxy bool, pinnipedExe,
 		apiGroupSuffix,
 	)
 	if useProxy {
-		cmd.Env = append(os.Environ(), library.IntegrationEnv(t).ProxyEnv()...)
+		cmd.Env = append(os.Environ(), testlib.IntegrationEnv(t).ProxyEnv()...)
 	}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -164,13 +164,13 @@ func deserializeWhoAmIRequest(t *testing.T, data string, apiGroupSuffix string) 
 }
 
 func TestCLILoginOIDC(t *testing.T) {
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	// Build pinniped CLI.
-	pinnipedExe := library.PinnipedCLIPath(t)
+	pinnipedExe := testlib.PinnipedCLIPath(t)
 
 	// Run "pinniped login oidc" to get an ExecCredential struct with an OIDC ID token.
 	credOutput, sessionCachePath := runPinnipedLoginOIDC(ctx, t, pinnipedExe)
@@ -268,7 +268,7 @@ func runPinnipedLoginOIDC(
 ) (clientauthenticationv1beta1.ExecCredential, string) {
 	t.Helper()
 
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 
 	// Make a temp directory to hold the session cache for this test.
 	sessionCachePath := testutil.TempDir(t) + "/sessions.yaml"
@@ -304,7 +304,7 @@ func runPinnipedLoginOIDC(
 			}
 		}()
 
-		reader := bufio.NewReader(library.NewLoggerReader(t, "stderr", stderr))
+		reader := bufio.NewReader(testlib.NewLoggerReader(t, "stderr", stderr))
 
 		scanner := bufio.NewScanner(reader)
 		const prompt = "Please log in: "
@@ -331,7 +331,7 @@ func runPinnipedLoginOIDC(
 				err = fmt.Errorf("stdout stream closed with error: %w", closeErr)
 			}
 		}()
-		reader := bufio.NewReader(library.NewLoggerReader(t, "stdout", stdout))
+		reader := bufio.NewReader(testlib.NewLoggerReader(t, "stdout", stdout))
 		var out clientauthenticationv1beta1.ExecCredential
 		if err := json.NewDecoder(reader).Decode(&out); err != nil {
 			return fmt.Errorf("could not read ExecCredential from stdout: %w", err)
@@ -401,7 +401,7 @@ func spawnTestGoroutine(t *testing.T, f func() error) {
 }
 
 func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, sessionCachePath string) *exec.Cmd {
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 	callbackURL, err := url.Parse(env.CLIUpstreamOIDC.CallbackURL)
 	require.NoError(t, err)
 	cmd := exec.CommandContext(ctx, pinnipedExe, "login", "oidc",

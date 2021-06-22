@@ -10,12 +10,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 // Smoke test to see if the kubeconfig works and the cluster is reachable.
 func TestGetNodes(t *testing.T) {
-	library.SkipUnlessIntegration(t)
+	testlib.SkipUnlessIntegration(t)
 	cmd := exec.Command("kubectl", "get", "nodes")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

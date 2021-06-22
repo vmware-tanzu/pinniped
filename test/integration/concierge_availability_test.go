@@ -13,12 +13,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestGetDeployment(t *testing.T) {
-	env := library.IntegrationEnv(t)
-	client := library.NewKubernetesClientset(t)
+	env := testlib.IntegrationEnv(t)
+	client := testlib.NewKubernetesClientset(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -28,7 +28,7 @@ func TestGetDeployment(t *testing.T) {
 
 	cond := getDeploymentCondition(appDeployment.Status, appsv1.DeploymentAvailable)
 	require.NotNil(t, cond)
-	require.Equalf(t, corev1.ConditionTrue, cond.Status, "app should be available: %s", library.Sdump(appDeployment))
+	require.Equalf(t, corev1.ConditionTrue, cond.Status, "app should be available: %s", testlib.Sdump(appDeployment))
 }
 
 // getDeploymentCondition returns the condition with the provided type.

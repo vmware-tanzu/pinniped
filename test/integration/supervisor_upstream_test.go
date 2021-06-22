@@ -11,11 +11,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestSupervisorUpstreamOIDCDiscovery(t *testing.T) {
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 
 	t.Run("invalid missing secret and bad issuer", func(t *testing.T) {
 		t.Parallel()
@@ -25,7 +25,7 @@ func TestSupervisorUpstreamOIDCDiscovery(t *testing.T) {
 				SecretName: "does-not-exist",
 			},
 		}
-		upstream := library.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseError)
+		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseError)
 		expectUpstreamConditions(t, upstream, []v1alpha1.Condition{
 			{
 				Type:    "ClientCredentialsValid",
@@ -54,10 +54,10 @@ Get "https://127.0.0.1:444444/issuer/.well-known/openid-configuration": dial tcp
 				AdditionalScopes: []string{"email", "profile"},
 			},
 			Client: v1alpha1.OIDCClient{
-				SecretName: library.CreateClientCredsSecret(t, "test-client-id", "test-client-secret").Name,
+				SecretName: testlib.CreateClientCredsSecret(t, "test-client-id", "test-client-secret").Name,
 			},
 		}
-		upstream := library.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseError)
+		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseError)
 		expectUpstreamConditions(t, upstream, []v1alpha1.Condition{
 			{
 				Type:    "ClientCredentialsValid",
@@ -86,10 +86,10 @@ oidc: issuer did not match the issuer returned by provider, expected "` + env.Su
 				AdditionalScopes: []string{"email", "profile"},
 			},
 			Client: v1alpha1.OIDCClient{
-				SecretName: library.CreateClientCredsSecret(t, "test-client-id", "test-client-secret").Name,
+				SecretName: testlib.CreateClientCredsSecret(t, "test-client-id", "test-client-secret").Name,
 			},
 		}
-		upstream := library.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseReady)
+		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseReady)
 		expectUpstreamConditions(t, upstream, []v1alpha1.Condition{
 			{
 				Type:    "ClientCredentialsValid",

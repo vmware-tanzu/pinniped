@@ -21,11 +21,11 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 
 	"go.pinniped.dev/internal/upstreamldap"
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func TestLDAPSearch(t *testing.T) {
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 
 	// Note that these tests depend on the values hard-coded in the LDIF file in test/deploy/tools/ldap.yaml.
 	// It requires the test LDAP server from the tools deployment.
@@ -613,7 +613,7 @@ func TestLDAPSearch(t *testing.T) {
 }
 
 func TestSimultaneousLDAPRequestsOnSingleProvider(t *testing.T) {
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 
 	// Note that these tests depend on the values hard-coded in the LDIF file in test/deploy/tools/ldap.yaml.
 	// It requires the test LDAP server from the tools deployment.
@@ -673,7 +673,7 @@ type authUserResult struct {
 	err           error
 }
 
-func defaultProviderConfig(env *library.TestEnv, port string) *upstreamldap.ProviderConfig {
+func defaultProviderConfig(env *testlib.TestEnv, port string) *upstreamldap.ProviderConfig {
 	return &upstreamldap.ProviderConfig{
 		Name:               "test-ldap-provider",
 		Host:               "127.0.0.1:" + port,
@@ -775,7 +775,7 @@ func startLongRunningCommandAndWaitForInitialOutput(
 		require.NoError(t, err)
 	})
 
-	library.RequireEventually(t, func(requireEventually *require.Assertions) {
+	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		t.Logf(`Waiting for %s to emit output: "%s"`, command, waitForOutputToContain)
 		requireEventually.Equal(-1, cmd.ProcessState.ExitCode(), "subcommand ended sooner than expected")
 		requireEventually.Contains(watchOn.String(), waitForOutputToContain, "expected process to emit output")

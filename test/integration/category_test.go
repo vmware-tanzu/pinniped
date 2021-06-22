@@ -12,13 +12,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"go.pinniped.dev/test/library"
+	"go.pinniped.dev/test/testlib"
 )
 
 func runTestKubectlCommand(t *testing.T, args ...string) (string, string) {
 	t.Helper()
 	var stdOut, stdErr bytes.Buffer
-	library.RequireEventually(t, func(requireEventually *require.Assertions) {
+	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		stdOut.Reset()
 		stdErr.Reset()
 		cmd := exec.Command("kubectl", args...)
@@ -47,7 +47,7 @@ func requireCleanKubectlStderr(t *testing.T, stderr string) {
 }
 
 func TestGetPinnipedCategory(t *testing.T) {
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 	dotSuffix := "." + env.APIGroupSuffix
 
 	t.Run("category, no special params", func(t *testing.T) {

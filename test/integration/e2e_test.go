@@ -42,19 +42,19 @@ import (
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/pkg/oidcclient"
 	"go.pinniped.dev/pkg/oidcclient/filesession"
-	"go.pinniped.dev/test/library"
-	"go.pinniped.dev/test/library/browsertest"
+	"go.pinniped.dev/test/testlib"
+	"go.pinniped.dev/test/testlib/browsertest"
 )
 
 // TestE2EFullIntegration tests a full integration scenario that combines the supervisor, concierge, and CLI.
 func TestE2EFullIntegration(t *testing.T) {
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancelFunc()
 
 	// Build pinniped CLI.
-	pinnipedExe := library.PinnipedCLIPath(t)
+	pinnipedExe := testlib.PinnipedCLIPath(t)
 	tempDir := testutil.TempDir(t)
 
 	// Start the browser driver.
@@ -86,7 +86,7 @@ func TestE2EFullIntegration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Write the serving cert to a secret.
-	certSecret := library.CreateTestSecret(t,
+	certSecret := testlib.CreateTestSecret(t,
 		env.SupervisorNamespace,
 		"oidc-provider-tls",
 		corev1.SecretTypeTLS,
@@ -94,15 +94,15 @@ func TestE2EFullIntegration(t *testing.T) {
 	)
 
 	// Create the downstream FederationDomain and expect it to go into the success status condition.
-	downstream := library.CreateTestFederationDomain(ctx, t,
+	downstream := testlib.CreateTestFederationDomain(ctx, t,
 		issuerURL.String(),
 		certSecret.Name,
 		configv1alpha1.SuccessFederationDomainStatusCondition,
 	)
 
 	// Create a JWTAuthenticator that will validate the tokens from the downstream issuer.
-	clusterAudience := "test-cluster-" + library.RandHex(t, 8)
-	authenticator := library.CreateTestJWTAuthenticator(ctx, t, authv1alpha.JWTAuthenticatorSpec{
+	clusterAudience := "test-cluster-" + testlib.RandHex(t, 8)
+	authenticator := testlib.CreateTestJWTAuthenticator(ctx, t, authv1alpha.JWTAuthenticatorSpec{
 		Issuer:   downstream.Spec.Issuer,
 		Audience: clusterAudience,
 		TLS:      &authv1alpha.TLSSpec{CertificateAuthorityData: testCABundleBase64},
@@ -114,11 +114,11 @@ func TestE2EFullIntegration(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
 
 		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
-		library.CreateTestClusterRoleBinding(t,
+		testlib.CreateTestClusterRoleBinding(t,
 			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: expectedUsername},
 			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
 		)
-		library.WaitForUserToHaveAccess(t, expectedUsername, []string{}, &authorizationv1.ResourceAttributes{
+		testlib.WaitForUserToHaveAccess(t, expectedUsername, []string{}, &authorizationv1.ResourceAttributes{
 			Verb:     "get",
 			Group:    "",
 			Version:  "v1",
@@ -126,7 +126,7 @@ func TestE2EFullIntegration(t *testing.T) {
 		})
 
 		// Create upstream OIDC provider and wait for it to become ready.
-		library.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+		testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
 			TLS: &idpv1alpha1.TLSSpec{
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
@@ -139,7 +139,7 @@ func TestE2EFullIntegration(t *testing.T) {
 				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
 			},
 			Client: idpv1alpha1.OIDCClient{
-				SecretName: library.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
 
@@ -194,7 +194,7 @@ func TestE2EFullIntegration(t *testing.T) {
 				}
 			}()
 
-			reader := bufio.NewReader(library.NewLoggerReader(t, "stderr", stderrPipe))
+			reader := bufio.NewReader(testlib.NewLoggerReader(t, "stderr", stderrPipe))
 			line, err := reader.ReadString('\n')
 			if err != nil {
 				return fmt.Errorf("could not read login URL line from stderr: %w", err)
@@ -277,7 +277,7 @@ func TestE2EFullIntegration(t *testing.T) {
 
 	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands.
 	t.Run("with Supervisor LDAP upstream IDP", func(t *testing.T) {
-		if len(env.ToolsNamespace) == 0 && !env.HasCapability(library.CanReachInternetLDAPPorts) {
+		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
 			t.Skip("LDAP integration test requires connectivity to an LDAP server")
 		}
 
@@ -285,11 +285,11 @@ func TestE2EFullIntegration(t *testing.T) {
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
 		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
-		library.CreateTestClusterRoleBinding(t,
+		testlib.CreateTestClusterRoleBinding(t,
 			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: expectedUsername},
 			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
 		)
-		library.WaitForUserToHaveAccess(t, expectedUsername, []string{}, &authorizationv1.ResourceAttributes{
+		testlib.WaitForUserToHaveAccess(t, expectedUsername, []string{}, &authorizationv1.ResourceAttributes{
 			Verb:     "get",
 			Group:    "",
 			Version:  "v1",
@@ -297,7 +297,7 @@ func TestE2EFullIntegration(t *testing.T) {
 		})
 
 		// Put the bind service account's info into a Secret.
-		bindSecret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", corev1.SecretTypeBasicAuth,
+		bindSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", corev1.SecretTypeBasicAuth,
 			map[string]string{
 				corev1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
 				corev1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
@@ -305,7 +305,7 @@ func TestE2EFullIntegration(t *testing.T) {
 		)
 
 		// Create upstream LDAP provider and wait for it to become ready.
-		library.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
+		testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
 			Host: env.SupervisorUpstreamLDAP.Host,
 			TLS: &idpv1alpha1.TLSSpec{
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
@@ -379,7 +379,7 @@ func TestE2EFullIntegration(t *testing.T) {
 func readFromFileUntilStringIsSeen(t *testing.T, f *os.File, until string) {
 	readFromFile := ""
 
-	library.RequireEventuallyWithoutError(t, func() (bool, error) {
+	testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
 		someOutput, foundEOF := readAvailableOutput(t, f)
 		readFromFile += someOutput
 		if strings.Contains(readFromFile, until) {
@@ -407,7 +407,7 @@ func readAvailableOutput(t *testing.T, r io.Reader) (string, bool) {
 func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 	ctx context.Context,
 	t *testing.T,
-	env *library.TestEnv,
+	env *testlib.TestEnv,
 	downstream *configv1alpha1.FederationDomain,
 	kubeconfigPath string,
 	sessionCachePath string,
@@ -485,7 +485,7 @@ func requireGCAnnotationsOnSessionStorage(ctx context.Context, t *testing.T, sup
 	// check that the access token is new (since it's just been refreshed) and has close to two minutes left.
 	testutil.RequireTimeInDelta(t, startTime.Add(2*time.Minute), token.AccessToken.Expiry.Time, 15*time.Second)
 
-	kubeClient := library.NewKubernetesClientset(t).CoreV1()
+	kubeClient := testlib.NewKubernetesClientset(t).CoreV1()
 
 	// get the access token secret that matches the signature from the cache
 	accessTokenSignature := strings.Split(token.AccessToken.Token, ".")[1]
@@ -515,14 +515,14 @@ func requireGCAnnotationsOnSessionStorage(ctx context.Context, t *testing.T, sup
 	testutil.RequireTimeInDelta(t, accessTokenGCTime, refreshTokenGCTime, 1*time.Minute)
 }
 
-func runPinnipedGetKubeconfig(t *testing.T, env *library.TestEnv, pinnipedExe string, tempDir string, pinnipedCLICommand []string) string {
+func runPinnipedGetKubeconfig(t *testing.T, env *testlib.TestEnv, pinnipedExe string, tempDir string, pinnipedCLICommand []string) string {
 	// Run "pinniped get kubeconfig" to get a kubeconfig YAML.
 	envVarsWithProxy := append(os.Environ(), env.ProxyEnv()...)
 	kubeconfigYAML, stderr := runPinnipedCLI(t, envVarsWithProxy, pinnipedExe, pinnipedCLICommand...)
 	t.Logf("stderr output from 'pinniped get kubeconfig':\n%s\n\n", stderr)
 	t.Logf("test kubeconfig:\n%s\n\n", kubeconfigYAML)
 
-	restConfig := library.NewRestConfigFromKubeconfig(t, kubeconfigYAML)
+	restConfig := testlib.NewRestConfigFromKubeconfig(t, kubeconfigYAML)
 	require.NotNil(t, restConfig.ExecProvider)
 	require.Equal(t, []string{"login", "oidc"}, restConfig.ExecProvider.Args[:2])
 

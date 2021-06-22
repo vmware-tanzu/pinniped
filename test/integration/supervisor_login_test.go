@@ -32,12 +32,12 @@ import (
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 	"go.pinniped.dev/pkg/oidcclient/state"
-	"go.pinniped.dev/test/library"
-	"go.pinniped.dev/test/library/browsertest"
+	"go.pinniped.dev/test/testlib"
+	"go.pinniped.dev/test/testlib/browsertest"
 )
 
 func TestSupervisorLogin(t *testing.T) {
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 
 	tests := []struct {
 		name                                 string
@@ -55,13 +55,13 @@ func TestSupervisorLogin(t *testing.T) {
 			},
 			createIDP: func(t *testing.T) {
 				t.Helper()
-				library.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+				testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 					Issuer: env.SupervisorUpstreamOIDC.Issuer,
 					TLS: &idpv1alpha1.TLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
 					},
 					Client: idpv1alpha1.OIDCClient{
-						SecretName: library.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+						SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 					},
 				}, idpv1alpha1.PhaseReady)
 			},
@@ -78,13 +78,13 @@ func TestSupervisorLogin(t *testing.T) {
 			},
 			createIDP: func(t *testing.T) {
 				t.Helper()
-				library.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+				testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 					Issuer: env.SupervisorUpstreamOIDC.Issuer,
 					TLS: &idpv1alpha1.TLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
 					},
 					Client: idpv1alpha1.OIDCClient{
-						SecretName: library.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+						SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 					},
 					Claims: idpv1alpha1.OIDCClaims{
 						Username: env.SupervisorUpstreamOIDC.UsernameClaim,
@@ -104,19 +104,19 @@ func TestSupervisorLogin(t *testing.T) {
 			name: "ldap with email as username and groups names as DNs and using an LDAP provider which supports TLS",
 			maybeSkip: func(t *testing.T) {
 				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(library.CanReachInternetLDAPPorts) {
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
 					t.Skip("LDAP integration test requires connectivity to an LDAP server")
 				}
 			},
 			createIDP: func(t *testing.T) {
 				t.Helper()
-				secret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
+				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
 					map[string]string{
 						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
 						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
 					},
 				)
-				ldapIDP := library.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
+				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
 					Host: env.SupervisorUpstreamLDAP.Host,
 					TLS: &idpv1alpha1.TLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
@@ -169,19 +169,19 @@ func TestSupervisorLogin(t *testing.T) {
 			name: "ldap with CN as username and group names as CNs and using an LDAP provider which only supports StartTLS", // try another variation of configuration options
 			maybeSkip: func(t *testing.T) {
 				t.Helper()
-				if len(env.ToolsNamespace) == 0 && !env.HasCapability(library.CanReachInternetLDAPPorts) {
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
 					t.Skip("LDAP integration test requires connectivity to an LDAP server")
 				}
 			},
 			createIDP: func(t *testing.T) {
 				t.Helper()
-				secret := library.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
+				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", v1.SecretTypeBasicAuth,
 					map[string]string{
 						v1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
 						v1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
 					},
 				)
-				ldapIDP := library.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
+				ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
 					Host: env.SupervisorUpstreamLDAP.StartTLSOnlyHost,
 					TLS: &idpv1alpha1.TLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
@@ -278,7 +278,7 @@ func testSupervisorLogin(
 	requestAuthorization func(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, httpClient *http.Client),
 	wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch string, wantDownstreamIDTokenGroups []string,
 ) {
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -305,12 +305,12 @@ func testSupervisorLogin(
 					return nil, nil
 				}
 				if env.Proxy == "" {
-					t.Logf("passing request for %s with no proxy", library.RedactURLParams(req.URL))
+					t.Logf("passing request for %s with no proxy", testlib.RedactURLParams(req.URL))
 					return nil, nil
 				}
 				proxyURL, err := url.Parse(env.Proxy)
 				require.NoError(t, err)
-				t.Logf("passing request for %s through proxy %s", library.RedactURLParams(req.URL), proxyURL.String())
+				t.Logf("passing request for %s through proxy %s", testlib.RedactURLParams(req.URL), proxyURL.String())
 				return proxyURL, nil
 			},
 		},
@@ -329,7 +329,7 @@ func testSupervisorLogin(
 	require.NoError(t, err)
 
 	// Write the serving cert to a secret.
-	certSecret := library.CreateTestSecret(t,
+	certSecret := testlib.CreateTestSecret(t,
 		env.SupervisorNamespace,
 		"oidc-provider-tls",
 		v1.SecretTypeTLS,
@@ -337,7 +337,7 @@ func testSupervisorLogin(
 	)
 
 	// Create the downstream FederationDomain and expect it to go into the success status condition.
-	downstream := library.CreateTestFederationDomain(ctx, t,
+	downstream := testlib.CreateTestFederationDomain(ctx, t,
 		issuerURL.String(),
 		certSecret.Name,
 		configv1alpha1.SuccessFederationDomainStatusCondition,
@@ -354,7 +354,7 @@ func testSupervisorLogin(
 		nil,
 	)
 	require.NoError(t, err)
-	library.RequireEventually(t, func(requireEventually *require.Assertions) {
+	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		rsp, err := httpClient.Do(requestJWKSEndpoint)
 		requireEventually.NoError(err)
 		requireEventually.NoError(rsp.Body.Close())
@@ -366,7 +366,7 @@ func testSupervisorLogin(
 
 	// Perform OIDC discovery for our downstream.
 	var discovery *coreosoidc.Provider
-	library.RequireEventually(t, func(requireEventually *require.Assertions) {
+	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		var err error
 		discovery, err = coreosoidc.NewProvider(oidcHTTPClientContext, downstream.Spec.Issuer)
 		requireEventually.NoError(err)
@@ -403,7 +403,7 @@ func testSupervisorLogin(
 
 	// Expect that our callback handler was invoked.
 	callback := localCallbackServer.waitForCallback(10 * time.Second)
-	t.Logf("got callback request: %s", library.MaskTokens(callback.URL.String()))
+	t.Logf("got callback request: %s", testlib.MaskTokens(callback.URL.String()))
 	require.Equal(t, stateParam.String(), callback.URL.Query().Get("state"))
 	require.ElementsMatch(t, []string{"openid", "pinniped:request-audience", "offline_access"}, strings.Split(callback.URL.Query().Get("scope"), " "))
 	authcode := callback.URL.Query().Get("code")
@@ -497,7 +497,7 @@ func verifyTokenResponse(
 
 func requestAuthorizationUsingOIDCIdentityProvider(t *testing.T, downstreamAuthorizeURL, downstreamCallbackURL string, httpClient *http.Client) {
 	t.Helper()
-	env := library.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Minute)
 	defer cancelFunc()
@@ -512,7 +512,7 @@ func requestAuthorizationUsingOIDCIdentityProvider(t *testing.T, downstreamAutho
 
 	// Open the web browser and navigate to the downstream authorize URL.
 	page := browsertest.Open(t)
-	t.Logf("opening browser to downstream authorize URL %s", library.MaskTokens(downstreamAuthorizeURL))
+	t.Logf("opening browser to downstream authorize URL %s", testlib.MaskTokens(downstreamAuthorizeURL))
 	require.NoError(t, page.Navigate(downstreamAuthorizeURL))
 
 	// Expect to be redirected to the upstream provider and log in.
@@ -542,7 +542,7 @@ func requestAuthorizationUsingLDAPIdentityProvider(t *testing.T, downstreamAutho
 	// to retry this request multiple times until we get the expected 302 status response.
 	var authResponse *http.Response
 	var responseBody []byte
-	library.RequireEventuallyWithoutError(t, func() (bool, error) {
+	testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
 		authResponse, err = httpClient.Do(authRequest)
 		if err != nil {
 			t.Logf("got authorization response with error %v", err)

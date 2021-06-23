@@ -106,6 +106,8 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		return failureResponse(), nil
 	}
 
+	// this timestamp should be returned from IssueClientCertPEM but this is a safe approximation
+	expires := metav1.NewTime(time.Now().UTC().Add(clientCertificateTTL))
 	certPEM, keyPEM, err := r.issuer.IssueClientCertPEM(userInfo.GetName(), userInfo.GetGroups(), clientCertificateTTL)
 	if err != nil {
 		traceFailureWithError(t, "cert issuer", err)
@@ -117,7 +119,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	return &loginapi.TokenCredentialRequest{
 		Status: loginapi.TokenCredentialRequestStatus{
 			Credential: &loginapi.ClusterCredential{
-				ExpirationTimestamp:   metav1.NewTime(time.Now().UTC().Add(clientCertificateTTL)),
+				ExpirationTimestamp:   expires,
 				ClientCertificateData: string(certPEM),
 				ClientKeyData:         string(keyPEM),
 			},

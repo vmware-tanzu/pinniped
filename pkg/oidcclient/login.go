@@ -140,7 +140,7 @@ func WithLogger(logger logr.Logger) Option {
 // system at the time of the request.
 func WithListenPort(port uint16) Option {
 	return func(h *handlerState) error {
-		h.listenAddr = fmt.Sprintf("localhost:%d", port)
+		h.listenAddr = net.JoinHostPort("localhost", fmt.Sprint(port))
 		return nil
 	}
 }

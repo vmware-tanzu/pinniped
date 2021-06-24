@@ -263,7 +263,12 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 				Message: err.Error(),
 			}
 		}
-		httpClient = &http.Client{Transport: &http.Transport{TLSClientConfig: tlsConfig}}
+		httpClient = &http.Client{
+			Transport: &http.Transport{
+				Proxy:           http.ProxyFromEnvironment,
+				TLSClientConfig: tlsConfig,
+			},
+		}
 
 		discoveredProvider, err = oidc.NewProvider(oidc.ClientContext(ctx, httpClient), upstream.Spec.Issuer)
 		if err != nil {

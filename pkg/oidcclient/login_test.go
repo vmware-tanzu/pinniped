@@ -248,8 +248,8 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 		h.generateState = func() (state.State, error) { return "test-state", nil }
 		h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 		h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
-		h.promptForValue = func(promptLabel string) (string, error) { return "some-upstream-username", nil }
-		h.promptForSecret = func(promptLabel string) (string, error) { return "some-upstream-password", nil }
+		h.promptForValue = func(_ context.Context, promptLabel string) (string, error) { return "some-upstream-username", nil }
+		h.promptForSecret = func(_ context.Context, _ string) (string, error) { return "some-upstream-password", nil }
 
 		cache := &mockSessionCache{t: t, getReturnsToken: nil}
 		cacheKey := SessionCacheKey{
@@ -751,7 +751,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					_ = defaultLDAPTestOpts(t, h, nil, nil)
-					h.promptForValue = func(promptLabel string) (string, error) {
+					h.promptForValue = func(_ context.Context, promptLabel string) (string, error) {
 						require.Equal(t, "Username: ", promptLabel)
 						return "", errors.New("some prompt error")
 					}
@@ -768,7 +768,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					_ = defaultLDAPTestOpts(t, h, nil, nil)
-					h.promptForSecret = func(promptLabel string) (string, error) { return "", errors.New("some prompt error") }
+					h.promptForSecret = func(_ context.Context, _ string) (string, error) { return "", errors.New("some prompt error") }
 					return nil
 				}
 			},
@@ -954,11 +954,11 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 					h.generateState = func() (state.State, error) { return "test-state", nil }
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
-					h.promptForValue = func(promptLabel string) (string, error) {
+					h.promptForValue = func(_ context.Context, promptLabel string) (string, error) {
 						require.Equal(t, "Username: ", promptLabel)
 						return "some-upstream-username", nil
 					}
-					h.promptForSecret = func(promptLabel string) (string, error) {
+					h.promptForSecret = func(_ context.Context, promptLabel string) (string, error) {
 						require.Equal(t, "Password: ", promptLabel)
 						return "some-upstream-password", nil
 					}

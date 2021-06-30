@@ -9,17 +9,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"time"
 
-	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/token/jwt"
 
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/csrftoken"
+	"go.pinniped.dev/internal/oidc/downstreamsession"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 )
@@ -65,9 +62,7 @@ func NewHandler(
 		}
 
 		// Automatically grant the openid, offline_access, and pinniped:request-audience scopes, but only if they were requested.
-		oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOpenID)
-		oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOfflineAccess)
-		oidc.GrantScopeIfRequested(authorizeRequester, "pinniped:request-audience")
+		downstreamsession.GrantScopesIfRequested(authorizeRequester)
 
 		token, err := upstreamIDPConfig.ExchangeAuthcodeAndValidateTokens(
 			r.Context(),
@@ -91,7 +86,8 @@ func NewHandler(
 			return err
 		}
 
-		openIDSession := makeDownstreamSession(subject, username, groups)
+		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups)
+
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 		if err != nil {
 			plog.WarningErr("error while generating and saving authcode", err, "upstreamName", upstreamIDPConfig.GetName())
@@ -346,23 +342,4 @@ func extractGroups(groupsAsInterface interface{}) ([]string, bool) {
 	}
 
 	return groupsAsStrings, true
-}
-
-func makeDownstreamSession(subject string, username string, groups []string) *openid.DefaultSession {
-	now := time.Now().UTC()
-	openIDSession := &openid.DefaultSession{
-		Claims: &jwt.IDTokenClaims{
-			Subject:     subject,
-			RequestedAt: now,
-			AuthTime:    now,
-		},
-	}
-	if groups == nil {
-		groups = []string{}
-	}
-	openIDSession.Claims.Extra = map[string]interface{}{
-		oidc.DownstreamUsernameClaim: username,
-		oidc.DownstreamGroupsClaim:   groups,
-	}
-	return openIDSession
 }

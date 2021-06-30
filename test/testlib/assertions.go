@@ -65,6 +65,7 @@ func RequireEventuallyf(
 	msg string,
 	args ...interface{},
 ) {
+	t.Helper()
 	RequireEventually(t, f, waitFor, tick, fmt.Sprintf(msg, args...))
 }
 

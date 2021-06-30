@@ -14,6 +14,7 @@ import (
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/formposthtml"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
 )
@@ -217,7 +218,7 @@ func FositeOauth2Helper(
 		MinParameterEntropy: fosite.MinParameterEntropy,
 	}
 
-	return compose.Compose(
+	provider := compose.Compose(
 		oauthConfig,
 		oauthStore,
 		&compose.CommonStrategy{
@@ -233,6 +234,8 @@ func FositeOauth2Helper(
 		compose.OAuth2PKCEFactory,
 		TokenExchangeFactory,
 	)
+	provider.(*fosite.Fosite).FormPostHTMLTemplate = formposthtml.Template()
+	return provider
 }
 
 // FositeErrorForLog generates a list of information about the provided Fosite error that can be

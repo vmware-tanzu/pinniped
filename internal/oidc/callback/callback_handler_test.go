@@ -149,7 +149,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusOK,
 			wantContentType:                   "text/html;charset=UTF-8",
-			wantBodyFormResponseRegexp:        `<input type="hidden" name="code" value="(.+)"/>`,
+			wantBodyFormResponseRegexp:        `<code id="manual-auth-code">(.+)</code>`,
 			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
 			wantDownstreamIDTokenUsername:     upstreamUsername,
 			wantDownstreamIDTokenGroups:       upstreamGroupMembership,

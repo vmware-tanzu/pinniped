@@ -18,6 +18,7 @@ import (
 	"go.pinniped.dev/internal/oidc/csrftoken"
 	"go.pinniped.dev/internal/oidc/downstreamsession"
 	"go.pinniped.dev/internal/oidc/provider"
+	"go.pinniped.dev/internal/oidc/provider/formposthtml"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -35,7 +36,7 @@ func NewHandler(
 	stateDecoder, cookieDecoder oidc.Decoder,
 	redirectURI string,
 ) http.Handler {
-	return securityheader.Wrap(httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+	handler := httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		state, err := validateRequest(r, stateDecoder, cookieDecoder)
 		if err != nil {
 			return err
@@ -97,7 +98,8 @@ func NewHandler(
 		oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
 
 		return nil
-	}))
+	})
+	return securityheader.WrapWithCustomCSP(handler, formposthtml.ContentSecurityPolicy())
 }
 
 func authcode(r *http.Request) string {

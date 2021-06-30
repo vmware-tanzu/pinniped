@@ -242,17 +242,13 @@ func TestE2EFullIntegration(t *testing.T) {
 		// Expect to be redirected to the upstream provider and log in.
 		browsertest.LoginToUpstream(t, page, env.SupervisorUpstreamOIDC)
 
-		// Expect to be redirected to the localhost callback.
-		t.Logf("waiting for redirect to callback")
-		browsertest.WaitForURL(t, page, regexp.MustCompile(`\Ahttp://127\.0\.0\.1:[0-9]+/callback\?.+\z`))
+		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
+		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
+		browsertest.WaitForURL(t, page, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
 
-		// Wait for the "pre" element that gets rendered for a `text/plain` page, and
-		// assert that it contains the success message.
-		t.Logf("verifying success page")
-		browsertest.WaitForVisibleElements(t, page, "pre")
-		msg, err := page.First("pre").Text()
-		require.NoError(t, err)
-		require.Equal(t, "you have been logged in and may now close this tab", msg)
+		// The response page should have done the background fetch() and POST'ed to the CLI's callback.
+		// It should now be in the "success" state.
+		formpostExpectSuccessState(t, page)
 
 		// Expect the CLI to output a list of namespaces in JSON format.
 		t.Logf("waiting for kubectl to output namespace list JSON")

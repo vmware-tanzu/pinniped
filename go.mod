@@ -12,6 +12,7 @@ require (
 	github.com/go-logr/stdr v0.4.0
 	github.com/go-openapi/spec v0.20.3 // indirect
 	github.com/gofrs/flock v0.8.1
+	github.com/gofrs/uuid v3.2.0+incompatible
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.6
 	github.com/google/gofuzz v1.2.0

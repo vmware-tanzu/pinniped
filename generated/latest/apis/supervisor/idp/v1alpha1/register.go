@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
@@ -34,6 +34,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&OIDCIdentityProviderList{},
 		&LDAPIdentityProvider{},
 		&LDAPIdentityProviderList{},
+		&ActiveDirectoryIdentityProvider{},
+		&ActiveDirectoryIdentityProviderList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

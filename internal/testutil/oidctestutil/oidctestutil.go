@@ -148,8 +148,9 @@ func (u *TestUpstreamOIDCIdentityProvider) ValidateToken(_ context.Context, _ *o
 }
 
 type UpstreamIDPListerBuilder struct {
-	upstreamOIDCIdentityProviders []*TestUpstreamOIDCIdentityProvider
-	upstreamLDAPIdentityProviders []*TestUpstreamLDAPIdentityProvider
+	upstreamOIDCIdentityProviders            []*TestUpstreamOIDCIdentityProvider
+	upstreamLDAPIdentityProviders            []*TestUpstreamLDAPIdentityProvider
+	upstreamActiveDirectoryIdentityProviders []*TestUpstreamLDAPIdentityProvider
 }
 
 func (b *UpstreamIDPListerBuilder) WithOIDC(upstreamOIDCIdentityProviders ...*TestUpstreamOIDCIdentityProvider) *UpstreamIDPListerBuilder {
@@ -159,6 +160,11 @@ func (b *UpstreamIDPListerBuilder) WithOIDC(upstreamOIDCIdentityProviders ...*Te
 
 func (b *UpstreamIDPListerBuilder) WithLDAP(upstreamLDAPIdentityProviders ...*TestUpstreamLDAPIdentityProvider) *UpstreamIDPListerBuilder {
 	b.upstreamLDAPIdentityProviders = append(b.upstreamLDAPIdentityProviders, upstreamLDAPIdentityProviders...)
+	return b
+}
+
+func (b *UpstreamIDPListerBuilder) WithActiveDirectory(upstreamActiveDirectoryIdentityProviders ...*TestUpstreamLDAPIdentityProvider) *UpstreamIDPListerBuilder {
+	b.upstreamActiveDirectoryIdentityProviders = append(b.upstreamActiveDirectoryIdentityProviders, upstreamActiveDirectoryIdentityProviders...)
 	return b
 }
 
@@ -176,6 +182,12 @@ func (b *UpstreamIDPListerBuilder) Build() provider.DynamicUpstreamIDPProvider {
 		ldapUpstreams[i] = provider.UpstreamLDAPIdentityProviderI(b.upstreamLDAPIdentityProviders[i])
 	}
 	idpProvider.SetLDAPIdentityProviders(ldapUpstreams)
+
+	adUpstreams := make([]provider.UpstreamLDAPIdentityProviderI, len(b.upstreamActiveDirectoryIdentityProviders))
+	for i := range b.upstreamActiveDirectoryIdentityProviders {
+		adUpstreams[i] = provider.UpstreamLDAPIdentityProviderI(b.upstreamActiveDirectoryIdentityProviders[i])
+	}
+	idpProvider.SetActiveDirectoryIdentityProviders(adUpstreams)
 
 	return idpProvider
 }

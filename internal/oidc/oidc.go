@@ -267,9 +267,14 @@ type UpstreamLDAPIdentityProvidersLister interface {
 	GetLDAPIdentityProviders() []provider.UpstreamLDAPIdentityProviderI
 }
 
+type UpstreamActiveDirectoryIdentityProviderLister interface {
+	GetActiveDirectoryIdentityProviders() []provider.UpstreamLDAPIdentityProviderI
+}
+
 type UpstreamIdentityProvidersLister interface {
 	UpstreamOIDCIdentityProvidersLister
 	UpstreamLDAPIdentityProvidersLister
+	UpstreamActiveDirectoryIdentityProviderLister
 }
 
 func GrantScopeIfRequested(authorizeRequester fosite.AuthorizeRequester, scopeName string) {

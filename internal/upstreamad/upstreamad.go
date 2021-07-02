@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"go.pinniped.dev/internal/upstreamldap"
+
 	"github.com/go-ldap/ldap/v3"
 	"github.com/gofrs/uuid"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
@@ -39,74 +41,6 @@ const (
 	defaultLDAPPort                         = uint16(389)
 	defaultLDAPSPort                        = uint16(636)
 )
-
-// Conn abstracts the upstream LDAP communication protocol (mostly for testing).
-type Conn interface {
-	Bind(username, password string) error
-
-	Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error)
-
-	SearchWithPaging(searchRequest *ldap.SearchRequest, pagingSize uint32) (*ldap.SearchResult, error)
-
-	Close()
-}
-
-// Our Conn type is subset of the ldap.Client interface, which is implemented by ldap.Conn.
-var _ Conn = &ldap.Conn{}
-
-// LDAPDialer is a factory of Conn, and the resulting Conn can then be used to interact with an upstream LDAP IDP.
-type LDAPDialer interface {
-	Dial(ctx context.Context, addr endpointaddr.HostPort) (Conn, error)
-}
-
-// LDAPDialerFunc makes it easy to use a func as an LDAPDialer.
-type LDAPDialerFunc func(ctx context.Context, addr endpointaddr.HostPort) (Conn, error)
-
-var _ LDAPDialer = LDAPDialerFunc(nil)
-
-func (f LDAPDialerFunc) Dial(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
-	return f(ctx, addr)
-}
-
-type LDAPConnectionProtocol string
-
-const (
-	StartTLS = LDAPConnectionProtocol("StartTLS")
-	TLS      = LDAPConnectionProtocol("TLS")
-)
-
-// ProviderConfig includes all of the settings for connection and searching for users and groups in
-// the upstream LDAP IDP. It also provides methods for testing the connection and performing logins.
-// The nested structs are not pointer fields to enable deep copy on function params and return values.
-type ProviderConfig struct {
-	// Name is the unique name of this upstream LDAP IDP.
-	Name string
-
-	// Host is the hostname or "hostname:port" of the LDAP server. When the port is not specified,
-	// the default LDAP port will be used.
-	Host string
-
-	// ConnectionProtocol determines how to establish the connection to the server. Either StartTLS or TLS.
-	ConnectionProtocol LDAPConnectionProtocol
-
-	// PEM-encoded CA cert bundle to trust when connecting to the LDAP server. Can be nil.
-	CABundle []byte
-
-	// BindUsername is the username to use when performing a bind with the upstream active directory IDP.
-	BindUsername string
-
-	// BindPassword is the password to use when performing a bind with the upstream active directory IDP.
-	BindPassword string
-
-	// UserSearch contains information about how to search for users in the upstream active directory IDP.
-	UserSearch UserSearchConfig
-
-	// GroupSearch contains information about how to search for group membership in the upstream active directory IDP.
-	GroupSearch GroupSearchConfig
-
-	// Dialer exists to enable testing. When nil, will use a default appropriate for production use.
-	Dialer LDAPDialer
-}
 
 // UserSearchConfig contains information about how to search for users in the upstream active directory IDP.
 type UserSearchConfig struct {
@@ -140,7 +74,7 @@ type GroupSearchConfig struct {
 }
 
 type Provider struct {
-	c ProviderConfig
+	c upstreamldap.ProviderConfig
 }
 
 var _ provider.UpstreamLDAPIdentityProviderI = &Provider{}
@@ -148,16 +82,16 @@ var _ authenticators.UserAuthenticator = &Provider{}
 
 // Create a Provider. The config is not a pointer to ensure that a copy of the config is created,
 // making the resulting Provider use an effectively read-only configuration.
-func New(config ProviderConfig) *Provider {
+func New(config upstreamldap.ProviderConfig) *Provider {
 	return &Provider{c: config}
 }
 
 // A reader for the config. Returns a copy of the config to keep the underlying config read-only.
-func (p *Provider) GetConfig() ProviderConfig {
+func (p *Provider) GetConfig() upstreamldap.ProviderConfig {
 	return p.c
 }
 
-func (p *Provider) dial(ctx context.Context) (Conn, error) {
+func (p *Provider) dial(ctx context.Context) (upstreamldap.Conn, error) {
 	tlsAddr, err := endpointaddr.Parse(p.c.Host, defaultLDAPSPort)
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
@@ -169,13 +103,13 @@ func (p *Provider) dial(ctx context.Context) (Conn, error) {
 	}
 
 	// Choose how and where to dial based on TLS vs. StartTLS config option.
-	var dialFunc LDAPDialerFunc
+	var dialFunc upstreamldap.LDAPDialerFunc
 	var addr endpointaddr.HostPort
 	switch {
-	case p.c.ConnectionProtocol == TLS:
+	case p.c.ConnectionProtocol == upstreamldap.TLS:
 		dialFunc = p.dialTLS
 		addr = tlsAddr
-	case p.c.ConnectionProtocol == StartTLS:
+	case p.c.ConnectionProtocol == upstreamldap.StartTLS:
 		dialFunc = p.dialStartTLS
 		addr = startTLSAddr
 	default:
@@ -193,7 +127,7 @@ func (p *Provider) dial(ctx context.Context) (Conn, error) {
 // dialTLS is a default implementation of the Dialer, used when Dialer is nil and ConnectionProtocol is TLS.
 // Unfortunately, the go-ldap library does not seem to support dialing with a context.Context,
 // so we implement it ourselves, heavily inspired by ldap.DialURL.
-func (p *Provider) dialTLS(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
+func (p *Provider) dialTLS(ctx context.Context, addr endpointaddr.HostPort) (upstreamldap.Conn, error) {
 	tlsConfig, err := p.tlsConfig()
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
@@ -213,7 +147,7 @@ func (p *Provider) dialTLS(ctx context.Context, addr endpointaddr.HostPort) (Con
 // dialTLS is a default implementation of the Dialer, used when Dialer is nil and ConnectionProtocol is StartTLS.
 // Unfortunately, the go-ldap library does not seem to support dialing with a context.Context,
 // so we implement it ourselves, heavily inspired by ldap.DialURL.
-func (p *Provider) dialStartTLS(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
+func (p *Provider) dialStartTLS(ctx context.Context, addr endpointaddr.HostPort) (upstreamldap.Conn, error) {
 	tlsConfig, err := p.tlsConfig()
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
@@ -295,7 +229,7 @@ func (p *Provider) TestConnection(ctx context.Context) error {
 // not bind as that user, so it does not test their password. It returns the same values that a real call to
 // AuthenticateUser with the correct password would return.
 func (p *Provider) DryRunAuthenticateUser(ctx context.Context, username string) (*authenticator.Response, bool, error) {
-	endUserBindFunc := func(conn Conn, foundUserDN string) error {
+	endUserBindFunc := func(conn upstreamldap.Conn, foundUserDN string) error {
 		// Act as if the end user bind always succeeds.
 		return nil
 	}
@@ -304,13 +238,13 @@ func (p *Provider) DryRunAuthenticateUser(ctx context.Context, username string) 
 
 // Authenticate an end user and return their mapped username, groups, and UID. Implements authenticators.UserAuthenticator.
 func (p *Provider) AuthenticateUser(ctx context.Context, username, password string) (*authenticator.Response, bool, error) {
-	endUserBindFunc := func(conn Conn, foundUserDN string) error {
+	endUserBindFunc := func(conn upstreamldap.Conn, foundUserDN string) error {
 		return conn.Bind(foundUserDN, password)
 	}
 	return p.authenticateUserImpl(ctx, username, endUserBindFunc)
 }
 
-func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bindFunc func(conn Conn, foundUserDN string) error) (*authenticator.Response, bool, error) {
+func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bindFunc func(conn upstreamldap.Conn, foundUserDN string) error) (*authenticator.Response, bool, error) {
 	t := trace.FromContext(ctx).Nest("slow ldap authenticate user attempt", trace.Field{Key: "providerName", Value: p.GetName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
 
@@ -361,7 +295,7 @@ func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bi
 	return response, true, nil
 }
 
-func (p *Provider) searchGroupsForUserDN(conn Conn, userDN string) ([]string, error) {
+func (p *Provider) searchGroupsForUserDN(conn upstreamldap.Conn, userDN string) ([]string, error) {
 	searchResult, err := conn.SearchWithPaging(p.groupSearchRequest(userDN), groupSearchPageSize)
 	if err != nil {
 		return nil, fmt.Errorf(`error searching for group memberships for user with DN %q: %w`, userDN, err)
@@ -396,7 +330,7 @@ func (p *Provider) validateConfig() error {
 	return nil
 }
 
-func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(conn Conn, foundUserDN string) error) (string, string, []string, error) {
+func (p *Provider) searchAndBindUser(conn upstreamldap.Conn, username string, bindFunc func(conn upstreamldap.Conn, foundUserDN string) error) (string, string, []string, error) {
 	searchResult, err := conn.Search(p.userSearchRequest(username))
 	if err != nil {
 		plog.All(`error searching for user`,

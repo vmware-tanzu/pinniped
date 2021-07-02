@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"go.pinniped.dev/internal/upstreamldap"
+
 	"github.com/go-ldap/ldap/v3"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -57,21 +59,21 @@ var (
 )
 
 func TestEndUserAuthentication(t *testing.T) {
-	providerConfig := func(editFunc func(p *ProviderConfig)) *ProviderConfig {
-		config := &ProviderConfig{
+	providerConfig := func(editFunc func(p *upstreamldap.ProviderConfig)) *upstreamldap.ProviderConfig {
+		config := &upstreamldap.ProviderConfig{
 			Name:               "some-provider-name",
 			Host:               testHost,
 			CABundle:           nil, // this field is only used by the production dialer, which is replaced by a mock for this test
-			ConnectionProtocol: TLS,
+			ConnectionProtocol: upstreamldap.TLS,
 			BindUsername:       testBindUsername,
 			BindPassword:       testBindPassword,
-			UserSearch: UserSearchConfig{
+			UserSearch: upstreamldap.UserSearchConfig{
 				Base:              testUserSearchBase,
 				Filter:            testUserSearchFilter,
 				UsernameAttribute: testUserSearchUsernameAttribute,
 				UIDAttribute:      testUserSearchUIDAttribute,
 			},
-			GroupSearch: GroupSearchConfig{
+			GroupSearch: upstreamldap.GroupSearchConfig{
 				Base:               testGroupSearchBase,
 				Filter:             testGroupSearchFilter,
 				GroupNameAttribute: testGroupSearchGroupNameAttribute,
@@ -167,7 +169,7 @@ func TestEndUserAuthentication(t *testing.T) {
 		name                       string
 		username                   string
 		password                   string
-		providerConfig             *ProviderConfig
+		providerConfig             *upstreamldap.ProviderConfig
 		searchMocks                func(conn *mockldapconn.MockConn)
 		bindEndUserMocks           func(conn *mockldapconn.MockConn)
 		dialError                  error
@@ -198,14 +200,14 @@ func TestEndUserAuthentication(t *testing.T) {
 			name:     "default as much as possible",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			providerConfig: &ProviderConfig{
+			providerConfig: &upstreamldap.ProviderConfig{
 				Name:               "some-provider-name",
 				Host:               testHost,
 				CABundle:           nil, // this field is only used by the production dialer, which is replaced by a mock for this test
-				ConnectionProtocol: TLS,
+				ConnectionProtocol: upstreamldap.TLS,
 				BindUsername:       testBindUsername,
 				BindPassword:       testBindPassword,
-				GroupSearch: GroupSearchConfig{
+				GroupSearch: upstreamldap.GroupSearchConfig{
 					Base:               testGroupSearchBase,
 					Filter:             testGroupSearchFilter,
 					GroupNameAttribute: testGroupSearchGroupNameAttribute,
@@ -241,7 +243,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			name:     "when the user search filter is already wrapped by parenthesis then it is not wrapped again",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
+			providerConfig: providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.UserSearch.Filter = "(" + testUserSearchFilter + ")"
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
@@ -260,7 +262,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			name:     "when the group search filter is already wrapped by parenthesis then it is not wrapped again",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
+			providerConfig: providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.GroupSearch.Filter = "(" + testGroupSearchFilter + ")"
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
@@ -279,7 +281,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			name:     "when the group search base is empty then skip the group search entirely",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
+			providerConfig: providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.GroupSearch.Base = "" // this configuration means that the user does not want group search to happen
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
@@ -298,7 +300,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			name:     "when the UsernameAttribute is dn and there is a user search filter provided",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
+			providerConfig: providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.UserSearch.UsernameAttribute = "dn"
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
@@ -330,7 +332,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			name:     "when the UIDAttribute is dn",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
+			providerConfig: providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.UserSearch.UIDAttribute = "dn"
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
@@ -362,7 +364,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			name:     "when the GroupNameAttribute is empty then it defaults to dn",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
+			providerConfig: providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.GroupSearch.GroupNameAttribute = "" // blank means to use dn
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
@@ -385,7 +387,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			name:     "when the GroupNameAttribute is dn",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
+			providerConfig: providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.GroupSearch.GroupNameAttribute = "dn"
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
@@ -408,7 +410,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			name:     "when the GroupNameAttribute is cn",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
+			providerConfig: providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.GroupSearch.GroupNameAttribute = "cn"
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
@@ -446,7 +448,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			name:     "when user search Filter is blank it derives a search filter from the UsernameAttribute",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
+			providerConfig: providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.UserSearch.Filter = ""
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
@@ -467,7 +469,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			name:     "when user search Filter and user attribute is blank it defaults to sAMAccountName={}",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
+			providerConfig: providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.UserSearch.Filter = ""
 				p.UserSearch.UsernameAttribute = ""
 			}),
@@ -500,7 +502,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			name:     "when group search Filter is blank it uses a default search filter of member={}",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
+			providerConfig: providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.GroupSearch.Filter = ""
 			}),
 			searchMocks: func(conn *mockldapconn.MockConn) {
@@ -594,7 +596,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			name:     "when the UsernameAttribute is dn and there is not a user search filter provided",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
-			providerConfig: providerConfig(func(p *ProviderConfig) {
+			providerConfig: providerConfig(func(p *upstreamldap.ProviderConfig) {
 				p.UserSearch.UsernameAttribute = "dn"
 				p.UserSearch.Filter = ""
 			}),
@@ -1027,7 +1029,7 @@ func TestEndUserAuthentication(t *testing.T) {
 			}
 
 			dialWasAttempted := false
-			tt.providerConfig.Dialer = LDAPDialerFunc(func(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
+			tt.providerConfig.Dialer = upstreamldap.LDAPDialerFunc(func(ctx context.Context, addr endpointaddr.HostPort) (upstreamldap.Conn, error) {
 				dialWasAttempted = true
 				require.Equal(t, tt.providerConfig.Host, addr.Endpoint())
 				if tt.dialError != nil {
@@ -1091,15 +1093,15 @@ func TestEndUserAuthentication(t *testing.T) {
 }
 
 func TestTestConnection(t *testing.T) {
-	providerConfig := func(editFunc func(p *ProviderConfig)) *ProviderConfig {
-		config := &ProviderConfig{
+	providerConfig := func(editFunc func(p *upstreamldap.ProviderConfig)) *upstreamldap.ProviderConfig {
+		config := &upstreamldap.ProviderConfig{
 			Name:               "some-provider-name",
 			Host:               testHost,
 			CABundle:           nil, // this field is only used by the production dialer, which is replaced by a mock for this test
-			ConnectionProtocol: TLS,
+			ConnectionProtocol: upstreamldap.TLS,
 			BindUsername:       testBindUsername,
 			BindPassword:       testBindPassword,
-			UserSearch:         UserSearchConfig{}, // not used by TestConnection
+			UserSearch:         upstreamldap.UserSearchConfig{}, // not used by TestConnection
 		}
 		if editFunc != nil {
 			editFunc(config)
@@ -1109,7 +1111,7 @@ func TestTestConnection(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		providerConfig *ProviderConfig
+		providerConfig *upstreamldap.ProviderConfig
 		setupMocks     func(conn *mockldapconn.MockConn)
 		dialError      error
 		wantError      string
@@ -1140,7 +1142,7 @@ func TestTestConnection(t *testing.T) {
 		},
 		{
 			name: "when the config is invalid",
-			providerConfig: providerConfig(func(p *ProviderConfig) {
+			providerConfig: providerConfig(func(p *upstreamldap.ProviderConfig) {
 				// This particular combination of options is not allowed.
 				p.UserSearch.UsernameAttribute = "dn"
 				p.UserSearch.Filter = ""
@@ -1162,7 +1164,7 @@ func TestTestConnection(t *testing.T) {
 			}
 
 			dialWasAttempted := false
-			tt.providerConfig.Dialer = LDAPDialerFunc(func(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
+			tt.providerConfig.Dialer = upstreamldap.LDAPDialerFunc(func(ctx context.Context, addr endpointaddr.HostPort) (upstreamldap.Conn, error) {
 				dialWasAttempted = true
 				require.Equal(t, tt.providerConfig.Host, addr.Endpoint())
 				if tt.dialError != nil {
@@ -1187,13 +1189,13 @@ func TestTestConnection(t *testing.T) {
 }
 
 func TestGetConfig(t *testing.T) {
-	c := ProviderConfig{
+	c := upstreamldap.ProviderConfig{
 		Name:         "original-provider-name",
 		Host:         testHost,
 		CABundle:     []byte("some-ca-bundle"),
 		BindUsername: testBindUsername,
 		BindPassword: testBindPassword,
-		UserSearch: UserSearchConfig{
+		UserSearch: upstreamldap.UserSearchConfig{
 			Base:              testUserSearchBase,
 			Filter:            testUserSearchFilter,
 			UsernameAttribute: testUserSearchUsernameAttribute,
@@ -1217,16 +1219,16 @@ func TestGetConfig(t *testing.T) {
 func TestGetURL(t *testing.T) {
 	require.Equal(t,
 		"ldaps://ldap.example.com:1234?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev",
-		New(ProviderConfig{
+		New(upstreamldap.ProviderConfig{
 			Host:       "ldap.example.com:1234",
-			UserSearch: UserSearchConfig{Base: "ou=users,dc=pinniped,dc=dev"},
+			UserSearch: upstreamldap.UserSearchConfig{Base: "ou=users,dc=pinniped,dc=dev"},
 		}).GetURL().String())
 
 	require.Equal(t,
 		"ldaps://ldap.example.com?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev",
-		New(ProviderConfig{
+		New(upstreamldap.ProviderConfig{
 			Host:       "ldap.example.com",
-			UserSearch: UserSearchConfig{Base: "ou=users,dc=pinniped,dc=dev"},
+			UserSearch: upstreamldap.UserSearchConfig{Base: "ou=users,dc=pinniped,dc=dev"},
 		}).GetURL().String())
 }
 
@@ -1255,7 +1257,7 @@ func TestRealTLSDialing(t *testing.T) {
 	tests := []struct {
 		name      string
 		host      string
-		connProto LDAPConnectionProtocol
+		connProto upstreamldap.LDAPConnectionProtocol
 		caBundle  []byte
 		context   context.Context
 		wantError string
@@ -1264,14 +1266,14 @@ func TestRealTLSDialing(t *testing.T) {
 			name:      "happy path",
 			host:      testServerHostAndPort,
 			caBundle:  []byte(testServerCABundle),
-			connProto: TLS,
+			connProto: upstreamldap.TLS,
 			context:   context.Background(),
 		},
 		{
 			name:      "server cert name does not match the address to which the client connected",
 			host:      testServerWithBadCertNameAddr,
 			caBundle:  caForTestServerWithBadCertName.Bundle(),
-			connProto: TLS,
+			connProto: upstreamldap.TLS,
 			context:   context.Background(),
 			wantError: `LDAP Result Code 200 "Network Error": x509: certificate is valid for 10.2.3.4, not 127.0.0.1`,
 		},
@@ -1279,7 +1281,7 @@ func TestRealTLSDialing(t *testing.T) {
 			name:      "invalid CA bundle with TLS",
 			host:      testServerHostAndPort,
 			caBundle:  []byte("not a ca bundle"),
-			connProto: TLS,
+			connProto: upstreamldap.TLS,
 			context:   context.Background(),
 			wantError: `LDAP Result Code 200 "Network Error": could not parse CA bundle`,
 		},
@@ -1287,7 +1289,7 @@ func TestRealTLSDialing(t *testing.T) {
 			name:      "invalid CA bundle with StartTLS",
 			host:      testServerHostAndPort,
 			caBundle:  []byte("not a ca bundle"),
-			connProto: StartTLS,
+			connProto: upstreamldap.StartTLS,
 			context:   context.Background(),
 			wantError: `LDAP Result Code 200 "Network Error": could not parse CA bundle`,
 		},
@@ -1295,7 +1297,7 @@ func TestRealTLSDialing(t *testing.T) {
 			name:      "invalid host with TLS",
 			host:      "this:is:not:a:valid:hostname",
 			caBundle:  []byte(testServerCABundle),
-			connProto: TLS,
+			connProto: upstreamldap.TLS,
 			context:   context.Background(),
 			wantError: `LDAP Result Code 200 "Network Error": host "this:is:not:a:valid:hostname" is not a valid hostname or IP address`,
 		},
@@ -1303,7 +1305,7 @@ func TestRealTLSDialing(t *testing.T) {
 			name:      "invalid host with StartTLS",
 			host:      "this:is:not:a:valid:hostname",
 			caBundle:  []byte(testServerCABundle),
-			connProto: StartTLS,
+			connProto: upstreamldap.StartTLS,
 			context:   context.Background(),
 			wantError: `LDAP Result Code 200 "Network Error": host "this:is:not:a:valid:hostname" is not a valid hostname or IP address`,
 		},
@@ -1311,7 +1313,7 @@ func TestRealTLSDialing(t *testing.T) {
 			name:      "missing CA bundle when it is required because the host is not using a trusted CA",
 			host:      testServerHostAndPort,
 			caBundle:  nil,
-			connProto: TLS,
+			connProto: upstreamldap.TLS,
 			context:   context.Background(),
 			wantError: `LDAP Result Code 200 "Network Error": x509: certificate signed by unknown authority`,
 		},
@@ -1320,7 +1322,7 @@ func TestRealTLSDialing(t *testing.T) {
 			// This is assuming that this port was not reclaimed by another app since the test setup ran. Seems safe enough.
 			host:      recentlyClaimedHostAndPort,
 			caBundle:  []byte(testServerCABundle),
-			connProto: TLS,
+			connProto: upstreamldap.TLS,
 			context:   context.Background(),
 			wantError: fmt.Sprintf(`LDAP Result Code 200 "Network Error": dial tcp %s: connect: connection refused`, recentlyClaimedHostAndPort),
 		},
@@ -1328,7 +1330,7 @@ func TestRealTLSDialing(t *testing.T) {
 			name:      "pays attention to the passed context",
 			host:      testServerHostAndPort,
 			caBundle:  []byte(testServerCABundle),
-			connProto: TLS,
+			connProto: upstreamldap.TLS,
 			context:   alreadyCancelledContext,
 			wantError: fmt.Sprintf(`LDAP Result Code 200 "Network Error": dial tcp %s: operation was canceled`, testServerHostAndPort),
 		},
@@ -1344,7 +1346,7 @@ func TestRealTLSDialing(t *testing.T) {
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
-			provider := New(ProviderConfig{
+			provider := New(upstreamldap.ProviderConfig{
 				Host:               tt.host,
 				CABundle:           tt.caBundle,
 				ConnectionProtocol: tt.connProto,

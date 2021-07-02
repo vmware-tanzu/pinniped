@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"go.pinniped.dev/internal/controller/supervisorconfig/activedirectoryupstreamwatcher"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/clock"
@@ -248,6 +250,15 @@ func startControllers(
 				dynamicUpstreamIDPProvider,
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders(),
+				secretInformer,
+				controllerlib.WithInformer,
+			),
+			singletonWorker).
+		WithController(
+			activedirectoryupstreamwatcher.New(
+				dynamicUpstreamIDPProvider,
+				pinnipedClient,
+				pinnipedInformers.IDP().V1alpha1().ActiveDirectoryIdentityProviders(),
 				secretInformer,
 				controllerlib.WithInformer,
 			),

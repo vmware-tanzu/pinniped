@@ -260,22 +260,26 @@ func readCSRFCookie(r *http.Request, codec oidc.Decoder) csrftoken.CSRFToken {
 	return csrfFromCookie
 }
 
-// Select either an OIDC or an LDAP IDP, or return an error.
+// Select either an OIDC, an LDAP or an AD IDP, or return an error.
 func chooseUpstreamIDP(idpLister oidc.UpstreamIdentityProvidersLister) (provider.UpstreamOIDCIdentityProviderI, provider.UpstreamLDAPIdentityProviderI, error) {
 	oidcUpstreams := idpLister.GetOIDCIdentityProviders()
 	ldapUpstreams := idpLister.GetLDAPIdentityProviders()
+	adUpstreams := idpLister.GetActiveDirectoryIdentityProviders()
 	switch {
-	case len(oidcUpstreams)+len(ldapUpstreams) == 0:
+	case len(oidcUpstreams)+len(ldapUpstreams)+len(adUpstreams) == 0:
 		return nil, nil, httperr.New(
 			http.StatusUnprocessableEntity,
 			"No upstream providers are configured",
 		)
-	case len(oidcUpstreams)+len(ldapUpstreams) > 1:
+	case len(oidcUpstreams)+len(ldapUpstreams)+len(adUpstreams) > 1:
 		var upstreamIDPNames []string
 		for _, idp := range oidcUpstreams {
 			upstreamIDPNames = append(upstreamIDPNames, idp.GetName())
 		}
 		for _, idp := range ldapUpstreams {
+			upstreamIDPNames = append(upstreamIDPNames, idp.GetName())
+		}
+		for _, idp := range adUpstreams {
 			upstreamIDPNames = append(upstreamIDPNames, idp.GetName())
 		}
 		plog.Warning("Too many upstream providers are configured (found: %s)", upstreamIDPNames)
@@ -285,6 +289,8 @@ func chooseUpstreamIDP(idpLister oidc.UpstreamIdentityProvidersLister) (provider
 		)
 	case len(oidcUpstreams) == 1:
 		return oidcUpstreams[0], nil, nil
+	case len(adUpstreams) == 1:
+		return nil, adUpstreams[0], nil
 	default:
 		return nil, ldapUpstreams[0], nil
 	}

@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	idpDiscoveryTypeLDAP = "ldap"
-	idpDiscoveryTypeOIDC = "oidc"
+	idpDiscoveryTypeLDAP            = "ldap"
+	idpDiscoveryTypeOIDC            = "oidc"
+	idpDiscoveryTypeActiveDirectory = "activedirectory"
 )
 
 type response struct {
@@ -57,6 +58,9 @@ func responseAsJSON(upstreamIDPs oidc.UpstreamIdentityProvidersLister) ([]byte, 
 	// The cache of IDPs could change at any time, so always recalculate the list.
 	for _, provider := range upstreamIDPs.GetLDAPIdentityProviders() {
 		r.IDPs = append(r.IDPs, identityProviderResponse{Name: provider.GetName(), Type: idpDiscoveryTypeLDAP})
+	}
+	for _, provider := range upstreamIDPs.GetActiveDirectoryIdentityProviders() {
+		r.IDPs = append(r.IDPs, identityProviderResponse{Name: provider.GetName(), Type: idpDiscoveryTypeActiveDirectory})
 	}
 	for _, provider := range upstreamIDPs.GetOIDCIdentityProviders() {
 		r.IDPs = append(r.IDPs, identityProviderResponse{Name: provider.GetName(), Type: idpDiscoveryTypeOIDC})

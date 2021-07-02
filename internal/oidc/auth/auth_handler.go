@@ -21,6 +21,7 @@ import (
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/csrftoken"
+	"go.pinniped.dev/internal/oidc/downstreamsession"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -109,18 +110,11 @@ func handleAuthRequestForLDAPUpstream(
 		return nil
 	}
 
-	now := time.Now().UTC()
-	openIDSession := &openid.DefaultSession{
-		Claims: &jwt.IDTokenClaims{
-			Subject:     downstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse),
-			RequestedAt: now,
-			AuthTime:    now,
-		},
-	}
-	openIDSession.Claims.Extra = map[string]interface{}{
-		oidc.DownstreamUsernameClaim: authenticateResponse.User.GetName(),
-		oidc.DownstreamGroupsClaim:   authenticateResponse.User.GetGroups(),
-	}
+	openIDSession := downstreamsession.MakeDownstreamSession(
+		downstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse),
+		authenticateResponse.User.GetName(),
+		authenticateResponse.User.GetGroups(),
+	)
 
 	authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 	if err != nil {
@@ -130,6 +124,7 @@ func handleAuthRequestForLDAPUpstream(
 	}
 
 	oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
+
 	return nil
 }
 
@@ -236,18 +231,14 @@ func newAuthorizeRequest(r *http.Request, w http.ResponseWriter, oauthHelper fos
 		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
 		return nil, false
 	}
-	grantScopes(authorizeRequester)
-	return authorizeRequester, true
-}
 
-func grantScopes(authorizeRequester fosite.AuthorizeRequester) {
+	// Automatically grant the openid, offline_access, and pinniped:request-audience scopes, but only if they were requested.
 	// Grant the openid scope (for now) if they asked for it so that `NewAuthorizeResponse` will perform its OIDC validations.
-	oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOpenID)
 	// There don't seem to be any validations inside `NewAuthorizeResponse` related to the offline_access scope
 	// at this time, however we will temporarily grant the scope just in case that changes in a future release of fosite.
-	oidc.GrantScopeIfRequested(authorizeRequester, coreosoidc.ScopeOfflineAccess)
-	// Grant the pinniped:request-audience scope if requested.
-	oidc.GrantScopeIfRequested(authorizeRequester, "pinniped:request-audience")
+	downstreamsession.GrantScopesIfRequested(authorizeRequester)
+
+	return authorizeRequester, true
 }
 
 func readCSRFCookie(r *http.Request, codec oidc.Decoder) csrftoken.CSRFToken {

@@ -33,13 +33,15 @@ The following table includes the current roadmap for Pinniped. If you have any q
 
 
 
-Last Updated: June 2021
+Last Updated: July 2021
 Theme|Description|Timeline|
 |--|--|--|
-|Remote OIDC login support|Add support for logging in from remote hosts without web browsers in the Pinniped CLI and Supervisor|Jun 2021|
-|AD Support|Extends upstream IDP protocols|Jun 2021|
+|Remote OIDC login support|Add support for logging in from remote hosts without web browsers in the Pinniped CLI and Supervisor|Jul 2021|
+|AD Support|Extends upstream IDP protocols|Jul 2021|
 |Wider Concierge cluster support|Support for more cluster types in the Concierge|Jul 2021|
 |Multiple IDP support|Support multiple IDPs configured on a single Supervisor|Exploring/Ongoing|
+|Identity transforms|Support prefixing, filtering, or performing coarse-grained checks on upstream users and groups|Exploring/Ongoing|
+|Extended IDP support|Support more types of identity providers on the Supervisor|Exploring/Ongoing|
 |Improved Documentation|Reorganizing and improving Pinniped docs; new how-to guides and tutorials|Exploring/Ongoing|
 |Improving Security Posture|Offer the best security posture for Kubernetes cluster authentication|Exploring/Ongoing|
 |Improve our CI/CD systems|Upgrade tests; make Kind more efficient and reliable for CI ; Windows tests; performance tests; scale tests; soak tests|Exploring/Ongoing|

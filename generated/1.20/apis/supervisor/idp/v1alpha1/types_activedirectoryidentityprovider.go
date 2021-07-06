@@ -72,8 +72,9 @@ type ActiveDirectoryIdentityProviderGroupSearchAttributes struct {
 type ActiveDirectoryIdentityProviderUserSearch struct {
 	// Base is the dn (distinguished name) that should be used as the search base when searching for users.
 	// E.g. "ou=users,dc=example,dc=com".
-	// Optional, when not specified it will be defaulted based on the host, for example if your active directory host is
-	// "activedirectory.example.com:636", it will be "dc=activedirectory,dc=example,dc=com".
+	// Optional, when not specified it will search the whole directory tree.
+	// Note that if your bind user only has permission to search a subtree, this must be specified.
+	// Search a subtree will also be faster.
 	// +optional
 	Base string `json:"base,omitempty"`
 

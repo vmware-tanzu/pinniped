@@ -78,7 +78,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				      --session-cache string                     Path to session cache file (default "` + cfgDir + `/sessions.yaml")
 				      --skip-browser                             Skip opening the browser (just print the URL)
 					  --upstream-identity-provider-name string   The name of the upstream identity provider used during login with a Supervisor
-					  --upstream-identity-provider-type string   The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap') (default "oidc")
+					  --upstream-identity-provider-type string   The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap', 'activedirectory') (default "oidc")
 			`),
 		},
 		{
@@ -148,7 +148,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			},
 			wantError: true,
 			wantStderr: here.Doc(`
-				Error: --upstream-identity-provider-type value not recognized: invalid (supported values: oidc, ldap)
+				Error: --upstream-identity-provider-type value not recognized: invalid (supported values: oidc, ldap, activedirectory)
 			`),
 		},
 		{
@@ -168,6 +168,17 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--issuer", "test-issuer",
 				"--client-id", "test-client-id",
 				"--upstream-identity-provider-type", "ldap",
+				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
+			},
+			wantOptionsCount: 5,
+			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
+		},
+		{
+			name: "activedirectory upstream type is allowed",
+			args: []string{
+				"--issuer", "test-issuer",
+				"--client-id", "test-client-id",
+				"--upstream-identity-provider-type", "activedirectory",
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
 			},
 			wantOptionsCount: 5,

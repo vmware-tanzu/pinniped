@@ -218,7 +218,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				conn.EXPECT().Search(expectedUserSearch(func(r *ldap.SearchRequest) {
 					r.Filter = "(" + sAMAccountNameAttributeName + "=" + testUpstreamUsername + ")"
 					r.Attributes = []string{sAMAccountNameAttributeName, testUserSearchUIDAttribute}
-					r.BaseDN = "dc=activedirectory,dc=example,dc=com"
+					r.BaseDN = ""
 				})).Return(&ldap.SearchResult{
 					Entries: []*ldap.Entry{
 						{

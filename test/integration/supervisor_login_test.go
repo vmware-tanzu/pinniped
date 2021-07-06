@@ -230,6 +230,9 @@ func TestSupervisorLogin(t *testing.T) {
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserDN),
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamLDAP.TestUserDirectGroupsCNs,
 		},
+		{
+			name: "activedirectory with all default options",
+		},
 	}
 	for _, test := range tests {
 		tt := test

@@ -417,19 +417,7 @@ func (p *Provider) userSearchRequest(username string) *ldap.SearchRequest {
 
 func (p *Provider) userSearchBase() string {
 	if len(p.c.UserSearch.Base) == 0 {
-		parsed, err := endpointaddr.Parse(p.c.Host, 636)
-		if err != nil {
-			return ""
-		}
-		dcParts := strings.Split(parsed.Host, ".")
-		base := ""
-		for i, dcPart := range dcParts {
-			base += "dc=" + dcPart
-			if i < len(dcParts)-1 {
-				base += ","
-			}
-		}
-		return base
+		return ""
 	}
 	return p.c.UserSearch.Base
 }

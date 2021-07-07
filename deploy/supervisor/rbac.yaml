@@ -40,6 +40,14 @@ rules:
       - #@ pinnipedDevAPIGroupWithPrefix("idp.supervisor")
     resources: [ldapidentityproviders/status]
     verbs: [get, patch, update]
+  - apiGroups:
+      - #@ pinnipedDevAPIGroupWithPrefix("idp.supervisor")
+    resources: [activedirectoryidentityproviders]
+    verbs: [get, list, watch]
+  - apiGroups:
+      - #@ pinnipedDevAPIGroupWithPrefix("idp.supervisor")
+    resources: [activedirectoryidentityproviders/status]
+    verbs: [get, patch, update]
     #! We want to be able to read pods/replicasets/deployment so we can learn who our deployment is to set
     #! as an owner reference.
   - apiGroups: [""]

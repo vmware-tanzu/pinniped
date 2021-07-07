@@ -1,7 +1,7 @@
 // Copyright 2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package activedirectoryupstreamwatcher implements a controller which watches LDAPIdentityProviders.
+// Package activedirectoryupstreamwatcher implements a controller which watches ActiveDirectoryIdentityProviders.
 package activedirectoryupstreamwatcher
 
 import (

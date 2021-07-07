@@ -158,9 +158,21 @@ func WithScopes(scopes []string) Option {
 
 // WithBrowserOpen overrides the default "open browser" functionality with a custom callback. If not specified,
 // an implementation using https://github.com/pkg/browser will be used by default.
+//
+// Deprecated: this option will be removed in a future version of Pinniped. See the
+// WithSkipBrowserOpen() option instead.
 func WithBrowserOpen(openURL func(url string) error) Option {
 	return func(h *handlerState) error {
 		h.openURL = openURL
+		return nil
+	}
+}
+
+// WithSkipBrowserOpen causes the login to only print the authorize URL, but skips attempting to
+// open the user's default web browser.
+func WithSkipBrowserOpen() Option {
+	return func(h *handlerState) error {
+		h.openURL = func(_ string) error { return nil }
 		return nil
 	}
 }

@@ -182,12 +182,9 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		}
 	}
 
-	// --skip-browser replaces the default "browser open" function with one that prints to stderr.
+	// --skip-browser skips opening the browser.
 	if flags.skipBrowser {
-		opts = append(opts, oidcclient.WithBrowserOpen(func(url string) error {
-			cmd.PrintErr("Please log in: ", url, "\n")
-			return nil
-		}))
+		opts = append(opts, oidcclient.WithSkipBrowserOpen())
 	}
 
 	if len(flags.caBundlePaths) > 0 || len(flags.caBundleData) > 0 {

@@ -102,6 +102,15 @@ spec:
               protocol: TCP
             - containerPort: 8443
               protocol: TCP
+          env:
+            #@ if data.values.https_proxy:
+            - name: HTTPS_PROXY
+              value: #@ data.values.https_proxy
+            #@ end
+            #@ if data.values.no_proxy:
+            - name: NO_PROXY
+              value: #@ data.values.no_proxy
+            #@ end
           livenessProbe:
             httpGet:
               path: /healthz

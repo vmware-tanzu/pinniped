@@ -128,7 +128,7 @@ func TestSupervisorLogin(t *testing.T) {
 						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
 						Filter: "",
 						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
-							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
+							Username: env.SupervisorUpstreamLDAP.TestUsernameAttributeName,
 							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
 						},
 					},
@@ -150,7 +150,7 @@ func TestSupervisorLogin(t *testing.T) {
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingLDAPIdentityProvider(t,
 					downstreamAuthorizeURL,
-					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUsernameAttributeValue, // username to present to server during login
 					env.SupervisorUpstreamLDAP.TestUserPassword,           // password to present to server during login
 					httpClient,
 				)
@@ -162,7 +162,7 @@ func TestSupervisorLogin(t *testing.T) {
 					"&sub=" + base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
 			),
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
-			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue),
+			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUsernameAttributeValue),
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
 		},
 		{
@@ -232,6 +232,56 @@ func TestSupervisorLogin(t *testing.T) {
 		},
 		{
 			name: "activedirectory with all default options",
+			maybeSkip: func(t *testing.T) {
+				t.Helper()
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+					t.Skip("LDAP integration test requires connectivity to an LDAP server")
+				}
+				if env.SupervisorUpstreamActiveDirectory.Host == "" {
+					t.Skip("Active Directory hostname not specified")
+				}
+			},
+			createIDP: func(t *testing.T) {
+				t.Helper()
+				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
+					map[string]string{
+						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
+						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
+					},
+				)
+				adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
+					Host: env.SupervisorUpstreamLDAP.Host,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
+					},
+					Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
+						SecretName: secret.Name,
+					},
+				}, idpv1alpha1.ActiveDirectoryPhaseReady)
+				expectedMsg := fmt.Sprintf(
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
+					secret.Name, secret.ResourceVersion,
+				)
+				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg) // TODO refactor to be same as LDAP func
+			},
+			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingLDAPIdentityProvider(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamActiveDirectory.TestUsernameAttributeName, // username to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserPassword,          // password to present to server during login
+					httpClient,
+				)
+			},
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(
+				"ldaps://" + env.SupervisorUpstreamActiveDirectory.Host +
+					"?base=" + url.QueryEscape(env.SupervisorUpstreamActiveDirectory.UserSearchBase) +
+					"&sub=" + base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue)),
+			),
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserDN),
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamActiveDirectory.TestUserDirectGroupsCNs,
 		},
 	}
 	for _, test := range tests {
@@ -265,6 +315,30 @@ func requireSuccessfulLDAPIdentityProviderConditions(t *testing.T, ldapIDP *idpv
 			require.Equal(t, "loaded TLS configuration", condition.Message)
 		case "LDAPConnectionValid":
 			require.Equal(t, expectedLDAPConnectionValidMessage, condition.Message)
+		}
+	}
+
+	require.ElementsMatch(t, [][]string{
+		{"BindSecretValid", "True", "Success"},
+		{"TLSConfigurationValid", "True", "Success"},
+		{"LDAPConnectionValid", "True", "Success"},
+	}, conditionsSummary)
+}
+func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, adIDP *idpv1alpha1.ActiveDirectoryIdentityProvider, expectedActiveDirectoryConnectionValidMessage string) {
+	require.Len(t, adIDP.Status.Conditions, 3)
+
+	conditionsSummary := [][]string{}
+	for _, condition := range adIDP.Status.Conditions {
+		conditionsSummary = append(conditionsSummary, []string{condition.Type, string(condition.Status), condition.Reason})
+		t.Logf("Saw ActiveDirectoryIdentityProvider Status.Condition Type=%s Status=%s Reason=%s Message=%s",
+			condition.Type, string(condition.Status), condition.Reason, condition.Message)
+		switch condition.Type {
+		case "BindSecretValid":
+			require.Equal(t, "loaded bind secret", condition.Message)
+		case "TLSConfigurationValid":
+			require.Equal(t, "loaded TLS configuration", condition.Message)
+		case "LDAPConnectionValid":
+			require.Equal(t, expectedActiveDirectoryConnectionValidMessage, condition.Message)
 		}
 	}
 

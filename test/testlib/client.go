@@ -434,6 +434,47 @@ func CreateTestLDAPIdentityProvider(t *testing.T, spec idpv1alpha1.LDAPIdentityP
 	return result
 }
 
+func CreateTestActiveDirectoryIdentityProvider(t *testing.T, spec idpv1alpha1.ActiveDirectoryIdentityProviderSpec, expectedPhase idpv1alpha1.ActiveDirectoryIdentityProviderPhase) *idpv1alpha1.ActiveDirectoryIdentityProvider {
+	t.Helper()
+	env := IntegrationEnv(t)
+	client := NewSupervisorClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// Create the LDAPIdentityProvider using GenerateName to get a random name.
+	upstreams := client.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace)
+
+	created, err := upstreams.Create(ctx, &idpv1alpha1.ActiveDirectoryIdentityProvider{
+		ObjectMeta: testObjectMeta(t, "upstream-ad-idp"),
+		Spec:       spec,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Always clean this up after this point.
+	t.Cleanup(func() {
+		t.Logf("cleaning up test ActiveDirectoryIdentityProvider %s/%s", created.Namespace, created.Name)
+		err := upstreams.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+	t.Logf("created test ActiveDirectoryIdentityProvider %s", created.Name)
+
+	// Wait for the LDAPIdentityProvider to enter the expected phase (or time out).
+	var result *idpv1alpha1.ActiveDirectoryIdentityProvider
+	RequireEventuallyf(t,
+		func(requireEventually *require.Assertions) {
+			var err error
+			result, err = upstreams.Get(ctx, created.Name, metav1.GetOptions{})
+			requireEventually.NoErrorf(err, "error while getting ActiveDirectoryIdentityProvider %s/%s", created.Namespace, created.Name)
+			requireEventually.Equalf(expectedPhase, result.Status.Phase, "ActiveDirectoryIdentityProvider is not in phase %s: %v", expectedPhase, Sdump(result))
+		},
+		2*time.Minute, // it takes 1 minute for a failed LDAP TLS connection test to timeout before it tries using StartTLS, so wait longer than that
+		1*time.Second,
+		"expected the ActiveDirectoryIdentityProvider to go into phase %s",
+		expectedPhase,
+	)
+	return result
+}
+
 func CreateTestClusterRoleBinding(t *testing.T, subject rbacv1.Subject, roleRef rbacv1.RoleRef) *rbacv1.ClusterRoleBinding {
 	t.Helper()
 	client := NewKubernetesClientset(t)

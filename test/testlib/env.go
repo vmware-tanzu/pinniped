@@ -61,9 +61,10 @@ type TestEnv struct {
 		ExpectedGroups   []string `json:"expectedGroups"`
 	} `json:"testUser"`
 
-	CLIUpstreamOIDC        TestOIDCUpstream `json:"cliOIDCUpstream"`
-	SupervisorUpstreamOIDC TestOIDCUpstream `json:"supervisorOIDCUpstream"`
-	SupervisorUpstreamLDAP TestLDAPUpstream `json:"supervisorLDAPUpstream"`
+	CLIUpstreamOIDC                   TestOIDCUpstream `json:"cliOIDCUpstream"`
+	SupervisorUpstreamOIDC            TestOIDCUpstream `json:"supervisorOIDCUpstream"`
+	SupervisorUpstreamLDAP            TestLDAPUpstream `json:"supervisorLDAPUpstream"`
+	SupervisorUpstreamActiveDirectory TestLDAPUpstream `json:"supervisorActiveDirectoryUpstream"`
 }
 
 type TestOIDCUpstream struct {
@@ -91,8 +92,8 @@ type TestLDAPUpstream struct {
 	TestUserDN                     string   `json:"testUserDN"`
 	TestUserCN                     string   `json:"testUserCN"`
 	TestUserPassword               string   `json:"testUserPassword"`
-	TestUserMailAttributeName      string   `json:"testUserMailAttributeName"`
-	TestUserMailAttributeValue     string   `json:"testUserMailAttributeValue"`
+	TestUsernameAttributeName      string   `json:"testUserMailAttributeName"`
+	TestUsernameAttributeValue     string   `json:"testUserMailAttributeValue"`
 	TestUserUniqueIDAttributeName  string   `json:"testUserUniqueIDAttributeName"`
 	TestUserUniqueIDAttributeValue string   `json:"testUserUniqueIDAttributeValue"`
 	TestUserDirectGroupsCNs        []string `json:"testUserDirectGroupsCNs"`
@@ -260,11 +261,23 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 		TestUserCN:                     needEnv(t, "PINNIPED_TEST_LDAP_USER_CN"),
 		TestUserUniqueIDAttributeName:  needEnv(t, "PINNIPED_TEST_LDAP_USER_UNIQUE_ID_ATTRIBUTE_NAME"),
 		TestUserUniqueIDAttributeValue: needEnv(t, "PINNIPED_TEST_LDAP_USER_UNIQUE_ID_ATTRIBUTE_VALUE"),
-		TestUserMailAttributeName:      needEnv(t, "PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_NAME"),
-		TestUserMailAttributeValue:     needEnv(t, "PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_VALUE"),
+		TestUsernameAttributeName:      needEnv(t, "PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_NAME"),
+		TestUsernameAttributeValue:     needEnv(t, "PINNIPED_TEST_LDAP_USER_EMAIL_ATTRIBUTE_VALUE"),
 		TestUserDirectGroupsCNs:        filterEmpty(strings.Split(needEnv(t, "PINNIPED_TEST_LDAP_EXPECTED_DIRECT_GROUPS_CN"), ";")),
 		TestUserDirectGroupsDNs:        filterEmpty(strings.Split(needEnv(t, "PINNIPED_TEST_LDAP_EXPECTED_DIRECT_GROUPS_DN"), ";")),
 		TestUserPassword:               needEnv(t, "PINNIPED_TEST_LDAP_USER_PASSWORD"),
+	}
+
+	result.SupervisorUpstreamActiveDirectory = TestLDAPUpstream{
+		Host:                           wantEnv("PINNIPED_TEST_AD_HOST", ""),
+		CABundle:                       base64Decoded(t, os.Getenv("PINNIPED_TEST_AD_LDAPS_CA_BUNDLE")),
+		BindUsername:                   wantEnv("PINNIPED_TEST_AD_BIND_ACCOUNT_USERNAME", ""),
+		BindPassword:                   wantEnv("PINNIPED_TEST_AD_BIND_ACCOUNT_PASSWORD", ""),
+		TestUserPassword:               wantEnv("PINNIPED_TEST_AD_USER_PASSWORD", ""),
+		TestUserUniqueIDAttributeName:  wantEnv("PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_NAME", ""),
+		TestUserUniqueIDAttributeValue: wantEnv("PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_VALUE", ""),
+		TestUsernameAttributeName:      wantEnv("PINNIPED_TEST_AD_USERNAME_ATTRIBUTE_NAME", ""),
+		TestUsernameAttributeValue:     wantEnv("PINNIPED_TEST_AD_USERNAME_ATTRIBUTE_VALUE", ""),
 	}
 
 	sort.Strings(result.SupervisorUpstreamLDAP.TestUserDirectGroupsCNs)

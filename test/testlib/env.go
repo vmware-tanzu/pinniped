@@ -278,6 +278,8 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 		TestUserUniqueIDAttributeValue: wantEnv("PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_VALUE", ""),
 		TestUsernameAttributeName:      wantEnv("PINNIPED_TEST_AD_USERNAME_ATTRIBUTE_NAME", ""),
 		TestUsernameAttributeValue:     wantEnv("PINNIPED_TEST_AD_USERNAME_ATTRIBUTE_VALUE", ""),
+		TestUserDirectGroupsDNs:        filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_DN", ""), ";")),
+		TestUserDirectGroupsCNs:        filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_CN", ""), ";")),
 	}
 
 	sort.Strings(result.SupervisorUpstreamLDAP.TestUserDirectGroupsCNs)

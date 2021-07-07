@@ -1,4 +1,4 @@
-#! Copyright 2020 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@data/values
@@ -56,3 +56,11 @@ service_loadbalancer_ip: #! e.g. 1.2.3.4
 #! Specify the verbosity of logging: info ("nice to know" information), debug (developer
 #! information), trace (timing information), all (kitchen sink).
 log_level: #! By default, when this value is left unset, only warnings and errors are printed. There is no way to suppress warning and error logs.
+
+#! Set the standard golang HTTPS_PROXY and NO_PROXY environment variables on the Supervisor containers.
+#! These will be used when the Supervisor makes backend-to-backend calls to upstream identity providers using HTTPS,
+#! e.g. when the Supervisor fetches discovery documents, JWKS keys, and tokens from an upstream OIDC Provider.
+#! The Supervisor never makes insecure HTTP calls, so there is no reason to set HTTP_PROXY.
+#! Optional.
+https_proxy: #! e.g. http://proxy.example.com
+no_proxy: #! e.g. 127.0.0.1

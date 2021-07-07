@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -650,6 +651,15 @@ func TestController(t *testing.T) {
 				require.Equal(t, tt.wantResultingCache[i].GetUsernameClaim(), actualIDP.GetUsernameClaim())
 				require.Equal(t, tt.wantResultingCache[i].GetGroupsClaim(), actualIDP.GetGroupsClaim())
 				require.ElementsMatch(t, tt.wantResultingCache[i].GetScopes(), actualIDP.GetScopes())
+
+				// We always want to use the proxy from env on these clients, so although the following assertions
+				// are a little hacky, this is a cheap way to test that we are using it.
+				actualTransport, ok := actualIDP.Client.Transport.(*http.Transport)
+				require.True(t, ok, "expected cached provider to have client with Transport of type *http.Transport")
+				httpProxyFromEnvFunction := reflect.ValueOf(http.ProxyFromEnvironment).Pointer()
+				actualTransportProxyFunction := reflect.ValueOf(actualTransport.Proxy).Pointer()
+				require.Equal(t, httpProxyFromEnvFunction, actualTransportProxyFunction,
+					"Transport should have used http.ProxyFromEnvironment as its Proxy func")
 			}
 
 			actualUpstreams, err := fakePinnipedClient.IDPV1alpha1().OIDCIdentityProviders(testNamespace).List(ctx, metav1.ListOptions{})

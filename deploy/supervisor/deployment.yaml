@@ -1,4 +1,4 @@
-#! Copyright 2020 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -101,6 +101,15 @@ spec:
               protocol: TCP
             - containerPort: 8443
               protocol: TCP
+          env:
+            #@ if data.values.https_proxy:
+            - name: HTTPS_PROXY
+              value: #@ data.values.https_proxy
+            #@ end
+            #@ if data.values.no_proxy:
+            - name: NO_PROXY
+              value: #@ data.values.no_proxy
+            #@ end
           livenessProbe:
             httpGet:
               path: /healthz

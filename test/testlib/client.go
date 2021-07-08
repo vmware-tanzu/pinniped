@@ -15,11 +15,12 @@ import (
 	"testing"
 	"time"
 
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+
 	"github.com/stretchr/testify/require"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -441,7 +442,7 @@ func CreateTestActiveDirectoryIdentityProvider(t *testing.T, spec idpv1alpha1.Ac
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Create the LDAPIdentityProvider using GenerateName to get a random name.
+	// Create the ActiveDirectoryIdentityProvider using GenerateName to get a random name.
 	upstreams := client.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace)
 
 	created, err := upstreams.Create(ctx, &idpv1alpha1.ActiveDirectoryIdentityProvider{

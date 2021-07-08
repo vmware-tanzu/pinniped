@@ -250,7 +250,7 @@ func TestSupervisorLogin(t *testing.T) {
 					},
 				)
 				adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
-					Host: env.SupervisorUpstreamLDAP.Host,
+					Host: env.SupervisorUpstreamActiveDirectory.Host,
 					TLS: &idpv1alpha1.TLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
 					},
@@ -268,19 +268,18 @@ func TestSupervisorLogin(t *testing.T) {
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingLDAPIdentityProvider(t,
 					downstreamAuthorizeURL,
-					env.SupervisorUpstreamActiveDirectory.TestUsernameAttributeName, // username to present to server during login
-					env.SupervisorUpstreamActiveDirectory.TestUserPassword,          // password to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUsernameAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserPassword,           // password to present to server during login
 					httpClient,
 				)
 			},
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(
 				"ldaps://" + env.SupervisorUpstreamActiveDirectory.Host +
-					"?base=" + url.QueryEscape(env.SupervisorUpstreamActiveDirectory.UserSearchBase) +
 					"&sub=" + base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue)),
 			),
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
-			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserDN),
+			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUsernameAttributeValue),
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamActiveDirectory.TestUserDirectGroupsCNs,
 		},
 	}
@@ -337,7 +336,7 @@ func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, ad
 			require.Equal(t, "loaded bind secret", condition.Message)
 		case "TLSConfigurationValid":
 			require.Equal(t, "loaded TLS configuration", condition.Message)
-		case "LDAPConnectionValid":
+		case "ActiveDirectoryConnectionValid":
 			require.Equal(t, expectedActiveDirectoryConnectionValidMessage, condition.Message)
 		}
 	}
@@ -345,7 +344,7 @@ func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, ad
 	require.ElementsMatch(t, [][]string{
 		{"BindSecretValid", "True", "Success"},
 		{"TLSConfigurationValid", "True", "Success"},
-		{"LDAPConnectionValid", "True", "Success"},
+		{"ActiveDirectoryConnectionValid", "True", "Success"},
 	}, conditionsSummary)
 }
 
@@ -604,7 +603,7 @@ func requestAuthorizationUsingOIDCIdentityProvider(t *testing.T, downstreamAutho
 func requestAuthorizationUsingLDAPIdentityProvider(t *testing.T, downstreamAuthorizeURL, upstreamUsername, upstreamPassword string, httpClient *http.Client) {
 	t.Helper()
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancelFunc()
 
 	authRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthorizeURL, nil)
@@ -635,7 +634,7 @@ func requestAuthorizationUsingLDAPIdentityProvider(t *testing.T, downstreamAutho
 			return false, nil
 		}
 		return true, nil
-	}, 30*time.Second, 200*time.Millisecond)
+	}, 60*time.Second, 200*time.Millisecond)
 
 	expectSecurityHeaders(t, authResponse, true)
 

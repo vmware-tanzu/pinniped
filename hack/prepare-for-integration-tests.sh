@@ -50,6 +50,7 @@ skip_build=no
 clean_kind=no
 api_group_suffix="pinniped.dev" # same default as in the values.yaml ytt file
 skip_chromedriver_check=no
+test_active_directory=no
 
 while (("$#")); do
   case "$1" in
@@ -77,6 +78,10 @@ while (("$#")); do
     ;;
   --live-dangerously)
     skip_chromedriver_check=yes
+    shift
+    ;;
+  --test-active-directory)
+    test_active_directory=yes
     shift
     ;;
   -*)
@@ -368,6 +373,24 @@ export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME=pinny@example.com
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD=${dex_test_password}
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_EXPECTED_GROUPS= # Dex's local user store does not let us configure groups.
 export PINNIPED_TEST_API_GROUP_SUFFIX='${api_group_suffix}'
+
+if [[ "$test_active_directory" == "yes" ]]; then
+
+if [[ -z "$(gcloud config list account --format "value(core.account)")" ]]; then
+  echo "Please run \`gcloud auth login\`"
+  exit 1
+fi
+
+export PINNIPED_TEST_AD_HOST="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-host' -))"
+export PINNIPED_TEST_AD_BIND_ACCOUNT_USERNAME="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-bind-account-username' -))"
+export PINNIPED_TEST_AD_BIND_ACCOUNT_PASSWORD="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-bind-account-password' -)"
+export PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_NAME="objectGUID"
+export PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_VALUE="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-user-unique-id-attribute-value' -)"
+export PINNIPED_TEST_AD_USERNAME_ATTRIBUTE_NAME="sAMAccountName"
+export PINNIPED_TEST_AD_USERNAME_ATTRIBUTE_VALUE="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-user-sAMAccountName' -))"
+export PINNIPED_TEST_AD_USER_PASSWORD="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-user-password' -)"
+export PINNIPED_TEST_AD_LDAPS_CA_BUNDLE="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-ca-data' -))"
+fi
 
 read -r -d '' PINNIPED_TEST_CLUSTER_CAPABILITY_YAML << PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF || true
 ${pinniped_cluster_capability_file_content}

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"mime"
 	"net"
 	"net/http"
@@ -98,6 +99,8 @@ type handlerState struct {
 	generatePKCE    func() (pkce.Code, error)
 	generateNonce   func() (nonce.Nonce, error)
 	openURL         func(string) error
+	listen          func(string, string) (net.Listener, error)
+	isTTY           func(int) bool
 	getProvider     func(*oauth2.Config, *oidc.Provider, *http.Client) provider.UpstreamOIDCIdentityProviderI
 	validateIDToken func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error)
 	promptForValue  func(ctx context.Context, promptLabel string) (string, error)
@@ -264,6 +267,8 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		generateNonce: nonce.Generate,
 		generatePKCE:  pkce.Generate,
 		openURL:       browser.OpenURL,
+		listen:        net.Listen,
+		isTTY:         term.IsTerminal,
 		getProvider:   upstreamoidc.New,
 		validateIDToken: func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error) {
 			return provider.Verifier(&oidc.Config{ClientID: audience}).Verify(ctx, token)
@@ -489,16 +494,27 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 // Open a web browser, or ask the user to open a web browser, to visit the authorize endpoint.
 // Create a localhost callback listener which exchanges the authcode for tokens. Return the tokens or an error.
 func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (*oidctypes.Token, error) {
-	// Open a TCP listener and update the OAuth2 redirect_uri to match (in case we are using an ephemeral port number).
-	listener, err := net.Listen("tcp", h.listenAddr)
+	// Attempt to open a local TCP listener, logging but otherwise ignoring any error.
+	listener, err := h.listen("tcp", h.listenAddr)
 	if err != nil {
-		return nil, fmt.Errorf("could not open callback listener: %w", err)
+		h.logger.V(debugLogLevel).Error(err, "could not open callback listener")
 	}
-	h.oauth2Config.RedirectURL = (&url.URL{
-		Scheme: "http",
-		Host:   listener.Addr().String(),
-		Path:   h.callbackPath,
-	}).String()
+
+	// If the listener failed to start and stdin is not a TTY, then we have no hope of succeeding,
+	// since we won't be able to receive the web callback and we can't prompt for the manual auth code.
+	if listener == nil && !h.isTTY(syscall.Stdin) {
+		return nil, fmt.Errorf("login failed: must have either a localhost listener or stdin must be a TTY")
+	}
+
+	// Update the OAuth2 redirect_uri to match the actual listener address (if there is one), or just use
+	// a fake ":0" port if there is no listener running.
+	redirectURI := url.URL{Scheme: "http", Path: h.callbackPath}
+	if listener == nil {
+		redirectURI.Host = "127.0.0.1:0"
+	} else {
+		redirectURI.Host = listener.Addr().String()
+	}
+	h.oauth2Config.RedirectURL = redirectURI.String()
 
 	// If the server supports it, request response_mode=form_post.
 	authParams := *authorizeOptions
@@ -509,16 +525,24 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 	// Now that we have a redirect URL with the listener port, we can build the authorize URL.
 	authorizeURL := h.oauth2Config.AuthCodeURL(h.state.String(), authParams...)
 
-	// Start a callback server in a background goroutine.
-	shutdown := h.serve(listener)
-	defer shutdown()
-
-	// Open the authorize URL in the users browser.
-	if err := h.openURL(authorizeURL); err != nil {
-		return nil, fmt.Errorf("could not open browser: %w", err)
+	// If there is a listener running, start serving the callback handler in a background goroutine.
+	if listener != nil {
+		shutdown := h.serve(listener)
+		defer shutdown()
 	}
 
-	// Wait for either the callback or a timeout.
+	// Open the authorize URL in the users browser, logging but otherwise ignoring any error.
+	if err := h.openURL(authorizeURL); err != nil {
+		h.logger.V(debugLogLevel).Error(err, "could not open browser")
+	}
+
+	ctx, cancel := context.WithCancel(h.ctx)
+	defer cancel()
+
+	// Prompt the user to visit the authorize URL, and to paste a manually-copied auth code (if possible).
+	h.promptForWebLogin(ctx, authorizeURL, os.Stderr)
+
+	// Wait for either the web callback, a pasted auth code, or a timeout.
 	select {
 	case <-h.ctx.Done():
 		return nil, fmt.Errorf("timed out waiting for token callback: %w", h.ctx.Err())
@@ -528,6 +552,36 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 		}
 		return callback.token, nil
 	}
+}
+
+func (h *handlerState) promptForWebLogin(ctx context.Context, authorizeURL string, out io.Writer) {
+	_, _ = fmt.Fprintf(out, "Log in by visiting this link:\n\n    %s\n\n", authorizeURL)
+
+	// If stdin is not a TTY, print the URL but don't prompt for the manual paste,
+	// since we have no way of reading it.
+	if !h.isTTY(syscall.Stdin) {
+		return
+	}
+
+	// If the server didn't support response_mode=form_post, don't bother prompting for the manual
+	// code because the user isn't going to have any easy way to manually copy it anyway.
+	if !h.useFormPost {
+		return
+	}
+
+	// Launch the manual auth code prompt in a background goroutine, which will be cancelled
+	// if the parent context is cancelled (when the login succeeds or times out).
+	go func() {
+		code, err := h.promptForSecret(ctx, "    If automatic login fails, paste your authorization code to login manually: ")
+		if err != nil {
+			h.callbacks <- callbackResult{err: fmt.Errorf("failed to prompt for manual authorization code: %v", err)}
+			return
+		}
+
+		// When a code is pasted, redeem it for a token and return that result on the callbacks channel.
+		token, err := h.redeemAuthCode(ctx, code)
+		h.callbacks <- callbackResult{token: token, err: err}
+	}()
 }
 
 func promptForValue(ctx context.Context, promptLabel string) (string, error) {
@@ -758,14 +812,7 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 
 	// Exchange the authorization code for access, ID, and refresh tokens and perform required
 	// validations on the returned ID token.
-	token, err := h.getProvider(h.oauth2Config, h.provider, h.httpClient).
-		ExchangeAuthcodeAndValidateTokens(
-			r.Context(),
-			params.Get("code"),
-			h.pkce,
-			h.nonce,
-			h.oauth2Config.RedirectURL,
-		)
+	token, err := h.redeemAuthCode(r.Context(), params.Get("code"))
 	if err != nil {
 		return httperr.Wrap(http.StatusBadRequest, "could not complete code exchange", err)
 	}
@@ -773,6 +820,17 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 	h.callbacks <- callbackResult{token: token}
 	_, _ = w.Write([]byte("you have been logged in and may now close this tab"))
 	return nil
+}
+
+func (h *handlerState) redeemAuthCode(ctx context.Context, code string) (*oidctypes.Token, error) {
+	return h.getProvider(h.oauth2Config, h.provider, h.httpClient).
+		ExchangeAuthcodeAndValidateTokens(
+			ctx,
+			code,
+			h.pkce,
+			h.nonce,
+			h.oauth2Config.RedirectURL,
+		)
 }
 
 func (h *handlerState) serve(listener net.Listener) func() {

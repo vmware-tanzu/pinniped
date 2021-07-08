@@ -195,16 +195,15 @@ func TestE2EFullIntegration(t *testing.T) {
 			}()
 
 			reader := bufio.NewReader(testlib.NewLoggerReader(t, "stderr", stderrPipe))
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				return fmt.Errorf("could not read login URL line from stderr: %w", err)
+			scanner := bufio.NewScanner(reader)
+			for scanner.Scan() {
+				loginURL, err := url.Parse(strings.TrimSpace(scanner.Text()))
+				if err == nil && loginURL.Scheme == "https" {
+					loginURLChan <- loginURL.String()
+					return nil
+				}
 			}
-			const prompt = "Please log in: "
-			if !strings.HasPrefix(line, prompt) {
-				return fmt.Errorf("expected %q to have prefix %q", line, prompt)
-			}
-			loginURLChan <- strings.TrimPrefix(line, prompt)
-			return readAndExpectEmpty(reader)
+			return fmt.Errorf("expected stderr to contain login URL")
 		})
 
 		// Start a background goroutine to read stdout from kubectl and return the result as a string.

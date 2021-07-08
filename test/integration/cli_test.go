@@ -307,16 +307,15 @@ func runPinnipedLoginOIDC(
 		reader := bufio.NewReader(testlib.NewLoggerReader(t, "stderr", stderr))
 
 		scanner := bufio.NewScanner(reader)
-		const prompt = "Please log in: "
 		for scanner.Scan() {
-			line := scanner.Text()
-			if strings.HasPrefix(line, prompt) {
-				loginURLChan <- strings.TrimPrefix(line, prompt)
+			loginURL, err := url.Parse(strings.TrimSpace(scanner.Text()))
+			if err == nil && loginURL.Scheme == "https" {
+				loginURLChan <- loginURL.String()
 				return nil
 			}
 		}
 
-		return fmt.Errorf("expected stderr to contain %s", prompt)
+		return fmt.Errorf("expected stderr to contain login URL")
 	})
 
 	// Start a background goroutine to read stdout from the CLI and parse out an ExecCredential.

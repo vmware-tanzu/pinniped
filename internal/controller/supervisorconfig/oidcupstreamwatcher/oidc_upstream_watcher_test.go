@@ -807,6 +807,8 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 				actualTransportProxyFunction := reflect.ValueOf(actualTransport.Proxy).Pointer()
 				require.Equal(t, httpProxyFromEnvFunction, actualTransportProxyFunction,
 					"Transport should have used http.ProxyFromEnvironment as its Proxy func")
+				// We also want a reasonable timeout on each request/response cycle for OIDC discovery and JWKS.
+				require.Equal(t, time.Minute, actualIDP.Client.Timeout)
 			}
 
 			actualUpstreams, err := fakePinnipedClient.IDPV1alpha1().OIDCIdentityProviders(testNamespace).List(ctx, metav1.ListOptions{})

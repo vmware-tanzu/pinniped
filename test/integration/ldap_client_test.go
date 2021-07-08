@@ -25,7 +25,11 @@ import (
 )
 
 func TestLDAPSearch(t *testing.T) {
-	env := testlib.IntegrationEnv(t)
+	// This test does not interact with Kubernetes itself. It is a test of our LDAP client code, and only interacts
+	// with our test OpenLDAP server, which is exposed directly to this test via kubectl port-forward.
+	// Theoretically we should always be able to run this test, but something about the kubectl port forwarding
+	// was very flaky on AKS, so we'll get the coverage by only running it on kind.
+	env := testlib.IntegrationEnv(t).WithKubeDistribution(testlib.KindDistro)
 
 	// Note that these tests depend on the values hard-coded in the LDIF file in test/deploy/tools/ldap.yaml.
 	// It requires the test LDAP server from the tools deployment.
@@ -613,7 +617,11 @@ func TestLDAPSearch(t *testing.T) {
 }
 
 func TestSimultaneousLDAPRequestsOnSingleProvider(t *testing.T) {
-	env := testlib.IntegrationEnv(t)
+	// This test does not interact with Kubernetes itself. It is a test of our LDAP client code, and only interacts
+	// with our test OpenLDAP server, which is exposed directly to this test via kubectl port-forward.
+	// Theoretically we should always be able to run this test, but something about the kubectl port forwarding
+	// was very flaky on AKS, so we'll get the coverage by only running it on kind.
+	env := testlib.IntegrationEnv(t).WithKubeDistribution(testlib.KindDistro)
 
 	// Note that these tests depend on the values hard-coded in the LDIF file in test/deploy/tools/ldap.yaml.
 	// It requires the test LDAP server from the tools deployment.

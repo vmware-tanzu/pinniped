@@ -1,6 +1,9 @@
 # Copyright 2021 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+# The name of the cluster type.
+kubernetesDistribution: EKS
+
 # Describe the capabilities of the cluster against which the integration tests will run.
 capabilities:
 

@@ -107,24 +107,26 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 			require.NoError(t, test.forceRotation(ctx, kubeClient, env.ConciergeNamespace))
 
 			// Expect that the Secret comes back right away with newly minted certs.
+			var regeneratedCACert []byte
 			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 				var err error
 				secret, err = kubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})
 				requireEventually.NoError(err)
+
+				regeneratedCACert = secret.Data["caCertificate"]
+				regeneratedPrivateKey := secret.Data["tlsPrivateKey"]
+				regeneratedCertChain := secret.Data["tlsCertificateChain"]
+				requireEventually.NotEmpty(regeneratedCACert)
+				requireEventually.NotEmpty(regeneratedPrivateKey)
+				requireEventually.NotEmpty(regeneratedCertChain)
+				requireEventually.NotEqual(initialCACert, regeneratedCACert)
+				requireEventually.NotEqual(initialPrivateKey, regeneratedPrivateKey)
+				requireEventually.NotEqual(initialCertChain, regeneratedCertChain)
+				for k, v := range env.ConciergeCustomLabels {
+					requireEventually.Equalf(v, secret.Labels[k], "expected secret to have label `%s: %s`", k, v)
+				}
+				requireEventually.Equal(env.ConciergeAppName, secret.Labels["app"])
 			}, time.Minute, 250*time.Millisecond)
-			regeneratedCACert := secret.Data["caCertificate"]
-			regeneratedPrivateKey := secret.Data["tlsPrivateKey"]
-			regeneratedCertChain := secret.Data["tlsCertificateChain"]
-			require.NotEmpty(t, regeneratedCACert)
-			require.NotEmpty(t, regeneratedPrivateKey)
-			require.NotEmpty(t, regeneratedCertChain)
-			require.NotEqual(t, initialCACert, regeneratedCACert)
-			require.NotEqual(t, initialPrivateKey, regeneratedPrivateKey)
-			require.NotEqual(t, initialCertChain, regeneratedCertChain)
-			for k, v := range env.ConciergeCustomLabels {
-				require.Equalf(t, v, secret.Labels[k], "expected secret to have label `%s: %s`", k, v)
-			}
-			require.Equal(t, env.ConciergeAppName, secret.Labels["app"])
 
 			// Expect that the APIService was also updated with the new CA.
 			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {

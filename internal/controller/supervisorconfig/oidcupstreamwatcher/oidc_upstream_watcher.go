@@ -264,12 +264,15 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 			}
 		}
 
-		httpClient = &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, TLSClientConfig: tlsConfig}}
+		httpClient = &http.Client{
+			Timeout: time.Minute,
+			Transport: &http.Transport{
+				Proxy:           http.ProxyFromEnvironment,
+				TLSClientConfig: tlsConfig,
+			},
+		}
 
-		timeoutCtx, cancelFunc := context.WithTimeout(oidc.ClientContext(ctx, httpClient), time.Minute)
-		defer cancelFunc()
-
-		discoveredProvider, err = oidc.NewProvider(timeoutCtx, upstream.Spec.Issuer)
+		discoveredProvider, err = oidc.NewProvider(oidc.ClientContext(ctx, httpClient), upstream.Spec.Issuer)
 		if err != nil {
 			const klogLevelTrace = 6
 			c.log.V(klogLevelTrace).WithValues(

@@ -111,7 +111,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 				var err error
 				secret, err = kubeClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, defaultServingCertResourceName, metav1.GetOptions{})
 				requireEventually.NoError(err)
-			}, 10*time.Second, 250*time.Millisecond)
+			}, time.Minute, 250*time.Millisecond)
 			regeneratedCACert := secret.Data["caCertificate"]
 			regeneratedPrivateKey := secret.Data["tlsPrivateKey"]
 			regeneratedCertChain := secret.Data["tlsCertificateChain"]
@@ -131,7 +131,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 				apiService, err := aggregatedClient.ApiregistrationV1().APIServices().Get(ctx, apiServiceName, metav1.GetOptions{})
 				requireEventually.NoErrorf(err, "get for APIService %q returned error", apiServiceName)
 				requireEventually.Equalf(regeneratedCACert, apiService.Spec.CABundle, "CA bundle in APIService %q does not yet have the expected value", apiServiceName)
-			}, 10*time.Second, 250*time.Millisecond, "never saw CA certificate rotate to expected value")
+			}, time.Minute, 250*time.Millisecond, "never saw CA certificate rotate to expected value")
 
 			// Check that we can still make requests to the aggregated API through the kube API server,
 			// because the kube API server uses these certs when proxying requests to the aggregated API server,
@@ -150,7 +150,7 @@ func TestAPIServingCertificateAutoCreationAndRotation(t *testing.T) {
 					}, metav1.CreateOptions{})
 					requireEventually.NoError(err, "dynamiccertificates.Notifier broken?")
 				}
-			}, 30*time.Second, 250*time.Millisecond)
+			}, time.Minute, 250*time.Millisecond)
 		})
 	}
 }

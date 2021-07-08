@@ -19,12 +19,19 @@ import (
 )
 
 type Capability string
+type KubeDistro string
 
 const (
 	ClusterSigningKeyIsAvailable     Capability = "clusterSigningKeyIsAvailable"
 	AnonymousAuthenticationSupported Capability = "anonymousAuthenticationSupported"
 	HasExternalLoadBalancerProvider  Capability = "hasExternalLoadBalancerProvider"
 	CanReachInternetLDAPPorts        Capability = "canReachInternetLDAPPorts"
+
+	KindDistro KubeDistro = "Kind"
+	GKEDistro  KubeDistro = "GKE"
+	AKSDistro  KubeDistro = "AKS"
+	EKSDistro  KubeDistro = "EKS"
+	TKGSDistro KubeDistro = "TKGS"
 )
 
 // TestEnv captures all the external parameters consumed by our integration tests.
@@ -38,6 +45,7 @@ type TestEnv struct {
 	SupervisorAppName              string                               `json:"supervisorAppName"`
 	SupervisorCustomLabels         map[string]string                    `json:"supervisorCustomLabels"`
 	ConciergeCustomLabels          map[string]string                    `json:"conciergeCustomLabels"`
+	KubernetesDistribution         KubeDistro                           `json:"kubernetesDistribution"`
 	Capabilities                   map[Capability]bool                  `json:"capabilities"`
 	TestWebhook                    auth1alpha1.WebhookAuthenticatorSpec `json:"testWebhook"`
 	SupervisorHTTPAddress          string                               `json:"supervisorHttpAddress"`
@@ -282,6 +290,19 @@ func (e *TestEnv) WithoutCapability(cap Capability) *TestEnv {
 	e.t.Helper()
 	if e.HasCapability(cap) {
 		e.t.Skipf("skipping integration test because test environment has the %q capability", cap)
+	}
+	return e
+}
+
+// WithKubeDistribution skips the test unless it will run on the expected cluster type.
+// Please use this sparingly. We would prefer that a test run on every cluster type where it can possibly run, so
+// prefer to run everywhere when possible or use cluster capabilities when needed, rather than looking at the
+// type of cluster to decide to skip a test. However, there are some tests that do not depend on or interact with
+// Kubernetes itself which really only need to run on on a single platform to give us the coverage that we desire.
+func (e *TestEnv) WithKubeDistribution(distro KubeDistro) *TestEnv {
+	e.t.Helper()
+	if e.KubernetesDistribution != distro {
+		e.t.Skipf("skipping integration test because test environment is running %q but this test wants %q", e.KubernetesDistribution, distro)
 	}
 	return e
 }

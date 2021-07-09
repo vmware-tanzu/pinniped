@@ -18,10 +18,16 @@ type Client struct {
 	fosite.DefaultOpenIDConnectClient
 }
 
-// It implements both the base and OIDC client interfaces of Fosite.
+func (c Client) GetResponseModes() []fosite.ResponseModeType {
+	// For now, all Pinniped clients always support "" (unspecified), "query", and "form_post" response modes.
+	return []fosite.ResponseModeType{fosite.ResponseModeDefault, fosite.ResponseModeQuery, fosite.ResponseModeFormPost}
+}
+
+// It implements both the base, OIDC, and response_mode client interfaces of Fosite.
 var (
 	_ fosite.Client              = (*Client)(nil)
 	_ fosite.OpenIDConnectClient = (*Client)(nil)
+	_ fosite.ResponseModeClient  = (*Client)(nil)
 )
 
 // StaticClientManager is a fosite.ClientManager with statically-defined clients.

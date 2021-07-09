@@ -43,6 +43,7 @@ func TestDiscovery(t *testing.T) {
 					PinnipedIDPsEndpoint: "https://some-issuer.com/some/path/v1alpha1/pinniped_identity_providers",
 				},
 				ResponseTypesSupported:            []string{"code"},
+				ResponseModesSupported:            []string{"query", "form_post"},
 				SubjectTypesSupported:             []string{"public"},
 				IDTokenSigningAlgValuesSupported:  []string{"ES256"},
 				TokenEndpointAuthMethodsSupported: []string{"client_secret_basic"},

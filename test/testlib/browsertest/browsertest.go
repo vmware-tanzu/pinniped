@@ -27,6 +27,10 @@ func Open(t *testing.T) *agouti.Page {
 	t.Logf("opening browser driver")
 	env := testlib.IntegrationEnv(t)
 	caps := agouti.NewCapabilities()
+
+	// Capture console.log(), not just console.error().
+	caps["loggingPrefs"] = map[string]string{"browser": "INFO"}
+
 	if env.Proxy != "" {
 		t.Logf("configuring Chrome to use proxy %q", env.Proxy)
 		caps = caps.Proxy(agouti.ProxyConfig{

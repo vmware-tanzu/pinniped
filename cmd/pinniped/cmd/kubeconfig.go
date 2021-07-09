@@ -61,6 +61,7 @@ type getKubeconfigOIDCParams struct {
 	listenPort        uint16
 	scopes            []string
 	skipBrowser       bool
+	skipListen        bool
 	sessionCachePath  string
 	debugSessionCache bool
 	caBundle          caBundleFlag
@@ -146,6 +147,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.Uint16Var(&flags.oidc.listenPort, "oidc-listen-port", 0, "TCP port for localhost listener (authorization code flow only)")
 	f.StringSliceVar(&flags.oidc.scopes, "oidc-scopes", []string{oidc.ScopeOfflineAccess, oidc.ScopeOpenID, "pinniped:request-audience"}, "OpenID Connect scopes to request during login")
 	f.BoolVar(&flags.oidc.skipBrowser, "oidc-skip-browser", false, "During OpenID Connect login, skip opening the browser (just print the URL)")
+	f.BoolVar(&flags.oidc.skipListen, "oidc-skip-listen", false, "During OpenID Connect login, skip starting a localhost callback listener (manual copy/paste flow only)")
 	f.StringVar(&flags.oidc.sessionCachePath, "oidc-session-cache", "", "Path to OpenID Connect session cache file")
 	f.Var(&flags.oidc.caBundle, "oidc-ca-bundle", "Path to TLS certificate authority bundle (PEM format, optional, can be repeated)")
 	f.BoolVar(&flags.oidc.debugSessionCache, "oidc-debug-session-cache", false, "Print debug logs related to the OpenID Connect session cache")
@@ -160,6 +162,9 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.StringVar(&flags.generatedNameSuffix, "generated-name-suffix", "-pinniped", "Suffix to append to generated cluster, context, user kubeconfig entries")
 	f.StringVar(&flags.credentialCachePath, "credential-cache", "", "Path to cluster-specific credentials cache")
 	mustMarkHidden(cmd, "oidc-debug-session-cache")
+
+	// --oidc-skip-listen is mainly needed for testing. We'll leave it hidden until we have a non-testing use case.
+	mustMarkHidden(cmd, "oidc-skip-listen")
 
 	mustMarkDeprecated(cmd, "concierge-namespace", "not needed anymore")
 	mustMarkHidden(cmd, "concierge-namespace")
@@ -316,6 +321,9 @@ func newExecConfig(deps kubeconfigDeps, flags getKubeconfigParams) (*clientcmdap
 	)
 	if flags.oidc.skipBrowser {
 		execConfig.Args = append(execConfig.Args, "--skip-browser")
+	}
+	if flags.oidc.skipListen {
+		execConfig.Args = append(execConfig.Args, "--skip-listen")
 	}
 	if flags.oidc.listenPort != 0 {
 		execConfig.Args = append(execConfig.Args, "--listen-port="+strconv.Itoa(int(flags.oidc.listenPort)))

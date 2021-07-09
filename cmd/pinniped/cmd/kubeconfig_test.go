@@ -1352,6 +1352,7 @@ func TestGetKubeconfig(t *testing.T) {
 					"--concierge-ca-bundle", testConciergeCABundlePath,
 					"--oidc-issuer", issuerURL,
 					"--oidc-skip-browser",
+					"--oidc-skip-listen",
 					"--oidc-listen-port", "1234",
 					"--oidc-ca-bundle", f.Name(),
 					"--oidc-session-cache", "/path/to/cache/dir/sessions.yaml",
@@ -1405,6 +1406,7 @@ func TestGetKubeconfig(t *testing.T) {
 						  - --client-id=pinniped-cli
 						  - --scopes=offline_access,openid,pinniped:request-audience
 						  - --skip-browser
+						  - --skip-listen
 						  - --listen-port=1234
 						  - --ca-bundle-data=%s
 						  - --session-cache=/path/to/cache/dir/sessions.yaml

@@ -185,7 +185,14 @@ func formpostExpectFavicon(t *testing.T, page *agouti.Page, expected string) {
 	iconURL, err := page.First("#favicon").Attribute("href")
 	require.NoError(t, err)
 	require.True(t, strings.HasPrefix(iconURL, "data:image/svg+xml,<svg"))
-	require.Contains(t, iconURL, expected)
+
+	// For some reason chromedriver on Linux returns this attribute urlencoded, but on macOS it contains the
+	// original emoji bytes (unescaped). To check correctly in both cases we allow either version here.
+	expectedEscaped := url.QueryEscape(expected)
+	require.Truef(t,
+		strings.Contains(iconURL, expected) || strings.Contains(iconURL, expectedEscaped),
+		"expected %q to contain %q or %q", iconURL, expected, expectedEscaped,
+	)
 }
 
 // formpostInitiate navigates to the template server endpoint and expects the

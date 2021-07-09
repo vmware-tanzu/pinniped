@@ -411,7 +411,7 @@ ImpersonationProxyServiceSpec describes how the Concierge should provision a Ser
 | *`mode`* __ImpersonationProxyMode__ | Mode configures whether the impersonation proxy should be started: - "disabled" explicitly disables the impersonation proxy. This is the default. - "enabled" explicitly enables the impersonation proxy. - "auto" enables or disables the impersonation proxy based upon the cluster in which it is running.
 | *`service`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-19-apis-concierge-config-v1alpha1-impersonationproxyservicespec[$$ImpersonationProxyServiceSpec$$]__ | Service describes the configuration of the Service provisioned to expose the impersonation proxy to clients.
 | *`externalEndpoint`* __string__ | ExternalEndpoint describes the HTTPS endpoint where the proxy will be exposed. If not set, the proxy will be served using the external name of the LoadBalancer service or the cluster service DNS name. 
- This field must be non-empty when spec.impersonationProxy.service.mode is "None".
+ This field must be non-empty when spec.impersonationProxy.service.type is "None".
 |===
 
 

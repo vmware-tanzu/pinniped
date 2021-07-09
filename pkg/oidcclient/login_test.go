@@ -529,10 +529,10 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			wantErr: "login failed: must have either a localhost listener or stdin must be a TTY",
 		},
 		{
-			name: "listen failure and manual prompt fails",
+			name: "listening disabled and manual prompt fails",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.listen = func(string, string) (net.Listener, error) { return nil, fmt.Errorf("some listen error") }
+					require.NoError(t, WithSkipListen()(h))
 					h.isTTY = func(fd int) bool { return true }
 					h.openURL = func(authorizeURL string) error {
 						parsed, err := url.Parse(authorizeURL)
@@ -550,7 +550,6 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			issuer: formPostSuccessServer.URL,
 			wantLogs: []string{
 				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + formPostSuccessServer.URL + `"`,
-				`"msg"="could not open callback listener" "error"="some listen error"`,
 				`"msg"="could not open browser" "error"="some browser open error"`,
 			},
 			wantErr: "error handling callback: failed to prompt for manual authorization code: some prompt error",

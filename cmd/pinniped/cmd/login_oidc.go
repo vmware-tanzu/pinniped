@@ -59,6 +59,7 @@ type oidcLoginFlags struct {
 	listenPort                   uint16
 	scopes                       []string
 	skipBrowser                  bool
+	skipListen                   bool
 	sessionCachePath             string
 	caBundlePaths                []string
 	caBundleData                 []string
@@ -91,6 +92,7 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().Uint16Var(&flags.listenPort, "listen-port", 0, "TCP port for localhost listener (authorization code flow only)")
 	cmd.Flags().StringSliceVar(&flags.scopes, "scopes", []string{oidc.ScopeOfflineAccess, oidc.ScopeOpenID, "pinniped:request-audience"}, "OIDC scopes to request during login")
 	cmd.Flags().BoolVar(&flags.skipBrowser, "skip-browser", false, "Skip opening the browser (just print the URL)")
+	cmd.Flags().BoolVar(&flags.skipListen, "skip-listen", false, "Skip starting a localhost callback listener (manual copy/paste flow only)")
 	cmd.Flags().StringVar(&flags.sessionCachePath, "session-cache", filepath.Join(mustGetConfigDir(), "sessions.yaml"), "Path to session cache file")
 	cmd.Flags().StringSliceVar(&flags.caBundlePaths, "ca-bundle", nil, "Path to TLS certificate authority bundle (PEM format, optional, can be repeated)")
 	cmd.Flags().StringSliceVar(&flags.caBundleData, "ca-bundle-data", nil, "Base64 encoded TLS certificate authority bundle (base64 encoded PEM format, optional, can be repeated)")
@@ -107,6 +109,8 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.upstreamIdentityProviderName, "upstream-identity-provider-name", "", "The name of the upstream identity provider used during login with a Supervisor")
 	cmd.Flags().StringVar(&flags.upstreamIdentityProviderType, "upstream-identity-provider-type", "oidc", "The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap')")
 
+	// --skip-listen is mainly needed for testing. We'll leave it hidden until we have a non-testing use case.
+	mustMarkHidden(cmd, "skip-listen")
 	mustMarkHidden(cmd, "debug-session-cache")
 	mustMarkRequired(cmd, "issuer")
 	cmd.RunE = func(cmd *cobra.Command, args []string) error { return runOIDCLogin(cmd, deps, flags) }
@@ -185,6 +189,11 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	// --skip-browser skips opening the browser.
 	if flags.skipBrowser {
 		opts = append(opts, oidcclient.WithSkipBrowserOpen())
+	}
+
+	// --skip-listen skips starting the localhost callback listener.
+	if flags.skipListen {
+		opts = append(opts, oidcclient.WithSkipListen())
 	}
 
 	if len(flags.caBundlePaths) > 0 || len(flags.caBundleData) > 0 {

@@ -180,6 +180,14 @@ func WithSkipBrowserOpen() Option {
 	}
 }
 
+// WithSkipListen causes the login skip starting the localhost listener, forcing the manual copy/paste login flow.
+func WithSkipListen() Option {
+	return func(h *handlerState) error {
+		h.listen = func(string, string) (net.Listener, error) { return nil, nil }
+		return nil
+	}
+}
+
 // SessionCacheKey contains the data used to select a valid session cache entry.
 type SessionCacheKey struct {
 	Issuer      string   `json:"issuer"`

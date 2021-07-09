@@ -226,6 +226,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--client-id", "test-client-id",
 				"--issuer", "test-issuer",
 				"--skip-browser",
+				"--skip-listen",
 				"--listen-port", "1234",
 				"--debug-session-cache",
 				"--request-audience", "cluster-1234",
@@ -242,7 +243,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--upstream-identity-provider-type", "ldap",
 			},
 			env:              map[string]string{"PINNIPED_DEBUG": "true"},
-			wantOptionsCount: 10,
+			wantOptionsCount: 11,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"exchanged-token"}}` + "\n",
 			wantLogs: []string{
 				"\"level\"=0 \"msg\"=\"Pinniped login: Performing OIDC login\"  \"client id\"=\"test-client-id\" \"issuer\"=\"test-issuer\"",

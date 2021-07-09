@@ -118,7 +118,6 @@ func (c *tlsCertObserverController) certFromSecret(ns string, secretName string)
 }
 
 func lowercaseHostWithoutPort(issuerURL *url.URL) string {
-	lowercaseHost := strings.ToLower(issuerURL.Host)
-	colonSegments := strings.Split(lowercaseHost, ":")
-	return colonSegments[0]
+	lowercaseHost := strings.ToLower(issuerURL.Hostname())
+	return lowercaseHost
 }

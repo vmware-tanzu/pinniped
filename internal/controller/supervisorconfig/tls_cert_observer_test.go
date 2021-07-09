@@ -279,6 +279,17 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "good-tls-secret-name2"},
 					},
 				}
+				federationDomainWithIPv6Issuer := &v1alpha1.FederationDomain{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ipv6-issuer-federationdomain",
+						Namespace: installedInNamespace,
+					},
+					// Issuer hostname should be treated correctly when it is an IPv6 address. Test with a port number.
+					Spec: v1alpha1.FederationDomainSpec{
+						Issuer: "https://[2001:db8::1]:1234/path",
+						TLS:    &v1alpha1.FederationDomainTLSSpec{SecretName: "good-tls-secret-name1"},
+					},
+				}
 				testCrt1 := readTestFile("testdata/test.crt")
 				r.NotEmpty(testCrt1)
 				testCrt2 := readTestFile("testdata/test2.crt")
@@ -309,6 +320,7 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithBadIssuer))
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithGoodSecret1))
 				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithGoodSecret2))
+				r.NoError(pinnipedInformerClient.Tracker().Add(federationDomainWithIPv6Issuer))
 				r.NoError(kubeInformerClient.Tracker().Add(goodTLSSecret1))
 				r.NoError(kubeInformerClient.Tracker().Add(goodTLSSecret2))
 				r.NoError(kubeInformerClient.Tracker().Add(badTLSSecret))
@@ -322,7 +334,7 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 				r.Nil(issuerTLSCertSetter.setDefaultTLSCertReceived)
 
 				r.True(issuerTLSCertSetter.setIssuerHostToTLSCertMapWasCalled)
-				r.Len(issuerTLSCertSetter.issuerHostToTLSCertMapReceived, 2)
+				r.Len(issuerTLSCertSetter.issuerHostToTLSCertMapReceived, 3)
 
 				// They keys in the map should be lower case and should not include the port numbers, because
 				// TLS SNI says that SNI hostnames must be DNS names (not ports) and must be case insensitive.
@@ -334,6 +346,10 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 				actualCertificate2 := issuerTLSCertSetter.issuerHostToTLSCertMapReceived["www.issuer-with-good-secret2.com"]
 				r.NotNil(actualCertificate2)
 				r.Equal(expectedCertificate2, *actualCertificate2)
+
+				actualCertificate3 := issuerTLSCertSetter.issuerHostToTLSCertMapReceived["2001:db8::1"]
+				r.NotNil(actualCertificate3)
+				r.Equal(expectedCertificate1, *actualCertificate3)
 			})
 
 			when("there is also a default TLS cert secret with the configured default TLS cert secret name", func() {
@@ -366,7 +382,7 @@ func TestTLSCertObserverControllerSync(t *testing.T) {
 					r.Equal(expectedDefaultCertificate, *actualDefaultCertificate)
 
 					r.True(issuerTLSCertSetter.setIssuerHostToTLSCertMapWasCalled)
-					r.Len(issuerTLSCertSetter.issuerHostToTLSCertMapReceived, 2)
+					r.Len(issuerTLSCertSetter.issuerHostToTLSCertMapReceived, 3)
 				})
 			})
 		})

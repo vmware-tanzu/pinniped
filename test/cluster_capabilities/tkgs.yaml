@@ -1,6 +1,9 @@
 # Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+# The name of the cluster type.
+kubernetesDistribution: TKGS
+
 # Describe the capabilities of the cluster against which the integration tests will run.
 capabilities:
 
@@ -15,4 +18,4 @@ capabilities:
   anonymousAuthenticationSupported: true
 
   # Are LDAP ports on the Internet reachable without interference from network firewalls or proxies?
-  canReachInternetLDAPPorts: false
+  canReachInternetLDAPPorts: true

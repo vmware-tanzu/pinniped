@@ -263,7 +263,9 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 				Message: err.Error(),
 			}
 		}
+
 		httpClient = &http.Client{
+			Timeout: time.Minute,
 			Transport: &http.Transport{
 				Proxy:           http.ProxyFromEnvironment,
 				TLSClientConfig: tlsConfig,

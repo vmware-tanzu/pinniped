@@ -850,9 +850,9 @@ func (h *handlerState) serve(listener net.Listener) func() {
 	}
 	go func() { _ = srv.Serve(listener) }()
 	return func() {
-		// Gracefully shut down the server, allowing up to 5 seconds for
+		// Gracefully shut down the server, allowing up to 5 00ms for
 		// clients to receive any in-flight responses.
-		shutdownCtx, cancel := context.WithTimeout(h.ctx, 5*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(h.ctx, 500*time.Millisecond)
 		_ = srv.Shutdown(shutdownCtx)
 		cancel()
 	}

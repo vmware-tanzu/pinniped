@@ -4,10 +4,10 @@
 package integration
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -71,7 +71,8 @@ func TestFormPostHTML(t *testing.T) {
 		expectCallback(t, responseParams)
 
 		// This failure should cause the UI to enter the "manual" state.
-		formpostExpectManualState(t, page, responseParams.Get("code"))
+		actualCode := formpostExpectManualState(t, page)
+		require.Equal(t, responseParams.Get("code"), actualCode)
 	})
 
 	t.Run("timeout", func(t *testing.T) {
@@ -84,7 +85,8 @@ func TestFormPostHTML(t *testing.T) {
 		time.Sleep(3 * time.Second)
 
 		// Assert that the timeout fires and we see the manual instructions.
-		formpostExpectManualState(t, page, responseParams.Get("code"))
+		actualCode := formpostExpectManualState(t, page)
+		require.Equal(t, responseParams.Get("code"), actualCode)
 
 		// Now simulate the callback finally succeeding, in which case
 		// the manual instructions should disappear and we should see the success
@@ -220,15 +222,14 @@ func formpostExpectSuccessState(t *testing.T, page *agouti.Page) {
 	formpostExpectFavicon(t, page, "✅")
 }
 
-// formpostExpectManualState asserts that the page is in the "manual" state.
-func formpostExpectManualState(t *testing.T, page *agouti.Page, code string) {
+// formpostExpectManualState asserts that the page is in the "manual" state and returns the auth code.
+func formpostExpectManualState(t *testing.T, page *agouti.Page) string {
 	t.Logf("expecting to see manual message become visible...")
 	browsertest.WaitForVisibleElements(t, page, "#manual")
 	manualDivText, err := page.First("#manual").Text()
 	require.NoError(t, err)
 	require.Contains(t, manualDivText, "Finish your login")
 	require.Contains(t, manualDivText, "To finish logging in, paste this authorization code into your command-line session:")
-	require.Contains(t, manualDivText, code)
 	formpostExpectTitle(t, page, "Finish your login")
 	formpostExpectFavicon(t, page, "⌛")
 
@@ -237,16 +238,20 @@ func formpostExpectManualState(t *testing.T, page *agouti.Page, code string) {
 	// console.log() statement that happens at the same time.
 	t.Logf("clicking the 'copy' button and expecting the clipboard event to fire...")
 	require.NoError(t, page.First("#manual-copy-button").Click())
+
+	var authCode string
+	consoleLogPattern := regexp.MustCompile(`code (.+) to clipboard`)
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		logs, err := page.ReadNewLogs("browser")
 		requireEventually.NoError(err)
 
-		expectedConsoleLog := fmt.Sprintf("code %s to clipboard", code)
 		for _, log := range logs {
-			if strings.Contains(log.Message, expectedConsoleLog) {
+			if match := consoleLogPattern.FindStringSubmatch(log.Message); match != nil {
+				authCode = match[1]
 				return
 			}
 		}
 		requireEventually.FailNow("expected console log was not found")
 	}, 3*time.Second, 100*time.Millisecond)
+	return authCode
 }

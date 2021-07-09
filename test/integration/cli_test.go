@@ -355,7 +355,7 @@ func runPinnipedLoginOIDC(
 
 	// Expect to be redirected to the localhost callback.
 	t.Logf("waiting for redirect to callback")
-	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(env.CLIUpstreamOIDC.CallbackURL) + `\?.+\z`)
+	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(env.CLIUpstreamOIDC.CallbackURL) + `(\?.+)?\z`)
 	browsertest.WaitForURL(t, page, callbackURLPattern)
 
 	// Wait for the "pre" element that gets rendered for a `text/plain` page, and

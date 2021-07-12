@@ -369,8 +369,6 @@ func (p *Provider) searchAndBindUser(conn upstreamldap.Conn, username string, bi
 		return "", "", nil, err
 	}
 
-	// We would like to support binary typed attributes for UIDs, so always read them as binary and encode them,
-	// even when the attribute may not be binary.
 	mappedUID, err := p.getSearchResultAttributeRawValueEncoded(p.uidAttribute(), userEntry, username)
 	if err != nil {
 		return "", "", nil, err
@@ -523,13 +521,7 @@ func (p *Provider) getSearchResultAttributeRawValueEncoded(attributeName string,
 	}
 
 	if attributeName == objectGUIDAttributeName {
-		// In AD, objectGUID will be represented as a base64-encoded UUID. Convert it back to UUID encoding.
-		base64decoded, err := base64.StdEncoding.DecodeString(entry.GetAttributeValue(attributeName))
-		if err != nil {
-			// TODO if there is an error, should we throw it or pass it through as base64?
-			return "", fmt.Errorf("Error decoding UID: %s", err.Error())
-		}
-		uuidEntry, err := uuid.FromBytes(base64decoded)
+		uuidEntry, err := uuid.FromBytes(attributeValue)
 		if err != nil {
 			return "", fmt.Errorf("Error decoding UID: %s", err.Error())
 		}

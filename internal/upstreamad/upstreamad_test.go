@@ -46,7 +46,7 @@ const (
 	testGroupSearchResultDNValue1                 = "some-upstream-group-dn1"
 	testGroupSearchResultDNValue2                 = "some-upstream-group-dn2"
 	testUserSearchResultUsernameAttributeValue    = "some-upstream-username-value"
-	testUserSearchResultUIDAttributeValue         = "Ej5FZ+ibEtOkVkJmFBdAAA==" // this is base64 encoded 123e4567-e89b-12d3-a456-426614174000
+	testUserSearchResultUIDAttributeValue         = "\x12>Eg\xe8\x9b\x12\u04e4VBf\x14\x17@\x00" // binary representation of 123e4567-e89b-12d3-a456-426614174000
 	testGroupSearchResultGroupNameAttributeValue1 = "some-upstream-group-name-value1"
 	testGroupSearchResultGroupNameAttributeValue2 = "some-upstream-group-name-value2"
 
@@ -207,6 +207,7 @@ func TestEndUserAuthentication(t *testing.T) {
 				ConnectionProtocol: upstreamldap.TLS,
 				BindUsername:       testBindUsername,
 				BindPassword:       testBindPassword,
+				// no user search... that's all defaulted.
 				GroupSearch: upstreamldap.GroupSearchConfig{
 					Base:               testGroupSearchBase,
 					Filter:             testGroupSearchFilter,

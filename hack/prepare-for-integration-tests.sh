@@ -381,15 +381,17 @@ if [[ -z "$(gcloud config list account --format "value(core.account)")" ]]; then
   exit 1
 fi
 
-export PINNIPED_TEST_AD_HOST="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-host' -))"
-export PINNIPED_TEST_AD_BIND_ACCOUNT_USERNAME="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-bind-account-username' -))"
+export PINNIPED_TEST_AD_HOST="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-host' -)"
+export PINNIPED_TEST_AD_BIND_ACCOUNT_USERNAME="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-bind-account-username' -)"
 export PINNIPED_TEST_AD_BIND_ACCOUNT_PASSWORD="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-bind-account-password' -)"
 export PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_NAME="objectGUID"
 export PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_VALUE="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-user-unique-id-attribute-value' -)"
 export PINNIPED_TEST_AD_USERNAME_ATTRIBUTE_NAME="sAMAccountName"
-export PINNIPED_TEST_AD_USERNAME_ATTRIBUTE_VALUE="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-user-sAMAccountName' -))"
+export PINNIPED_TEST_AD_USERNAME_ATTRIBUTE_VALUE="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-user-sAMAccountName' -)"
 export PINNIPED_TEST_AD_USER_PASSWORD="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-user-password' -)"
-export PINNIPED_TEST_AD_LDAPS_CA_BUNDLE="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-ca-data' -))"
+export PINNIPED_TEST_AD_LDAPS_CA_BUNDLE="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-ca-data' -)"
+export PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_DN="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-expected-direct-groups-dn' -)"
+export PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_CN="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-expected-direct-groups-cn' -)"
 fi
 
 read -r -d '' PINNIPED_TEST_CLUSTER_CAPABILITY_YAML << PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF || true

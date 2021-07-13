@@ -57,9 +57,6 @@ func TestE2EFullIntegration(t *testing.T) {
 	pinnipedExe := testlib.PinnipedCLIPath(t)
 	tempDir := testutil.TempDir(t)
 
-	// Start the browser driver.
-	page := browsertest.Open(t)
-
 	// Infer the downstream issuer URL from the callback associated with the upstream test client registration.
 	issuerURL, err := url.Parse(env.SupervisorUpstreamOIDC.CallbackURL)
 	require.NoError(t, err)
@@ -110,6 +107,9 @@ func TestE2EFullIntegration(t *testing.T) {
 
 	// Add an OIDC upstream IDP and try using it to authenticate during kubectl commands.
 	t.Run("with Supervisor OIDC upstream IDP and automatic flow", func(t *testing.T) {
+		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
+		page := browsertest.Open(t)
+
 		expectedUsername := env.SupervisorUpstreamOIDC.Username
 		expectedGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
 
@@ -271,6 +271,9 @@ func TestE2EFullIntegration(t *testing.T) {
 	})
 
 	t.Run("with Supervisor OIDC upstream IDP and manual flow", func(t *testing.T) {
+		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
+		page := browsertest.Open(t)
+
 		expectedUsername := env.SupervisorUpstreamOIDC.Username
 		expectedGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
 

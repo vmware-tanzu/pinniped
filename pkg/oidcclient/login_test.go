@@ -4,15 +4,18 @@
 package oidcclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -80,6 +83,22 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 	}))
 	t.Cleanup(errorServer.Close)
 
+	// Start a test server that returns discovery data with a broken response_modes_supported value.
+	brokenResponseModeMux := http.NewServeMux()
+	brokenResponseModeServer := httptest.NewServer(brokenResponseModeMux)
+	brokenResponseModeMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		type providerJSON struct {
+			Issuer                 string `json:"issuer"`
+			ResponseModesSupported string `json:"response_modes_supported"` // Wrong type (should be []string).
+		}
+		_ = json.NewEncoder(w).Encode(&providerJSON{
+			Issuer:                 brokenResponseModeServer.URL,
+			ResponseModesSupported: "invalid",
+		})
+	})
+	t.Cleanup(brokenResponseModeServer.Close)
+
 	// Start a test server that returns discovery data with a broken token URL
 	brokenTokenURLMux := http.NewServeMux()
 	brokenTokenURLServer := httptest.NewServer(brokenTokenURLMux)
@@ -100,30 +119,29 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 	})
 	t.Cleanup(brokenTokenURLServer.Close)
 
-	// Start a test server that returns a real discovery document and answers refresh requests.
-	providerMux := http.NewServeMux()
-	successServer := httptest.NewServer(providerMux)
-	t.Cleanup(successServer.Close)
-	providerMux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "unexpected method", http.StatusMethodNotAllowed)
-			return
+	discoveryHandler := func(server *httptest.Server, responseModes []string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				http.Error(w, "unexpected method", http.StatusMethodNotAllowed)
+				return
+			}
+			w.Header().Set("content-type", "application/json")
+			_ = json.NewEncoder(w).Encode(&struct {
+				Issuer                 string   `json:"issuer"`
+				AuthURL                string   `json:"authorization_endpoint"`
+				TokenURL               string   `json:"token_endpoint"`
+				JWKSURL                string   `json:"jwks_uri"`
+				ResponseModesSupported []string `json:"response_modes_supported,omitempty"`
+			}{
+				Issuer:                 server.URL,
+				AuthURL:                server.URL + "/authorize",
+				TokenURL:               server.URL + "/token",
+				JWKSURL:                server.URL + "/keys",
+				ResponseModesSupported: responseModes,
+			})
 		}
-		w.Header().Set("content-type", "application/json")
-		type providerJSON struct {
-			Issuer   string `json:"issuer"`
-			AuthURL  string `json:"authorization_endpoint"`
-			TokenURL string `json:"token_endpoint"`
-			JWKSURL  string `json:"jwks_uri"`
-		}
-		_ = json.NewEncoder(w).Encode(&providerJSON{
-			Issuer:   successServer.URL,
-			AuthURL:  successServer.URL + "/authorize",
-			TokenURL: successServer.URL + "/token",
-			JWKSURL:  successServer.URL + "/keys",
-		})
-	})
-	providerMux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+	}
+	tokenHandler := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "unexpected method", http.StatusMethodNotAllowed)
 			return
@@ -204,7 +222,21 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 
 		w.Header().Set("content-type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(&response))
-	})
+	}
+
+	// Start a test server that returns a real discovery document and answers refresh requests.
+	providerMux := http.NewServeMux()
+	successServer := httptest.NewServer(providerMux)
+	t.Cleanup(successServer.Close)
+	providerMux.HandleFunc("/.well-known/openid-configuration", discoveryHandler(successServer, nil))
+	providerMux.HandleFunc("/token", tokenHandler)
+
+	// Start a test server that returns a real discovery document and answers refresh requests, _and_ supports form_mode=post.
+	formPostProviderMux := http.NewServeMux()
+	formPostSuccessServer := httptest.NewServer(formPostProviderMux)
+	t.Cleanup(formPostSuccessServer.Close)
+	formPostProviderMux.HandleFunc("/.well-known/openid-configuration", discoveryHandler(formPostSuccessServer, []string{"query", "form_post"}))
+	formPostProviderMux.HandleFunc("/token", tokenHandler)
 
 	defaultDiscoveryResponse := func(req *http.Request) (*http.Response, error) { // nolint:unparam
 		// Call the handler function from the test server to calculate the response.
@@ -218,8 +250,8 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 		h.generateState = func() (state.State, error) { return "test-state", nil }
 		h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 		h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
-		h.promptForValue = func(promptLabel string) (string, error) { return "some-upstream-username", nil }
-		h.promptForSecret = func(promptLabel string) (string, error) { return "some-upstream-password", nil }
+		h.promptForValue = func(_ context.Context, promptLabel string) (string, error) { return "some-upstream-username", nil }
+		h.promptForSecret = func(_ context.Context, _ string) (string, error) { return "some-upstream-password", nil }
 
 		cache := &mockSessionCache{t: t, getReturnsToken: nil}
 		cacheKey := SessionCacheKey{
@@ -349,13 +381,22 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			wantToken: &testToken,
 		},
 		{
-			name: "discovery failure",
+			name: "discovery failure due to 500 error",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error { return nil }
 			},
 			issuer:   errorServer.URL,
 			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + errorServer.URL + "\""},
 			wantErr:  fmt.Sprintf("could not perform OIDC discovery for %q: 500 Internal Server Error: some discovery error\n", errorServer.URL),
+		},
+		{
+			name: "discovery failure due to invalid response_modes_supported",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error { return nil }
+			},
+			issuer:   brokenResponseModeServer.URL,
+			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + brokenResponseModeServer.URL + "\""},
+			wantErr:  fmt.Sprintf("could not decode response_modes_supported in OIDC discovery from %q: json: cannot unmarshal string into Go struct field .response_modes_supported of type []string", brokenResponseModeServer.URL),
 		},
 		{
 			name:     "session cache hit with refreshable token",
@@ -451,38 +492,93 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 					})
 					h.cache = cache
 
-					h.listenAddr = "invalid-listen-address"
-
+					h.listen = func(string, string) (net.Listener, error) { return nil, fmt.Errorf("some listen error") }
+					h.isTTY = func(int) bool { return false }
 					return nil
 				}
 			},
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\"",
-				"\"level\"=4 \"msg\"=\"Pinniped: Refreshing cached token.\""},
+			wantLogs: []string{
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`,
+				`"level"=4 "msg"="Pinniped: Refreshing cached token."`,
+				`"msg"="could not open callback listener" "error"="some listen error"`,
+			},
 			// Expect this to fall through to the authorization code flow, so it fails here.
-			wantErr: "could not open callback listener: listen tcp: address invalid-listen-address: missing port in address",
+			wantErr: "login failed: must have either a localhost listener or stdin must be a TTY",
 		},
 		{
-			name: "listen failure",
+			name: "listen failure and non-tty stdin",
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
-					h.listenAddr = "invalid-listen-address"
+					h.listen = func(net string, addr string) (net.Listener, error) {
+						assert.Equal(t, "tcp", net)
+						assert.Equal(t, "localhost:0", addr)
+						return nil, fmt.Errorf("some listen error")
+					}
+					h.isTTY = func(fd int) bool {
+						assert.Equal(t, fd, syscall.Stdin)
+						return false
+					}
 					return nil
 				}
 			},
-			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
-			wantErr:  "could not open callback listener: listen tcp: address invalid-listen-address: missing port in address",
+			issuer: successServer.URL,
+			wantLogs: []string{
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + successServer.URL + `"`,
+				`"msg"="could not open callback listener" "error"="some listen error"`,
+			},
+			wantErr: "login failed: must have either a localhost listener or stdin must be a TTY",
 		},
 		{
-			name: "browser open failure",
+			name: "listening disabled and manual prompt fails",
 			opt: func(t *testing.T) Option {
-				return WithBrowserOpen(func(url string) error {
-					return fmt.Errorf("some browser open error")
-				})
+				return func(h *handlerState) error {
+					require.NoError(t, WithSkipListen()(h))
+					h.isTTY = func(fd int) bool { return true }
+					h.openURL = func(authorizeURL string) error {
+						parsed, err := url.Parse(authorizeURL)
+						require.NoError(t, err)
+						require.Equal(t, "http://127.0.0.1:0/callback", parsed.Query().Get("redirect_uri"))
+						require.Equal(t, "form_post", parsed.Query().Get("response_mode"))
+						return fmt.Errorf("some browser open error")
+					}
+					h.promptForSecret = func(ctx context.Context, promptLabel string) (string, error) {
+						return "", fmt.Errorf("some prompt error")
+					}
+					return nil
+				}
 			},
-			issuer:   successServer.URL,
-			wantLogs: []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + successServer.URL + "\""},
-			wantErr:  "could not open browser: some browser open error",
+			issuer: formPostSuccessServer.URL,
+			wantLogs: []string{
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + formPostSuccessServer.URL + `"`,
+				`"msg"="could not open browser" "error"="some browser open error"`,
+			},
+			wantErr: "error handling callback: failed to prompt for manual authorization code: some prompt error",
+		},
+		{
+			name: "listen success and manual prompt succeeds",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.listen = func(string, string) (net.Listener, error) { return nil, fmt.Errorf("some listen error") }
+					h.isTTY = func(fd int) bool { return true }
+					h.openURL = func(authorizeURL string) error {
+						parsed, err := url.Parse(authorizeURL)
+						require.NoError(t, err)
+						require.Equal(t, "http://127.0.0.1:0/callback", parsed.Query().Get("redirect_uri"))
+						require.Equal(t, "form_post", parsed.Query().Get("response_mode"))
+						return nil
+					}
+					h.promptForSecret = func(ctx context.Context, promptLabel string) (string, error) {
+						return "", fmt.Errorf("some prompt error")
+					}
+					return nil
+				}
+			},
+			issuer: formPostSuccessServer.URL,
+			wantLogs: []string{
+				`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + formPostSuccessServer.URL + `"`,
+				`"msg"="could not open callback listener" "error"="some listen error"`,
+			},
+			wantErr: "error handling callback: failed to prompt for manual authorization code: some prompt error",
 		},
 		{
 			name: "timeout waiting for callback",
@@ -581,6 +677,68 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			wantToken: &testToken,
 		},
 		{
+			name:     "callback returns success with request_mode=form_post",
+			clientID: "test-client-id",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.generateState = func() (state.State, error) { return "test-state", nil }
+					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
+					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
+
+					cache := &mockSessionCache{t: t, getReturnsToken: nil}
+					cacheKey := SessionCacheKey{
+						Issuer:      formPostSuccessServer.URL,
+						ClientID:    "test-client-id",
+						Scopes:      []string{"test-scope"},
+						RedirectURI: "http://localhost:0/callback",
+					}
+					t.Cleanup(func() {
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawGetKeys)
+						require.Equal(t, []SessionCacheKey{cacheKey}, cache.sawPutKeys)
+						require.Equal(t, []*oidctypes.Token{&testToken}, cache.sawPutTokens)
+					})
+					require.NoError(t, WithSessionCache(cache)(h))
+					require.NoError(t, WithClient(&http.Client{Timeout: 10 * time.Second})(h))
+
+					h.openURL = func(actualURL string) error {
+						parsedActualURL, err := url.Parse(actualURL)
+						require.NoError(t, err)
+						actualParams := parsedActualURL.Query()
+
+						require.Contains(t, actualParams.Get("redirect_uri"), "http://127.0.0.1:")
+						actualParams.Del("redirect_uri")
+
+						require.Equal(t, url.Values{
+							// This is the PKCE challenge which is calculated as base64(sha256("test-pkce")). For example:
+							// $ echo -n test-pkce | shasum -a 256 | cut -d" " -f1 | xxd -r -p | base64 | cut -d"=" -f1
+							// VVaezYqum7reIhoavCHD1n2d+piN3r/mywoYj7fCR7g
+							"code_challenge":        []string{"VVaezYqum7reIhoavCHD1n2d-piN3r_mywoYj7fCR7g"},
+							"code_challenge_method": []string{"S256"},
+							"response_type":         []string{"code"},
+							"response_mode":         []string{"form_post"},
+							"scope":                 []string{"test-scope"},
+							"nonce":                 []string{"test-nonce"},
+							"state":                 []string{"test-state"},
+							"access_type":           []string{"offline"},
+							"client_id":             []string{"test-client-id"},
+						}, actualParams)
+
+						parsedActualURL.RawQuery = ""
+						require.Equal(t, formPostSuccessServer.URL+"/authorize", parsedActualURL.String())
+
+						go func() {
+							h.callbacks <- callbackResult{token: &testToken}
+						}()
+						return nil
+					}
+					return nil
+				}
+			},
+			issuer:    formPostSuccessServer.URL,
+			wantLogs:  []string{"\"level\"=4 \"msg\"=\"Pinniped: Performing OIDC discovery\"  \"issuer\"=\"" + formPostSuccessServer.URL + "\""},
+			wantToken: &testToken,
+		},
+		{
 			name:     "upstream name and type are included in authorize request if upstream name is provided",
 			clientID: "test-client-id",
 			opt: func(t *testing.T) Option {
@@ -650,7 +808,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					_ = defaultLDAPTestOpts(t, h, nil, nil)
-					h.promptForValue = func(promptLabel string) (string, error) {
+					h.promptForValue = func(_ context.Context, promptLabel string) (string, error) {
 						require.Equal(t, "Username: ", promptLabel)
 						return "", errors.New("some prompt error")
 					}
@@ -667,7 +825,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					_ = defaultLDAPTestOpts(t, h, nil, nil)
-					h.promptForSecret = func(promptLabel string) (string, error) { return "", errors.New("some prompt error") }
+					h.promptForSecret = func(_ context.Context, _ string) (string, error) { return "", errors.New("some prompt error") }
 					return nil
 				}
 			},
@@ -853,11 +1011,11 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 					h.generateState = func() (state.State, error) { return "test-state", nil }
 					h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 					h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
-					h.promptForValue = func(promptLabel string) (string, error) {
+					h.promptForValue = func(_ context.Context, promptLabel string) (string, error) {
 						require.Equal(t, "Username: ", promptLabel)
 						return "some-upstream-username", nil
 					}
-					h.promptForSecret = func(promptLabel string) (string, error) {
+					h.promptForSecret = func(_ context.Context, promptLabel string) (string, error) {
 						require.Equal(t, "Password: ", promptLabel)
 						return "some-upstream-password", nil
 					}
@@ -1287,10 +1445,11 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 				WithContext(context.Background()),
 				WithListenPort(0),
 				WithScopes([]string{"test-scope"}),
+				WithSkipBrowserOpen(),
 				tt.opt(t),
 				WithLogger(testLogger),
 			)
-			require.Equal(t, tt.wantLogs, testLogger.Lines())
+			testLogger.Expect(tt.wantLogs)
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				require.Nil(t, tok)
@@ -1324,13 +1483,152 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 	}
 }
 
+func TestHandlePasteCallback(t *testing.T) {
+	const testRedirectURI = "http://127.0.0.1:12324/callback"
+
+	tests := []struct {
+		name         string
+		opt          func(t *testing.T) Option
+		wantCallback *callbackResult
+	}{
+		{
+			name: "no stdin available",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.isTTY = func(fd int) bool {
+						require.Equal(t, syscall.Stdin, fd)
+						return false
+					}
+					h.useFormPost = true
+					return nil
+				}
+			},
+		},
+		{
+			name: "no form_post mode available",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.isTTY = func(fd int) bool { return true }
+					h.useFormPost = false
+					return nil
+				}
+			},
+		},
+		{
+			name: "prompt fails",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.isTTY = func(fd int) bool { return true }
+					h.useFormPost = true
+					h.promptForSecret = func(ctx context.Context, promptLabel string) (string, error) {
+						assert.Equal(t, "    If automatic login fails, paste your authorization code to login manually: ", promptLabel)
+						return "", fmt.Errorf("some prompt error")
+					}
+					return nil
+				}
+			},
+			wantCallback: &callbackResult{
+				err: fmt.Errorf("failed to prompt for manual authorization code: some prompt error"),
+			},
+		},
+		{
+			name: "redeeming code fails",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.isTTY = func(fd int) bool { return true }
+					h.useFormPost = true
+					h.promptForSecret = func(ctx context.Context, promptLabel string) (string, error) {
+						return "invalid", nil
+					}
+					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+						mock := mockUpstream(t)
+						mock.EXPECT().
+							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "invalid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
+							Return(nil, fmt.Errorf("some exchange error"))
+						return mock
+					}
+					return nil
+				}
+			},
+			wantCallback: &callbackResult{
+				err: fmt.Errorf("some exchange error"),
+			},
+		},
+		{
+			name: "success",
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.isTTY = func(fd int) bool { return true }
+					h.useFormPost = true
+					h.promptForSecret = func(ctx context.Context, promptLabel string) (string, error) {
+						return "valid", nil
+					}
+					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+						mock := mockUpstream(t)
+						mock.EXPECT().
+							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
+							Return(&oidctypes.Token{IDToken: &oidctypes.IDToken{Token: "test-id-token"}}, nil)
+						return mock
+					}
+					return nil
+				}
+			},
+			wantCallback: &callbackResult{
+				token: &oidctypes.Token{IDToken: &oidctypes.IDToken{Token: "test-id-token"}},
+			},
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			h := &handlerState{
+				callbacks: make(chan callbackResult, 1),
+				state:     state.State("test-state"),
+				pkce:      pkce.Code("test-pkce"),
+				nonce:     nonce.Nonce("test-nonce"),
+			}
+			if tt.opt != nil {
+				require.NoError(t, tt.opt(t)(h))
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+
+			var buf bytes.Buffer
+			h.promptForWebLogin(ctx, "https://test-authorize-url/", &buf)
+			require.Equal(t,
+				"Log in by visiting this link:\n\n    https://test-authorize-url/\n\n",
+				buf.String(),
+			)
+
+			if tt.wantCallback != nil {
+				select {
+				case <-time.After(1 * time.Second):
+					require.Fail(t, "timed out waiting to receive from callbacks channel")
+				case result := <-h.callbacks:
+					require.Equal(t, *tt.wantCallback, result)
+				}
+			}
+		})
+	}
+}
+
 func TestHandleAuthCodeCallback(t *testing.T) {
 	const testRedirectURI = "http://127.0.0.1:12324/callback"
 
+	withFormPostMode := func(t *testing.T) Option {
+		return func(h *handlerState) error {
+			h.useFormPost = true
+			return nil
+		}
+	}
 	tests := []struct {
 		name           string
 		method         string
 		query          string
+		body           []byte
+		contentType    string
 		opt            func(t *testing.T) Option
 		wantErr        string
 		wantHTTPStatus int
@@ -1341,6 +1639,24 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			query:          "",
 			wantErr:        "wanted GET",
 			wantHTTPStatus: http.StatusMethodNotAllowed,
+		},
+		{
+			name:           "wrong method for form_post",
+			method:         "GET",
+			query:          "",
+			opt:            withFormPostMode,
+			wantErr:        "wanted POST",
+			wantHTTPStatus: http.StatusMethodNotAllowed,
+		},
+		{
+			name:           "invalid form for form_post",
+			method:         "POST",
+			query:          "",
+			contentType:    "application/x-www-form-urlencoded",
+			body:           []byte(`%`),
+			opt:            withFormPostMode,
+			wantErr:        `invalid form: invalid URL escape "%"`,
+			wantHTTPStatus: http.StatusBadRequest,
 		},
 		{
 			name:           "invalid state",
@@ -1396,6 +1712,26 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:        "valid form_post",
+			method:      http.MethodPost,
+			contentType: "application/x-www-form-urlencoded",
+			body:        []byte(`state=test-state&code=valid`),
+			opt: func(t *testing.T) Option {
+				return func(h *handlerState) error {
+					h.useFormPost = true
+					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
+					h.getProvider = func(_ *oauth2.Config, _ *oidc.Provider, _ *http.Client) provider.UpstreamOIDCIdentityProviderI {
+						mock := mockUpstream(t)
+						mock.EXPECT().
+							ExchangeAuthcodeAndValidateTokens(gomock.Any(), "valid", pkce.Code("test-pkce"), nonce.Nonce("test-nonce"), testRedirectURI).
+							Return(&oidctypes.Token{IDToken: &oidctypes.IDToken{Token: "test-id-token"}}, nil)
+						return mock
+					}
+					return nil
+				}
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -1414,11 +1750,14 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 			defer cancel()
 
 			resp := httptest.NewRecorder()
-			req, err := http.NewRequestWithContext(ctx, "GET", "/test-callback", nil)
+			req, err := http.NewRequestWithContext(ctx, "GET", "/test-callback", bytes.NewBuffer(tt.body))
 			require.NoError(t, err)
 			req.URL.RawQuery = tt.query
 			if tt.method != "" {
 				req.Method = tt.method
+			}
+			if tt.contentType != "" {
+				req.Header.Set("Content-Type", tt.contentType)
 			}
 
 			err = h.handleAuthCodeCallback(resp, req)

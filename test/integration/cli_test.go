@@ -307,16 +307,15 @@ func runPinnipedLoginOIDC(
 		reader := bufio.NewReader(testlib.NewLoggerReader(t, "stderr", stderr))
 
 		scanner := bufio.NewScanner(reader)
-		const prompt = "Please log in: "
 		for scanner.Scan() {
-			line := scanner.Text()
-			if strings.HasPrefix(line, prompt) {
-				loginURLChan <- strings.TrimPrefix(line, prompt)
+			loginURL, err := url.Parse(strings.TrimSpace(scanner.Text()))
+			if err == nil && loginURL.Scheme == "https" {
+				loginURLChan <- loginURL.String()
 				return nil
 			}
 		}
 
-		return fmt.Errorf("expected stderr to contain %s", prompt)
+		return fmt.Errorf("expected stderr to contain login URL")
 	})
 
 	// Start a background goroutine to read stdout from the CLI and parse out an ExecCredential.
@@ -356,7 +355,7 @@ func runPinnipedLoginOIDC(
 
 	// Expect to be redirected to the localhost callback.
 	t.Logf("waiting for redirect to callback")
-	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(env.CLIUpstreamOIDC.CallbackURL) + `\?.+\z`)
+	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(env.CLIUpstreamOIDC.CallbackURL) + `(\?.+)?\z`)
 	browsertest.WaitForURL(t, page, callbackURLPattern)
 
 	// Wait for the "pre" element that gets rendered for a `text/plain` page, and

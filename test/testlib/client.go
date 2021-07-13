@@ -311,11 +311,15 @@ func CreateTestFederationDomain(ctx context.Context, t *testing.T, issuer string
 	return federationDomain
 }
 
-func RandHex(t *testing.T, numBytes int) string {
+func RandBytes(t *testing.T, numBytes int) []byte {
 	buf := make([]byte, numBytes)
 	_, err := io.ReadFull(rand.Reader, buf)
 	require.NoError(t, err)
-	return hex.EncodeToString(buf)
+	return buf
+}
+
+func RandHex(t *testing.T, numBytes int) string {
+	return hex.EncodeToString(RandBytes(t, numBytes))
 }
 
 func CreateTestSecret(t *testing.T, namespace string, baseName string, secretType corev1.SecretType, stringData map[string]string) *corev1.Secret {

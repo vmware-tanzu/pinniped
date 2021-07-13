@@ -109,7 +109,7 @@ func TestE2EFullIntegration(t *testing.T) {
 	})
 
 	// Add an OIDC upstream IDP and try using it to authenticate during kubectl commands.
-	t.Run("with Supervisor OIDC upstream IDP", func(t *testing.T) {
+	t.Run("with Supervisor OIDC upstream IDP and automatic flow", func(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamOIDC.Username
 		expectedGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
 
@@ -195,16 +195,15 @@ func TestE2EFullIntegration(t *testing.T) {
 			}()
 
 			reader := bufio.NewReader(testlib.NewLoggerReader(t, "stderr", stderrPipe))
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				return fmt.Errorf("could not read login URL line from stderr: %w", err)
+			scanner := bufio.NewScanner(reader)
+			for scanner.Scan() {
+				loginURL, err := url.Parse(strings.TrimSpace(scanner.Text()))
+				if err == nil && loginURL.Scheme == "https" {
+					loginURLChan <- loginURL.String()
+					return nil
+				}
 			}
-			const prompt = "Please log in: "
-			if !strings.HasPrefix(line, prompt) {
-				return fmt.Errorf("expected %q to have prefix %q", line, prompt)
-			}
-			loginURLChan <- strings.TrimPrefix(line, prompt)
-			return readAndExpectEmpty(reader)
+			return fmt.Errorf("expected stderr to contain login URL")
 		})
 
 		// Start a background goroutine to read stdout from kubectl and return the result as a string.
@@ -242,17 +241,13 @@ func TestE2EFullIntegration(t *testing.T) {
 		// Expect to be redirected to the upstream provider and log in.
 		browsertest.LoginToUpstream(t, page, env.SupervisorUpstreamOIDC)
 
-		// Expect to be redirected to the localhost callback.
-		t.Logf("waiting for redirect to callback")
-		browsertest.WaitForURL(t, page, regexp.MustCompile(`\Ahttp://127\.0\.0\.1:[0-9]+/callback\?.+\z`))
+		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
+		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
+		browsertest.WaitForURL(t, page, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
 
-		// Wait for the "pre" element that gets rendered for a `text/plain` page, and
-		// assert that it contains the success message.
-		t.Logf("verifying success page")
-		browsertest.WaitForVisibleElements(t, page, "pre")
-		msg, err := page.First("pre").Text()
-		require.NoError(t, err)
-		require.Equal(t, "you have been logged in and may now close this tab", msg)
+		// The response page should have done the background fetch() and POST'ed to the CLI's callback.
+		// It should now be in the "success" state.
+		formpostExpectSuccessState(t, page)
 
 		// Expect the CLI to output a list of namespaces in JSON format.
 		t.Logf("waiting for kubectl to output namespace list JSON")
@@ -263,6 +258,113 @@ func TestE2EFullIntegration(t *testing.T) {
 		case kubectlOutput = <-kubectlOutputChan:
 		}
 		require.Greaterf(t, len(strings.Split(kubectlOutput, "\n")), 2, "expected some namespaces to be returned, got %q", kubectlOutput)
+		t.Logf("first kubectl command took %s", time.Since(start).String())
+
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
+			downstream,
+			kubeconfigPath,
+			sessionCachePath,
+			pinnipedExe,
+			expectedUsername,
+			expectedGroups,
+		)
+	})
+
+	t.Run("with Supervisor OIDC upstream IDP and manual flow", func(t *testing.T) {
+		expectedUsername := env.SupervisorUpstreamOIDC.Username
+		expectedGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
+
+		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
+		testlib.CreateTestClusterRoleBinding(t,
+			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: expectedUsername},
+			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
+		)
+		testlib.WaitForUserToHaveAccess(t, expectedUsername, []string{}, &authorizationv1.ResourceAttributes{
+			Verb:     "get",
+			Group:    "",
+			Version:  "v1",
+			Resource: "namespaces",
+		})
+
+		// Create upstream OIDC provider and wait for it to become ready.
+		testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+			Issuer: env.SupervisorUpstreamOIDC.Issuer,
+			TLS: &idpv1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+			},
+			AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
+				AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+			},
+			Claims: idpv1alpha1.OIDCClaims{
+				Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+			},
+			Client: idpv1alpha1.OIDCClient{
+				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+			},
+		}, idpv1alpha1.PhaseReady)
+
+		// Use a specific session cache for this test.
+		sessionCachePath := tempDir + "/oidc-test-sessions-manual.yaml"
+		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-skip-browser",
+			"--oidc-skip-listen",
+			"--oidc-ca-bundle", testCABundlePath,
+			"--oidc-session-cache", sessionCachePath,
+		})
+
+		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
+		start := time.Now()
+		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+
+		ptyFile, err := pty.Start(kubectlCmd)
+		require.NoError(t, err)
+
+		// Wait for the subprocess to print the login prompt.
+		t.Logf("waiting for CLI to output login URL and manual prompt")
+		output := readFromFileUntilStringIsSeen(t, ptyFile, "If automatic login fails, paste your authorization code to login manually: ")
+		require.Contains(t, output, "Log in by visiting this link:")
+		require.Contains(t, output, "If automatic login fails, paste your authorization code to login manually: ")
+
+		// Find the line with the login URL.
+		var loginURL string
+		for _, line := range strings.Split(output, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "https://") {
+				loginURL = trimmed
+			}
+		}
+		require.NotEmptyf(t, loginURL, "didn't find login URL in output: %s", output)
+
+		t.Logf("navigating to login page")
+		require.NoError(t, page.Navigate(loginURL))
+
+		// Expect to be redirected to the upstream provider and log in.
+		browsertest.LoginToUpstream(t, page, env.SupervisorUpstreamOIDC)
+
+		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
+		t.Logf("waiting for response page %s", downstream.Spec.Issuer)
+		browsertest.WaitForURL(t, page, regexp.MustCompile(regexp.QuoteMeta(downstream.Spec.Issuer)))
+
+		// The response page should have failed to automatically post, and should now be showing the manual instructions.
+		authCode := formpostExpectManualState(t, page)
+
+		// Enter the auth code in the waiting prompt, followed by a newline.
+		t.Logf("'manually' pasting authorization code %q to waiting prompt", authCode)
+		_, err = ptyFile.WriteString(authCode + "\n")
+		require.NoError(t, err)
+
+		// Read all of the remaining output from the subprocess until EOF.
+		t.Logf("waiting for kubectl to output namespace list")
+		remainingOutput, _ := ioutil.ReadAll(ptyFile)
+		// Ignore any errors returned because there is always an error on linux.
+		require.Greaterf(t, len(remainingOutput), 0, "expected to get some more output from the kubectl subcommand, but did not")
+		require.Greaterf(t, len(strings.Split(string(remainingOutput), "\n")), 2, "expected some namespaces to be returned, got %q", string(remainingOutput))
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
 		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
@@ -376,7 +478,7 @@ func TestE2EFullIntegration(t *testing.T) {
 	})
 }
 
-func readFromFileUntilStringIsSeen(t *testing.T, f *os.File, until string) {
+func readFromFileUntilStringIsSeen(t *testing.T, f *os.File, until string) string {
 	readFromFile := ""
 
 	testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
@@ -390,6 +492,7 @@ func readFromFileUntilStringIsSeen(t *testing.T, f *os.File, until string) {
 		}
 		return false, nil // keep waiting and reading
 	}, 1*time.Minute, 1*time.Second)
+	return readFromFile
 }
 
 func readAvailableOutput(t *testing.T, r io.Reader) (string, bool) {

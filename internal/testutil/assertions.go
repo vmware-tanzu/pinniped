@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
@@ -55,7 +55,9 @@ func RequireNumberOfSecretsMatchingLabelSelector(t *testing.T, secrets v1.Secret
 }
 
 func RequireSecurityHeaders(t *testing.T, response *httptest.ResponseRecorder) {
-	require.Equal(t, "default-src 'none'; frame-ancestors 'none'", response.Header().Get("Content-Security-Policy"))
+	// This is a more relaxed assertion rather than an exact match, so it can cover all the CSP headers we use.
+	require.Contains(t, response.Header().Get("Content-Security-Policy"), "default-src 'none'")
+
 	require.Equal(t, "DENY", response.Header().Get("X-Frame-Options"))
 	require.Equal(t, "1; mode=block", response.Header().Get("X-XSS-Protection"))
 	require.Equal(t, "nosniff", response.Header().Get("X-Content-Type-Options"))

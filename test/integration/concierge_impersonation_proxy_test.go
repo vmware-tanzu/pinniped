@@ -1088,17 +1088,22 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 					return proxyURL, nil
 				}
 			}
-			c, r, err := dialer.Dial(dest.String(), http.Header{"Origin": {dest.String()}})
-			if r != nil {
-				defer func() {
-					require.NoError(t, r.Body.Close())
-				}()
-			}
-			if err != nil && r != nil {
-				body, _ := ioutil.ReadAll(r.Body)
-				t.Logf("websocket dial failed: %d:%s", r.StatusCode, body)
-			}
-			require.NoError(t, err)
+			var (
+				resp *http.Response
+				conn *websocket.Conn
+			)
+			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+				var err error
+				conn, resp, err = dialer.Dial(dest.String(), http.Header{"Origin": {dest.String()}})
+				if resp != nil {
+					defer func() { requireEventually.NoError(resp.Body.Close()) }()
+				}
+				if err != nil && resp != nil {
+					body, _ := ioutil.ReadAll(resp.Body)
+					t.Logf("websocket dial failed: %d:%s", resp.StatusCode, body)
+				}
+				requireEventually.NoError(err)
+			}, time.Minute, time.Second)
 
 			// perform a create through the admin client
 			wantConfigMap := &corev1.ConfigMap{
@@ -1115,7 +1120,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			})
 
 			// see if the websocket client received an event for the create
-			_, message, err := c.ReadMessage()
+			_, message, err := conn.ReadMessage()
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}

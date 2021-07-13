@@ -1156,7 +1156,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			require.Len(t, kubeClient.Actions(), test.wantUnnecessaryStoredRecords)
 		case test.wantRedirectLocationRegexp != "":
 			require.Len(t, rsp.Header().Values("Location"), 1)
-			oidctestutil.RequireAuthcodeRedirectLocation(
+			oidctestutil.RequireAuthCodeRegexpMatch(
 				t,
 				rsp.Header().Get("Location"),
 				test.wantRedirectLocationRegexp,

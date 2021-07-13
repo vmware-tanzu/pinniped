@@ -235,10 +235,10 @@ func VerifyECDSAIDToken(
 	return token
 }
 
-func RequireAuthcodeRedirectLocation(
+func RequireAuthCodeRegexpMatch(
 	t *testing.T,
-	actualRedirectLocation string,
-	wantRedirectLocationRegexp string,
+	actualContent string,
+	wantRegexp string,
 	kubeClient *fake.Clientset,
 	secretsClient v1.SecretInterface,
 	oauthStore fositestoragei.AllFositeStorage,
@@ -256,9 +256,9 @@ func RequireAuthcodeRedirectLocation(
 	t.Helper()
 
 	// Assert that Location header matches regular expression.
-	regex := regexp.MustCompile(wantRedirectLocationRegexp)
-	submatches := regex.FindStringSubmatch(actualRedirectLocation)
-	require.Lenf(t, submatches, 2, "no regexp match in actualRedirectLocation: %q", actualRedirectLocation)
+	regex := regexp.MustCompile(wantRegexp)
+	submatches := regex.FindStringSubmatch(actualContent)
+	require.Lenf(t, submatches, 2, "no regexp match in actualContent: %", actualContent)
 	capturedAuthCode := submatches[1]
 
 	// fosite authcodes are in the format `data.signature`, so grab the signature part, which is the lookup key in the storage interface

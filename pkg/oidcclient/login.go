@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"mime"
 	"net"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -87,6 +89,7 @@ type handlerState struct {
 	// Generated parameters of a login flow.
 	provider     *oidc.Provider
 	oauth2Config *oauth2.Config
+	useFormPost  bool
 	state        state.State
 	nonce        nonce.Nonce
 	pkce         pkce.Code
@@ -96,10 +99,12 @@ type handlerState struct {
 	generatePKCE    func() (pkce.Code, error)
 	generateNonce   func() (nonce.Nonce, error)
 	openURL         func(string) error
+	listen          func(string, string) (net.Listener, error)
+	isTTY           func(int) bool
 	getProvider     func(*oauth2.Config, *oidc.Provider, *http.Client) provider.UpstreamOIDCIdentityProviderI
 	validateIDToken func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error)
-	promptForValue  func(promptLabel string) (string, error)
-	promptForSecret func(promptLabel string) (string, error)
+	promptForValue  func(ctx context.Context, promptLabel string) (string, error)
+	promptForSecret func(ctx context.Context, promptLabel string) (string, error)
 
 	callbacks chan callbackResult
 }
@@ -156,9 +161,29 @@ func WithScopes(scopes []string) Option {
 
 // WithBrowserOpen overrides the default "open browser" functionality with a custom callback. If not specified,
 // an implementation using https://github.com/pkg/browser will be used by default.
+//
+// Deprecated: this option will be removed in a future version of Pinniped. See the
+// WithSkipBrowserOpen() option instead.
 func WithBrowserOpen(openURL func(url string) error) Option {
 	return func(h *handlerState) error {
 		h.openURL = openURL
+		return nil
+	}
+}
+
+// WithSkipBrowserOpen causes the login to only print the authorize URL, but skips attempting to
+// open the user's default web browser.
+func WithSkipBrowserOpen() Option {
+	return func(h *handlerState) error {
+		h.openURL = func(_ string) error { return nil }
+		return nil
+	}
+}
+
+// WithSkipListen causes the login skip starting the localhost listener, forcing the manual copy/paste login flow.
+func WithSkipListen() Option {
+	return func(h *handlerState) error {
+		h.listen = func(string, string) (net.Listener, error) { return nil, nil }
 		return nil
 	}
 }
@@ -250,6 +275,8 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		generateNonce: nonce.Generate,
 		generatePKCE:  pkce.Generate,
 		openURL:       browser.OpenURL,
+		listen:        net.Listen,
+		isTTY:         term.IsTerminal,
 		getProvider:   upstreamoidc.New,
 		validateIDToken: func(ctx context.Context, provider *oidc.Provider, audience string, token string) (*oidc.IDToken, error) {
 			return provider.Verifier(&oidc.Config{ClientID: audience}).Verify(ctx, token)
@@ -376,11 +403,11 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 // and parse the authcode from the response. Exchange the authcode for tokens. Return the tokens or an error.
 func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (*oidctypes.Token, error) {
 	// Ask the user for their username and password.
-	username, err := h.promptForValue(defaultLDAPUsernamePrompt)
+	username, err := h.promptForValue(h.ctx, defaultLDAPUsernamePrompt)
 	if err != nil {
 		return nil, fmt.Errorf("error prompting for username: %w", err)
 	}
-	password, err := h.promptForSecret(defaultLDAPPasswordPrompt)
+	password, err := h.promptForSecret(h.ctx, defaultLDAPPasswordPrompt)
 	if err != nil {
 		return nil, fmt.Errorf("error prompting for password: %w", err)
 	}
@@ -475,30 +502,55 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 // Open a web browser, or ask the user to open a web browser, to visit the authorize endpoint.
 // Create a localhost callback listener which exchanges the authcode for tokens. Return the tokens or an error.
 func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (*oidctypes.Token, error) {
-	// Open a TCP listener and update the OAuth2 redirect_uri to match (in case we are using an ephemeral port number).
-	listener, err := net.Listen("tcp", h.listenAddr)
+	// Attempt to open a local TCP listener, logging but otherwise ignoring any error.
+	listener, err := h.listen("tcp", h.listenAddr)
 	if err != nil {
-		return nil, fmt.Errorf("could not open callback listener: %w", err)
+		h.logger.V(debugLogLevel).Error(err, "could not open callback listener")
 	}
-	h.oauth2Config.RedirectURL = (&url.URL{
-		Scheme: "http",
-		Host:   listener.Addr().String(),
-		Path:   h.callbackPath,
-	}).String()
+
+	// If the listener failed to start and stdin is not a TTY, then we have no hope of succeeding,
+	// since we won't be able to receive the web callback and we can't prompt for the manual auth code.
+	if listener == nil && !h.isTTY(syscall.Stdin) {
+		return nil, fmt.Errorf("login failed: must have either a localhost listener or stdin must be a TTY")
+	}
+
+	// Update the OAuth2 redirect_uri to match the actual listener address (if there is one), or just use
+	// a fake ":0" port if there is no listener running.
+	redirectURI := url.URL{Scheme: "http", Path: h.callbackPath}
+	if listener == nil {
+		redirectURI.Host = "127.0.0.1:0"
+	} else {
+		redirectURI.Host = listener.Addr().String()
+	}
+	h.oauth2Config.RedirectURL = redirectURI.String()
+
+	// If the server supports it, request response_mode=form_post.
+	authParams := *authorizeOptions
+	if h.useFormPost {
+		authParams = append(authParams, oauth2.SetAuthURLParam("response_mode", "form_post"))
+	}
 
 	// Now that we have a redirect URL with the listener port, we can build the authorize URL.
-	authorizeURL := h.oauth2Config.AuthCodeURL(h.state.String(), *authorizeOptions...)
+	authorizeURL := h.oauth2Config.AuthCodeURL(h.state.String(), authParams...)
 
-	// Start a callback server in a background goroutine.
-	shutdown := h.serve(listener)
-	defer shutdown()
-
-	// Open the authorize URL in the users browser.
-	if err := h.openURL(authorizeURL); err != nil {
-		return nil, fmt.Errorf("could not open browser: %w", err)
+	// If there is a listener running, start serving the callback handler in a background goroutine.
+	if listener != nil {
+		shutdown := h.serve(listener)
+		defer shutdown()
 	}
 
-	// Wait for either the callback or a timeout.
+	// Open the authorize URL in the users browser, logging but otherwise ignoring any error.
+	if err := h.openURL(authorizeURL); err != nil {
+		h.logger.V(debugLogLevel).Error(err, "could not open browser")
+	}
+
+	ctx, cancel := context.WithCancel(h.ctx)
+	defer cancel()
+
+	// Prompt the user to visit the authorize URL, and to paste a manually-copied auth code (if possible).
+	h.promptForWebLogin(ctx, authorizeURL, os.Stderr)
+
+	// Wait for either the web callback, a pasted auth code, or a timeout.
 	select {
 	case <-h.ctx.Done():
 		return nil, fmt.Errorf("timed out waiting for token callback: %w", h.ctx.Err())
@@ -510,7 +562,37 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 	}
 }
 
-func promptForValue(promptLabel string) (string, error) {
+func (h *handlerState) promptForWebLogin(ctx context.Context, authorizeURL string, out io.Writer) {
+	_, _ = fmt.Fprintf(out, "Log in by visiting this link:\n\n    %s\n\n", authorizeURL)
+
+	// If stdin is not a TTY, print the URL but don't prompt for the manual paste,
+	// since we have no way of reading it.
+	if !h.isTTY(syscall.Stdin) {
+		return
+	}
+
+	// If the server didn't support response_mode=form_post, don't bother prompting for the manual
+	// code because the user isn't going to have any easy way to manually copy it anyway.
+	if !h.useFormPost {
+		return
+	}
+
+	// Launch the manual auth code prompt in a background goroutine, which will be cancelled
+	// if the parent context is cancelled (when the login succeeds or times out).
+	go func() {
+		code, err := h.promptForSecret(ctx, "    If automatic login fails, paste your authorization code to login manually: ")
+		if err != nil {
+			h.callbacks <- callbackResult{err: fmt.Errorf("failed to prompt for manual authorization code: %v", err)}
+			return
+		}
+
+		// When a code is pasted, redeem it for a token and return that result on the callbacks channel.
+		token, err := h.redeemAuthCode(ctx, code)
+		h.callbacks <- callbackResult{token: token, err: err}
+	}()
+}
+
+func promptForValue(ctx context.Context, promptLabel string) (string, error) {
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return "", errors.New("stdin is not connected to a terminal")
 	}
@@ -518,6 +600,15 @@ func promptForValue(promptLabel string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("could not print prompt to stderr: %w", err)
 	}
+
+	// If the context is canceled, set the read deadline on stdin so the read immediately finishes.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		<-ctx.Done()
+		_ = os.Stdin.SetReadDeadline(time.Now())
+	}()
+
 	text, err := bufio.NewReader(os.Stdin).ReadString('\n')
 	if err != nil {
 		return "", fmt.Errorf("could read input from stdin: %w", err)
@@ -526,7 +617,7 @@ func promptForValue(promptLabel string) (string, error) {
 	return text, nil
 }
 
-func promptForSecret(promptLabel string) (string, error) {
+func promptForSecret(ctx context.Context, promptLabel string) (string, error) {
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return "", errors.New("stdin is not connected to a terminal")
 	}
@@ -534,16 +625,26 @@ func promptForSecret(promptLabel string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("could not print prompt to stderr: %w", err)
 	}
-	password, err := term.ReadPassword(0)
+
+	// If the context is canceled, set the read deadline on stdin so the read immediately finishes.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		<-ctx.Done()
+		_ = os.Stdin.SetReadDeadline(time.Now())
+
+		// term.ReadPassword swallows the newline that was typed by the user, so to
+		// avoid the next line of output from happening on same line as the password
+		// prompt, we need to print a newline.
+		//
+		// Even if the read was cancelled prematurely, we still want to echo a newline so whatever comes next
+		// on stderr is formatted correctly.
+		_, _ = fmt.Fprint(os.Stderr, "\n")
+	}()
+
+	password, err := term.ReadPassword(syscall.Stdin)
 	if err != nil {
 		return "", fmt.Errorf("could not read password: %w", err)
-	}
-	// term.ReadPassword swallows the newline that was typed by the user, so to
-	// avoid the next line of output from happening on same line as the password
-	// prompt, we need to print a newline.
-	_, err = fmt.Fprint(os.Stderr, "\n")
-	if err != nil {
-		return "", fmt.Errorf("could not print newline to stderr: %w", err)
 	}
 	return string(password), err
 }
@@ -567,7 +668,25 @@ func (h *handlerState) initOIDCDiscovery() error {
 		Endpoint: h.provider.Endpoint(),
 		Scopes:   h.scopes,
 	}
+
+	// Use response_mode=form_post if the provider supports it.
+	var discoveryClaims struct {
+		ResponseModesSupported []string `json:"response_modes_supported"`
+	}
+	if err := h.provider.Claims(&discoveryClaims); err != nil {
+		return fmt.Errorf("could not decode response_modes_supported in OIDC discovery from %q: %w", h.issuer, err)
+	}
+	h.useFormPost = stringSliceContains(discoveryClaims.ResponseModesSupported, "form_post")
 	return nil
+}
+
+func stringSliceContains(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *handlerState) tokenExchangeRFC8693(baseToken *oidctypes.Token) (*oidctypes.Token, error) {
@@ -664,13 +783,29 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 		}
 	}()
 
-	// Return HTTP 405 for anything that's not a GET.
-	if r.Method != http.MethodGet {
-		return httperr.Newf(http.StatusMethodNotAllowed, "wanted GET")
+	var params url.Values
+	if h.useFormPost {
+		// Return HTTP 405 for anything that's not a POST.
+		if r.Method != http.MethodPost {
+			return httperr.Newf(http.StatusMethodNotAllowed, "wanted POST")
+		}
+
+		// Parse and pull the response parameters from a application/x-www-form-urlencoded request body.
+		if err := r.ParseForm(); err != nil {
+			return httperr.Wrap(http.StatusBadRequest, "invalid form", err)
+		}
+		params = r.Form
+	} else {
+		// Return HTTP 405 for anything that's not a GET.
+		if r.Method != http.MethodGet {
+			return httperr.Newf(http.StatusMethodNotAllowed, "wanted GET")
+		}
+
+		// Pull response parameters from the URL query string.
+		params = r.URL.Query()
 	}
 
 	// Validate OAuth2 state and fail if it's incorrect (to block CSRF).
-	params := r.URL.Query()
 	if err := h.state.Validate(params.Get("state")); err != nil {
 		return httperr.New(http.StatusForbidden, "missing or invalid state parameter")
 	}
@@ -685,14 +820,7 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 
 	// Exchange the authorization code for access, ID, and refresh tokens and perform required
 	// validations on the returned ID token.
-	token, err := h.getProvider(h.oauth2Config, h.provider, h.httpClient).
-		ExchangeAuthcodeAndValidateTokens(
-			r.Context(),
-			params.Get("code"),
-			h.pkce,
-			h.nonce,
-			h.oauth2Config.RedirectURL,
-		)
+	token, err := h.redeemAuthCode(r.Context(), params.Get("code"))
 	if err != nil {
 		return httperr.Wrap(http.StatusBadRequest, "could not complete code exchange", err)
 	}
@@ -700,6 +828,17 @@ func (h *handlerState) handleAuthCodeCallback(w http.ResponseWriter, r *http.Req
 	h.callbacks <- callbackResult{token: token}
 	_, _ = w.Write([]byte("you have been logged in and may now close this tab"))
 	return nil
+}
+
+func (h *handlerState) redeemAuthCode(ctx context.Context, code string) (*oidctypes.Token, error) {
+	return h.getProvider(h.oauth2Config, h.provider, h.httpClient).
+		ExchangeAuthcodeAndValidateTokens(
+			ctx,
+			code,
+			h.pkce,
+			h.nonce,
+			h.oauth2Config.RedirectURL,
+		)
 }
 
 func (h *handlerState) serve(listener net.Listener) func() {
@@ -711,9 +850,9 @@ func (h *handlerState) serve(listener net.Listener) func() {
 	}
 	go func() { _ = srv.Serve(listener) }()
 	return func() {
-		// Gracefully shut down the server, allowing up to 5 seconds for
+		// Gracefully shut down the server, allowing up to 5 00ms for
 		// clients to receive any in-flight responses.
-		shutdownCtx, cancel := context.WithTimeout(h.ctx, 5*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(h.ctx, 500*time.Millisecond)
 		_ = srv.Shutdown(shutdownCtx)
 		cancel()
 	}

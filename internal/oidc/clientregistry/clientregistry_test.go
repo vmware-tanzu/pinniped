@@ -59,6 +59,7 @@ func TestPinnipedCLI(t *testing.T) {
 	require.Equal(t, "", c.GetRequestObjectSigningAlgorithm())
 	require.Equal(t, "none", c.GetTokenEndpointAuthMethod())
 	require.Equal(t, "RS256", c.GetTokenEndpointAuthSigningAlgorithm())
+	require.Equal(t, []fosite.ResponseModeType{"", "query", "form_post"}, c.GetResponseModes())
 
 	marshaled, err := json.Marshal(c)
 	require.NoError(t, err)

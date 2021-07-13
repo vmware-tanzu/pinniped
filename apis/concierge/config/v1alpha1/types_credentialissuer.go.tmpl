@@ -96,7 +96,7 @@ type ImpersonationProxySpec struct {
 	// ExternalEndpoint describes the HTTPS endpoint where the proxy will be exposed. If not set, the proxy will
 	// be served using the external name of the LoadBalancer service or the cluster service DNS name.
 	//
-	// This field must be non-empty when spec.impersonationProxy.service.mode is "None".
+	// This field must be non-empty when spec.impersonationProxy.service.type is "None".
 	//
 	// +optional
 	ExternalEndpoint string `json:"externalEndpoint,omitempty"`

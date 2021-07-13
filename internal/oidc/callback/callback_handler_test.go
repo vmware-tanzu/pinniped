@@ -122,6 +122,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantContentType                   string
 		wantBody                          string
 		wantRedirectLocationRegexp        string
+		wantBodyFormResponseRegexp        string
 		wantDownstreamGrantedScopes       []string
 		wantDownstreamIDTokenSubject      string
 		wantDownstreamIDTokenUsername     string
@@ -133,6 +134,32 @@ func TestCallbackEndpoint(t *testing.T) {
 
 		wantExchangeAndValidateTokensCall *oidctestutil.ExchangeAuthcodeAndValidateTokenArgs
 	}{
+		{
+			name:   "GET with good state and cookie and successful upstream token exchange with response_mode=form_post returns 200 with HTML+JS form",
+			idp:    happyUpstream().Build(),
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().WithAuthorizeRequestParams(
+					shallowCopyAndModifyQuery(
+						happyDownstreamRequestParamsQuery,
+						map[string]string{"response_mode": "form_post"},
+					).Encode(),
+				).Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusOK,
+			wantContentType:                   "text/html;charset=UTF-8",
+			wantBodyFormResponseRegexp:        `<code id="manual-auth-code">(.+)</code>`,
+			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
+			wantDownstreamIDTokenUsername:     upstreamUsername,
+			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+		},
 		{
 			name:                              "GET with good state and cookie and successful upstream token exchange returns 302 to downstream client callback with its state and code",
 			idp:                               happyUpstream().Build(),
@@ -666,15 +693,40 @@ func TestCallbackEndpoint(t *testing.T) {
 			require.Equal(t, test.wantStatus, rsp.Code)
 			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), test.wantContentType)
 
-			if test.wantBody != "" {
+			switch {
+			// If we want a specific static response body, assert that.
+			case test.wantBody != "":
 				require.Equal(t, test.wantBody, rsp.Body.String())
-			} else {
+
+			// Else if we want a body that contains a regex-matched auth code, assert that (for "response_mode=form_post").
+			case test.wantBodyFormResponseRegexp != "":
+				oidctestutil.RequireAuthCodeRegexpMatch(
+					t,
+					rsp.Body.String(),
+					test.wantBodyFormResponseRegexp,
+					client,
+					secrets,
+					oauthStore,
+					test.wantDownstreamGrantedScopes,
+					test.wantDownstreamIDTokenSubject,
+					test.wantDownstreamIDTokenUsername,
+					test.wantDownstreamIDTokenGroups,
+					test.wantDownstreamRequestedScopes,
+					test.wantDownstreamPKCEChallenge,
+					test.wantDownstreamPKCEChallengeMethod,
+					test.wantDownstreamNonce,
+					downstreamClientID,
+					downstreamRedirectURI,
+				)
+
+			// Otherwise, expect an empty response body.
+			default:
 				require.Empty(t, rsp.Body.String())
 			}
 
 			if test.wantRedirectLocationRegexp != "" { //nolint:nestif // don't mind have several sequential if statements in this test
 				require.Len(t, rsp.Header().Values("Location"), 1)
-				oidctestutil.RequireAuthcodeRedirectLocation(
+				oidctestutil.RequireAuthCodeRegexpMatch(
 					t,
 					rsp.Header().Get("Location"),
 					test.wantRedirectLocationRegexp,

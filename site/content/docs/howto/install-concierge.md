@@ -41,9 +41,18 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
    - `git clone git@github.com:vmware-tanzu/pinniped.git`
    - `cd pinniped/deploy/concierge`
 
+1. Decide which release version you would like to install. All release versions are [listed on GitHub](https://github.com/vmware-tanzu/pinniped/releases).
+
+1. Checkout your preferred version tag, e.g. `v0.9.2`.
+
+   - `git checkout v0.9.2`
+
+     *Replace v0.9.2 with your preferred version number.*
+
 1. Customize configuration parameters:
 
    - Edit `values.yaml` with your custom values.
+   - Change the `image_tag` value to match your preferred version tag, e.g. `v0.9.2`. *Replace v0.9.2 with your preferred version number.*
    - See the [default values](http://github.com/vmware-tanzu/pinniped/tree/main/deploy/concierge/values.yaml) for documentation about individual configuration parameters.
 
 1. Render templated YAML manifests:

@@ -15,8 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"go.pinniped.dev/internal/controller/supervisorconfig/activedirectoryupstreamwatcher"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/clock"
@@ -33,6 +31,7 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/controller/supervisorconfig"
+	"go.pinniped.dev/internal/controller/supervisorconfig/activedirectoryupstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorconfig/generator"
 	"go.pinniped.dev/internal/controller/supervisorconfig/ldapupstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorconfig/oidcupstreamwatcher"

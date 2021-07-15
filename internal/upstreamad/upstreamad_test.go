@@ -15,8 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"go.pinniped.dev/internal/upstreamldap"
-
 	"github.com/go-ldap/ldap/v3"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -27,6 +25,7 @@ import (
 	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/mocks/mockldapconn"
 	"go.pinniped.dev/internal/testutil"
+	"go.pinniped.dev/internal/upstreamldap"
 )
 
 const (

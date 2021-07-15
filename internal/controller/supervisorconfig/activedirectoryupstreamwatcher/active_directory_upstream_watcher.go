@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.pinniped.dev/internal/upstreamad"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +27,7 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/upstreamad"
 	"go.pinniped.dev/internal/upstreamldap"
 )
 
@@ -133,7 +132,7 @@ func newInternal(
 func (c *activeDirectoryWatcherController) Sync(ctx controllerlib.Context) error {
 	actualUpstreams, err := c.activeDirectoryIdentityProviderInformer.Lister().List(labels.Everything())
 	if err != nil {
-		return fmt.Errorf("failed to list LDAPIdentityProviders: %w", err)
+		return fmt.Errorf("failed to list ActiveDirectoryIdentityProviders: %w", err)
 	}
 
 	requeue := false

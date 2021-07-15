@@ -17,8 +17,6 @@ import (
 	"strings"
 	"time"
 
-	"go.pinniped.dev/internal/upstreamldap"
-
 	"github.com/go-ldap/ldap/v3"
 	"github.com/gofrs/uuid"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
@@ -29,6 +27,7 @@ import (
 	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/upstreamldap"
 )
 
 const (

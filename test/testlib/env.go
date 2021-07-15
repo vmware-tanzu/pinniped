@@ -284,6 +284,8 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 
 	sort.Strings(result.SupervisorUpstreamLDAP.TestUserDirectGroupsCNs)
 	sort.Strings(result.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs)
+	sort.Strings(result.SupervisorUpstreamActiveDirectory.TestUserDirectGroupsCNs)
+	sort.Strings(result.SupervisorUpstreamActiveDirectory.TestUserDirectGroupsDNs)
 }
 
 func (e *TestEnv) HasCapability(cap Capability) bool {

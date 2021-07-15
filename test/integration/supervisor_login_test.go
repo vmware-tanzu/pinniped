@@ -610,7 +610,7 @@ func requestAuthorizationUsingOIDCIdentityProvider(t *testing.T, downstreamAutho
 func requestAuthorizationUsingLDAPIdentityProvider(t *testing.T, downstreamAuthorizeURL, upstreamUsername, upstreamPassword string, httpClient *http.Client) {
 	t.Helper()
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Minute)
 	defer cancelFunc()
 
 	authRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, downstreamAuthorizeURL, nil)
@@ -641,7 +641,7 @@ func requestAuthorizationUsingLDAPIdentityProvider(t *testing.T, downstreamAutho
 			return false, nil
 		}
 		return true, nil
-	}, 60*time.Second, 200*time.Millisecond)
+	}, 30*time.Second, 200*time.Millisecond)
 
 	expectSecurityHeaders(t, authResponse, true)
 

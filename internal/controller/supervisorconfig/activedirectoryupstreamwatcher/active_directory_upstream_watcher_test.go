@@ -35,7 +35,7 @@ import (
 	"go.pinniped.dev/internal/upstreamldap"
 )
 
-func TestLDAPUpstreamWatcherControllerFilterSecrets(t *testing.T) {
+func TestActiveDirectoryUpstreamWatcherControllerFilterSecrets(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -94,7 +94,7 @@ func TestLDAPUpstreamWatcherControllerFilterSecrets(t *testing.T) {
 	}
 }
 
-func TestLDAPUpstreamWatcherControllerFilterLDAPIdentityProviders(t *testing.T) {
+func TestActiveDirectoryUpstreamWatcherControllerFilterActiveDirectoryIdentityProviders(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -105,7 +105,7 @@ func TestLDAPUpstreamWatcherControllerFilterLDAPIdentityProviders(t *testing.T) 
 		wantDelete bool
 	}{
 		{
-			name: "any LDAPIdentityProvider",
+			name: "any ActiveDirectoryIdentityProvider",
 			idp: &v1alpha1.ActiveDirectoryIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
 			},

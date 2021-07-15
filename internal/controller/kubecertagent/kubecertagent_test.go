@@ -207,16 +207,17 @@ func TestAgentController(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                 string
-		discoveryURLOverride *string
-		pinnipedObjects      []runtime.Object
-		kubeObjects          []runtime.Object
-		addKubeReactions     func(*kubefake.Clientset)
-		mocks                func(*testing.T, *mocks.MockPodCommandExecutorMockRecorder, *mocks.MockDynamicCertPrivateMockRecorder, *cache.Expiring)
-		wantDistinctErrors   []string
-		wantDistinctLogs     []string
-		wantAgentDeployment  *appsv1.Deployment
-		wantStrategy         *configv1alpha1.CredentialIssuerStrategy
+		name                             string
+		discoveryURLOverride             *string
+		pinnipedObjects                  []runtime.Object
+		kubeObjects                      []runtime.Object
+		addKubeReactions                 func(*kubefake.Clientset)
+		mocks                            func(*testing.T, *mocks.MockPodCommandExecutorMockRecorder, *mocks.MockDynamicCertPrivateMockRecorder, *cache.Expiring)
+		wantDistinctErrors               []string
+		alsoAllowUndesiredDistinctErrors []string
+		wantDistinctLogs                 []string
+		wantAgentDeployment              *appsv1.Deployment
+		wantStrategy                     *configv1alpha1.CredentialIssuerStrategy
 	}{
 		{
 			name: "no CredentialIssuer found",
@@ -351,6 +352,10 @@ func TestAgentController(t *testing.T) {
 			wantDistinctErrors: []string{
 				"could not find a healthy agent pod (1 candidate)",
 			},
+			alsoAllowUndesiredDistinctErrors: []string{
+				// due to the high amount of nondeterminism in this test, this error will sometimes also happen, but is not required to happen
+				`could not ensure agent deployment: deployments.apps "pinniped-concierge-kube-cert-agent" already exists`,
+			},
 			wantDistinctLogs: []string{
 				`kube-cert-agent-controller "level"=0 "msg"="creating new deployment" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
 			},
@@ -394,6 +399,10 @@ func TestAgentController(t *testing.T) {
 			},
 			wantDistinctErrors: []string{
 				"could not find a healthy agent pod (1 candidate)",
+			},
+			alsoAllowUndesiredDistinctErrors: []string{
+				// due to the high amount of nondeterminism in this test, this error will sometimes also happen, but is not required to happen
+				`could not ensure agent deployment: deployments.apps "pinniped-concierge-kube-cert-agent" already exists`,
 			},
 			wantDistinctLogs: []string{
 				`kube-cert-agent-controller "level"=0 "msg"="creating new deployment" "deployment"={"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"} "templatePod"={"name":"kube-controller-manager-1","namespace":"kube-system"}`,
@@ -756,7 +765,14 @@ func TestAgentController(t *testing.T) {
 			defer cancel()
 
 			errorMessages := runControllerUntilQuiet(ctx, t, controller, kubeInformers, conciergeInformers)
-			assert.Equal(t, tt.wantDistinctErrors, deduplicate(errorMessages), "unexpected errors")
+
+			actualErrors := deduplicate(errorMessages)
+			require.Subsetf(t, actualErrors, tt.wantDistinctErrors, "required error(s) were not found in the actual errors")
+
+			allAllowedErrors := append([]string{}, tt.wantDistinctErrors...)
+			allAllowedErrors = append(allAllowedErrors, tt.alsoAllowUndesiredDistinctErrors...)
+			require.Subsetf(t, allAllowedErrors, actualErrors, "actual errors contained additional error(s) which is not expected by the test")
+
 			assert.Equal(t, tt.wantDistinctLogs, deduplicate(log.Lines()), "unexpected logs")
 
 			// Assert that the agent deployment is in the expected final state.

@@ -49,5 +49,6 @@ Theme|Description|Timeline|
 |Telemetry|Adding some useful phone home metrics as well as some vanity metrics|Exploring/Ongoing|
 |Observability|Expose Pinniped metrics through Prometheus Integration|Exploring/Ongoing|
 |Device Code Flow|Add support for OAuth 2.0 Device Authorization Grant in the Pinniped CLI and Supervisor|Exploring/Ongoing|
+|Supervisor with New Clients|Enable registering new clients with Supervisor|Exploring/Ongoing|
 
    

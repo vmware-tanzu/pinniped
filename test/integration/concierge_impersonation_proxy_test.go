@@ -16,6 +16,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -278,6 +279,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	if !clusterSupportsLoadBalancers {
 		// In this case, we specified the endpoint in the configmap, so check that it was reported correctly in the CredentialIssuer.
 		require.Equal(t, "https://"+proxyServiceEndpoint, impersonationProxyURL)
+	} else {
+		// If the impersonationProxyURL is a hostname, make sure DNS will resolve before we move on.
+		ensureDNSResolves(t, impersonationProxyURL)
 	}
 
 	// Because our credentials expire so quickly, we'll always use a new client, to give us a chance to refresh our
@@ -1624,6 +1628,18 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	})
 }
 
+func ensureDNSResolves(t *testing.T, urlString string) {
+	t.Helper()
+	parsedURL, err := url.Parse(urlString)
+	require.NoError(t, err)
+	if net.ParseIP(parsedURL.Host) == nil {
+		testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+			_, err = net.LookupIP(parsedURL.Host)
+			requireEventually.NoError(err)
+		}, 5*time.Minute, 1*time.Second)
+	}
+}
+
 func createTestNamespace(t *testing.T, adminClient kubernetes.Interface) string {
 	t.Helper()
 
@@ -1721,6 +1737,7 @@ func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testli
 					return false, fmt.Errorf("did not find an ImpersonationProxyInfo") // unexpected, fail the test
 				}
 				impersonationProxyURL = strategy.Frontend.ImpersonationProxyInfo.Endpoint
+
 				impersonationProxyCACertPEM, err = base64.StdEncoding.DecodeString(strategy.Frontend.ImpersonationProxyInfo.CertificateAuthorityData)
 				if err != nil {
 					return false, err // unexpected, fail the test

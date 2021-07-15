@@ -43,7 +43,7 @@ const (
 	noTLSConfigurationMessage            = "no TLS configuration provided"
 	loadedTLSConfigurationMessage        = "loaded TLS configuration"
 
-	// Default values for active directory config
+	// Default values for active directory config.
 	defaultActiveDirectoryUsernameAttributeName = "sAMAccountName"
 	defaultActiveDirectoryUIDAttributeName      = "objectGUID"
 )

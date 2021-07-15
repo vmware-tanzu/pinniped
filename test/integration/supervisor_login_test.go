@@ -128,7 +128,7 @@ func TestSupervisorLogin(t *testing.T) {
 						Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
 						Filter: "",
 						Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
-							Username: env.SupervisorUpstreamLDAP.TestUsernameAttributeName,
+							Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
 							UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
 						},
 					},
@@ -150,7 +150,7 @@ func TestSupervisorLogin(t *testing.T) {
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingLDAPIdentityProvider(t,
 					downstreamAuthorizeURL,
-					env.SupervisorUpstreamLDAP.TestUsernameAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
 					env.SupervisorUpstreamLDAP.TestUserPassword,           // password to present to server during login
 					httpClient,
 				)
@@ -162,7 +162,7 @@ func TestSupervisorLogin(t *testing.T) {
 					"&sub=" + base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue)),
 			),
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
-			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUsernameAttributeValue),
+			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue),
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
 		},
 		{
@@ -274,8 +274,8 @@ func TestSupervisorLogin(t *testing.T) {
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingLDAPIdentityProvider(t,
 					downstreamAuthorizeURL,
-					env.SupervisorUpstreamActiveDirectory.TestUsernameAttributeValue, // username to present to server during login
-					env.SupervisorUpstreamActiveDirectory.TestUserPassword,           // password to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserSAMAccountNameValue, // username to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserPassword,            // password to present to server during login
 					httpClient,
 				)
 			},
@@ -286,7 +286,7 @@ func TestSupervisorLogin(t *testing.T) {
 					"&sub=" + env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue,
 			),
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
-			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUsernameAttributeValue),
+			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserSAMAccountNameValue),
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamActiveDirectory.TestUserDirectGroupsDNs,
 		},
 	}

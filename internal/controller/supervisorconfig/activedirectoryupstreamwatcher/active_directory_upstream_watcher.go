@@ -27,7 +27,6 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
-	"go.pinniped.dev/internal/upstreamad"
 	"go.pinniped.dev/internal/upstreamldap"
 )
 
@@ -43,6 +42,10 @@ const (
 	reasonActiveDirectoryConnectionError = "ActiveDirectoryConnectionError"
 	noTLSConfigurationMessage            = "no TLS configuration provided"
 	loadedTLSConfigurationMessage        = "loaded TLS configuration"
+
+	// Default values for active directory config
+	defaultActiveDirectoryUsernameAttributeName = "sAMAccountName"
+	defaultActiveDirectoryUIDAttributeName      = "objectGUID"
 )
 
 // UpstreamActiveDirectoryIdentityProviderICache is a thread safe cache that holds a list of validated upstream LDAP IDP configurations.
@@ -158,14 +161,23 @@ func (c *activeDirectoryWatcherController) Sync(ctx controllerlib.Context) error
 func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context, upstream *v1alpha1.ActiveDirectoryIdentityProvider) (p provider.UpstreamLDAPIdentityProviderI, requeue bool) {
 	spec := upstream.Spec
 
+	usernameAttribute := spec.UserSearch.Attributes.Username
+	if len(usernameAttribute) == 0 {
+		usernameAttribute = defaultActiveDirectoryUsernameAttributeName
+	}
+	uidAttribute := spec.UserSearch.Attributes.UID
+	if len(uidAttribute) == 0 {
+		uidAttribute = defaultActiveDirectoryUIDAttributeName
+	}
+
 	config := &upstreamldap.ProviderConfig{
 		Name: upstream.Name,
 		Host: spec.Host,
 		UserSearch: upstreamldap.UserSearchConfig{
 			Base:              spec.UserSearch.Base,
 			Filter:            spec.UserSearch.Filter,
-			UsernameAttribute: spec.UserSearch.Attributes.Username,
-			UIDAttribute:      spec.UserSearch.Attributes.UID,
+			UsernameAttribute: usernameAttribute,
+			UIDAttribute:      uidAttribute,
 		},
 		GroupSearch: upstreamldap.GroupSearchConfig{
 			Base:               spec.GroupSearch.Base,
@@ -198,12 +210,12 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 		requeue = true
 	case finishedConfigCondition != nil && finishedConfigCondition.Status != v1alpha1.ConditionTrue:
 		// Error but load it into the cache anyway, treating this condition failure more like a warning.
-		p = upstreamad.New(*config)
+		p = upstreamldap.New(*config)
 		// Try again hoping that the condition will improve.
 		requeue = true
 	default:
 		// Fully validated provider, so load it into the cache.
-		p = upstreamad.New(*config)
+		p = upstreamldap.New(*config)
 		requeue = false
 	}
 

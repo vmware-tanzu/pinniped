@@ -12,8 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"go.pinniped.dev/internal/upstreamad"
-
 	"github.com/go-ldap/ldap/v3"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -139,7 +137,7 @@ func TestActiveDirectoryUpstreamWatcherControllerFilterActiveDirectoryIdentityPr
 	}
 }
 
-// Wrap the func into a struct so the test can do deep equal assertions on instances of upstreamad.Provider.
+// Wrap the func into a struct so the test can do deep equal assertions on instances of upstreamldap.Provider.
 type comparableDialer struct {
 	upstreamldap.LDAPDialerFunc
 }
@@ -850,6 +848,47 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 			wantValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
 		},
+		{
+			name: "when the input activedirectoryidentityprovider leaves user attributes blank, provide default values",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
+				upstream.Spec.UserSearch.Attributes = v1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
+			})},
+			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{
+				{
+					Name:               testName,
+					Host:               testHost,
+					ConnectionProtocol: upstreamldap.TLS,
+					CABundle:           testCABundle,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
+					UserSearch: upstreamldap.UserSearchConfig{
+						Base:              testUserSearchBase,
+						Filter:            testUserSearchFilter,
+						UsernameAttribute: "sAMAccountName",
+						UIDAttribute:      "objectGUID",
+					},
+					GroupSearch: upstreamldap.GroupSearchConfig{
+						Base:               testGroupSearchBase,
+						Filter:             testGroupSearchFilter,
+						GroupNameAttribute: testGroupNameAttrName,
+					},
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase:      "Ready",
+					Conditions: allConditionsTrue(1234, "4242"),
+				},
+			}},
+			wantValidatedSettings: map[string]validatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
+		},
 	}
 
 	for _, tt := range tests {
@@ -863,7 +902,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			cache := provider.NewDynamicUpstreamIDPProvider()
 			cache.SetActiveDirectoryIdentityProviders([]provider.UpstreamLDAPIdentityProviderI{
-				upstreamad.New(upstreamldap.ProviderConfig{Name: "initial-entry"}),
+				upstreamldap.New(upstreamldap.ProviderConfig{Name: "initial-entry"}),
 			})
 
 			ctrl := gomock.NewController(t)
@@ -917,7 +956,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			actualIDPList := cache.GetActiveDirectoryIdentityProviders()
 			require.Equal(t, len(tt.wantResultingCache), len(actualIDPList))
 			for i := range actualIDPList {
-				actualIDP := actualIDPList[i].(*upstreamad.Provider)
+				actualIDP := actualIDPList[i].(*upstreamldap.Provider)
 				copyOfExpectedValueForResultingCache := *tt.wantResultingCache[i] // copy before edit to avoid race because these tests are run in parallel
 				// The dialer that was passed in to the controller's constructor should always have been
 				// passed through to the provider.

@@ -107,7 +107,7 @@ func oidcLoginCommand(deps oidcLoginCommandDeps) *cobra.Command {
 	cmd.Flags().StringVar(&flags.conciergeAPIGroupSuffix, "concierge-api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
 	cmd.Flags().StringVar(&flags.credentialCachePath, "credential-cache", filepath.Join(mustGetConfigDir(), "credentials.yaml"), "Path to cluster-specific credentials cache (\"\" disables the cache)")
 	cmd.Flags().StringVar(&flags.upstreamIdentityProviderName, "upstream-identity-provider-name", "", "The name of the upstream identity provider used during login with a Supervisor")
-	cmd.Flags().StringVar(&flags.upstreamIdentityProviderType, "upstream-identity-provider-type", "oidc", "The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap')")
+	cmd.Flags().StringVar(&flags.upstreamIdentityProviderType, "upstream-identity-provider-type", "oidc", "The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap', 'activedirectory')")
 
 	// --skip-listen is mainly needed for testing. We'll leave it hidden until we have a non-testing use case.
 	mustMarkHidden(cmd, "skip-listen")
@@ -165,10 +165,12 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 		// this is the default, so don't need to do anything
 	case "ldap":
 		opts = append(opts, oidcclient.WithCLISendingCredentials())
+	case "activedirectory":
+		opts = append(opts, oidcclient.WithCLISendingCredentials())
 	default:
 		// Surprisingly cobra does not support this kind of flag validation. See https://github.com/spf13/pflag/issues/236
 		return fmt.Errorf(
-			"--upstream-identity-provider-type value not recognized: %s (supported values: oidc, ldap)",
+			"--upstream-identity-provider-type value not recognized: %s (supported values: oidc, ldap, activedirectory)",
 			flags.upstreamIdentityProviderType)
 	}
 

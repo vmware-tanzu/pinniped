@@ -67,18 +67,22 @@ type DynamicUpstreamIDPProvider interface {
 	GetOIDCIdentityProviders() []UpstreamOIDCIdentityProviderI
 	SetLDAPIdentityProviders(ldapIDPs []UpstreamLDAPIdentityProviderI)
 	GetLDAPIdentityProviders() []UpstreamLDAPIdentityProviderI
+	SetActiveDirectoryIdentityProviders(adIDPs []UpstreamLDAPIdentityProviderI)
+	GetActiveDirectoryIdentityProviders() []UpstreamLDAPIdentityProviderI
 }
 
 type dynamicUpstreamIDPProvider struct {
-	oidcUpstreams []UpstreamOIDCIdentityProviderI
-	ldapUpstreams []UpstreamLDAPIdentityProviderI
-	mutex         sync.RWMutex
+	oidcUpstreams            []UpstreamOIDCIdentityProviderI
+	ldapUpstreams            []UpstreamLDAPIdentityProviderI
+	activeDirectoryUpstreams []UpstreamLDAPIdentityProviderI
+	mutex                    sync.RWMutex
 }
 
 func NewDynamicUpstreamIDPProvider() DynamicUpstreamIDPProvider {
 	return &dynamicUpstreamIDPProvider{
-		oidcUpstreams: []UpstreamOIDCIdentityProviderI{},
-		ldapUpstreams: []UpstreamLDAPIdentityProviderI{},
+		oidcUpstreams:            []UpstreamOIDCIdentityProviderI{},
+		ldapUpstreams:            []UpstreamLDAPIdentityProviderI{},
+		activeDirectoryUpstreams: []UpstreamLDAPIdentityProviderI{},
 	}
 }
 
@@ -104,4 +108,16 @@ func (p *dynamicUpstreamIDPProvider) GetLDAPIdentityProviders() []UpstreamLDAPId
 	p.mutex.RLock() // acquire a read lock
 	defer p.mutex.RUnlock()
 	return p.ldapUpstreams
+}
+
+func (p *dynamicUpstreamIDPProvider) SetActiveDirectoryIdentityProviders(adIDPs []UpstreamLDAPIdentityProviderI) {
+	p.mutex.Lock() // acquire a write lock
+	defer p.mutex.Unlock()
+	p.activeDirectoryUpstreams = adIDPs
+}
+
+func (p *dynamicUpstreamIDPProvider) GetActiveDirectoryIdentityProviders() []UpstreamLDAPIdentityProviderI {
+	p.mutex.RLock() // acquire a read lock
+	defer p.mutex.RUnlock()
+	return p.activeDirectoryUpstreams
 }

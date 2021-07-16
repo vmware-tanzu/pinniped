@@ -61,9 +61,10 @@ type TestEnv struct {
 		ExpectedGroups   []string `json:"expectedGroups"`
 	} `json:"testUser"`
 
-	CLIUpstreamOIDC        TestOIDCUpstream `json:"cliOIDCUpstream"`
-	SupervisorUpstreamOIDC TestOIDCUpstream `json:"supervisorOIDCUpstream"`
-	SupervisorUpstreamLDAP TestLDAPUpstream `json:"supervisorLDAPUpstream"`
+	CLIUpstreamOIDC                   TestOIDCUpstream `json:"cliOIDCUpstream"`
+	SupervisorUpstreamOIDC            TestOIDCUpstream `json:"supervisorOIDCUpstream"`
+	SupervisorUpstreamLDAP            TestLDAPUpstream `json:"supervisorLDAPUpstream"`
+	SupervisorUpstreamActiveDirectory TestLDAPUpstream `json:"supervisorActiveDirectoryUpstream"`
 }
 
 type TestOIDCUpstream struct {
@@ -97,6 +98,7 @@ type TestLDAPUpstream struct {
 	TestUserUniqueIDAttributeValue string   `json:"testUserUniqueIDAttributeValue"`
 	TestUserDirectGroupsCNs        []string `json:"testUserDirectGroupsCNs"`
 	TestUserDirectGroupsDNs        []string `json:"testUserDirectGroupsDNs"` //nolint:golint // this is "distinguished names", not "DNS"
+	TestUserSAMAccountNameValue    string   `json:"testUserSAMAccountNameValue"`
 }
 
 // ProxyEnv returns a set of environment variable strings (e.g., to combine with os.Environ()) which set up the configured test HTTP proxy.
@@ -267,8 +269,23 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 		TestUserPassword:               needEnv(t, "PINNIPED_TEST_LDAP_USER_PASSWORD"),
 	}
 
+	result.SupervisorUpstreamActiveDirectory = TestLDAPUpstream{
+		Host:                           wantEnv("PINNIPED_TEST_AD_HOST", ""),
+		CABundle:                       base64Decoded(t, os.Getenv("PINNIPED_TEST_AD_LDAPS_CA_BUNDLE")),
+		BindUsername:                   wantEnv("PINNIPED_TEST_AD_BIND_ACCOUNT_USERNAME", ""),
+		BindPassword:                   wantEnv("PINNIPED_TEST_AD_BIND_ACCOUNT_PASSWORD", ""),
+		TestUserPassword:               wantEnv("PINNIPED_TEST_AD_USER_PASSWORD", ""),
+		TestUserUniqueIDAttributeName:  wantEnv("PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_NAME", ""),
+		TestUserUniqueIDAttributeValue: wantEnv("PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_VALUE", ""),
+		TestUserSAMAccountNameValue:    wantEnv("PINNIPED_TEST_AD_USERNAME_ATTRIBUTE_VALUE", ""),
+		TestUserDirectGroupsDNs:        filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_DN", ""), ";")),
+		TestUserDirectGroupsCNs:        filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_CN", ""), ";")),
+	}
+
 	sort.Strings(result.SupervisorUpstreamLDAP.TestUserDirectGroupsCNs)
 	sort.Strings(result.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs)
+	sort.Strings(result.SupervisorUpstreamActiveDirectory.TestUserDirectGroupsCNs)
+	sort.Strings(result.SupervisorUpstreamActiveDirectory.TestUserDirectGroupsDNs)
 }
 
 func (e *TestEnv) HasCapability(cap Capability) bool {

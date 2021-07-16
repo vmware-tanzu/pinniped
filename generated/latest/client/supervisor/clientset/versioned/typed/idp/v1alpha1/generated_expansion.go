@@ -5,6 +5,8 @@
 
 package v1alpha1
 
+type ActiveDirectoryIdentityProviderExpansion interface{}
+
 type LDAPIdentityProviderExpansion interface{}
 
 type OIDCIdentityProviderExpansion interface{}

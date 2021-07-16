@@ -41,12 +41,14 @@ func TestIDPDiscovery(t *testing.T) {
 					{Name: "a-some-oidc-idp", Type: "oidc"},
 					{Name: "x-some-idp", Type: "ldap"},
 					{Name: "x-some-idp", Type: "oidc"},
+					{Name: "z-some-ad-idp", Type: "activedirectory"},
 					{Name: "z-some-ldap-idp", Type: "ldap"},
 					{Name: "z-some-oidc-idp", Type: "oidc"},
 				},
 			},
 			wantSecondResponseBodyJSON: &response{
 				IDPs: []identityProviderResponse{
+					{Name: "some-other-ad-idp-1", Type: "activedirectory"},
 					{Name: "some-other-ldap-idp-1", Type: "ldap"},
 					{Name: "some-other-ldap-idp-2", Type: "ldap"},
 					{Name: "some-other-oidc-idp-1", Type: "oidc"},
@@ -73,6 +75,7 @@ func TestIDPDiscovery(t *testing.T) {
 				WithOIDC(&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "a-some-oidc-idp"}).
 				WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "z-some-ldap-idp"}).
 				WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "x-some-idp"}).
+				WithActiveDirectory(&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "z-some-ad-idp"}).
 				Build()
 
 			handler := NewHandler(idpLister)
@@ -102,6 +105,10 @@ func TestIDPDiscovery(t *testing.T) {
 			idpLister.SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI{
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "some-other-oidc-idp-1"},
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "some-other-oidc-idp-2"},
+			})
+
+			idpLister.SetActiveDirectoryIdentityProviders([]provider.UpstreamLDAPIdentityProviderI{
+				&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "some-other-ad-idp-1"},
 			})
 
 			// Make the same request to the same handler instance again, and expect different results.

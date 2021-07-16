@@ -31,6 +31,7 @@ import (
 	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/controller/supervisorconfig"
+	"go.pinniped.dev/internal/controller/supervisorconfig/activedirectoryupstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorconfig/generator"
 	"go.pinniped.dev/internal/controller/supervisorconfig/ldapupstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorconfig/oidcupstreamwatcher"
@@ -248,6 +249,15 @@ func startControllers(
 				dynamicUpstreamIDPProvider,
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders(),
+				secretInformer,
+				controllerlib.WithInformer,
+			),
+			singletonWorker).
+		WithController(
+			activedirectoryupstreamwatcher.New(
+				dynamicUpstreamIDPProvider,
+				pinnipedClient,
+				pinnipedInformers.IDP().V1alpha1().ActiveDirectoryIdentityProviders(),
 				secretInformer,
 				controllerlib.WithInformer,
 			),

@@ -13,6 +13,7 @@ import (
 
 type IDPV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	ActiveDirectoryIdentityProvidersGetter
 	LDAPIdentityProvidersGetter
 	OIDCIdentityProvidersGetter
 }
@@ -20,6 +21,10 @@ type IDPV1alpha1Interface interface {
 // IDPV1alpha1Client is used to interact with features provided by the idp.supervisor.pinniped.dev group.
 type IDPV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *IDPV1alpha1Client) ActiveDirectoryIdentityProviders(namespace string) ActiveDirectoryIdentityProviderInterface {
+	return newActiveDirectoryIdentityProviders(c, namespace)
 }
 
 func (c *IDPV1alpha1Client) LDAPIdentityProviders(namespace string) LDAPIdentityProviderInterface {

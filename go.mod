@@ -39,7 +39,7 @@ require (
 	k8s.io/client-go v0.21.2
 	k8s.io/component-base v0.21.2
 	k8s.io/gengo v0.0.0-20210203185629-de9496dff47b
-	k8s.io/klog/v2 v2.9.0
+	k8s.io/klog/v2 v2.10.0
 	k8s.io/kube-aggregator v0.21.2
 	k8s.io/utils v0.0.0-20210521133846-da695404a2bc
 	sigs.k8s.io/yaml v1.2.0

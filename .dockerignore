@@ -1,4 +1,6 @@
 ./.*
+# Allow .git to get copied into the container so we can use it in hack/get-ldflags.sh during build.
+!/.git
 ./*.md
 ./*.yaml
 ./apis

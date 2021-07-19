@@ -343,7 +343,7 @@ func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, ad
 			require.Equal(t, "loaded bind secret", condition.Message)
 		case "TLSConfigurationValid":
 			require.Equal(t, "loaded TLS configuration", condition.Message)
-		case "ActiveDirectoryConnectionValid":
+		case "LDAPConnectionValid":
 			require.Equal(t, expectedActiveDirectoryConnectionValidMessage, condition.Message)
 		}
 	}
@@ -351,7 +351,7 @@ func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, ad
 	require.ElementsMatch(t, [][]string{
 		{"BindSecretValid", "True", "Success"},
 		{"TLSConfigurationValid", "True", "Success"},
-		{"ActiveDirectoryConnectionValid", "True", "Success"},
+		{"LDAPConnectionValid", "True", "Success"},
 	}, conditionsSummary)
 }
 

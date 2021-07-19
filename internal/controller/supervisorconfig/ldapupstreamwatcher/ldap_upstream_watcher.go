@@ -7,9 +7,7 @@ package ldapupstreamwatcher
 import (
 	"context"
 	"fmt"
-	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -28,9 +26,7 @@ import (
 )
 
 const (
-	ldapControllerName        = "ldap-upstream-observer"
-	ldapBindAccountSecretType = corev1.SecretTypeBasicAuth
-	testLDAPConnectionTimeout = 90 * time.Second
+	ldapControllerName = "ldap-upstream-observer"
 )
 
 type ldapUpstreamGenericLDAPImpl struct {
@@ -187,7 +183,7 @@ func newInternal(
 		),
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.MatchAnySecretOfTypeFilter(ldapBindAccountSecretType, pinnipedcontroller.SingletonQueue()),
+			pinnipedcontroller.MatchAnySecretOfTypeFilter(upstreamwatchers.LDAPBindAccountSecretType, pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
 	)

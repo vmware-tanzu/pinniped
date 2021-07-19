@@ -60,6 +60,11 @@ const (
 	defaultLDAPUsernamePrompt = "Username: "
 	defaultLDAPPasswordPrompt = "Password: "
 
+	// For CLI-based auth, such as with LDAP upstream identity providers, the user may use these environment variables
+	// to avoid getting interactively prompted for username and password.
+	defaultUsernameEnvVarName = "PINNIPED_USERNAME"
+	defaultPasswordEnvVarName = "PINNIPED_PASSWORD"
+
 	httpLocationHeaderName = "Location"
 
 	debugLogLevel = 4
@@ -99,6 +104,7 @@ type handlerState struct {
 	generatePKCE    func() (pkce.Code, error)
 	generateNonce   func() (nonce.Nonce, error)
 	openURL         func(string) error
+	getEnv          func(key string) string
 	listen          func(string, string) (net.Listener, error)
 	isTTY           func(int) bool
 	getProvider     func(*oauth2.Config, *oidc.Provider, *http.Client) provider.UpstreamOIDCIdentityProviderI
@@ -275,6 +281,7 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		generateNonce: nonce.Generate,
 		generatePKCE:  pkce.Generate,
 		openURL:       browser.OpenURL,
+		getEnv:        os.Getenv,
 		listen:        net.Listen,
 		isTTY:         term.IsTerminal,
 		getProvider:   upstreamoidc.New,
@@ -402,14 +409,10 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 // Make a direct call to the authorize endpoint, including the user's username and password on custom http headers,
 // and parse the authcode from the response. Exchange the authcode for tokens. Return the tokens or an error.
 func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (*oidctypes.Token, error) {
-	// Ask the user for their username and password.
-	username, err := h.promptForValue(h.ctx, defaultLDAPUsernamePrompt)
+	// Ask the user for their username and password, or get them from env vars.
+	username, password, err := h.getUsernameAndPassword()
 	if err != nil {
-		return nil, fmt.Errorf("error prompting for username: %w", err)
-	}
-	password, err := h.promptForSecret(h.ctx, defaultLDAPPasswordPrompt)
-	if err != nil {
-		return nil, fmt.Errorf("error prompting for password: %w", err)
+		return nil, err
 	}
 
 	// Make a callback URL even though we won't be listening on this port, because providing a redirect URL is
@@ -497,6 +500,33 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 	}
 
 	return token, nil
+}
+
+// Prompt for the user's username and password, or read them from env vars if they are available.
+func (h *handlerState) getUsernameAndPassword() (string, string, error) {
+	var err error
+
+	username := h.getEnv(defaultUsernameEnvVarName)
+	if username == "" {
+		username, err = h.promptForValue(h.ctx, defaultLDAPUsernamePrompt)
+		if err != nil {
+			return "", "", fmt.Errorf("error prompting for username: %w", err)
+		}
+	} else {
+		h.logger.V(debugLogLevel).Info("Pinniped: Read username from environment variable", "name", defaultUsernameEnvVarName)
+	}
+
+	password := h.getEnv(defaultPasswordEnvVarName)
+	if password == "" {
+		password, err = h.promptForSecret(h.ctx, defaultLDAPPasswordPrompt)
+		if err != nil {
+			return "", "", fmt.Errorf("error prompting for password: %w", err)
+		}
+	} else {
+		h.logger.V(debugLogLevel).Info("Pinniped: Read password from environment variable", "name", defaultPasswordEnvVarName)
+	}
+
+	return username, password, nil
 }
 
 // Open a web browser, or ask the user to open a web browser, to visit the authorize endpoint.

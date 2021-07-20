@@ -13,6 +13,7 @@ This is the current list of maintainers for the Pinniped project.
 ## Emeritus Maintainers
 
 * Andrew Keesler, [ankeesler](https://github.com/ankeesler)
+* Pablo Schuhmacher, [pabloschuhmacher](https://github.com/pabloschuhmacher)
 
 ## Pinniped Contributors & Stakeholders
 

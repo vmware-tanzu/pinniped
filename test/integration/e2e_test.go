@@ -249,15 +249,16 @@ func TestE2EFullIntegration(t *testing.T) {
 		// It should now be in the "success" state.
 		formpostExpectSuccessState(t, page)
 
-		// Expect the CLI to output a list of namespaces in JSON format.
-		t.Logf("waiting for kubectl to output namespace list JSON")
+		// Expect the CLI to output a list of namespaces.
+		t.Logf("waiting for kubectl to output namespace list")
 		var kubectlOutput string
 		select {
 		case <-time.After(10 * time.Second):
 			require.Fail(t, "timed out waiting for kubectl output")
 		case kubectlOutput = <-kubectlOutputChan:
 		}
-		require.Greaterf(t, len(strings.Split(kubectlOutput, "\n")), 2, "expected some namespaces to be returned, got %q", kubectlOutput)
+		requireKubectlGetNamespaceOutput(t, env, kubectlOutput)
+
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
 		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
@@ -364,10 +365,11 @@ func TestE2EFullIntegration(t *testing.T) {
 
 		// Read all of the remaining output from the subprocess until EOF.
 		t.Logf("waiting for kubectl to output namespace list")
-		remainingOutput, _ := ioutil.ReadAll(ptyFile)
+		// Read all of the output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		require.Greaterf(t, len(remainingOutput), 0, "expected to get some more output from the kubectl subcommand, but did not")
-		require.Greaterf(t, len(strings.Split(string(remainingOutput), "\n")), 2, "expected some namespaces to be returned, got %q", string(remainingOutput))
+		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
+
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
 		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
@@ -380,8 +382,9 @@ func TestE2EFullIntegration(t *testing.T) {
 		)
 	})
 
-	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands.
-	t.Run("with Supervisor LDAP upstream IDP", func(t *testing.T) {
+	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands
+	// by interacting with the CLI's username and password prompts.
+	t.Run("with Supervisor LDAP upstream IDP using username and password prompts", func(t *testing.T) {
 		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
 			t.Skip("LDAP integration test requires connectivity to an LDAP server")
 		}
@@ -389,51 +392,7 @@ func TestE2EFullIntegration(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
-		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
-		testlib.CreateTestClusterRoleBinding(t,
-			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: expectedUsername},
-			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
-		)
-		testlib.WaitForUserToHaveAccess(t, expectedUsername, []string{}, &authorizationv1.ResourceAttributes{
-			Verb:     "get",
-			Group:    "",
-			Version:  "v1",
-			Resource: "namespaces",
-		})
-
-		// Put the bind service account's info into a Secret.
-		bindSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", corev1.SecretTypeBasicAuth,
-			map[string]string{
-				corev1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
-				corev1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
-			},
-		)
-
-		// Create upstream LDAP provider and wait for it to become ready.
-		testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
-			Host: env.SupervisorUpstreamLDAP.Host,
-			TLS: &idpv1alpha1.TLSSpec{
-				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
-			},
-			Bind: idpv1alpha1.LDAPIdentityProviderBind{
-				SecretName: bindSecret.Name,
-			},
-			UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
-				Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
-				Filter: "",
-				Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
-					Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
-					UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
-				},
-			},
-			GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
-				Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
-				Filter: "", // use the default value of "member={}"
-				Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
-					GroupName: "", // use the default value of "dn"
-				},
-			},
-		}, idpv1alpha1.LDAPPhaseReady)
+		setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/ldap-test-sessions.yaml"
@@ -463,11 +422,11 @@ func TestE2EFullIntegration(t *testing.T) {
 		_, err = ptyFile.WriteString(env.SupervisorUpstreamLDAP.TestUserPassword + "\n")
 		require.NoError(t, err)
 
-		// Read all of the remaining output from the subprocess until EOF.
-		remainingOutput, _ := ioutil.ReadAll(ptyFile)
+		// Read all of the output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
-		require.Greaterf(t, len(remainingOutput), 0, "expected to get some more output from the kubectl subcommand, but did not")
-		require.Greaterf(t, len(strings.Split(string(remainingOutput), "\n")), 2, "expected some namespaces to be returned, got %q", string(remainingOutput))
+		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
+
 		t.Logf("first kubectl command took %s", time.Since(start).String())
 
 		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
@@ -479,6 +438,123 @@ func TestE2EFullIntegration(t *testing.T) {
 			expectedGroups,
 		)
 	})
+
+	// Add an LDAP upstream IDP and try using it to authenticate during kubectl commands
+	// by passing username and password via environment variables, thus avoiding the CLI's username and password prompts.
+	t.Run("with Supervisor LDAP upstream IDP using PINNIPED_USERNAME and PINNIPED_PASSWORD env vars", func(t *testing.T) {
+		if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+			t.Skip("LDAP integration test requires connectivity to an LDAP server")
+		}
+
+		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
+		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
+
+		setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
+
+		// Use a specific session cache for this test.
+		sessionCachePath := tempDir + "/ldap-test-with-env-vars-sessions.yaml"
+
+		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-session-cache", sessionCachePath,
+		})
+
+		// Set up the username and password env vars to avoid the interactive prompts.
+		const usernameEnvVar = "PINNIPED_USERNAME"
+		originalUsername, hadOriginalUsername := os.LookupEnv(usernameEnvVar)
+		t.Cleanup(func() {
+			if hadOriginalUsername {
+				require.NoError(t, os.Setenv(usernameEnvVar, originalUsername))
+			}
+		})
+		require.NoError(t, os.Setenv(usernameEnvVar, expectedUsername))
+		const passwordEnvVar = "PINNIPED_PASSWORD"
+		originalPassword, hadOriginalPassword := os.LookupEnv(passwordEnvVar)
+		t.Cleanup(func() {
+			if hadOriginalPassword {
+				require.NoError(t, os.Setenv(passwordEnvVar, originalPassword))
+			}
+		})
+		require.NoError(t, os.Setenv(passwordEnvVar, env.SupervisorUpstreamLDAP.TestUserPassword))
+
+		// Run "kubectl get namespaces" which should run an LDAP-style login without interactive prompts for username and password.
+		start := time.Now()
+		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		ptyFile, err := pty.Start(kubectlCmd)
+		require.NoError(t, err)
+
+		// Read all of the output from the subprocess until EOF.
+		// Ignore any errors returned because there is always an error on linux.
+		kubectlOutputBytes, _ := ioutil.ReadAll(ptyFile)
+		requireKubectlGetNamespaceOutput(t, env, string(kubectlOutputBytes))
+
+		t.Logf("first kubectl command took %s", time.Since(start).String())
+
+		// The next kubectl command should not require auth, so we should be able to run it without these env vars.
+		require.NoError(t, os.Unsetenv(usernameEnvVar))
+		require.NoError(t, os.Unsetenv(passwordEnvVar))
+
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(ctx, t, env,
+			downstream,
+			kubeconfigPath,
+			sessionCachePath,
+			pinnipedExe,
+			expectedUsername,
+			expectedGroups,
+		)
+	})
+}
+
+func setupClusterForEndToEndLDAPTest(t *testing.T, username string, env *testlib.TestEnv) {
+	// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
+	testlib.CreateTestClusterRoleBinding(t,
+		rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: username},
+		rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
+	)
+	testlib.WaitForUserToHaveAccess(t, username, []string{}, &authorizationv1.ResourceAttributes{
+		Verb:     "get",
+		Group:    "",
+		Version:  "v1",
+		Resource: "namespaces",
+	})
+
+	// Put the bind service account's info into a Secret.
+	bindSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", corev1.SecretTypeBasicAuth,
+		map[string]string{
+			corev1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
+			corev1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
+		},
+	)
+
+	// Create upstream LDAP provider and wait for it to become ready.
+	testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
+		Host: env.SupervisorUpstreamLDAP.Host,
+		TLS: &idpv1alpha1.TLSSpec{
+			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
+		},
+		Bind: idpv1alpha1.LDAPIdentityProviderBind{
+			SecretName: bindSecret.Name,
+		},
+		UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
+			Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
+			Filter: "",
+			Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
+				Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
+				UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
+			},
+		},
+		GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
+			Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
+			Filter: "", // use the default value of "member={}"
+			Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
+				GroupName: "", // use the default value of "dn"
+			},
+		},
+	}, idpv1alpha1.LDAPPhaseReady)
 }
 
 func readFromFileUntilStringIsSeen(t *testing.T, f *os.File, until string) string {
@@ -508,6 +584,19 @@ func readAvailableOutput(t *testing.T, r io.Reader) (string, bool) {
 		require.NoError(t, err)
 	}
 	return string(buf[:n]), false
+}
+
+func requireKubectlGetNamespaceOutput(t *testing.T, env *testlib.TestEnv, kubectlOutput string) {
+	t.Log("kubectl command output:\n", kubectlOutput)
+	require.Greaterf(t, len(kubectlOutput), 0, "expected to get some more output from the kubectl subcommand, but did not")
+
+	// Should look generally like a list of namespaces, with one namespace listed per line in a table format.
+	require.Greaterf(t, len(strings.Split(kubectlOutput, "\n")), 2, "expected some namespaces to be returned, got %q", kubectlOutput)
+	require.Contains(t, kubectlOutput, fmt.Sprintf("\n%s ", env.ConciergeNamespace))
+	require.Contains(t, kubectlOutput, fmt.Sprintf("\n%s ", env.SupervisorNamespace))
+	if len(env.ToolsNamespace) == 0 {
+		require.Contains(t, kubectlOutput, fmt.Sprintf("\n%s ", env.ToolsNamespace))
+	}
 }
 
 func requireUserCanUseKubectlWithoutAuthenticatingAgain(

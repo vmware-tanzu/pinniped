@@ -21,6 +21,8 @@ cluster using Dex and Github.
 This how-to guide assumes that you have already [installed the Pinniped Supervisor]({{< ref "install-supervisor" >}}) with working ingress,
 and that you have [configured a FederationDomain to issue tokens for your downstream clusters]({{< ref "configure-supervisor" >}}).
 
+You'd also have to have an instance of Dex up and running, i.e. accessible at `https://<dex-dns-record>`. You can refer to the [Getting started with Dex](https://dexidp.io/docs/getting-started/) guidelines for more information on how to deploy it.
+
 ## Configure Dex to use Github as an external identity provider
 
 Dex is an OIDC issuer that supports various identity providers through connectors, i.e. LDAP, Github, Gitlab, Google, SAML and much more. Take a look at its [documentation](https://dexidp.io/docs/connectors/) to understand how to configure such connector in Dex.
@@ -98,6 +100,10 @@ spec:
     # Specify the name of the claim in your Dex ID token that represents the groups
     # that the user belongs to. This matches what you specified above
     # with the Groups claim filter.
+    # Note that the group claims from Github are in the format of "org:team".
+    # To query for the group scope, you should set the organization you want Dex to
+    # search against in its configuration, otherwise your group claim would be empty.
+    # An example config can be found at - https://dexidp.io/docs/connectors/github/#configuration
     groups: groups
 
   # Specify the name of the Kubernetes Secret that contains your Dex

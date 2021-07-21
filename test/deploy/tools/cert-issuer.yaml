@@ -54,6 +54,7 @@ spec:
       initContainers:
       - name: generate-certs
         image: #@ data.values.cfssl_image
+        imagePullPolicy: IfNotPresent
         command: ["/bin/bash"]
         args:
         - -c
@@ -111,6 +112,7 @@ spec:
       containers:
       - name: save-certs
         image: #@ data.values.kubectl_image
+        imagePullPolicy: IfNotPresent
         command: ["/bin/bash"]
         args:
         - -c

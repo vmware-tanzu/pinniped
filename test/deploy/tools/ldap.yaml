@@ -210,6 +210,7 @@ spec:
           #! LDAP_SERVER_CONFIG_BEFORE_CUSTOM_LDIF_DIR and LDAP_SERVER_CONFIG_AFTER_CUSTOM_LDIF_DIR options.
           #! See https://github.com/pinniped-ci-bot/bitnami-docker-openldap/tree/pinniped
           image: #@ data.values.ldap_image
+          imagePullPolicy: IfNotPresent
           ports:
             - name: ldap
               containerPort: 1389

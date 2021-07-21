@@ -36,13 +36,14 @@ const (
 	typeBindSecretValid           = "BindSecretValid"
 	typeTLSConfigurationValid     = "TLSConfigurationValid"
 	typeLDAPConnectionValid       = "LDAPConnectionValid"
+	TypeSearchBaseFound           = "SearchBaseFound"
 	reasonLDAPConnectionError     = "LDAPConnectionError"
 	noTLSConfigurationMessage     = "no TLS configuration provided"
 	loadedTLSConfigurationMessage = "loaded TLS configuration"
 )
 
 // An in-memory cache with an entry for each ActiveDirectoryIdentityProvider, to keep track of which ResourceVersion
-// of the bind Secret and which TLS/StartTLS setting was used during the most recent successful validation.
+// of the bind Secret, which TLS/StartTLS setting was used and which search base was found during the most recent successful validation.
 type SecretVersionCache struct {
 	ValidatedSettingsByName map[string]ValidatedSettings
 }
@@ -50,6 +51,8 @@ type SecretVersionCache struct {
 type ValidatedSettings struct {
 	BindSecretResourceVersion string
 	LDAPConnectionProtocol    upstreamldap.LDAPConnectionProtocol
+	UserSearchBase            string
+	GroupSearchBase           string
 }
 
 func NewSecretVersionCache() *SecretVersionCache {
@@ -71,6 +74,7 @@ type UpstreamGenericLDAPSpec interface {
 	BindSecretName() string
 	UserSearch() UpstreamGenericLDAPUserSearch
 	GroupSearch() UpstreamGenericLDAPGroupSearch
+	DetectAndSetSearchBase(ctx context.Context, config *upstreamldap.ProviderConfig) *v1alpha1.Condition
 }
 
 type UpstreamGenericLDAPUserSearch interface {
@@ -161,7 +165,7 @@ func TestConnection(
 	}
 }
 
-func HasPreviousSuccessfulConditionForCurrentSpecGenerationAndSecretVersion(secretVersionCache *SecretVersionCache, currentGeneration int64, upstreamStatusConditions []v1alpha1.Condition, upstreamName string, currentSecretVersion string, config *upstreamldap.ProviderConfig) bool {
+func HasPreviousSuccessfulTLSConnectionConditionForCurrentSpecGenerationAndSecretVersion(secretVersionCache *SecretVersionCache, currentGeneration int64, upstreamStatusConditions []v1alpha1.Condition, upstreamName string, currentSecretVersion string, config *upstreamldap.ProviderConfig) bool {
 	for _, cond := range upstreamStatusConditions {
 		if cond.Type == typeLDAPConnectionValid && cond.Status == v1alpha1.ConditionTrue && cond.ObservedGeneration == currentGeneration {
 			// Found a previously successful condition for the current spec generation.
@@ -172,6 +176,21 @@ func HasPreviousSuccessfulConditionForCurrentSpecGenerationAndSecretVersion(secr
 				config.ConnectionProtocol = validatedSecretVersion.LDAPConnectionProtocol
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func HasPreviousSuccessfulSearchBaseConditionForCurrentGeneration(secretVersionCache *SecretVersionCache, currentGeneration int64, upstreamStatusConditions []v1alpha1.Condition, upstreamName string, currentSecretVersion string, config *upstreamldap.ProviderConfig) bool {
+	for _, cond := range upstreamStatusConditions {
+		if cond.Type == TypeSearchBaseFound && cond.Status == v1alpha1.ConditionTrue && cond.ObservedGeneration == currentGeneration {
+			// Found a previously successful condition for the current spec generation.
+			// Now figure out which version of the bind Secret was used during that previous validation, if any.
+			validatedSettings := secretVersionCache.ValidatedSettingsByName[upstreamName]
+			// Reload the TLS vs StartTLS setting that was previously validated.
+			config.UserSearch.Base = validatedSettings.UserSearchBase
+			config.GroupSearch.Base = validatedSettings.GroupSearchBase
+			return true
 		}
 	}
 	return false
@@ -267,38 +286,47 @@ func ValidateGenericLDAP(ctx context.Context, upstream UpstreamGenericLDAPIDP, s
 
 	// No point in trying to connect to the server if the config was already determined to be invalid.
 	var ldapConnectionValidCondition *v1alpha1.Condition
+	var searchBaseFoundCondition *v1alpha1.Condition
 	if secretValidCondition.Status == v1alpha1.ConditionTrue && tlsValidCondition.Status == v1alpha1.ConditionTrue {
-		ldapConnectionValidCondition = validateAndSetLDAPServerConnectivity(ctx, validatedSecretVersionsCache, upstream, config, currentSecretVersion)
+		ldapConnectionValidCondition, searchBaseFoundCondition = validateAndSetLDAPServerConnectivity(ctx, validatedSecretVersionsCache, upstream, config, currentSecretVersion)
 		if ldapConnectionValidCondition != nil {
 			conditions.Append(ldapConnectionValidCondition, false)
+		}
+		if searchBaseFoundCondition != nil {
+			conditions.Append(searchBaseFoundCondition, true)
 		}
 	}
 	return conditions
 }
 
-func validateAndSetLDAPServerConnectivity(ctx context.Context, validatedSecretVersionsCache *SecretVersionCache, upstream UpstreamGenericLDAPIDP, config *upstreamldap.ProviderConfig, currentSecretVersion string) *v1alpha1.Condition {
-	// TODO refactor validateAndSetLDAPServerConnectivity to be shared and take a helper function for the defaultNamingContext stuff
-	//  so that can be shared.
-	if HasPreviousSuccessfulConditionForCurrentSpecGenerationAndSecretVersion(validatedSecretVersionsCache, upstream.Generation(), upstream.Status().Conditions(), upstream.Name(), currentSecretVersion, config) {
-		return nil
-	}
+func validateAndSetLDAPServerConnectivity(ctx context.Context, validatedSecretVersionsCache *SecretVersionCache, upstream UpstreamGenericLDAPIDP, config *upstreamldap.ProviderConfig, currentSecretVersion string) (*v1alpha1.Condition, *v1alpha1.Condition) {
+	var ldapConnectionValidCondition *v1alpha1.Condition
+	if !HasPreviousSuccessfulTLSConnectionConditionForCurrentSpecGenerationAndSecretVersion(validatedSecretVersionsCache, upstream.Generation(), upstream.Status().Conditions(), upstream.Name(), currentSecretVersion, config) {
+		testConnectionTimeout, cancelFunc := context.WithTimeout(ctx, TestLDAPConnectionTimeout)
+		defer cancelFunc()
 
-	testConnectionTimeout, cancelFunc := context.WithTimeout(ctx, TestLDAPConnectionTimeout)
-	defer cancelFunc()
+		ldapConnectionValidCondition = TestConnection(testConnectionTimeout, upstream.Spec().BindSecretName(), config, currentSecretVersion)
 
-	condition := TestConnection(testConnectionTimeout, upstream.Spec().BindSecretName(), config, currentSecretVersion)
-
-	if condition.Status == v1alpha1.ConditionTrue {
-		// Remember (in-memory for this pod) that the controller has successfully validated the LDAP provider
-		// using this version of the Secret. This is for performance reasons, to avoid attempting to connect to
-		// the LDAP server more than is needed. If the pod restarts, it will attempt this validation again.
-		validatedSecretVersionsCache.ValidatedSettingsByName[upstream.Name()] = ValidatedSettings{
-			BindSecretResourceVersion: currentSecretVersion,
-			LDAPConnectionProtocol:    config.ConnectionProtocol,
+		if ldapConnectionValidCondition.Status == v1alpha1.ConditionTrue {
+			// Remember (in-memory for this pod) that the controller has successfully validated the LDAP provider
+			// using this version of the Secret. This is for performance reasons, to avoid attempting to connect to
+			// the LDAP server more than is needed. If the pod restarts, it will attempt this validation again.
+			validatedSecretVersionsCache.ValidatedSettingsByName[upstream.Name()] = ValidatedSettings{
+				BindSecretResourceVersion: currentSecretVersion,
+				LDAPConnectionProtocol:    config.ConnectionProtocol,
+			}
 		}
 	}
+	var searchBaseFoundCondition *v1alpha1.Condition
+	if !HasPreviousSuccessfulSearchBaseConditionForCurrentGeneration(validatedSecretVersionsCache, upstream.Generation(), upstream.Status().Conditions(), upstream.Name(), currentSecretVersion, config) {
+		searchBaseFoundCondition = upstream.Spec().DetectAndSetSearchBase(ctx, config)
+		validatedSettings := validatedSecretVersionsCache.ValidatedSettingsByName[upstream.Name()]
+		validatedSettings.GroupSearchBase = config.GroupSearch.Base
+		validatedSettings.UserSearchBase = config.UserSearch.Base
+		validatedSecretVersionsCache.ValidatedSettingsByName[upstream.Name()] = validatedSettings
+	}
 
-	return condition
+	return ldapConnectionValidCondition, searchBaseFoundCondition
 }
 
 func EvaluateConditions(conditions GradatedConditions, config *upstreamldap.ProviderConfig) (provider.UpstreamLDAPIdentityProviderI, bool) {

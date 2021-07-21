@@ -256,11 +256,51 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			ObservedGeneration: gen,
 		}
 	}
+
+	searchBaseFoundInRootDSECondition := func(gen int64) v1alpha1.Condition {
+		return v1alpha1.Condition{
+			Type:               "SearchBaseFound",
+			Status:             "True",
+			LastTransitionTime: now,
+			Reason:             "Success",
+			Message:            "Successfully fetched defaultNamingContext to use as default search base from RootDSE.",
+			ObservedGeneration: gen,
+		}
+	}
+
+	searchBaseFoundInConfigCondition := func(gen int64) v1alpha1.Condition {
+		return v1alpha1.Condition{
+			Type:               "SearchBaseFound",
+			Status:             "True",
+			LastTransitionTime: now,
+			Reason:             "Success",
+			Message:            "Using search base from ActiveDirectoryIdentityProvider config.",
+			ObservedGeneration: gen,
+		}
+	}
+
+	searchBaseFoundErrorCondition := func(gen int64, message string) v1alpha1.Condition {
+		return v1alpha1.Condition{
+			Type:               "SearchBaseFound",
+			Status:             "False",
+			LastTransitionTime: now,
+			Reason:             "Error",
+			Message:            message,
+			ObservedGeneration: gen,
+		}
+	}
+
 	allConditionsTrue := func(gen int64, secretVersion string) []v1alpha1.Condition {
 		return []v1alpha1.Condition{
 			bindSecretValidTrueCondition(gen),
 			activeDirectoryConnectionValidTrueCondition(gen, secretVersion),
+			searchBaseFoundInConfigCondition(gen),
 			tlsConfigurationValidLoadedTrueCondition(gen),
+			// TODO should there be a condition when you just get it from the config? is that worth reporting?
+			//  I'm thinking maybe no since it's not a network call or anything... it's just like any other field in the
+			//  spec that we don't bother to report on.
+			//  Although perhaps it would be weirder to have a condition that only sometimes exists? And it's a useful
+			//  way to communicate internally.
 		}
 	}
 
@@ -270,6 +310,34 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			Type:       corev1.SecretTypeBasicAuth,
 			Data:       testValidSecretData,
 		}
+	}
+
+	expectedDefaultNamingContextSearch := func() *ldap.SearchRequest {
+		request := &ldap.SearchRequest{
+			BaseDN:       "",
+			Scope:        ldap.ScopeBaseObject,
+			DerefAliases: ldap.NeverDerefAliases,
+			SizeLimit:    2,
+			TimeLimit:    90,
+			TypesOnly:    false,
+			Filter:       "(objectClass=*)",
+			Attributes:   []string{"defaultNamingContext"},
+			Controls:     nil, // don't need paging because we set the SizeLimit so small
+		}
+		return request
+	}
+
+	exampleDefaultNamingContext := "dc=default,dc=naming,dc=context,dc=example,dc=com"
+
+	exampleDefaultNamingContextSearchResult := &ldap.SearchResult{
+		Entries: []*ldap.Entry{
+			{
+				DN: "",
+				Attributes: []*ldap.EntryAttribute{
+					ldap.NewEntryAttribute("defaultNamingContext", []string{exampleDefaultNamingContext}),
+				},
+			},
+		},
 	}
 
 	tests := []struct {
@@ -305,7 +373,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
 			}},
-			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS, UserSearchBase: testUserSearchBase, GroupSearchBase: testGroupSearchBase}},
 		},
 		{
 			name:               "missing secret",
@@ -477,6 +545,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: []v1alpha1.Condition{
 						bindSecretValidTrueCondition(1234),
 						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
+						searchBaseFoundInConfigCondition(1234),
 						{
 							Type:               "TLSConfigurationValid",
 							Status:             "True",
@@ -488,7 +557,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					},
 				},
 			}},
-			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS, UserSearchBase: testUserSearchBase, GroupSearchBase: testGroupSearchBase}},
 		},
 		{
 			name: "when TLS connection fails it tries to use StartTLS instead: without a specified port it automatically switches ports",
@@ -542,11 +611,12 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 								"ldap.example.com", testBindUsername, testSecretName, "4242"),
 							ObservedGeneration: 1234,
 						},
+						searchBaseFoundInConfigCondition(1234),
 						tlsConfigurationValidLoadedTrueCondition(1234),
 					},
 				},
 			}},
-			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.StartTLS}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.StartTLS, UserSearchBase: testUserSearchBase, GroupSearchBase: testGroupSearchBase}},
 		},
 		{
 			name: "when TLS connection fails it tries to use StartTLS instead: with a specified port it does not automatically switch ports",
@@ -599,10 +669,12 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 								"ldap.example.com:5678", testBindUsername, "ldap.example.com:5678"),
 							ObservedGeneration: 1234,
 						},
+						searchBaseFoundInConfigCondition(1234),
 						tlsConfigurationValidLoadedTrueCondition(1234),
 					},
 				},
 			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {UserSearchBase: testUserSearchBase, GroupSearchBase: testGroupSearchBase}},
 		},
 		{
 			name: "non-nil TLS configuration with empty CertificateAuthorityData is valid",
@@ -643,7 +715,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
 			}},
-			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS, UserSearchBase: testUserSearchBase, GroupSearchBase: testGroupSearchBase}},
 		},
 		{
 			name: "one valid upstream and one invalid upstream updates the cache to include only the valid upstream",
@@ -686,7 +758,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					},
 				},
 			},
-			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS, UserSearchBase: testUserSearchBase, GroupSearchBase: testGroupSearchBase}},
 		},
 		{
 			name:           "when testing the connection to the LDAP server fails then the upstream is still added to the cache anyway (treated like a warning)",
@@ -716,10 +788,107 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 								testHost, testBindUsername, testBindUsername),
 							ObservedGeneration: 1234,
 						},
+						searchBaseFoundInConfigCondition(1234),
 						tlsConfigurationValidLoadedTrueCondition(1234),
 					},
 				},
 			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {UserSearchBase: testUserSearchBase, GroupSearchBase: testGroupSearchBase}},
+		},
+		{
+			name: "when testing the connection to the LDAP server fails, but later querying defaultsearchbase succeeds, then the upstream is still added to the cache anyway (treated like a warning)",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
+				upstream.Spec.UserSearch.Base = ""
+			})},
+			inputSecrets: []runtime.Object{validBindUserSecret("")},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				// Expect three calls bind: once for trying TLS and once for trying StartTLS (both fail), and one before querying for defaultNamingContext (succeeds)
+				first := conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2).Return(errors.New("some bind error"))
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1).After(first)
+				conn.EXPECT().Search(expectedDefaultNamingContextSearch()).Times(1).Return(exampleDefaultNamingContextSearchResult, nil)
+				conn.EXPECT().Close().Times(3)
+			},
+			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
+			wantResultingCache: []*upstreamldap.ProviderConfig{
+				{
+					Name:               testName,
+					Host:               testHost,
+					ConnectionProtocol: upstreamldap.TLS,
+					CABundle:           testCABundle,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
+					UserSearch: upstreamldap.UserSearchConfig{
+						Base:              exampleDefaultNamingContext,
+						Filter:            testUserSearchFilter,
+						UsernameAttribute: testUsernameAttrName,
+						UIDAttribute:      testUIDAttrName,
+					},
+					GroupSearch: upstreamldap.GroupSearchConfig{
+						Base:               testGroupSearchBase,
+						Filter:             testGroupSearchFilter,
+						GroupNameAttribute: testGroupNameAttrName,
+					},
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						{
+							Type:               "LDAPConnectionValid",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "LDAPConnectionError",
+							Message: fmt.Sprintf(
+								`could not successfully connect to "%s" and bind as user "%s": error binding as "%s": some bind error`,
+								testHost, testBindUsername, testBindUsername),
+							ObservedGeneration: 1234,
+						},
+						searchBaseFoundInRootDSECondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234),
+					},
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {UserSearchBase: exampleDefaultNamingContext, GroupSearchBase: testGroupSearchBase}},
+		},
+		{
+			name: "when testing the connection to the LDAP server fails, and querying defaultsearchbase fails, then the upstream is not added to the cache",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
+				upstream.Spec.UserSearch.Base = ""
+			})},
+			inputSecrets: []runtime.Object{validBindUserSecret("")},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				// Expect 3 calls to each of these: once for trying TLS and once for trying StartTLS, one before querying
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(3).Return(errors.New("some bind error"))
+				conn.EXPECT().Close().Times(3)
+			},
+			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
+			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						{
+							Type:               "LDAPConnectionValid",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "LDAPConnectionError",
+							Message: fmt.Sprintf(
+								`could not successfully connect to "%s" and bind as user "%s": error binding as "%s": some bind error`,
+								testHost, testBindUsername, testBindUsername),
+							ObservedGeneration: 1234,
+						},
+						searchBaseFoundErrorCondition(1234, "Error finding search base: error binding as \"test-bind-username\" before user search: some bind error"),
+						tlsConfigurationValidLoadedTrueCondition(1234),
+					},
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {GroupSearchBase: testGroupSearchBase}},
 		},
 		{
 			name: "when the LDAP server connection was already validated using TLS for the current resource generation and secret version, then do not validate it again and keep using TLS",
@@ -730,7 +899,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				}
 			})},
 			inputSecrets:             []runtime.Object{validBindUserSecret("4242")},
-			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
+			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS, UserSearchBase: testUserSearchBase, GroupSearchBase: testGroupSearchBase}},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should not perform a test dial and bind. No mocking here means the test will fail if Bind() or Close() are called.
 			},
@@ -742,7 +911,112 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
 			}},
-			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS, UserSearchBase: testUserSearchBase, GroupSearchBase: testGroupSearchBase}},
+		},
+		{
+			name: "when the LDAP server connection was already validated using TLS, but the search base wasn't, load TLS into the config and try again for the search base",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
+				upstream.Generation = 1234
+				upstream.Status.Conditions = []v1alpha1.Condition{
+					activeDirectoryConnectionValidTrueCondition(1234, "4242"),
+				}
+				upstream.Spec.UserSearch.Base = ""
+			})},
+			inputSecrets:             []runtime.Object{validBindUserSecret("4242")},
+			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+				conn.EXPECT().Search(expectedDefaultNamingContextSearch()).Return(exampleDefaultNamingContextSearchResult, nil).Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{
+				{
+					Name:               testName,
+					Host:               testHost,
+					ConnectionProtocol: upstreamldap.TLS,
+					CABundle:           testCABundle,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
+					UserSearch: upstreamldap.UserSearchConfig{
+						Base:              exampleDefaultNamingContext,
+						Filter:            testUserSearchFilter,
+						UsernameAttribute: testUsernameAttrName,
+						UIDAttribute:      testUIDAttrName,
+					},
+					GroupSearch: upstreamldap.GroupSearchConfig{
+						Base:               testGroupSearchBase,
+						Filter:             testGroupSearchFilter,
+						GroupNameAttribute: testGroupNameAttrName,
+					},
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
+						searchBaseFoundInRootDSECondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234),
+					},
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS, UserSearchBase: exampleDefaultNamingContext, GroupSearchBase: testGroupSearchBase}},
+		},
+		{
+			name: "when the LDAP server connection was already validated using TLS, and the search base was found, load TLS and search base info into the cache",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
+				upstream.Generation = 1234
+				upstream.Status.Conditions = []v1alpha1.Condition{
+					activeDirectoryConnectionValidTrueCondition(1234, "4242"),
+					searchBaseFoundInRootDSECondition(1234),
+				}
+				upstream.Spec.UserSearch.Base = ""
+			})},
+			inputSecrets:             []runtime.Object{validBindUserSecret("4242")},
+			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS, UserSearchBase: exampleDefaultNamingContext, GroupSearchBase: testGroupSearchBase}},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{
+				{
+					Name:               testName,
+					Host:               testHost,
+					ConnectionProtocol: upstreamldap.TLS,
+					CABundle:           testCABundle,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
+					UserSearch: upstreamldap.UserSearchConfig{
+						Base:              exampleDefaultNamingContext,
+						Filter:            testUserSearchFilter,
+						UsernameAttribute: testUsernameAttrName,
+						UIDAttribute:      testUIDAttrName,
+					},
+					GroupSearch: upstreamldap.GroupSearchConfig{
+						Base:               testGroupSearchBase,
+						Filter:             testGroupSearchFilter,
+						GroupNameAttribute: testGroupNameAttrName,
+					},
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
+						searchBaseFoundInRootDSECondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234),
+					},
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            exampleDefaultNamingContext,
+				GroupSearchBase:           testGroupSearchBase,
+			}},
 		},
 		{
 			name: "when the LDAP server connection was already validated using StartTLS for the current resource generation and secret version, then do not validate it again and keep using StartTLS",
@@ -765,7 +1039,12 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
 			}},
-			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.StartTLS}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.StartTLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+			}},
 		},
 		{
 			name: "when the LDAP server connection was validated for an older resource generation, then try to validate it again",
@@ -775,8 +1054,13 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					activeDirectoryConnectionValidTrueCondition(1233, "4242"), // older spec generation!
 				}
 			})},
-			inputSecrets:             []runtime.Object{validBindUserSecret("4242")},
-			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
+			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+			}},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -790,7 +1074,12 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
 			}},
-			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+			}},
 		},
 		{
 			name: "when the LDAP server connection validation previously failed for this resource generation, then try to validate it again",
@@ -822,7 +1111,12 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
 			}},
-			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+			}},
 		},
 		{
 			name: "when the LDAP server connection was already validated for this resource generation but the bind secret has changed, then try to validate it again",
@@ -832,8 +1126,13 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					activeDirectoryConnectionValidTrueCondition(1234, "4241"), // same spec generation, old secret version
 				}
 			})},
-			inputSecrets:             []runtime.Object{validBindUserSecret("4242")},                                                                                          // newer secret version!
-			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4241", LDAPConnectionProtocol: upstreamldap.TLS}}, // old version was validated
+			inputSecrets: []runtime.Object{validBindUserSecret("4242")}, // newer secret version!
+			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4241",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+			}}, // old version was validated
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -847,7 +1146,12 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
 			}},
-			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{
+				testName: {BindSecretResourceVersion: "4242",
+					LDAPConnectionProtocol: upstreamldap.TLS,
+					UserSearchBase:         testUserSearchBase,
+					GroupSearchBase:        testGroupSearchBase,
+				}},
 		},
 		{
 			name: "when the input activedirectoryidentityprovider leaves user attributes blank, provide default values",
@@ -888,7 +1192,190 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
 			}},
-			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+			}},
+		},
+		{
+			name: "when the input activedirectoryidentityprovider leaves user and group search base blank, query for defaultNamingContext",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
+				upstream.Spec.UserSearch.Attributes = v1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
+				upstream.Spec.UserSearch.Base = ""
+				upstream.Spec.GroupSearch.Base = ""
+			})},
+			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2)
+				conn.EXPECT().Close().Times(2)
+				conn.EXPECT().Search(expectedDefaultNamingContextSearch()).Return(exampleDefaultNamingContextSearchResult, nil).Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{
+				{
+					Name:               testName,
+					Host:               testHost,
+					ConnectionProtocol: upstreamldap.TLS,
+					CABundle:           testCABundle,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
+					UserSearch: upstreamldap.UserSearchConfig{
+						Base:              exampleDefaultNamingContext,
+						Filter:            testUserSearchFilter,
+						UsernameAttribute: "sAMAccountName",
+						UIDAttribute:      "objectGUID",
+					},
+					GroupSearch: upstreamldap.GroupSearchConfig{
+						Base:               exampleDefaultNamingContext,
+						Filter:             testGroupSearchFilter,
+						GroupNameAttribute: testGroupNameAttrName,
+					},
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
+						searchBaseFoundInRootDSECondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234),
+					},
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS, UserSearchBase: exampleDefaultNamingContext, GroupSearchBase: exampleDefaultNamingContext}},
+		},
+		{
+			name: "when the input activedirectoryidentityprovider leaves user search base blank but provides group search base, query for defaultNamingContext",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
+				upstream.Spec.UserSearch.Attributes = v1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
+				upstream.Spec.UserSearch.Base = ""
+			})},
+			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2)
+				conn.EXPECT().Close().Times(2)
+				conn.EXPECT().Search(expectedDefaultNamingContextSearch()).Return(exampleDefaultNamingContextSearchResult, nil).Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{
+				{
+					Name:               testName,
+					Host:               testHost,
+					ConnectionProtocol: upstreamldap.TLS,
+					CABundle:           testCABundle,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
+					UserSearch: upstreamldap.UserSearchConfig{
+						Base:              exampleDefaultNamingContext,
+						Filter:            testUserSearchFilter,
+						UsernameAttribute: "sAMAccountName",
+						UIDAttribute:      "objectGUID",
+					},
+					GroupSearch: upstreamldap.GroupSearchConfig{
+						Base:               testGroupSearchBase,
+						Filter:             testGroupSearchFilter,
+						GroupNameAttribute: testGroupNameAttrName,
+					},
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
+						searchBaseFoundInRootDSECondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234),
+					},
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS, UserSearchBase: exampleDefaultNamingContext, GroupSearchBase: testGroupSearchBase}},
+		},
+		{
+			name: "when the input activedirectoryidentityprovider leaves group search base blank but provides user search base, query for defaultNamingContext",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
+				upstream.Spec.UserSearch.Attributes = v1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
+				upstream.Spec.GroupSearch.Base = ""
+			})},
+			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2)
+				conn.EXPECT().Close().Times(2)
+				conn.EXPECT().Search(expectedDefaultNamingContextSearch()).Return(exampleDefaultNamingContextSearchResult, nil).Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{
+				{
+					Name:               testName,
+					Host:               testHost,
+					ConnectionProtocol: upstreamldap.TLS,
+					CABundle:           testCABundle,
+					BindUsername:       testBindUsername,
+					BindPassword:       testBindPassword,
+					UserSearch: upstreamldap.UserSearchConfig{
+						Base:              testUserSearchBase,
+						Filter:            testUserSearchFilter,
+						UsernameAttribute: "sAMAccountName",
+						UIDAttribute:      "objectGUID",
+					},
+					GroupSearch: upstreamldap.GroupSearchConfig{
+						Base:               exampleDefaultNamingContext,
+						Filter:             testGroupSearchFilter,
+						GroupNameAttribute: testGroupNameAttrName,
+					},
+				},
+			},
+			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
+						searchBaseFoundInRootDSECondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234),
+					},
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {BindSecretResourceVersion: "4242", LDAPConnectionProtocol: upstreamldap.TLS, UserSearchBase: testUserSearchBase, GroupSearchBase: exampleDefaultNamingContext}},
+		},
+		{
+			name: "when the input activedirectoryidentityprovider leaves group search base blank and query for defaultNamingContext fails",
+			// TODO is this a fatal error? I think so because leaving the search base blank and trying anyway does not seem expected.
+			//  it could potentially succeed but return something unexpected...
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
+				upstream.Spec.UserSearch.Attributes = v1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
+				upstream.Spec.GroupSearch.Base = ""
+			})},
+			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2)
+				conn.EXPECT().Close().Times(2)
+				conn.EXPECT().Search(expectedDefaultNamingContextSearch()).Return(nil, errors.New("some error")).Times(1)
+			},
+			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
+			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
+						searchBaseFoundErrorCondition(1234, "Error finding search base: error querying RootDSE for defaultNamingContext: some error"),
+						tlsConfigurationValidLoadedTrueCondition(1234),
+					},
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{
+				testName: {BindSecretResourceVersion: "4242",
+					LDAPConnectionProtocol: upstreamldap.TLS,
+					UserSearchBase:         testUserSearchBase}},
 		},
 	}
 

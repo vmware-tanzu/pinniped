@@ -81,6 +81,45 @@ func (s *activeDirectoryUpstreamGenericLDAPSpec) GroupSearch() upstreamwatchers.
 	return &activeDirectoryUpstreamGenericLDAPGroupSearch{s.activeDirectoryIdentityProvider.Spec.GroupSearch}
 }
 
+func (s *activeDirectoryUpstreamGenericLDAPSpec) DetectAndSetSearchBase(ctx context.Context, config *upstreamldap.ProviderConfig) *v1alpha1.Condition {
+	config.GroupSearch.Base = s.activeDirectoryIdentityProvider.Spec.GroupSearch.Base
+	config.UserSearch.Base = s.activeDirectoryIdentityProvider.Spec.UserSearch.Base
+	if config.GroupSearch.Base != "" && config.UserSearch.Base != "" {
+		// Both were already set in spec so just return; no need to query the RootDSE
+		return &v1alpha1.Condition{
+			Type:    "SearchBaseFound",
+			Status:  v1alpha1.ConditionTrue,
+			Reason:  "Success",
+			Message: "Using search base from ActiveDirectoryIdentityProvider config.",
+		}
+	}
+	ldapProvider := upstreamldap.New(*config)
+	// Query your AD server for the defaultNamingContext to get a DN to use as the search base
+	// when it isn't specified.
+	// https://ldapwiki.com/wiki/DefaultNamingContext
+	defaultNamingContext, err := ldapProvider.SearchForDefaultNamingContext(ctx)
+	if err != nil {
+		return &v1alpha1.Condition{
+			Type:    upstreamwatchers.TypeSearchBaseFound,
+			Status:  v1alpha1.ConditionFalse,
+			Reason:  "Error",
+			Message: fmt.Sprintf(`Error finding search base: %s`, err.Error()),
+		}
+	}
+	if config.UserSearch.Base == "" {
+		config.UserSearch.Base = defaultNamingContext
+	}
+	if config.GroupSearch.Base == "" {
+		config.GroupSearch.Base = defaultNamingContext
+	}
+	return &v1alpha1.Condition{
+		Type:    upstreamwatchers.TypeSearchBaseFound,
+		Status:  v1alpha1.ConditionTrue,
+		Reason:  "Success",
+		Message: "Successfully fetched defaultNamingContext to use as default search base from RootDSE.",
+	}
+}
+
 type activeDirectoryUpstreamGenericLDAPUserSearch struct {
 	userSearch v1alpha1.ActiveDirectoryIdentityProviderUserSearch
 }

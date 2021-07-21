@@ -77,6 +77,12 @@ func (s *ldapUpstreamGenericLDAPSpec) GroupSearch() upstreamwatchers.UpstreamGen
 	return &ldapUpstreamGenericLDAPGroupSearch{s.ldapIdentityProvider.Spec.GroupSearch}
 }
 
+func (s *ldapUpstreamGenericLDAPSpec) DetectAndSetSearchBase(_ context.Context, config *upstreamldap.ProviderConfig) *v1alpha1.Condition {
+	config.GroupSearch.Base = s.ldapIdentityProvider.Spec.GroupSearch.Base
+	config.UserSearch.Base = s.ldapIdentityProvider.Spec.UserSearch.Base
+	return nil
+}
+
 type ldapUpstreamGenericLDAPUserSearch struct {
 	userSearch v1alpha1.LDAPIdentityProviderUserSearch
 }

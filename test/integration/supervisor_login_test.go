@@ -254,12 +254,6 @@ func TestSupervisorLogin(t *testing.T) {
 					TLS: &idpv1alpha1.TLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
 					},
-					UserSearch: idpv1alpha1.ActiveDirectoryIdentityProviderUserSearch{
-						Base: "dc=activedirectory,dc=test,dc=pinniped,dc=dev",
-					},
-					GroupSearch: idpv1alpha1.ActiveDirectoryIdentityProviderGroupSearch{
-						Base: "dc=activedirectory,dc=test,dc=pinniped,dc=dev",
-					},
 					Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
 						SecretName: secret.Name,
 					},
@@ -269,7 +263,7 @@ func TestSupervisorLogin(t *testing.T) {
 					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
 					secret.Name, secret.ResourceVersion,
 				)
-				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg) // TODO refactor to be same as LDAP func
+				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
 			},
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingLDAPIdentityProvider(t,
@@ -282,7 +276,7 @@ func TestSupervisorLogin(t *testing.T) {
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(
 				"ldaps://" + env.SupervisorUpstreamActiveDirectory.Host +
-					"?base=" + url.QueryEscape("dc=activedirectory,dc=test,dc=pinniped,dc=dev") +
+					"?base=" + url.QueryEscape("DC=activedirectory,DC=test,DC=pinniped,DC=dev") +
 					"&sub=" + env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue,
 			),
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
@@ -331,7 +325,7 @@ func requireSuccessfulLDAPIdentityProviderConditions(t *testing.T, ldapIDP *idpv
 	}, conditionsSummary)
 }
 func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, adIDP *idpv1alpha1.ActiveDirectoryIdentityProvider, expectedActiveDirectoryConnectionValidMessage string) {
-	require.Len(t, adIDP.Status.Conditions, 3)
+	require.Len(t, adIDP.Status.Conditions, 4)
 
 	conditionsSummary := [][]string{}
 	for _, condition := range adIDP.Status.Conditions {
@@ -352,6 +346,7 @@ func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, ad
 		{"BindSecretValid", "True", "Success"},
 		{"TLSConfigurationValid", "True", "Success"},
 		{"LDAPConnectionValid", "True", "Success"},
+		{"SearchBaseFound", "True", "Success"},
 	}, conditionsSummary)
 }
 

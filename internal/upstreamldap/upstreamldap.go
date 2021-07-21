@@ -392,6 +392,35 @@ func (p *Provider) validateConfig() error {
 	return nil
 }
 
+func (p *Provider) SearchForDefaultNamingContext(ctx context.Context) (string, error) {
+	t := trace.FromContext(ctx).Nest("slow ldap authenticate user attempt", trace.Field{Key: "providerName", Value: p.GetName()})
+	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
+
+	conn, err := p.dial(ctx)
+	if err != nil {
+		p.traceAuthFailure(t, err)
+		return "", fmt.Errorf(`error dialing host "%s": %w`, p.c.Host, err)
+	}
+	defer conn.Close()
+
+	err = conn.Bind(p.c.BindUsername, p.c.BindPassword)
+	if err != nil {
+		p.traceAuthFailure(t, err)
+		return "", fmt.Errorf(`error binding as "%s" before user search: %w`, p.c.BindUsername, err)
+	}
+
+	searchResult, err := conn.Search(p.defaultNamingContextRequest())
+	if err != nil {
+		return "", fmt.Errorf(`error querying RootDSE for defaultNamingContext: %w`, err)
+	}
+	// TODO handle getting empty entry back-- I think this is possible but we might want to
+	//  treat it as an error
+	// TODO handle getting no entries back
+	// TODO handle getting more than 1 result back
+	// TODO handle getting no values for defaultNamingContext attribute back in entry
+	return searchResult.Entries[0].GetAttributeValue("defaultNamingContext"), nil
+}
+
 func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(conn Conn, foundUserDN string) error) (string, string, []string, error) {
 	searchResult, err := conn.Search(p.userSearchRequest(username))
 	if err != nil {
@@ -460,6 +489,20 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 	}
 
 	return mappedUsername, mappedUID, mappedGroupNames, nil
+}
+
+func (p *Provider) defaultNamingContextRequest() *ldap.SearchRequest {
+	return &ldap.SearchRequest{
+		BaseDN:       "",
+		Scope:        ldap.ScopeBaseObject,
+		DerefAliases: ldap.NeverDerefAliases,
+		SizeLimit:    2,
+		TimeLimit:    90,
+		TypesOnly:    false,
+		Filter:       "(objectClass=*)",
+		Attributes:   []string{"defaultNamingContext"},
+		Controls:     nil, // don't need paging because we set the SizeLimit so small
+	}
 }
 
 func (p *Provider) userSearchRequest(username string) *ldap.SearchRequest {

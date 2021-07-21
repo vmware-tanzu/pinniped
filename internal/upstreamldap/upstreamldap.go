@@ -413,12 +413,16 @@ func (p *Provider) SearchForDefaultNamingContext(ctx context.Context) (string, e
 	if err != nil {
 		return "", fmt.Errorf(`error querying RootDSE for defaultNamingContext: %w`, err)
 	}
-	// TODO handle getting empty entry back-- I think this is possible but we might want to
-	//  treat it as an error
-	// TODO handle getting no entries back
-	// TODO handle getting more than 1 result back
-	// TODO handle getting no values for defaultNamingContext attribute back in entry
-	return searchResult.Entries[0].GetAttributeValue("defaultNamingContext"), nil
+
+	if len(searchResult.Entries) != 1 {
+		return "", fmt.Errorf(`error querying RootDSE for defaultNamingContext: expected to find 1 entry but found %d`, len(searchResult.Entries))
+	}
+	searchBase := searchResult.Entries[0].GetAttributeValue("defaultNamingContext")
+	if searchBase == "" {
+		// if we get an empty search base back, treat it like an error. Otherwise we might make too broad of a search.
+		return "", fmt.Errorf(`error querying RootDSE for defaultNamingContext: empty search base DN found`)
+	}
+	return searchBase, nil
 }
 
 func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(conn Conn, foundUserDN string) error) (string, string, []string, error) {

@@ -1347,7 +1347,8 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 		{
 			name: "when the input activedirectoryidentityprovider leaves group search base blank and query for defaultNamingContext fails",
 			// TODO is this a fatal error? I think so because leaving the search base blank and trying anyway does not seem expected.
-			//  it could potentially succeed but return something unexpected...
+			//  queries with an empty search base could potentially succeed but return something unexpected, like if you were
+			//  pointing at global catalog but not intending to use the GC functionality...
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Spec.UserSearch.Attributes = v1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
 				upstream.Spec.GroupSearch.Base = ""
@@ -1368,6 +1369,122 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						bindSecretValidTrueCondition(1234),
 						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
 						searchBaseFoundErrorCondition(1234, "Error finding search base: error querying RootDSE for defaultNamingContext: some error"),
+						tlsConfigurationValidLoadedTrueCondition(1234),
+					},
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{
+				testName: {BindSecretResourceVersion: "4242",
+					LDAPConnectionProtocol: upstreamldap.TLS,
+					UserSearchBase:         testUserSearchBase}},
+		},
+		{
+			name: "when query for defaultNamingContext returns empty string",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
+				upstream.Spec.UserSearch.Attributes = v1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
+				upstream.Spec.GroupSearch.Base = ""
+			})},
+			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2)
+				conn.EXPECT().Close().Times(2)
+				conn.EXPECT().Search(expectedDefaultNamingContextSearch()).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: "",
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute("defaultNamingContext", []string{""}),
+							},
+						},
+					}}, nil).Times(1)
+			},
+			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
+			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
+						searchBaseFoundErrorCondition(1234, "Error finding search base: error querying RootDSE for defaultNamingContext: empty search base DN found"),
+						tlsConfigurationValidLoadedTrueCondition(1234),
+					},
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{
+				testName: {BindSecretResourceVersion: "4242",
+					LDAPConnectionProtocol: upstreamldap.TLS,
+					UserSearchBase:         testUserSearchBase}},
+		},
+		{
+			name: "when query for defaultNamingContext returns multiple entries",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
+				upstream.Spec.UserSearch.Attributes = v1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
+				upstream.Spec.GroupSearch.Base = ""
+			})},
+			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2)
+				conn.EXPECT().Close().Times(2)
+				conn.EXPECT().Search(expectedDefaultNamingContextSearch()).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{
+						{
+							DN: "",
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute("defaultNamingContext", []string{""}),
+							},
+						},
+						{
+							DN: "",
+							Attributes: []*ldap.EntryAttribute{
+								ldap.NewEntryAttribute("defaultNamingContext", []string{""}),
+							},
+						},
+					}}, nil).Times(1)
+			},
+			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
+			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
+						searchBaseFoundErrorCondition(1234, "Error finding search base: error querying RootDSE for defaultNamingContext: expected to find 1 entry but found 2"),
+						tlsConfigurationValidLoadedTrueCondition(1234),
+					},
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{
+				testName: {BindSecretResourceVersion: "4242",
+					LDAPConnectionProtocol: upstreamldap.TLS,
+					UserSearchBase:         testUserSearchBase}},
+		},
+		{
+			name: "when query for defaultNamingContext returns no entries",
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
+				upstream.Spec.UserSearch.Attributes = v1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
+				upstream.Spec.GroupSearch.Base = ""
+			})},
+			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2)
+				conn.EXPECT().Close().Times(2)
+				conn.EXPECT().Search(expectedDefaultNamingContextSearch()).Return(&ldap.SearchResult{
+					Entries: []*ldap.Entry{}}, nil).Times(1)
+			},
+			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
+			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
+				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase: "Error",
+					Conditions: []v1alpha1.Condition{
+						bindSecretValidTrueCondition(1234),
+						activeDirectoryConnectionValidTrueCondition(1234, "4242"),
+						searchBaseFoundErrorCondition(1234, "Error finding search base: error querying RootDSE for defaultNamingContext: expected to find 1 entry but found 0"),
 						tlsConfigurationValidLoadedTrueCondition(1234),
 					},
 				},

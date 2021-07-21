@@ -69,4 +69,4 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
 
 ## Next Steps
 
-Now that you have installed the Supervisor, you will want to [configure the Supervisor]({{< ref "configure-supervisor" >}}).
+Next, [configure the Supervisor as an OIDC issuer]({{< ref "configure-supervisor" >}})!

@@ -138,4 +138,5 @@ spec:
 
 ## Next Steps
 
-Now that you have configured the Supervisor to use GitLab, you will want to [configure the Concierge to validate JWTs issued by the Supervisor]({{< ref "configure-concierge-supervisor-jwt" >}}).
+Next, [configure the Concierge to validate JWTs issued by the Supervisor]({{< ref "configure-concierge-supervisor-jwt" >}})!
+Then you'll be able to log into those clusters as any of the users from the GitLab directory.

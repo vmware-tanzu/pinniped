@@ -1,5 +1,5 @@
 ---
-title: Configure the Pinniped Concierge to validate JWT tokens issued by the Pinniped Supervisor
+title: Configure the Pinniped Concierge to Validate JWT Tokens Issued by the Pinniped Supervisor
 description: Set up JSON Web Token (JWT) based token authentication on an individual Kubernetes cluster using the Pinniped Supervisor as the OIDC Provider.
 cascade:
   layout: docs
@@ -25,6 +25,9 @@ If you would rather not use the Supervisor, you may want to [configure the Conci
 
 This how-to guide assumes that you have already [installed the Pinniped Supervisor]({{< ref "install-supervisor" >}}) with working ingress,
 and that you have [configured a FederationDomain to issue tokens for your downstream clusters]({{< ref "configure-supervisor" >}}).
+
+It also assumes that you have configured an `OIDCIdentityProvider` or an `LDAPIdentityProvider` for the Supervisor as the source of your user's identities.
+Various examples of configuring these resources can be found in these guides.
 
 It also assumes that you have already [installed the Pinniped Concierge]({{< ref "install-concierge" >}})
 on all the clusters in which you would like to allow users to have a unified identity.
@@ -64,62 +67,6 @@ kubectl apply -f my-supervisor-authenticator.yaml
 Do this on each cluster in which you would like to allow users from that FederationDomain to log in.
 Don't forget to give each cluster a unique `audience` value for security reasons.
 
-## Generate a kubeconfig file
+## Next Steps
 
-Generate a kubeconfig file for one of the clusters in which you installed and configured the Concierge as described above:
-
-```sh
-pinniped get kubeconfig > my-cluster.yaml
-```
-
-This assumes that your current kubeconfig is an admin-level kubeconfig for the cluster, such as the kubeconfig
-that you used to install the Concierge.
-
-This creates a kubeconfig YAML file `my-cluster.yaml`, unique to that cluster, which targets your JWTAuthenticator
-using `pinniped login oidc` as an [ExecCredential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins).
-This new kubeconfig can be shared with the other users of this cluster. It does not contain any specific
-identity or credentials. When a user uses this new kubeconfig with `kubectl`, the Pinniped plugin will
-prompt them to log in using their own identity.
-
-## Use the kubeconfig file
-
-Use the kubeconfig with `kubectl` to access your cluster:
-
-```sh
-kubectl --kubeconfig my-cluster.yaml get namespaces
-```
-
-You should see:
-
-- The `pinniped login oidc` command is executed automatically by `kubectl`.
-
-- Pinniped directs you to login with whatever identity provider is configured in the Supervisor, either by opening
-  your browser (for upstream OIDC Providers) or by prompting for your username and password (for upstream LDAP providers).
-
-- In your shell, you see your clusters namespaces.
-
-  If instead you get an access denied error, you may need to create a ClusterRoleBinding for username of your account
-  in the Supervisor's upstream identity provider, for example:
-
-  ```sh
-  kubectl create clusterrolebinding my-user-admin \
-    --clusterrole admin \
-    --user my-username@example.com
-  ```
-
-  Alternatively, you could create role bindings based on the group membership of your users
-  in the upstream identity provider, for example:
-
-  ```sh
-  kubectl create clusterrolebinding my-auditors \
-    --clusterrole view \
-    --group auditors
-  ```
-
-## Other notes
-
-- Pinniped kubeconfig files do not contain secrets and are safe to share between users.
-
-- Temporary session credentials such as ID, access, and refresh tokens are stored in:
-  - `~/.config/pinniped/sessions.yaml` (macOS/Linux)
-  - `%USERPROFILE%/.config/pinniped/sessions.yaml` (Windows).
+Next, [log in to your cluster]({{< ref "login" >}})!

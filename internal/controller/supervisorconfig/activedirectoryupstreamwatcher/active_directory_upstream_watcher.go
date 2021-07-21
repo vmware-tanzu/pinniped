@@ -29,8 +29,21 @@ const (
 	activeDirectoryControllerName = "active-directory-upstream-observer"
 
 	// Default values for active directory config.
-	defaultActiveDirectoryUsernameAttributeName = "sAMAccountName"
-	defaultActiveDirectoryUIDAttributeName      = "objectGUID"
+	defaultActiveDirectoryUsernameAttributeName  = "sAMAccountName"
+	defaultActiveDirectoryUIDAttributeName       = "objectGUID"
+	defaultActiveDirectoryGroupNameAttributeName = "sAMAccountName"
+
+	// - is a person.
+	// - is not a computer.
+	// - is not shown in advanced view only (which would likely mean its a system created service account with advanced permissions).
+	// - either the sAMAccountName or the mail attribute matches the input username.
+	// - the sAMAccountType is for a normal user account.
+	defaultActiveDirectoryUserSearchFilter = "(&(objectClass=person)(!(objectClass=computer))(!(showInAdvancedViewOnly=TRUE))(|(sAMAccountName={})(mail={}))(sAMAccountType=805306368))"
+
+	// - is a group.
+	// - has a member that matches the DN of the user we successfully logged in as.
+	// - perform nested group search by default.
+	defaultActiveDirectoryGroupSearchFilter = "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={})"
 )
 
 type activeDirectoryUpstreamGenericLDAPImpl struct {
@@ -271,19 +284,34 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 		uidAttribute = defaultActiveDirectoryUIDAttributeName
 	}
 
+	groupNameAttribute := spec.GroupSearch.Attributes.GroupName
+	if len(groupNameAttribute) == 0 {
+		groupNameAttribute = defaultActiveDirectoryGroupNameAttributeName
+	}
+
+	userSearchFilter := spec.UserSearch.Filter
+	if len(userSearchFilter) == 0 {
+		userSearchFilter = defaultActiveDirectoryUserSearchFilter
+	}
+
+	groupSearchFilter := spec.GroupSearch.Filter
+	if len(groupSearchFilter) == 0 {
+		groupSearchFilter = defaultActiveDirectoryGroupSearchFilter
+	}
+
 	config := &upstreamldap.ProviderConfig{
 		Name: upstream.Name,
 		Host: spec.Host,
 		UserSearch: upstreamldap.UserSearchConfig{
 			Base:              spec.UserSearch.Base,
-			Filter:            spec.UserSearch.Filter,
+			Filter:            userSearchFilter,
 			UsernameAttribute: usernameAttribute,
 			UIDAttribute:      uidAttribute,
 		},
 		GroupSearch: upstreamldap.GroupSearchConfig{
 			Base:               spec.GroupSearch.Base,
-			Filter:             spec.GroupSearch.Filter,
-			GroupNameAttribute: spec.GroupSearch.Attributes.GroupName,
+			Filter:             groupSearchFilter,
+			GroupNameAttribute: groupNameAttribute,
 		},
 		Dialer: c.ldapDialer,
 	}

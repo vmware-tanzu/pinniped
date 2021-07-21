@@ -1157,6 +1157,9 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			name: "when the input activedirectoryidentityprovider leaves user attributes blank, provide default values",
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Spec.UserSearch.Attributes = v1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
+				upstream.Spec.UserSearch.Filter = ""
+				upstream.Spec.GroupSearch.Filter = ""
+				upstream.Spec.GroupSearch.Attributes = v1alpha1.ActiveDirectoryIdentityProviderGroupSearchAttributes{}
 			})},
 			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
@@ -1174,14 +1177,14 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					BindPassword:       testBindPassword,
 					UserSearch: upstreamldap.UserSearchConfig{
 						Base:              testUserSearchBase,
-						Filter:            testUserSearchFilter,
+						Filter:            "(&(objectClass=person)(!(objectClass=computer))(!(showInAdvancedViewOnly=TRUE))(|(sAMAccountName={})(mail={}))(sAMAccountType=805306368))",
 						UsernameAttribute: "sAMAccountName",
 						UIDAttribute:      "objectGUID",
 					},
 					GroupSearch: upstreamldap.GroupSearchConfig{
 						Base:               testGroupSearchBase,
-						Filter:             testGroupSearchFilter,
-						GroupNameAttribute: testGroupNameAttrName,
+						Filter:             "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={})",
+						GroupNameAttribute: "sAMAccountName",
 					},
 				},
 			},

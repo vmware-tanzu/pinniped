@@ -392,6 +392,7 @@ export PINNIPED_TEST_AD_USER_PASSWORD="$(gcloud secrets versions access latest -
 export PINNIPED_TEST_AD_LDAPS_CA_BUNDLE="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-ca-data' -)"
 export PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_DN="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-expected-direct-groups-dn' -)"
 export PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_CN="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-expected-direct-groups-cn' -)"
+export PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_SAMACCOUNTNAME="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-expected-direct-and-nested-groups-samaccountnames' -)"
 fi
 
 read -r -d '' PINNIPED_TEST_CLUSTER_CAPABILITY_YAML << PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF || true

@@ -43,7 +43,7 @@ const (
 	// - is a group.
 	// - has a member that matches the DN of the user we successfully logged in as.
 	// - perform nested group search by default.
-	defaultActiveDirectoryGroupSearchFilter = "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={})"
+	defaultActiveDirectoryGroupSearchFilter = "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={}))"
 )
 
 type activeDirectoryUpstreamGenericLDAPImpl struct {
@@ -142,14 +142,23 @@ func (u *activeDirectoryUpstreamGenericLDAPUserSearch) Base() string {
 }
 
 func (u *activeDirectoryUpstreamGenericLDAPUserSearch) Filter() string {
+	if len(u.userSearch.Filter) == 0 {
+		return defaultActiveDirectoryUserSearchFilter
+	}
 	return u.userSearch.Filter
 }
 
 func (u *activeDirectoryUpstreamGenericLDAPUserSearch) UsernameAttribute() string {
+	if len(u.userSearch.Attributes.Username) == 0 {
+		return defaultActiveDirectoryUsernameAttributeName
+	}
 	return u.userSearch.Attributes.Username
 }
 
 func (u *activeDirectoryUpstreamGenericLDAPUserSearch) UIDAttribute() string {
+	if len(u.userSearch.Attributes.UID) == 0 {
+		return defaultActiveDirectoryUIDAttributeName
+	}
 	return u.userSearch.Attributes.UID
 }
 
@@ -162,10 +171,16 @@ func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) Base() string {
 }
 
 func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) Filter() string {
+	if len(g.groupSearch.Filter) == 0 {
+		return defaultActiveDirectoryGroupSearchFilter
+	}
 	return g.groupSearch.Filter
 }
 
 func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) GroupNameAttribute() string {
+	if len(g.groupSearch.Attributes.GroupName) == 0 {
+		return defaultActiveDirectoryGroupNameAttributeName
+	}
 	return g.groupSearch.Attributes.GroupName
 }
 
@@ -275,48 +290,26 @@ func (c *activeDirectoryWatcherController) Sync(ctx controllerlib.Context) error
 func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context, upstream *v1alpha1.ActiveDirectoryIdentityProvider) (p provider.UpstreamLDAPIdentityProviderI, requeue bool) {
 	spec := upstream.Spec
 
-	usernameAttribute := spec.UserSearch.Attributes.Username
-	if len(usernameAttribute) == 0 {
-		usernameAttribute = defaultActiveDirectoryUsernameAttributeName
-	}
-	uidAttribute := spec.UserSearch.Attributes.UID
-	if len(uidAttribute) == 0 {
-		uidAttribute = defaultActiveDirectoryUIDAttributeName
-	}
-
-	groupNameAttribute := spec.GroupSearch.Attributes.GroupName
-	if len(groupNameAttribute) == 0 {
-		groupNameAttribute = defaultActiveDirectoryGroupNameAttributeName
-	}
-
-	userSearchFilter := spec.UserSearch.Filter
-	if len(userSearchFilter) == 0 {
-		userSearchFilter = defaultActiveDirectoryUserSearchFilter
-	}
-
-	groupSearchFilter := spec.GroupSearch.Filter
-	if len(groupSearchFilter) == 0 {
-		groupSearchFilter = defaultActiveDirectoryGroupSearchFilter
-	}
+	adUpstreamImpl := activeDirectoryUpstreamGenericLDAPImpl{*upstream}
 
 	config := &upstreamldap.ProviderConfig{
 		Name: upstream.Name,
 		Host: spec.Host,
 		UserSearch: upstreamldap.UserSearchConfig{
 			Base:              spec.UserSearch.Base,
-			Filter:            userSearchFilter,
-			UsernameAttribute: usernameAttribute,
-			UIDAttribute:      uidAttribute,
+			Filter:            adUpstreamImpl.Spec().UserSearch().Filter(),
+			UsernameAttribute: adUpstreamImpl.Spec().UserSearch().UsernameAttribute(),
+			UIDAttribute:      adUpstreamImpl.Spec().UserSearch().UIDAttribute(),
 		},
 		GroupSearch: upstreamldap.GroupSearchConfig{
 			Base:               spec.GroupSearch.Base,
-			Filter:             groupSearchFilter,
-			GroupNameAttribute: groupNameAttribute,
+			Filter:             adUpstreamImpl.Spec().GroupSearch().Filter(),
+			GroupNameAttribute: adUpstreamImpl.Spec().GroupSearch().GroupNameAttribute(),
 		},
 		Dialer: c.ldapDialer,
 	}
 
-	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, &activeDirectoryUpstreamGenericLDAPImpl{*upstream}, c.secretInformer, c.validatedSecretVersionsCache, config)
+	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, &adUpstreamImpl, c.secretInformer, c.validatedSecretVersionsCache, config)
 
 	c.updateStatus(ctx, upstream, conditions.Conditions())
 

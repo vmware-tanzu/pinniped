@@ -281,7 +281,7 @@ func TestSupervisorLogin(t *testing.T) {
 			),
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserSAMAccountNameValue),
-			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamActiveDirectory.TestUserDirectGroupsDNs,
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountNames,
 		},
 	}
 	for _, test := range tests {

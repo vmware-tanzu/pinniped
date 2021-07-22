@@ -1183,7 +1183,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					},
 					GroupSearch: upstreamldap.GroupSearchConfig{
 						Base:               testGroupSearchBase,
-						Filter:             "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={})",
+						Filter:             "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={}))",
 						GroupNameAttribute: "sAMAccountName",
 					},
 				},

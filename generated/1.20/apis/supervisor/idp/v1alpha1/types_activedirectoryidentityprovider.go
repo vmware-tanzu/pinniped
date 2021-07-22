@@ -46,7 +46,7 @@ type ActiveDirectoryIdentityProviderBind struct {
 }
 
 type ActiveDirectoryIdentityProviderUserSearchAttributes struct {
-	// Username specifies the name of the attribute in the ActiveDirectory entry whose value shall become the username
+	// Username specifies the name of the attribute in Active Directory entry whose value shall become the username
     // of the user after a successful authentication. This would typically be the same attribute name used in
     // Optional, when empty this defaults to "sAMAccountName".
     // +optional
@@ -64,7 +64,7 @@ type ActiveDirectoryIdentityProviderGroupSearchAttributes struct {
 	// in the user's list of groups after a successful authentication.
 	// The value of this field is case-sensitive and must match the case of the attribute name returned by the ActiveDirectory
 	// server in the user's entry. E.g. "cn" for common name. Distinguished names can be used by specifying lower-case "dn".
-	// Optional. When not specified, the default will act as if the GroupName were specified as "dn" (distinguished name).
+	// Optional. When not specified, this defaults to "sAMAccountName".
 	// +optional
 	GroupName string `json:"groupName,omitempty"`
 }
@@ -72,20 +72,17 @@ type ActiveDirectoryIdentityProviderGroupSearchAttributes struct {
 type ActiveDirectoryIdentityProviderUserSearch struct {
 	// Base is the dn (distinguished name) that should be used as the search base when searching for users.
 	// E.g. "ou=users,dc=example,dc=com".
-	// Optional, when not specified it will search the whole directory tree.
-	// Note that if your bind user only has permission to search a subtree, this must be specified.
-	// Search a subtree will also be faster.
+	// Optional, when not specified it will be based on the result of a query for the default naming context.
 	// +optional
 	Base string `json:"base,omitempty"`
 
-	// Filter is the ActiveDirectory search filter which should be applied when searching for users. The pattern "{}" must occur
+	// Filter is the search filter which should be applied when searching for users. The pattern "{}" must occur
 	// in the filter at least once and will be dynamically replaced by the username for which the search is being run.
-	// E.g. "mail={}" or "&(objectClass=person)(uid={})". For more information about ActiveDirectory filters, see
+	// E.g. "mail={}" or "&(objectClass=person)(uid={})". For more information about LDAP filters, see
 	// https://ldap.com/ldap-filters.
 	// Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}" cannot be used.
-	// Optional. When not specified, the default will act as if the Filter were specified as the value from
-	// Attributes.Username appended by "={}". When the Attributes.Username is set to "dn" then the Filter must be
-	// explicitly specified, since the default value of "dn={}" would not work.
+	// Optional. When not specified, the default will be
+	// '(&(objectClass=person)(!(objectClass=computer))(!(showInAdvancedViewOnly=TRUE))(|(sAMAccountName={}")(mail={}))(sAMAccountType=805306368))'
 	// +optional
 	Filter string `json:"filter,omitempty"`
 
@@ -97,9 +94,8 @@ type ActiveDirectoryIdentityProviderUserSearch struct {
 
 type ActiveDirectoryIdentityProviderGroupSearch struct {
 	// Base is the dn (distinguished name) that should be used as the search base when searching for groups. E.g.
-	// "ou=groups,dc=example,dc=com". When not specified, no group search will be performed and
-	// authenticated users will not belong to any groups from the ActiveDirectory provider. Also, when not specified,
-	// the values of Filter and Attributes are ignored.
+	// "ou=groups,dc=example,dc=com".
+	// Optional, when not specified it will be based on the result of a query for the default naming context.
 	// +optional
 	Base string `json:"base,omitempty"`
 
@@ -109,7 +105,9 @@ type ActiveDirectoryIdentityProviderGroupSearch struct {
 	// "&(objectClass=groupOfNames)(member={})". For more information about ActiveDirectory filters, see
 	// https://ldap.com/ldap-filters.
 	// Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}" cannot be used.
-	// Optional. When not specified, the default will act as if the Filter were specified as "member={}".
+	// Optional. When not specified, the default will act as if the Filter were specified as
+	// "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={})".
+	// This searches nested groups by default.
 	// +optional
 	Filter string `json:"filter,omitempty"`
 

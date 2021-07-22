@@ -69,6 +69,7 @@ spec:
       containers:
       - name: dex
         image: #@ data.values.dex_image
+        imagePullPolicy: IfNotPresent
         command:
         - /usr/local/bin/dex
         - serve

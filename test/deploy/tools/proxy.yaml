@@ -26,6 +26,7 @@ spec:
       containers:
         - name: proxy
           image: #@ data.values.proxy_image
+          imagePullPolicy: IfNotPresent
           ports:
           - name: http
             containerPort: 3128
@@ -48,6 +49,7 @@ spec:
             failureThreshold: 2
         - name: accesslogs
           image: #@ data.values.proxy_image
+          imagePullPolicy: IfNotPresent
           command:
             - "/bin/sh"
             - "-c"

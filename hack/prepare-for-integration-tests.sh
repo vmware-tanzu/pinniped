@@ -50,7 +50,7 @@ skip_build=no
 clean_kind=no
 api_group_suffix="pinniped.dev" # same default as in the values.yaml ytt file
 skip_chromedriver_check=no
-test_active_directory=no
+get_active_directory_vars="" # specify a filename for a script to get AD related env variables
 
 while (("$#")); do
   case "$1" in
@@ -80,8 +80,14 @@ while (("$#")); do
     skip_chromedriver_check=yes
     shift
     ;;
-  --test-active-directory)
-    test_active_directory=yes
+  --get-active-directory-vars)
+    shift
+    # If there are no more command line arguments, or there is another command line argument but it starts with a dash, then error
+    if [[ "$#" == "0" || "$1" == -* ]]; then
+      log_error "-g|--get-active-directory-vars requires a script name to be specified"
+      exit 1
+    fi
+    get_active_directory_vars=$1
     shift
     ;;
   -*)
@@ -374,25 +380,13 @@ export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_PASSWORD=${dex_test_password}
 export PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_EXPECTED_GROUPS= # Dex's local user store does not let us configure groups.
 export PINNIPED_TEST_API_GROUP_SUFFIX='${api_group_suffix}'
 
-if [[ "$test_active_directory" == "yes" ]]; then
-
-if [[ -z "$(gcloud config list account --format "value(core.account)")" ]]; then
-  echo "Please run \`gcloud auth login\`"
-  exit 1
-fi
-
-export PINNIPED_TEST_AD_HOST="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-host' -)"
-export PINNIPED_TEST_AD_BIND_ACCOUNT_USERNAME="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-bind-account-username' -)"
-export PINNIPED_TEST_AD_BIND_ACCOUNT_PASSWORD="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-bind-account-password' -)"
-export PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_NAME="objectGUID"
-export PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_VALUE="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-user-unique-id-attribute-value' -)"
-export PINNIPED_TEST_AD_USERNAME_ATTRIBUTE_NAME="sAMAccountName"
-export PINNIPED_TEST_AD_USERNAME_ATTRIBUTE_VALUE="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-user-sAMAccountName' -)"
-export PINNIPED_TEST_AD_USER_PASSWORD="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-user-password' -)"
-export PINNIPED_TEST_AD_LDAPS_CA_BUNDLE="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-ca-data' -)"
-export PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_DN="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-expected-direct-groups-dn' -)"
-export PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_CN="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-expected-direct-groups-cn' -)"
-export PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_SAMACCOUNTNAME="$(gcloud secrets versions access latest --secret="concourse-secrets" --project tanzu-user-authentication | yq e '.aws-ad-expected-direct-and-nested-groups-samaccountnames' -)"
+# We can't set up an in-cluster active directory instance, but
+# if you have an active directory instance that you wish to run the tests against,
+# specify a script to set the ad-related environment variables.
+# You will need to set the environment variables that start with "PINNIPED_TEST_AD_"
+# found in pinniped/test/testlib/env.go.
+if [[ "$get_active_directory_vars" != "" ]]; then
+  source $get_active_directory_vars
 fi
 
 read -r -d '' PINNIPED_TEST_CLUSTER_CAPABILITY_YAML << PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF || true

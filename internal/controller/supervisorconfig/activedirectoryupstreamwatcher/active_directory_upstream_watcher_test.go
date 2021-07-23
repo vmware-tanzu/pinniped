@@ -296,11 +296,6 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			activeDirectoryConnectionValidTrueCondition(gen, secretVersion),
 			searchBaseFoundInConfigCondition(gen),
 			tlsConfigurationValidLoadedTrueCondition(gen),
-			// TODO should there be a condition when you just get it from the config? is that worth reporting?
-			//  I'm thinking maybe no since it's not a network call or anything... it's just like any other field in the
-			//  spec that we don't bother to report on.
-			//  Although perhaps it would be weirder to have a condition that only sometimes exists? And it's a useful
-			//  way to communicate internally.
 		}
 	}
 

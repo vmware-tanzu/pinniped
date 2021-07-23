@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -1491,10 +1492,13 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				if updated.Annotations == nil {
 					updated.Annotations = map[string]string{}
 				}
+				// Add/update each requested annotation, without overwriting others that are already there.
 				for k, v := range annotations {
 					updated.Annotations[k] = v
 				}
-				require.NotEqual(t, service, updated, "should have caused a meaningful update")
+				if equality.Semantic.DeepEqual(service, updated) {
+					return nil
+				}
 
 				t.Logf("updating Service with annotations: %v", annotations)
 				_, err = adminClient.CoreV1().Services(env.ConciergeNamespace).Update(ctx, updated, metav1.UpdateOptions{})
@@ -1502,20 +1506,23 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}))
 		}
 
-		deleteServiceAnnotation := func(annotationKey string) {
+		deleteServiceAnnotations := func(annotations map[string]string) {
 			require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				service, err := adminClient.CoreV1().Services(env.ConciergeNamespace).Get(ctx, impersonationProxyLoadBalancerName(env), metav1.GetOptions{})
 				if err != nil {
 					return err
 				}
 				updated := service.DeepCopy()
-				if updated.Annotations == nil {
-					updated.Annotations = map[string]string{}
+				if updated.Annotations != nil {
+					for k := range annotations {
+						delete(updated.Annotations, k)
+					}
 				}
-				delete(updated.Annotations, annotationKey)
-				require.NotEqual(t, service, updated, "should have caused a meaningful update")
+				if equality.Semantic.DeepEqual(service, updated) {
+					return nil
+				}
 
-				t.Logf("updating Service to remove annotation: %v", annotationKey)
+				t.Logf("updating Service to remove annotations: %v", annotations)
 				_, err = adminClient.CoreV1().Services(env.ConciergeNamespace).Update(ctx, updated, metav1.UpdateOptions{})
 				return err
 			}))
@@ -1545,24 +1552,50 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				if err != nil {
 					return false, err
 				}
-				t.Logf("found Service %s of type %s with annotations: %s", service.Name, service.Spec.Type, service.Annotations)
+				t.Logf("found Service %s of type %s with actual annotations %q; expected annotations %q",
+					service.Name, service.Spec.Type, service.Annotations, annotations)
 				return equality.Semantic.DeepEqual(service.Annotations, annotations), nil
 			}, 30*time.Second, 100*time.Millisecond)
 		}
 
-		// Having another actor, like a human or a non-Pinniped controller, add unrelated annotations to the Service
-		// should not cause the Pinniped controllers to overwrite those annotations.
-		otherActorAnnotationKey := "pinniped.dev/test-other-actor-" + testlib.RandHex(t, 8)
-		otherActorAnnotationValue := "test-other-actor-" + testlib.RandHex(t, 8)
-		updateServiceAnnotations(map[string]string{otherActorAnnotationKey: otherActorAnnotationValue})
+		expectedAnnotations := func(credentialIssuerSpecAnnotations map[string]string, otherAnnotations map[string]string) map[string]string {
+			credentialIssuerSpecAnnotationKeys := []string{}
+			expectedAnnotations := map[string]string{}
+			// Expect the annotations specified on the CredentialIssuer spec to be present.
+			for k, v := range credentialIssuerSpecAnnotations {
+				credentialIssuerSpecAnnotationKeys = append(credentialIssuerSpecAnnotationKeys, k)
+				expectedAnnotations[k] = v
+			}
+			// Aside from the annotations requested on the CredentialIssuer spec, also expect the other annotation to still be there too.
+			for k, v := range otherAnnotations {
+				expectedAnnotations[k] = v
+			}
+			// Also expect the internal bookkeeping annotation to be present. It tracks the requested keys from the spec.
+			// Our controller sorts these keys to make the order in the annotation's value predictable.
+			sort.Strings(credentialIssuerSpecAnnotationKeys)
+			credentialIssuerSpecAnnotationKeysJSON, err := json.Marshal(credentialIssuerSpecAnnotationKeys)
+			require.NoError(t, err)
+			expectedAnnotations["credentialissuer.pinniped.dev/annotation-keys"] = string(credentialIssuerSpecAnnotationKeysJSON)
+			return expectedAnnotations
+		}
+
+		otherActorAnnotations := map[string]string{
+			"pinniped.dev/test-other-actor-" + testlib.RandHex(t, 8): "test-other-actor-" + testlib.RandHex(t, 8),
+		}
 
 		// Whatever happens, set the annotations back to the original value and expect the Service to be updated.
 		t.Cleanup(func() {
 			t.Log("reverting CredentialIssuer back to previous configuration")
-			deleteServiceAnnotation(otherActorAnnotationKey)
+			deleteServiceAnnotations(otherActorAnnotations)
 			applyCredentialIssuerAnnotations(previous.Spec.ImpersonationProxy.Service.DeepCopy().Annotations)
-			waitForServiceAnnotations(previous.Spec.ImpersonationProxy.Service.DeepCopy().Annotations)
+			waitForServiceAnnotations(
+				expectedAnnotations(previous.Spec.ImpersonationProxy.Service.DeepCopy().Annotations, map[string]string{}),
+			)
 		})
+
+		// Having another actor, like a human or a non-Pinniped controller, add unrelated annotations to the Service
+		// should not cause the Pinniped controllers to overwrite those annotations.
+		updateServiceAnnotations(otherActorAnnotations)
 
 		// Set a new annotation in the CredentialIssuer spec.impersonationProxy.service.annotations field.
 		newAnnotationKey := "pinniped.dev/test-" + testlib.RandHex(t, 8)
@@ -1571,9 +1604,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		updatedAnnotations[newAnnotationKey] = newAnnotationValue
 		applyCredentialIssuerAnnotations(updatedAnnotations)
 
-		// Expect them to be applied to the Service, and expect the other annotation to still be there too.
-		updatedAnnotations[otherActorAnnotationKey] = otherActorAnnotationValue
-		waitForServiceAnnotations(updatedAnnotations)
+		// Expect them to be applied to the Service.
+		waitForServiceAnnotations(expectedAnnotations(updatedAnnotations, otherActorAnnotations))
 	})
 
 	t.Run("running impersonation proxy with ClusterIP service", func(t *testing.T) {

@@ -1481,6 +1481,46 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		previous, err := adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuerName(env), metav1.GetOptions{})
 		require.NoError(t, err)
 
+		updateServiceAnnotations := func(annotations map[string]string) {
+			require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				service, err := adminClient.CoreV1().Services(env.ConciergeNamespace).Get(ctx, impersonationProxyLoadBalancerName(env), metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				updated := service.DeepCopy()
+				if updated.Annotations == nil {
+					updated.Annotations = map[string]string{}
+				}
+				for k, v := range annotations {
+					updated.Annotations[k] = v
+				}
+				require.NotEqual(t, service, updated, "should have caused a meaningful update")
+
+				t.Logf("updating Service with annotations: %v", annotations)
+				_, err = adminClient.CoreV1().Services(env.ConciergeNamespace).Update(ctx, updated, metav1.UpdateOptions{})
+				return err
+			}))
+		}
+
+		deleteServiceAnnotation := func(annotationKey string) {
+			require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				service, err := adminClient.CoreV1().Services(env.ConciergeNamespace).Get(ctx, impersonationProxyLoadBalancerName(env), metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				updated := service.DeepCopy()
+				if updated.Annotations == nil {
+					updated.Annotations = map[string]string{}
+				}
+				delete(updated.Annotations, annotationKey)
+				require.NotEqual(t, service, updated, "should have caused a meaningful update")
+
+				t.Logf("updating Service to remove annotation: %v", annotationKey)
+				_, err = adminClient.CoreV1().Services(env.ConciergeNamespace).Update(ctx, updated, metav1.UpdateOptions{})
+				return err
+			}))
+		}
+
 		applyCredentialIssuerAnnotations := func(annotations map[string]string) {
 			require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				issuer, err := adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuerName(env), metav1.GetOptions{})
@@ -1510,9 +1550,16 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}, 30*time.Second, 100*time.Millisecond)
 		}
 
+		// Having another actor, like a human or a non-Pinniped controller, add unrelated annotations to the Service
+		// should not cause the Pinniped controllers to overwrite those annotations.
+		otherActorAnnotationKey := "pinniped.dev/test-other-actor-" + testlib.RandHex(t, 8)
+		otherActorAnnotationValue := "test-other-actor-" + testlib.RandHex(t, 8)
+		updateServiceAnnotations(map[string]string{otherActorAnnotationKey: otherActorAnnotationValue})
+
 		// Whatever happens, set the annotations back to the original value and expect the Service to be updated.
 		t.Cleanup(func() {
 			t.Log("reverting CredentialIssuer back to previous configuration")
+			deleteServiceAnnotation(otherActorAnnotationKey)
 			applyCredentialIssuerAnnotations(previous.Spec.ImpersonationProxy.Service.DeepCopy().Annotations)
 			waitForServiceAnnotations(previous.Spec.ImpersonationProxy.Service.DeepCopy().Annotations)
 		})
@@ -1524,7 +1571,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		updatedAnnotations[newAnnotationKey] = newAnnotationValue
 		applyCredentialIssuerAnnotations(updatedAnnotations)
 
-		// Expect it to be applied to the Service.
+		// Expect them to be applied to the Service, and expect the other annotation to still be there too.
+		updatedAnnotations[otherActorAnnotationKey] = otherActorAnnotationValue
 		waitForServiceAnnotations(updatedAnnotations)
 	})
 

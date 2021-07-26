@@ -398,14 +398,14 @@ func (p *Provider) SearchForDefaultNamingContext(ctx context.Context) (string, e
 
 	conn, err := p.dial(ctx)
 	if err != nil {
-		p.traceAuthFailure(t, err)
+		p.traceSearchBaseDiscoveryFailure(t, err)
 		return "", fmt.Errorf(`error dialing host "%s": %w`, p.c.Host, err)
 	}
 	defer conn.Close()
 
 	err = conn.Bind(p.c.BindUsername, p.c.BindPassword)
 	if err != nil {
-		p.traceAuthFailure(t, err)
+		p.traceSearchBaseDiscoveryFailure(t, err)
 		return "", fmt.Errorf(`error binding as "%s" before querying for defaultNamingContext: %w`, p.c.BindUsername, err)
 	}
 
@@ -647,4 +647,9 @@ func (p *Provider) traceAuthSuccess(t *trace.Trace) {
 	t.Step("authentication succeeded",
 		trace.Field{Key: "authenticated", Value: true},
 	)
+}
+
+func (p *Provider) traceSearchBaseDiscoveryFailure(t *trace.Trace, err error) {
+	t.Step("search base discovery failed",
+		trace.Field{Key: "reason", Value: err.Error()})
 }

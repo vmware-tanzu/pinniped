@@ -84,7 +84,7 @@ while (("$#")); do
     shift
     # If there are no more command line arguments, or there is another command line argument but it starts with a dash, then error
     if [[ "$#" == "0" || "$1" == -* ]]; then
-      log_error "-g|--get-active-directory-vars requires a script name to be specified"
+      log_error "--get-active-directory-vars requires a script name to be specified"
       exit 1
     fi
     get_active_directory_vars=$1
@@ -107,10 +107,11 @@ if [[ "$help" == "yes" ]]; then
   log_note "   $me [flags]"
   log_note
   log_note "Flags:"
-  log_note "   -h, --help:              print this usage"
-  log_note "   -c, --clean:             destroy the current kind cluster and make a new one"
-  log_note "   -g, --api-group-suffix:  deploy Pinniped with an alternate API group suffix"
-  log_note "   -s, --skip-build:        reuse the most recently built image of the app instead of building"
+  log_note "   -h, --help:                   print this usage"
+  log_note "   -c, --clean:                  destroy the current kind cluster and make a new one"
+  log_note "   -g, --api-group-suffix:       deploy Pinniped with an alternate API group suffix"
+  log_note "   -s, --skip-build:             reuse the most recently built image of the app instead of building"
+  log_note "   --get-active-directory-vars:  specify a script that exports active directory environment variables"
   exit 1
 fi
 

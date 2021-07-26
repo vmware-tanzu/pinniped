@@ -88,6 +88,7 @@ type TestLDAPUpstream struct {
 	BindUsername                           string   `json:"bindUsername"`
 	BindPassword                           string   `json:"bindPassword"`
 	UserSearchBase                         string   `json:"userSearchBase"`
+	DefaultNamingContextSearchBase         string   `json:"defaultNamingContextSearchBase"`
 	GroupSearchBase                        string   `json:"groupSearchBase"`
 	TestUserDN                             string   `json:"testUserDN"`
 	TestUserCN                             string   `json:"testUserCN"`
@@ -281,11 +282,16 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 		TestUserUniqueIDAttributeName:          wantEnv("PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_NAME", ""),
 		TestUserUniqueIDAttributeValue:         wantEnv("PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_VALUE", ""),
 		TestUserSAMAccountNameValue:            wantEnv("PINNIPED_TEST_AD_USERNAME_ATTRIBUTE_VALUE", ""),
+		TestUserMailAttributeValue:             wantEnv("PINNIPED_TEST_AD_USER_EMAIL_ATTRIBUTE_VALUE", ""),
+		TestUserMailAttributeName:              wantEnv("PINNIPED_TEST_AD_USER_EMAIL_ATTRIBUTE_NAME", ""),
 		TestUserDirectGroupsDNs:                filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_DN", ""), ";")),
 		TestUserDirectGroupsCNs:                filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_CN", ""), ";")),
 		TestUserIndirectGroupsSAMAccountNames:  filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_SAMACCOUNTNAME", ""), ";")),
 		TestDeactivatedUserSAMAccountNameValue: wantEnv("PINNIPED_TEST_DEACTIVATED_AD_USER_SAMACCOUNTNAME", ""),
 		TestDeactivatedUserPassword:            wantEnv("PINNIPED_TEST_DEACTIVATED_AD_USER_PASSWORD", ""),
+		DefaultNamingContextSearchBase:         wantEnv("PINNIPED_TEST_AD_DEFAULTNAMINGCONTEXT_DN", ""),
+		UserSearchBase:                         wantEnv("PINNIPED_TEST_AD_USERS_DN", ""),
+		GroupSearchBase:                        wantEnv("PINNIPED_TEST_AD_USERS_DN", ""),
 	}
 
 	sort.Strings(result.SupervisorUpstreamLDAP.TestUserDirectGroupsCNs)

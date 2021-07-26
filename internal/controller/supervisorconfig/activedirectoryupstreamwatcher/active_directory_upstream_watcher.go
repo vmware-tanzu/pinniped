@@ -100,9 +100,9 @@ func (s *activeDirectoryUpstreamGenericLDAPSpec) DetectAndSetSearchBase(ctx cont
 	if config.GroupSearch.Base != "" && config.UserSearch.Base != "" {
 		// Both were already set in spec so just return; no need to query the RootDSE
 		return &v1alpha1.Condition{
-			Type:    "SearchBaseFound",
+			Type:    upstreamwatchers.TypeSearchBaseFound,
 			Status:  v1alpha1.ConditionTrue,
-			Reason:  "Success",
+			Reason:  upstreamwatchers.ReasonUsingConfigurationFromSpec,
 			Message: "Using search base from ActiveDirectoryIdentityProvider config.",
 		}
 	}
@@ -115,7 +115,7 @@ func (s *activeDirectoryUpstreamGenericLDAPSpec) DetectAndSetSearchBase(ctx cont
 		return &v1alpha1.Condition{
 			Type:    upstreamwatchers.TypeSearchBaseFound,
 			Status:  v1alpha1.ConditionFalse,
-			Reason:  "Error",
+			Reason:  upstreamwatchers.ReasonErrorFetchingSearchBase,
 			Message: fmt.Sprintf(`Error finding search base: %s`, err.Error()),
 		}
 	}

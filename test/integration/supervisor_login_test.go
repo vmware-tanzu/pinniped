@@ -281,12 +281,79 @@ func TestSupervisorLogin(t *testing.T) {
 			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
 			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(
 				"ldaps://" + env.SupervisorUpstreamActiveDirectory.Host +
-					"?base=" + url.QueryEscape("DC=activedirectory,DC=test,DC=pinniped,DC=dev") +
+					"?base=" + url.QueryEscape(env.SupervisorUpstreamActiveDirectory.DefaultNamingContextSearchBase) +
 					"&sub=" + env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue,
 			),
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
 			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserSAMAccountNameValue),
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountNames,
+		}, {
+			name: "activedirectory with custom options",
+			maybeSkip: func(t *testing.T) {
+				t.Helper()
+				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
+					t.Skip("LDAP integration test requires connectivity to an LDAP server")
+				}
+				if env.SupervisorUpstreamActiveDirectory.Host == "" {
+					t.Skip("Active Directory hostname not specified")
+				}
+			},
+			createIDP: func(t *testing.T) {
+				t.Helper()
+				secret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ad-service-account", v1.SecretTypeBasicAuth,
+					map[string]string{
+						v1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
+						v1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
+					},
+				)
+				adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
+					Host: env.SupervisorUpstreamActiveDirectory.Host,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
+					},
+					Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
+						SecretName: secret.Name,
+					},
+					UserSearch: idpv1alpha1.ActiveDirectoryIdentityProviderUserSearch{
+						Base:   env.SupervisorUpstreamActiveDirectory.UserSearchBase,
+						Filter: env.SupervisorUpstreamActiveDirectory.TestUserMailAttributeName + "={}",
+						Attributes: idpv1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{
+							Username: env.SupervisorUpstreamActiveDirectory.TestUserMailAttributeName,
+						},
+					},
+					GroupSearch: idpv1alpha1.ActiveDirectoryIdentityProviderGroupSearch{
+						Filter: "member={}", // excluding nested groups
+						Base:   env.SupervisorUpstreamActiveDirectory.GroupSearchBase,
+						Attributes: idpv1alpha1.ActiveDirectoryIdentityProviderGroupSearchAttributes{
+							GroupName: "dn",
+						},
+					},
+				}, idpv1alpha1.ActiveDirectoryPhaseReady)
+				expectedMsg := fmt.Sprintf(
+					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
+					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
+					secret.Name, secret.ResourceVersion,
+				)
+				requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
+			},
+			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingLDAPIdentityProvider(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamActiveDirectory.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			// the ID token Subject should be the Host URL plus the value pulled from the requested UserSearch.Attributes.UID attribute
+			wantDownstreamIDTokenSubjectToMatch: regexp.QuoteMeta(
+				"ldaps://" + env.SupervisorUpstreamActiveDirectory.Host +
+					"?base=" + url.QueryEscape(env.SupervisorUpstreamActiveDirectory.UserSearchBase) +
+					"&sub=" + env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue,
+			),
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserMailAttributeValue),
+			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamActiveDirectory.TestUserDirectGroupsDNs,
 		},
 		{
 			name: "logging in to activedirectory with a deactivated user fails",
@@ -395,11 +462,18 @@ func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, ad
 		}
 	}
 
+	expectedUserSearchReason := ""
+	if adIDP.Spec.UserSearch.Base == "" || adIDP.Spec.GroupSearch.Base == "" {
+		expectedUserSearchReason = "Success"
+	} else {
+		expectedUserSearchReason = "UsingConfigurationFromSpec"
+	}
+
 	require.ElementsMatch(t, [][]string{
 		{"BindSecretValid", "True", "Success"},
 		{"TLSConfigurationValid", "True", "Success"},
 		{"LDAPConnectionValid", "True", "Success"},
-		{"SearchBaseFound", "True", "Success"},
+		{"SearchBaseFound", "True", expectedUserSearchReason},
 	}, conditionsSummary)
 }
 

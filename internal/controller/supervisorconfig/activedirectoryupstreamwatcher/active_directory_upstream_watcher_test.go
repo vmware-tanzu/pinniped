@@ -273,7 +273,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			Type:               "SearchBaseFound",
 			Status:             "True",
 			LastTransitionTime: now,
-			Reason:             "Success",
+			Reason:             "UsingConfigurationFromSpec",
 			Message:            "Using search base from ActiveDirectoryIdentityProvider config.",
 			ObservedGeneration: gen,
 		}
@@ -284,7 +284,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			Type:               "SearchBaseFound",
 			Status:             "False",
 			LastTransitionTime: now,
-			Reason:             "Error",
+			Reason:             "ErrorFetchingSearchBase",
 			Message:            message,
 			ObservedGeneration: gen,
 		}
@@ -878,7 +878,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 								testHost, testBindUsername, testBindUsername),
 							ObservedGeneration: 1234,
 						},
-						searchBaseFoundErrorCondition(1234, "Error finding search base: error binding as \"test-bind-username\" before user search: some bind error"),
+						searchBaseFoundErrorCondition(1234, "Error finding search base: error binding as \"test-bind-username\" before querying for defaultNamingContext: some bind error"),
 						tlsConfigurationValidLoadedTrueCondition(1234),
 					},
 				},
@@ -1344,9 +1344,6 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "when the input activedirectoryidentityprovider leaves group search base blank and query for defaultNamingContext fails",
-			// TODO is this a fatal error? I think so because leaving the search base blank and trying anyway does not seem expected.
-			//  queries with an empty search base could potentially succeed but return something unexpected, like if you were
-			//  pointing at global catalog but not intending to use the GC functionality...
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Spec.UserSearch.Attributes = v1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
 				upstream.Spec.GroupSearch.Base = ""

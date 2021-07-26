@@ -33,13 +33,15 @@ const (
 	TestLDAPConnectionTimeout = 90 * time.Second
 
 	// Constants related to conditions.
-	typeBindSecretValid           = "BindSecretValid"
-	typeTLSConfigurationValid     = "TLSConfigurationValid"
-	typeLDAPConnectionValid       = "LDAPConnectionValid"
-	TypeSearchBaseFound           = "SearchBaseFound"
-	reasonLDAPConnectionError     = "LDAPConnectionError"
-	noTLSConfigurationMessage     = "no TLS configuration provided"
-	loadedTLSConfigurationMessage = "loaded TLS configuration"
+	typeBindSecretValid              = "BindSecretValid"
+	typeTLSConfigurationValid        = "TLSConfigurationValid"
+	typeLDAPConnectionValid          = "LDAPConnectionValid"
+	TypeSearchBaseFound              = "SearchBaseFound"
+	reasonLDAPConnectionError        = "LDAPConnectionError"
+	noTLSConfigurationMessage        = "no TLS configuration provided"
+	loadedTLSConfigurationMessage    = "loaded TLS configuration"
+	ReasonUsingConfigurationFromSpec = "UsingConfigurationFromSpec"
+	ReasonErrorFetchingSearchBase    = "ErrorFetchingSearchBase"
 )
 
 // An in-memory cache with an entry for each ActiveDirectoryIdentityProvider, to keep track of which ResourceVersion
@@ -187,7 +189,7 @@ func HasPreviousSuccessfulSearchBaseConditionForCurrentGeneration(secretVersionC
 			// Found a previously successful condition for the current spec generation.
 			// Now figure out which version of the bind Secret was used during that previous validation, if any.
 			validatedSettings := secretVersionCache.ValidatedSettingsByName[upstreamName]
-			// Reload the TLS vs StartTLS setting that was previously validated.
+			// Reload the user search and group search base settings that were previously validated.
 			config.UserSearch.Base = validatedSettings.UserSearchBase
 			config.GroupSearch.Base = validatedSettings.GroupSearchBase
 			return true

@@ -393,7 +393,7 @@ func (p *Provider) validateConfig() error {
 }
 
 func (p *Provider) SearchForDefaultNamingContext(ctx context.Context) (string, error) {
-	t := trace.FromContext(ctx).Nest("slow ldap authenticate user attempt", trace.Field{Key: "providerName", Value: p.GetName()})
+	t := trace.FromContext(ctx).Nest("slow ldap attempt when searching for default naming context", trace.Field{Key: "providerName", Value: p.GetName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
 
 	conn, err := p.dial(ctx)
@@ -406,7 +406,7 @@ func (p *Provider) SearchForDefaultNamingContext(ctx context.Context) (string, e
 	err = conn.Bind(p.c.BindUsername, p.c.BindPassword)
 	if err != nil {
 		p.traceAuthFailure(t, err)
-		return "", fmt.Errorf(`error binding as "%s" before user search: %w`, p.c.BindUsername, err)
+		return "", fmt.Errorf(`error binding as "%s" before querying for defaultNamingContext: %w`, p.c.BindUsername, err)
 	}
 
 	searchResult, err := conn.Search(p.defaultNamingContextRequest())

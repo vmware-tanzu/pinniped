@@ -478,7 +478,8 @@ func CreatePod(ctx context.Context, t *testing.T, name, namespace string, spec c
 	client := NewKubernetesClientset(t)
 	pods := client.CoreV1().Pods(namespace)
 
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	const podCreateTimeout = 2 * time.Minute
+	ctx, cancel := context.WithTimeout(ctx, podCreateTimeout+time.Second)
 	defer cancel()
 
 	created, err := pods.Create(ctx, &corev1.Pod{ObjectMeta: testObjectMeta(t, name), Spec: spec}, metav1.CreateOptions{})
@@ -497,7 +498,7 @@ func CreatePod(ctx context.Context, t *testing.T, name, namespace string, spec c
 		result, err = pods.Get(ctx, created.Name, metav1.GetOptions{})
 		requireEventually.NoError(err)
 		requireEventually.Equal(corev1.PodRunning, result.Status.Phase)
-	}, 15*time.Second, 1*time.Second, "expected the Pod to go into phase %s", corev1.PodRunning)
+	}, podCreateTimeout, 1*time.Second, "expected the Pod to go into phase %s", corev1.PodRunning)
 	return result
 }
 

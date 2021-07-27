@@ -1,14 +1,23 @@
-./.*
-# Allow .git to get copied into the container so we can use it in hack/get-ldflags.sh during build.
-!/.git
-./*.md
-./*.yaml
-./apis
-./deploy
-./Dockerfile
-./generated/1.1*
-./internal/mocks
-./LICENSE
-./site/
-./test
-**/*_test.go
+# This is effectively a copy of the .gitignore file.
+# The whole git repo, including the .git directory, should get copied into the Docker build context,
+# to enable the use of hack/get-ldflags.sh inside the Dockerfile.
+# When you change the .gitignore file, please consider also changing this file.
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# GoLand
+.idea
+
+# MacOS Desktop Services Store
+.DS_Store

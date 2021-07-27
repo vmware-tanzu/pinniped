@@ -163,3 +163,9 @@ You can create the certificate Secrets however you like, for example you could u
 or `kubectl create secret tls`.
 Keep in mind that your users must load some of these endpoints in their web browsers, so the TLS certificates
 should be signed by a certificate authority that is trusted by their browsers.
+
+## Next steps
+
+Next, configure an `OIDCIdentityProvider` or an `LDAPIdentityProvider` for the Supervisor (several examples are available in these guides),
+and [configure the Concierge to use the Supervisor for authentication]({{< ref "configure-concierge-supervisor-jwt" >}})
+on each cluster!

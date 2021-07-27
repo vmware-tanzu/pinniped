@@ -68,4 +68,8 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
 
      `ytt --file . | kapp deploy --yes --app pinniped-concierge --diff-changes --file -`
 
-*Next, configure the Concierge for [JWT]({{< ref "configure-concierge-jwt.md" >}}) or [webhook]({{< ref "configure-concierge-webhook.md" >}}) authentication.*
+## Next steps
+
+Next, configure the Concierge for
+[JWT]({{< ref "configure-concierge-jwt.md" >}}) or [webhook]({{< ref "configure-concierge-webhook.md" >}}) authentication,
+or [configure the Concierge to use the Supervisor for authentication]({{< ref "configure-concierge-supervisor-jwt" >}}).

@@ -112,5 +112,5 @@ You should see:
   If instead you get an access denied error, you may need to create a ClusterRoleBinding for the username/groups returned by your webhook, for example:
 
   ```sh
-  kubectl create clusterrolebinding my-user-admin --clusterrole admin --user my-username
+  kubectl create clusterrolebinding my-user-admin --clusterrole edit --user my-username
   ```

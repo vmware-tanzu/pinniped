@@ -1,5 +1,5 @@
 ---
-title: Configure the Pinniped Supervisor to use GitLab as an OIDC Provider
+title: Configure the Pinniped Supervisor to use GitLab as an OIDC provider
 description: Set up the Pinniped Supervisor to use GitLab login.
 cascade:
   layout: docs
@@ -136,7 +136,7 @@ spec:
 # [...]
 ```
 
-## Next Steps
+## Next steps
 
 Next, [configure the Concierge to validate JWTs issued by the Supervisor]({{< ref "configure-concierge-supervisor-jwt" >}})!
 Then you'll be able to log into those clusters as any of the users from the GitLab directory.

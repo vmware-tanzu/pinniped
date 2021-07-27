@@ -1,6 +1,6 @@
 ---
-title: Logging into your Cluster using Pinniped
-description: Logging into your Kubernetes Cluster using Pinniped for Authentication.
+title: Logging into your cluster using Pinniped
+description: Logging into your Kubernetes cluster using Pinniped for authentication.
 cascade:
   layout: docs
 menu:
@@ -31,7 +31,7 @@ You should have also already [installed the `pinniped` command-line]({{< ref "in
 1. A cluster admin uses Pinniped to generate a kubeconfig for each cluster, and shares the kubeconfig for each cluster with all users of that cluster.
 1. A cluster user uses `kubectl` with the generated kubeconfig given to them by the cluster admin. `kubectl` interactively prompts the user to log in using their own unique identity.
 
-## Key Advantages of Using the Pinniped Supervisor
+## Key advantages of using the Pinniped Supervisor
 
 Although you can choose to use Pinniped without using the Pinniped Supervisor, there are several key advantages of choosing to use the Pinniped Supervisor to manage identity across fleets of Kubernetes clusters.
 
@@ -48,7 +48,7 @@ Although you can choose to use Pinniped without using the Pinniped Supervisor, t
    It also allows you to configure how identities and group memberships in the OIDC or LDAP identity provider map to identities 
    and group memberships in the Kubernetes clusters.
 
-## Generate a Pinniped-Compatible kubeconfig File
+## Generate a Pinniped-compatible kubeconfig file
 
 You will need to generate a Pinniped-compatible kubeconfig file for each cluster in which you have installed the Concierge.
 This requires admin-level access to each cluster, so this would typically be performed by the same user who installed the Concierge.
@@ -72,7 +72,7 @@ The new Pinniped-compatible kubeconfig YAML will be output as stdout, and can be
 
 Various default behaviors of `pinniped get kubeconfig` can be overridden using [its command-line options]({{< ref "cli" >}}).
 
-## Use the Generated kubeconfig with `kubectl` to Access the Cluster
+## Use the generated kubeconfig with `kubectl` to access the cluster
 
 A cluster user will typically be given a Pinniped-compatible kubeconfig by their cluster admin. They can use this kubeconfig
 with `kubectl` just like any other kubeconfig, as long as they have also installed the `pinniped` CLI tool at the

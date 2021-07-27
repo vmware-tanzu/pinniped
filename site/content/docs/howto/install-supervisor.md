@@ -67,6 +67,6 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
 
      `ytt --file . | kapp deploy --yes --app pinniped-supervisor --diff-changes --file -`
 
-## Next Steps
+## Next steps
 
 Next, [configure the Supervisor as an OIDC issuer]({{< ref "configure-supervisor" >}})!

@@ -1,5 +1,5 @@
 ---
-title: Configure the Pinniped Concierge to Validate JWT tokens
+title: Configure the Pinniped Concierge to validate JWT tokens
 description: Set up JSON Web Token (JWT) based token authentication on an individual Kubernetes cluster.
 cascade:
   layout: docs

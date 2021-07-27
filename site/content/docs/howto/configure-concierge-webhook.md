@@ -1,5 +1,5 @@
 ---
-title: Configure the Pinniped Concierge to Validate Webhook Tokens
+title: Configure the Pinniped Concierge to validate webhook tokens
 description: Set up webhook-based token authentication on an individual Kubernetes cluster.
 cascade:
   layout: docs

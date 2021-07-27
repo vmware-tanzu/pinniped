@@ -1,6 +1,6 @@
 ---
-title: Configure the Pinniped Concierge to Validate JWT Tokens Issued by the Pinniped Supervisor
-description: Set up JSON Web Token (JWT) based token authentication on an individual Kubernetes cluster using the Pinniped Supervisor as the OIDC Provider.
+title: Configure the Pinniped Concierge to validate JWT tokens issued by the Pinniped Supervisor
+description: Set up JSON Web Token (JWT) based token authentication on an individual Kubernetes cluster using the Pinniped Supervisor as the OIDC provider.
 cascade:
   layout: docs
 menu:
@@ -67,6 +67,6 @@ kubectl apply -f my-supervisor-authenticator.yaml
 Do this on each cluster in which you would like to allow users from that FederationDomain to log in.
 Don't forget to give each cluster a unique `audience` value for security reasons.
 
-## Next Steps
+## Next steps
 
 Next, [log in to your cluster]({{< ref "login" >}})!

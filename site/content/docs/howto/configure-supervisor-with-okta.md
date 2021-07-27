@@ -1,5 +1,5 @@
 ---
-title: Configure the Pinniped Supervisor to use Okta as an OIDC Provider
+title: Configure the Pinniped Supervisor to use Okta as an OIDC provider
 description: Set up the Pinniped Supervisor to use Okta login.
 cascade:
   layout: docs

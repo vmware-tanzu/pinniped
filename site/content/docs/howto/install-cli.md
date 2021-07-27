@@ -56,6 +56,6 @@ curl -Lso pinniped https://get.pinniped.dev/v0.9.2/pinniped-cli-linux-amd64 \
 
 *Replace v0.9.2 with your preferred version number.*
 
-## Next Steps
+## Next steps
 
 Next, [install the Supervisor]({{< ref "install-supervisor.md" >}}) and/or [install the Concierge]({{< ref "install-concierge.md" >}})!

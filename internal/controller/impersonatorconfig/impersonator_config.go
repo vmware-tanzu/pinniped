@@ -532,7 +532,7 @@ func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context
 	// to be able to detect that the missing key means that we should remove the key. This is needed to
 	// differentiate it from a key that was added by another actor, which we should not remove.
 	// But don't bother recording the requested annotations if there were no annotations requested.
-	desiredAnnotationKeys := []string{}
+	desiredAnnotationKeys := make([]string, 0, len(desiredService.Annotations))
 	for k := range desiredService.Annotations {
 		desiredAnnotationKeys = append(desiredAnnotationKeys, k)
 	}
@@ -542,9 +542,6 @@ func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context
 		keysJSONArray, err := json.Marshal(desiredAnnotationKeys)
 		if err != nil {
 			return err // This shouldn't really happen. We should always be able to marshal an array of strings.
-		}
-		if desiredService.Annotations == nil {
-			desiredService.Annotations = map[string]string{}
 		}
 		// Save the desired annotations to a bookkeeping annotation.
 		desiredService.Annotations[annotationKeysKey] = string(keysJSONArray)
@@ -593,9 +590,8 @@ func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context
 
 	// Check if any annotations which were previously in the CredentialIssuer spec are now gone from the spec,
 	// which means that those now-missing annotations should get deleted.
-	// Nested loops are not efficient here, but these lists of annotations should be small.
 	for _, oldKey := range oldDesiredAnnotationKeys {
-		if !stringSliceContains(desiredAnnotationKeys, oldKey) {
+		if _, existsInDesired := desiredService.Annotations[oldKey]; !existsInDesired {
 			delete(updatedService.Annotations, oldKey)
 		}
 	}
@@ -616,15 +612,6 @@ func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context
 	c.infoLog.Info("updating service for impersonation proxy")
 	_, err = c.k8sClient.CoreV1().Services(c.namespace).Update(ctx, updatedService, metav1.UpdateOptions{})
 	return err
-}
-
-func stringSliceContains(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-	return false
 }
 
 func (c *impersonatorConfigController) ensureTLSSecret(ctx context.Context, nameInfo *certNameInfo, ca *certauthority.CA) error {

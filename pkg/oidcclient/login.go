@@ -18,7 +18,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -69,6 +68,9 @@ const (
 
 	debugLogLevel = 4
 )
+
+// stdin returns the file descriptor for stdin as an int.
+func stdin() int { return int(os.Stdin.Fd()) }
 
 type handlerState struct {
 	// Basic parameters.
@@ -540,7 +542,7 @@ func (h *handlerState) webBrowserBasedAuth(authorizeOptions *[]oauth2.AuthCodeOp
 
 	// If the listener failed to start and stdin is not a TTY, then we have no hope of succeeding,
 	// since we won't be able to receive the web callback and we can't prompt for the manual auth code.
-	if listener == nil && !h.isTTY(syscall.Stdin) {
+	if listener == nil && !h.isTTY(stdin()) {
 		return nil, fmt.Errorf("login failed: must have either a localhost listener or stdin must be a TTY")
 	}
 
@@ -597,7 +599,7 @@ func (h *handlerState) promptForWebLogin(ctx context.Context, authorizeURL strin
 
 	// If stdin is not a TTY, print the URL but don't prompt for the manual paste,
 	// since we have no way of reading it.
-	if !h.isTTY(syscall.Stdin) {
+	if !h.isTTY(stdin()) {
 		return
 	}
 
@@ -623,7 +625,7 @@ func (h *handlerState) promptForWebLogin(ctx context.Context, authorizeURL strin
 }
 
 func promptForValue(ctx context.Context, promptLabel string) (string, error) {
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
+	if !term.IsTerminal(stdin()) {
 		return "", errors.New("stdin is not connected to a terminal")
 	}
 	_, err := fmt.Fprint(os.Stderr, promptLabel)
@@ -648,7 +650,7 @@ func promptForValue(ctx context.Context, promptLabel string) (string, error) {
 }
 
 func promptForSecret(ctx context.Context, promptLabel string) (string, error) {
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
+	if !term.IsTerminal(stdin()) {
 		return "", errors.New("stdin is not connected to a terminal")
 	}
 	_, err := fmt.Fprint(os.Stderr, promptLabel)
@@ -672,7 +674,7 @@ func promptForSecret(ctx context.Context, promptLabel string) (string, error) {
 		_, _ = fmt.Fprint(os.Stderr, "\n")
 	}()
 
-	password, err := term.ReadPassword(syscall.Stdin)
+	password, err := term.ReadPassword(stdin())
 	if err != nil {
 		return "", fmt.Errorf("could not read password: %w", err)
 	}

@@ -306,7 +306,8 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 			Filter:             adUpstreamImpl.Spec().GroupSearch().Filter(),
 			GroupNameAttribute: adUpstreamImpl.Spec().GroupSearch().GroupNameAttribute(),
 		},
-		Dialer: c.ldapDialer,
+		Dialer:                       c.ldapDialer,
+		UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary}},
 	}
 
 	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, &adUpstreamImpl, c.secretInformer, c.validatedSecretVersionsCache, config)

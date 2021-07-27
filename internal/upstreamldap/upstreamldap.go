@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/go-ldap/ldap/v3"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -103,6 +105,15 @@ type ProviderConfig struct {
 
 	// Dialer exists to enable testing. When nil, will use a default appropriate for production use.
 	Dialer LDAPDialer
+
+	// UIDAttributeParsingOverrides are mappings between an attribute name and a way to parse it when
+	// it comes out of LDAP.
+	UIDAttributeParsingOverrides []AttributeParsingOverride
+}
+
+type AttributeParsingOverride struct {
+	AttributeName string
+	OverrideFunc  func([]byte) (string, error)
 }
 
 // UserSearchConfig contains information about how to search for users in the upstream LDAP IDP.
@@ -610,6 +621,12 @@ func (p *Provider) getSearchResultAttributeRawValueEncoded(attributeName string,
 		)
 	}
 
+	for _, override := range p.c.UIDAttributeParsingOverrides {
+		if attributeName == override.AttributeName {
+			return override.OverrideFunc(attributeValue)
+		}
+	}
+
 	return base64.RawURLEncoding.EncodeToString(attributeValue), nil
 }
 
@@ -652,4 +669,17 @@ func (p *Provider) traceAuthSuccess(t *trace.Trace) {
 func (p *Provider) traceSearchBaseDiscoveryFailure(t *trace.Trace, err error) {
 	t.Step("search base discovery failed",
 		trace.Field{Key: "reason", Value: err.Error()})
+}
+
+func MicrosoftUUIDFromBinary(binaryUUID []byte) (string, error) {
+	uuidVal, err := uuid.FromBytes(binaryUUID) // start out with the RFC4122 version
+	if err != nil {
+		return "", err
+	}
+	// then swap it because AD stores the first 3 fields little-endian rather than the expected
+	// big-endian.
+	uuidVal[0], uuidVal[1], uuidVal[2], uuidVal[3] = uuidVal[3], uuidVal[2], uuidVal[1], uuidVal[0]
+	uuidVal[4], uuidVal[5] = uuidVal[5], uuidVal[4]
+	uuidVal[6], uuidVal[7] = uuidVal[7], uuidVal[6]
+	return uuidVal.String(), nil
 }

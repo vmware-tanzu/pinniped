@@ -1,5 +1,5 @@
 ---
-title: Configure the Pinniped Supervisor to use Okta as an OIDC Provider
+title: Configure the Pinniped Supervisor to use Okta as an OIDC provider
 description: Set up the Pinniped Supervisor to use Okta login.
 cascade:
   layout: docs
@@ -108,4 +108,5 @@ Look at the `status` field. If it was configured correctly, you should see `phas
 
 ## Next steps
 
-Now that you have configured the Supervisor to use Okta, you will want to [configure the Concierge to validate JWTs issued by the Supervisor]({{< ref "configure-concierge-supervisor-jwt" >}}).
+Next, [configure the Concierge to validate JWTs issued by the Supervisor]({{< ref "configure-concierge-supervisor-jwt" >}})!
+Then you'll be able to log into those clusters as any of the users from the Okta directory.

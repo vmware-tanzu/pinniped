@@ -1,5 +1,5 @@
 ---
-title: Pinniped How-To Guides
+title: Pinniped how-to guides
 cascade:
   layout: docs
 menu:

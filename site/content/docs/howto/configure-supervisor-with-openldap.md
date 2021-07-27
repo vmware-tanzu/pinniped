@@ -1,5 +1,5 @@
 ---
-title: Configure the Pinniped Supervisor to use OpenLDAP as an LDAP Provider
+title: Configure the Pinniped Supervisor to use OpenLDAP as an LDAP provider
 description: Set up the Pinniped Supervisor to use OpenLDAP login.
 cascade:
   layout: docs
@@ -22,7 +22,7 @@ cluster using their identity from an OpenLDAP server.
 This how-to guide assumes that you have already [installed the Pinniped Supervisor]({{< ref "install-supervisor" >}}) with working ingress,
 and that you have [configured a FederationDomain to issue tokens for your downstream clusters]({{< ref "configure-supervisor" >}}).
 
-## An Example of Deploying OpenLDAP on Kubernetes
+## An example of deploying OpenLDAP on Kubernetes
 
 *Note: If you already have an OpenLDAP server installed and configured, please skip to the next section to configure the Supervisor.*
 
@@ -292,7 +292,7 @@ kubectl describe LDAPIdentityProvider -n pinniped-supervisor openldap
 
 Look at the `status` field. If it was configured correctly, you should see `phase: Ready`.
 
-## Next Steps
+## Next steps
 
-Now that you have configured the Supervisor to use OpenLDAP, you will want to [configure the Concierge to validate JWTs issued by the Supervisor]({{< ref "configure-concierge-supervisor-jwt" >}}).
+Next, [configure the Concierge to validate JWTs issued by the Supervisor]({{< ref "configure-concierge-supervisor-jwt" >}})!
 Then you'll be able to log into those clusters as any of the users from the OpenLDAP directory.

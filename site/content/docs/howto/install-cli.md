@@ -36,13 +36,15 @@ To find specific versions or view all available platforms and architectures, vis
 
 ### Gatekeeper
 
-If you are using macOS, you may get an error dialog when you first run `pinniped` that says `“pinniped” cannot be opened because the developer cannotbe verified`.
+If you are using macOS, you may get an error dialog when you first run `pinniped` that says `“pinniped” cannot be opened because the developer cannot be verified`.
 Cancel this dialog, open System Preferences, click Security & Privacy, and click the Allow Anyway button next to the Pinniped message.
 
 Run the command again and another dialog appears saying `macOS cannot verify the developer of “pinniped”. Are you sure you want to open it?`.
 Click Open to allow the command to proceed.
 
 ## Install a specific version via script
+
+Choose your preferred [release](https://github.com/vmware-tanzu/pinniped/releases) version number and use it to replace the version number in the URL below.
 
 For example, to install v0.9.2 on Linux/amd64:
 
@@ -52,4 +54,8 @@ curl -Lso pinniped https://get.pinniped.dev/v0.9.2/pinniped-cli-linux-amd64 \
   && sudo mv pinniped /usr/local/bin/pinniped
 ```
 
-*Next, [install the Concierge]({{< ref "install-concierge.md" >}})!*
+*Replace v0.9.2 with your preferred version number.*
+
+## Next steps
+
+Next, [install the Supervisor]({{< ref "install-supervisor.md" >}}) and/or [install the Concierge]({{< ref "install-concierge.md" >}})!

@@ -15,6 +15,7 @@ This guide shows you how to use this capability _without_ the Pinniped Superviso
 This is most useful if you have only a single cluster and want to authenticate to it via an existing OIDC provider.
 
 If you have multiple clusters, you may want to [install]({{< ref "install-supervisor" >}}) and [configure]({{< ref "configure-supervisor" >}}) the Pinniped Supervisor.
+Then you can [configure the Concierge to use the Supervisor for authentication]({{< ref "configure-concierge-supervisor-jwt" >}}).
 
 ## Prerequisites
 
@@ -121,7 +122,7 @@ You should see:
 
   ```sh
   kubectl create clusterrolebinding my-user-admin \
-    --clusterrole admin \
+    --clusterrole edit \
     --user my-username@example.com
   ```
 

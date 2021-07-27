@@ -63,7 +63,7 @@ const (
 	// For CLI-based auth, such as with LDAP upstream identity providers, the user may use these environment variables
 	// to avoid getting interactively prompted for username and password.
 	defaultUsernameEnvVarName = "PINNIPED_USERNAME"
-	defaultPasswordEnvVarName = "PINNIPED_PASSWORD"
+	defaultPasswordEnvVarName = "PINNIPED_PASSWORD" //nolint:gosec // this is not a credential
 
 	httpLocationHeaderName = "Location"
 

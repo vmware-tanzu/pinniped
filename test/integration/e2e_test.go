@@ -471,7 +471,7 @@ func TestE2EFullIntegration(t *testing.T) {
 			}
 		})
 		require.NoError(t, os.Setenv(usernameEnvVar, expectedUsername))
-		const passwordEnvVar = "PINNIPED_PASSWORD"
+		const passwordEnvVar = "PINNIPED_PASSWORD" //nolint:gosec // this is not a credential
 		originalPassword, hadOriginalPassword := os.LookupEnv(passwordEnvVar)
 		t.Cleanup(func() {
 			if hadOriginalPassword {

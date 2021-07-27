@@ -128,7 +128,7 @@ func (s *activeDirectoryUpstreamGenericLDAPSpec) DetectAndSetSearchBase(ctx cont
 	return &v1alpha1.Condition{
 		Type:    upstreamwatchers.TypeSearchBaseFound,
 		Status:  v1alpha1.ConditionTrue,
-		Reason:  "Success",
+		Reason:  upstreamwatchers.ReasonSuccess,
 		Message: "Successfully fetched defaultNamingContext to use as default search base from RootDSE.",
 	}
 }

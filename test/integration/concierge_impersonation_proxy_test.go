@@ -1478,6 +1478,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			t.Skip("only running when the cluster is meant to be using LoadBalancer services")
 		}
 
+		// Use this string in all annotation keys added by this test, so the assertions can ignore annotation keys
+		// which might exist on the Service which are not related to this test.
+		recognizableAnnotationKeyString := "pinniped.dev"
+
 		// Grab the state of the CredentialIssuer prior to this test, so we can restore things back afterwards.
 		previous, err := adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuerName(env), metav1.GetOptions{})
 		require.NoError(t, err)
@@ -1546,16 +1550,30 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}))
 		}
 
-		waitForServiceAnnotations := func(annotations map[string]string) {
+		waitForServiceAnnotations := func(wantAnnotations map[string]string, annotationKeyFilter string) {
 			testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
 				service, err := adminClient.CoreV1().Services(env.ConciergeNamespace).Get(ctx, impersonationProxyLoadBalancerName(env), metav1.GetOptions{})
 				if err != nil {
 					return false, err
 				}
-				t.Logf("found Service %s of type %s with actual annotations %q; expected annotations %q",
-					service.Name, service.Spec.Type, service.Annotations, annotations)
-				return equality.Semantic.DeepEqual(service.Annotations, annotations), nil
-			}, 30*time.Second, 100*time.Millisecond)
+				filteredActualAnnotations := map[string]string{}
+				for k, v := range service.Annotations {
+					// We do want to pay attention to any annotation for which we intend to make an explicit assertion,
+					// e.g. "service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout" which is from our
+					// default CredentialIssuer spec.
+					_, wantToMakeAssertionOnThisAnnotation := wantAnnotations[k]
+					// We do not want to pay attention to Service annotations added by other controllers,
+					// e.g. the "cloud.google.com/neg" annotation that is sometimes added by GKE on Services.
+					// These can come and go in time intervals outside of our control.
+					annotationContainsFilterString := strings.Contains(k, annotationKeyFilter)
+					if wantToMakeAssertionOnThisAnnotation || annotationContainsFilterString {
+						filteredActualAnnotations[k] = v
+					}
+				}
+				t.Logf("found Service %s of type %s with actual annotations %q; filtered by interesting keys results in %q; expected annotations %q",
+					service.Name, service.Spec.Type, service.Annotations, filteredActualAnnotations, wantAnnotations)
+				return equality.Semantic.DeepEqual(filteredActualAnnotations, wantAnnotations), nil
+			}, 1*time.Minute, 1*time.Second)
 		}
 
 		expectedAnnotations := func(credentialIssuerSpecAnnotations map[string]string, otherAnnotations map[string]string) map[string]string {
@@ -1575,12 +1593,13 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			sort.Strings(credentialIssuerSpecAnnotationKeys)
 			credentialIssuerSpecAnnotationKeysJSON, err := json.Marshal(credentialIssuerSpecAnnotationKeys)
 			require.NoError(t, err)
-			expectedAnnotations["credentialissuer.pinniped.dev/annotation-keys"] = string(credentialIssuerSpecAnnotationKeysJSON)
+			// The name of this annotation key is decided by our controller.
+			expectedAnnotations["credentialissuer."+recognizableAnnotationKeyString+"/annotation-keys"] = string(credentialIssuerSpecAnnotationKeysJSON)
 			return expectedAnnotations
 		}
 
 		otherActorAnnotations := map[string]string{
-			"pinniped.dev/test-other-actor-" + testlib.RandHex(t, 8): "test-other-actor-" + testlib.RandHex(t, 8),
+			recognizableAnnotationKeyString + "/test-other-actor-" + testlib.RandHex(t, 8): "test-other-actor-" + testlib.RandHex(t, 8),
 		}
 
 		// Whatever happens, set the annotations back to the original value and expect the Service to be updated.
@@ -1590,6 +1609,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			applyCredentialIssuerAnnotations(previous.Spec.ImpersonationProxy.Service.DeepCopy().Annotations)
 			waitForServiceAnnotations(
 				expectedAnnotations(previous.Spec.ImpersonationProxy.Service.DeepCopy().Annotations, map[string]string{}),
+				recognizableAnnotationKeyString,
 			)
 		})
 
@@ -1598,14 +1618,17 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		updateServiceAnnotations(otherActorAnnotations)
 
 		// Set a new annotation in the CredentialIssuer spec.impersonationProxy.service.annotations field.
-		newAnnotationKey := "pinniped.dev/test-" + testlib.RandHex(t, 8)
+		newAnnotationKey := recognizableAnnotationKeyString + "/test-" + testlib.RandHex(t, 8)
 		newAnnotationValue := "test-" + testlib.RandHex(t, 8)
 		updatedAnnotations := previous.Spec.ImpersonationProxy.Service.DeepCopy().Annotations
 		updatedAnnotations[newAnnotationKey] = newAnnotationValue
 		applyCredentialIssuerAnnotations(updatedAnnotations)
 
 		// Expect them to be applied to the Service.
-		waitForServiceAnnotations(expectedAnnotations(updatedAnnotations, otherActorAnnotations))
+		waitForServiceAnnotations(
+			expectedAnnotations(updatedAnnotations, otherActorAnnotations),
+			recognizableAnnotationKeyString,
+		)
 	})
 
 	t.Run("running impersonation proxy with ClusterIP service", func(t *testing.T) {

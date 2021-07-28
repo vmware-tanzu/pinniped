@@ -95,7 +95,7 @@ func findSuccessfulStrategy(credentialIssuer *conciergev1alpha.CredentialIssuer,
 
 func TestLegacyPodCleaner(t *testing.T) {
 	env := testlib.IntegrationEnv(t).WithCapability(testlib.ClusterSigningKeyIsAvailable)
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	kubeClient := testlib.NewKubernetesClientset(t)
 
@@ -144,5 +144,5 @@ func TestLegacyPodCleaner(t *testing.T) {
 			return true, nil
 		}
 		return false, err
-	}, 60*time.Second, 1*time.Second)
+	}, 2*time.Minute, 1*time.Second)
 }

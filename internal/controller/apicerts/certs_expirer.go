@@ -90,7 +90,12 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 		err := c.k8sClient.
 			CoreV1().
 			Secrets(c.namespace).
-			Delete(ctx.Context, c.certsSecretResourceName, metav1.DeleteOptions{})
+			Delete(ctx.Context, c.certsSecretResourceName, metav1.DeleteOptions{
+				Preconditions: &metav1.Preconditions{
+					UID:             &secret.UID,
+					ResourceVersion: &secret.ResourceVersion,
+				},
+			})
 		if err != nil {
 			// Do return an error here so that the controller library will reschedule
 			// us to try deleting this cert again.

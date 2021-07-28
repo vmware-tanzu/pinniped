@@ -71,15 +71,13 @@ as the authenticator.
    an authenticator that works with your real identity provider, and therefore would not need to deploy or configure local-user-authenticator.
 
     ```sh
-    kubectl apply -f https://get.pinniped.dev/latest/install-local-user-authenticator.yaml
+    kubectl apply -f https://get.pinniped.dev/{{< latestversion >}}/install-local-user-authenticator.yaml
     ```
 
    The `install-local-user-authenticator.yaml` file includes the default deployment options.
    If you would prefer to customize the available options, please
    see [deploy/local-user-authenticator/README.md](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/local-user-authenticator/README.md)
    for instructions on how to deploy using `ytt`.
-
-   If you prefer to install a specific version, replace `latest` in the URL with the version number such as `{{< latestversion >}}`.
 
 1. Create a test user named `pinny-the-seal` in the local-user-authenticator namespace.
 
@@ -101,10 +99,14 @@ as the authenticator.
 1. Deploy the Pinniped Concierge.
 
    ```sh
-   kubectl apply -f https://get.pinniped.dev/latest/install-pinniped-concierge.yaml
+   kubectl apply -f https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge-crds.yaml
+   kubectl apply -f https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge.yaml
    ```
 
-   The `install-pinniped-concierge.yaml` file includes the default deployment options.
+   The `install-pinniped-concierge-crds.yaml` file contains the Concierge CustomResourceDefinitions.
+   These define the custom APIs that you use to configure and interact with the Concierge.
+
+   The `install-pinniped-concierge.yaml` file includes the rest of the Concierge resources with default deployment options.
    If you would prefer to customize the available options, please see the [Concierge installation guide]({{< ref "../howto/install-concierge" >}})
    for instructions on how to deploy using `ytt`.
 

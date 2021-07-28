@@ -12,29 +12,37 @@ menu:
 This guide shows you how to install the Pinniped Concierge.
 You should have a [supported Kubernetes cluster]({{< ref "../reference/supported-clusters" >}}).
 
+In the examples below, you can replace *{{< latestversion >}}* with your preferred version number.
+You can find a list of Pinniped releases [on GitHub](https://github.com/vmware-tanzu/pinniped/releases).
+
 ## With default options
+
+**Warning:** the default Concierge configuration may create a public LoadBalancer Service on your cluster if that is the default on your cloud provider.
+If you'd prefer to customize the annotations or load balancer IP address, see the "With custom options" section below.
+
+### Using kapp
+
+1. Install the latest version of the Concierge into the `pinniped-concierge` namespace with default options using [kapp](https://carvel.dev/kapp/):
+
+   - `kapp deploy --app pinniped-concierge--file https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge.yaml`
+
+### Using kubectl
+
+1. Install the latest version of the Concierge CustomResourceDefinitions:
+
+   - `kubectl apply -f https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge-crds.yaml`
+
+   This step is required so kubectl can validate the custom resources deployed in the next step.
 
 1. Install the latest version of the Concierge into the `pinniped-concierge` namespace with default options:
 
-   - `kubectl apply -f https://get.pinniped.dev/latest/install-pinniped-concierge.yaml`
-
-Warning: the default configuration may create a public LoadBalancer Service on your cluster.
-
-## With specific version and default options
-
-1. Choose your preferred [release](https://github.com/vmware-tanzu/pinniped/releases) version number and use it to replace the version number in the URL below.
-
-1. Install the Concierge into the `pinniped-concierge` namespace with default options:
-
    - `kubectl apply -f https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge.yaml`
 
-      *Replace {{< latestversion >}} with your preferred version number.*
-  
 ## With custom options
 
 Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) as a templating system.
 
-1. Install the `ytt` command-line tool using the instructions from the [Carvel documentation](https://carvel.dev/#whole-suite).
+1. Install the `ytt` and `kapp` command-line tools using the instructions from the [Carvel documentation](https://carvel.dev/#whole-suite).
 
 1. Clone the Pinniped GitHub repository and visit the `deploy/concierge` directory:
 
@@ -47,12 +55,10 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
 
    - `git checkout {{< latestversion >}}`
 
-     *Replace {{< latestversion >}} with your preferred version number.*
-
 1. Customize configuration parameters:
 
    - Edit `values.yaml` with your custom values.
-   - Change the `image_tag` value to match your preferred version tag, e.g. `{{< latestversion >}}`. *Replace {{< latestversion >}} with your preferred version number.*
+   - Change the `image_tag` value to match your preferred version tag, e.g. `{{< latestversion >}}`.
    - See the [default values](http://github.com/vmware-tanzu/pinniped/tree/main/deploy/concierge/values.yaml) for documentation about individual configuration parameters.
 
 1. Render templated YAML manifests:
@@ -61,12 +67,7 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
 
 1. Deploy the templated YAML manifests:
 
-   - *If you're using `kubectl`:*
-
-     `ytt --file . | kubectl apply -f -`
-   - *If you're using [`kapp` from Carvel](https://carvel.dev/kapp/):*
-
-     `ytt --file . | kapp deploy --yes --app pinniped-concierge --diff-changes --file -`
+   - `ytt --file . | kapp deploy --app pinniped-concierge --file -`
 
 ## Next steps
 

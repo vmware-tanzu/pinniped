@@ -131,11 +131,12 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 
 		when("watching Service objects", func() {
 			var subject controllerlib.Filter
-			var target, wrongNamespace, wrongName, unrelated *corev1.Service
+			var targetLBService, targetClusterIPService, wrongNamespace, wrongName, unrelated *corev1.Service
 
 			it.Before(func() {
 				subject = servicesInformerFilter
-				target = &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: generatedLoadBalancerServiceName, Namespace: installedInNamespace}}
+				targetLBService = &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: generatedLoadBalancerServiceName, Namespace: installedInNamespace}}
+				targetClusterIPService = &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: generatedClusterIPServiceName, Namespace: installedInNamespace}}
 				wrongNamespace = &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: generatedLoadBalancerServiceName, Namespace: "wrong-namespace"}}
 				wrongName = &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: installedInNamespace}}
 				unrelated = &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "wrong-name", Namespace: "wrong-namespace"}}
@@ -143,10 +144,14 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 
 			when("the target Service changes", func() {
 				it("returns true to trigger the sync method", func() {
-					r.True(subject.Add(target))
-					r.True(subject.Update(target, unrelated))
-					r.True(subject.Update(unrelated, target))
-					r.True(subject.Delete(target))
+					r.True(subject.Add(targetLBService))
+					r.True(subject.Update(targetLBService, unrelated))
+					r.True(subject.Update(unrelated, targetLBService))
+					r.True(subject.Delete(targetLBService))
+					r.True(subject.Add(targetClusterIPService))
+					r.True(subject.Update(targetClusterIPService, unrelated))
+					r.True(subject.Update(unrelated, targetClusterIPService))
+					r.True(subject.Delete(targetClusterIPService))
 				})
 			})
 

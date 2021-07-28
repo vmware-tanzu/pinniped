@@ -143,7 +143,15 @@ func NewImpersonatorConfigController(
 		withInformer(
 			servicesInformer,
 			pinnipedcontroller.SimpleFilterWithSingletonQueue(func(obj metav1.Object) bool {
-				return obj.GetNamespace() == namespace && obj.GetName() == generatedLoadBalancerServiceName
+				if obj.GetNamespace() != namespace {
+					return false
+				}
+				switch obj.GetName() {
+				case generatedLoadBalancerServiceName, generatedClusterIPServiceName:
+					return true
+				default:
+					return false
+				}
 			}),
 			controllerlib.InformerOption{},
 		),

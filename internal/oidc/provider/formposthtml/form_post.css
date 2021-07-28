@@ -44,9 +44,9 @@ button:active {
 }
 
 code {
+    display: block;
     word-wrap: break-word;
-    hyphens: auto;
-    hyphenate-character: '';
+    word-break: break-all;
     font-size: 12px;
     font-family: monospace;
     color: #333;
@@ -56,8 +56,8 @@ code {
     float: left;
     width: 36px;
     height: 36px;
-    padding-top: 2px;
-    padding-right: 10px;
+    margin-top: -3px;
+    margin-right: 10px;
     background-size: contain;
     background-repeat: no-repeat;
     /*

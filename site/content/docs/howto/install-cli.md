@@ -46,15 +46,15 @@ Click Open to allow the command to proceed.
 
 Choose your preferred [release](https://github.com/vmware-tanzu/pinniped/releases) version number and use it to replace the version number in the URL below.
 
-For example, to install v0.9.2 on Linux/amd64:
+For example, to install {{< latestversion >}} on Linux/amd64:
 
 ```sh
-curl -Lso pinniped https://get.pinniped.dev/v0.9.2/pinniped-cli-linux-amd64 \
+curl -Lso pinniped https://get.pinniped.dev/{{< latestversion >}}/pinniped-cli-linux-amd64 \
   && chmod +x pinniped \
   && sudo mv pinniped /usr/local/bin/pinniped
 ```
 
-*Replace v0.9.2 with your preferred version number.*
+*Replace {{< latestversion >}} with your preferred version number.*
 
 ## Next steps
 

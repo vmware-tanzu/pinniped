@@ -25,9 +25,9 @@ You should have a supported Kubernetes cluster with working HTTPS ingress capabi
 
 1. Install the Supervisor into the `pinniped-supervisor` namespace with default options:
 
-   - `kubectl apply -f https://get.pinniped.dev/v0.9.2/install-pinniped-supervisor.yaml`
+   - `kubectl apply -f https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-supervisor.yaml`
 
-     *Replace v0.9.2 with your preferred version number.*
+     *Replace {{< latestversion >}} with your preferred version number.*
 
 ## With custom options
 
@@ -42,16 +42,16 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
 
 1. Decide which release version you would like to install. All release versions are [listed on GitHub](https://github.com/vmware-tanzu/pinniped/releases).
 
-1. Checkout your preferred version tag, e.g. `v0.9.2`.
+1. Checkout your preferred version tag, e.g. `{{< latestversion >}}`.
 
-    - `git checkout v0.9.2`
+    - `git checkout {{< latestversion >}}`
 
-      *Replace v0.9.2 with your preferred version number.*
+      *Replace {{< latestversion >}} with your preferred version number.*
 
 1. Customize configuration parameters:
 
    - Edit `values.yaml` with your custom values.
-   - Change the `image_tag` value to match your preferred version tag, e.g. `v0.9.2`. *Replace v0.9.2 with your preferred version number.*
+   - Change the `image_tag` value to match your preferred version tag, e.g. `{{< latestversion >}}`. *Replace {{< latestversion >}} with your preferred version number.*
    - See the [default values](http://github.com/vmware-tanzu/pinniped/tree/main/deploy/supervisor/values.yaml) for documentation about individual configuration parameters.
 
 1. Render templated YAML manifests:

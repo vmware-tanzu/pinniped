@@ -18,8 +18,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	kubetesting "k8s.io/client-go/testing"
 
 	"go.pinniped.dev/internal/controllerlib"
@@ -223,14 +226,19 @@ func TestExpirerControllerSync(t *testing.T) {
 				test.configKubeAPIClient(kubeAPIClient)
 			}
 
+			testRV := "rv_001"
+			testUID := types.UID("uid_002")
+
 			kubeInformerClient := kubernetesfake.NewSimpleClientset()
 			name := certsSecretResourceName
 			namespace := "some-namespace"
 			if test.fillSecretData != nil {
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      name,
-						Namespace: namespace,
+						Name:            name,
+						Namespace:       namespace,
+						ResourceVersion: testRV,
+						UID:             testUID,
 					},
 					Data: map[string][]byte{},
 				}
@@ -245,10 +253,12 @@ func TestExpirerControllerSync(t *testing.T) {
 				0,
 			)
 
+			trackDeleteClient := &clientWrapper{Interface: kubeAPIClient, opts: &[]metav1.DeleteOptions{}}
+
 			c := NewCertsExpirerController(
 				namespace,
 				certsSecretResourceName,
-				kubeAPIClient,
+				trackDeleteClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 				test.renewBefore,
@@ -285,6 +295,46 @@ func TestExpirerControllerSync(t *testing.T) {
 			}
 			acActions := kubeAPIClient.Actions()
 			require.Equal(t, exActions, acActions)
+
+			if test.wantDelete {
+				require.Len(t, *trackDeleteClient.opts, 1)
+				require.Equal(t, metav1.DeleteOptions{
+					Preconditions: &metav1.Preconditions{
+						UID:             &testUID,
+						ResourceVersion: &testRV,
+					},
+				}, (*trackDeleteClient.opts)[0])
+			} else {
+				require.Len(t, *trackDeleteClient.opts, 0)
+			}
 		})
 	}
+}
+
+type clientWrapper struct {
+	kubernetes.Interface
+	opts *[]metav1.DeleteOptions
+}
+
+func (c *clientWrapper) CoreV1() corev1client.CoreV1Interface {
+	return &coreWrapper{CoreV1Interface: c.Interface.CoreV1(), opts: c.opts}
+}
+
+type coreWrapper struct {
+	corev1client.CoreV1Interface
+	opts *[]metav1.DeleteOptions
+}
+
+func (c *coreWrapper) Secrets(namespace string) corev1client.SecretInterface {
+	return &secretsWrapper{SecretInterface: c.CoreV1Interface.Secrets(namespace), opts: c.opts}
+}
+
+type secretsWrapper struct {
+	corev1client.SecretInterface
+	opts *[]metav1.DeleteOptions
+}
+
+func (s *secretsWrapper) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
+	*s.opts = append(*s.opts, opts)
+	return s.SecretInterface.Delete(ctx, name, opts)
 }

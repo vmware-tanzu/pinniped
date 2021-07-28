@@ -24,7 +24,7 @@ If you'd prefer to customize the annotations or load balancer IP address, see th
 
 1. Install the latest version of the Concierge into the `pinniped-concierge` namespace with default options using [kapp](https://carvel.dev/kapp/):
 
-   - `kapp deploy --app pinniped-concierge--file https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge.yaml`
+   - `kapp deploy --app pinniped-concierge --file https://get.pinniped.dev/{{< latestversion >}}/install-pinniped-concierge.yaml`
 
 ### Using kubectl
 
@@ -60,6 +60,8 @@ Pinniped uses [ytt](https://carvel.dev/ytt/) from [Carvel](https://carvel.dev/) 
    - Edit `values.yaml` with your custom values.
    - Change the `image_tag` value to match your preferred version tag, e.g. `{{< latestversion >}}`.
    - See the [default values](http://github.com/vmware-tanzu/pinniped/tree/main/deploy/concierge/values.yaml) for documentation about individual configuration parameters.
+
+     For example, you can change the number of Concierge pods by setting `replicas` or apply custom annotations to the impersonation proxy service using `impersonation_proxy_spec`.
 
 1. Render templated YAML manifests:
 

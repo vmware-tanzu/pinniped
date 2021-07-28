@@ -594,7 +594,7 @@ func requireKubectlGetNamespaceOutput(t *testing.T, env *testlib.TestEnv, kubect
 	require.Greaterf(t, len(strings.Split(kubectlOutput, "\n")), 2, "expected some namespaces to be returned, got %q", kubectlOutput)
 	require.Contains(t, kubectlOutput, fmt.Sprintf("\n%s ", env.ConciergeNamespace))
 	require.Contains(t, kubectlOutput, fmt.Sprintf("\n%s ", env.SupervisorNamespace))
-	if len(env.ToolsNamespace) == 0 {
+	if len(env.ToolsNamespace) > 0 {
 		require.Contains(t, kubectlOutput, fmt.Sprintf("\n%s ", env.ToolsNamespace))
 	}
 }

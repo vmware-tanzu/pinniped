@@ -1733,14 +1733,54 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 func ensureDNSResolves(t *testing.T, urlString string) {
 	t.Helper()
+
 	parsedURL, err := url.Parse(urlString)
 	require.NoError(t, err)
-	if net.ParseIP(parsedURL.Host) == nil {
-		testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
-			_, err = net.LookupIP(parsedURL.Host)
-			requireEventually.NoError(err)
-		}, 5*time.Minute, 1*time.Second)
+
+	host := parsedURL.Hostname()
+
+	if net.ParseIP(host) != nil {
+		return // ignore IPs
 	}
+
+	var d net.Dialer
+	loggingDialer := func(ctx context.Context, network, address string) (net.Conn, error) {
+		t.Logf("dns lookup, network=%s address=%s", network, address)
+		conn, connErr := d.DialContext(ctx, network, address)
+		if connErr != nil {
+			t.Logf("dns lookup, err=%v", connErr)
+		} else {
+			local := conn.LocalAddr()
+			remote := conn.RemoteAddr()
+			t.Logf("dns lookup, local conn network=%s addr=%s", local.Network(), local.String())
+			t.Logf("dns lookup, remote conn network=%s addr=%s", remote.Network(), remote.String())
+		}
+		return conn, connErr
+	}
+
+	goResolver := &net.Resolver{
+		PreferGo:     true,
+		StrictErrors: true,
+		Dial:         loggingDialer,
+	}
+	notGoResolver := &net.Resolver{
+		PreferGo:     false,
+		StrictErrors: true,
+		Dial:         loggingDialer,
+	}
+
+	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		for _, resolver := range []*net.Resolver{goResolver, notGoResolver} {
+			resolver := resolver
+
+			ips, ipErr := resolver.LookupIPAddr(ctx, host)
+			requireEventually.NoError(ipErr)
+			requireEventually.NotEmpty(ips)
+		}
+	}, 5*time.Minute, 1*time.Second)
 }
 
 func createTestNamespace(t *testing.T, adminClient kubernetes.Interface) string {

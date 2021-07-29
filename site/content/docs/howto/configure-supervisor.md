@@ -49,7 +49,7 @@ The most common ways are:
    and the service.
 
 For either of the first two options, if you installed using `ytt` then you can use
-the related `service_*` options from [deploy/supervisor/values.yml](values.yaml) to create a Service.
+the related `service_*` options from [deploy/supervisor/values.yml](https://github.com/vmware-tanzu/pinniped/blob/main/deploy/supervisor/values.yaml) to create a Service.
 If you installed using `install-supervisor.yaml` then you can create
 the Service separately after installing the Supervisor app. There is no `Ingress` included in the `ytt` templates,
 so if you choose to use an Ingress then you'll need to create that separately after installing the Supervisor app.

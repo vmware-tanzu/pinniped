@@ -331,9 +331,9 @@ func TestE2EFullIntegration(t *testing.T) {
 
 		// Wait for the subprocess to print the login prompt.
 		t.Logf("waiting for CLI to output login URL and manual prompt")
-		output := readFromFileUntilStringIsSeen(t, ptyFile, "If automatic login fails, paste your authorization code to login manually: ")
+		output := readFromFileUntilStringIsSeen(t, ptyFile, "Optionally, paste your authorization code: ")
 		require.Contains(t, output, "Log in by visiting this link:")
-		require.Contains(t, output, "If automatic login fails, paste your authorization code to login manually: ")
+		require.Contains(t, output, "Optionally, paste your authorization code: ")
 
 		// Find the line with the login URL.
 		var loginURL string

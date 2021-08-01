@@ -107,7 +107,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	impersonatorShouldHaveStartedAutomaticallyByDefault := !env.HasCapability(testlib.ClusterSigningKeyIsAvailable)
 	clusterSupportsLoadBalancers := env.HasCapability(testlib.HasExternalLoadBalancerProvider)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
 	// Create a client using the admin kubeconfig.
@@ -333,8 +333,13 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			)
 		}
 
+		if env.KubernetesDistribution == testlib.EKSDistro {
+			t.Log("eks: sleeping for 10 minutes to allow DNS propagation")
+			time.Sleep(10 * time.Minute)
+		}
+
 		t.Run("kubectl port-forward and keeping the connection open for over a minute (non-idle)", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			kubeconfigPath, envVarsWithProxy, _ := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM, credentialRequestSpecWithWorkingCredentials.Authenticator)
 
 			// Run the kubectl port-forward command.
@@ -392,7 +397,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("kubectl port-forward and keeping the connection open for over a minute (idle)", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			kubeconfigPath, envVarsWithProxy, _ := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM, credentialRequestSpecWithWorkingCredentials.Authenticator)
 
 			// Run the kubectl port-forward command.
@@ -430,7 +435,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("using and watching all the basic verbs", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			// Create a namespace, because it will be easier to exercise "deletecollection" if we have a namespace.
 			namespaceName := createTestNamespace(t, adminClient)
 
@@ -560,7 +565,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("nested impersonation as a regular user is allowed if they have enough RBAC permissions", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			// Make a client which will send requests through the impersonation proxy and will also add
 			// impersonate headers to the request.
 			nestedImpersonationClient := newImpersonationProxyClient(t, impersonationProxyURL, impersonationProxyCACertPEM,
@@ -633,7 +638,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("nested impersonation as a cluster admin user is allowed", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			// Copy the admin credentials from the admin kubeconfig.
 			adminClientRestConfig := testlib.NewClientConfig(t)
 			clusterAdminCredentials := getCredForConfig(t, adminClientRestConfig)
@@ -709,7 +714,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("nested impersonation as a cluster admin fails on reserved key", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			adminClientRestConfig := testlib.NewClientConfig(t)
 			clusterAdminCredentials := getCredForConfig(t, adminClientRestConfig)
 
@@ -747,7 +752,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// this works because impersonation cannot set UID and thus the final user info the proxy sees has no UID
 		t.Run("nested impersonation as a service account is allowed if it has enough RBAC permissions", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			namespaceName := createTestNamespace(t, adminClient)
 			saName, saToken, saUID := createServiceAccountToken(ctx, t, adminClient, namespaceName)
 			nestedImpersonationClient := newImpersonationProxyClientWithCredentials(t,
@@ -794,7 +799,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("WhoAmIRequests and different kinds of authentication through the impersonation proxy", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			// Test using the TokenCredentialRequest for authentication.
 			impersonationProxyPinnipedConciergeClient := newImpersonationProxyClient(t,
 				impersonationProxyURL, impersonationProxyCACertPEM, nil, refreshCredential,
@@ -981,7 +986,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("kubectl as a client", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			kubeconfigPath, envVarsWithProxy, tempDir := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM, credentialRequestSpecWithWorkingCredentials.Authenticator)
 
 			// Try "kubectl exec" through the impersonation proxy.
@@ -1063,7 +1068,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("websocket client", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			namespaceName := createTestNamespace(t, adminClient)
 
 			impersonationRestConfig := impersonationProxyRestConfig(
@@ -1142,7 +1147,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("http2 client", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			namespaceName := createTestNamespace(t, adminClient)
 
 			wantConfigMapLabelKey, wantConfigMapLabelValue := "some-label-key", "some-label-value"
@@ -1235,7 +1240,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("honors anonymous authentication of KAS", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 
 			impersonationProxyAnonymousClient := newAnonymousImpersonationProxyClient(
 				t, impersonationProxyURL, impersonationProxyCACertPEM, nil,
@@ -1261,14 +1266,14 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.NoError(t, err)
 
 			t.Run("anonymous authentication irrelevant", func(t *testing.T) {
-				t.Parallel()
+				parallelIfNotEKS(t)
 
 				// - hit the token credential request endpoint with an empty body
 				//   - through the impersonation proxy
 				//   - should succeed as an invalid request whether anonymous authentication is enabled or disabled
 				//   - should not reject as unauthorized
 				t.Run("token credential request", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					tkr, err := impersonationProxyAnonymousClient.PinnipedConcierge.LoginV1alpha1().TokenCredentialRequests().
 						Create(ctx, &loginv1alpha1.TokenCredentialRequest{
@@ -1289,7 +1294,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				//   - healthz should succeed, anonymous users can request this endpoint
 				//   - healthz/log should fail, forbidden anonymous
 				t.Run("non-resource request while impersonating anonymous - nested impersonation", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					whoami, errWho := impersonationProxyAdminRestClientAsAnonymous.Post().Body([]byte(`{}`)).AbsPath("/apis/identity.concierge." + env.APIGroupSuffix + "/v1alpha1/whoamirequests").DoRaw(ctx)
 					require.NoError(t, errWho, testlib.Sdump(errWho))
@@ -1307,7 +1312,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			t.Run("anonymous authentication enabled", func(t *testing.T) {
 				testlib.IntegrationEnv(t).WithCapability(testlib.AnonymousAuthenticationSupported)
-				t.Parallel()
+				parallelIfNotEKS(t)
 
 				// anonymous auth enabled
 				// - hit the healthz endpoint (non-resource endpoint)
@@ -1315,7 +1320,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				//   - should succeed 200
 				//   - should respond "ok"
 				t.Run("non-resource request", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					healthz, errHealth := impersonationProxyAnonymousRestClient.Get().AbsPath("/healthz").DoRaw(ctx)
 					require.NoError(t, errHealth, testlib.Sdump(errHealth))
@@ -1327,7 +1332,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				//   - should fail forbidden
 				//   - system:anonymous cannot get pods
 				t.Run("resource", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					pod, err := impersonationProxyAnonymousClient.Kubernetes.CoreV1().Pods(metav1.NamespaceSystem).
 						Get(ctx, "does-not-matter", metav1.GetOptions{})
@@ -1342,7 +1347,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				//   - should succeed 200
 				//   - should respond "you are system:anonymous"
 				t.Run("pinniped resource request", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					whoAmI, err := impersonationProxyAnonymousClient.PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 						Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
@@ -1360,14 +1365,14 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			t.Run("anonymous authentication disabled", func(t *testing.T) {
 				testlib.IntegrationEnv(t).WithoutCapability(testlib.AnonymousAuthenticationSupported)
-				t.Parallel()
+				parallelIfNotEKS(t)
 
 				// - hit the healthz endpoint (non-resource endpoint)
 				//   - through the impersonation proxy
 				//   - should fail unauthorized
 				//   - kube api server should reject it
 				t.Run("non-resource request", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					healthz, err := impersonationProxyAnonymousRestClient.Get().AbsPath("/healthz").DoRaw(ctx)
 					require.True(t, k8serrors.IsUnauthorized(err), testlib.Sdump(err))
@@ -1379,7 +1384,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				//   - should fail unauthorized
 				//   - kube api server should reject it
 				t.Run("resource", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					pod, err := impersonationProxyAnonymousClient.Kubernetes.CoreV1().Pods(metav1.NamespaceSystem).
 						Get(ctx, "does-not-matter", metav1.GetOptions{})
@@ -1392,7 +1397,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				//   - should fail unauthorized
 				//   - kube api server should reject it
 				t.Run("pinniped resource request", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					whoAmI, err := impersonationProxyAnonymousClient.PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 						Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
@@ -2325,4 +2330,12 @@ func getUIDAndExtraViaCSR(ctx context.Context, t *testing.T, uid string, client 
 	}
 
 	return outUID, csReq.Spec.Extra
+}
+
+func parallelIfNotEKS(t *testing.T) {
+	if testlib.IntegrationEnv(t).KubernetesDistribution == testlib.EKSDistro {
+		return
+	}
+
+	t.Parallel()
 }

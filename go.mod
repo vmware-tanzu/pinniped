@@ -10,14 +10,12 @@ require (
 	github.com/go-ldap/ldap/v3 v3.3.0
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/stdr v0.4.0
-	github.com/go-openapi/spec v0.20.3 // indirect
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.6
 	github.com/google/gofuzz v1.2.0
 	github.com/gorilla/securecookie v1.1.1
 	github.com/gorilla/websocket v1.4.2
-	github.com/onsi/ginkgo v1.13.0 // indirect
 	github.com/ory/fosite v0.40.2
 	github.com/pkg/browser v0.0.0-20210115035449-ce105d075bb4
 	github.com/pkg/errors v0.9.1
@@ -33,15 +31,15 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/term v0.0.0-20210503060354-a79de5458b56
 	gopkg.in/square/go-jose.v2 v2.6.0
-	k8s.io/api v0.21.3
-	k8s.io/apimachinery v0.21.3
-	k8s.io/apiserver v0.21.3
-	k8s.io/client-go v0.21.3
-	k8s.io/component-base v0.21.3
+	k8s.io/api v0.22.0
+	k8s.io/apimachinery v0.22.0
+	k8s.io/apiserver v0.22.0
+	k8s.io/client-go v0.22.0
+	k8s.io/component-base v0.22.0
 	k8s.io/gengo v0.0.0-20210203185629-de9496dff47b
 	k8s.io/klog/v2 v2.10.0
-	k8s.io/kube-aggregator v0.21.3
-	k8s.io/utils v0.0.0-20210521133846-da695404a2bc
+	k8s.io/kube-aggregator v0.22.0
+	k8s.io/utils v0.0.0-20210707171843-4b05e18ac7d9
 	sigs.k8s.io/yaml v1.2.0
 )
 

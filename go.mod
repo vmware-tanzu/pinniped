@@ -17,7 +17,6 @@ require (
 	github.com/google/gofuzz v1.2.0
 	github.com/gorilla/securecookie v1.1.1
 	github.com/gorilla/websocket v1.4.2
-	github.com/onsi/ginkgo v1.13.0 // indirect
 	github.com/ory/fosite v0.40.2
 	github.com/pkg/browser v0.0.0-20210115035449-ce105d075bb4
 	github.com/pkg/errors v0.9.1
@@ -34,7 +33,7 @@ require (
 	golang.org/x/term v0.0.0-20210503060354-a79de5458b56
 	gopkg.in/square/go-jose.v2 v2.6.0
 	k8s.io/api v0.21.3
-	k8s.io/apimachinery v0.21.3
+	k8s.io/apimachinery v0.22.0
 	k8s.io/apiserver v0.21.3
 	k8s.io/client-go v0.21.3
 	k8s.io/component-base v0.21.3

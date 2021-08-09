@@ -965,6 +965,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				csrPEM,
 				"",
 				certificatesv1.KubeAPIServerClientSignerName,
+				nil,
 				[]certificatesv1.KeyUsage{certificatesv1.UsageClientAuth},
 				privateKey,
 			)
@@ -2319,6 +2320,7 @@ func getUIDAndExtraViaCSR(ctx context.Context, t *testing.T, uid string, client 
 		csrPEM,
 		"",
 		certificatesv1.KubeAPIServerClientSignerName,
+		nil,
 		[]certificatesv1.KeyUsage{certificatesv1.UsageClientAuth},
 		privateKey,
 	)

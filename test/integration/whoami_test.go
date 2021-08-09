@@ -274,6 +274,7 @@ func TestWhoAmI_CSR(t *testing.T) {
 		csrPEM,
 		"",
 		certificatesv1.KubeAPIServerClientSignerName,
+		nil,
 		[]certificatesv1.KeyUsage{certificatesv1.UsageClientAuth},
 		privateKey,
 	)

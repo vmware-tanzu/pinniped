@@ -1,13 +1,13 @@
 // Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package main provides a authentication webhook program.
+// Package localuserauthenticator provides a authentication webhook program.
 //
 // This webhook is meant to be used in demo settings to play around with
 // Pinniped. As well, it can come in handy in integration tests.
 //
 // This webhook is NOT meant for use in production systems.
-package main
+package localuserauthenticator
 
 import (
 	"bytes"
@@ -378,7 +378,7 @@ func run() error {
 	return nil
 }
 
-func main() {
+func Main() {
 	// Hardcode the logging level to debug, since this is a test app and it is very helpful to have
 	// verbose logs to debug test failures.
 	if err := plog.ValidateAndSetLogLevelGlobally(plog.LevelDebug); err != nil {

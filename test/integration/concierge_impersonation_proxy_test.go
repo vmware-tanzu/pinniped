@@ -40,6 +40,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/unstructuredscheme"
 	"k8s.io/apimachinery/pkg/labels"
@@ -306,7 +307,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// Get pods in concierge namespace and pick one.
 		// this is for tests that require performing actions against a running pod. We use the concierge pod because we already have it handy.
-		// We want to make sure it's a concierge pod (not cert agent), because we need to be able to "exec echo" and port-forward a running port.
+		// We want to make sure it's a concierge pod (not cert agent), because we need to be able to port-forward a running port.
 		pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{})
 		require.NoError(t, err)
 		require.Greater(t, len(pods.Items), 0)
@@ -989,48 +990,53 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			parallelIfNotEKS(t)
 			kubeconfigPath, envVarsWithProxy, tempDir := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM, credentialRequestSpecWithWorkingCredentials.Authenticator)
 
+			// Run a new test pod so we can interact with it using kubectl. We use a fresh pod here rather than the
+			// existing Concierge pod because we need more tools than we can get from a scratch/distroless base image.
+			runningTestPod := testlib.CreatePod(ctx, t, "impersonation-proxy", env.ConciergeNamespace, corev1.PodSpec{Containers: []corev1.Container{{
+				Name:            "impersonation-proxy-test",
+				Image:           "debian:10.10-slim",
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Command:         []string{"bash", "-c", `while true; do read VAR; echo "VAR: $VAR"; done`},
+				Stdin:           true,
+				Resources: corev1.ResourceRequirements{
+					Limits: corev1.ResourceList{
+						corev1.ResourceMemory: resource.MustParse("16Mi"),
+						corev1.ResourceCPU:    resource.MustParse("10m"),
+					},
+					Requests: corev1.ResourceList{
+						corev1.ResourceMemory: resource.MustParse("16Mi"),
+						corev1.ResourceCPU:    resource.MustParse("10m"),
+					},
+				},
+			}}})
+
 			// Try "kubectl exec" through the impersonation proxy.
 			echoString := "hello world"
 			remoteEchoFile := fmt.Sprintf("/tmp/test-impersonation-proxy-echo-file-%d.txt", time.Now().Unix())
-			stdout, err := runKubectl(t, kubeconfigPath, envVarsWithProxy, "exec", "--namespace", env.ConciergeNamespace, conciergePod.Name, "--", "bash", "-c", fmt.Sprintf(`echo "%s" | tee %s`, echoString, remoteEchoFile))
+			stdout, err := runKubectl(t, kubeconfigPath, envVarsWithProxy, "exec", "--namespace", runningTestPod.Namespace, runningTestPod.Name, "--", "bash", "-c", fmt.Sprintf(`echo "%s" | tee %s`, echoString, remoteEchoFile))
 			require.NoError(t, err, `"kubectl exec" failed`)
 			require.Equal(t, echoString+"\n", stdout)
 
 			// run the kubectl cp command
 			localEchoFile := filepath.Join(tempDir, filepath.Base(remoteEchoFile))
-			_, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "cp", fmt.Sprintf("%s/%s:%s", env.ConciergeNamespace, conciergePod.Name, remoteEchoFile), localEchoFile)
+			_, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "cp", fmt.Sprintf("%s/%s:%s", runningTestPod.Namespace, runningTestPod.Name, remoteEchoFile), localEchoFile)
 			require.NoError(t, err, `"kubectl cp" failed`)
 			localEchoFileData, err := ioutil.ReadFile(localEchoFile)
 			require.NoError(t, err)
 			require.Equal(t, echoString+"\n", string(localEchoFileData))
-			defer func() {
-				_, _ = runKubectl(t, kubeconfigPath, envVarsWithProxy, "exec", "--namespace", env.ConciergeNamespace, conciergePod.Name, "--", "rm", remoteEchoFile) // cleanup remote echo file
-			}()
 
 			// run the kubectl logs command
 			logLinesCount := 10
-			stdout, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "logs", "--namespace", env.ConciergeNamespace, conciergePod.Name, fmt.Sprintf("--tail=%d", logLinesCount))
+			stdout, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "logs", "--namespace", conciergePod.Namespace, conciergePod.Name, fmt.Sprintf("--tail=%d", logLinesCount))
 			require.NoError(t, err, `"kubectl logs" failed`)
 			// Expect _approximately_ logLinesCount lines in the output
 			// (we can't match 100% exactly due to https://github.com/kubernetes/kubernetes/issues/72628).
 			require.InDeltaf(t, logLinesCount, strings.Count(stdout, "\n"), 1, "wanted %d newlines in kubectl logs output:\n%s", logLinesCount, stdout)
 
 			// run the kubectl attach command
-			namespaceName := createTestNamespace(t, adminClient)
-			attachPod := testlib.CreatePod(ctx, t, "impersonation-proxy-attach", namespaceName, corev1.PodSpec{
-				Containers: []corev1.Container{
-					{
-						Name:    "impersonation-proxy-attach",
-						Image:   conciergePod.Spec.Containers[0].Image,
-						Command: []string{"bash"},
-						Args:    []string{"-c", `while true; do read VAR; echo "VAR: $VAR"; done`},
-						Stdin:   true,
-					},
-				},
-			})
 			timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
 			defer cancelFunc()
-			attachCmd, attachStdout, attachStderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, "attach", "--stdin=true", "--namespace", namespaceName, attachPod.Name, "-v=10")
+			attachCmd, attachStdout, attachStderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, "attach", "--stdin=true", "--namespace", runningTestPod.Namespace, runningTestPod.Name, "-v=10")
 			attachCmd.Env = envVarsWithProxy
 			attachStdin, err := attachCmd.StdinPipe()
 			require.NoError(t, err)

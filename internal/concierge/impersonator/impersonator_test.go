@@ -468,14 +468,18 @@ func TestImpersonator(t *testing.T) {
 				header["Impersonate-Uid"] = []string{"root"}
 			},
 			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
-			wantError:                          "Internal error occurred: invalid impersonation",
+			wantError:                          "Internal error occurred: unimplemented functionality - unable to act as current user",
 			wantAuthorizerAttributes: []authorizer.AttributesRecord{
 				{
 					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
 					Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
 				},
 				{
-					User: &user.DefaultInfo{Name: "some-other-username", UID: "", Groups: []string{"system:authenticated"}, Extra: map[string][]string{}},
+					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
+					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "uids", Subresource: "", Name: "root", ResourceRequest: true, Path: "",
+				},
+				{
+					User: &user.DefaultInfo{Name: "some-other-username", UID: "root", Groups: []string{"system:authenticated"}, Extra: map[string][]string{}},
 					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
 				},
 			},
@@ -488,14 +492,18 @@ func TestImpersonator(t *testing.T) {
 				header["imPerSoNaTE-uid"] = []string{"magic"}
 			},
 			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
-			wantError:                          "Internal error occurred: invalid impersonation",
+			wantError:                          "Internal error occurred: unimplemented functionality - unable to act as current user",
 			wantAuthorizerAttributes: []authorizer.AttributesRecord{
 				{
 					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
 					Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
 				},
 				{
-					User: &user.DefaultInfo{Name: "some-other-username", UID: "", Groups: []string{"system:authenticated"}, Extra: map[string][]string{}},
+					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
+					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "uids", Subresource: "", Name: "magic", ResourceRequest: true, Path: "",
+				},
+				{
+					User: &user.DefaultInfo{Name: "some-other-username", UID: "magic", Groups: []string{"system:authenticated"}, Extra: map[string][]string{}},
 					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
 				},
 			},
@@ -645,34 +653,24 @@ func TestImpersonator(t *testing.T) {
 			},
 		},
 		{
-			name:       "header canonicalization future UID header",
+			name:       "header canonicalization future UID header", // no longer future as it exists in Kube v1.22
 			clientCert: newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
 			clientMutateHeaders: func(header http.Header) {
 				header["imPerSonaTE-uid"] = []string{"007"}
 			},
 			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
-			wantError:                          "Internal error occurred: invalid impersonation",
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-username", UID: "", Groups: []string{"test-group1", "test-group2", "system:authenticated"}, Extra: nil},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
-			},
+			wantError:                          `an error on the server ("Internal Server Error: \"/api/v1/namespaces\": requested [{UID  007  authentication.k8s.io/v1  }] without impersonating a user") has prevented the request from succeeding (get namespaces)`,
+			wantAuthorizerAttributes:           []authorizer.AttributesRecord{},
 		},
 		{
-			name:       "future UID header",
+			name:       "future UID header", // no longer future as it exists in Kube v1.22
 			clientCert: newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
 			clientMutateHeaders: func(header http.Header) {
 				header["Impersonate-Uid"] = []string{"008"}
 			},
 			kubeAPIServerClientBearerTokenFile: "required-to-be-set",
-			wantError:                          "Internal error occurred: invalid impersonation",
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-username", UID: "", Groups: []string{"test-group1", "test-group2", "system:authenticated"}, Extra: nil},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
-			},
+			wantError:                          `an error on the server ("Internal Server Error: \"/api/v1/namespaces\": requested [{UID  008  authentication.k8s.io/v1  }] without impersonating a user") has prevented the request from succeeding (get namespaces)`,
+			wantAuthorizerAttributes:           []authorizer.AttributesRecord{},
 		},
 	}
 	for _, tt := range tests {

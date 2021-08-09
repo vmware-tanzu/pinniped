@@ -55,9 +55,6 @@ replace github.com/oleiade/reflections v1.0.0 => github.com/oleiade/reflections 
 // https://golang.org/issues/26904
 replace github.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/form3tech-oss/jwt-go v0.0.0-20200915135329-9162a5abdbc0
 
-// Pin gRPC back to v1.29.1 (the version required by Kubernetes), but also override a module that's only used in some tests.
+// Pin a gRPC module that's only used in some tests.
 // This is required because sometime after v1.29.1, they moved this package into a separate module.
-replace (
-	google.golang.org/grpc => google.golang.org/grpc v1.29.1
-	google.golang.org/grpc/examples => ./hack/dependencyhacks/grpcexamples/
-)
+replace google.golang.org/grpc/examples => ./hack/dependencyhacks/grpcexamples/

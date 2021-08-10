@@ -119,7 +119,7 @@ func TestLoginStaticCommand(t *testing.T) {
 			env: map[string]string{
 				"TEST_TOKEN_ENV": "test-token",
 			},
-			wantStdout: `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"test-token"}}` + "\n",
+			wantStdout: `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"token":"test-token"}}` + "\n",
 		},
 		{
 			name: "concierge failure",
@@ -159,7 +159,7 @@ func TestLoginStaticCommand(t *testing.T) {
 				"--token", "test-token",
 			},
 			env:        map[string]string{"PINNIPED_DEBUG": "true"},
-			wantStdout: `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"token":"test-token"}}` + "\n",
+			wantStdout: `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"token":"test-token"}}` + "\n",
 		},
 	}
 	for _, tt := range tests {

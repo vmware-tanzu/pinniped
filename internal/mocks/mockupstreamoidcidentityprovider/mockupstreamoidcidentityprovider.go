@@ -43,6 +43,20 @@ func (m *MockUpstreamOIDCIdentityProviderI) EXPECT() *MockUpstreamOIDCIdentityPr
 	return m.recorder
 }
 
+// AllowsPasswordGrant mocks base method.
+func (m *MockUpstreamOIDCIdentityProviderI) AllowsPasswordGrant() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AllowsPasswordGrant")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// AllowsPasswordGrant indicates an expected call of AllowsPasswordGrant.
+func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) AllowsPasswordGrant() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllowsPasswordGrant", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).AllowsPasswordGrant))
+}
+
 // ExchangeAuthcodeAndValidateTokens mocks base method.
 func (m *MockUpstreamOIDCIdentityProviderI) ExchangeAuthcodeAndValidateTokens(arg0 context.Context, arg1 string, arg2 pkce.Code, arg3 nonce.Nonce, arg4 string) (*oidctypes.Token, error) {
 	m.ctrl.T.Helper()
@@ -140,6 +154,21 @@ func (m *MockUpstreamOIDCIdentityProviderI) GetUsernameClaim() string {
 func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetUsernameClaim() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUsernameClaim", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetUsernameClaim))
+}
+
+// PasswordCredentialsGrantAndValidateTokens mocks base method.
+func (m *MockUpstreamOIDCIdentityProviderI) PasswordCredentialsGrantAndValidateTokens(arg0 context.Context, arg1, arg2 string) (*oidctypes.Token, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PasswordCredentialsGrantAndValidateTokens", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*oidctypes.Token)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PasswordCredentialsGrantAndValidateTokens indicates an expected call of PasswordCredentialsGrantAndValidateTokens.
+func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) PasswordCredentialsGrantAndValidateTokens(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PasswordCredentialsGrantAndValidateTokens", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).PasswordCredentialsGrantAndValidateTokens), arg0, arg1, arg2)
 }
 
 // ValidateToken mocks base method.

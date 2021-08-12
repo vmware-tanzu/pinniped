@@ -59,7 +59,12 @@ func NewHandler(
 		}
 
 		if oidcUpstream != nil {
-			return handleAuthRequestForOIDCUpstream(r, w,
+			if len(r.Header.Values(CustomUsernameHeaderName)) > 0 {
+				// The client set a username header, so they are trying to log in with a username/password.
+				// TODO unit test this
+				return handleAuthRequestForOIDCUpstreamPasswordGrant(r, w, oauthHelperWithStorage, oidcUpstream)
+			}
+			return handleAuthRequestForOIDCUpstreamAuthcodeGrant(r, w,
 				oauthHelperWithoutStorage,
 				generateCSRF, generateNonce, generatePKCE,
 				oidcUpstream,
@@ -86,13 +91,8 @@ func handleAuthRequestForLDAPUpstream(
 		return nil
 	}
 
-	username := r.Header.Get(CustomUsernameHeaderName)
-	password := r.Header.Get(CustomPasswordHeaderName)
-	if username == "" || password == "" {
-		// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
-		err := errors.WithStack(fosite.ErrAccessDenied.WithHintf("Missing or blank username or password."))
-		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
-		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+	username, password, hadUsernamePasswordValues := requireNonEmptyUsernameAndPasswordHeaders(r, w, oauthHelper, authorizeRequester)
+	if !hadUsernamePasswordValues {
 		return nil
 	}
 
@@ -128,7 +128,69 @@ func handleAuthRequestForLDAPUpstream(
 	return nil
 }
 
-func handleAuthRequestForOIDCUpstream(
+func requireNonEmptyUsernameAndPasswordHeaders(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester) (string, string, bool) {
+	username := r.Header.Get(CustomUsernameHeaderName)
+	password := r.Header.Get(CustomPasswordHeaderName)
+	if username == "" || password == "" {
+		// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
+		err := errors.WithStack(fosite.ErrAccessDenied.WithHintf("Missing or blank username or password."))
+		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
+		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+		return "", "", false
+	}
+	return username, password, true
+}
+
+func handleAuthRequestForOIDCUpstreamPasswordGrant(
+	r *http.Request,
+	w http.ResponseWriter,
+	oauthHelper fosite.OAuth2Provider,
+	oidcUpstream provider.UpstreamOIDCIdentityProviderI,
+) error {
+	authorizeRequester, created := newAuthorizeRequest(r, w, oauthHelper)
+	if !created {
+		return nil
+	}
+
+	username, password, hadUsernamePasswordValues := requireNonEmptyUsernameAndPasswordHeaders(r, w, oauthHelper, authorizeRequester)
+	if !hadUsernamePasswordValues {
+		return nil
+	}
+
+	token, err := oidcUpstream.PasswordCredentialsGrantAndValidateTokens(r.Context(), username, password)
+	if err != nil {
+		// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
+		// TODO do not return the full details of the error to the client, but let them know if it is because password grants are disallowed
+		err := errors.WithStack(fosite.ErrAccessDenied.WithHintf(err.Error()))
+		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
+		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+		return nil
+	}
+
+	subject, username, err := downstreamsession.GetSubjectAndUsernameFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
+	if err != nil {
+		return err
+	}
+
+	groups, err := downstreamsession.GetGroupsFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
+	if err != nil {
+		return err
+	}
+
+	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups)
+
+	authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
+	if err != nil {
+		plog.WarningErr("error while generating and saving authcode", err, "upstreamName", oidcUpstream.GetName())
+		return httperr.Wrap(http.StatusInternalServerError, "error while generating and saving authcode", err)
+	}
+
+	oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
+
+	return nil
+}
+
+func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 	r *http.Request,
 	w http.ResponseWriter,
 	oauthHelper fosite.OAuth2Provider,

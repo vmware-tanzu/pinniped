@@ -37,20 +37,20 @@ func TestIDPDiscovery(t *testing.T) {
 			wantContentType: "application/json",
 			wantFirstResponseBodyJSON: &response{
 				IDPs: []identityProviderResponse{
-					{Name: "a-some-ldap-idp", Type: "ldap"},
-					{Name: "a-some-oidc-idp", Type: "oidc"},
-					{Name: "x-some-idp", Type: "ldap"},
-					{Name: "x-some-idp", Type: "oidc"},
-					{Name: "z-some-ldap-idp", Type: "ldap"},
-					{Name: "z-some-oidc-idp", Type: "oidc"},
+					{Name: "a-some-ldap-idp", Type: "ldap", Flows: []string{"cli_password"}},
+					{Name: "a-some-oidc-idp", Type: "oidc", Flows: []string{"browser_authcode"}},
+					{Name: "x-some-idp", Type: "ldap", Flows: []string{"cli_password"}},
+					{Name: "x-some-idp", Type: "oidc", Flows: []string{"browser_authcode"}},
+					{Name: "z-some-ldap-idp", Type: "ldap", Flows: []string{"cli_password"}},
+					{Name: "z-some-oidc-idp", Type: "oidc", Flows: []string{"browser_authcode", "cli_password"}},
 				},
 			},
 			wantSecondResponseBodyJSON: &response{
 				IDPs: []identityProviderResponse{
-					{Name: "some-other-ldap-idp-1", Type: "ldap"},
-					{Name: "some-other-ldap-idp-2", Type: "ldap"},
-					{Name: "some-other-oidc-idp-1", Type: "oidc"},
-					{Name: "some-other-oidc-idp-2", Type: "oidc"},
+					{Name: "some-other-ldap-idp-1", Type: "ldap", Flows: []string{"cli_password"}},
+					{Name: "some-other-ldap-idp-2", Type: "ldap", Flows: []string{"cli_password"}},
+					{Name: "some-other-oidc-idp-1", Type: "oidc", Flows: []string{"browser_authcode", "cli_password"}},
+					{Name: "some-other-oidc-idp-2", Type: "oidc", Flows: []string{"browser_authcode"}},
 				},
 			},
 		},
@@ -67,7 +67,7 @@ func TestIDPDiscovery(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			idpLister := oidctestutil.NewUpstreamIDPListerBuilder().
-				WithOIDC(&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "z-some-oidc-idp"}).
+				WithOIDC(&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "z-some-oidc-idp", AllowPasswordGrant: true}).
 				WithOIDC(&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "x-some-idp"}).
 				WithLDAP(&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "a-some-ldap-idp"}).
 				WithOIDC(&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "a-some-oidc-idp"}).
@@ -100,7 +100,7 @@ func TestIDPDiscovery(t *testing.T) {
 				&oidctestutil.TestUpstreamLDAPIdentityProvider{Name: "some-other-ldap-idp-2"},
 			})
 			idpLister.SetOIDCIdentityProviders([]provider.UpstreamOIDCIdentityProviderI{
-				&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "some-other-oidc-idp-1"},
+				&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "some-other-oidc-idp-1", AllowPasswordGrant: true},
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{Name: "some-other-oidc-idp-2"},
 			})
 

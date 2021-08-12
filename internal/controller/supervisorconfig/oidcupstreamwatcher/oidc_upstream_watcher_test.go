@@ -506,15 +506,18 @@ Get "invalid-url-that-is-really-really-long/.well-known/openid-configuration": u
 			}},
 		},
 		{
-			name: "upstream becomes valid",
+			name: "upstream with error becomes valid",
 			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "test-name"},
 				Spec: v1alpha1.OIDCIdentityProviderSpec{
-					Issuer:              testIssuerURL,
-					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
-					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
-					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: append(testAdditionalScopes, "xyz", "openid")},
-					Claims:              v1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
+					Issuer: testIssuerURL,
+					TLS:    &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
+					Client: v1alpha1.OIDCClient{SecretName: testSecretName},
+					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{
+						AdditionalScopes:   append(testAdditionalScopes, "xyz", "openid"),
+						AllowPasswordGrant: true,
+					},
+					Claims: v1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
 				},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
@@ -535,12 +538,13 @@ Get "invalid-url-that-is-really-really-long/.well-known/openid-configuration": u
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{
-					Name:             testName,
-					ClientID:         testClientID,
-					AuthorizationURL: *testIssuerAuthorizeURL,
-					Scopes:           append(testExpectedScopes, "xyz"),
-					UsernameClaim:    testUsernameClaim,
-					GroupsClaim:      testGroupsClaim,
+					Name:               testName,
+					ClientID:           testClientID,
+					AuthorizationURL:   *testIssuerAuthorizeURL,
+					Scopes:             append(testExpectedScopes, "xyz"),
+					UsernameClaim:      testUsernameClaim,
+					GroupsClaim:        testGroupsClaim,
+					AllowPasswordGrant: true,
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -559,11 +563,14 @@ Get "invalid-url-that-is-really-really-long/.well-known/openid-configuration": u
 			inputUpstreams: []runtime.Object{&v1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
 				Spec: v1alpha1.OIDCIdentityProviderSpec{
-					Issuer:              testIssuerURL,
-					TLS:                 &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
-					Client:              v1alpha1.OIDCClient{SecretName: testSecretName},
-					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{AdditionalScopes: testAdditionalScopes},
-					Claims:              v1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
+					Issuer: testIssuerURL,
+					TLS:    &v1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
+					Client: v1alpha1.OIDCClient{SecretName: testSecretName},
+					AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{
+						AdditionalScopes:   testAdditionalScopes,
+						AllowPasswordGrant: false,
+					},
+					Claims: v1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
 				},
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
@@ -584,12 +591,13 @@ Get "invalid-url-that-is-really-really-long/.well-known/openid-configuration": u
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{
-					Name:             testName,
-					ClientID:         testClientID,
-					AuthorizationURL: *testIssuerAuthorizeURL,
-					Scopes:           testExpectedScopes,
-					UsernameClaim:    testUsernameClaim,
-					GroupsClaim:      testGroupsClaim,
+					Name:               testName,
+					ClientID:           testClientID,
+					AuthorizationURL:   *testIssuerAuthorizeURL,
+					Scopes:             testExpectedScopes,
+					UsernameClaim:      testUsernameClaim,
+					GroupsClaim:        testGroupsClaim,
+					AllowPasswordGrant: false,
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -633,12 +641,13 @@ Get "invalid-url-that-is-really-really-long/.well-known/openid-configuration": u
 			},
 			wantResultingCache: []provider.UpstreamOIDCIdentityProviderI{
 				&oidctestutil.TestUpstreamOIDCIdentityProvider{
-					Name:             testName,
-					ClientID:         testClientID,
-					AuthorizationURL: *testIssuerAuthorizeURL,
-					Scopes:           testExpectedScopes,
-					UsernameClaim:    testUsernameClaim,
-					GroupsClaim:      testGroupsClaim,
+					Name:               testName,
+					ClientID:           testClientID,
+					AuthorizationURL:   *testIssuerAuthorizeURL,
+					Scopes:             testExpectedScopes,
+					UsernameClaim:      testUsernameClaim,
+					GroupsClaim:        testGroupsClaim,
+					AllowPasswordGrant: false,
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -797,6 +806,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 				require.Equal(t, tt.wantResultingCache[i].GetAuthorizationURL().String(), actualIDP.GetAuthorizationURL().String())
 				require.Equal(t, tt.wantResultingCache[i].GetUsernameClaim(), actualIDP.GetUsernameClaim())
 				require.Equal(t, tt.wantResultingCache[i].GetGroupsClaim(), actualIDP.GetGroupsClaim())
+				require.Equal(t, tt.wantResultingCache[i].AllowsPasswordGrant(), actualIDP.AllowsPasswordGrant())
 				require.ElementsMatch(t, tt.wantResultingCache[i].GetScopes(), actualIDP.GetScopes())
 
 				// We always want to use the proxy from env on these clients, so although the following assertions

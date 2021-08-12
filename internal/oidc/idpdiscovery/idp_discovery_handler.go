@@ -16,6 +16,9 @@ import (
 const (
 	idpDiscoveryTypeLDAP = "ldap"
 	idpDiscoveryTypeOIDC = "oidc"
+
+	flowOIDCBrowser = "browser_authcode"
+	flowCLIPassword = "cli_password"
 )
 
 type response struct {
@@ -23,8 +26,9 @@ type response struct {
 }
 
 type identityProviderResponse struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
+	Name  string   `json:"name"`
+	Type  string   `json:"type"`
+	Flows []string `json:"flows"`
 }
 
 // NewHandler returns an http.Handler that serves the upstream IDP discovery endpoint.
@@ -56,10 +60,22 @@ func responseAsJSON(upstreamIDPs oidc.UpstreamIdentityProvidersLister) ([]byte, 
 
 	// The cache of IDPs could change at any time, so always recalculate the list.
 	for _, provider := range upstreamIDPs.GetLDAPIdentityProviders() {
-		r.IDPs = append(r.IDPs, identityProviderResponse{Name: provider.GetName(), Type: idpDiscoveryTypeLDAP})
+		r.IDPs = append(r.IDPs, identityProviderResponse{
+			Name:  provider.GetName(),
+			Type:  idpDiscoveryTypeLDAP,
+			Flows: []string{flowCLIPassword},
+		})
 	}
 	for _, provider := range upstreamIDPs.GetOIDCIdentityProviders() {
-		r.IDPs = append(r.IDPs, identityProviderResponse{Name: provider.GetName(), Type: idpDiscoveryTypeOIDC})
+		flows := []string{flowOIDCBrowser}
+		if provider.AllowsPasswordGrant() {
+			flows = append(flows, flowCLIPassword)
+		}
+		r.IDPs = append(r.IDPs, identityProviderResponse{
+			Name:  provider.GetName(),
+			Type:  idpDiscoveryTypeOIDC,
+			Flows: flows,
+		})
 	}
 
 	// Nobody like an API that changes the results unnecessarily. :)

@@ -76,6 +76,7 @@ type TestUpstreamOIDCIdentityProvider struct {
 	UsernameClaim                         string
 	GroupsClaim                           string
 	Scopes                                []string
+	AllowPasswordGrant                    bool
 	ExchangeAuthcodeAndValidateTokensFunc func(
 		ctx context.Context,
 		authcode string,
@@ -109,6 +110,15 @@ func (u *TestUpstreamOIDCIdentityProvider) GetUsernameClaim() string {
 
 func (u *TestUpstreamOIDCIdentityProvider) GetGroupsClaim() string {
 	return u.GroupsClaim
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) AllowsPasswordGrant() bool {
+	return u.AllowPasswordGrant
+}
+
+func (u *TestUpstreamOIDCIdentityProvider) PasswordCredentialsGrantAndValidateTokens(ctx context.Context, username, password string) (*oidctypes.Token, error) {
+	// TODO implement this unit test helper
+	return nil, nil
 }
 
 func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokens(

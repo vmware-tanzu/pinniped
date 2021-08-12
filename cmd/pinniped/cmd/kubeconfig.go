@@ -68,6 +68,7 @@ type getKubeconfigOIDCParams struct {
 	requestAudience   string
 	upstreamIDPName   string
 	upstreamIDPType   string
+	upstreamIDPFlow   string
 }
 
 type getKubeconfigConciergeParams struct {
@@ -110,8 +111,9 @@ type supervisorIDPsDiscoveryResponseV1Alpha1 struct {
 }
 
 type pinnipedIDPResponse struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
+	Name  string   `json:"name"`
+	Type  string   `json:"type"`
+	Flows []string `json:"flows,omitempty"`
 }
 
 func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
@@ -154,6 +156,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.StringVar(&flags.oidc.requestAudience, "oidc-request-audience", "", "Request a token with an alternate audience using RFC8693 token exchange")
 	f.StringVar(&flags.oidc.upstreamIDPName, "upstream-identity-provider-name", "", "The name of the upstream identity provider used during login with a Supervisor")
 	f.StringVar(&flags.oidc.upstreamIDPType, "upstream-identity-provider-type", "", "The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap')")
+	f.StringVar(&flags.oidc.upstreamIDPFlow, "upstream-identity-provider-flow", "", "The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. 'cli_password', 'browser_authcode')")
 	f.StringVar(&flags.kubeconfigPath, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to kubeconfig file")
 	f.StringVar(&flags.kubeconfigContextOverride, "kubeconfig-context", "", "Kubeconfig context name (default: current active context)")
 	f.BoolVar(&flags.skipValidate, "skip-validation", false, "Skip final validation of the kubeconfig (default: false)")
@@ -243,8 +246,10 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 		cluster.CertificateAuthorityData = flags.concierge.caBundle
 	}
 
-	// If there is an issuer, and if both upstream flags are not already set, then try to discover Supervisor upstream IDP.
-	if len(flags.oidc.issuer) > 0 && (flags.oidc.upstreamIDPType == "" || flags.oidc.upstreamIDPName == "") {
+	// If there is an issuer, and if any upstream IDP flags are not already set, then try to discover Supervisor upstream IDP details.
+	// When all the upstream IDP flags are set by the user, then skip discovery and don't validate their input. Maybe they know something
+	// that we can't know, like the name of an IDP that they are going to define in the future.
+	if len(flags.oidc.issuer) > 0 && (flags.oidc.upstreamIDPType == "" || flags.oidc.upstreamIDPName == "" || flags.oidc.upstreamIDPFlow == "") {
 		if err := discoverSupervisorUpstreamIDP(ctx, &flags); err != nil {
 			return err
 		}
@@ -345,6 +350,9 @@ func newExecConfig(deps kubeconfigDeps, flags getKubeconfigParams) (*clientcmdap
 	}
 	if flags.oidc.upstreamIDPType != "" {
 		execConfig.Args = append(execConfig.Args, "--upstream-identity-provider-type="+flags.oidc.upstreamIDPType)
+	}
+	if flags.oidc.upstreamIDPFlow != "" {
+		execConfig.Args = append(execConfig.Args, "--upstream-identity-provider-flow="+flags.oidc.upstreamIDPFlow)
 	}
 
 	return execConfig, nil
@@ -758,21 +766,31 @@ func discoverSupervisorUpstreamIDP(ctx context.Context, flags *getKubeconfigPara
 		return nil
 	}
 
-	upstreamIDPs, err := discoverAllAvailableSupervisorUpstreamIDPs(ctx, pinnipedIDPsEndpoint, httpClient)
+	discoveredUpstreamIDPs, err := discoverAllAvailableSupervisorUpstreamIDPs(ctx, pinnipedIDPsEndpoint, httpClient)
 	if err != nil {
 		return err
 	}
-	if len(upstreamIDPs) == 1 {
-		flags.oidc.upstreamIDPName = upstreamIDPs[0].Name
-		flags.oidc.upstreamIDPType = upstreamIDPs[0].Type
-	} else if len(upstreamIDPs) > 1 {
-		idpName, idpType, err := selectUpstreamIDP(upstreamIDPs, flags.oidc.upstreamIDPName, flags.oidc.upstreamIDPType)
-		if err != nil {
-			return err
-		}
-		flags.oidc.upstreamIDPName = idpName
-		flags.oidc.upstreamIDPType = idpType
+
+	if len(discoveredUpstreamIDPs) == 0 {
+		// Discovered that the Supervisor does not have any upstream IDPs defined. Continue without putting one into the
+		// kubeconfig. This kubeconfig will only work if the user defines one (and only one) OIDC IDP in the Supervisor
+		// later and wants to use the default client flow for OIDC (browser-based auth).
+		return nil
 	}
+
+	selectedIDPName, selectedIDPType, discoveredIDPFlows, err := selectUpstreamIDPNameAndType(discoveredUpstreamIDPs, flags.oidc.upstreamIDPName, flags.oidc.upstreamIDPType)
+	if err != nil {
+		return err
+	}
+
+	selectedIDPFlow, err := selectUpstreamIDPFlow(discoveredIDPFlows, selectedIDPName, selectedIDPType, flags.oidc.upstreamIDPFlow)
+	if err != nil {
+		return err
+	}
+
+	flags.oidc.upstreamIDPName = selectedIDPName
+	flags.oidc.upstreamIDPType = selectedIDPType
+	flags.oidc.upstreamIDPFlow = selectedIDPFlow
 	return nil
 }
 
@@ -840,53 +858,104 @@ func discoverAllAvailableSupervisorUpstreamIDPs(ctx context.Context, pinnipedIDP
 	return body.PinnipedIDPs, nil
 }
 
-func selectUpstreamIDP(pinnipedIDPs []pinnipedIDPResponse, idpName, idpType string) (string, string, error) {
+func selectUpstreamIDPNameAndType(pinnipedIDPs []pinnipedIDPResponse, specifiedIDPName, specifiedIDPType string) (string, string, []string, error) {
 	pinnipedIDPsString, _ := json.Marshal(pinnipedIDPs)
+	var discoveredFlows []string
 	switch {
-	case idpType != "":
+	case specifiedIDPName != "" && specifiedIDPType != "":
+		// The user specified both name and type, so check to see if there exists an exact match.
+		for _, idp := range pinnipedIDPs {
+			if idp.Name == specifiedIDPName && idp.Type == specifiedIDPType {
+				return specifiedIDPName, specifiedIDPType, idp.Flows, nil
+			}
+		}
+		return "", "", nil, fmt.Errorf(
+			"no Supervisor upstream identity providers with name %q of type %q were found. "+
+				"Found these upstreams: %s", specifiedIDPName, specifiedIDPType, pinnipedIDPsString)
+	case specifiedIDPType != "":
+		// The user specified only a type, so check if there is only one of that type found.
 		discoveredName := ""
 		for _, idp := range pinnipedIDPs {
-			if idp.Type == idpType {
+			if idp.Type == specifiedIDPType {
 				if discoveredName != "" {
-					return "", "", fmt.Errorf(
-						"multiple Supervisor upstream identity providers of type \"%s\" were found,"+
-							" so the --upstream-identity-provider-name flag must be specified. "+
+					return "", "", nil, fmt.Errorf(
+						"multiple Supervisor upstream identity providers of type %q were found, "+
+							"so the --upstream-identity-provider-name flag must be specified. "+
 							"Found these upstreams: %s",
-						idpType, pinnipedIDPsString)
+						specifiedIDPType, pinnipedIDPsString)
 				}
 				discoveredName = idp.Name
+				discoveredFlows = idp.Flows
 			}
 		}
 		if discoveredName == "" {
-			return "", "", fmt.Errorf(
-				"no Supervisor upstream identity providers of type \"%s\" were found."+
-					" Found these upstreams: %s", idpType, pinnipedIDPsString)
+			return "", "", nil, fmt.Errorf(
+				"no Supervisor upstream identity providers of type %q were found. "+
+					"Found these upstreams: %s", specifiedIDPType, pinnipedIDPsString)
 		}
-		return discoveredName, idpType, nil
-	case idpName != "":
+		return discoveredName, specifiedIDPType, discoveredFlows, nil
+	case specifiedIDPName != "":
+		// The user specified only a name, so check if there is only one of that name found.
 		discoveredType := ""
 		for _, idp := range pinnipedIDPs {
-			if idp.Name == idpName {
+			if idp.Name == specifiedIDPName {
 				if discoveredType != "" {
-					return "", "", fmt.Errorf(
-						"multiple Supervisor upstream identity providers with name \"%s\" were found,"+
-							" so the --upstream-identity-provider-type flag must be specified. Found these upstreams: %s",
-						idpName, pinnipedIDPsString)
+					return "", "", nil, fmt.Errorf(
+						"multiple Supervisor upstream identity providers with name %q were found, "+
+							"so the --upstream-identity-provider-type flag must be specified. Found these upstreams: %s",
+						specifiedIDPName, pinnipedIDPsString)
 				}
 				discoveredType = idp.Type
+				discoveredFlows = idp.Flows
 			}
 		}
 		if discoveredType == "" {
-			return "", "", fmt.Errorf(
-				"no Supervisor upstream identity providers with name \"%s\" were found."+
-					" Found these upstreams: %s", idpName, pinnipedIDPsString)
+			return "", "", nil, fmt.Errorf(
+				"no Supervisor upstream identity providers with name %q were found. "+
+					"Found these upstreams: %s", specifiedIDPName, pinnipedIDPsString)
 		}
-		return idpName, discoveredType, nil
+		return specifiedIDPName, discoveredType, discoveredFlows, nil
+	case len(pinnipedIDPs) == 1:
+		// The user did not specify any name or type, but there is only one found, so select it.
+		return pinnipedIDPs[0].Name, pinnipedIDPs[0].Type, pinnipedIDPs[0].Flows, nil
 	default:
-		return "", "", fmt.Errorf(
-			"multiple Supervisor upstream identity providers were found,"+
-				" so the --upstream-identity-provider-name/--upstream-identity-provider-type flags must be specified."+
-				" Found these upstreams: %s",
+		// The user did not specify any name or type, and there is more than one found.
+		return "", "", nil, fmt.Errorf(
+			"multiple Supervisor upstream identity providers were found, "+
+				"so the --upstream-identity-provider-name/--upstream-identity-provider-type flags must be specified. "+
+				"Found these upstreams: %s",
 			pinnipedIDPsString)
+	}
+}
+
+func selectUpstreamIDPFlow(discoveredIDPFlows []string, selectedIDPName string, selectedIDPType string, specifiedFlow string) (string, error) {
+	switch {
+	case len(discoveredIDPFlows) == 0:
+		// No flows listed by discovery means that we are talking to an old Supervisor from before this feature existed.
+		// If the user specified a flow on the CLI flag then use it without validation, otherwise skip flow selection
+		// and return empty string.
+		return specifiedFlow, nil
+	case specifiedFlow != "":
+		// The user specified a flow, so validate that it is available for the selected IDP.
+		for _, flow := range discoveredIDPFlows {
+			if flow == specifiedFlow {
+				// Found it, so use it as specified by the user.
+				return specifiedFlow, nil
+			}
+		}
+		return "", fmt.Errorf(
+			"no client flow %q for Supervisor upstream identity provider %q of type %q were found. "+
+				"Found these flows: %v",
+			specifiedFlow, selectedIDPName, selectedIDPType, discoveredIDPFlows)
+	case len(discoveredIDPFlows) == 1:
+		// The user did not specify a flow, but there is only one found, so select it.
+		return discoveredIDPFlows[0], nil
+	default:
+		// The user did not specify a flow, and more than one was found.
+		return "", fmt.Errorf(
+			"multiple client flows for Supervisor upstream identity provider %q of type %q were found, "+
+				"so the --upstream-identity-provider-flow flag must be specified. "+
+				"Found these flows: %v",
+			selectedIDPName, selectedIDPType, discoveredIDPFlows)
 	}
 }

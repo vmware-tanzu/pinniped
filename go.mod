@@ -10,14 +10,12 @@ require (
 	github.com/go-ldap/ldap/v3 v3.3.0
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/stdr v0.4.0
-	github.com/go-openapi/spec v0.20.3 // indirect
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.6
 	github.com/google/gofuzz v1.2.0
 	github.com/gorilla/securecookie v1.1.1
 	github.com/gorilla/websocket v1.4.2
-	github.com/onsi/ginkgo v1.13.0 // indirect
 	github.com/ory/fosite v0.40.2
 	github.com/pkg/browser v0.0.0-20210115035449-ce105d075bb4
 	github.com/pkg/errors v0.9.1
@@ -26,22 +24,22 @@ require (
 	github.com/spf13/cobra v1.2.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
-	github.com/tdewolff/minify/v2 v2.9.20
+	github.com/tdewolff/minify/v2 v2.9.21
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
 	golang.org/x/net v0.0.0-20210520170846-37e1c6afe023
 	golang.org/x/oauth2 v0.0.0-20210402161424-2e8d93401602
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/term v0.0.0-20210503060354-a79de5458b56
 	gopkg.in/square/go-jose.v2 v2.6.0
-	k8s.io/api v0.21.3
-	k8s.io/apimachinery v0.21.3
-	k8s.io/apiserver v0.21.3
-	k8s.io/client-go v0.21.3
-	k8s.io/component-base v0.21.3
+	k8s.io/api v0.22.0
+	k8s.io/apimachinery v0.22.0
+	k8s.io/apiserver v0.22.0
+	k8s.io/client-go v0.22.0
+	k8s.io/component-base v0.22.0
 	k8s.io/gengo v0.0.0-20210203185629-de9496dff47b
 	k8s.io/klog/v2 v2.10.0
-	k8s.io/kube-aggregator v0.21.3
-	k8s.io/utils v0.0.0-20210521133846-da695404a2bc
+	k8s.io/kube-aggregator v0.22.0
+	k8s.io/utils v0.0.0-20210707171843-4b05e18ac7d9
 	sigs.k8s.io/yaml v1.2.0
 )
 
@@ -57,9 +55,6 @@ replace github.com/oleiade/reflections v1.0.0 => github.com/oleiade/reflections 
 // https://golang.org/issues/26904
 replace github.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/form3tech-oss/jwt-go v0.0.0-20200915135329-9162a5abdbc0
 
-// Pin gRPC back to v1.29.1 (the version required by Kubernetes), but also override a module that's only used in some tests.
+// Pin a gRPC module that's only used in some tests.
 // This is required because sometime after v1.29.1, they moved this package into a separate module.
-replace (
-	google.golang.org/grpc => google.golang.org/grpc v1.29.1
-	google.golang.org/grpc/examples => ./hack/dependencyhacks/grpcexamples/
-)
+replace google.golang.org/grpc/examples => ./hack/dependencyhacks/grpcexamples/

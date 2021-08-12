@@ -751,6 +751,79 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}, err)
 		})
 
+		t.Run("nested impersonation as a cluster admin fails if UID impersonation is attempted", func(t *testing.T) {
+			parallelIfNotEKS(t)
+			adminClientRestConfig := testlib.NewClientConfig(t)
+			clusterAdminCredentials := getCredForConfig(t, adminClientRestConfig)
+
+			nestedImpersonationUIDOnly := newImpersonationProxyConfigWithCredentials(t,
+				clusterAdminCredentials, impersonationProxyURL, impersonationProxyCACertPEM, nil,
+			)
+			nestedImpersonationUIDOnly.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+				return roundtripper.Func(func(r *http.Request) (*http.Response, error) {
+					r.Header.Set("iMperSONATE-uid", "some-awesome-uid")
+					return rt.RoundTrip(r)
+				})
+			})
+
+			_, errUID := testlib.NewKubeclient(t, nestedImpersonationUIDOnly).Kubernetes.CoreV1().Secrets("foo").Get(ctx, "bar", metav1.GetOptions{})
+			msg := `Internal Server Error: "/api/v1/namespaces/foo/secrets/bar": requested [{UID  some-awesome-uid  authentication.k8s.io/v1  }] without impersonating a user`
+			full := fmt.Sprintf(`an error on the server (%q) has prevented the request from succeeding (get secrets bar)`, msg)
+			require.EqualError(t, errUID, full)
+			require.True(t, k8serrors.IsInternalError(errUID), errUID)
+			require.Equal(t, &k8serrors.StatusError{
+				ErrStatus: metav1.Status{
+					Status: metav1.StatusFailure,
+					Code:   http.StatusInternalServerError,
+					Reason: metav1.StatusReasonInternalError,
+					Details: &metav1.StatusDetails{
+						Name: "bar",
+						Kind: "secrets",
+						Causes: []metav1.StatusCause{
+							{
+								Type:    metav1.CauseTypeUnexpectedServerResponse,
+								Message: msg,
+							},
+						},
+					},
+					Message: full,
+				},
+			}, errUID)
+
+			nestedImpersonationUID := newImpersonationProxyConfigWithCredentials(t,
+				clusterAdminCredentials, impersonationProxyURL, impersonationProxyCACertPEM,
+				&rest.ImpersonationConfig{
+					UserName: "other-user-to-impersonate",
+					Groups:   []string{"system:masters"}, // impersonate system:masters so we get past authorization checks
+				},
+			)
+			nestedImpersonationUID.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+				return roundtripper.Func(func(r *http.Request) (*http.Response, error) {
+					r.Header.Set("imperSONate-uiD", "some-fancy-uid")
+					return rt.RoundTrip(r)
+				})
+			})
+
+			_, err := testlib.NewKubeclient(t, nestedImpersonationUID).Kubernetes.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
+			require.EqualError(t, err, "Internal error occurred: unimplemented functionality - unable to act as current user")
+			require.True(t, k8serrors.IsInternalError(err), err)
+			require.Equal(t, &k8serrors.StatusError{
+				ErrStatus: metav1.Status{
+					Status: metav1.StatusFailure,
+					Code:   http.StatusInternalServerError,
+					Reason: metav1.StatusReasonInternalError,
+					Details: &metav1.StatusDetails{
+						Causes: []metav1.StatusCause{
+							{
+								Message: "unimplemented functionality - unable to act as current user",
+							},
+						},
+					},
+					Message: "Internal error occurred: unimplemented functionality - unable to act as current user",
+				},
+			}, err)
+		})
+
 		// this works because impersonation cannot set UID and thus the final user info the proxy sees has no UID
 		t.Run("nested impersonation as a service account is allowed if it has enough RBAC permissions", func(t *testing.T) {
 			parallelIfNotEKS(t)
@@ -965,6 +1038,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				csrPEM,
 				"",
 				certificatesv1.KubeAPIServerClientSignerName,
+				nil,
 				[]certificatesv1.KeyUsage{certificatesv1.UsageClientAuth},
 				privateKey,
 			)
@@ -2167,6 +2241,13 @@ func createTokenCredentialRequest(
 func newImpersonationProxyClientWithCredentials(t *testing.T, credentials *loginv1alpha1.ClusterCredential, impersonationProxyURL string, impersonationProxyCACertPEM []byte, nestedImpersonationConfig *rest.ImpersonationConfig) *kubeclient.Client {
 	t.Helper()
 
+	kubeconfig := newImpersonationProxyConfigWithCredentials(t, credentials, impersonationProxyURL, impersonationProxyCACertPEM, nestedImpersonationConfig)
+	return testlib.NewKubeclient(t, kubeconfig)
+}
+
+func newImpersonationProxyConfigWithCredentials(t *testing.T, credentials *loginv1alpha1.ClusterCredential, impersonationProxyURL string, impersonationProxyCACertPEM []byte, nestedImpersonationConfig *rest.ImpersonationConfig) *rest.Config {
+	t.Helper()
+
 	env := testlib.IntegrationEnv(t)
 	clusterSupportsLoadBalancers := env.HasCapability(testlib.HasExternalLoadBalancerProvider)
 
@@ -2176,7 +2257,7 @@ func newImpersonationProxyClientWithCredentials(t *testing.T, credentials *login
 		// Prefer to go through a load balancer because that's how the impersonator is intended to be used in the real world.
 		kubeconfig.Proxy = kubeconfigProxyFunc(t, env.Proxy)
 	}
-	return testlib.NewKubeclient(t, kubeconfig)
+	return kubeconfig
 }
 
 func newAnonymousImpersonationProxyClient(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte, nestedImpersonationConfig *rest.ImpersonationConfig) *kubeclient.Client {
@@ -2319,6 +2400,7 @@ func getUIDAndExtraViaCSR(ctx context.Context, t *testing.T, uid string, client 
 		csrPEM,
 		"",
 		certificatesv1.KubeAPIServerClientSignerName,
+		nil,
 		[]certificatesv1.KeyUsage{certificatesv1.UsageClientAuth},
 		privateKey,
 	)

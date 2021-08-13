@@ -21,20 +21,19 @@ import (
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
-	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	oidcpkce "go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
 const (
 	happyUpstreamIDPName = "upstream-idp-name"
 
-	upstreamIssuer              = "https://my-upstream-issuer.com"
-	upstreamSubject             = "abc123-some guid" // has a space character which should get escaped in URL
-	queryEscapedUpstreamSubject = "abc123-some+guid"
-	upstreamUsername            = "test-pinniped-username"
+	oidcUpstreamIssuer              = "https://my-upstream-issuer.com"
+	oidcUpstreamSubject             = "abc123-some guid" // has a space character which should get escaped in URL
+	oidcUpstreamSubjectQueryEscaped = "abc123-some+guid"
+	oidcUpstreamUsername            = "test-pinniped-username"
 
-	upstreamUsernameClaim = "the-user-claim"
-	upstreamGroupsClaim   = "the-groups-claim"
+	oidcUpstreamUsernameClaim = "the-user-claim"
+	oidcUpstreamGroupsClaim   = "the-groups-claim"
 
 	happyUpstreamAuthcode    = "upstream-auth-code"
 	happyUpstreamRedirectURI = "https://example.com/callback"
@@ -56,7 +55,7 @@ const (
 )
 
 var (
-	upstreamGroupMembership        = []string{"test-pinniped-group-0", "test-pinniped-group-1"}
+	oidcUpstreamGroupMembership    = []string{"test-pinniped-group-0", "test-pinniped-group-1"}
 	happyDownstreamScopesRequested = []string{"openid"}
 	happyDownstreamScopesGranted   = []string{"openid"}
 
@@ -113,7 +112,7 @@ func TestCallbackEndpoint(t *testing.T) {
 	tests := []struct {
 		name string
 
-		idp        oidctestutil.TestUpstreamOIDCIdentityProvider
+		idps       *oidctestutil.UpstreamIDPListerBuilder
 		method     string
 		path       string
 		csrfCookie string
@@ -132,11 +131,11 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantDownstreamPKCEChallenge       string
 		wantDownstreamPKCEChallengeMethod string
 
-		wantExchangeAndValidateTokensCall *oidctestutil.ExchangeAuthcodeAndValidateTokenArgs
+		wantAuthcodeExchangeCall *expectedAuthcodeExchange
 	}{
 		{
 			name:   "GET with good state and cookie and successful upstream token exchange with response_mode=form_post returns 200 with HTML+JS form",
-			idp:    happyUpstream().Build(),
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().WithState(
 				happyUpstreamStateParam().WithAuthorizeRequestParams(
@@ -150,204 +149,254 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:                        http.StatusOK,
 			wantContentType:                   "text/html;charset=UTF-8",
 			wantBodyFormResponseRegexp:        `<code id="manual-auth-code">(.+)</code>`,
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
-			wantDownstreamIDTokenUsername:     upstreamUsername,
-			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
 			name:                              "GET with good state and cookie and successful upstream token exchange returns 302 to downstream client callback with its state and code",
-			idp:                               happyUpstream().Build(),
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
-			wantDownstreamIDTokenUsername:     upstreamUsername,
-			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
-			name:                              "upstream IDP provides no username or group claim configuration, so we use default username claim and skip groups",
-			idp:                               happyUpstream().WithoutUsernameClaim().WithoutGroupsClaim().Build(),
+			name: "upstream IDP provides no username or group claim configuration, so we use default username claim and skip groups",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithoutUsernameClaim().WithoutGroupsClaim().Build(),
+			),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
-			wantDownstreamIDTokenUsername:     upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
 			wantDownstreamIDTokenGroups:       []string{},
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
 			name: "upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is missing",
-			idp: happyUpstream().WithUsernameClaim("email").
-				WithIDTokenClaim("email", "joe@whitehouse.gov").Build(),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithUsernameClaim("email").WithIDTokenClaim("email", "joe@whitehouse.gov").Build(),
+			),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
 			wantDownstreamIDTokenUsername:     "joe@whitehouse.gov",
-			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
 			name: "upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with true value",
-			idp: happyUpstream().WithUsernameClaim("email").
-				WithIDTokenClaim("email", "joe@whitehouse.gov").
-				WithIDTokenClaim("email_verified", true).Build(),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithUsernameClaim("email").
+					WithIDTokenClaim("email", "joe@whitehouse.gov").
+					WithIDTokenClaim("email_verified", true).Build(),
+			),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
 			wantDownstreamIDTokenUsername:     "joe@whitehouse.gov",
-			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
 			name: "upstream IDP configures username claim as anything other than special claim `email` and `email_verified` upstream claim is present with false value",
-			idp: happyUpstream().WithUsernameClaim("some-claim").
-				WithIDTokenClaim("some-claim", "joe").
-				WithIDTokenClaim("email", "joe@whitehouse.gov").
-				WithIDTokenClaim("email_verified", false).Build(),
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithUsernameClaim("some-claim").
+					WithIDTokenClaim("some-claim", "joe").
+					WithIDTokenClaim("email", "joe@whitehouse.gov").
+					WithIDTokenClaim("email_verified", false).Build(),
+			),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound, // succeed despite `email_verified=false` because we're not using the email claim for anything
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
 			wantDownstreamIDTokenUsername:     "joe",
-			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
 			name: "upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with illegal value",
-			idp: happyUpstream().WithUsernameClaim("email").
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().WithUsernameClaim("email").
 				WithIDTokenClaim("email", "joe@whitehouse.gov").
 				WithIDTokenClaim("email_verified", "supposed to be boolean").Build(),
-			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
-			csrfCookie:                        happyCSRFCookie,
-			wantStatus:                        http.StatusUnprocessableEntity,
-			wantContentType:                   htmlContentType,
-			wantBody:                          "Unprocessable Entity: email_verified claim in upstream ID token has invalid format\n",
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: email_verified claim in upstream ID token has invalid format\n",
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
 			name: "upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with false value",
-			idp: happyUpstream().WithUsernameClaim("email").
-				WithIDTokenClaim("email", "joe@whitehouse.gov").
-				WithIDTokenClaim("email_verified", false).Build(),
-			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
-			csrfCookie:                        happyCSRFCookie,
-			wantStatus:                        http.StatusUnprocessableEntity,
-			wantContentType:                   htmlContentType,
-			wantBody:                          "Unprocessable Entity: email_verified claim in upstream ID token has false value\n",
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithUsernameClaim("email").
+					WithIDTokenClaim("email", "joe@whitehouse.gov").
+					WithIDTokenClaim("email_verified", false).Build(),
+			),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: email_verified claim in upstream ID token has false value\n",
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
-			name:                              "upstream IDP provides username claim configuration as `sub`, so the downstream token subject should be exactly what they asked for",
-			idp:                               happyUpstream().WithUsernameClaim("sub").Build(),
+			name: "upstream IDP provides username claim configuration as `sub`, so the downstream token subject should be exactly what they asked for",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithUsernameClaim("sub").Build(),
+			),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
-			wantDownstreamIDTokenUsername:     upstreamSubject,
-			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamSubject,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
-			name:                              "upstream IDP's configured groups claim in the ID token has a non-array value",
-			idp:                               happyUpstream().WithIDTokenClaim(upstreamGroupsClaim, "notAnArrayGroup1 notAnArrayGroup2").Build(),
+			name: "upstream IDP's configured groups claim in the ID token has a non-array value",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, "notAnArrayGroup1 notAnArrayGroup2").Build(),
+			),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
-			wantDownstreamIDTokenUsername:     upstreamUsername,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
 			wantDownstreamIDTokenGroups:       []string{"notAnArrayGroup1 notAnArrayGroup2"},
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
-			name:                              "upstream IDP's configured groups claim in the ID token is a slice of interfaces",
-			idp:                               happyUpstream().WithIDTokenClaim(upstreamGroupsClaim, []interface{}{"group1", "group2"}).Build(),
+			name: "upstream IDP's configured groups claim in the ID token is a slice of interfaces",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"group1", "group2"}).Build(),
+			),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
-			wantDownstreamIDTokenUsername:     upstreamUsername,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
 			wantDownstreamIDTokenGroups:       []string{"group1", "group2"},
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 
 		// Pre-upstream-exchange verification
 		{
 			name:            "PUT method is invalid",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodPut,
 			path:            newRequestPath().String(),
 			wantStatus:      http.StatusMethodNotAllowed,
@@ -356,6 +405,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "POST method is invalid",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodPost,
 			path:            newRequestPath().String(),
 			wantStatus:      http.StatusMethodNotAllowed,
@@ -364,6 +414,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "PATCH method is invalid",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodPatch,
 			path:            newRequestPath().String(),
 			wantStatus:      http.StatusMethodNotAllowed,
@@ -372,6 +423,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "DELETE method is invalid",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodDelete,
 			path:            newRequestPath().String(),
 			wantStatus:      http.StatusMethodNotAllowed,
@@ -380,6 +432,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "code param was not included on request",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).WithoutCode().String(),
 			csrfCookie:      happyCSRFCookie,
@@ -389,6 +442,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "state param was not included on request",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithoutState().String(),
 			csrfCookie:      happyCSRFCookie,
@@ -398,7 +452,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "state param was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
-			idp:             happyUpstream().Build(),
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState("this-will-not-decode").String(),
 			csrfCookie:      happyCSRFCookie,
@@ -410,22 +464,26 @@ func TestCallbackEndpoint(t *testing.T) {
 			// This shouldn't happen in practice because the authorize endpoint should have already run the same
 			// validations, but we would like to test the error handling in this endpoint anyway.
 			name:   "state param contains authorization request params which fail validation",
-			idp:    happyUpstream().Build(),
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().WithState(
 				happyUpstreamStateParam().
 					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery, map[string]string{"prompt": "none login"}).Encode()).
 					Build(t, happyStateCodec),
 			).String(),
-			csrfCookie:                        happyCSRFCookie,
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
-			wantStatus:                        http.StatusInternalServerError,
-			wantContentType:                   htmlContentType,
-			wantBody:                          "Internal Server Error: error while generating and saving authcode\n",
+			csrfCookie: happyCSRFCookie,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+
+			wantStatus:      http.StatusInternalServerError,
+			wantContentType: htmlContentType,
+			wantBody:        "Internal Server Error: error while generating and saving authcode\n",
 		},
 		{
 			name:            "state's internal version does not match what we want",
-			idp:             happyUpstream().Build(),
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyUpstreamStateParam().WithStateVersion("wrong-state-version").Build(t, happyStateCodec)).String(),
 			csrfCookie:      happyCSRFCookie,
@@ -435,7 +493,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:   "state's downstream auth params element is invalid",
-			idp:    happyUpstream().Build(),
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().WithState(happyUpstreamStateParam().
 				WithAuthorizeRequestParams("the following is an invalid url encoding token, and therefore this is an invalid param: %z").
@@ -447,7 +505,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:   "state's downstream auth params are missing required value (e.g., client_id)",
-			idp:    happyUpstream().Build(),
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().WithState(
 				happyUpstreamStateParam().
@@ -461,7 +519,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:   "state's downstream auth params does not contain openid scope",
-			idp:    happyUpstream().Build(),
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().
 				WithState(
@@ -472,18 +530,21 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyDownstreamState,
-			wantDownstreamIDTokenUsername:     upstreamUsername,
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
 			wantDownstreamRequestedScopes:     []string{"profile", "email"},
-			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
 			name:   "state's downstream auth params also included offline_access scope",
-			idp:    happyUpstream().Build(),
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().
 				WithState(
@@ -494,19 +555,22 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+offline_access&state=` + happyDownstreamState,
-			wantDownstreamIDTokenUsername:     upstreamUsername,
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
 			wantDownstreamRequestedScopes:     []string{"openid", "offline_access"},
 			wantDownstreamGrantedScopes:       []string{"openid", "offline_access"},
-			wantDownstreamIDTokenGroups:       upstreamGroupMembership,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
 			name:            "the OIDCIdentityProvider CRD has been deleted",
-			idp:             otherUpstreamOIDCIdentityProvider,
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(&otherUpstreamOIDCIdentityProvider),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).String(),
 			csrfCookie:      happyCSRFCookie,
@@ -516,7 +580,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "the CSRF cookie does not exist on request",
-			idp:             happyUpstream().Build(),
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).String(),
 			wantStatus:      http.StatusForbidden,
@@ -525,7 +589,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "cookie was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
-			idp:             happyUpstream().Build(),
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyState).String(),
 			csrfCookie:      "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
@@ -535,7 +599,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		},
 		{
 			name:            "cookie csrf value does not match state csrf value",
-			idp:             happyUpstream().Build(),
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(happyUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyUpstreamStateParam().WithCSRF("wrong-csrf-value").Build(t, happyStateCodec)).String(),
 			csrfCookie:      happyCSRFCookie,
@@ -546,111 +610,156 @@ func TestCallbackEndpoint(t *testing.T) {
 
 		// Upstream exchange
 		{
-			name:                              "upstream auth code exchange fails",
-			idp:                               happyUpstream().WithoutUpstreamAuthcodeExchangeError(errors.New("some error")).Build(),
-			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
-			csrfCookie:                        happyCSRFCookie,
-			wantStatus:                        http.StatusBadGateway,
-			wantBody:                          "Bad Gateway: error exchanging and validating upstream tokens\n",
-			wantContentType:                   htmlContentType,
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			name: "upstream auth code exchange fails",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithUpstreamAuthcodeExchangeError(errors.New("some error")).Build(),
+			),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadGateway,
+			wantBody:        "Bad Gateway: error exchanging and validating upstream tokens\n",
+			wantContentType: htmlContentType,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
-			name:                              "upstream ID token does not contain requested username claim",
-			idp:                               happyUpstream().WithoutIDTokenClaim(upstreamUsernameClaim).Build(),
-			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
-			csrfCookie:                        happyCSRFCookie,
-			wantStatus:                        http.StatusUnprocessableEntity,
-			wantBody:                          "Unprocessable Entity: no username claim in upstream ID token\n",
-			wantContentType:                   htmlContentType,
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			name: "upstream ID token does not contain requested username claim",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithoutIDTokenClaim(oidcUpstreamUsernameClaim).Build(),
+			),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantBody:        "Unprocessable Entity: no username claim in upstream ID token\n",
+			wantContentType: htmlContentType,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
-			name:                              "upstream ID token does not contain requested groups claim",
-			idp:                               happyUpstream().WithoutIDTokenClaim(upstreamGroupsClaim).Build(),
+			name: "upstream ID token does not contain requested groups claim",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithoutIDTokenClaim(oidcUpstreamGroupsClaim).Build(),
+			),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusFound,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
 			wantBody:                          "",
-			wantDownstreamIDTokenSubject:      upstreamIssuer + "?sub=" + queryEscapedUpstreamSubject,
-			wantDownstreamIDTokenUsername:     upstreamUsername,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamIDTokenGroups:       []string{},
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
-			name:                              "upstream ID token contains username claim with weird format",
-			idp:                               happyUpstream().WithIDTokenClaim(upstreamUsernameClaim, 42).Build(),
-			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
-			csrfCookie:                        happyCSRFCookie,
-			wantStatus:                        http.StatusUnprocessableEntity,
-			wantContentType:                   htmlContentType,
-			wantBody:                          "Unprocessable Entity: username claim in upstream ID token has invalid format\n",
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			name: "upstream ID token contains username claim with weird format",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithIDTokenClaim(oidcUpstreamUsernameClaim, 42).Build(),
+			),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: username claim in upstream ID token has invalid format\n",
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
-			name:                              "upstream ID token does not contain iss claim when using default username claim config",
-			idp:                               happyUpstream().WithIDTokenClaim("iss", "").WithoutUsernameClaim().Build(),
-			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
-			csrfCookie:                        happyCSRFCookie,
-			wantStatus:                        http.StatusUnprocessableEntity,
-			wantContentType:                   htmlContentType,
-			wantBody:                          "Unprocessable Entity: issuer claim in upstream ID token missing\n",
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			name: "upstream ID token does not contain iss claim when using default username claim config",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithIDTokenClaim("iss", "").WithoutUsernameClaim().Build(),
+			),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: issuer claim in upstream ID token missing\n",
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
-			name:                              "upstream ID token has an non-string iss claim when using default username claim config",
-			idp:                               happyUpstream().WithIDTokenClaim("iss", 42).WithoutUsernameClaim().Build(),
-			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
-			csrfCookie:                        happyCSRFCookie,
-			wantStatus:                        http.StatusUnprocessableEntity,
-			wantContentType:                   htmlContentType,
-			wantBody:                          "Unprocessable Entity: issuer claim in upstream ID token has invalid format\n",
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			name: "upstream ID token has an non-string iss claim when using default username claim config",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithIDTokenClaim("iss", 42).WithoutUsernameClaim().Build(),
+			),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: issuer claim in upstream ID token has invalid format\n",
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
-			name:                              "upstream ID token contains groups claim with weird format",
-			idp:                               happyUpstream().WithIDTokenClaim(upstreamGroupsClaim, 42).Build(),
-			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
-			csrfCookie:                        happyCSRFCookie,
-			wantStatus:                        http.StatusUnprocessableEntity,
-			wantContentType:                   htmlContentType,
-			wantBody:                          "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			name: "upstream ID token contains groups claim with weird format",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, 42).Build(),
+			),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
-			name:                              "upstream ID token contains groups claim where one element is invalid",
-			idp:                               happyUpstream().WithIDTokenClaim(upstreamGroupsClaim, []interface{}{"foo", 7}).Build(),
-			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
-			csrfCookie:                        happyCSRFCookie,
-			wantStatus:                        http.StatusUnprocessableEntity,
-			wantContentType:                   htmlContentType,
-			wantBody:                          "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			name: "upstream ID token contains groups claim where one element is invalid",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"foo", 7}).Build(),
+			),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 		{
-			name:                              "upstream ID token contains groups claim with invalid null type",
-			idp:                               happyUpstream().WithIDTokenClaim(upstreamGroupsClaim, nil).Build(),
-			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
-			csrfCookie:                        happyCSRFCookie,
-			wantStatus:                        http.StatusUnprocessableEntity,
-			wantContentType:                   htmlContentType,
-			wantBody:                          "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
-			wantExchangeAndValidateTokensCall: happyExchangeAndValidateTokensArgs,
+			name: "upstream ID token contains groups claim with invalid null type",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, nil).Build(),
+			),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
 		},
 	}
 	for _, test := range tests {
@@ -669,9 +778,9 @@ func TestCallbackEndpoint(t *testing.T) {
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
 			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration)
 
-			idpLister := oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(&test.idp).Build()
-			subject := NewHandler(idpLister, oauthHelper, happyStateCodec, happyCookieCodec, happyUpstreamRedirectURI)
-			req := httptest.NewRequest(test.method, test.path, nil)
+			subject := NewHandler(test.idps.Build(), oauthHelper, happyStateCodec, happyCookieCodec, happyUpstreamRedirectURI)
+			reqContext := context.WithValue(context.Background(), struct{ name string }{name: "test"}, "request-context")
+			req := httptest.NewRequest(test.method, test.path, nil).WithContext(reqContext)
 			if test.csrfCookie != "" {
 				req.Header.Set("Cookie", test.csrfCookie)
 			}
@@ -682,12 +791,13 @@ func TestCallbackEndpoint(t *testing.T) {
 
 			testutil.RequireSecurityHeaders(t, rsp)
 
-			if test.wantExchangeAndValidateTokensCall != nil {
-				require.Equal(t, 1, test.idp.ExchangeAuthcodeAndValidateTokensCallCount())
-				test.wantExchangeAndValidateTokensCall.Ctx = req.Context()
-				require.Equal(t, test.wantExchangeAndValidateTokensCall, test.idp.ExchangeAuthcodeAndValidateTokensArgs(0))
+			if test.wantAuthcodeExchangeCall != nil {
+				test.wantAuthcodeExchangeCall.args.Ctx = reqContext
+				test.idps.RequireExactlyOneCallToExchangeAuthcodeAndValidateTokens(t,
+					test.wantAuthcodeExchangeCall.performedByUpstreamName, test.wantAuthcodeExchangeCall.args,
+				)
 			} else {
-				require.Equal(t, 0, test.idp.ExchangeAuthcodeAndValidateTokensCallCount())
+				test.idps.RequireExactlyZeroCallsToExchangeAuthcodeAndValidateTokens(t)
 			}
 
 			require.Equal(t, test.wantStatus, rsp.Code)
@@ -747,6 +857,11 @@ func TestCallbackEndpoint(t *testing.T) {
 			}
 		})
 	}
+}
+
+type expectedAuthcodeExchange struct {
+	performedByUpstreamName string
+	args                    *oidctestutil.ExchangeAuthcodeAndValidateTokenArgs
 }
 
 type requestPath struct {
@@ -838,70 +953,20 @@ func (b *upstreamStateParamBuilder) WithStateVersion(version string) *upstreamSt
 	return b
 }
 
-type upstreamOIDCIdentityProviderBuilder struct {
-	idToken                    map[string]interface{}
-	usernameClaim, groupsClaim string
-	authcodeExchangeErr        error
-}
-
-func happyUpstream() *upstreamOIDCIdentityProviderBuilder {
-	return &upstreamOIDCIdentityProviderBuilder{
-		usernameClaim: upstreamUsernameClaim,
-		groupsClaim:   upstreamGroupsClaim,
-		idToken: map[string]interface{}{
-			"iss":                 upstreamIssuer,
-			"sub":                 upstreamSubject,
-			upstreamUsernameClaim: upstreamUsername,
-			upstreamGroupsClaim:   upstreamGroupMembership,
-			"other-claim":         "should be ignored",
-		},
-	}
-}
-
-func (u *upstreamOIDCIdentityProviderBuilder) WithUsernameClaim(value string) *upstreamOIDCIdentityProviderBuilder {
-	u.usernameClaim = value
-	return u
-}
-
-func (u *upstreamOIDCIdentityProviderBuilder) WithoutUsernameClaim() *upstreamOIDCIdentityProviderBuilder {
-	u.usernameClaim = ""
-	return u
-}
-
-func (u *upstreamOIDCIdentityProviderBuilder) WithoutGroupsClaim() *upstreamOIDCIdentityProviderBuilder {
-	u.groupsClaim = ""
-	return u
-}
-
-func (u *upstreamOIDCIdentityProviderBuilder) WithIDTokenClaim(name string, value interface{}) *upstreamOIDCIdentityProviderBuilder {
-	u.idToken[name] = value
-	return u
-}
-
-func (u *upstreamOIDCIdentityProviderBuilder) WithoutIDTokenClaim(claim string) *upstreamOIDCIdentityProviderBuilder {
-	delete(u.idToken, claim)
-	return u
-}
-
-func (u *upstreamOIDCIdentityProviderBuilder) WithoutUpstreamAuthcodeExchangeError(err error) *upstreamOIDCIdentityProviderBuilder {
-	u.authcodeExchangeErr = err
-	return u
-}
-
-func (u *upstreamOIDCIdentityProviderBuilder) Build() oidctestutil.TestUpstreamOIDCIdentityProvider {
-	return oidctestutil.TestUpstreamOIDCIdentityProvider{
-		Name:          happyUpstreamIDPName,
-		ClientID:      "some-client-id",
-		UsernameClaim: u.usernameClaim,
-		GroupsClaim:   u.groupsClaim,
-		Scopes:        []string{"scope1", "scope2"},
-		ExchangeAuthcodeAndValidateTokensFunc: func(ctx context.Context, authcode string, pkceCodeVerifier oidcpkce.Code, expectedIDTokenNonce nonce.Nonce) (*oidctypes.Token, error) {
-			if u.authcodeExchangeErr != nil {
-				return nil, u.authcodeExchangeErr
-			}
-			return &oidctypes.Token{IDToken: &oidctypes.IDToken{Claims: u.idToken}}, nil
-		},
-	}
+func happyUpstream() *oidctestutil.TestUpstreamOIDCIdentityProviderBuilder {
+	return oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
+		WithName(happyUpstreamIDPName).
+		WithClientID("some-client-id").
+		WithScopes([]string{"scope1", "scope2"}).
+		WithUsernameClaim(oidcUpstreamUsernameClaim).
+		WithGroupsClaim(oidcUpstreamGroupsClaim).
+		WithIDTokenClaim("iss", oidcUpstreamIssuer).
+		WithIDTokenClaim("sub", oidcUpstreamSubject).
+		WithIDTokenClaim(oidcUpstreamUsernameClaim, oidcUpstreamUsername).
+		WithIDTokenClaim(oidcUpstreamGroupsClaim, oidcUpstreamGroupMembership).
+		WithIDTokenClaim("other-claim", "should be ignored").
+		WithAllowPasswordGrant(false).
+		WithPasswordGrantError(errors.New("the callback endpoint should not use password grants"))
 }
 
 func shallowCopyAndModifyQuery(query url.Values, modifications map[string]string) url.Values {

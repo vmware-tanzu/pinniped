@@ -183,8 +183,6 @@ func (c *impersonatorConfigController) Sync(syncCtx controllerlib.Context) error
 			Message:        err.Error(),
 			LastUpdateTime: metav1.NewTime(c.clock.Now()),
 		}
-		// The impersonator is not ready, so clear the signer CA from the dynamic provider.
-		c.clearSignerCA()
 	}
 
 	err = utilerrors.NewAggregate([]error{err, issuerconfig.Update(
@@ -281,27 +279,32 @@ func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context, cre
 
 	nameInfo, err := c.findDesiredTLSCertificateName(impersonationSpec)
 	if err != nil {
-		// Unexpected error while determining the name that should go into the certs, so clear any existing certs.
-		c.tlsServingCertDynamicCertProvider.UnsetCertKeyContent()
 		return nil, err
 	}
 
 	var impersonationCA *certauthority.CA
-	if c.shouldHaveTLSSecret(impersonationSpec) {
+	if c.shouldHaveImpersonator(impersonationSpec) {
 		if impersonationCA, err = c.ensureCASecretIsCreated(ctx); err != nil {
 			return nil, err
 		}
 		if err = c.ensureTLSSecret(ctx, nameInfo, impersonationCA); err != nil {
 			return nil, err
 		}
-	} else if err = c.ensureTLSSecretIsRemoved(ctx); err != nil {
-		return nil, err
+	} else {
+		if err = c.ensureTLSSecretIsRemoved(ctx); err != nil {
+			return nil, err
+		}
+		c.clearTLSSecret()
 	}
 
 	credentialIssuerStrategyResult := c.doSyncResult(nameInfo, impersonationSpec, impersonationCA)
 
-	if err = c.loadSignerCA(credentialIssuerStrategyResult.Status); err != nil {
-		return nil, err
+	if c.shouldHaveImpersonator(impersonationSpec) {
+		if err = c.loadSignerCA(); err != nil {
+			return nil, err
+		}
+	} else {
+		c.clearSignerCA()
 	}
 
 	return credentialIssuerStrategyResult, nil
@@ -350,20 +353,16 @@ func (c *impersonatorConfigController) shouldHaveClusterIPService(config *v1alph
 	return c.shouldHaveImpersonator(config) && config.Service.Type == v1alpha1.ImpersonationProxyServiceTypeClusterIP
 }
 
-func (c *impersonatorConfigController) shouldHaveTLSSecret(config *v1alpha1.ImpersonationProxySpec) bool {
-	return c.shouldHaveImpersonator(config)
-}
-
-func (c *impersonatorConfigController) serviceExists(serviceName string) (bool, error) {
-	_, err := c.servicesInformer.Lister().Services(c.namespace).Get(serviceName)
+func (c *impersonatorConfigController) serviceExists(serviceName string) (bool, *v1.Service, error) {
+	service, err := c.servicesInformer.Lister().Services(c.namespace).Get(serviceName)
 	notFound := k8serrors.IsNotFound(err)
 	if notFound {
-		return false, nil
+		return false, nil, nil
 	}
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
-	return true, nil
+	return true, service, nil
 }
 
 func (c *impersonatorConfigController) tlsSecretExists() (bool, *v1.Secret, error) {
@@ -477,7 +476,7 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.C
 }
 
 func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.Context) error {
-	running, err := c.serviceExists(c.generatedLoadBalancerServiceName)
+	running, service, err := c.serviceExists(c.generatedLoadBalancerServiceName)
 	if err != nil {
 		return err
 	}
@@ -488,7 +487,12 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.C
 	c.infoLog.Info("deleting load balancer for impersonation proxy",
 		"service", klog.KRef(c.namespace, c.generatedLoadBalancerServiceName),
 	)
-	err = c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedLoadBalancerServiceName, metav1.DeleteOptions{})
+	err = c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedLoadBalancerServiceName, metav1.DeleteOptions{
+		Preconditions: &metav1.Preconditions{
+			UID:             &service.UID,
+			ResourceVersion: &service.ResourceVersion,
+		},
+	})
 	return utilerrors.FilterOut(err, k8serrors.IsNotFound)
 }
 
@@ -517,7 +521,7 @@ func (c *impersonatorConfigController) ensureClusterIPServiceIsStarted(ctx conte
 }
 
 func (c *impersonatorConfigController) ensureClusterIPServiceIsStopped(ctx context.Context) error {
-	running, err := c.serviceExists(c.generatedClusterIPServiceName)
+	running, service, err := c.serviceExists(c.generatedClusterIPServiceName)
 	if err != nil {
 		return err
 	}
@@ -528,7 +532,12 @@ func (c *impersonatorConfigController) ensureClusterIPServiceIsStopped(ctx conte
 	c.infoLog.Info("deleting cluster ip for impersonation proxy",
 		"service", klog.KRef(c.namespace, c.generatedClusterIPServiceName),
 	)
-	err = c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedClusterIPServiceName, metav1.DeleteOptions{})
+	err = c.k8sClient.CoreV1().Services(c.namespace).Delete(ctx, c.generatedClusterIPServiceName, metav1.DeleteOptions{
+		Preconditions: &metav1.Preconditions{
+			UID:             &service.UID,
+			ResourceVersion: &service.ResourceVersion,
+		},
+	})
 	return utilerrors.FilterOut(err, k8serrors.IsNotFound)
 }
 
@@ -942,7 +951,6 @@ func (c *impersonatorConfigController) loadTLSCertFromSecret(tlsSecret *v1.Secre
 	keyPEM := tlsSecret.Data[v1.TLSPrivateKeyKey]
 
 	if err := c.tlsServingCertDynamicCertProvider.SetCertKeyContent(certPEM, keyPEM); err != nil {
-		c.tlsServingCertDynamicCertProvider.UnsetCertKeyContent()
 		return fmt.Errorf("could not parse TLS cert PEM data from Secret: %w", err)
 	}
 
@@ -955,39 +963,33 @@ func (c *impersonatorConfigController) loadTLSCertFromSecret(tlsSecret *v1.Secre
 }
 
 func (c *impersonatorConfigController) ensureTLSSecretIsRemoved(ctx context.Context) error {
-	tlsSecretExists, _, err := c.tlsSecretExists()
+	tlsSecretExists, secret, err := c.tlsSecretExists()
 	if err != nil {
 		return err
 	}
 	if !tlsSecretExists {
 		return nil
 	}
-	c.infoLog.Info("deleting TLS certificates for impersonation proxy",
+	c.infoLog.Info("deleting TLS serving certificate for impersonation proxy",
 		"secret", klog.KRef(c.namespace, c.tlsSecretName),
 	)
-	err = c.k8sClient.CoreV1().Secrets(c.namespace).Delete(ctx, c.tlsSecretName, metav1.DeleteOptions{})
-	notFound := k8serrors.IsNotFound(err)
-	if notFound {
-		// its okay if we tried to delete and we got a not found error. This probably means
-		// another instance of the concierge got here first so there's nothing to delete.
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-
-	c.tlsServingCertDynamicCertProvider.UnsetCertKeyContent()
-
-	return nil
+	err = c.k8sClient.CoreV1().Secrets(c.namespace).Delete(ctx, c.tlsSecretName, metav1.DeleteOptions{
+		Preconditions: &metav1.Preconditions{
+			UID:             &secret.UID,
+			ResourceVersion: &secret.ResourceVersion,
+		},
+	})
+	// it is okay if we tried to delete and we got a not found error. This probably means
+	// another instance of the concierge got here first so there's nothing to delete.
+	return utilerrors.FilterOut(err, k8serrors.IsNotFound)
 }
 
-func (c *impersonatorConfigController) loadSignerCA(status v1alpha1.StrategyStatus) error {
-	// Clear it when the impersonator is not completely ready.
-	if status != v1alpha1.SuccessStrategyStatus {
-		c.clearSignerCA()
-		return nil
-	}
+func (c *impersonatorConfigController) clearTLSSecret() {
+	c.debugLog.Info("clearing TLS serving certificate for impersonation proxy")
+	c.tlsServingCertDynamicCertProvider.UnsetCertKeyContent()
+}
 
+func (c *impersonatorConfigController) loadSignerCA() error {
 	signingCertSecret, err := c.secretsInformer.Lister().Secrets(c.namespace).Get(c.impersonationSignerSecretName)
 	if err != nil {
 		return fmt.Errorf("could not load the impersonator's credential signing secret: %w", err)
@@ -997,7 +999,7 @@ func (c *impersonatorConfigController) loadSignerCA(status v1alpha1.StrategyStat
 	keyPEM := signingCertSecret.Data[apicerts.CACertificatePrivateKeySecretKey]
 
 	if err := c.impersonationSigningCertProvider.SetCertKeyContent(certPEM, keyPEM); err != nil {
-		return fmt.Errorf("could not load the impersonator's credential signing secret: %w", err)
+		return fmt.Errorf("could not set the impersonator's credential signing secret: %w", err)
 	}
 
 	c.infoLog.Info("loading credential signing certificate for impersonation proxy",

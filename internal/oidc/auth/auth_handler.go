@@ -109,22 +109,11 @@ func handleAuthRequestForLDAPUpstream(
 		return nil
 	}
 
-	openIDSession := downstreamsession.MakeDownstreamSession(
-		downstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse),
-		authenticateResponse.User.GetName(),
-		authenticateResponse.User.GetGroups(),
-	)
+	subject := downstreamSubjectFromUpstreamLDAP(ldapUpstream, authenticateResponse)
+	username = authenticateResponse.User.GetName()
+	groups := authenticateResponse.User.GetGroups()
 
-	authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
-	if err != nil {
-		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
-		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
-		return nil
-	}
-
-	oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
-
-	return nil
+	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, subject, username, groups)
 }
 
 func handleAuthRequestForOIDCUpstreamPasswordGrant(
@@ -179,18 +168,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		return err
 	}
 
-	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups)
-
-	authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
-	if err != nil {
-		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
-		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
-		return nil
-	}
-
-	oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
-
-	return nil
+	return makeDownstreamSessionAndReturnAuthcodeRedirect(r, w, oauthHelper, authorizeRequester, subject, username, groups)
 }
 
 func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
@@ -285,6 +263,29 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 		),
 		302,
 	)
+
+	return nil
+}
+
+func makeDownstreamSessionAndReturnAuthcodeRedirect(
+	r *http.Request,
+	w http.ResponseWriter,
+	oauthHelper fosite.OAuth2Provider,
+	authorizeRequester fosite.AuthorizeRequester,
+	subject string,
+	username string,
+	groups []string,
+) error {
+	openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups)
+
+	authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
+	if err != nil {
+		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
+		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+		return nil
+	}
+
+	oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
 
 	return nil
 }

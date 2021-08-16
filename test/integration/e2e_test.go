@@ -531,7 +531,7 @@ func TestE2EFullIntegration(t *testing.T) {
 		require.Contains(t, kubectlOutput,
 			`Error: could not complete Pinniped login: login failed with code "access_denied": `+
 				`The resource owner or authorization server denied the request. `+
-				`resource owner password grant is not allowed for this upstream provider according to its configuration`,
+				`Resource owner password credentials grant is not allowed for this upstream provider according to its configuration.`,
 		)
 	})
 

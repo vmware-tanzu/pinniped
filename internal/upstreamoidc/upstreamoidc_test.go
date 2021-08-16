@@ -147,7 +147,7 @@ func TestProviderConfig(t *testing.T) {
 			{
 				name:                  "password grant not allowed",
 				disallowPasswordGrant: true, // password grant is not allowed in this ProviderConfig
-				wantErr:               "resource owner password grant is not allowed for this upstream provider according to its configuration",
+				wantErr:               "resource owner password credentials grant is not allowed for this upstream provider according to its configuration",
 			},
 			{
 				name:            "token request fails with http error",

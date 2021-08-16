@@ -61,7 +61,6 @@ func NewHandler(
 		if oidcUpstream != nil {
 			if len(r.Header.Values(CustomUsernameHeaderName)) > 0 {
 				// The client set a username header, so they are trying to log in with a username/password.
-				// TODO unit test this
 				return handleAuthRequestForOIDCUpstreamPasswordGrant(r, w, oauthHelperWithStorage, oidcUpstream)
 			}
 			return handleAuthRequestForOIDCUpstreamAuthcodeGrant(r, w,
@@ -128,19 +127,6 @@ func handleAuthRequestForLDAPUpstream(
 	return nil
 }
 
-func requireNonEmptyUsernameAndPasswordHeaders(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester) (string, string, bool) {
-	username := r.Header.Get(CustomUsernameHeaderName)
-	password := r.Header.Get(CustomPasswordHeaderName)
-	if username == "" || password == "" {
-		// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
-		err := errors.WithStack(fosite.ErrAccessDenied.WithHintf("Missing or blank username or password."))
-		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
-		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
-		return "", "", false
-	}
-	return username, password, true
-}
-
 func handleAuthRequestForOIDCUpstreamPasswordGrant(
 	r *http.Request,
 	w http.ResponseWriter,
@@ -157,11 +143,27 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		return nil
 	}
 
+	if !oidcUpstream.AllowsPasswordGrant() {
+		// Return a user-friendly error for this case which is entirely within our control.
+		err := errors.WithStack(fosite.ErrAccessDenied.
+			WithHint("Resource owner password credentials grant is not allowed for this upstream provider according to its configuration."),
+		)
+		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
+		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+		return nil
+	}
+
 	token, err := oidcUpstream.PasswordCredentialsGrantAndValidateTokens(r.Context(), username, password)
 	if err != nil {
+		// Upstream password grant errors can be generic errors (e.g. a network failure) or can be oauth2.RetrieveError errors
+		// which represent the http response from the upstream server. These could be a 5XX or some other unexpected error,
+		// or could be a 400 with a JSON body as described by https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
+		// which notes that wrong resource owner credentials should result in an "invalid_grant" error.
+		// However, the exact response is undefined in the sense that there is no such thing as a password grant in
+		// the OIDC spec, so we don't try too hard to read the upstream errors in this case. (E.g. Dex departs from the
+		// spec and returns something other than an "invalid_grant" error for bad resource owner credentials.)
 		// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
-		// TODO do not return the full details of the error to the client, but let them know if it is because password grants are disallowed
-		err := errors.WithStack(fosite.ErrAccessDenied.WithHintf(err.Error()))
+		err := errors.WithStack(fosite.ErrAccessDenied.WithDebug(err.Error())) // WithDebug hides the error from the client
 		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
 		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
 		return nil
@@ -181,8 +183,9 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 
 	authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, openIDSession)
 	if err != nil {
-		plog.WarningErr("error while generating and saving authcode", err, "upstreamName", oidcUpstream.GetName())
-		return httperr.Wrap(http.StatusInternalServerError, "error while generating and saving authcode", err)
+		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
+		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+		return nil
 	}
 
 	oauthHelper.WriteAuthorizeResponse(w, authorizeRequester, authorizeResponder)
@@ -284,6 +287,19 @@ func handleAuthRequestForOIDCUpstreamAuthcodeGrant(
 	)
 
 	return nil
+}
+
+func requireNonEmptyUsernameAndPasswordHeaders(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester) (string, string, bool) {
+	username := r.Header.Get(CustomUsernameHeaderName)
+	password := r.Header.Get(CustomPasswordHeaderName)
+	if username == "" || password == "" {
+		// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
+		err := errors.WithStack(fosite.ErrAccessDenied.WithHintf("Missing or blank username or password."))
+		plog.Info("authorize response error", oidc.FositeErrorForLog(err)...)
+		oauthHelper.WriteAuthorizeError(w, authorizeRequester, err)
+		return "", "", false
+	}
+	return username, password, true
 }
 
 func newAuthorizeRequest(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider) (fosite.AuthorizeRequester, bool) {

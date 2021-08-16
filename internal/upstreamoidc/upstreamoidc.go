@@ -73,7 +73,7 @@ func (p *ProviderConfig) AllowsPasswordGrant() bool {
 func (p *ProviderConfig) PasswordCredentialsGrantAndValidateTokens(ctx context.Context, username, password string) (*oidctypes.Token, error) {
 	// Disallow this grant when requested.
 	if !p.AllowPasswordGrant {
-		return nil, fmt.Errorf("resource owner password grant is not allowed for this upstream provider according to its configuration")
+		return nil, fmt.Errorf("resource owner password credentials grant is not allowed for this upstream provider according to its configuration")
 	}
 
 	// Note that this implicitly uses the scopes from p.Config.Scopes.

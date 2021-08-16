@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/securecookie"
 	"github.com/ory/fosite"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/oauth2"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/kubernetes/fake"
@@ -37,7 +38,8 @@ import (
 
 func TestAuthorizationEndpoint(t *testing.T) {
 	const (
-		passwordGrantUpstreamName = "some-password-granting-oidc-idp"
+		oidcUpstreamName              = "some-oidc-idp"
+		oidcPasswordGrantUpstreamName = "some-password-granting-oidc-idp"
 
 		oidcUpstreamIssuer              = "https://my-upstream-issuer.com"
 		oidcUpstreamSubject             = "abc123-some guid" // has a space character which should get escaped in URL
@@ -126,6 +128,12 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			"state":             happyState,
 		}
 
+		fositeAccessDeniedErrorQuery = map[string]string{
+			"error":             "access_denied",
+			"error_description": "The resource owner or authorization server denied the request. Make sure that the request you are making is valid. Maybe the credential or request parameters you are using are limited in scope or otherwise restricted.",
+			"state":             happyState,
+		}
+
 		fositeAccessDeniedWithBadUsernamePasswordHintErrorQuery = map[string]string{
 			"error":             "access_denied",
 			"error_description": "The resource owner or authorization server denied the request. Username/password not accepted by LDAP provider.",
@@ -135,6 +143,12 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		fositeAccessDeniedWithMissingUsernamePasswordHintErrorQuery = map[string]string{
 			"error":             "access_denied",
 			"error_description": "The resource owner or authorization server denied the request. Missing or blank username or password.",
+			"state":             happyState,
+		}
+
+		fositeAccessDeniedWithPasswordGrantDisallowedHintErrorQuery = map[string]string{
+			"error":             "access_denied",
+			"error_description": "The resource owner or authorization server denied the request. Resource owner password credentials grant is not allowed for this upstream provider according to its configuration.",
 			"state":             happyState,
 		}
 	)
@@ -158,18 +172,20 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	upstreamAuthURL, err := url.Parse("https://some-upstream-idp:8443/auth")
 	require.NoError(t, err)
 
-	upstreamOIDCIdentityProvider := oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
-		WithName("some-oidc-idp").
-		WithClientID("some-client-id").
-		WithAuthorizationURL(*upstreamAuthURL).
-		WithScopes([]string{"scope1", "scope2"}). // the scopes to request when starting the upstream authorization flow
-		WithAllowPasswordGrant(false).
-		WithPasswordGrantError(errors.New("should not have used password grant on this instance")).
-		Build()
+	upstreamOIDCIdentityProvider := func() *oidctestutil.TestUpstreamOIDCIdentityProvider {
+		return oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
+			WithName(oidcUpstreamName).
+			WithClientID("some-client-id").
+			WithAuthorizationURL(*upstreamAuthURL).
+			WithScopes([]string{"scope1", "scope2"}). // the scopes to request when starting the upstream authorization flow
+			WithAllowPasswordGrant(false).
+			WithPasswordGrantError(errors.New("should not have used password grant on this instance")).
+			Build()
+	}
 
 	passwordGrantUpstreamOIDCIdentityProviderBuilder := func() *oidctestutil.TestUpstreamOIDCIdentityProviderBuilder {
 		return oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
-			WithName(passwordGrantUpstreamName).
+			WithName(oidcPasswordGrantUpstreamName).
 			WithClientID("some-client-id").
 			WithAuthorizationURL(*upstreamAuthURL).
 			WithScopes([]string{"scope1", "scope2"}). // the scopes to request when starting the upstream authorization flow
@@ -309,7 +325,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		if csrfValueOverride != "" {
 			csrf = csrfValueOverride
 		}
-		upstreamName := upstreamOIDCIdentityProvider.Name
+		upstreamName := oidcUpstreamName
 		if upstreamNameOverride != "" {
 			upstreamName = upstreamNameOverride
 		}
@@ -396,7 +412,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 	tests := []testCase{
 		{
 			name:                                   "OIDC upstream browser flow happy path using GET without a CSRF cookie",
-			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
 			generateNonce:                          happyNonceGenerator,
@@ -419,7 +435,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
 			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
 			wantPasswordGrantCall: &expectedPasswordGrant{
-				performedByUpstreamName: passwordGrantUpstreamName,
+				performedByUpstreamName: oidcPasswordGrantUpstreamName,
 				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
 					Username: oidcUpstreamUsername,
 					Password: oidcUpstreamPassword,
@@ -458,8 +474,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 		},
 		{
-			name:                                   "OIDC upstream happy path using GET with a CSRF cookie",
-			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:                                   "OIDC upstream browser flow happy path using GET with a CSRF cookie",
+			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
 			generateNonce:                          happyNonceGenerator,
@@ -475,8 +491,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyStringWithLocationInHref:       true,
 		},
 		{
-			name:                                   "OIDC upstream happy path using POST",
-			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:                                   "OIDC upstream browser flow happy path using POST",
+			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
 			generateNonce:                          happyNonceGenerator,
@@ -492,6 +508,34 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantCSRFValueInCookieHeader:            happyCSRF,
 			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", ""), ""),
 			wantUpstreamStateParamInLocationHeader: true,
+		},
+		{
+			name:                 "OIDC upstream password grant happy path using POST",
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:               http.MethodPost,
+			path:                 "/some/path",
+			contentType:          "application/x-www-form-urlencoded",
+			body:                 encodeQuery(happyGetRequestQueryMap),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: &expectedPasswordGrant{
+				performedByUpstreamName: oidcPasswordGrantUpstreamName,
+				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
+					Username: oidcUpstreamUsername,
+					Password: oidcUpstreamPassword,
+				}},
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 		},
 		{
 			name:                              "LDAP upstream happy path using POST",
@@ -516,8 +560,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 		},
 		{
-			name:                                   "OIDC upstream happy path with prompt param login passed through to redirect uri",
-			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:                                   "OIDC upstream browser flow happy path with prompt param login passed through to redirect uri",
+			idps:                                   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:                           happyCSRFGenerator,
 			generatePKCE:                           happyPKCEGenerator,
 			generateNonce:                          happyNonceGenerator,
@@ -535,8 +579,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
-			name:            "OIDC upstream with error while decoding CSRF cookie just generates a new cookie and succeeds as usual",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:            "OIDC upstream browser flow with error while decoding CSRF cookie just generates a new cookie and succeeds as usual",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
@@ -554,8 +598,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyStringWithLocationInHref:       true,
 		},
 		{
-			name:          "OIDC upstream happy path when downstream redirect uri matches what is configured for client except for the port number",
-			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:          "OIDC upstream browser flow happy path when downstream redirect uri matches what is configured for client except for the port number",
+			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:  happyCSRFGenerator,
 			generatePKCE:  happyPKCEGenerator,
 			generateNonce: happyNonceGenerator,
@@ -573,6 +617,34 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			}, "", ""), ""),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
+		},
+		{
+			name:   "OIDC upstream password grant happy path when downstream redirect uri matches what is configured for client except for the port number",
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method: http.MethodGet,
+			path: modifiedHappyGetRequestPath(map[string]string{
+				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
+			}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: &expectedPasswordGrant{
+				performedByUpstreamName: oidcPasswordGrantUpstreamName,
+				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
+					Username: oidcUpstreamUsername,
+					Password: oidcUpstreamPassword,
+				}},
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        downstreamRedirectURIWithDifferentPort + `\?code=([^&]+)&scope=openid&state=` + happyState,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURIWithDifferentPort,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 		},
 		{
 			name:   "LDAP upstream happy path when downstream redirect uri matches what is configured for client except for the port number",
@@ -597,8 +669,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 		},
 		{
-			name:                        "OIDC upstream happy path when downstream requested scopes include offline_access",
-			idps:                        oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:                        "OIDC upstream browser flow happy path when downstream requested scopes include offline_access",
+			idps:                        oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:                happyCSRFGenerator,
 			generatePKCE:                happyPKCEGenerator,
 			generateNonce:               happyNonceGenerator,
@@ -625,6 +697,29 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:           http.StatusBadGateway,
 			wantContentType:      htmlContentType,
 			wantBodyString:       "Bad Gateway: unexpected error during upstream authentication\n",
+		},
+		{
+			name: "wrong upstream credentials for OIDC password grant authentication",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().
+					// This is similar to the error that would be returned by the underlying call to oauth2.PasswordCredentialsToken()
+					WithPasswordGrantError(&oauth2.RetrieveError{Response: &http.Response{Status: "fake status"}, Body: []byte("fake body")}).
+					Build(),
+			),
+			method:               http.MethodGet,
+			path:                 happyGetRequestPath,
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr("wrong-password"),
+			wantPasswordGrantCall: &expectedPasswordGrant{
+				performedByUpstreamName: oidcPasswordGrantUpstreamName,
+				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
+					Username: oidcUpstreamUsername,
+					Password: "wrong-password",
+				}},
+			wantStatus:         http.StatusFound,
+			wantContentType:    "application/json; charset=utf-8",
+			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeAccessDeniedErrorQuery),
+			wantBodyString:     "",
 		},
 		{
 			name:                 "wrong upstream password for LDAP authentication",
@@ -675,8 +770,32 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:       "",
 		},
 		{
-			name:          "downstream redirect uri does not match what is configured for client when using OIDC upstream",
-			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:                 "missing upstream password on request for OIDC password grant authentication",
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:               http.MethodGet,
+			path:                 happyGetRequestPath,
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: nil, // do not send header
+			wantStatus:           http.StatusFound,
+			wantContentType:      "application/json; charset=utf-8",
+			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithMissingUsernamePasswordHintErrorQuery),
+			wantBodyString:       "",
+		},
+		{
+			name:                 "using the custom username header on request for OIDC password grant authentication when OIDCIdentityProvider does not allow password grants",
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
+			method:               http.MethodGet,
+			path:                 happyGetRequestPath,
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantStatus:           http.StatusFound,
+			wantContentType:      "application/json; charset=utf-8",
+			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithPasswordGrantDisallowedHintErrorQuery),
+			wantBodyString:       "",
+		},
+		{
+			name:          "downstream redirect uri does not match what is configured for client when using OIDC upstream browser flow",
+			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:  happyCSRFGenerator,
 			generatePKCE:  happyPKCEGenerator,
 			generateNonce: happyNonceGenerator,
@@ -689,6 +808,19 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantStatus:      http.StatusBadRequest,
 			wantContentType: "application/json; charset=utf-8",
 			wantBodyJSON:    fositeInvalidRedirectURIErrorBody,
+		},
+		{
+			name:   "downstream redirect uri does not match what is configured for client when using OIDC upstream password grant",
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method: http.MethodGet,
+			path: modifiedHappyGetRequestPath(map[string]string{
+				"redirect_uri": "http://127.0.0.1/does-not-match-what-is-configured-for-pinniped-cli-client",
+			}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantStatus:           http.StatusBadRequest,
+			wantContentType:      "application/json; charset=utf-8",
+			wantBodyJSON:         fositeInvalidRedirectURIErrorBody,
 		},
 		{
 			name:   "downstream redirect uri does not match what is configured for client when using LDAP upstream",
@@ -704,8 +836,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyJSON:         fositeInvalidRedirectURIErrorBody,
 		},
 		{
-			name:            "downstream client does not exist when using OIDC upstream",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:            "downstream client does not exist when using OIDC upstream browser flow",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
@@ -718,6 +850,17 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyJSON:    fositeInvalidClientErrorBody,
 		},
 		{
+			name:                 "downstream client does not exist when using OIDC upstream password grant",
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:               http.MethodGet,
+			path:                 modifiedHappyGetRequestPath(map[string]string{"client_id": "invalid-client"}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantStatus:           http.StatusUnauthorized,
+			wantContentType:      "application/json; charset=utf-8",
+			wantBodyJSON:         fositeInvalidClientErrorBody,
+		},
+		{
 			name:            "downstream client does not exist when using LDAP upstream",
 			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			method:          http.MethodGet,
@@ -727,8 +870,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyJSON:    fositeInvalidClientErrorBody,
 		},
 		{
-			name:               "response type is unsupported when using OIDC upstream",
-			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:               "response type is unsupported when using OIDC upstream browser flow",
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -740,6 +883,18 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeUnsupportedResponseTypeErrorQuery),
 			wantBodyString:     "",
+		},
+		{
+			name:                 "response type is unsupported when using OIDC upstream password grant",
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:               http.MethodGet,
+			path:                 modifiedHappyGetRequestPath(map[string]string{"response_type": "unsupported"}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantStatus:           http.StatusFound,
+			wantContentType:      "application/json; charset=utf-8",
+			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeUnsupportedResponseTypeErrorQuery),
+			wantBodyString:       "",
 		},
 		{
 			name:               "response type is unsupported when using LDAP upstream",
@@ -752,8 +907,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:     "",
 		},
 		{
-			name:               "downstream scopes do not match what is configured for client using OIDC upstream",
-			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:               "downstream scopes do not match what is configured for client using OIDC upstream browser flow",
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -765,6 +920,18 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidScopeErrorQuery),
 			wantBodyString:     "",
+		},
+		{
+			name:                 "downstream scopes do not match what is configured for client using OIDC upstream password grant",
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:               http.MethodGet,
+			path:                 modifiedHappyGetRequestPath(map[string]string{"scope": "openid profile email tuna"}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantStatus:           http.StatusFound,
+			wantContentType:      "application/json; charset=utf-8",
+			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeInvalidScopeErrorQuery),
+			wantBodyString:       "",
 		},
 		{
 			name:                 "downstream scopes do not match what is configured for client using LDAP upstream",
@@ -779,8 +946,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:       "",
 		},
 		{
-			name:               "missing response type in request using OIDC upstream",
-			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:               "missing response type in request using OIDC upstream browser flow",
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -792,6 +959,18 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
 			wantBodyString:     "",
+		},
+		{
+			name:                 "missing response type in request using OIDC upstream password grant",
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:               http.MethodGet,
+			path:                 modifiedHappyGetRequestPath(map[string]string{"response_type": ""}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantStatus:           http.StatusFound,
+			wantContentType:      "application/json; charset=utf-8",
+			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeMissingResponseTypeErrorQuery),
+			wantBodyString:       "",
 		},
 		{
 			name:               "missing response type in request using LDAP upstream",
@@ -804,8 +983,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:     "",
 		},
 		{
-			name:            "missing client id in request using OIDC upstream",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:            "missing client id in request using OIDC upstream browser flow",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
@@ -818,6 +997,17 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyJSON:    fositeInvalidClientErrorBody,
 		},
 		{
+			name:                 "missing client id in request using OIDC upstream password grant",
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:               http.MethodGet,
+			path:                 modifiedHappyGetRequestPath(map[string]string{"client_id": ""}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantStatus:           http.StatusUnauthorized,
+			wantContentType:      "application/json; charset=utf-8",
+			wantBodyJSON:         fositeInvalidClientErrorBody,
+		},
+		{
 			name:            "missing client id in request using LDAP upstream",
 			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithLDAP(&upstreamLDAPIdentityProvider),
 			method:          http.MethodGet,
@@ -827,8 +1017,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyJSON:    fositeInvalidClientErrorBody,
 		},
 		{
-			name:               "missing PKCE code_challenge in request using OIDC upstream", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
-			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:               "missing PKCE code_challenge in request using OIDC upstream browser flow", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -840,6 +1030,25 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeErrorQuery),
 			wantBodyString:     "",
+		},
+		{
+			name:                 "missing PKCE code_challenge in request using OIDC upstream password grant", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:               http.MethodGet,
+			path:                 modifiedHappyGetRequestPath(map[string]string{"code_challenge": ""}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: &expectedPasswordGrant{
+				performedByUpstreamName: oidcPasswordGrantUpstreamName,
+				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
+					Username: oidcUpstreamUsername,
+					Password: oidcUpstreamPassword,
+				}},
+			wantStatus:                   http.StatusFound,
+			wantContentType:              "application/json; charset=utf-8",
+			wantLocationHeader:           urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeErrorQuery),
+			wantBodyString:               "",
+			wantUnnecessaryStoredRecords: 2, // fosite already stored the authcode and oidc session before it noticed the error
 		},
 		{
 			name:                         "missing PKCE code_challenge in request using LDAP upstream", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
@@ -855,8 +1064,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantUnnecessaryStoredRecords: 2, // fosite already stored the authcode and oidc session before it noticed the error
 		},
 		{
-			name:               "invalid value for PKCE code_challenge_method in request using OIDC upstream", // https://tools.ietf.org/html/rfc7636#section-4.3
-			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:               "invalid value for PKCE code_challenge_method in request using OIDC upstream browser flow", // https://tools.ietf.org/html/rfc7636#section-4.3
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -868,6 +1077,25 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidCodeChallengeErrorQuery),
 			wantBodyString:     "",
+		},
+		{
+			name:                 "invalid value for PKCE code_challenge_method in request using OIDC upstream password grant", // https://tools.ietf.org/html/rfc7636#section-4.3
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:               http.MethodGet,
+			path:                 modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: &expectedPasswordGrant{
+				performedByUpstreamName: oidcPasswordGrantUpstreamName,
+				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
+					Username: oidcUpstreamUsername,
+					Password: oidcUpstreamPassword,
+				}},
+			wantStatus:                   http.StatusFound,
+			wantContentType:              "application/json; charset=utf-8",
+			wantLocationHeader:           urlWithQuery(downstreamRedirectURI, fositeInvalidCodeChallengeErrorQuery),
+			wantBodyString:               "",
+			wantUnnecessaryStoredRecords: 2, // fosite already stored the authcode and oidc session before it noticed the error
 		},
 		{
 			name:                         "invalid value for PKCE code_challenge_method in request using LDAP upstream", // https://tools.ietf.org/html/rfc7636#section-4.3
@@ -883,8 +1111,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantUnnecessaryStoredRecords: 2, // fosite already stored the authcode and oidc session before it noticed the error
 		},
 		{
-			name:               "when PKCE code_challenge_method in request is `plain` using OIDC upstream", // https://tools.ietf.org/html/rfc7636#section-4.3
-			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:               "when PKCE code_challenge_method in request is `plain` using OIDC upstream browser flow", // https://tools.ietf.org/html/rfc7636#section-4.3
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -896,6 +1124,25 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
 			wantBodyString:     "",
+		},
+		{
+			name:                 "when PKCE code_challenge_method in request is `plain` using OIDC upstream password grant", // https://tools.ietf.org/html/rfc7636#section-4.3
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:               http.MethodGet,
+			path:                 modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "plain"}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: &expectedPasswordGrant{
+				performedByUpstreamName: oidcPasswordGrantUpstreamName,
+				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
+					Username: oidcUpstreamUsername,
+					Password: oidcUpstreamPassword,
+				}},
+			wantStatus:                   http.StatusFound,
+			wantContentType:              "application/json; charset=utf-8",
+			wantLocationHeader:           urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
+			wantBodyString:               "",
+			wantUnnecessaryStoredRecords: 2, // fosite already stored the authcode and oidc session before it noticed the error
 		},
 		{
 			name:                         "when PKCE code_challenge_method in request is `plain` using LDAP upstream", // https://tools.ietf.org/html/rfc7636#section-4.3
@@ -911,8 +1158,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantUnnecessaryStoredRecords: 2, // fosite already stored the authcode and oidc session before it noticed the error
 		},
 		{
-			name:               "missing PKCE code_challenge_method in request using OIDC upstream", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
-			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:               "missing PKCE code_challenge_method in request using OIDC upstream browser flow", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -924,6 +1171,25 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
 			wantBodyString:     "",
+		},
+		{
+			name:                 "missing PKCE code_challenge_method in request using OIDC upstream password grant", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:               http.MethodGet,
+			path:                 modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": ""}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: &expectedPasswordGrant{
+				performedByUpstreamName: oidcPasswordGrantUpstreamName,
+				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
+					Username: oidcUpstreamUsername,
+					Password: oidcUpstreamPassword,
+				}},
+			wantStatus:                   http.StatusFound,
+			wantContentType:              "application/json; charset=utf-8",
+			wantLocationHeader:           urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
+			wantBodyString:               "",
+			wantUnnecessaryStoredRecords: 2, // fosite already stored the authcode and oidc session before it noticed the error
 		},
 		{
 			name:                         "missing PKCE code_challenge_method in request using LDAP upstream", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
@@ -940,9 +1206,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			// This is just one of the many OIDC validations run by fosite. This test is to ensure that we are running
-			// through that part of the fosite library when using an OIDC upstream.
-			name:               "prompt param is not allowed to have none and another legal value at the same time using OIDC upstream",
-			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			// through that part of the fosite library when using an OIDC upstream browser flow.
+			name:               "prompt param is not allowed to have none and another legal value at the same time using OIDC upstream browser flow",
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -954,6 +1220,27 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositePromptHasNoneAndOtherValueErrorQuery),
 			wantBodyString:     "",
+		},
+		{
+			// This is just one of the many OIDC validations run by fosite. This test is to ensure that we are running
+			// through that part of the fosite library when using an OIDC upstream password grant.
+			name:                 "prompt param is not allowed to have none and another legal value at the same time using OIDC upstream password grant",
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:               http.MethodGet,
+			path:                 modifiedHappyGetRequestPath(map[string]string{"prompt": "none login"}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: &expectedPasswordGrant{
+				performedByUpstreamName: oidcPasswordGrantUpstreamName,
+				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
+					Username: oidcUpstreamUsername,
+					Password: oidcUpstreamPassword,
+				}},
+			wantStatus:                   http.StatusFound,
+			wantContentType:              "application/json; charset=utf-8",
+			wantLocationHeader:           urlWithQuery(downstreamRedirectURI, fositePromptHasNoneAndOtherValueErrorQuery),
+			wantBodyString:               "",
+			wantUnnecessaryStoredRecords: 1, // fosite already stored the authcode before it noticed the error
 		},
 		{
 			// This is just one of the many OIDC validations run by fosite. This test is to ensure that we are running
@@ -971,8 +1258,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantUnnecessaryStoredRecords: 1, // fosite already stored the authcode before it noticed the error
 		},
 		{
-			name:          "happy path: downstream OIDC validations are skipped when the openid scope was not requested using OIDC upstream",
-			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:          "happy path: downstream OIDC validations are skipped when the openid scope was not requested using OIDC upstream browser flow",
+			idps:          oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:  happyCSRFGenerator,
 			generatePKCE:  happyPKCEGenerator,
 			generateNonce: happyNonceGenerator,
@@ -989,6 +1276,33 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			), ""),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
+		},
+		{
+			name:   "happy path: downstream OIDC validations are skipped when the openid scope was not requested using OIDC upstream password grant",
+			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method: http.MethodGet,
+			// The following prompt value is illegal when openid is requested, but note that openid is not requested.
+			path:                 modifiedHappyGetRequestPath(map[string]string{"prompt": "none login", "scope": "email"}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: &expectedPasswordGrant{
+				performedByUpstreamName: oidcPasswordGrantUpstreamName,
+				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
+					Username: oidcUpstreamUsername,
+					Password: oidcUpstreamPassword,
+				}},
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyState, // no scopes granted
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     []string{"email"}, // only email was requested
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       []string{}, // no scopes granted
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 		},
 		{
 			name:   "happy path: downstream OIDC validations are skipped when the openid scope was not requested using LDAP upstream",
@@ -1012,8 +1326,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 		},
 		{
-			name:               "downstream state does not have enough entropy using OIDC upstream",
-			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:               "downstream state does not have enough entropy using OIDC upstream browser flow",
+			idps:               oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:       happyCSRFGenerator,
 			generatePKCE:       happyPKCEGenerator,
 			generateNonce:      happyNonceGenerator,
@@ -1025,6 +1339,18 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantContentType:    "application/json; charset=utf-8",
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeInvalidStateErrorQuery),
 			wantBodyString:     "",
+		},
+		{
+			name:                 "downstream state does not have enough entropy using OIDC upstream password grant",
+			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:               http.MethodGet,
+			path:                 modifiedHappyGetRequestPath(map[string]string{"state": "short"}),
+			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
+			wantStatus:           http.StatusFound,
+			wantContentType:      "application/json; charset=utf-8",
+			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeInvalidStateErrorQuery),
+			wantBodyString:       "",
 		},
 		{
 			name:                 "downstream state does not have enough entropy using LDAP upstream",
@@ -1039,8 +1365,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:       "",
 		},
 		{
-			name:            "error while encoding upstream state param using OIDC upstream",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:            "error while encoding upstream state param using OIDC upstream browser flow",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
@@ -1053,8 +1379,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:  "Internal Server Error: error encoding upstream state param\n",
 		},
 		{
-			name:            "error while encoding CSRF cookie value for new cookie using OIDC upstream",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:            "error while encoding CSRF cookie value for new cookie using OIDC upstream browser flow",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
@@ -1067,8 +1393,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:  "Internal Server Error: error encoding CSRF cookie\n",
 		},
 		{
-			name:            "error while generating CSRF token using OIDC upstream",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:            "error while generating CSRF token using OIDC upstream browser flow",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:    sadCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
@@ -1081,8 +1407,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:  "Internal Server Error: error generating CSRF token\n",
 		},
 		{
-			name:            "error while generating nonce using OIDC upstream",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:            "error while generating nonce using OIDC upstream browser flow",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    happyPKCEGenerator,
 			generateNonce:   sadNonceGenerator,
@@ -1095,8 +1421,8 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:  "Internal Server Error: error generating nonce param\n",
 		},
 		{
-			name:            "error while generating PKCE using OIDC upstream",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			name:            "error while generating PKCE using OIDC upstream browser flow",
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			generateCSRF:    happyCSRFGenerator,
 			generatePKCE:    sadPKCEGenerator,
 			generateNonce:   happyNonceGenerator,
@@ -1119,7 +1445,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:            "too many upstream providers are configured: multiple OIDC",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider, upstreamOIDCIdentityProvider), // more than one not allowed
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider(), upstreamOIDCIdentityProvider()), // more than one not allowed
 			method:          http.MethodGet,
 			path:            happyGetRequestPath,
 			wantStatus:      http.StatusUnprocessableEntity,
@@ -1137,7 +1463,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:            "too many upstream providers are configured: both OIDC and LDAP",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider).WithLDAP(&upstreamLDAPIdentityProvider), // more than one not allowed
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()).WithLDAP(&upstreamLDAPIdentityProvider), // more than one not allowed
 			method:          http.MethodGet,
 			path:            happyGetRequestPath,
 			wantStatus:      http.StatusUnprocessableEntity,
@@ -1146,7 +1472,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:            "PUT is a bad method",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			method:          http.MethodPut,
 			path:            "/some/path",
 			wantStatus:      http.StatusMethodNotAllowed,
@@ -1155,7 +1481,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:            "PATCH is a bad method",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			method:          http.MethodPatch,
 			path:            "/some/path",
 			wantStatus:      http.StatusMethodNotAllowed,
@@ -1164,7 +1490,7 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		},
 		{
 			name:            "DELETE is a bad method",
-			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider),
+			idps:            oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProvider()),
 			method:          http.MethodDelete,
 			path:            "/some/path",
 			wantStatus:      http.StatusMethodNotAllowed,

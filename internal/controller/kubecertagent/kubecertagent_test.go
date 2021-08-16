@@ -961,7 +961,6 @@ func runControllerUntilQuiet(ctx context.Context, t *testing.T, controller contr
 
 	errorStream := make(chan error)
 	controllerlib.TestWrap(t, controller, func(syncer controllerlib.Syncer) controllerlib.Syncer {
-		controller.Name()
 		return controllerlib.SyncFunc(func(ctx controllerlib.Context) error {
 			err := syncer.Sync(ctx)
 			errorStream <- err

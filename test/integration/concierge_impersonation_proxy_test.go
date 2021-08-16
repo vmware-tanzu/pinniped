@@ -197,7 +197,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// We do this to ensure that future tests that use the impersonation proxy (e.g.,
 		// TestE2EFullIntegration) will start with a known-good state.
 		if clusterSupportsLoadBalancers {
-			performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
+			performImpersonatorDiscovery(ctx, t, env, adminClient, adminConciergeClient, refreshCredential)
 		}
 	})
 
@@ -277,7 +277,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	// to discover the impersonator's URL and CA certificate. Until it has finished starting, it may not be included
 	// in the strategies array or it may be included in an error state. It can be in an error state for
 	// awhile when it is waiting for the load balancer to be assigned an ip/hostname.
-	impersonationProxyURL, impersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
+	impersonationProxyURL, impersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminClient, adminConciergeClient, refreshCredential)
 	if !clusterSupportsLoadBalancers {
 		// In this case, we specified the endpoint in the configmap, so check that it was reported correctly in the CredentialIssuer.
 		require.Equal(t, "https://"+proxyServiceEndpoint, impersonationProxyURL)
@@ -1422,7 +1422,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 					require.Equal(t, &corev1.Pod{}, pod)
 				})
 
-				// - request to whoami (pinniped resource endpoing)
+				// - request to whoami (pinniped resource endpoint)
 				//   - through the impersonation proxy
 				//   - should succeed 200
 				//   - should respond "you are system:anonymous"
@@ -1733,10 +1733,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// wait until the credential issuer is updated with the new url
 		testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
-			newImpersonationProxyURL, _ := performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
+			newImpersonationProxyURL, _ := performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)
 			return newImpersonationProxyURL == "https://"+clusterIPServiceURL, nil
 		}, 30*time.Second, 500*time.Millisecond)
-		newImpersonationProxyURL, newImpersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
+		newImpersonationProxyURL, newImpersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminClient, adminConciergeClient, refreshCredential)
 
 		anonymousClient := newAnonymousImpersonationProxyClientWithProxy(t, newImpersonationProxyURL, newImpersonationProxyCACertPEM, nil).PinnipedConcierge
 		refreshedCredentials := refreshCredentialHelper(t, anonymousClient)
@@ -1941,7 +1941,64 @@ func expectedWhoAmIRequestResponse(username string, groups []string, extra map[s
 	}
 }
 
-func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient pinnipedconciergeclientset.Interface) (string, []byte) {
+func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testlib.TestEnv,
+	adminClient kubernetes.Interface, adminConciergeClient pinnipedconciergeclientset.Interface,
+	refreshCredential func(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte) *loginv1alpha1.ClusterCredential) (string, []byte) {
+	t.Helper()
+
+	impersonationProxyURL, impersonationProxyCACertPEM := performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)
+
+	if len(env.Proxy) == 0 {
+		t.Log("no test proxy is available, skipping readiness checks for concierge impersonation proxy pods")
+		return impersonationProxyURL, impersonationProxyCACertPEM
+	}
+
+	impersonationProxyParsedURL, err := url.Parse(impersonationProxyURL)
+	require.NoError(t, err)
+
+	expectedGroups := make([]string, 0, len(env.TestUser.ExpectedGroups)+1) // make sure we do not mutate env.TestUser.ExpectedGroups
+	expectedGroups = append(expectedGroups, env.TestUser.ExpectedGroups...)
+	expectedGroups = append(expectedGroups, "system:authenticated")
+
+	// probe each pod directly for readiness since the concierge status is a lie - it just means a single pod is ready
+	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+		pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx,
+			metav1.ListOptions{LabelSelector: "app=" + env.ConciergeAppName + ",!kube-cert-agent.pinniped.dev"}) // TODO replace with deployment.pinniped.dev=concierge
+		requireEventually.NoError(err)
+		requireEventually.Len(pods.Items, 2) // has to stay in sync with the defaults in our YAML
+
+		for _, pod := range pods.Items {
+			t.Logf("checking if concierge impersonation proxy pod %q is ready", pod.Name)
+
+			requireEventually.NotEmptyf(pod.Status.PodIP, "pod %q does not have an IP", pod.Name)
+
+			credentials := refreshCredential(t, impersonationProxyURL, impersonationProxyCACertPEM).DeepCopy()
+			credentials.Token = "not a valid token" // demonstrates that client certs take precedence over tokens by setting both on the requests
+
+			config := newImpersonationProxyConfigWithCredentials(t, credentials, impersonationProxyURL, impersonationProxyCACertPEM, nil)
+			config = rest.CopyConfig(config)
+			config.Proxy = kubeconfigProxyFunc(t, env.Proxy)                           // always use the proxy since we are talking directly to a pod IP
+			config.Host = "https://" + pod.Status.PodIP + ":8444"                      // hardcode the internal port - it should not change
+			config.TLSClientConfig.ServerName = impersonationProxyParsedURL.Hostname() // make SNI hostname TLS verification work even when using IP
+
+			whoAmI, err := testlib.NewKubeclient(t, config).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
+				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
+			requireEventually.NoError(err)
+			requireEventually.Equal(
+				expectedWhoAmIRequestResponse(
+					env.TestUser.ExpectedUsername,
+					expectedGroups,
+					nil,
+				),
+				whoAmI,
+			)
+		}
+	}, 10*time.Minute, 10*time.Second)
+
+	return impersonationProxyURL, impersonationProxyCACertPEM
+}
+
+func performImpersonatorDiscoveryURL(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient pinnipedconciergeclientset.Interface) (string, []byte) {
 	t.Helper()
 
 	var impersonationProxyURL string

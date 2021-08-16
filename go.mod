@@ -7,7 +7,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.0.0
 	github.com/creack/pty v1.1.14
 	github.com/davecgh/go-spew v1.1.1
-	github.com/go-ldap/ldap/v3 v3.3.0
+	github.com/go-ldap/ldap/v3 v3.4.1
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/stdr v0.4.0
 	github.com/gofrs/flock v0.8.1

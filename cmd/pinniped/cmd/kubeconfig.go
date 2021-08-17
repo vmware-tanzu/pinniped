@@ -32,6 +32,7 @@ import (
 
 	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/groupsuffix"
 )
@@ -96,24 +97,6 @@ type getKubeconfigParams struct {
 	generatedNameSuffix       string
 	credentialCachePath       string
 	credentialCachePathSet    bool
-}
-
-type supervisorOIDCDiscoveryResponseWithV1Alpha1 struct {
-	SupervisorDiscovery SupervisorDiscoveryResponseV1Alpha1 `json:"discovery.supervisor.pinniped.dev/v1alpha1"`
-}
-
-type SupervisorDiscoveryResponseV1Alpha1 struct {
-	PinnipedIDPsEndpoint string `json:"pinniped_identity_providers_endpoint"`
-}
-
-type supervisorIDPsDiscoveryResponseV1Alpha1 struct {
-	PinnipedIDPs []pinnipedIDPResponse `json:"pinniped_identity_providers"`
-}
-
-type pinnipedIDPResponse struct {
-	Name  string   `json:"name"`
-	Type  string   `json:"type"`
-	Flows []string `json:"flows,omitempty"`
 }
 
 func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
@@ -818,7 +801,7 @@ func discoverIDPsDiscoveryEndpointURL(ctx context.Context, issuer string, httpCl
 		return "", fmt.Errorf("while fetching OIDC discovery data from issuer: %w", err)
 	}
 
-	var body supervisorOIDCDiscoveryResponseWithV1Alpha1
+	var body idpdiscoveryv1alpha1.SupervisorOIDCDiscoveryResponse
 	err = discoveredProvider.Claims(&body)
 	if err != nil {
 		return "", fmt.Errorf("while fetching OIDC discovery data from issuer: %w", err)
@@ -827,7 +810,7 @@ func discoverIDPsDiscoveryEndpointURL(ctx context.Context, issuer string, httpCl
 	return body.SupervisorDiscovery.PinnipedIDPsEndpoint, nil
 }
 
-func discoverAllAvailableSupervisorUpstreamIDPs(ctx context.Context, pinnipedIDPsEndpoint string, httpClient *http.Client) ([]pinnipedIDPResponse, error) {
+func discoverAllAvailableSupervisorUpstreamIDPs(ctx context.Context, pinnipedIDPsEndpoint string, httpClient *http.Client) ([]idpdiscoveryv1alpha1.SupervisorPinnipedIDP, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, pinnipedIDPsEndpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("while forming request to IDP discovery URL: %w", err)
@@ -849,7 +832,7 @@ func discoverAllAvailableSupervisorUpstreamIDPs(ctx context.Context, pinnipedIDP
 		return nil, fmt.Errorf("unable to fetch IDP discovery data from issuer: could not read response body: %w", err)
 	}
 
-	var body supervisorIDPsDiscoveryResponseV1Alpha1
+	var body idpdiscoveryv1alpha1.SupervisorIDPDiscoveryResponse
 	err = json.Unmarshal(rawBody, &body)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch IDP discovery data from issuer: could not parse response JSON: %w", err)
@@ -858,7 +841,7 @@ func discoverAllAvailableSupervisorUpstreamIDPs(ctx context.Context, pinnipedIDP
 	return body.PinnipedIDPs, nil
 }
 
-func selectUpstreamIDPNameAndType(pinnipedIDPs []pinnipedIDPResponse, specifiedIDPName, specifiedIDPType string) (string, string, []string, error) {
+func selectUpstreamIDPNameAndType(pinnipedIDPs []idpdiscoveryv1alpha1.SupervisorPinnipedIDP, specifiedIDPName, specifiedIDPType string) (string, string, []string, error) {
 	pinnipedIDPsString, _ := json.Marshal(pinnipedIDPs)
 	var discoveredFlows []string
 	switch {

@@ -4,13 +4,13 @@
 package idpdiscovery
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -25,8 +25,8 @@ func TestIDPDiscovery(t *testing.T) {
 
 		wantStatus                 int
 		wantContentType            string
-		wantFirstResponseBodyJSON  interface{}
-		wantSecondResponseBodyJSON interface{}
+		wantFirstResponseBodyJSON  string
+		wantSecondResponseBodyJSON string
 		wantBodyString             string
 	}{
 		{
@@ -35,24 +35,24 @@ func TestIDPDiscovery(t *testing.T) {
 			path:            "/some/path" + oidc.WellKnownEndpointPath,
 			wantStatus:      http.StatusOK,
 			wantContentType: "application/json",
-			wantFirstResponseBodyJSON: &response{
-				IDPs: []identityProviderResponse{
-					{Name: "a-some-ldap-idp", Type: "ldap", Flows: []string{"cli_password"}},
-					{Name: "a-some-oidc-idp", Type: "oidc", Flows: []string{"browser_authcode"}},
-					{Name: "x-some-idp", Type: "ldap", Flows: []string{"cli_password"}},
-					{Name: "x-some-idp", Type: "oidc", Flows: []string{"browser_authcode"}},
-					{Name: "z-some-ldap-idp", Type: "ldap", Flows: []string{"cli_password"}},
-					{Name: "z-some-oidc-idp", Type: "oidc", Flows: []string{"browser_authcode", "cli_password"}},
-				},
-			},
-			wantSecondResponseBodyJSON: &response{
-				IDPs: []identityProviderResponse{
-					{Name: "some-other-ldap-idp-1", Type: "ldap", Flows: []string{"cli_password"}},
-					{Name: "some-other-ldap-idp-2", Type: "ldap", Flows: []string{"cli_password"}},
-					{Name: "some-other-oidc-idp-1", Type: "oidc", Flows: []string{"browser_authcode", "cli_password"}},
-					{Name: "some-other-oidc-idp-2", Type: "oidc", Flows: []string{"browser_authcode"}},
-				},
-			},
+			wantFirstResponseBodyJSON: here.Doc(`{
+				"pinniped_identity_providers": [
+					{"name": "a-some-ldap-idp", "type": "ldap", "flows": ["cli_password"]},
+					{"name": "a-some-oidc-idp", "type": "oidc", "flows": ["browser_authcode"]},
+					{"name": "x-some-idp",      "type": "ldap", "flows": ["cli_password"]},
+					{"name": "x-some-idp",      "type": "oidc", "flows": ["browser_authcode"]},
+					{"name": "z-some-ldap-idp", "type": "ldap", "flows": ["cli_password"]},
+					{"name": "z-some-oidc-idp", "type": "oidc", "flows": ["browser_authcode", "cli_password"]}
+				]
+			}`),
+			wantSecondResponseBodyJSON: here.Doc(`{
+				"pinniped_identity_providers": [
+					{"name": "some-other-ldap-idp-1", "type": "ldap", "flows": ["cli_password"]},
+					{"name": "some-other-ldap-idp-2", "type": "ldap", "flows": ["cli_password"]},
+					{"name": "some-other-oidc-idp-1", "type": "oidc", "flows": ["browser_authcode", "cli_password"]},
+					{"name": "some-other-oidc-idp-2", "type": "oidc", "flows": ["browser_authcode"]}
+				]
+			}`),
 		},
 		{
 			name:            "bad method",
@@ -84,10 +84,8 @@ func TestIDPDiscovery(t *testing.T) {
 
 			require.Equal(t, test.wantContentType, rsp.Header().Get("Content-Type"))
 
-			if test.wantFirstResponseBodyJSON != nil {
-				wantJSON, err := json.Marshal(test.wantFirstResponseBodyJSON)
-				require.NoError(t, err)
-				require.JSONEq(t, string(wantJSON), rsp.Body.String())
+			if test.wantFirstResponseBodyJSON != "" {
+				require.JSONEq(t, test.wantFirstResponseBodyJSON, rsp.Body.String())
 			}
 
 			if test.wantBodyString != "" {
@@ -112,10 +110,8 @@ func TestIDPDiscovery(t *testing.T) {
 
 			require.Equal(t, test.wantContentType, rsp.Header().Get("Content-Type"))
 
-			if test.wantFirstResponseBodyJSON != nil {
-				wantJSON, err := json.Marshal(test.wantSecondResponseBodyJSON)
-				require.NoError(t, err)
-				require.JSONEq(t, string(wantJSON), rsp.Body.String())
+			if test.wantFirstResponseBodyJSON != "" {
+				require.JSONEq(t, test.wantSecondResponseBodyJSON, rsp.Body.String())
 			}
 
 			if test.wantBodyString != "" {

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"sort"
 
+	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/oidc"
 )
 
@@ -20,16 +21,6 @@ const (
 	flowOIDCBrowser = "browser_authcode"
 	flowCLIPassword = "cli_password"
 )
-
-type response struct {
-	IDPs []identityProviderResponse `json:"pinniped_identity_providers"`
-}
-
-type identityProviderResponse struct {
-	Name  string   `json:"name"`
-	Type  string   `json:"type"`
-	Flows []string `json:"flows"`
-}
 
 // NewHandler returns an http.Handler that serves the upstream IDP discovery endpoint.
 func NewHandler(upstreamIDPs oidc.UpstreamIdentityProvidersLister) http.Handler {
@@ -54,13 +45,13 @@ func NewHandler(upstreamIDPs oidc.UpstreamIdentityProvidersLister) http.Handler 
 }
 
 func responseAsJSON(upstreamIDPs oidc.UpstreamIdentityProvidersLister) ([]byte, error) {
-	r := response{
-		IDPs: []identityProviderResponse{},
+	r := v1alpha1.SupervisorIDPDiscoveryResponse{
+		PinnipedIDPs: []v1alpha1.SupervisorPinnipedIDP{},
 	}
 
 	// The cache of IDPs could change at any time, so always recalculate the list.
 	for _, provider := range upstreamIDPs.GetLDAPIdentityProviders() {
-		r.IDPs = append(r.IDPs, identityProviderResponse{
+		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.SupervisorPinnipedIDP{
 			Name:  provider.GetName(),
 			Type:  idpDiscoveryTypeLDAP,
 			Flows: []string{flowCLIPassword},
@@ -71,7 +62,7 @@ func responseAsJSON(upstreamIDPs oidc.UpstreamIdentityProvidersLister) ([]byte, 
 		if provider.AllowsPasswordGrant() {
 			flows = append(flows, flowCLIPassword)
 		}
-		r.IDPs = append(r.IDPs, identityProviderResponse{
+		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.SupervisorPinnipedIDP{
 			Name:  provider.GetName(),
 			Type:  idpDiscoveryTypeOIDC,
 			Flows: flows,
@@ -79,8 +70,8 @@ func responseAsJSON(upstreamIDPs oidc.UpstreamIdentityProvidersLister) ([]byte, 
 	}
 
 	// Nobody like an API that changes the results unnecessarily. :)
-	sort.SliceStable(r.IDPs, func(i, j int) bool {
-		return r.IDPs[i].Name < r.IDPs[j].Name
+	sort.SliceStable(r.PinnipedIDPs, func(i, j int) bool {
+		return r.PinnipedIDPs[i].Name < r.PinnipedIDPs[j].Name
 	})
 
 	var b bytes.Buffer

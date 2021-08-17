@@ -43,11 +43,6 @@ require (
 	sigs.k8s.io/yaml v1.2.0
 )
 
-// Workaround a broken module version (see https://github.com/oleiade/reflections/issues/14).
-// We need this until none of our deps tries to pull in v1.0.0, otherwise some tools like
-// Dependabot will fail on our module.
-replace github.com/oleiade/reflections v1.0.0 => github.com/oleiade/reflections v1.0.1
-
 // We were never vulnerable to CVE-2020-26160 but this avoids future issues
 // This fork is not particularly better though:
 // https://github.com/form3tech-oss/jwt-go/issues/7

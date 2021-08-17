@@ -54,7 +54,3 @@ replace github.com/oleiade/reflections v1.0.0 => github.com/oleiade/reflections 
 // We use the SHA of github.com/form3tech-oss/jwt-go@v3.2.2 to get around "used for two different module paths"
 // https://golang.org/issues/26904
 replace github.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/form3tech-oss/jwt-go v0.0.0-20200915135329-9162a5abdbc0
-
-// Pin a gRPC module that's only used in some tests.
-// This is required because sometime after v1.29.1, they moved this package into a separate module.
-replace google.golang.org/grpc/examples => ./hack/dependencyhacks/grpcexamples/

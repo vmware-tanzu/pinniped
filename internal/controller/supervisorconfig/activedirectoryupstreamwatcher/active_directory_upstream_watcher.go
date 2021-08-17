@@ -29,16 +29,23 @@ const (
 	activeDirectoryControllerName = "active-directory-upstream-observer"
 
 	// Default values for active directory config.
-	defaultActiveDirectoryUsernameAttributeName  = "sAMAccountName"
-	defaultActiveDirectoryUIDAttributeName       = "objectGUID"
-	defaultActiveDirectoryGroupNameAttributeName = "sAMAccountName"
+	defaultActiveDirectoryUsernameAttributeName = "userPrincipalName"
+	defaultActiveDirectoryUIDAttributeName      = "objectGUID"
+
+	// This is not a real attribute in active directory.
+	// It represents a combined attribute name, sAMAccountName + "@" + domain.
+	// For example if your group sAMAccountName is "mammals" and your domain is
+	// "activedirectory.example.com", it would be mammals@activedirectory.example.com.
+	// This is because sAMAccountName is only unique within a domain, not a forest.
+	defaultActiveDirectoryGroupNameAttributeName         = "sAMAccountName"
+	defaultActiveDirectoryGroupNameOverrideAttributeName = "pinniped:sAMAccountName@domain"
 
 	// - is a person.
 	// - is not a computer.
 	// - is not shown in advanced view only (which would likely mean its a system created service account with advanced permissions).
-	// - either the sAMAccountName or the mail attribute matches the input username.
+	// - either the sAMAccountName, the userPrincipalName or the mail attribute matches the input username.
 	// - the sAMAccountType is for a normal user account.
-	defaultActiveDirectoryUserSearchFilter = "(&(objectClass=person)(!(objectClass=computer))(!(showInAdvancedViewOnly=TRUE))(|(sAMAccountName={})(mail={}))(sAMAccountType=805306368))"
+	defaultActiveDirectoryUserSearchFilter = "(&(objectClass=person)(!(objectClass=computer))(!(showInAdvancedViewOnly=TRUE))(|(sAMAccountName={})(mail={})(userPrincipalName={}))(sAMAccountType=805306368))"
 
 	// - is a group.
 	// - has a member that matches the DN of the user we successfully logged in as.
@@ -181,6 +188,10 @@ func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) GroupNameAttribute() str
 	if len(g.groupSearch.Attributes.GroupName) == 0 {
 		return defaultActiveDirectoryGroupNameAttributeName
 	}
+	// you explicitly told us to use the override value
+	if g.groupSearch.Attributes.GroupName == defaultActiveDirectoryGroupNameOverrideAttributeName {
+		return defaultActiveDirectoryGroupNameAttributeName
+	}
 	return g.groupSearch.Attributes.GroupName
 }
 
@@ -307,7 +318,11 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 			GroupNameAttribute: adUpstreamImpl.Spec().GroupSearch().GroupNameAttribute(),
 		},
 		Dialer:                       c.ldapDialer,
-		UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary}},
+		UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
+	}
+
+	if spec.GroupSearch.Attributes.GroupName == defaultActiveDirectoryGroupNameOverrideAttributeName || spec.GroupSearch.Attributes.GroupName == "" {
+		config.GroupAttributeParsingOverrides = []upstreamldap.AttributeParsingOverride{{AttributeName: defaultActiveDirectoryGroupNameAttributeName, OverrideFunc: upstreamldap.GroupSAMAccountNameWithDomainSuffix}}
 	}
 
 	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, &adUpstreamImpl, c.secretInformer, c.validatedSecretVersionsCache, config)

@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -106,14 +107,18 @@ type ProviderConfig struct {
 	// Dialer exists to enable testing. When nil, will use a default appropriate for production use.
 	Dialer LDAPDialer
 
-	// UIDAttributeParsingOverrides are mappings between an attribute name and a way to parse it when
+	// UIDAttributeParsingOverrides are mappings between an attribute name and a way to parse it as a UID when
 	// it comes out of LDAP.
 	UIDAttributeParsingOverrides []AttributeParsingOverride
+
+	// GroupNameMappingOverrides are the mappings between an attribute name and a way to parse it as a group
+	// name when it comes out of LDAP.
+	GroupAttributeParsingOverrides []AttributeParsingOverride
 }
 
 type AttributeParsingOverride struct {
 	AttributeName string
-	OverrideFunc  func([]byte) (string, error)
+	OverrideFunc  func(entry *ldap.Entry) (string, error)
 }
 
 // UserSearchConfig contains information about how to search for users in the upstream LDAP IDP.
@@ -389,6 +394,15 @@ func (p *Provider) searchGroupsForUserDN(conn Conn, userDN string) ([]string, er
 		if err != nil {
 			return nil, fmt.Errorf(`error searching for group memberships for user with DN %q: %w`, userDN, err)
 		}
+		for _, override := range p.c.GroupAttributeParsingOverrides {
+			if groupAttributeName == override.AttributeName {
+				overrideGroupName, err := override.OverrideFunc(groupEntry)
+				if err != nil {
+					return nil, fmt.Errorf("error finding groups: %w", err)
+				}
+				mappedGroupName = overrideGroupName
+			}
+		}
 		groups = append(groups, mappedGroupName)
 	}
 
@@ -623,7 +637,7 @@ func (p *Provider) getSearchResultAttributeRawValueEncoded(attributeName string,
 
 	for _, override := range p.c.UIDAttributeParsingOverrides {
 		if attributeName == override.AttributeName {
-			return override.OverrideFunc(attributeValue)
+			return override.OverrideFunc(entry)
 		}
 	}
 
@@ -671,7 +685,15 @@ func (p *Provider) traceSearchBaseDiscoveryFailure(t *trace.Trace, err error) {
 		trace.Field{Key: "reason", Value: err.Error()})
 }
 
-func MicrosoftUUIDFromBinary(binaryUUID []byte) (string, error) {
+func MicrosoftUUIDFromBinary(attributeName string) func(entry *ldap.Entry) (string, error) {
+	// validation has already been done so we can just get the attribute...
+	return func(entry *ldap.Entry) (string, error) {
+		binaryUUID := entry.GetRawAttributeValue(attributeName)
+		return microsoftUUIDFromBinary(binaryUUID)
+	}
+}
+
+func microsoftUUIDFromBinary(binaryUUID []byte) (string, error) {
 	uuidVal, err := uuid.FromBytes(binaryUUID) // start out with the RFC4122 version
 	if err != nil {
 		return "", err
@@ -682,4 +704,23 @@ func MicrosoftUUIDFromBinary(binaryUUID []byte) (string, error) {
 	uuidVal[4], uuidVal[5] = uuidVal[5], uuidVal[4]
 	uuidVal[6], uuidVal[7] = uuidVal[7], uuidVal[6]
 	return uuidVal.String(), nil
+}
+
+func GroupSAMAccountNameWithDomainSuffix(entry *ldap.Entry) (string, error) {
+	sAMAccountNameAttribute := "sAMAccountName"
+	sAMAccountName := entry.GetAttributeValue(sAMAccountNameAttribute)
+	distinguishedName := entry.DN
+	domain, err := getDomainFromDistinguishedName(distinguishedName)
+	if err != nil {
+		return "", err
+	}
+	return sAMAccountName + "@" + domain, nil
+}
+
+func getDomainFromDistinguishedName(distinguishedName string) (string, error) {
+	domainComponents := regexp.MustCompile(",DC=|,dc=").Split(distinguishedName, -1)
+	if len(domainComponents) == 1 {
+		return "", fmt.Errorf("did not find domain components in group dn: %s", distinguishedName)
+	}
+	return strings.Join(domainComponents[1:], "."), nil
 }

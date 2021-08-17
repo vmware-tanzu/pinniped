@@ -107,7 +107,7 @@ spec:
             - name: HTTPS_PROXY
               value: #@ data.values.https_proxy
             #@ end
-            #@ if data.values.no_proxy:
+            #@ if data.values.https_proxy and data.values.no_proxy:
             - name: NO_PROXY
               value: #@ data.values.no_proxy
             #@ end

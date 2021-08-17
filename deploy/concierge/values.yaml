@@ -93,3 +93,11 @@ impersonation_proxy_spec:
       {service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "4000"}
     #! When mode LoadBalancer is set, this will set the LoadBalancer Service's Spec.LoadBalancerIP.
     load_balancer_ip:
+
+#! Set the standard golang HTTPS_PROXY and NO_PROXY environment variables on the Concierge containers.
+#! These will be used when the Concierge makes backend-to-backend calls to authenticators using HTTPS,
+#! e.g. when the Concierge fetches discovery documents, JWKS keys, and POSTs to token webhooks.
+#! The Concierge never makes insecure HTTP calls, so there is no reason to set HTTP_PROXY.
+#! Optional.
+https_proxy: #! e.g. http://proxy.example.com
+no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local" #! do not proxy Kubernetes endpoints

@@ -944,21 +944,17 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				return // stop test early since the token request API is not enabled on this cluster - other errors are caught below
 			}
 
-			pod, err := kubeClient.Pods(namespaceName).Create(ctx, &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "test-impersonation-proxy-",
-				},
-				Spec: corev1.PodSpec{
+			pod := testlib.CreatePod(ctx, t, "impersonation-proxy", namespaceName,
+				corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "ignored-but-required",
-							Image: "does-not-matter",
+							Name:    "ignored-but-required",
+							Image:   "busybox",
+							Command: []string{"sh", "-c", "sleep 3600"},
 						},
 					},
 					ServiceAccountName: saName,
-				},
-			}, metav1.CreateOptions{})
-			require.NoError(t, err)
+				})
 
 			tokenRequestBadAudience, err := kubeClient.ServiceAccounts(namespaceName).CreateToken(ctx, saName, &authenticationv1.TokenRequest{
 				Spec: authenticationv1.TokenRequestSpec{

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
@@ -224,3 +225,19 @@ func poolSubjects(pool *x509.CertPool) [][]byte {
 	}
 	return pool.Subjects()
 }
+
+func TestNewServingCert(t *testing.T) {
+	got := NewServingCert("")
+
+	ok1 := assert.Implements(fakeT{}, (*Private)(nil), got)
+	ok2 := assert.Implements(fakeT{}, (*Public)(nil), got)
+	ok3 := assert.Implements(fakeT{}, (*Provider)(nil), got)
+
+	require.True(t, ok1, "NewServingCert must implement Private")
+	require.False(t, ok2, "NewServingCert must not implement Public")
+	require.False(t, ok3, "NewServingCert must not implement Provider")
+}
+
+type fakeT struct{}
+
+func (fakeT) Errorf(string, ...interface{}) {}

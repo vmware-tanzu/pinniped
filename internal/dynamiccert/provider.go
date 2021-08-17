@@ -55,7 +55,11 @@ type provider struct {
 // NewServingCert returns a Private that is go routine safe.
 // It can only hold key pairs that have IsCA=false.
 func NewServingCert(name string) Private {
-	return &provider{name: name}
+	return struct {
+		Private
+	}{
+		Private: &provider{name: name},
+	}
 }
 
 // NewCA returns a Provider that is go routine safe.

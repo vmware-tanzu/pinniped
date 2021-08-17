@@ -72,4 +72,4 @@ api_group_suffix: pinniped.dev
 #! The Supervisor never makes insecure HTTP calls, so there is no reason to set HTTP_PROXY.
 #! Optional.
 https_proxy: #! e.g. http://proxy.example.com
-no_proxy: #! e.g. 127.0.0.1
+no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.cluster.local" #! do not proxy Kubernetes endpoints

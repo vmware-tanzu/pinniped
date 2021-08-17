@@ -142,8 +142,8 @@ func IntegrationEnv(t *testing.T) *TestEnv {
 	memoizedTestEnvsByTest.Store(t, &result)
 
 	// In every integration test, assert that no pods in our namespaces restart during the test.
-	assertNoRestartsDuringTest(t, result.ConciergeNamespace, "")
-	assertNoRestartsDuringTest(t, result.SupervisorNamespace, "")
+	assertNoRestartsDuringTest(t, result.ConciergeNamespace, "!pinniped.dev/test")
+	assertNoRestartsDuringTest(t, result.SupervisorNamespace, "!pinniped.dev/test")
 	return &result
 }
 

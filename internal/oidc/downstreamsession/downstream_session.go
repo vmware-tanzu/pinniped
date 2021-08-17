@@ -56,50 +56,39 @@ func GrantScopesIfRequested(authorizeRequester fosite.AuthorizeRequester) {
 	oidc.GrantScopeIfRequested(authorizeRequester, "pinniped:request-audience")
 }
 
-func GetSubjectAndUsernameFromUpstreamIDToken(
+// GetDownstreamIdentityFromUpstreamIDToken returns the mapped subject, username, and group names, in that order.
+func GetDownstreamIdentityFromUpstreamIDToken(
+	upstreamIDPConfig provider.UpstreamOIDCIdentityProviderI,
+	idTokenClaims map[string]interface{},
+) (string, string, []string, error) {
+	subject, username, err := getSubjectAndUsernameFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	groups, err := getGroupsFromUpstreamIDToken(upstreamIDPConfig, idTokenClaims)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	return subject, username, groups, err
+}
+
+func getSubjectAndUsernameFromUpstreamIDToken(
 	upstreamIDPConfig provider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
 ) (string, string, error) {
 	// The spec says the "sub" claim is only unique per issuer,
 	// so we will prepend the issuer string to make it globally unique.
-	upstreamIssuer := idTokenClaims[oidc.IDTokenIssuerClaim]
-	if upstreamIssuer == "" {
-		plog.Warning(
-			"issuer claim in upstream ID token missing",
-			"upstreamName", upstreamIDPConfig.GetName(),
-			"issClaim", upstreamIssuer,
-		)
-		return "", "", httperr.New(http.StatusUnprocessableEntity, "issuer claim in upstream ID token missing")
+	upstreamIssuer, err := extractStringClaimValue(oidc.IDTokenIssuerClaim, upstreamIDPConfig.GetName(), idTokenClaims)
+	if err != nil {
+		return "", "", err
 	}
-	upstreamIssuerAsString, ok := upstreamIssuer.(string)
-	if !ok {
-		plog.Warning(
-			"issuer claim in upstream ID token has invalid format",
-			"upstreamName", upstreamIDPConfig.GetName(),
-			"issClaim", upstreamIssuer,
-		)
-		return "", "", httperr.New(http.StatusUnprocessableEntity, "issuer claim in upstream ID token has invalid format")
+	upstreamSubject, err := extractStringClaimValue(oidc.IDTokenSubjectClaim, upstreamIDPConfig.GetName(), idTokenClaims)
+	if err != nil {
+		return "", "", err
 	}
-
-	subjectAsInterface, ok := idTokenClaims[oidc.IDTokenSubjectClaim]
-	if !ok {
-		plog.Warning(
-			"no subject claim in upstream ID token",
-			"upstreamName", upstreamIDPConfig.GetName(),
-		)
-		return "", "", httperr.New(http.StatusUnprocessableEntity, "no subject claim in upstream ID token")
-	}
-
-	upstreamSubject, ok := subjectAsInterface.(string)
-	if !ok {
-		plog.Warning(
-			"subject claim in upstream ID token has invalid format",
-			"upstreamName", upstreamIDPConfig.GetName(),
-		)
-		return "", "", httperr.New(http.StatusUnprocessableEntity, "subject claim in upstream ID token has invalid format")
-	}
-
-	subject := downstreamSubjectFromUpstreamOIDC(upstreamIssuerAsString, upstreamSubject)
+	subject := downstreamSubjectFromUpstreamOIDC(upstreamIssuer, upstreamSubject)
 
 	usernameClaimName := upstreamIDPConfig.GetUsernameClaim()
 	if usernameClaimName == "" {
@@ -130,34 +119,52 @@ func GetSubjectAndUsernameFromUpstreamIDToken(
 		}
 	}
 
-	usernameAsInterface, ok := idTokenClaims[usernameClaimName]
-	if !ok {
-		plog.Warning(
-			"no username claim in upstream ID token",
-			"upstreamName", upstreamIDPConfig.GetName(),
-			"configuredUsernameClaim", usernameClaimName,
-		)
-		return "", "", httperr.New(http.StatusUnprocessableEntity, "no username claim in upstream ID token")
-	}
-
-	username, ok := usernameAsInterface.(string)
-	if !ok {
-		plog.Warning(
-			"username claim in upstream ID token has invalid format",
-			"upstreamName", upstreamIDPConfig.GetName(),
-			"configuredUsernameClaim", usernameClaimName,
-		)
-		return "", "", httperr.New(http.StatusUnprocessableEntity, "username claim in upstream ID token has invalid format")
+	username, err := extractStringClaimValue(usernameClaimName, upstreamIDPConfig.GetName(), idTokenClaims)
+	if err != nil {
+		return "", "", err
 	}
 
 	return subject, username, nil
+}
+
+func extractStringClaimValue(claimName string, upstreamIDPName string, idTokenClaims map[string]interface{}) (string, error) {
+	value, ok := idTokenClaims[claimName]
+	if !ok {
+		plog.Warning(
+			"required claim in upstream ID token missing",
+			"upstreamName", upstreamIDPName,
+			"claimName", claimName,
+		)
+		return "", httperr.New(http.StatusUnprocessableEntity, "required claim in upstream ID token missing")
+	}
+
+	valueAsString, ok := value.(string)
+	if !ok {
+		plog.Warning(
+			"required claim in upstream ID token is not a string value",
+			"upstreamName", upstreamIDPName,
+			"claimName", claimName,
+		)
+		return "", httperr.New(http.StatusUnprocessableEntity, "required claim in upstream ID token has invalid format")
+	}
+
+	if valueAsString == "" {
+		plog.Warning(
+			"required claim in upstream ID token has an empty string value",
+			"upstreamName", upstreamIDPName,
+			"claimName", claimName,
+		)
+		return "", httperr.New(http.StatusUnprocessableEntity, "required claim in upstream ID token is empty")
+	}
+
+	return valueAsString, nil
 }
 
 func downstreamSubjectFromUpstreamOIDC(upstreamIssuerAsString string, upstreamSubject string) string {
 	return fmt.Sprintf("%s?%s=%s", upstreamIssuerAsString, oidc.IDTokenSubjectClaim, url.QueryEscape(upstreamSubject))
 }
 
-func GetGroupsFromUpstreamIDToken(
+func getGroupsFromUpstreamIDToken(
 	upstreamIDPConfig provider.UpstreamOIDCIdentityProviderI,
 	idTokenClaims map[string]interface{},
 ) ([]string, error) {

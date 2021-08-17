@@ -134,9 +134,6 @@ func (u *TestUpstreamOIDCIdentityProvider) AllowsPasswordGrant() bool {
 }
 
 func (u *TestUpstreamOIDCIdentityProvider) PasswordCredentialsGrantAndValidateTokens(ctx context.Context, username, password string) (*oidctypes.Token, error) {
-	if u.passwordCredentialsGrantAndValidateTokensArgs == nil {
-		u.passwordCredentialsGrantAndValidateTokensArgs = make([]*PasswordCredentialsGrantAndValidateTokensArgs, 0)
-	}
 	u.passwordCredentialsGrantAndValidateTokensCallCount++
 	u.passwordCredentialsGrantAndValidateTokensArgs = append(u.passwordCredentialsGrantAndValidateTokensArgs, &PasswordCredentialsGrantAndValidateTokensArgs{
 		Ctx:      ctx,

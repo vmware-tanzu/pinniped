@@ -634,7 +634,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			path:            newRequestPath().WithState(happyState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
-			wantBody:        "Unprocessable Entity: no username claim in upstream ID token\n",
+			wantBody:        "Unprocessable Entity: required claim in upstream ID token missing\n",
 			wantContentType: htmlContentType,
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
@@ -675,7 +675,23 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
-			wantBody:        "Unprocessable Entity: username claim in upstream ID token has invalid format\n",
+			wantBody:        "Unprocessable Entity: required claim in upstream ID token has invalid format\n",
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name: "upstream ID token contains username claim with empty string value",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithIDTokenClaim(oidcUpstreamUsernameClaim, "").Build(),
+			),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: required claim in upstream ID token is empty\n",
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -684,6 +700,22 @@ func TestCallbackEndpoint(t *testing.T) {
 		{
 			name: "upstream ID token does not contain iss claim when using default username claim config",
 			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithoutIDTokenClaim("iss").WithoutUsernameClaim().Build(),
+			),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: required claim in upstream ID token missing\n",
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name: "upstream ID token does has an empty string value for iss claim when using default username claim config",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyUpstream().WithIDTokenClaim("iss", "").WithoutUsernameClaim().Build(),
 			),
 			method:          http.MethodGet,
@@ -691,7 +723,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
-			wantBody:        "Unprocessable Entity: issuer claim in upstream ID token missing\n",
+			wantBody:        "Unprocessable Entity: required claim in upstream ID token is empty\n",
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -707,7 +739,55 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
-			wantBody:        "Unprocessable Entity: issuer claim in upstream ID token has invalid format\n",
+			wantBody:        "Unprocessable Entity: required claim in upstream ID token has invalid format\n",
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name: "upstream ID token does not contain sub claim when using default username claim config",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithoutIDTokenClaim("sub").WithoutUsernameClaim().Build(),
+			),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: required claim in upstream ID token missing\n",
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name: "upstream ID token does has an empty string value for sub claim when using default username claim config",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithIDTokenClaim("sub", "").WithoutUsernameClaim().Build(),
+			),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: required claim in upstream ID token is empty\n",
+			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
+				performedByUpstreamName: happyUpstreamIDPName,
+				args:                    happyExchangeAndValidateTokensArgs,
+			},
+		},
+		{
+			name: "upstream ID token has an non-string sub claim when using default username claim config",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				happyUpstream().WithIDTokenClaim("sub", 42).WithoutUsernameClaim().Build(),
+			),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyState).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: required claim in upstream ID token has invalid format\n",
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,

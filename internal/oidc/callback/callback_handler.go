@@ -68,12 +68,7 @@ func NewHandler(
 			return httperr.New(http.StatusBadGateway, "error exchanging and validating upstream tokens")
 		}
 
-		subject, username, err := downstreamsession.GetSubjectAndUsernameFromUpstreamIDToken(upstreamIDPConfig, token.IDToken.Claims)
-		if err != nil {
-			return err
-		}
-
-		groups, err := downstreamsession.GetGroupsFromUpstreamIDToken(upstreamIDPConfig, token.IDToken.Claims)
+		subject, username, groups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(upstreamIDPConfig, token.IDToken.Claims)
 		if err != nil {
 			return err
 		}

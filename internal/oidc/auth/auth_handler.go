@@ -158,12 +158,7 @@ func handleAuthRequestForOIDCUpstreamPasswordGrant(
 		return nil
 	}
 
-	subject, username, err := downstreamsession.GetSubjectAndUsernameFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
-	if err != nil {
-		return err
-	}
-
-	groups, err := downstreamsession.GetGroupsFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
+	subject, username, groups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(oidcUpstream, token.IDToken.Claims)
 	if err != nil {
 		return err
 	}

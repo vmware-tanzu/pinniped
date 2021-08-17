@@ -41,7 +41,7 @@ type OIDCAuthorizationConfig struct {
 	// AdditionalScopes are the scopes in addition to "openid" that will be requested as part of the authorization
 	// request flow with an OIDC identity provider.
 	// In the case of a Resource Owner Password Credentials Grant flow, AdditionalScopes are the scopes
-	// in addition to "openid" that will be requested as part of the token request (see also the AllowPasswordGrant field).
+	// in addition to "openid" that will be requested as part of the token request (see also the allowPasswordGrant field).
 	// By default, only the "openid" scope will be requested.
 	// +optional
 	AdditionalScopes []string `json:"additionalScopes,omitempty"`

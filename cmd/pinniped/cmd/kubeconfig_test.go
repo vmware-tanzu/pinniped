@@ -149,7 +149,7 @@ func TestGetKubeconfig(t *testing.T) {
 				      --static-token string                      Instead of doing an OIDC-based login, specify a static token
 				      --static-token-env string                  Instead of doing an OIDC-based login, read a static token from the environment
 				      --timeout duration                         Timeout for autodiscovery and validation (default 10m0s)
-					  --upstream-identity-provider-flow string   The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. 'cli_password', 'browser_authcode')
+				      --upstream-identity-provider-flow string   The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. 'cli_password', 'browser_authcode')
 				      --upstream-identity-provider-name string   The name of the upstream identity provider used during login with a Supervisor
 				      --upstream-identity-provider-type string   The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap')
 			`)

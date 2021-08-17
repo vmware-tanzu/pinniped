@@ -88,7 +88,7 @@ func (p *ProviderConfig) PasswordCredentialsGrantAndValidateTokens(ctx context.C
 
 	// There is no nonce to validate for a resource owner password credentials grant because it skips using
 	// the authorize endpoint and goes straight to the token endpoint.
-	skipNonceValidation := nonce.Nonce("")
+	const skipNonceValidation nonce.Nonce = ""
 	return p.ValidateToken(ctx, tok, skipNonceValidation)
 }
 

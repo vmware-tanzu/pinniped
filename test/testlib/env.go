@@ -100,6 +100,7 @@ type TestLDAPUpstream struct {
 	TestUserDirectGroupsCNs                         []string `json:"testUserDirectGroupsCNs"`
 	TestUserDirectGroupsDNs                         []string `json:"testUserDirectGroupsDNs"` //nolint:golint // this is "distinguished names", not "DNS"
 	TestUserSAMAccountNameValue                     string   `json:"testUserSAMAccountNameValue"`
+	TestUserPrincipalNameValue                      string   `json:"testUserPrincipalNameValue"`
 	TestUserIndirectGroupsSAMAccountNames           []string `json:"TestUserIndirectGroupsSAMAccountNames"`
 	TestUserIndirectGroupsSAMAccountPlusDomainNames []string `json:"TestUserIndirectGroupsSAMAccountPlusDomainNames"`
 	TestDeactivatedUserSAMAccountNameValue          string   `json:"TestDeactivatedUserSAMAccountNameValue"`
@@ -282,7 +283,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 		TestUserPassword:                      wantEnv("PINNIPED_TEST_AD_USER_PASSWORD", ""),
 		TestUserUniqueIDAttributeName:         wantEnv("PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_NAME", ""),
 		TestUserUniqueIDAttributeValue:        wantEnv("PINNIPED_TEST_AD_USER_UNIQUE_ID_ATTRIBUTE_VALUE", ""),
-		TestUserSAMAccountNameValue:           wantEnv("PINNIPED_TEST_AD_USERNAME_ATTRIBUTE_VALUE", ""),
+		TestUserPrincipalNameValue:            wantEnv("PINNIPED_TEST_AD_USERNAME_ATTRIBUTE_VALUE", ""),
 		TestUserMailAttributeValue:            wantEnv("PINNIPED_TEST_AD_USER_EMAIL_ATTRIBUTE_VALUE", ""),
 		TestUserMailAttributeName:             wantEnv("PINNIPED_TEST_AD_USER_EMAIL_ATTRIBUTE_NAME", ""),
 		TestUserDirectGroupsDNs:               filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_AD_USER_EXPECTED_GROUPS_DN", ""), ";")),

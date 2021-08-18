@@ -331,8 +331,8 @@ func TestSupervisorLogin(t *testing.T) {
 			requestAuthorization: func(t *testing.T, downstreamAuthorizeURL, _ string, httpClient *http.Client) {
 				requestAuthorizationUsingLDAPIdentityProvider(t,
 					downstreamAuthorizeURL,
-					env.SupervisorUpstreamActiveDirectory.TestUserSAMAccountNameValue, // username to present to server during login
-					env.SupervisorUpstreamActiveDirectory.TestUserPassword,            // password to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserPassword,           // password to present to server during login
 					httpClient,
 					false,
 				)
@@ -344,7 +344,7 @@ func TestSupervisorLogin(t *testing.T) {
 					"&sub=" + env.SupervisorUpstreamActiveDirectory.TestUserUniqueIDAttributeValue,
 			),
 			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
-			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserSAMAccountNameValue),
+			wantDownstreamIDTokenUsernameToMatch: regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue),
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames,
 		}, {
 			name: "activedirectory with custom options",

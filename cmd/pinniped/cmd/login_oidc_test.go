@@ -182,7 +182,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				"--credential-cache", "", // must specify --credential-cache or else the cache file on disk causes test pollution
 			},
 			wantOptionsCount: 5,
-			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
+			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 		},
 		{
 			name: "login error",

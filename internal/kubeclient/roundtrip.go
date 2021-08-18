@@ -146,7 +146,7 @@ func handleOtherVerbs(
 
 	result, err := middlewareReq.mutateRequest(obj)
 	if err != nil {
-		return true, nil, err
+		return true, nil, fmt.Errorf("middleware request for %#v failed to mutate: %w", middlewareReq, err)
 	}
 
 	if !result.mutated {
@@ -231,7 +231,7 @@ func handleCreateOrUpdate(
 
 	result, err := middlewareReq.mutateRequest(obj)
 	if err != nil {
-		return true, nil, err
+		return true, nil, fmt.Errorf("middleware request for %#v failed to mutate: %w", middlewareReq, err)
 	}
 
 	if !result.mutated {

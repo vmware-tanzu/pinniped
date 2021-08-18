@@ -33,6 +33,7 @@ import (
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
+	"go.pinniped.dev/internal/leaderelection"
 )
 
 const (
@@ -97,7 +98,7 @@ type Config struct {
 func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 	loginConciergeGroupData, identityConciergeGroupData := groupsuffix.ConciergeAggregatedGroups(c.APIGroupSuffix)
 
-	dref, _, err := deploymentref.New(c.ServerInstallationInfo)
+	dref, deployment, err := deploymentref.New(c.ServerInstallationInfo)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create deployment ref: %w", err)
 	}
@@ -107,7 +108,9 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 		return nil, fmt.Errorf("cannot create API service ref: %w", err)
 	}
 
-	client, err := kubeclient.New(
+	client, leaderElector, err := leaderelection.New(
+		c.ServerInstallationInfo,
+		deployment,
 		dref,          // first try to use the deployment as an owner ref (for namespace scoped resources)
 		apiServiceRef, // fallback to our API service (for everything else we create)
 		kubeclient.WithMiddleware(groupsuffix.New(c.APIGroupSuffix)),
@@ -303,7 +306,7 @@ func PrepareControllers(c *Config) (func(ctx context.Context), error) {
 	// Return a function which starts the informers and controllers.
 	return func(ctx context.Context) {
 		informers.startAndWaitForSync(ctx)
-		go controllerManager.Start(ctx)
+		go leaderElector(ctx, controllerManager.Start)
 	}, nil
 }
 

@@ -102,7 +102,7 @@ func newInternal( //nolint:funlen // yeah, it's kind of long.
 
 		// Wire up the impersonation proxy signer CA as another valid authenticator for client cert auth,
 		// along with the Kube API server's CA.
-		// Note: any changes to the the Authentication stack need to be kept in sync with any assumptions made
+		// Note: any changes to the Authentication stack need to be kept in sync with any assumptions made
 		// by getTransportForUser, especially if we ever update the TCR API to start returning bearer tokens.
 		kubeClientUnsafeForProxying, err := kubeclient.New(clientOpts...)
 		if err != nil {

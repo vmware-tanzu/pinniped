@@ -41,6 +41,7 @@ import (
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/groupsuffix"
 	"go.pinniped.dev/internal/kubeclient"
+	"go.pinniped.dev/internal/leaderelection"
 	"go.pinniped.dev/internal/oidc/jwks"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/oidc/provider/manager"
@@ -94,6 +95,7 @@ func startControllers(
 	pinnipedClient pinnipedclientset.Interface,
 	kubeInformers kubeinformers.SharedInformerFactory,
 	pinnipedInformers pinnipedinformers.SharedInformerFactory,
+	leaderElector func(context.Context, func(context.Context)),
 ) {
 	federationDomainInformer := pinnipedInformers.Config().V1alpha1().FederationDomains()
 	secretInformer := kubeInformers.Core().V1().Secrets()
@@ -261,7 +263,7 @@ func startControllers(
 	kubeInformers.WaitForCacheSync(ctx.Done())
 	pinnipedInformers.WaitForCacheSync(ctx.Done())
 
-	go controllerManager.Start(ctx)
+	go leaderElector(ctx, controllerManager.Start)
 }
 
 func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
@@ -275,12 +277,23 @@ func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 		return fmt.Errorf("cannot create deployment ref: %w", err)
 	}
 
-	client, err := kubeclient.New(
+	opts := []kubeclient.Option{
 		dref,
 		kubeclient.WithMiddleware(groupsuffix.New(*cfg.APIGroupSuffix)),
+	}
+
+	client, leaderElector, err := leaderelection.New(
+		podInfo,
+		supervisorDeployment,
+		opts...,
 	)
 	if err != nil {
 		return fmt.Errorf("cannot create k8s client: %w", err)
+	}
+
+	clientWithoutLeaderElection, err := kubeclient.New(opts...)
+	if err != nil {
+		return fmt.Errorf("cannot create k8s client without leader election: %w", err)
 	}
 
 	kubeInformers := kubeinformers.NewSharedInformerFactoryWithOptions(
@@ -312,7 +325,7 @@ func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 		dynamicJWKSProvider,
 		dynamicUpstreamIDPProvider,
 		&secretCache,
-		client.Kubernetes.CoreV1().Secrets(serverInstallationNamespace),
+		clientWithoutLeaderElection.Kubernetes.CoreV1().Secrets(serverInstallationNamespace), // writes to kube storage are allowed for non-leaders
 	)
 
 	startControllers(
@@ -328,6 +341,7 @@ func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 		client.PinnipedSupervisor,
 		kubeInformers,
 		pinnipedInformers,
+		leaderElector,
 	)
 
 	//nolint: gosec // Intentionally binding to all network interfaces.

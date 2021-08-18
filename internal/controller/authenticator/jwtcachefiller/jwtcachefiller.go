@@ -7,14 +7,13 @@ package jwtcachefiller
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
 	"reflect"
 
 	"github.com/go-logr/logr"
 	"gopkg.in/square/go-jose.v2"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
+	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	"k8s.io/klog/v2"
 
@@ -151,22 +150,13 @@ func newJWTAuthenticator(spec *auth1alpha1.JWTAuthenticatorSpec) (*jwtAuthentica
 		return nil, fmt.Errorf("invalid TLS configuration: %w", err)
 	}
 
-	var caFile string
-	if caBundle != nil {
-		temp, err := ioutil.TempFile("", "pinniped-jwkauthenticator-cafile-*")
-		if err != nil {
-			return nil, fmt.Errorf("unable to create temporary file: %w", err)
+	var caContentProvider oidc.CAContentProvider
+	if len(caBundle) != 0 {
+		var caContentProviderErr error
+		caContentProvider, caContentProviderErr = dynamiccertificates.NewStaticCAContent("ignored", caBundle)
+		if caContentProviderErr != nil {
+			return nil, caContentProviderErr // impossible since caBundle is validated already
 		}
-
-		// We can safely remove the temp file at the end of this function since oidc.New() reads the
-		// provided CA file and then forgets about it.
-		defer func() { _ = os.Remove(temp.Name()) }()
-
-		if _, err := temp.Write(caBundle); err != nil {
-			return nil, fmt.Errorf("cannot write CA file: %w", err)
-		}
-
-		caFile = temp.Name()
 	}
 	usernameClaim := spec.Claims.Username
 	if usernameClaim == "" {
@@ -183,7 +173,7 @@ func newJWTAuthenticator(spec *auth1alpha1.JWTAuthenticatorSpec) (*jwtAuthentica
 		UsernameClaim:        usernameClaim,
 		GroupsClaim:          groupsClaim,
 		SupportedSigningAlgs: defaultSupportedSigningAlgos(),
-		CAFile:               caFile,
+		CAContentProvider:    caContentProvider,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("could not initialize authenticator: %w", err)

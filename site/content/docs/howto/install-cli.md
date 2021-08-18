@@ -23,11 +23,11 @@ Use [Homebrew](https://brew.sh/) to install from the Pinniped [tap](https://gith
 
 Find the appropriate binary for your platform from the [latest release](https://github.com/vmware-tanzu/pinniped/releases/latest):
 
-{{< buttonlink href="https://get.pinniped.dev/latest/pinniped-cli-darwin-amd64" >}}Download for macOS/amd64{{< buttonicon "download.png" >}}{{< /buttonlink >}}
+{{< buttonlink filename="pinniped-cli-darwin-amd64" >}}Download {{< latestversion >}} for macOS/amd64{{< buttonicon "download.png" >}}{{< /buttonlink >}}
 
-{{< buttonlink href="https://get.pinniped.dev/latest/pinniped-cli-linux-amd64" >}}Download for Linux/amd64{{< buttonicon "download.png" >}}{{< /buttonlink >}}
+{{< buttonlink filename="pinniped-cli-linux-amd64" >}}Download {{< latestversion >}} for Linux/amd64{{< buttonicon "download.png" >}}{{< /buttonlink >}}
 
-{{< buttonlink href="https://get.pinniped.dev/latest/pinniped-cli-windows-amd64.exe" >}}Download for Windows/amd64{{< buttonicon "download.png" >}}{{< /buttonlink >}}
+{{< buttonlink filename="pinniped-cli-windows-amd64.exe" >}}Download {{< latestversion >}} for Windows/amd64{{< buttonicon "download.png" >}}{{< /buttonlink >}}
 
 You should put the command-line tool somewhere on your `$PATH`, such as `/usr/local/bin` on macOS/Linux.
 You'll also need to mark the file as executable.
@@ -44,17 +44,15 @@ Click Open to allow the command to proceed.
 
 ## Install a specific version via script
 
-Choose your preferred [release](https://github.com/vmware-tanzu/pinniped/releases) version number and use it to replace the version number in the URL below.
+Choose your preferred [release](https://github.com/vmware-tanzu/pinniped/releases) and use it to replace the version number in the URL below.
 
-For example, to install v0.9.2 on Linux/amd64:
+For example, to install {{< latestversion >}} on Linux/amd64:
 
 ```sh
-curl -Lso pinniped https://get.pinniped.dev/v0.9.2/pinniped-cli-linux-amd64 \
+curl -Lso pinniped https://get.pinniped.dev/{{< latestversion >}}/pinniped-cli-linux-amd64 \
   && chmod +x pinniped \
   && sudo mv pinniped /usr/local/bin/pinniped
 ```
-
-*Replace v0.9.2 with your preferred version number.*
 
 ## Next steps
 

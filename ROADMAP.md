@@ -37,9 +37,11 @@ Last Updated: July 2021
 Theme|Description|Timeline|
 |--|--|--|
 |Remote OIDC login support|Add support for logging in from remote hosts without web browsers in the Pinniped CLI and Supervisor|Jul 2021|
-|AD Support|Extends upstream IDP protocols|Jul 2021|
-|Wider Concierge cluster support|Support for more cluster types in the Concierge|Aug 2021|
-|Multiple IDP support|Support multiple IDPs configured on a single Supervisor|Exploring/Ongoing|
+|Non-Interactive Password based LDAP logins |Support for non-interactive LDAP Logins via CLI using Environmental Variables |Jul 2021|
+|Non-Interactive Password based OIDC logins |Support for non-interactive OIDC Logins via CLI using Password Grant |Aug 2021|
+|Active Directory Support|Extends upstream IDP protocols|Aug 2021|
+|Multiple IDP support|Support multiple IDPs configured on a single Supervisor|Sept 2021|
+|Wider Concierge cluster support|Support for more cluster types in the Concierge|Sept 2021|
 |Identity transforms|Support prefixing, filtering, or performing coarse-grained checks on upstream users and groups|Exploring/Ongoing|
 |Extended IDP support|Support more types of identity providers on the Supervisor|Exploring/Ongoing|
 |Improved Documentation|Reorganizing and improving Pinniped docs; new how-to guides and tutorials|Exploring/Ongoing|

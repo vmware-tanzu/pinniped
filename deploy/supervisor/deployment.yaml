@@ -65,6 +65,7 @@ spec:
       labels: #@ defaultLabel()
     spec:
       securityContext:
+        readOnlyRootFilesystem: true
         runAsUser: #@ data.values.run_as_user
         runAsGroup: #@ data.values.run_as_group
       serviceAccountName: #@ defaultResourceName()
@@ -80,9 +81,8 @@ spec:
           image: #@ data.values.image_repo + ":" + data.values.image_tag
           #@ end
           imagePullPolicy: IfNotPresent
-          command: #! override the default entrypoint
-            - /usr/local/bin/pinniped-supervisor
-          args:
+          command:
+            - pinniped-supervisor
             - /etc/podinfo
             - /etc/config/pinniped.yaml
           resources:
@@ -107,7 +107,7 @@ spec:
             - name: HTTPS_PROXY
               value: #@ data.values.https_proxy
             #@ end
-            #@ if data.values.no_proxy:
+            #@ if data.values.https_proxy and data.values.no_proxy:
             - name: NO_PROXY
               value: #@ data.values.no_proxy
             #@ end
@@ -131,9 +131,11 @@ spec:
             failureThreshold: 3
       volumes:
         - name: config-volume
+          readOnly: true
           configMap:
             name: #@ defaultResourceNameWithSuffix("static-config")
         - name: podinfo
+          readOnly: true
           downwardAPI:
             items:
               - path: "labels"

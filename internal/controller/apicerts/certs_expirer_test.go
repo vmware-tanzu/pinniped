@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	kubetesting "k8s.io/client-go/testing"
@@ -223,14 +224,19 @@ func TestExpirerControllerSync(t *testing.T) {
 				test.configKubeAPIClient(kubeAPIClient)
 			}
 
+			testRV := "rv_001"
+			testUID := types.UID("uid_002")
+
 			kubeInformerClient := kubernetesfake.NewSimpleClientset()
 			name := certsSecretResourceName
 			namespace := "some-namespace"
 			if test.fillSecretData != nil {
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      name,
-						Namespace: namespace,
+						Name:            name,
+						Namespace:       namespace,
+						ResourceVersion: testRV,
+						UID:             testUID,
 					},
 					Data: map[string][]byte{},
 				}
@@ -245,10 +251,13 @@ func TestExpirerControllerSync(t *testing.T) {
 				0,
 			)
 
+			opts := &[]metav1.DeleteOptions{}
+			trackDeleteClient := testutil.NewDeleteOptionsRecorder(kubeAPIClient, opts)
+
 			c := NewCertsExpirerController(
 				namespace,
 				certsSecretResourceName,
-				kubeAPIClient,
+				trackDeleteClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 				test.renewBefore,
@@ -285,6 +294,18 @@ func TestExpirerControllerSync(t *testing.T) {
 			}
 			acActions := kubeAPIClient.Actions()
 			require.Equal(t, exActions, acActions)
+
+			if test.wantDelete {
+				require.Len(t, *opts, 1)
+				require.Equal(t, metav1.DeleteOptions{
+					Preconditions: &metav1.Preconditions{
+						UID:             &testUID,
+						ResourceVersion: &testRV,
+					},
+				}, (*opts)[0])
+			} else {
+				require.Len(t, *opts, 0)
+			}
 		})
 	}
 }

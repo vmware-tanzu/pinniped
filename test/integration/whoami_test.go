@@ -164,21 +164,17 @@ func TestWhoAmI_ServiceAccount_TokenRequest(t *testing.T) {
 		return // stop test early since the token request API is not enabled on this cluster - other errors are caught below
 	}
 
-	pod, err := kubeClient.Pods(ns.Name).Create(ctx, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "test-whoami-",
-		},
-		Spec: corev1.PodSpec{
+	pod := testlib.CreatePod(ctx, t, "whoami", ns.Name,
+		corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Name:  "ignored-but-required",
-					Image: "does-not-matter",
+					Name:    "ignored-but-required",
+					Image:   "busybox",
+					Command: []string{"sh", "-c", "sleep 3600"},
 				},
 			},
 			ServiceAccountName: sa.Name,
-		},
-	}, metav1.CreateOptions{})
-	require.NoError(t, err)
+		})
 
 	tokenRequestBadAudience, err := kubeClient.ServiceAccounts(ns.Name).CreateToken(ctx, sa.Name, &authenticationv1.TokenRequest{
 		Spec: authenticationv1.TokenRequestSpec{
@@ -274,6 +270,7 @@ func TestWhoAmI_CSR(t *testing.T) {
 		csrPEM,
 		"",
 		certificatesv1.KubeAPIServerClientSignerName,
+		nil,
 		[]certificatesv1.KeyUsage{certificatesv1.UsageClientAuth},
 		privateKey,
 	)

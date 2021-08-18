@@ -1,7 +1,8 @@
 // Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package main
+// Package server defines the entrypoint for the Pinniped Supervisor server.
+package server
 
 import (
 	"context"
@@ -381,7 +382,7 @@ func run(podInfo *downward.PodInfo, cfg *supervisor.Config) error {
 	return nil
 }
 
-func main() {
+func Main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
 	plog.RemoveKlogGlobalFlags() // move this whenever the below code gets refactored to use cobra

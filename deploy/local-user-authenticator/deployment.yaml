@@ -63,8 +63,8 @@ spec:
           image: #@ data.values.image_repo + ":" + data.values.image_tag
           #@ end
           imagePullPolicy: IfNotPresent
-          command: #! override the default entrypoint
-            - /usr/local/bin/local-user-authenticator
+          command:
+            - local-user-authenticator
 ---
 apiVersion: v1
 kind: Service

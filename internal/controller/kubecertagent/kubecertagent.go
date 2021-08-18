@@ -8,6 +8,7 @@ package kubecertagent
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -309,22 +310,30 @@ func (c *agentController) loadSigningKey(agentPod *corev1.Pod) error {
 	}
 
 	// Exec into the agent pod and cat out the certificate and the key.
-	combinedPEM, err := c.executor.Exec(
-		agentPod.Namespace, agentPod.Name,
-		"sh", "-c", "cat ${CERT_PATH}; echo; echo; cat ${KEY_PATH}",
-	)
+	outputJSON, err := c.executor.Exec(agentPod.Namespace, agentPod.Name, "pinniped-concierge-kube-cert-agent", "print")
 	if err != nil {
 		return fmt.Errorf("could not exec into agent pod %s/%s: %w", agentPod.Namespace, agentPod.Name, err)
 	}
 
-	// Split up the output by looking for the block of newlines.
-	var certPEM, keyPEM string
-	if parts := strings.Split(combinedPEM, "\n\n\n"); len(parts) == 2 {
-		certPEM, keyPEM = parts[0], parts[1]
+	// Parse and decode the JSON output from the "pinniped-concierge-kube-cert-agent print" command.
+	var output struct {
+		Cert string `json:"tls.crt"`
+		Key  string `json:"tls.key"`
+	}
+	if err := json.Unmarshal([]byte(outputJSON), &output); err != nil {
+		return fmt.Errorf("failed to decode signing cert/key JSON from agent pod %s/%s: %w", agentPod.Namespace, agentPod.Name, err)
+	}
+	certPEM, err := base64.StdEncoding.DecodeString(output.Cert)
+	if err != nil {
+		return fmt.Errorf("failed to decode signing cert base64 from agent pod %s/%s: %w", agentPod.Namespace, agentPod.Name, err)
+	}
+	keyPEM, err := base64.StdEncoding.DecodeString(output.Key)
+	if err != nil {
+		return fmt.Errorf("failed to decode signing key base64 from agent pod %s/%s: %w", agentPod.Namespace, agentPod.Name, err)
 	}
 
 	// Load the certificate and key into the dynamic signer.
-	if err := c.dynamicCertProvider.SetCertKeyContent([]byte(certPEM), []byte(keyPEM)); err != nil {
+	if err := c.dynamicCertProvider.SetCertKeyContent(certPEM, keyPEM); err != nil {
 		return fmt.Errorf("failed to set signing cert/key content from agent pod %s/%s: %w", agentPod.Namespace, agentPod.Name, err)
 	}
 
@@ -461,7 +470,7 @@ func (c *agentController) newAgentDeployment(controllerManagerPod *corev1.Pod) *
 							Name:            "sleeper",
 							Image:           c.cfg.ContainerImage,
 							ImagePullPolicy: corev1.PullIfNotPresent,
-							Command:         []string{"/bin/sleep", "infinity"},
+							Command:         []string{"pinniped-concierge-kube-cert-agent", "sleep"},
 							VolumeMounts:    volumeMounts,
 							Env: []corev1.EnvVar{
 								{Name: "CERT_PATH", Value: getContainerArgByName(controllerManagerPod, "cluster-signing-cert-file", "/etc/kubernetes/ca/ca.pem")},

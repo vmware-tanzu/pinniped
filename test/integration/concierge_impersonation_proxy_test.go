@@ -40,6 +40,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/unstructuredscheme"
 	"k8s.io/apimachinery/pkg/labels"
@@ -107,7 +108,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	impersonatorShouldHaveStartedAutomaticallyByDefault := !env.HasCapability(testlib.ClusterSigningKeyIsAvailable)
 	clusterSupportsLoadBalancers := env.HasCapability(testlib.HasExternalLoadBalancerProvider)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
 	// Create a client using the admin kubeconfig.
@@ -196,7 +197,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// We do this to ensure that future tests that use the impersonation proxy (e.g.,
 		// TestE2EFullIntegration) will start with a known-good state.
 		if clusterSupportsLoadBalancers {
-			performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
+			performImpersonatorDiscovery(ctx, t, env, adminClient, adminConciergeClient, refreshCredential)
 		}
 	})
 
@@ -276,7 +277,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	// to discover the impersonator's URL and CA certificate. Until it has finished starting, it may not be included
 	// in the strategies array or it may be included in an error state. It can be in an error state for
 	// awhile when it is waiting for the load balancer to be assigned an ip/hostname.
-	impersonationProxyURL, impersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
+	impersonationProxyURL, impersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminClient, adminConciergeClient, refreshCredential)
 	if !clusterSupportsLoadBalancers {
 		// In this case, we specified the endpoint in the configmap, so check that it was reported correctly in the CredentialIssuer.
 		require.Equal(t, "https://"+proxyServiceEndpoint, impersonationProxyURL)
@@ -306,7 +307,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// Get pods in concierge namespace and pick one.
 		// this is for tests that require performing actions against a running pod. We use the concierge pod because we already have it handy.
-		// We want to make sure it's a concierge pod (not cert agent), because we need to be able to "exec echo" and port-forward a running port.
+		// We want to make sure it's a concierge pod (not cert agent), because we need to be able to port-forward a running port.
 		pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx, metav1.ListOptions{})
 		require.NoError(t, err)
 		require.Greater(t, len(pods.Items), 0)
@@ -333,8 +334,13 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			)
 		}
 
+		if env.KubernetesDistribution == testlib.EKSDistro {
+			t.Log("eks: sleeping for 10 minutes to allow DNS propagation")
+			time.Sleep(10 * time.Minute)
+		}
+
 		t.Run("kubectl port-forward and keeping the connection open for over a minute (non-idle)", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			kubeconfigPath, envVarsWithProxy, _ := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM, credentialRequestSpecWithWorkingCredentials.Authenticator)
 
 			// Run the kubectl port-forward command.
@@ -392,7 +398,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("kubectl port-forward and keeping the connection open for over a minute (idle)", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			kubeconfigPath, envVarsWithProxy, _ := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM, credentialRequestSpecWithWorkingCredentials.Authenticator)
 
 			// Run the kubectl port-forward command.
@@ -430,7 +436,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("using and watching all the basic verbs", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			// Create a namespace, because it will be easier to exercise "deletecollection" if we have a namespace.
 			namespaceName := createTestNamespace(t, adminClient)
 
@@ -560,7 +566,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("nested impersonation as a regular user is allowed if they have enough RBAC permissions", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			// Make a client which will send requests through the impersonation proxy and will also add
 			// impersonate headers to the request.
 			nestedImpersonationClient := newImpersonationProxyClient(t, impersonationProxyURL, impersonationProxyCACertPEM,
@@ -633,7 +639,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("nested impersonation as a cluster admin user is allowed", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			// Copy the admin credentials from the admin kubeconfig.
 			adminClientRestConfig := testlib.NewClientConfig(t)
 			clusterAdminCredentials := getCredForConfig(t, adminClientRestConfig)
@@ -709,7 +715,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("nested impersonation as a cluster admin fails on reserved key", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			adminClientRestConfig := testlib.NewClientConfig(t)
 			clusterAdminCredentials := getCredForConfig(t, adminClientRestConfig)
 
@@ -745,9 +751,82 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}, err)
 		})
 
+		t.Run("nested impersonation as a cluster admin fails if UID impersonation is attempted", func(t *testing.T) {
+			parallelIfNotEKS(t)
+			adminClientRestConfig := testlib.NewClientConfig(t)
+			clusterAdminCredentials := getCredForConfig(t, adminClientRestConfig)
+
+			nestedImpersonationUIDOnly := newImpersonationProxyConfigWithCredentials(t,
+				clusterAdminCredentials, impersonationProxyURL, impersonationProxyCACertPEM, nil,
+			)
+			nestedImpersonationUIDOnly.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+				return roundtripper.Func(func(r *http.Request) (*http.Response, error) {
+					r.Header.Set("iMperSONATE-uid", "some-awesome-uid")
+					return rt.RoundTrip(r)
+				})
+			})
+
+			_, errUID := testlib.NewKubeclient(t, nestedImpersonationUIDOnly).Kubernetes.CoreV1().Secrets("foo").Get(ctx, "bar", metav1.GetOptions{})
+			msg := `Internal Server Error: "/api/v1/namespaces/foo/secrets/bar": requested [{UID  some-awesome-uid  authentication.k8s.io/v1  }] without impersonating a user`
+			full := fmt.Sprintf(`an error on the server (%q) has prevented the request from succeeding (get secrets bar)`, msg)
+			require.EqualError(t, errUID, full)
+			require.True(t, k8serrors.IsInternalError(errUID), errUID)
+			require.Equal(t, &k8serrors.StatusError{
+				ErrStatus: metav1.Status{
+					Status: metav1.StatusFailure,
+					Code:   http.StatusInternalServerError,
+					Reason: metav1.StatusReasonInternalError,
+					Details: &metav1.StatusDetails{
+						Name: "bar",
+						Kind: "secrets",
+						Causes: []metav1.StatusCause{
+							{
+								Type:    metav1.CauseTypeUnexpectedServerResponse,
+								Message: msg,
+							},
+						},
+					},
+					Message: full,
+				},
+			}, errUID)
+
+			nestedImpersonationUID := newImpersonationProxyConfigWithCredentials(t,
+				clusterAdminCredentials, impersonationProxyURL, impersonationProxyCACertPEM,
+				&rest.ImpersonationConfig{
+					UserName: "other-user-to-impersonate",
+					Groups:   []string{"system:masters"}, // impersonate system:masters so we get past authorization checks
+				},
+			)
+			nestedImpersonationUID.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+				return roundtripper.Func(func(r *http.Request) (*http.Response, error) {
+					r.Header.Set("imperSONate-uiD", "some-fancy-uid")
+					return rt.RoundTrip(r)
+				})
+			})
+
+			_, err := testlib.NewKubeclient(t, nestedImpersonationUID).Kubernetes.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
+			require.EqualError(t, err, "Internal error occurred: unimplemented functionality - unable to act as current user")
+			require.True(t, k8serrors.IsInternalError(err), err)
+			require.Equal(t, &k8serrors.StatusError{
+				ErrStatus: metav1.Status{
+					Status: metav1.StatusFailure,
+					Code:   http.StatusInternalServerError,
+					Reason: metav1.StatusReasonInternalError,
+					Details: &metav1.StatusDetails{
+						Causes: []metav1.StatusCause{
+							{
+								Message: "unimplemented functionality - unable to act as current user",
+							},
+						},
+					},
+					Message: "Internal error occurred: unimplemented functionality - unable to act as current user",
+				},
+			}, err)
+		})
+
 		// this works because impersonation cannot set UID and thus the final user info the proxy sees has no UID
 		t.Run("nested impersonation as a service account is allowed if it has enough RBAC permissions", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			namespaceName := createTestNamespace(t, adminClient)
 			saName, saToken, saUID := createServiceAccountToken(ctx, t, adminClient, namespaceName)
 			nestedImpersonationClient := newImpersonationProxyClientWithCredentials(t,
@@ -794,7 +873,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("WhoAmIRequests and different kinds of authentication through the impersonation proxy", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			// Test using the TokenCredentialRequest for authentication.
 			impersonationProxyPinnipedConciergeClient := newImpersonationProxyClient(t,
 				impersonationProxyURL, impersonationProxyCACertPEM, nil, refreshCredential,
@@ -865,21 +944,17 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				return // stop test early since the token request API is not enabled on this cluster - other errors are caught below
 			}
 
-			pod, err := kubeClient.Pods(namespaceName).Create(ctx, &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "test-impersonation-proxy-",
-				},
-				Spec: corev1.PodSpec{
+			pod := testlib.CreatePod(ctx, t, "impersonation-proxy", namespaceName,
+				corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "ignored-but-required",
-							Image: "does-not-matter",
+							Name:    "ignored-but-required",
+							Image:   "busybox",
+							Command: []string{"sh", "-c", "sleep 3600"},
 						},
 					},
 					ServiceAccountName: saName,
-				},
-			}, metav1.CreateOptions{})
-			require.NoError(t, err)
+				})
 
 			tokenRequestBadAudience, err := kubeClient.ServiceAccounts(namespaceName).CreateToken(ctx, saName, &authenticationv1.TokenRequest{
 				Spec: authenticationv1.TokenRequestSpec{
@@ -959,6 +1034,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				csrPEM,
 				"",
 				certificatesv1.KubeAPIServerClientSignerName,
+				nil,
 				[]certificatesv1.KeyUsage{certificatesv1.UsageClientAuth},
 				privateKey,
 			)
@@ -981,51 +1057,56 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("kubectl as a client", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			kubeconfigPath, envVarsWithProxy, tempDir := getImpersonationKubeconfig(t, env, impersonationProxyURL, impersonationProxyCACertPEM, credentialRequestSpecWithWorkingCredentials.Authenticator)
+
+			// Run a new test pod so we can interact with it using kubectl. We use a fresh pod here rather than the
+			// existing Concierge pod because we need more tools than we can get from a scratch/distroless base image.
+			runningTestPod := testlib.CreatePod(ctx, t, "impersonation-proxy", env.ConciergeNamespace, corev1.PodSpec{Containers: []corev1.Container{{
+				Name:            "impersonation-proxy-test",
+				Image:           "debian:10.10-slim",
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Command:         []string{"bash", "-c", `while true; do read VAR; echo "VAR: $VAR"; done`},
+				Stdin:           true,
+				Resources: corev1.ResourceRequirements{
+					Limits: corev1.ResourceList{
+						corev1.ResourceMemory: resource.MustParse("16Mi"),
+						corev1.ResourceCPU:    resource.MustParse("10m"),
+					},
+					Requests: corev1.ResourceList{
+						corev1.ResourceMemory: resource.MustParse("16Mi"),
+						corev1.ResourceCPU:    resource.MustParse("10m"),
+					},
+				},
+			}}})
 
 			// Try "kubectl exec" through the impersonation proxy.
 			echoString := "hello world"
 			remoteEchoFile := fmt.Sprintf("/tmp/test-impersonation-proxy-echo-file-%d.txt", time.Now().Unix())
-			stdout, err := runKubectl(t, kubeconfigPath, envVarsWithProxy, "exec", "--namespace", env.ConciergeNamespace, conciergePod.Name, "--", "bash", "-c", fmt.Sprintf(`echo "%s" | tee %s`, echoString, remoteEchoFile))
+			stdout, err := runKubectl(t, kubeconfigPath, envVarsWithProxy, "exec", "--namespace", runningTestPod.Namespace, runningTestPod.Name, "--", "bash", "-c", fmt.Sprintf(`echo "%s" | tee %s`, echoString, remoteEchoFile))
 			require.NoError(t, err, `"kubectl exec" failed`)
 			require.Equal(t, echoString+"\n", stdout)
 
 			// run the kubectl cp command
 			localEchoFile := filepath.Join(tempDir, filepath.Base(remoteEchoFile))
-			_, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "cp", fmt.Sprintf("%s/%s:%s", env.ConciergeNamespace, conciergePod.Name, remoteEchoFile), localEchoFile)
+			_, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "cp", fmt.Sprintf("%s/%s:%s", runningTestPod.Namespace, runningTestPod.Name, remoteEchoFile), localEchoFile)
 			require.NoError(t, err, `"kubectl cp" failed`)
 			localEchoFileData, err := ioutil.ReadFile(localEchoFile)
 			require.NoError(t, err)
 			require.Equal(t, echoString+"\n", string(localEchoFileData))
-			defer func() {
-				_, _ = runKubectl(t, kubeconfigPath, envVarsWithProxy, "exec", "--namespace", env.ConciergeNamespace, conciergePod.Name, "--", "rm", remoteEchoFile) // cleanup remote echo file
-			}()
 
 			// run the kubectl logs command
 			logLinesCount := 10
-			stdout, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "logs", "--namespace", env.ConciergeNamespace, conciergePod.Name, fmt.Sprintf("--tail=%d", logLinesCount))
+			stdout, err = runKubectl(t, kubeconfigPath, envVarsWithProxy, "logs", "--namespace", conciergePod.Namespace, conciergePod.Name, fmt.Sprintf("--tail=%d", logLinesCount))
 			require.NoError(t, err, `"kubectl logs" failed`)
 			// Expect _approximately_ logLinesCount lines in the output
 			// (we can't match 100% exactly due to https://github.com/kubernetes/kubernetes/issues/72628).
 			require.InDeltaf(t, logLinesCount, strings.Count(stdout, "\n"), 1, "wanted %d newlines in kubectl logs output:\n%s", logLinesCount, stdout)
 
 			// run the kubectl attach command
-			namespaceName := createTestNamespace(t, adminClient)
-			attachPod := testlib.CreatePod(ctx, t, "impersonation-proxy-attach", namespaceName, corev1.PodSpec{
-				Containers: []corev1.Container{
-					{
-						Name:    "impersonation-proxy-attach",
-						Image:   conciergePod.Spec.Containers[0].Image,
-						Command: []string{"bash"},
-						Args:    []string{"-c", `while true; do read VAR; echo "VAR: $VAR"; done`},
-						Stdin:   true,
-					},
-				},
-			})
 			timeout, cancelFunc := context.WithTimeout(ctx, 2*time.Minute)
 			defer cancelFunc()
-			attachCmd, attachStdout, attachStderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, "attach", "--stdin=true", "--namespace", namespaceName, attachPod.Name, "-v=10")
+			attachCmd, attachStdout, attachStderr := kubectlCommand(timeout, t, kubeconfigPath, envVarsWithProxy, "attach", "--stdin=true", "--namespace", runningTestPod.Namespace, runningTestPod.Name, "-v=10")
 			attachCmd.Env = envVarsWithProxy
 			attachStdin, err := attachCmd.StdinPipe()
 			require.NoError(t, err)
@@ -1063,7 +1144,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("websocket client", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			namespaceName := createTestNamespace(t, adminClient)
 
 			impersonationRestConfig := impersonationProxyRestConfig(
@@ -1142,7 +1223,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("http2 client", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 			namespaceName := createTestNamespace(t, adminClient)
 
 			wantConfigMapLabelKey, wantConfigMapLabelValue := "some-label-key", "some-label-value"
@@ -1235,7 +1316,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		})
 
 		t.Run("honors anonymous authentication of KAS", func(t *testing.T) {
-			t.Parallel()
+			parallelIfNotEKS(t)
 
 			impersonationProxyAnonymousClient := newAnonymousImpersonationProxyClient(
 				t, impersonationProxyURL, impersonationProxyCACertPEM, nil,
@@ -1261,14 +1342,14 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.NoError(t, err)
 
 			t.Run("anonymous authentication irrelevant", func(t *testing.T) {
-				t.Parallel()
+				parallelIfNotEKS(t)
 
 				// - hit the token credential request endpoint with an empty body
 				//   - through the impersonation proxy
 				//   - should succeed as an invalid request whether anonymous authentication is enabled or disabled
 				//   - should not reject as unauthorized
 				t.Run("token credential request", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					tkr, err := impersonationProxyAnonymousClient.PinnipedConcierge.LoginV1alpha1().TokenCredentialRequests().
 						Create(ctx, &loginv1alpha1.TokenCredentialRequest{
@@ -1289,7 +1370,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				//   - healthz should succeed, anonymous users can request this endpoint
 				//   - healthz/log should fail, forbidden anonymous
 				t.Run("non-resource request while impersonating anonymous - nested impersonation", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					whoami, errWho := impersonationProxyAdminRestClientAsAnonymous.Post().Body([]byte(`{}`)).AbsPath("/apis/identity.concierge." + env.APIGroupSuffix + "/v1alpha1/whoamirequests").DoRaw(ctx)
 					require.NoError(t, errWho, testlib.Sdump(errWho))
@@ -1307,7 +1388,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			t.Run("anonymous authentication enabled", func(t *testing.T) {
 				testlib.IntegrationEnv(t).WithCapability(testlib.AnonymousAuthenticationSupported)
-				t.Parallel()
+				parallelIfNotEKS(t)
 
 				// anonymous auth enabled
 				// - hit the healthz endpoint (non-resource endpoint)
@@ -1315,7 +1396,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				//   - should succeed 200
 				//   - should respond "ok"
 				t.Run("non-resource request", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					healthz, errHealth := impersonationProxyAnonymousRestClient.Get().AbsPath("/healthz").DoRaw(ctx)
 					require.NoError(t, errHealth, testlib.Sdump(errHealth))
@@ -1327,7 +1408,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				//   - should fail forbidden
 				//   - system:anonymous cannot get pods
 				t.Run("resource", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					pod, err := impersonationProxyAnonymousClient.Kubernetes.CoreV1().Pods(metav1.NamespaceSystem).
 						Get(ctx, "does-not-matter", metav1.GetOptions{})
@@ -1337,12 +1418,12 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 					require.Equal(t, &corev1.Pod{}, pod)
 				})
 
-				// - request to whoami (pinniped resource endpoing)
+				// - request to whoami (pinniped resource endpoint)
 				//   - through the impersonation proxy
 				//   - should succeed 200
 				//   - should respond "you are system:anonymous"
 				t.Run("pinniped resource request", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					whoAmI, err := impersonationProxyAnonymousClient.PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 						Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
@@ -1360,14 +1441,14 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			t.Run("anonymous authentication disabled", func(t *testing.T) {
 				testlib.IntegrationEnv(t).WithoutCapability(testlib.AnonymousAuthenticationSupported)
-				t.Parallel()
+				parallelIfNotEKS(t)
 
 				// - hit the healthz endpoint (non-resource endpoint)
 				//   - through the impersonation proxy
 				//   - should fail unauthorized
 				//   - kube api server should reject it
 				t.Run("non-resource request", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					healthz, err := impersonationProxyAnonymousRestClient.Get().AbsPath("/healthz").DoRaw(ctx)
 					require.True(t, k8serrors.IsUnauthorized(err), testlib.Sdump(err))
@@ -1379,7 +1460,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				//   - should fail unauthorized
 				//   - kube api server should reject it
 				t.Run("resource", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					pod, err := impersonationProxyAnonymousClient.Kubernetes.CoreV1().Pods(metav1.NamespaceSystem).
 						Get(ctx, "does-not-matter", metav1.GetOptions{})
@@ -1392,7 +1473,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				//   - should fail unauthorized
 				//   - kube api server should reject it
 				t.Run("pinniped resource request", func(t *testing.T) {
-					t.Parallel()
+					parallelIfNotEKS(t)
 
 					whoAmI, err := impersonationProxyAnonymousClient.PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 						Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
@@ -1478,6 +1559,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			t.Skip("only running when the cluster is meant to be using LoadBalancer services")
 		}
 
+		// Use this string in all annotation keys added by this test, so the assertions can ignore annotation keys
+		// which might exist on the Service which are not related to this test.
+		recognizableAnnotationKeyString := "pinniped.dev"
+
 		// Grab the state of the CredentialIssuer prior to this test, so we can restore things back afterwards.
 		previous, err := adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Get(ctx, credentialIssuerName(env), metav1.GetOptions{})
 		require.NoError(t, err)
@@ -1546,16 +1631,30 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}))
 		}
 
-		waitForServiceAnnotations := func(annotations map[string]string) {
+		waitForServiceAnnotations := func(wantAnnotations map[string]string, annotationKeyFilter string) {
 			testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
 				service, err := adminClient.CoreV1().Services(env.ConciergeNamespace).Get(ctx, impersonationProxyLoadBalancerName(env), metav1.GetOptions{})
 				if err != nil {
 					return false, err
 				}
-				t.Logf("found Service %s of type %s with actual annotations %q; expected annotations %q",
-					service.Name, service.Spec.Type, service.Annotations, annotations)
-				return equality.Semantic.DeepEqual(service.Annotations, annotations), nil
-			}, 30*time.Second, 100*time.Millisecond)
+				filteredActualAnnotations := map[string]string{}
+				for k, v := range service.Annotations {
+					// We do want to pay attention to any annotation for which we intend to make an explicit assertion,
+					// e.g. "service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout" which is from our
+					// default CredentialIssuer spec.
+					_, wantToMakeAssertionOnThisAnnotation := wantAnnotations[k]
+					// We do not want to pay attention to Service annotations added by other controllers,
+					// e.g. the "cloud.google.com/neg" annotation that is sometimes added by GKE on Services.
+					// These can come and go in time intervals outside of our control.
+					annotationContainsFilterString := strings.Contains(k, annotationKeyFilter)
+					if wantToMakeAssertionOnThisAnnotation || annotationContainsFilterString {
+						filteredActualAnnotations[k] = v
+					}
+				}
+				t.Logf("found Service %s of type %s with actual annotations %q; filtered by interesting keys results in %q; expected annotations %q",
+					service.Name, service.Spec.Type, service.Annotations, filteredActualAnnotations, wantAnnotations)
+				return equality.Semantic.DeepEqual(filteredActualAnnotations, wantAnnotations), nil
+			}, 1*time.Minute, 1*time.Second)
 		}
 
 		expectedAnnotations := func(credentialIssuerSpecAnnotations map[string]string, otherAnnotations map[string]string) map[string]string {
@@ -1575,12 +1674,13 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			sort.Strings(credentialIssuerSpecAnnotationKeys)
 			credentialIssuerSpecAnnotationKeysJSON, err := json.Marshal(credentialIssuerSpecAnnotationKeys)
 			require.NoError(t, err)
-			expectedAnnotations["credentialissuer.pinniped.dev/annotation-keys"] = string(credentialIssuerSpecAnnotationKeysJSON)
+			// The name of this annotation key is decided by our controller.
+			expectedAnnotations["credentialissuer."+recognizableAnnotationKeyString+"/annotation-keys"] = string(credentialIssuerSpecAnnotationKeysJSON)
 			return expectedAnnotations
 		}
 
 		otherActorAnnotations := map[string]string{
-			"pinniped.dev/test-other-actor-" + testlib.RandHex(t, 8): "test-other-actor-" + testlib.RandHex(t, 8),
+			recognizableAnnotationKeyString + "/test-other-actor-" + testlib.RandHex(t, 8): "test-other-actor-" + testlib.RandHex(t, 8),
 		}
 
 		// Whatever happens, set the annotations back to the original value and expect the Service to be updated.
@@ -1590,6 +1690,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			applyCredentialIssuerAnnotations(previous.Spec.ImpersonationProxy.Service.DeepCopy().Annotations)
 			waitForServiceAnnotations(
 				expectedAnnotations(previous.Spec.ImpersonationProxy.Service.DeepCopy().Annotations, map[string]string{}),
+				recognizableAnnotationKeyString,
 			)
 		})
 
@@ -1598,14 +1699,17 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		updateServiceAnnotations(otherActorAnnotations)
 
 		// Set a new annotation in the CredentialIssuer spec.impersonationProxy.service.annotations field.
-		newAnnotationKey := "pinniped.dev/test-" + testlib.RandHex(t, 8)
+		newAnnotationKey := recognizableAnnotationKeyString + "/test-" + testlib.RandHex(t, 8)
 		newAnnotationValue := "test-" + testlib.RandHex(t, 8)
 		updatedAnnotations := previous.Spec.ImpersonationProxy.Service.DeepCopy().Annotations
 		updatedAnnotations[newAnnotationKey] = newAnnotationValue
 		applyCredentialIssuerAnnotations(updatedAnnotations)
 
 		// Expect them to be applied to the Service.
-		waitForServiceAnnotations(expectedAnnotations(updatedAnnotations, otherActorAnnotations))
+		waitForServiceAnnotations(
+			expectedAnnotations(updatedAnnotations, otherActorAnnotations),
+			recognizableAnnotationKeyString,
+		)
 	})
 
 	t.Run("running impersonation proxy with ClusterIP service", func(t *testing.T) {
@@ -1625,10 +1729,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// wait until the credential issuer is updated with the new url
 		testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
-			newImpersonationProxyURL, _ := performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
+			newImpersonationProxyURL, _ := performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)
 			return newImpersonationProxyURL == "https://"+clusterIPServiceURL, nil
 		}, 30*time.Second, 500*time.Millisecond)
-		newImpersonationProxyURL, newImpersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminConciergeClient)
+		newImpersonationProxyURL, newImpersonationProxyCACertPEM := performImpersonatorDiscovery(ctx, t, env, adminClient, adminConciergeClient, refreshCredential)
 
 		anonymousClient := newAnonymousImpersonationProxyClientWithProxy(t, newImpersonationProxyURL, newImpersonationProxyCACertPEM, nil).PinnipedConcierge
 		refreshedCredentials := refreshCredentialHelper(t, anonymousClient)
@@ -1710,14 +1814,54 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 func ensureDNSResolves(t *testing.T, urlString string) {
 	t.Helper()
+
 	parsedURL, err := url.Parse(urlString)
 	require.NoError(t, err)
-	if net.ParseIP(parsedURL.Host) == nil {
-		testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
-			_, err = net.LookupIP(parsedURL.Host)
-			requireEventually.NoError(err)
-		}, 5*time.Minute, 1*time.Second)
+
+	host := parsedURL.Hostname()
+
+	if net.ParseIP(host) != nil {
+		return // ignore IPs
 	}
+
+	var d net.Dialer
+	loggingDialer := func(ctx context.Context, network, address string) (net.Conn, error) {
+		t.Logf("dns lookup, network=%s address=%s", network, address)
+		conn, connErr := d.DialContext(ctx, network, address)
+		if connErr != nil {
+			t.Logf("dns lookup, err=%v", connErr)
+		} else {
+			local := conn.LocalAddr()
+			remote := conn.RemoteAddr()
+			t.Logf("dns lookup, local conn network=%s addr=%s", local.Network(), local.String())
+			t.Logf("dns lookup, remote conn network=%s addr=%s", remote.Network(), remote.String())
+		}
+		return conn, connErr
+	}
+
+	goResolver := &net.Resolver{
+		PreferGo:     true,
+		StrictErrors: true,
+		Dial:         loggingDialer,
+	}
+	notGoResolver := &net.Resolver{
+		PreferGo:     false,
+		StrictErrors: true,
+		Dial:         loggingDialer,
+	}
+
+	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		for _, resolver := range []*net.Resolver{goResolver, notGoResolver} {
+			resolver := resolver
+
+			ips, ipErr := resolver.LookupIPAddr(ctx, host)
+			requireEventually.NoError(ipErr)
+			requireEventually.NotEmpty(ips)
+		}
+	}, 5*time.Minute, 1*time.Second)
 }
 
 func createTestNamespace(t *testing.T, adminClient kubernetes.Interface) string {
@@ -1793,7 +1937,64 @@ func expectedWhoAmIRequestResponse(username string, groups []string, extra map[s
 	}
 }
 
-func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient pinnipedconciergeclientset.Interface) (string, []byte) {
+func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testlib.TestEnv,
+	adminClient kubernetes.Interface, adminConciergeClient pinnipedconciergeclientset.Interface,
+	refreshCredential func(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte) *loginv1alpha1.ClusterCredential) (string, []byte) {
+	t.Helper()
+
+	impersonationProxyURL, impersonationProxyCACertPEM := performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)
+
+	if len(env.Proxy) == 0 {
+		t.Log("no test proxy is available, skipping readiness checks for concierge impersonation proxy pods")
+		return impersonationProxyURL, impersonationProxyCACertPEM
+	}
+
+	impersonationProxyParsedURL, err := url.Parse(impersonationProxyURL)
+	require.NoError(t, err)
+
+	expectedGroups := make([]string, 0, len(env.TestUser.ExpectedGroups)+1) // make sure we do not mutate env.TestUser.ExpectedGroups
+	expectedGroups = append(expectedGroups, env.TestUser.ExpectedGroups...)
+	expectedGroups = append(expectedGroups, "system:authenticated")
+
+	// probe each pod directly for readiness since the concierge status is a lie - it just means a single pod is ready
+	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+		pods, err := adminClient.CoreV1().Pods(env.ConciergeNamespace).List(ctx,
+			metav1.ListOptions{LabelSelector: "app=" + env.ConciergeAppName + ",!kube-cert-agent.pinniped.dev"}) // TODO replace with deployment.pinniped.dev=concierge
+		requireEventually.NoError(err)
+		requireEventually.Len(pods.Items, 2) // has to stay in sync with the defaults in our YAML
+
+		for _, pod := range pods.Items {
+			t.Logf("checking if concierge impersonation proxy pod %q is ready", pod.Name)
+
+			requireEventually.NotEmptyf(pod.Status.PodIP, "pod %q does not have an IP", pod.Name)
+
+			credentials := refreshCredential(t, impersonationProxyURL, impersonationProxyCACertPEM).DeepCopy()
+			credentials.Token = "not a valid token" // demonstrates that client certs take precedence over tokens by setting both on the requests
+
+			config := newImpersonationProxyConfigWithCredentials(t, credentials, impersonationProxyURL, impersonationProxyCACertPEM, nil)
+			config = rest.CopyConfig(config)
+			config.Proxy = kubeconfigProxyFunc(t, env.Proxy)                           // always use the proxy since we are talking directly to a pod IP
+			config.Host = "https://" + pod.Status.PodIP + ":8444"                      // hardcode the internal port - it should not change
+			config.TLSClientConfig.ServerName = impersonationProxyParsedURL.Hostname() // make SNI hostname TLS verification work even when using IP
+
+			whoAmI, err := testlib.NewKubeclient(t, config).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
+				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
+			requireEventually.NoError(err)
+			requireEventually.Equal(
+				expectedWhoAmIRequestResponse(
+					env.TestUser.ExpectedUsername,
+					expectedGroups,
+					nil,
+				),
+				whoAmI,
+			)
+		}
+	}, 10*time.Minute, 10*time.Second)
+
+	return impersonationProxyURL, impersonationProxyCACertPEM
+}
+
+func performImpersonatorDiscoveryURL(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient pinnipedconciergeclientset.Interface) (string, []byte) {
 	t.Helper()
 
 	var impersonationProxyURL string
@@ -2093,6 +2294,13 @@ func createTokenCredentialRequest(
 func newImpersonationProxyClientWithCredentials(t *testing.T, credentials *loginv1alpha1.ClusterCredential, impersonationProxyURL string, impersonationProxyCACertPEM []byte, nestedImpersonationConfig *rest.ImpersonationConfig) *kubeclient.Client {
 	t.Helper()
 
+	kubeconfig := newImpersonationProxyConfigWithCredentials(t, credentials, impersonationProxyURL, impersonationProxyCACertPEM, nestedImpersonationConfig)
+	return testlib.NewKubeclient(t, kubeconfig)
+}
+
+func newImpersonationProxyConfigWithCredentials(t *testing.T, credentials *loginv1alpha1.ClusterCredential, impersonationProxyURL string, impersonationProxyCACertPEM []byte, nestedImpersonationConfig *rest.ImpersonationConfig) *rest.Config {
+	t.Helper()
+
 	env := testlib.IntegrationEnv(t)
 	clusterSupportsLoadBalancers := env.HasCapability(testlib.HasExternalLoadBalancerProvider)
 
@@ -2102,7 +2310,7 @@ func newImpersonationProxyClientWithCredentials(t *testing.T, credentials *login
 		// Prefer to go through a load balancer because that's how the impersonator is intended to be used in the real world.
 		kubeconfig.Proxy = kubeconfigProxyFunc(t, env.Proxy)
 	}
-	return testlib.NewKubeclient(t, kubeconfig)
+	return kubeconfig
 }
 
 func newAnonymousImpersonationProxyClient(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte, nestedImpersonationConfig *rest.ImpersonationConfig) *kubeclient.Client {
@@ -2245,6 +2453,7 @@ func getUIDAndExtraViaCSR(ctx context.Context, t *testing.T, uid string, client 
 		csrPEM,
 		"",
 		certificatesv1.KubeAPIServerClientSignerName,
+		nil,
 		[]certificatesv1.KeyUsage{certificatesv1.UsageClientAuth},
 		privateKey,
 	)
@@ -2262,4 +2471,12 @@ func getUIDAndExtraViaCSR(ctx context.Context, t *testing.T, uid string, client 
 	}
 
 	return outUID, csReq.Spec.Extra
+}
+
+func parallelIfNotEKS(t *testing.T) {
+	if testlib.IntegrationEnv(t).KubernetesDistribution == testlib.EKSDistro {
+		return
+	}
+
+	t.Parallel()
 }

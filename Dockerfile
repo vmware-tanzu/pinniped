@@ -3,7 +3,7 @@
 # Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.16.6 as build-env
+FROM golang:1.16.7 as build-env
 
 WORKDIR /work
 COPY . .
@@ -16,26 +16,18 @@ RUN \
   --mount=type=cache,target=/cache/gocache \
   --mount=type=cache,target=/cache/gomodcache \
   mkdir out && \
-  GOCACHE=/cache/gocache \
-  GOMODCACHE=/cache/gomodcache \
-  CGO_ENABLED=0 \
-  GOOS=linux \
-  GOARCH=amd64 \
-  go build -v -ldflags "$(hack/get-ldflags.sh)" -o out \
-    ./cmd/pinniped-concierge/... \
-    ./cmd/pinniped-supervisor/... \
-    ./cmd/local-user-authenticator/...
+  export GOCACHE=/cache/gocache GOMODCACHE=/cache/gomodcache CGO_ENABLED=0 GOOS=linux GOARCH=amd64 && \
+  go build -v -ldflags "$(hack/get-ldflags.sh) -w -s" -o /usr/local/bin/pinniped-concierge-kube-cert-agent ./cmd/pinniped-concierge-kube-cert-agent/main.go && \
+  go build -v -ldflags "$(hack/get-ldflags.sh) -w -s" -o /usr/local/bin/pinniped-server ./cmd/pinniped-server/main.go && \
+  ln -s /usr/local/bin/pinniped-server /usr/local/bin/pinniped-concierge && \
+  ln -s /usr/local/bin/pinniped-server /usr/local/bin/pinniped-supervisor && \
+  ln -s /usr/local/bin/pinniped-server /usr/local/bin/local-user-authenticator
 
-# Use a Debian slim image to grab a reasonable default CA bundle.
-FROM debian:10.10-slim AS get-ca-bundle-env
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* /var/cache/debconf/*
+# Use a distroless runtime image with CA certificates, timezone data, and not much else.
+FROM gcr.io/distroless/static:nonroot@sha256:c9f9b040044cc23e1088772814532d90adadfa1b86dcba17d07cb567db18dc4e
 
-# Use a runtime image based on Debian slim.
-FROM debian:10.10-slim
-COPY --from=get-ca-bundle-env /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-
-# Copy the binaries from the build-env stage.
-COPY --from=build-env /work/out/ /usr/local/bin/
+# Copy the server binary from the build-env stage.
+COPY --from=build-env /usr/local/bin /usr/local/bin
 
 # Document the ports
 EXPOSE 8080 8443
@@ -44,4 +36,4 @@ EXPOSE 8080 8443
 USER 1001:1001
 
 # Set the entrypoint
-ENTRYPOINT ["/usr/local/bin/pinniped-concierge"]
+ENTRYPOINT ["/usr/local/bin/pinniped-server"]

@@ -251,7 +251,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 		h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 		h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }
 		h.promptForValue = func(_ context.Context, promptLabel string) (string, error) { return "some-upstream-username", nil }
-		h.promptForSecret = func(_ context.Context, _ string) (string, error) { return "some-upstream-password", nil }
+		h.promptForSecret = func(_ string) (string, error) { return "some-upstream-password", nil }
 
 		cache := &mockSessionCache{t: t, getReturnsToken: nil}
 		cacheKey := SessionCacheKey{
@@ -541,7 +541,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						require.Equal(t, "form_post", parsed.Query().Get("response_mode"))
 						return fmt.Errorf("some browser open error")
 					}
-					h.promptForSecret = func(ctx context.Context, promptLabel string) (string, error) {
+					h.promptForValue = func(_ context.Context, promptLabel string) (string, error) {
 						return "", fmt.Errorf("some prompt error")
 					}
 					return nil
@@ -567,7 +567,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						require.Equal(t, "form_post", parsed.Query().Get("response_mode"))
 						return nil
 					}
-					h.promptForSecret = func(ctx context.Context, promptLabel string) (string, error) {
+					h.promptForValue = func(_ context.Context, promptLabel string) (string, error) {
 						return "", fmt.Errorf("some prompt error")
 					}
 					return nil
@@ -825,7 +825,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 			opt: func(t *testing.T) Option {
 				return func(h *handlerState) error {
 					_ = defaultLDAPTestOpts(t, h, nil, nil)
-					h.promptForSecret = func(_ context.Context, _ string) (string, error) { return "", errors.New("some prompt error") }
+					h.promptForSecret = func(_ string) (string, error) { return "", errors.New("some prompt error") }
 					return nil
 				}
 			},
@@ -1018,7 +1018,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						require.Equal(t, "Username: ", promptLabel)
 						return "some-upstream-username", nil
 					}
-					h.promptForSecret = func(_ context.Context, promptLabel string) (string, error) {
+					h.promptForSecret = func(promptLabel string) (string, error) {
 						require.Equal(t, "Password: ", promptLabel)
 						return "some-upstream-password", nil
 					}
@@ -1125,7 +1125,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 						require.FailNow(t, fmt.Sprintf("saw unexpected prompt from the CLI: %q", promptLabel))
 						return "", nil
 					}
-					h.promptForSecret = func(_ context.Context, promptLabel string) (string, error) {
+					h.promptForSecret = func(promptLabel string) (string, error) {
 						require.FailNow(t, fmt.Sprintf("saw unexpected prompt from the CLI: %q", promptLabel))
 						return "", nil
 					}
@@ -1634,8 +1634,8 @@ func TestHandlePasteCallback(t *testing.T) {
 				return func(h *handlerState) error {
 					h.isTTY = func(fd int) bool { return true }
 					h.useFormPost = true
-					h.promptForSecret = func(ctx context.Context, promptLabel string) (string, error) {
-						assert.Equal(t, "    If automatic login fails, paste your authorization code to login manually: ", promptLabel)
+					h.promptForValue = func(_ context.Context, promptLabel string) (string, error) {
+						assert.Equal(t, "    Optionally, paste your authorization code: ", promptLabel)
 						return "", fmt.Errorf("some prompt error")
 					}
 					return nil
@@ -1651,7 +1651,7 @@ func TestHandlePasteCallback(t *testing.T) {
 				return func(h *handlerState) error {
 					h.isTTY = func(fd int) bool { return true }
 					h.useFormPost = true
-					h.promptForSecret = func(ctx context.Context, promptLabel string) (string, error) {
+					h.promptForValue = func(_ context.Context, promptLabel string) (string, error) {
 						return "invalid", nil
 					}
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}
@@ -1675,7 +1675,7 @@ func TestHandlePasteCallback(t *testing.T) {
 				return func(h *handlerState) error {
 					h.isTTY = func(fd int) bool { return true }
 					h.useFormPost = true
-					h.promptForSecret = func(ctx context.Context, promptLabel string) (string, error) {
+					h.promptForValue = func(_ context.Context, promptLabel string) (string, error) {
 						return "valid", nil
 					}
 					h.oauth2Config = &oauth2.Config{RedirectURL: testRedirectURI}

@@ -104,7 +104,7 @@ func TestAgentController(t *testing.T) {
 					Containers: []corev1.Container{{
 						Name:    "sleeper",
 						Image:   "pinniped-server-image",
-						Command: []string{"/bin/sleep", "infinity"},
+						Command: []string{"pinniped-concierge-kube-cert-agent", "sleep"},
 						Env: []corev1.EnvVar{
 							{Name: "CERT_PATH", Value: "/path/to/signing.crt"},
 							{Name: "KEY_PATH", Value: "/path/to/signing.key"},
@@ -200,8 +200,8 @@ func TestAgentController(t *testing.T) {
 	}
 
 	mockExecSucceeds := func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
-		executor.Exec("concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "sh", "-c", "cat ${CERT_PATH}; echo; echo; cat ${KEY_PATH}").
-			Return("test-cert\n\n\ntest-key", nil)
+		executor.Exec("concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
+			Return(`{"tls.crt": "dGVzdC1jZXJ0", "tls.key": "dGVzdC1rZXk="}`, nil) // "test-cert" / "test-key"
 		dynamicCert.SetCertKeyContent([]byte("test-cert"), []byte("test-key")).
 			Return(nil)
 	}
@@ -573,7 +573,7 @@ func TestAgentController(t *testing.T) {
 				validClusterInfoConfigMap,
 			},
 			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
-				executor.Exec("concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "sh", "-c", "cat ${CERT_PATH}; echo; echo; cat ${KEY_PATH}").
+				executor.Exec("concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
 					Return("", fmt.Errorf("some exec error")).
 					AnyTimes()
 			},
@@ -590,6 +590,90 @@ func TestAgentController(t *testing.T) {
 			},
 		},
 		{
+			name: "deployment exists, configmap is valid, exec into agent pod returns invalid JSON",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				healthyKubeControllerManagerPod,
+				healthyAgentDeployment,
+				healthyAgentPod,
+				validClusterInfoConfigMap,
+			},
+			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
+				executor.Exec("concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
+					Return("bogus-data", nil).
+					AnyTimes()
+			},
+			wantDistinctErrors: []string{
+				`failed to decode signing cert/key JSON from agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: invalid character 'b' looking for beginning of value`,
+			},
+			wantAgentDeployment: healthyAgentDeployment,
+			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
+				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         configv1alpha1.ErrorStrategyStatus,
+				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message:        `failed to decode signing cert/key JSON from agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: invalid character 'b' looking for beginning of value`,
+				LastUpdateTime: metav1.NewTime(now),
+			},
+		},
+		{
+			name: "deployment exists, configmap is valid, exec into agent pod returns invalid cert base64",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				healthyKubeControllerManagerPod,
+				healthyAgentDeployment,
+				healthyAgentPod,
+				validClusterInfoConfigMap,
+			},
+			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
+				executor.Exec("concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
+					Return(`{"tls.crt": "invalid"}`, nil).
+					AnyTimes()
+			},
+			wantDistinctErrors: []string{
+				`failed to decode signing cert base64 from agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: illegal base64 data at input byte 4`,
+			},
+			wantAgentDeployment: healthyAgentDeployment,
+			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
+				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         configv1alpha1.ErrorStrategyStatus,
+				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message:        `failed to decode signing cert base64 from agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: illegal base64 data at input byte 4`,
+				LastUpdateTime: metav1.NewTime(now),
+			},
+		},
+		{
+			name: "deployment exists, configmap is valid, exec into agent pod returns invalid key base64",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				healthyKubeControllerManagerPod,
+				healthyAgentDeployment,
+				healthyAgentPod,
+				validClusterInfoConfigMap,
+			},
+			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
+				executor.Exec("concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
+					Return(`{"tls.crt": "dGVzdAo=", "tls.key": "invalid"}`, nil).
+					AnyTimes()
+			},
+			wantDistinctErrors: []string{
+				`failed to decode signing key base64 from agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: illegal base64 data at input byte 4`,
+			},
+			wantAgentDeployment: healthyAgentDeployment,
+			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
+				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         configv1alpha1.ErrorStrategyStatus,
+				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message:        `failed to decode signing key base64 from agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: illegal base64 data at input byte 4`,
+				LastUpdateTime: metav1.NewTime(now),
+			},
+		},
+		{
 			name: "deployment exists, configmap is valid, exec into agent pod returns bogus certs",
 			pinnipedObjects: []runtime.Object{
 				initialCredentialIssuer,
@@ -601,10 +685,10 @@ func TestAgentController(t *testing.T) {
 				validClusterInfoConfigMap,
 			},
 			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
-				executor.Exec("concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "sh", "-c", "cat ${CERT_PATH}; echo; echo; cat ${KEY_PATH}").
-					Return("bogus-data", nil).
+				executor.Exec("concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "pinniped-concierge-kube-cert-agent", "print").
+					Return(`{"tls.crt": "dGVzdC1jZXJ0", "tls.key": "dGVzdC1rZXk="}`, nil). // "test-cert" / "test-key"
 					AnyTimes()
-				dynamicCert.SetCertKeyContent([]byte(""), []byte("")).
+				dynamicCert.SetCertKeyContent([]byte("test-cert"), []byte("test-key")).
 					Return(fmt.Errorf("some dynamic cert error")).
 					AnyTimes()
 			},
@@ -877,7 +961,6 @@ func runControllerUntilQuiet(ctx context.Context, t *testing.T, controller contr
 
 	errorStream := make(chan error)
 	controllerlib.TestWrap(t, controller, func(syncer controllerlib.Syncer) controllerlib.Syncer {
-		controller.Name()
 		return controllerlib.SyncFunc(func(ctx controllerlib.Context) error {
 			err := syncer.Sync(ctx)
 			errorStream <- err

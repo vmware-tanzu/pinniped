@@ -32,13 +32,12 @@ const (
 	defaultActiveDirectoryUsernameAttributeName = "userPrincipalName"
 	defaultActiveDirectoryUIDAttributeName      = "objectGUID"
 
-	// This is not a real attribute in active directory.
-	// It represents a combined attribute name, sAMAccountName + "@" + domain.
+	// By default this group name attribute is the sAMAccountName with special mapping.
+	// Each group will look like sAMAccountName + "@" + domain.
 	// For example if your group sAMAccountName is "mammals" and your domain is
 	// "activedirectory.example.com", it would be mammals@activedirectory.example.com.
 	// This is because sAMAccountName is only unique within a domain, not a forest.
-	defaultActiveDirectoryGroupNameAttributeName         = "sAMAccountName"
-	defaultActiveDirectoryGroupNameOverrideAttributeName = "pinniped:sAMAccountName@domain"
+	defaultActiveDirectoryGroupNameAttributeName = "sAMAccountName"
 
 	// - is a person.
 	// - is not a computer.
@@ -188,10 +187,6 @@ func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) GroupNameAttribute() str
 	if len(g.groupSearch.Attributes.GroupName) == 0 {
 		return defaultActiveDirectoryGroupNameAttributeName
 	}
-	// you explicitly told us to use the override value
-	if g.groupSearch.Attributes.GroupName == defaultActiveDirectoryGroupNameOverrideAttributeName {
-		return defaultActiveDirectoryGroupNameAttributeName
-	}
 	return g.groupSearch.Attributes.GroupName
 }
 
@@ -321,7 +316,7 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 		UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
 	}
 
-	if spec.GroupSearch.Attributes.GroupName == defaultActiveDirectoryGroupNameOverrideAttributeName || spec.GroupSearch.Attributes.GroupName == "" {
+	if spec.GroupSearch.Attributes.GroupName == "" {
 		config.GroupAttributeParsingOverrides = []upstreamldap.AttributeParsingOverride{{AttributeName: defaultActiveDirectoryGroupNameAttributeName, OverrideFunc: upstreamldap.GroupSAMAccountNameWithDomainSuffix}}
 	}
 

@@ -386,22 +386,25 @@ func (p *Provider) searchGroupsForUserDN(conn Conn, userDN string) ([]string, er
 	}
 
 	groups := []string{}
+entries:
 	for _, groupEntry := range searchResult.Entries {
 		if len(groupEntry.DN) == 0 {
 			return nil, fmt.Errorf(`searching for group memberships for user with DN %q resulted in search result without DN`, userDN)
-		}
-		mappedGroupName, err := p.getSearchResultAttributeValue(groupAttributeName, groupEntry, userDN)
-		if err != nil {
-			return nil, fmt.Errorf(`error searching for group memberships for user with DN %q: %w`, userDN, err)
 		}
 		for _, override := range p.c.GroupAttributeParsingOverrides {
 			if groupAttributeName == override.AttributeName {
 				overrideGroupName, err := override.OverrideFunc(groupEntry)
 				if err != nil {
-					return nil, fmt.Errorf("error finding groups: %w", err)
+					return nil, fmt.Errorf("error finding groups for user %s: %w", userDN, err)
 				}
-				mappedGroupName = overrideGroupName
+				groups = append(groups, overrideGroupName)
+				continue entries
 			}
+		}
+		// if none of the overrides matched, use the default behavior (no mapping)
+		mappedGroupName, err := p.getSearchResultAttributeValue(groupAttributeName, groupEntry, userDN)
+		if err != nil {
+			return nil, fmt.Errorf(`error searching for group memberships for user with DN %q: %w`, userDN, err)
 		}
 		groups = append(groups, mappedGroupName)
 	}
@@ -708,7 +711,21 @@ func microsoftUUIDFromBinary(binaryUUID []byte) (string, error) {
 
 func GroupSAMAccountNameWithDomainSuffix(entry *ldap.Entry) (string, error) {
 	sAMAccountNameAttribute := "sAMAccountName"
-	sAMAccountName := entry.GetAttributeValue(sAMAccountNameAttribute)
+	sAMAccountNameAttributeValues := entry.GetAttributeValues(sAMAccountNameAttribute)
+
+	if len(sAMAccountNameAttributeValues) != 1 {
+		return "", fmt.Errorf(`found %d values for attribute "%s", but expected 1 result`,
+			len(sAMAccountNameAttributeValues), sAMAccountNameAttribute,
+		)
+	}
+
+	sAMAccountName := sAMAccountNameAttributeValues[0]
+	if len(sAMAccountName) == 0 {
+		return "", fmt.Errorf(`found empty value for attribute "%s", but expected value to be non-empty`,
+			sAMAccountNameAttribute,
+		)
+	}
+
 	distinguishedName := entry.DN
 	domain, err := getDomainFromDistinguishedName(distinguishedName)
 	if err != nil {

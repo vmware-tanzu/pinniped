@@ -609,6 +609,62 @@ func TestEndUserAuthentication(t *testing.T) {
 			}),
 		},
 		{
+			name: "only the first group override for a given attribute name is applied",
+			// the choice to only run the first is somewhat arbitrary and likely irrelevant since we only
+			// have one group override at the moment...
+			// And as soon as we have starlark attribute mapping it will be obsolete. But this test
+			// ensures that we
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
+				p.GroupAttributeParsingOverrides = []AttributeParsingOverride{
+					{
+						AttributeName: "sAMAccountName",
+						OverrideFunc:  GroupSAMAccountNameWithDomainSuffix,
+					},
+					{
+						AttributeName: "sAMAccountName",
+						OverrideFunc: func(entry *ldap.Entry) (string, error) {
+							return "override-group-name", nil
+						},
+					},
+				}
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
+					r.Attributes = []string{"sAMAccountName"}
+				}), expectedGroupSearchPageSize).
+					Return(&ldap.SearchResult{
+						Entries: []*ldap.Entry{
+							{
+								DN: "CN=Mammals,OU=Users,OU=pinniped-ad,DC=activedirectory,DC=mycompany,DC=example,DC=com",
+								Attributes: []*ldap.EntryAttribute{
+									ldap.NewEntryAttribute("sAMAccountName", []string{"Mammals"}),
+								},
+							},
+							{
+								DN: "CN=Animals,OU=Users,OU=pinniped-ad,DC=activedirectory,DC=mycompany,DC=example,DC=com",
+								Attributes: []*ldap.EntryAttribute{
+									ldap.NewEntryAttribute("sAMAccountName", []string{"Animals"}),
+								},
+							},
+						},
+						Referrals: []string{}, // note that we are not following referrals at this time
+						Controls:  []ldap.Control{},
+					}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			bindEndUserMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testUserSearchResultDNValue, testUpstreamPassword).Times(1)
+			},
+			wantAuthResponse: expectedAuthResponse(func(r *user.DefaultInfo) {
+				r.Groups = []string{"Animals@activedirectory.mycompany.example.com", "Mammals@activedirectory.mycompany.example.com"}
+			}),
+		},
+		{
 			name:     "override group parsing when domain can't be determined from dn",
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
@@ -645,7 +701,70 @@ func TestEndUserAuthentication(t *testing.T) {
 					}, nil).Times(1)
 				conn.EXPECT().Close().Times(1)
 			},
-			wantError: "error finding groups: did not find domain components in group dn: no-domain-components",
+			wantError: "error finding groups for user some-upstream-user-dn: did not find domain components in group dn: no-domain-components",
+		},
+		{
+			name:     "override group parsing when entry has multiple values for attribute",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
+				p.GroupAttributeParsingOverrides = []AttributeParsingOverride{{
+					AttributeName: "sAMAccountName",
+					OverrideFunc:  GroupSAMAccountNameWithDomainSuffix,
+				}}
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
+					r.Attributes = []string{"sAMAccountName"}
+				}), expectedGroupSearchPageSize).
+					Return(&ldap.SearchResult{
+						Entries: []*ldap.Entry{
+							{
+								DN: "no-domain-components",
+								Attributes: []*ldap.EntryAttribute{
+									ldap.NewEntryAttribute("sAMAccountName", []string{"Mammals", "Eukaryotes"}),
+								},
+							},
+						},
+						Referrals: []string{}, // note that we are not following referrals at this time
+						Controls:  []ldap.Control{},
+					}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: "error finding groups for user some-upstream-user-dn: found 2 values for attribute \"sAMAccountName\", but expected 1 result",
+		}, {
+			name:     "override group parsing when entry has no values for attribute",
+			username: testUpstreamUsername,
+			password: testUpstreamPassword,
+			providerConfig: providerConfig(func(p *ProviderConfig) {
+				p.GroupSearch.GroupNameAttribute = "sAMAccountName"
+				p.GroupAttributeParsingOverrides = []AttributeParsingOverride{{
+					AttributeName: "sAMAccountName",
+					OverrideFunc:  GroupSAMAccountNameWithDomainSuffix,
+				}}
+			}),
+			searchMocks: func(conn *mockldapconn.MockConn) {
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Search(expectedUserSearch(nil)).Return(exampleUserSearchResult, nil).Times(1)
+				conn.EXPECT().SearchWithPaging(expectedGroupSearch(func(r *ldap.SearchRequest) {
+					r.Attributes = []string{"sAMAccountName"}
+				}), expectedGroupSearchPageSize).
+					Return(&ldap.SearchResult{
+						Entries: []*ldap.Entry{
+							{
+								DN:         "no-domain-components",
+								Attributes: []*ldap.EntryAttribute{},
+							},
+						},
+						Referrals: []string{}, // note that we are not following referrals at this time
+						Controls:  []ldap.Control{},
+					}, nil).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantError: "error finding groups for user some-upstream-user-dn: found 0 values for attribute \"sAMAccountName\", but expected 1 result",
 		},
 		{
 			name:           "when dial fails",

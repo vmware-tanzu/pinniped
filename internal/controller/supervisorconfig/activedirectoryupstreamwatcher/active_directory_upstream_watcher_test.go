@@ -218,7 +218,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			Filter:             testGroupSearchFilter,
 			GroupNameAttribute: testGroupNameAttrName,
 		},
-		UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary}},
+		UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
 	}
 
 	// Make a copy with targeted changes.
@@ -533,7 +533,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary}},
+					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -591,7 +591,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary}},
+					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -649,7 +649,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary}},
+					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
 				},
 			},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
@@ -706,7 +706,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary}},
+					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -830,7 +830,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary}},
+					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -950,7 +950,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary}},
+					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1000,7 +1000,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary}},
+					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1190,58 +1190,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={}))",
 						GroupNameAttribute: "sAMAccountName",
 					},
-					UIDAttributeParsingOverrides:   []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary}},
-					GroupAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "sAMAccountName", OverrideFunc: upstreamldap.GroupSAMAccountNameWithDomainSuffix}},
-				},
-			},
-			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
-				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234},
-				Status: v1alpha1.ActiveDirectoryIdentityProviderStatus{
-					Phase:      "Ready",
-					Conditions: allConditionsTrue(1234, "4242"),
-				},
-			}},
-			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
-				BindSecretResourceVersion: "4242",
-				LDAPConnectionProtocol:    upstreamldap.TLS,
-				UserSearchBase:            testUserSearchBase,
-				GroupSearchBase:           testGroupSearchBase,
-			}},
-		},
-		{
-			name: "when the input activedirectoryidentityprovider group search attributes is the special cased pinniped:sAMAccountName@domain value",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.ActiveDirectoryIdentityProvider) {
-				upstream.Spec.UserSearch.Attributes = v1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
-				upstream.Spec.UserSearch.Filter = ""
-				upstream.Spec.GroupSearch.Filter = ""
-				upstream.Spec.GroupSearch.Attributes = v1alpha1.ActiveDirectoryIdentityProviderGroupSearchAttributes{GroupName: "pinniped:sAMAccountName@domain"}
-			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
-			setupMocks: func(conn *mockldapconn.MockConn) {
-				// Should perform a test dial and bind.
-				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
-				conn.EXPECT().Close().Times(1)
-			},
-			wantResultingCache: []*upstreamldap.ProviderConfig{
-				{
-					Name:               testName,
-					Host:               testHost,
-					ConnectionProtocol: upstreamldap.TLS,
-					CABundle:           testCABundle,
-					BindUsername:       testBindUsername,
-					BindPassword:       testBindPassword,
-					UserSearch: upstreamldap.UserSearchConfig{
-						Base:              testUserSearchBase,
-						Filter:            "(&(objectClass=person)(!(objectClass=computer))(!(showInAdvancedViewOnly=TRUE))(|(sAMAccountName={})(mail={})(userPrincipalName={}))(sAMAccountType=805306368))",
-						UsernameAttribute: "userPrincipalName",
-						UIDAttribute:      "objectGUID",
-					},
-					GroupSearch: upstreamldap.GroupSearchConfig{
-						Base:               testGroupSearchBase,
-						Filter:             "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={}))",
-						GroupNameAttribute: "sAMAccountName",
-					},
-					UIDAttributeParsingOverrides:   []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary}},
+					UIDAttributeParsingOverrides:   []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
 					GroupAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "sAMAccountName", OverrideFunc: upstreamldap.GroupSAMAccountNameWithDomainSuffix}},
 				},
 			},
@@ -1292,7 +1241,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary}},
+					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1341,7 +1290,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary}},
+					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{
@@ -1390,7 +1339,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 						Filter:             testGroupSearchFilter,
 						GroupNameAttribute: testGroupNameAttrName,
 					},
-					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary}},
+					UIDAttributeParsingOverrides: []upstreamldap.AttributeParsingOverride{{AttributeName: "objectGUID", OverrideFunc: upstreamldap.MicrosoftUUIDFromBinary("objectGUID")}},
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.ActiveDirectoryIdentityProvider{{

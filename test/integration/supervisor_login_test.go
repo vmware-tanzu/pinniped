@@ -830,7 +830,7 @@ func requestAuthorizationUsingLDAPIdentityProvider(t *testing.T, downstreamAutho
 			return false, nil
 		}
 		return true, nil
-	}, 30*time.Second, 200*time.Millisecond)
+	}, 60*time.Second, 200*time.Millisecond)
 
 	expectSecurityHeaders(t, authResponse, true)
 

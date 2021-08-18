@@ -48,7 +48,7 @@ type ActiveDirectoryIdentityProviderBind struct {
 type ActiveDirectoryIdentityProviderUserSearchAttributes struct {
 	// Username specifies the name of the attribute in Active Directory entry whose value shall become the username
     // of the user after a successful authentication. This would typically be the same attribute name used in
-    // Optional, when empty this defaults to "sAMAccountName".
+    // Optional, when empty this defaults to "userPrincipalName".
     // +optional
 	Username string `json:"username,omitempty"`
 
@@ -64,7 +64,7 @@ type ActiveDirectoryIdentityProviderGroupSearchAttributes struct {
 	// in the user's list of groups after a successful authentication.
 	// The value of this field is case-sensitive and must match the case of the attribute name returned by the ActiveDirectory
 	// server in the user's entry. E.g. "cn" for common name. Distinguished names can be used by specifying lower-case "dn".
-	// Optional. When not specified, this defaults to "sAMAccountName".
+	// Optional. When not specified, this defaults to a custom field that looks like "sAMAccountName@domain".
 	// +optional
 	GroupName string `json:"groupName,omitempty"`
 }
@@ -82,7 +82,7 @@ type ActiveDirectoryIdentityProviderUserSearch struct {
 	// https://ldap.com/ldap-filters.
 	// Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}" cannot be used.
 	// Optional. When not specified, the default will be
-	// '(&(objectClass=person)(!(objectClass=computer))(!(showInAdvancedViewOnly=TRUE))(|(sAMAccountName={}")(mail={}))(sAMAccountType=805306368))'
+	// '(&(objectClass=person)(!(objectClass=computer))(!(showInAdvancedViewOnly=TRUE))(|(sAMAccountName={}")(mail={})(userPrincipalName={})(sAMAccountType=805306368))'
 	// +optional
 	Filter string `json:"filter,omitempty"`
 
@@ -105,7 +105,7 @@ type ActiveDirectoryIdentityProviderGroupSearch struct {
 	// "&(objectClass=groupOfNames)(member={})". For more information about ActiveDirectory filters, see
 	// https://ldap.com/ldap-filters.
 	// Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}" cannot be used.
-	// Optional. When not specified, the default will act as if the Filter were specified as
+	// Optional. When not specified, the default will act as if the filter were specified as
 	// "(&(objectClass=group)(member:1.2.840.113556.1.4.1941:={})".
 	// This searches nested groups by default.
 	// +optional

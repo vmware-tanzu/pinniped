@@ -70,7 +70,7 @@ func NewHandler(
 
 		subject, username, groups, err := downstreamsession.GetDownstreamIdentityFromUpstreamIDToken(upstreamIDPConfig, token.IDToken.Claims)
 		if err != nil {
-			return err
+			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
 		openIDSession := downstreamsession.MakeDownstreamSession(subject, username, groups)

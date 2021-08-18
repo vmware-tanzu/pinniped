@@ -6,7 +6,6 @@ package downstreamsession
 
 import (
 	"fmt"
-	"net/http"
 	"net/url"
 	"time"
 
@@ -15,7 +14,7 @@ import (
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/token/jwt"
 
-	"go.pinniped.dev/internal/httputil/httperr"
+	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/oidc"
 	"go.pinniped.dev/internal/oidc/provider"
 	"go.pinniped.dev/internal/plog"
@@ -27,6 +26,12 @@ const (
 
 	// The name of the email_verified claim from https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims
 	emailVerifiedClaimName = "email_verified"
+
+	requiredClaimMissingErr            = constable.Error("required claim in upstream ID token missing")
+	requiredClaimInvalidFormatErr      = constable.Error("required claim in upstream ID token has invalid format")
+	requiredClaimEmptyErr              = constable.Error("required claim in upstream ID token is empty")
+	emailVerifiedClaimInvalidFormatErr = constable.Error("email_verified claim in upstream ID token has invalid format")
+	emailVerifiedClaimFalseErr         = constable.Error("email_verified claim in upstream ID token has false value")
 )
 
 // MakeDownstreamSession creates a downstream OIDC session.
@@ -107,7 +112,7 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 				"configuredUsernameClaim", usernameClaimName,
 				"emailVerifiedClaim", emailVerifiedAsInterface,
 			)
-			return "", "", httperr.New(http.StatusUnprocessableEntity, "email_verified claim in upstream ID token has invalid format")
+			return "", "", emailVerifiedClaimInvalidFormatErr
 		}
 		if !emailVerified {
 			plog.Warning(
@@ -115,7 +120,7 @@ func getSubjectAndUsernameFromUpstreamIDToken(
 				"upstreamName", upstreamIDPConfig.GetName(),
 				"configuredUsernameClaim", usernameClaimName,
 			)
-			return "", "", httperr.New(http.StatusUnprocessableEntity, "email_verified claim in upstream ID token has false value")
+			return "", "", emailVerifiedClaimFalseErr
 		}
 	}
 
@@ -135,7 +140,7 @@ func extractStringClaimValue(claimName string, upstreamIDPName string, idTokenCl
 			"upstreamName", upstreamIDPName,
 			"claimName", claimName,
 		)
-		return "", httperr.New(http.StatusUnprocessableEntity, "required claim in upstream ID token missing")
+		return "", requiredClaimMissingErr
 	}
 
 	valueAsString, ok := value.(string)
@@ -145,7 +150,7 @@ func extractStringClaimValue(claimName string, upstreamIDPName string, idTokenCl
 			"upstreamName", upstreamIDPName,
 			"claimName", claimName,
 		)
-		return "", httperr.New(http.StatusUnprocessableEntity, "required claim in upstream ID token has invalid format")
+		return "", requiredClaimInvalidFormatErr
 	}
 
 	if valueAsString == "" {
@@ -154,7 +159,7 @@ func extractStringClaimValue(claimName string, upstreamIDPName string, idTokenCl
 			"upstreamName", upstreamIDPName,
 			"claimName", claimName,
 		)
-		return "", httperr.New(http.StatusUnprocessableEntity, "required claim in upstream ID token is empty")
+		return "", requiredClaimEmptyErr
 	}
 
 	return valueAsString, nil
@@ -190,7 +195,7 @@ func getGroupsFromUpstreamIDToken(
 			"upstreamName", upstreamIDPConfig.GetName(),
 			"configuredGroupsClaim", groupsClaimName,
 		)
-		return nil, httperr.New(http.StatusUnprocessableEntity, "groups claim in upstream ID token has invalid format")
+		return nil, requiredClaimInvalidFormatErr
 	}
 
 	return groupsAsArray, nil

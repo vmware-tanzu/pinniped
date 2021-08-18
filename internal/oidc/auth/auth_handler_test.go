@@ -151,6 +151,36 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			"error_description": "The resource owner or authorization server denied the request. Resource owner password credentials grant is not allowed for this upstream provider according to its configuration.",
 			"state":             happyState,
 		}
+
+		fositeAccessDeniedWithInvalidEmailVerifiedHintErrorQuery = map[string]string{
+			"error":             "access_denied",
+			"error_description": "The resource owner or authorization server denied the request. Reason: email_verified claim in upstream ID token has invalid format.",
+			"state":             happyState,
+		}
+
+		fositeAccessDeniedWithFalseEmailVerifiedHintErrorQuery = map[string]string{
+			"error":             "access_denied",
+			"error_description": "The resource owner or authorization server denied the request. Reason: email_verified claim in upstream ID token has false value.",
+			"state":             happyState,
+		}
+
+		fositeAccessDeniedWithRequiredClaimMissingHintErrorQuery = map[string]string{
+			"error":             "access_denied",
+			"error_description": "The resource owner or authorization server denied the request. Reason: required claim in upstream ID token missing.",
+			"state":             happyState,
+		}
+
+		fositeAccessDeniedWithRequiredClaimEmptyHintErrorQuery = map[string]string{
+			"error":             "access_denied",
+			"error_description": "The resource owner or authorization server denied the request. Reason: required claim in upstream ID token is empty.",
+			"state":             happyState,
+		}
+
+		fositeAccessDeniedWithRequiredClaimInvalidFormatHintErrorQuery = map[string]string{
+			"error":             "access_denied",
+			"error_description": "The resource owner or authorization server denied the request. Reason: required claim in upstream ID token has invalid format.",
+			"state":             happyState,
+		}
 	)
 
 	hmacSecretFunc := func() []byte { return []byte("some secret - must have at least 32 bytes") }
@@ -199,6 +229,14 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			WithIDTokenClaim("other-claim", "should be ignored").
 			WithAllowPasswordGrant(true).
 			WithUpstreamAuthcodeExchangeError(errors.New("should not have tried to exchange upstream authcode on this instance"))
+	}
+
+	happyUpstreamPasswordGrantMockExpectation := &expectedPasswordGrant{
+		performedByUpstreamName: oidcPasswordGrantUpstreamName,
+		args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
+			Username: oidcUpstreamUsername,
+			Password: oidcUpstreamPassword,
+		},
 	}
 
 	happyLDAPUsername := "some-ldap-user"
@@ -428,18 +466,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyStringWithLocationInHref:       true,
 		},
 		{
-			name:                 "OIDC upstream password grant happy path using GET",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
-			method:               http.MethodGet,
-			path:                 happyGetRequestPath,
-			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
-			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
-			wantPasswordGrantCall: &expectedPasswordGrant{
-				performedByUpstreamName: oidcPasswordGrantUpstreamName,
-				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
-					Username: oidcUpstreamUsername,
-					Password: oidcUpstreamPassword,
-				}},
+			name:                              "OIDC upstream password grant happy path using GET",
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPath,
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
 			wantStatus:                        http.StatusFound,
 			wantContentType:                   htmlContentType,
 			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
@@ -510,20 +543,15 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantUpstreamStateParamInLocationHeader: true,
 		},
 		{
-			name:                 "OIDC upstream password grant happy path using POST",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
-			method:               http.MethodPost,
-			path:                 "/some/path",
-			contentType:          "application/x-www-form-urlencoded",
-			body:                 encodeQuery(happyGetRequestQueryMap),
-			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
-			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
-			wantPasswordGrantCall: &expectedPasswordGrant{
-				performedByUpstreamName: oidcPasswordGrantUpstreamName,
-				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
-					Username: oidcUpstreamUsername,
-					Password: oidcUpstreamPassword,
-				}},
+			name:                              "OIDC upstream password grant happy path using POST",
+			idps:                              oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:                            http.MethodPost,
+			path:                              "/some/path",
+			contentType:                       "application/x-www-form-urlencoded",
+			body:                              encodeQuery(happyGetRequestQueryMap),
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
 			wantStatus:                        http.StatusFound,
 			wantContentType:                   htmlContentType,
 			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
@@ -625,14 +653,9 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			path: modifiedHappyGetRequestPath(map[string]string{
 				"redirect_uri": downstreamRedirectURIWithDifferentPort, // not the same port number that is registered for the client
 			}),
-			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
-			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
-			wantPasswordGrantCall: &expectedPasswordGrant{
-				performedByUpstreamName: oidcPasswordGrantUpstreamName,
-				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
-					Username: oidcUpstreamUsername,
-					Password: oidcUpstreamPassword,
-				}},
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
 			wantStatus:                        http.StatusFound,
 			wantContentType:                   htmlContentType,
 			wantRedirectLocationRegexp:        downstreamRedirectURIWithDifferentPort + `\?code=([^&]+)&scope=openid&state=` + happyState,
@@ -1032,18 +1055,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:     "",
 		},
 		{
-			name:                 "missing PKCE code_challenge in request using OIDC upstream password grant", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
-			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"code_challenge": ""}),
-			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
-			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
-			wantPasswordGrantCall: &expectedPasswordGrant{
-				performedByUpstreamName: oidcPasswordGrantUpstreamName,
-				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
-					Username: oidcUpstreamUsername,
-					Password: oidcUpstreamPassword,
-				}},
+			name:                         "missing PKCE code_challenge in request using OIDC upstream password grant", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
+			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:                       http.MethodGet,
+			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge": ""}),
+			customUsernameHeader:         pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:         pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:        happyUpstreamPasswordGrantMockExpectation,
 			wantStatus:                   http.StatusFound,
 			wantContentType:              "application/json; charset=utf-8",
 			wantLocationHeader:           urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeErrorQuery),
@@ -1079,18 +1097,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:     "",
 		},
 		{
-			name:                 "invalid value for PKCE code_challenge_method in request using OIDC upstream password grant", // https://tools.ietf.org/html/rfc7636#section-4.3
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
-			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
-			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
-			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
-			wantPasswordGrantCall: &expectedPasswordGrant{
-				performedByUpstreamName: oidcPasswordGrantUpstreamName,
-				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
-					Username: oidcUpstreamUsername,
-					Password: oidcUpstreamPassword,
-				}},
+			name:                         "invalid value for PKCE code_challenge_method in request using OIDC upstream password grant", // https://tools.ietf.org/html/rfc7636#section-4.3
+			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:                       http.MethodGet,
+			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "this-is-not-a-valid-pkce-alg"}),
+			customUsernameHeader:         pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:         pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:        happyUpstreamPasswordGrantMockExpectation,
 			wantStatus:                   http.StatusFound,
 			wantContentType:              "application/json; charset=utf-8",
 			wantLocationHeader:           urlWithQuery(downstreamRedirectURI, fositeInvalidCodeChallengeErrorQuery),
@@ -1126,18 +1139,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:     "",
 		},
 		{
-			name:                 "when PKCE code_challenge_method in request is `plain` using OIDC upstream password grant", // https://tools.ietf.org/html/rfc7636#section-4.3
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
-			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "plain"}),
-			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
-			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
-			wantPasswordGrantCall: &expectedPasswordGrant{
-				performedByUpstreamName: oidcPasswordGrantUpstreamName,
-				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
-					Username: oidcUpstreamUsername,
-					Password: oidcUpstreamPassword,
-				}},
+			name:                         "when PKCE code_challenge_method in request is `plain` using OIDC upstream password grant", // https://tools.ietf.org/html/rfc7636#section-4.3
+			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:                       http.MethodGet,
+			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": "plain"}),
+			customUsernameHeader:         pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:         pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:        happyUpstreamPasswordGrantMockExpectation,
 			wantStatus:                   http.StatusFound,
 			wantContentType:              "application/json; charset=utf-8",
 			wantLocationHeader:           urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
@@ -1173,18 +1181,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantBodyString:     "",
 		},
 		{
-			name:                 "missing PKCE code_challenge_method in request using OIDC upstream password grant", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
-			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": ""}),
-			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
-			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
-			wantPasswordGrantCall: &expectedPasswordGrant{
-				performedByUpstreamName: oidcPasswordGrantUpstreamName,
-				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
-					Username: oidcUpstreamUsername,
-					Password: oidcUpstreamPassword,
-				}},
+			name:                         "missing PKCE code_challenge_method in request using OIDC upstream password grant", // See https://tools.ietf.org/html/rfc7636#section-4.4.1
+			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:                       http.MethodGet,
+			path:                         modifiedHappyGetRequestPath(map[string]string{"code_challenge_method": ""}),
+			customUsernameHeader:         pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:         pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:        happyUpstreamPasswordGrantMockExpectation,
 			wantStatus:                   http.StatusFound,
 			wantContentType:              "application/json; charset=utf-8",
 			wantLocationHeader:           urlWithQuery(downstreamRedirectURI, fositeMissingCodeChallengeMethodErrorQuery),
@@ -1224,18 +1227,13 @@ func TestAuthorizationEndpoint(t *testing.T) {
 		{
 			// This is just one of the many OIDC validations run by fosite. This test is to ensure that we are running
 			// through that part of the fosite library when using an OIDC upstream password grant.
-			name:                 "prompt param is not allowed to have none and another legal value at the same time using OIDC upstream password grant",
-			idps:                 oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
-			method:               http.MethodGet,
-			path:                 modifiedHappyGetRequestPath(map[string]string{"prompt": "none login"}),
-			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
-			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
-			wantPasswordGrantCall: &expectedPasswordGrant{
-				performedByUpstreamName: oidcPasswordGrantUpstreamName,
-				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
-					Username: oidcUpstreamUsername,
-					Password: oidcUpstreamPassword,
-				}},
+			name:                         "prompt param is not allowed to have none and another legal value at the same time using OIDC upstream password grant",
+			idps:                         oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
+			method:                       http.MethodGet,
+			path:                         modifiedHappyGetRequestPath(map[string]string{"prompt": "none login"}),
+			customUsernameHeader:         pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:         pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:        happyUpstreamPasswordGrantMockExpectation,
 			wantStatus:                   http.StatusFound,
 			wantContentType:              "application/json; charset=utf-8",
 			wantLocationHeader:           urlWithQuery(downstreamRedirectURI, fositePromptHasNoneAndOtherValueErrorQuery),
@@ -1282,15 +1280,10 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			idps:   oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(passwordGrantUpstreamOIDCIdentityProviderBuilder().Build()),
 			method: http.MethodGet,
 			// The following prompt value is illegal when openid is requested, but note that openid is not requested.
-			path:                 modifiedHappyGetRequestPath(map[string]string{"prompt": "none login", "scope": "email"}),
-			customUsernameHeader: pointer.StringPtr(oidcUpstreamUsername),
-			customPasswordHeader: pointer.StringPtr(oidcUpstreamPassword),
-			wantPasswordGrantCall: &expectedPasswordGrant{
-				performedByUpstreamName: oidcPasswordGrantUpstreamName,
-				args: &oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs{
-					Username: oidcUpstreamUsername,
-					Password: oidcUpstreamPassword,
-				}},
+			path:                              modifiedHappyGetRequestPath(map[string]string{"prompt": "none login", "scope": "email"}),
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
 			wantStatus:                        http.StatusFound,
 			wantContentType:                   htmlContentType,
 			wantRedirectLocationRegexp:        downstreamRedirectURI + `\?code=([^&]+)&scope=&state=` + happyState, // no scopes granted
@@ -1324,6 +1317,417 @@ func TestAuthorizationEndpoint(t *testing.T) {
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+		},
+		{
+			name: "OIDC upstream password grant: upstream IDP provides no username or group claim configuration, so we use default username claim and skip groups",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutUsernameClaim().WithoutGroupsClaim().Build(),
+			),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPath,
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenGroups:       []string{},
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+		},
+		{
+			name: "OIDC upstream password grant: upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is missing",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().
+					WithUsernameClaim("email").
+					WithIDTokenClaim("email", "joe@whitehouse.gov").Build(),
+			),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPath,
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     "joe@whitehouse.gov",
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+		},
+		{
+			name: "OIDC upstream password grant: upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with true value",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().
+					WithUsernameClaim("email").
+					WithIDTokenClaim("email", "joe@whitehouse.gov").
+					WithIDTokenClaim("email_verified", true).Build(),
+			),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPath,
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     "joe@whitehouse.gov",
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+		},
+		{
+			name: "OIDC upstream password grant: upstream IDP configures username claim as anything other than special claim `email` and `email_verified` upstream claim is present with false value",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().
+					WithUsernameClaim("some-claim").
+					WithIDTokenClaim("some-claim", "joe").
+					WithIDTokenClaim("email", "joe@whitehouse.gov").
+					WithIDTokenClaim("email_verified", false).Build(),
+			),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPath,
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     "joe",
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+		},
+		{
+			name: "OIDC upstream password grant: upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with illegal value",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().
+					WithUsernameClaim("email").
+					WithIDTokenClaim("email", "joe@whitehouse.gov").
+					WithIDTokenClaim("email_verified", "supposed to be boolean").Build(),
+			),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithInvalidEmailVerifiedHintErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name: "OIDC upstream password grant: upstream IDP configures username claim as special claim `email` and `email_verified` upstream claim is present with false value",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().
+					WithUsernameClaim("email").
+					WithIDTokenClaim("email", "joe@whitehouse.gov").
+					WithIDTokenClaim("email_verified", false).Build(),
+			),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithFalseEmailVerifiedHintErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name: "OIDC upstream password grant: upstream IDP provides username claim configuration as `sub`, so the downstream token subject should be exactly what they asked for",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithUsernameClaim("sub").Build(),
+			),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPath,
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamSubject,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+		},
+		{
+			name: "OIDC upstream password grant: upstream IDP's configured groups claim in the ID token has a non-array value",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().
+					WithIDTokenClaim(oidcUpstreamGroupsClaim, "notAnArrayGroup1 notAnArrayGroup2").Build(),
+			),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPath,
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       []string{"notAnArrayGroup1 notAnArrayGroup2"},
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+		},
+		{
+			name: "OIDC upstream password grant: upstream IDP's configured groups claim in the ID token is a slice of interfaces",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().
+					WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"group1", "group2"}).Build(),
+			),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPath,
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       []string{"group1", "group2"},
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+		},
+		{
+			name: "OIDC upstream password grant: upstream ID token does not contain requested username claim",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutIDTokenClaim(oidcUpstreamUsernameClaim).Build(),
+			),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithRequiredClaimMissingHintErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name: "OIDC upstream password grant: upstream ID token does not contain requested groups claim",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutIDTokenClaim(oidcUpstreamGroupsClaim).Build(),
+			),
+			method:                            http.MethodGet,
+			path:                              happyGetRequestPath,
+			customUsernameHeader:              pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:              pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall:             happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:                        http.StatusFound,
+			wantContentType:                   htmlContentType,
+			wantRedirectLocationRegexp:        happyAuthcodeDownstreamRedirectLocationRegexp,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       []string{},
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamRedirectURI:         downstreamRedirectURI,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+		},
+		{
+			name: "OIDC upstream password grant: upstream ID token contains username claim with weird format",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim(oidcUpstreamUsernameClaim, 42).Build(),
+			),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithRequiredClaimInvalidFormatHintErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name: "OIDC upstream password grant: upstream ID token contains username claim with empty string value",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim(oidcUpstreamUsernameClaim, "").Build(),
+			),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithRequiredClaimEmptyHintErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name: "OIDC upstream password grant: upstream ID token does not contain iss claim when using default username claim config",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutIDTokenClaim("iss").WithoutUsernameClaim().Build(),
+			),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithRequiredClaimMissingHintErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name: "OIDC upstream password grant: upstream ID token does has an empty string value for iss claim when using default username claim config",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim("iss", "").WithoutUsernameClaim().Build(),
+			),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithRequiredClaimEmptyHintErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name: "OIDC upstream password grant: upstream ID token has an non-string iss claim when using default username claim config",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim("iss", 42).WithoutUsernameClaim().Build(),
+			),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithRequiredClaimInvalidFormatHintErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name: "OIDC upstream password grant: upstream ID token does not contain sub claim when using default username claim config",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithoutIDTokenClaim("sub").WithoutUsernameClaim().Build(),
+			),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithRequiredClaimMissingHintErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name: "OIDC upstream password grant: upstream ID token does has an empty string value for sub claim when using default username claim config",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim("sub", "").WithoutUsernameClaim().Build(),
+			),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithRequiredClaimEmptyHintErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name: "OIDC upstream password grant: upstream ID token has an non-string sub claim when using default username claim config",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim("sub", 42).WithoutUsernameClaim().Build(),
+			),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithRequiredClaimInvalidFormatHintErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name: "OIDC upstream password grant: upstream ID token contains groups claim with weird format",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim(oidcUpstreamGroupsClaim, 42).Build(),
+			),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithRequiredClaimInvalidFormatHintErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name: "OIDC upstream password grant: upstream ID token contains groups claim where one element is invalid",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"foo", 7}).Build(),
+			),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithRequiredClaimInvalidFormatHintErrorQuery),
+			wantBodyString:        "",
+		},
+		{
+			name: "OIDC upstream password grant: upstream ID token contains groups claim with invalid null type",
+			idps: oidctestutil.NewUpstreamIDPListerBuilder().WithOIDC(
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim(oidcUpstreamGroupsClaim, nil).Build(),
+			),
+			method:                http.MethodGet,
+			path:                  happyGetRequestPath,
+			customUsernameHeader:  pointer.StringPtr(oidcUpstreamUsername),
+			customPasswordHeader:  pointer.StringPtr(oidcUpstreamPassword),
+			wantPasswordGrantCall: happyUpstreamPasswordGrantMockExpectation,
+			wantStatus:            http.StatusFound,
+			wantContentType:       "application/json; charset=utf-8",
+			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithRequiredClaimInvalidFormatHintErrorQuery),
+			wantBodyString:        "",
 		},
 		{
 			name:               "downstream state does not have enough entropy using OIDC upstream browser flow",

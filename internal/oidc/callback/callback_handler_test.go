@@ -803,7 +803,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
-			wantBody:        "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
+			wantBody:        "Unprocessable Entity: required claim in upstream ID token has invalid format\n",
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -819,7 +819,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
-			wantBody:        "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
+			wantBody:        "Unprocessable Entity: required claim in upstream ID token has invalid format\n",
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,
@@ -835,7 +835,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
-			wantBody:        "Unprocessable Entity: groups claim in upstream ID token has invalid format\n",
+			wantBody:        "Unprocessable Entity: required claim in upstream ID token has invalid format\n",
 			wantAuthcodeExchangeCall: &expectedAuthcodeExchange{
 				performedByUpstreamName: happyUpstreamIDPName,
 				args:                    happyExchangeAndValidateTokensArgs,

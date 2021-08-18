@@ -801,7 +801,7 @@ func discoverIDPsDiscoveryEndpointURL(ctx context.Context, issuer string, httpCl
 		return "", fmt.Errorf("while fetching OIDC discovery data from issuer: %w", err)
 	}
 
-	var body idpdiscoveryv1alpha1.SupervisorOIDCDiscoveryResponse
+	var body idpdiscoveryv1alpha1.OIDCDiscoveryResponse
 	err = discoveredProvider.Claims(&body)
 	if err != nil {
 		return "", fmt.Errorf("while fetching OIDC discovery data from issuer: %w", err)
@@ -810,7 +810,7 @@ func discoverIDPsDiscoveryEndpointURL(ctx context.Context, issuer string, httpCl
 	return body.SupervisorDiscovery.PinnipedIDPsEndpoint, nil
 }
 
-func discoverAllAvailableSupervisorUpstreamIDPs(ctx context.Context, pinnipedIDPsEndpoint string, httpClient *http.Client) ([]idpdiscoveryv1alpha1.SupervisorPinnipedIDP, error) {
+func discoverAllAvailableSupervisorUpstreamIDPs(ctx context.Context, pinnipedIDPsEndpoint string, httpClient *http.Client) ([]idpdiscoveryv1alpha1.PinnipedIDP, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, pinnipedIDPsEndpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("while forming request to IDP discovery URL: %w", err)
@@ -832,7 +832,7 @@ func discoverAllAvailableSupervisorUpstreamIDPs(ctx context.Context, pinnipedIDP
 		return nil, fmt.Errorf("unable to fetch IDP discovery data from issuer: could not read response body: %w", err)
 	}
 
-	var body idpdiscoveryv1alpha1.SupervisorIDPDiscoveryResponse
+	var body idpdiscoveryv1alpha1.IDPDiscoveryResponse
 	err = json.Unmarshal(rawBody, &body)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch IDP discovery data from issuer: could not parse response JSON: %w", err)
@@ -841,7 +841,7 @@ func discoverAllAvailableSupervisorUpstreamIDPs(ctx context.Context, pinnipedIDP
 	return body.PinnipedIDPs, nil
 }
 
-func selectUpstreamIDPNameAndType(pinnipedIDPs []idpdiscoveryv1alpha1.SupervisorPinnipedIDP, specifiedIDPName, specifiedIDPType string) (string, idpdiscoveryv1alpha1.IDPType, []idpdiscoveryv1alpha1.IDPFlow, error) {
+func selectUpstreamIDPNameAndType(pinnipedIDPs []idpdiscoveryv1alpha1.PinnipedIDP, specifiedIDPName, specifiedIDPType string) (string, idpdiscoveryv1alpha1.IDPType, []idpdiscoveryv1alpha1.IDPFlow, error) {
 	pinnipedIDPsString, _ := json.Marshal(pinnipedIDPs)
 	var discoveredFlows []idpdiscoveryv1alpha1.IDPFlow
 	switch {

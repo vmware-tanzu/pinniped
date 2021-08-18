@@ -17,6 +17,7 @@ import (
 	"golang.org/x/oauth2"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 
+	supervisoroidc "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/oidc"
@@ -26,11 +27,6 @@ import (
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
-)
-
-const (
-	CustomUsernameHeaderName = "Pinniped-Username"
-	CustomPasswordHeaderName = "Pinniped-Password" //nolint:gosec // this is not a credential
 )
 
 func NewHandler(
@@ -59,7 +55,7 @@ func NewHandler(
 		}
 
 		if oidcUpstream != nil {
-			if len(r.Header.Values(CustomUsernameHeaderName)) > 0 {
+			if len(r.Header.Values(supervisoroidc.AuthorizeUsernameHeaderName)) > 0 {
 				// The client set a username header, so they are trying to log in with a username/password.
 				return handleAuthRequestForOIDCUpstreamPasswordGrant(r, w, oauthHelperWithStorage, oidcUpstream)
 			}
@@ -286,8 +282,8 @@ func makeDownstreamSessionAndReturnAuthcodeRedirect(
 }
 
 func requireNonEmptyUsernameAndPasswordHeaders(r *http.Request, w http.ResponseWriter, oauthHelper fosite.OAuth2Provider, authorizeRequester fosite.AuthorizeRequester) (string, string, bool) {
-	username := r.Header.Get(CustomUsernameHeaderName)
-	password := r.Header.Get(CustomPasswordHeaderName)
+	username := r.Header.Get(supervisoroidc.AuthorizeUsernameHeaderName)
+	password := r.Header.Get(supervisoroidc.AuthorizePasswordHeaderName)
 	if username == "" || password == "" {
 		// Return an error according to OIDC spec 3.1.2.6 (second paragraph).
 		err := errors.WithStack(fosite.ErrAccessDenied.WithHintf("Missing or blank username or password."))

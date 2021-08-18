@@ -42,7 +42,7 @@ type Metadata struct {
 
 	// vvv Custom vvv
 
-	SupervisorDiscovery v1alpha1.SupervisorOIDCDiscoveryResponseIDPEndpoint `json:"discovery.supervisor.pinniped.dev/v1alpha1"`
+	v1alpha1.OIDCDiscoveryResponse
 
 	// ^^^ Custom ^^^
 }
@@ -50,11 +50,15 @@ type Metadata struct {
 // NewHandler returns an http.Handler that serves an OIDC discovery endpoint.
 func NewHandler(issuerURL string) http.Handler {
 	oidcConfig := Metadata{
-		Issuer:                            issuerURL,
-		AuthorizationEndpoint:             issuerURL + oidc.AuthorizationEndpointPath,
-		TokenEndpoint:                     issuerURL + oidc.TokenEndpointPath,
-		JWKSURI:                           issuerURL + oidc.JWKSEndpointPath,
-		SupervisorDiscovery:               v1alpha1.SupervisorOIDCDiscoveryResponseIDPEndpoint{PinnipedIDPsEndpoint: issuerURL + oidc.PinnipedIDPsPathV1Alpha1},
+		Issuer:                issuerURL,
+		AuthorizationEndpoint: issuerURL + oidc.AuthorizationEndpointPath,
+		TokenEndpoint:         issuerURL + oidc.TokenEndpointPath,
+		JWKSURI:               issuerURL + oidc.JWKSEndpointPath,
+		OIDCDiscoveryResponse: v1alpha1.OIDCDiscoveryResponse{
+			SupervisorDiscovery: v1alpha1.OIDCDiscoveryResponseIDPEndpoint{
+				PinnipedIDPsEndpoint: issuerURL + oidc.PinnipedIDPsPathV1Alpha1,
+			},
+		},
 		ResponseTypesSupported:            []string{"code"},
 		ResponseModesSupported:            []string{"query", "form_post"},
 		SubjectTypesSupported:             []string{"public"},

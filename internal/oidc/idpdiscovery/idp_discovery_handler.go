@@ -37,13 +37,11 @@ func NewHandler(upstreamIDPs oidc.UpstreamIdentityProvidersLister) http.Handler 
 }
 
 func responseAsJSON(upstreamIDPs oidc.UpstreamIdentityProvidersLister) ([]byte, error) {
-	r := v1alpha1.SupervisorIDPDiscoveryResponse{
-		PinnipedIDPs: []v1alpha1.SupervisorPinnipedIDP{},
-	}
+	r := v1alpha1.IDPDiscoveryResponse{PinnipedIDPs: []v1alpha1.PinnipedIDP{}}
 
 	// The cache of IDPs could change at any time, so always recalculate the list.
 	for _, provider := range upstreamIDPs.GetLDAPIdentityProviders() {
-		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.SupervisorPinnipedIDP{
+		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.PinnipedIDP{
 			Name:  provider.GetName(),
 			Type:  v1alpha1.IDPTypeLDAP,
 			Flows: []v1alpha1.IDPFlow{v1alpha1.IDPFlowCLIPassword},
@@ -54,7 +52,7 @@ func responseAsJSON(upstreamIDPs oidc.UpstreamIdentityProvidersLister) ([]byte, 
 		if provider.AllowsPasswordGrant() {
 			flows = append(flows, v1alpha1.IDPFlowCLIPassword)
 		}
-		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.SupervisorPinnipedIDP{
+		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.PinnipedIDP{
 			Name:  provider.GetName(),
 			Type:  v1alpha1.IDPTypeOIDC,
 			Flows: flows,

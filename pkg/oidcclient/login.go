@@ -28,6 +28,7 @@ import (
 	"golang.org/x/term"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	supervisoroidc "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/oidc/provider"
@@ -51,11 +52,6 @@ const (
 	// overallTimeout is the overall time that a login is allowed to take. This includes several user interactions, so
 	// we set this to be relatively long.
 	overallTimeout = 90 * time.Minute
-
-	supervisorAuthorizeUpstreamNameParam      = "pinniped_idp_name"
-	supervisorAuthorizeUpstreamTypeParam      = "pinniped_idp_type"
-	supervisorAuthorizeUpstreamUsernameHeader = "Pinniped-Username"
-	supervisorAuthorizeUpstreamPasswordHeader = "Pinniped-Password" // nolint:gosec // this is not a credential
 
 	defaultLDAPUsernamePrompt = "Username: "
 	defaultLDAPPasswordPrompt = "Password: "
@@ -389,8 +385,12 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 		h.pkce.Method(),
 	}
 	if h.upstreamIdentityProviderName != "" {
-		authorizeOptions = append(authorizeOptions, oauth2.SetAuthURLParam(supervisorAuthorizeUpstreamNameParam, h.upstreamIdentityProviderName))
-		authorizeOptions = append(authorizeOptions, oauth2.SetAuthURLParam(supervisorAuthorizeUpstreamTypeParam, h.upstreamIdentityProviderType))
+		authorizeOptions = append(authorizeOptions,
+			oauth2.SetAuthURLParam(supervisoroidc.AuthorizeUpstreamIDPNameParamName, h.upstreamIdentityProviderName),
+		)
+		authorizeOptions = append(authorizeOptions,
+			oauth2.SetAuthURLParam(supervisoroidc.AuthorizeUpstreamIDPTypeParamName, h.upstreamIdentityProviderType),
+		)
 	}
 
 	// Choose the appropriate authorization and authcode exchange strategy.
@@ -445,8 +445,8 @@ func (h *handlerState) cliBasedAuth(authorizeOptions *[]oauth2.AuthCodeOption) (
 	if err != nil {
 		return nil, fmt.Errorf("could not build authorize request: %w", err)
 	}
-	authReq.Header.Set(supervisorAuthorizeUpstreamUsernameHeader, username)
-	authReq.Header.Set(supervisorAuthorizeUpstreamPasswordHeader, password)
+	authReq.Header.Set(supervisoroidc.AuthorizeUsernameHeaderName, username)
+	authReq.Header.Set(supervisoroidc.AuthorizePasswordHeaderName, password)
 	authRes, err := h.httpClient.Do(authReq)
 	if err != nil {
 		return nil, fmt.Errorf("authorization response error: %w", err)

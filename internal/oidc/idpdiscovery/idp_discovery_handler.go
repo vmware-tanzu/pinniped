@@ -14,14 +14,6 @@ import (
 	"go.pinniped.dev/internal/oidc"
 )
 
-const (
-	idpDiscoveryTypeLDAP = "ldap"
-	idpDiscoveryTypeOIDC = "oidc"
-
-	flowOIDCBrowser = "browser_authcode"
-	flowCLIPassword = "cli_password"
-)
-
 // NewHandler returns an http.Handler that serves the upstream IDP discovery endpoint.
 func NewHandler(upstreamIDPs oidc.UpstreamIdentityProvidersLister) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -53,18 +45,18 @@ func responseAsJSON(upstreamIDPs oidc.UpstreamIdentityProvidersLister) ([]byte, 
 	for _, provider := range upstreamIDPs.GetLDAPIdentityProviders() {
 		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.SupervisorPinnipedIDP{
 			Name:  provider.GetName(),
-			Type:  idpDiscoveryTypeLDAP,
-			Flows: []string{flowCLIPassword},
+			Type:  v1alpha1.IDPTypeLDAP,
+			Flows: []v1alpha1.IDPFlow{v1alpha1.IDPFlowCLIPassword},
 		})
 	}
 	for _, provider := range upstreamIDPs.GetOIDCIdentityProviders() {
-		flows := []string{flowOIDCBrowser}
+		flows := []v1alpha1.IDPFlow{v1alpha1.IDPFlowBrowserAuthcode}
 		if provider.AllowsPasswordGrant() {
-			flows = append(flows, flowCLIPassword)
+			flows = append(flows, v1alpha1.IDPFlowCLIPassword)
 		}
 		r.PinnipedIDPs = append(r.PinnipedIDPs, v1alpha1.SupervisorPinnipedIDP{
 			Name:  provider.GetName(),
-			Type:  idpDiscoveryTypeOIDC,
+			Type:  v1alpha1.IDPTypeOIDC,
 			Flows: flows,
 		})
 	}

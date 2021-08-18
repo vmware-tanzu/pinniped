@@ -138,8 +138,8 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 	f.BoolVar(&flags.oidc.debugSessionCache, "oidc-debug-session-cache", false, "Print debug logs related to the OpenID Connect session cache")
 	f.StringVar(&flags.oidc.requestAudience, "oidc-request-audience", "", "Request a token with an alternate audience using RFC8693 token exchange")
 	f.StringVar(&flags.oidc.upstreamIDPName, "upstream-identity-provider-name", "", "The name of the upstream identity provider used during login with a Supervisor")
-	f.StringVar(&flags.oidc.upstreamIDPType, "upstream-identity-provider-type", "", "The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap')")
-	f.StringVar(&flags.oidc.upstreamIDPFlow, "upstream-identity-provider-flow", "", "The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. 'cli_password', 'browser_authcode')")
+	f.StringVar(&flags.oidc.upstreamIDPType, "upstream-identity-provider-type", "", fmt.Sprintf("The type of the upstream identity provider used during login with a Supervisor (e.g. '%s', '%s')", idpdiscoveryv1alpha1.IDPTypeOIDC, idpdiscoveryv1alpha1.IDPTypeLDAP))
+	f.StringVar(&flags.oidc.upstreamIDPFlow, "upstream-identity-provider-flow", "", fmt.Sprintf("The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. '%s', '%s')", idpdiscoveryv1alpha1.IDPFlowCLIPassword, idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode))
 	f.StringVar(&flags.kubeconfigPath, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to kubeconfig file")
 	f.StringVar(&flags.kubeconfigContextOverride, "kubeconfig-context", "", "Kubeconfig context name (default: current active context)")
 	f.BoolVar(&flags.skipValidate, "skip-validation", false, "Skip final validation of the kubeconfig (default: false)")
@@ -772,8 +772,8 @@ func discoverSupervisorUpstreamIDP(ctx context.Context, flags *getKubeconfigPara
 	}
 
 	flags.oidc.upstreamIDPName = selectedIDPName
-	flags.oidc.upstreamIDPType = selectedIDPType
-	flags.oidc.upstreamIDPFlow = selectedIDPFlow
+	flags.oidc.upstreamIDPType = selectedIDPType.String()
+	flags.oidc.upstreamIDPFlow = selectedIDPFlow.String()
 	return nil
 }
 
@@ -841,15 +841,15 @@ func discoverAllAvailableSupervisorUpstreamIDPs(ctx context.Context, pinnipedIDP
 	return body.PinnipedIDPs, nil
 }
 
-func selectUpstreamIDPNameAndType(pinnipedIDPs []idpdiscoveryv1alpha1.SupervisorPinnipedIDP, specifiedIDPName, specifiedIDPType string) (string, string, []string, error) {
+func selectUpstreamIDPNameAndType(pinnipedIDPs []idpdiscoveryv1alpha1.SupervisorPinnipedIDP, specifiedIDPName, specifiedIDPType string) (string, idpdiscoveryv1alpha1.IDPType, []idpdiscoveryv1alpha1.IDPFlow, error) {
 	pinnipedIDPsString, _ := json.Marshal(pinnipedIDPs)
-	var discoveredFlows []string
+	var discoveredFlows []idpdiscoveryv1alpha1.IDPFlow
 	switch {
 	case specifiedIDPName != "" && specifiedIDPType != "":
 		// The user specified both name and type, so check to see if there exists an exact match.
 		for _, idp := range pinnipedIDPs {
-			if idp.Name == specifiedIDPName && idp.Type == specifiedIDPType {
-				return specifiedIDPName, specifiedIDPType, idp.Flows, nil
+			if idp.Name == specifiedIDPName && idp.Type.Equals(specifiedIDPType) {
+				return specifiedIDPName, idp.Type, idp.Flows, nil
 			}
 		}
 		return "", "", nil, fmt.Errorf(
@@ -858,8 +858,9 @@ func selectUpstreamIDPNameAndType(pinnipedIDPs []idpdiscoveryv1alpha1.Supervisor
 	case specifiedIDPType != "":
 		// The user specified only a type, so check if there is only one of that type found.
 		discoveredName := ""
+		var discoveredType idpdiscoveryv1alpha1.IDPType
 		for _, idp := range pinnipedIDPs {
-			if idp.Type == specifiedIDPType {
+			if idp.Type.Equals(specifiedIDPType) {
 				if discoveredName != "" {
 					return "", "", nil, fmt.Errorf(
 						"multiple Supervisor upstream identity providers of type %q were found, "+
@@ -868,6 +869,7 @@ func selectUpstreamIDPNameAndType(pinnipedIDPs []idpdiscoveryv1alpha1.Supervisor
 						specifiedIDPType, pinnipedIDPsString)
 				}
 				discoveredName = idp.Name
+				discoveredType = idp.Type
 				discoveredFlows = idp.Flows
 			}
 		}
@@ -876,10 +878,10 @@ func selectUpstreamIDPNameAndType(pinnipedIDPs []idpdiscoveryv1alpha1.Supervisor
 				"no Supervisor upstream identity providers of type %q were found. "+
 					"Found these upstreams: %s", specifiedIDPType, pinnipedIDPsString)
 		}
-		return discoveredName, specifiedIDPType, discoveredFlows, nil
+		return discoveredName, discoveredType, discoveredFlows, nil
 	case specifiedIDPName != "":
 		// The user specified only a name, so check if there is only one of that name found.
-		discoveredType := ""
+		var discoveredType idpdiscoveryv1alpha1.IDPType
 		for _, idp := range pinnipedIDPs {
 			if idp.Name == specifiedIDPName {
 				if discoveredType != "" {
@@ -911,19 +913,19 @@ func selectUpstreamIDPNameAndType(pinnipedIDPs []idpdiscoveryv1alpha1.Supervisor
 	}
 }
 
-func selectUpstreamIDPFlow(discoveredIDPFlows []string, selectedIDPName string, selectedIDPType string, specifiedFlow string) (string, error) {
+func selectUpstreamIDPFlow(discoveredIDPFlows []idpdiscoveryv1alpha1.IDPFlow, selectedIDPName string, selectedIDPType idpdiscoveryv1alpha1.IDPType, specifiedFlow string) (idpdiscoveryv1alpha1.IDPFlow, error) {
 	switch {
 	case len(discoveredIDPFlows) == 0:
 		// No flows listed by discovery means that we are talking to an old Supervisor from before this feature existed.
 		// If the user specified a flow on the CLI flag then use it without validation, otherwise skip flow selection
 		// and return empty string.
-		return specifiedFlow, nil
+		return idpdiscoveryv1alpha1.IDPFlow(specifiedFlow), nil
 	case specifiedFlow != "":
 		// The user specified a flow, so validate that it is available for the selected IDP.
 		for _, flow := range discoveredIDPFlows {
-			if flow == specifiedFlow {
+			if flow.Equals(specifiedFlow) {
 				// Found it, so use it as specified by the user.
-				return specifiedFlow, nil
+				return flow, nil
 			}
 		}
 		return "", fmt.Errorf(

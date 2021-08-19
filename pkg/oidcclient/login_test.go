@@ -238,7 +238,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 	formPostProviderMux.HandleFunc("/.well-known/openid-configuration", discoveryHandler(formPostSuccessServer, []string{"query", "form_post"}))
 	formPostProviderMux.HandleFunc("/token", tokenHandler)
 
-	defaultDiscoveryResponse := func(req *http.Request) (*http.Response, error) { // nolint:unparam
+	defaultDiscoveryResponse := func(req *http.Request) (*http.Response, error) {
 		// Call the handler function from the test server to calculate the response.
 		handler, _ := providerMux.Handler(req)
 		recorder := httptest.NewRecorder()
@@ -246,7 +246,7 @@ func TestLogin(t *testing.T) { // nolint:gocyclo
 		return recorder.Result(), nil
 	}
 
-	defaultLDAPTestOpts := func(t *testing.T, h *handlerState, authResponse *http.Response, authError error) error { // nolint:unparam
+	defaultLDAPTestOpts := func(t *testing.T, h *handlerState, authResponse *http.Response, authError error) error {
 		h.generateState = func() (state.State, error) { return "test-state", nil }
 		h.generatePKCE = func() (pkce.Code, error) { return "test-pkce", nil }
 		h.generateNonce = func() (nonce.Nonce, error) { return "test-nonce", nil }

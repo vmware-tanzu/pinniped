@@ -47,7 +47,6 @@ linters:
   - scopelint
   - sqlclosecheck
   - unconvert
-  - unparam
   - whitespace
 
 issues:
